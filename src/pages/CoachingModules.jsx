@@ -5,6 +5,10 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { CapabilityBadge } from "@/components/roleplay/CapabilityTagger";
 import ReactMarkdown from "react-markdown";
+import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
+
+// Extract all capability IDs from SOT (Single Source of Truth)
+const ALL_CAPABILITY_IDS = SIGNAL_CAPABILITIES.map(c => c.id);
 
 const modules = [
   {
@@ -134,7 +138,7 @@ const modules = [
     iconBg: "bg-purple-100 text-purple-600",
     category: "Signal Intelligence",
     tagline: "All 8 Signal Intelligence Capabilities",
-    capabilities: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"],
+    capabilities: ALL_CAPABILITY_IDS,
     definition: "The integration of all Signal Intelligence capabilities into a coherent, adaptive, and observable behavioral repertoire. Behavioral Mastery means the rep is not following a script — they are reading and responding to what is actually happening.",
     keyBehaviors: [
       { label: "Adaptive Steering", desc: "Adjust conversation direction in real time based on what the customer signals — maintain Directional Clarity while being responsive." },
@@ -148,7 +152,7 @@ const modules = [
       { score: "1", desc: "Rep applies a fixed script regardless of customer signals — no observable adaptation across the conversation." },
     ],
     exercises: ["Complete a full role-play with annotation enabled — review every highlighted moment and ask 'what signal did I respond to?'", "Select one capability per week for deliberate practice focus"],
-    relatedCapabilities: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"],
+    relatedCapabilities: ALL_CAPABILITY_IDS,
     aiCoachPrompt: "Provide personalized advice for achieving Behavioral Mastery across all Signal Intelligence Capabilities in pharma sales. Focus on integrating all capabilities into adaptive, responsive conversations.",
   },
 ];
@@ -201,8 +205,8 @@ export default function CoachingModules() {
               key={mod.id}
               onClick={() => setActiveModule(activeModule === mod.id ? null : mod.id)}
               className={`w-full text-left rounded-xl border p-4 transition-all ${activeModule === mod.id
-                  ? "border-teal-400 bg-teal-50 shadow-sm"
-                  : "border-gray-200 bg-white hover:border-gray-300"
+                ? "border-teal-400 bg-teal-50 shadow-sm"
+                : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
             >
               <div className="flex items-center gap-3">

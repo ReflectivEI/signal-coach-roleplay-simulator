@@ -497,19 +497,19 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Competent across most capabilities but gaps in one or two, especially under pressure." },
       { score: 1, desc: "Fixed script regardless of customer signals — no observable adaptation across the conversation." }
     ],
-    related: ["signal_awareness","signal_interpretation","value_connection","customer_engagement","objection_navigation","conversation_management","adaptive_response","commitment_generation"]
+    related: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"] // All 8 capabilities from SOT
   }
 ];
 
 export const CAPABILITY_META = {
-  signal_awareness:       { label: "Signal Awareness",       color: "#14b8a6", urgencyThreshold: 3.5 },
-  signal_interpretation:  { label: "Signal Interpretation",  color: "#0284c7", urgencyThreshold: 3.5 },
-  value_connection:       { label: "Value Connection",       color: "#8b5cf6", urgencyThreshold: 3.5 },
-  customer_engagement:    { label: "Customer Engagement",    color: "#f59e0b", urgencyThreshold: 3.5 },
-  objection_navigation:   { label: "Objection Navigation",   color: "#f97316", urgencyThreshold: 3.2 },
-  conversation_management:{ label: "Conversation Management",color: "#1A334D", urgencyThreshold: 3.5 },
-  adaptive_response:      { label: "Adaptive Response",      color: "#06b6d4", urgencyThreshold: 3.5 },
-  commitment_generation:  { label: "Commitment Generation",  color: "#10b981", urgencyThreshold: 3.2 },
+  signal_awareness: { label: "Signal Awareness", color: "#14b8a6", urgencyThreshold: 3.5 },
+  signal_interpretation: { label: "Signal Interpretation", color: "#0284c7", urgencyThreshold: 3.5 },
+  value_connection: { label: "Value Connection", color: "#8b5cf6", urgencyThreshold: 3.5 },
+  customer_engagement: { label: "Customer Engagement", color: "#f59e0b", urgencyThreshold: 3.5 },
+  objection_navigation: { label: "Objection Navigation", color: "#f97316", urgencyThreshold: 3.2 },
+  conversation_management: { label: "Conversation Management", color: "#1A334D", urgencyThreshold: 3.5 },
+  adaptive_response: { label: "Adaptive Response", color: "#06b6d4", urgencyThreshold: 3.5 },
+  commitment_generation: { label: "Commitment Generation", color: "#10b981", urgencyThreshold: 3.2 },
 };
 
 export function getModulesForCapability(capabilityId) {
