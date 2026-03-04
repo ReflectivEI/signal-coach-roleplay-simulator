@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
+import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 // ── Mock territory data ──────────────────────────────────────────────────────
 const REPS = [
@@ -22,16 +23,38 @@ const REPS = [
   { id: 6, name: "Linda Nguyen", territory: "Mid-Atlantic", specialty: "Rare Disease", sessionsLast30: 0, avgScore: 0, streak: 0, modulesCompleted: 1, modulesAssigned: 8, weakCapability: "All areas", status: "inactive" },
 ];
 
-const SIGNAL_CAPABILITIES = [
-  { id: "signal_awareness", label: "Signal Awareness", subtitle: "(Question Quality)", icon: Search, metrics: ["Contextual Relevance", "Forward Value"], color: "#14b8a6" },
-  { id: "signal_interpretation", label: "Signal Interpretation", subtitle: "(Listening & Response)", icon: Ear, metrics: ["Accuracy of Interpretation", "Responsiveness of Action"], color: "#0284c7" },
-  { id: "value_connection", label: "Value Connection", subtitle: "(Value Framing)", icon: Heart, metrics: ["Customer Relevance Alignment", "Outcome Translation"], color: "#8b5cf6" },
-  { id: "customer_engagement", label: "Customer Engagement", subtitle: "(Engagement Monitoring)", icon: Users, metrics: ["Engagement Monitoring", "Participation Amplification"], color: "#f59e0b" },
-  { id: "objection_navigation", label: "Objection Navigation", subtitle: "(Objection Handling)", icon: Shield, metrics: ["Non-Defensive Response", "Constructive Engagement"], color: "#f97316" },
-  { id: "conversation_management", label: "Conversation Management", subtitle: "(Control & Structure)", icon: GitFork, metrics: ["Directional Clarity", "Balance Structure/Responsiveness"], color: "#1A334D" },
-  { id: "adaptive_response", label: "Adaptive Response", subtitle: "(Adaptability)", icon: Shuffle, metrics: ["Real-time Adjustment", "Style Matching"], color: "#06b6d4" },
-  { id: "commitment_generation", label: "Commitment Generation", subtitle: "(Commitment Gaining)", icon: Target, metrics: ["Next-Step Clarity", "Customer Ownership"], color: "#10b981" },
-];
+// Icon mapping for capabilities
+const ICON_MAP = {
+  signal_awareness: Search,
+  signal_interpretation: Ear,
+  value_connection: Heart,
+  customer_engagement: Users,
+  objection_navigation: Shield,
+  conversation_management: GitFork,
+  adaptive_response: Shuffle,
+  commitment_generation: Target,
+};
+
+const COLOR_MAP = {
+  signal_awareness: "#14b8a6",
+  signal_interpretation: "#0284c7",
+  value_connection: "#8b5cf6",
+  customer_engagement: "#f59e0b",
+  objection_navigation: "#f97316",
+  conversation_management: "#1A334D",
+  adaptive_response: "#06b6d4",
+  commitment_generation: "#10b981",
+};
+
+// Transform SOT data into manager view format with correct metric names from SOT
+const SIGNAL_CAPABILITIES = SOT_CAPABILITIES.map(cap => ({
+  id: cap.id,
+  label: cap.label,
+  subtitle: cap.measurement ? `(${cap.measurement})` : "",
+  icon: ICON_MAP[cap.id] || Target,
+  metrics: cap.coreMetrics.map(m => m.name),
+  color: COLOR_MAP[cap.id] || "#64748b",
+}));
 
 const TRAINING_MODULES = [
   { id: 1, capability: "signal_awareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
