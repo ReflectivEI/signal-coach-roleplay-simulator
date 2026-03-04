@@ -42,11 +42,11 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
 
     try {
       const prompt = `Generate a realistic pharmaceutical sales roleplay scenario for training. Use these parameters:
-- HCP Type: ${params.hcp_type}
+- HCP Type: ${params.hcp_category || 'Any'}
+- Specialty: ${params.specialty || 'Any'}
 - Disease State: ${params.disease_state}
 - Rep Challenge: ${challenge}
 - Difficulty: ${params.difficulty}
-- Time Limit: ${params.prep_time} minutes
 
 Create a detailed scenario that includes:
 1. HCP background and context
@@ -72,7 +72,7 @@ Format as a detailed scenario brief that a sales rep can use for practice.`;
       }
     } catch (err) {
       console.error('Scenario generation error:', err);
-      setResult(null);
+      setPreview(null);
     } finally {
       setIsGenerating(false);
     }

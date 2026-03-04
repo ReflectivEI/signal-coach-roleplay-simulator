@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Search, Sparkles, Send, Copy, Wand2, Loader2, Zap, BookOpen, MessageCircle, ChevronDown, ChevronUp, Users, Star, Heart, Plus, Shield, Trophy, ArrowRight } from "lucide-react";
 import NavPill from "@/components/ui/NavPill";
+import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 const communicationTemplates = [
   { title: "Feel-Felt-Found", capability: "objection_navigation", content: "I understand how you feel. Other physicians have felt the same way. What they've found is that [benefit/outcome]." },
@@ -18,16 +19,10 @@ const communicationTemplates = [
   { title: "Trial Close with Options", capability: "commitment_generation", content: "Would you prefer to start with [option A] or [option B]? Either way, I'll ensure [support commitment]." },
 ];
 
-const CAPABILITY_LABELS = {
-  objection_navigation: "Objection Navigation",
-  commitment_generation: "Commitment Generation",
-  value_connection: "Value Connection",
-  signal_awareness: "Signal Awareness",
-  signal_interpretation: "Signal Interpretation",
-  adaptive_response: "Adaptive Response",
-  conversation_management: "Conversation Management",
-  customer_engagement: "Customer Engagement",
-};
+// Build capability labels from SOT
+const CAPABILITY_LABELS = Object.fromEntries(
+  SIGNAL_CAPABILITIES.map(cap => [cap.id, cap.label])
+);
 
 const SNIPPET_CATEGORIES = [
   { id: "all", label: "All" },

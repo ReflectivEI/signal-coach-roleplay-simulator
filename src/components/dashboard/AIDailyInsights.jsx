@@ -20,7 +20,7 @@ export default function AIDailyInsights() {
     try {
       const timestamp = Date.now();
       const seed = Math.random().toString(36).substring(7) + timestamp;
-      
+
       const topics = [
         "asking questions that uncover the HCP's real priorities",
         "reading subtle signals when an HCP's attention shifts",
@@ -32,7 +32,7 @@ export default function AIDailyInsights() {
         "using patient stories ethically to illustrate impact"
       ];
       const randomTopic = topics[Math.floor(Math.random() * topics.length)];
-      
+
       const prompt = `You are a pharmaceutical sales coach. Generate UNIQUE daily insights focused on: "${randomTopic}" (seed: ${seed}).
 
 Return ONLY valid JSON with these 4 fields (no markdown, no code blocks):
@@ -65,7 +65,7 @@ Tone: Like a seasoned rep coaching a peer over coffee. Warm, direct, practical.`
           // Strip markdown code block if present
           jsonStr = jsonStr.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
           const parsed = JSON.parse(jsonStr);
-          
+
           setInsights({
             focus_tip: parsed.focus_tip || DEFAULT.focus_tip,
             challenge: parsed.challenge || DEFAULT.challenge,

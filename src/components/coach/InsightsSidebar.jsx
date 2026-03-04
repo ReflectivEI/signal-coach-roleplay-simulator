@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sparkles, TrendingUp, AlertTriangle, BookOpen, Dumbbell, Loader2, ChevronDown, ChevronUp } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 
 export default function InsightsSidebar({ onSuggestedTopic, messages = [] }) {
   const [insights, setInsights] = useState(null);

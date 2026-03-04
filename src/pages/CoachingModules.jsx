@@ -134,7 +134,7 @@ const modules = [
     iconBg: "bg-purple-100 text-purple-600",
     category: "Signal Intelligence",
     tagline: "All 8 Signal Intelligence Capabilities",
-    capabilities: ["signal_awareness","signal_interpretation","value_connection","customer_engagement","objection_navigation","conversation_management","adaptive_response","commitment_generation"],
+    capabilities: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"],
     definition: "The integration of all Signal Intelligence capabilities into a coherent, adaptive, and observable behavioral repertoire. Behavioral Mastery means the rep is not following a script — they are reading and responding to what is actually happening.",
     keyBehaviors: [
       { label: "Adaptive Steering", desc: "Adjust conversation direction in real time based on what the customer signals — maintain Directional Clarity while being responsive." },
@@ -148,7 +148,7 @@ const modules = [
       { score: "1", desc: "Rep applies a fixed script regardless of customer signals — no observable adaptation across the conversation." },
     ],
     exercises: ["Complete a full role-play with annotation enabled — review every highlighted moment and ask 'what signal did I respond to?'", "Select one capability per week for deliberate practice focus"],
-    relatedCapabilities: ["signal_awareness","signal_interpretation","value_connection","customer_engagement","objection_navigation","conversation_management","adaptive_response","commitment_generation"],
+    relatedCapabilities: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"],
     aiCoachPrompt: "Provide personalized advice for achieving Behavioral Mastery across all Signal Intelligence Capabilities in pharma sales. Focus on integrating all capabilities into adaptive, responsive conversations.",
   },
 ];
@@ -200,11 +200,10 @@ export default function CoachingModules() {
             <button
               key={mod.id}
               onClick={() => setActiveModule(activeModule === mod.id ? null : mod.id)}
-              className={`w-full text-left rounded-xl border p-4 transition-all ${
-                activeModule === mod.id
+              className={`w-full text-left rounded-xl border p-4 transition-all ${activeModule === mod.id
                   ? "border-teal-400 bg-teal-50 shadow-sm"
                   : "border-gray-200 bg-white hover:border-gray-300"
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${mod.iconBg}`}>
@@ -390,61 +389,61 @@ export default function CoachingModules() {
                     <ArrowRight className="w-3.5 h-3.5" /> Try an Exercise
                   </Link>
                 </section>
-                </div>
-                </div>
-                )}
-                </div>
-                </div>
-                </div>
-                );
-                }
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-                function CoachInputPanel({ moduleId, moduleName, moduleTagline }) {
-                const [input, setInput] = React.useState("");
-                const [response, setResponse] = React.useState("");
-                const [isLoading, setIsLoading] = React.useState(false);
+function CoachInputPanel({ moduleId, moduleName, moduleTagline }) {
+  const [input, setInput] = React.useState("");
+  const [response, setResponse] = React.useState("");
+  const [isLoading, setIsLoading] = React.useState(false);
 
-                const handleGetAdvice = async () => {
-                if (!input.trim()) return;
-                setIsLoading(true);
-                try {
-                  const res = await fetch('/api/llm/invoke', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${input}"\n\nProvide 2-3 specific, actionable recommendations grounded in observable behavior. Reference Signal Intelligence™ principles where relevant. Keep response concise and practical.` })
-                  });
-                  const data = await res.json();
-                  setResponse(data.response || data.text || data.content || '');
-                } catch {
-                  setResponse('AI service unavailable.');
-                }
-                setIsLoading(false);
-                };
+  const handleGetAdvice = async () => {
+    if (!input.trim()) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${input}"\n\nProvide 2-3 specific, actionable recommendations grounded in observable behavior. Reference Signal Intelligence™ principles where relevant. Keep response concise and practical.` })
+      });
+      const data = await res.json();
+      setResponse(data.response || data.text || data.content || '');
+    } catch {
+      setResponse('AI service unavailable.');
+    }
+    setIsLoading(false);
+  };
 
-                return (
-                <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg border border-teal-200 p-5 space-y-4">
-                <textarea
-                placeholder="E.g., 'I'm meeting with a skeptical cardiologist who prefers data-driven conversations...'"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                className="w-full text-sm rounded-lg border border-teal-200 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none leading-relaxed"
-                rows="3"
-                />
-                <Button
-                onClick={handleGetAdvice}
-                disabled={isLoading || !input.trim()}
-                className="w-full bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium"
-                >
-                {isLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
-                {isLoading ? "Getting Advice..." : "Get AI Advice"}
-                </Button>
-                {response && (
-                <div className="bg-white rounded-lg p-5 border border-teal-100 text-xs text-gray-700 leading-relaxed space-y-3">
-                  <div className="prose prose-sm max-w-none text-gray-700 space-y-2">
-                    <ReactMarkdown>{response}</ReactMarkdown>
-                  </div>
-                </div>
-                )}
-                </div>
-                );
-                }
+  return (
+    <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg border border-teal-200 p-5 space-y-4">
+      <textarea
+        placeholder="E.g., 'I'm meeting with a skeptical cardiologist who prefers data-driven conversations...'"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        className="w-full text-sm rounded-lg border border-teal-200 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none leading-relaxed"
+        rows="3"
+      />
+      <Button
+        onClick={handleGetAdvice}
+        disabled={isLoading || !input.trim()}
+        className="w-full bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium"
+      >
+        {isLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+        {isLoading ? "Getting Advice..." : "Get AI Advice"}
+      </Button>
+      {response && (
+        <div className="bg-white rounded-lg p-5 border border-teal-100 text-xs text-gray-700 leading-relaxed space-y-3">
+          <div className="prose prose-sm max-w-none text-gray-700 space-y-2">
+            <ReactMarkdown>{response}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

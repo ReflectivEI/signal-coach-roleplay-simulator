@@ -25,23 +25,122 @@ const ICON_MAP = {
   commitment_generation: Target,
 };
 
-// Transform SOT data into frameworks format for UI display
+// UI-specific framework content (principles and techniques per capability)
+const FRAMEWORK_CONTENT = {
+  signal_awareness: {
+    principles: [
+      "Ask open-ended questions that encourage detailed responses",
+      "Focus questions on customer priorities, not product features",
+      "Use questions to uncover underlying needs and concerns",
+      "Adapt questions based on customer responses and context",
+    ],
+    techniques: [
+      { name: "Discovery Questions", desc: "Ask about current challenges, goals, and decision criteria", example: '"What are your biggest challenges with your current treatment approach?"' },
+      { name: "Implication Questions", desc: "Explore the consequences of current problems", example: '"How does this impact your patient outcomes and practice efficiency?"' },
+      { name: "Need-Payoff Questions", desc: "Help customers articulate the value of solving their problems", example: '"If we could address this, what would that mean for your practice?"' },
+    ],
+  },
+  signal_interpretation: {
+    principles: [
+      "Listen fully before formulating responses",
+      "Acknowledge and validate customer perspectives",
+      "Respond directly to stated concerns and questions",
+      "Demonstrate understanding through paraphrasing and reflection",
+    ],
+    techniques: [
+      { name: "Active Listening", desc: "Give full attention and reflect back what you hear", example: '"What I\'m hearing is that patient adherence is your primary concern..."' },
+      { name: "Empathetic Validation", desc: "Acknowledge the emotions and challenges behind customer statements", example: '"I understand how frustrating formulary restrictions can be for your practice"' },
+      { name: "Relevant Response", desc: "Address customer points directly before introducing new topics", example: '"You mentioned efficacy data - let me share our Phase 3 results that address exactly that"' },
+    ],
+  },
+  customer_engagement: {
+    principles: [
+      "Monitor verbal and non-verbal engagement cues",
+      "Recognize when customers are engaged vs. disengaged",
+      "Adapt approach when engagement drops",
+      "Encourage customer participation and questions",
+    ],
+    techniques: [
+      { name: "Engagement Check-ins", desc: "Periodically verify customer understanding and interest", example: '"Does this align with what you\'re looking for? What questions do you have?"' },
+      { name: "Re-engagement Tactics", desc: "Shift approach when you notice disengagement", example: '"Let me pause here - what aspects are most relevant to your practice?"' },
+      { name: "Participation Invitation", desc: "Actively invite customer input and questions", example: '"I\'d love to hear your thoughts on how this fits with your current protocols"' },
+    ],
+  },
+  value_connection: {
+    principles: [
+      "Frame value in customer terms, not product features",
+      "Connect solutions to stated customer priorities",
+      "Use customer language and context",
+      "Demonstrate understanding of customer's unique situation",
+    ],
+    techniques: [
+      { name: "Feature-Benefit-Impact", desc: "Link product features to customer benefits and business impact", example: '"Our once-daily dosing (feature) improves adherence (benefit), which means better outcomes for your patients (impact)"' },
+      { name: "Customer-Centric Language", desc: "Use the customer's own words and priorities when describing value", example: '"You mentioned reducing hospital readmissions - our data shows a 30% reduction in that specific metric"' },
+      { name: "Contextualized Evidence", desc: "Present data and evidence relevant to customer's specific context", example: '"For practices like yours treating elderly patients, our safety profile is particularly strong"' },
+    ],
+  },
+  objection_navigation: {
+    principles: [
+      "Welcome objections as opportunities to understand concerns",
+      "Acknowledge objections before addressing them",
+      "Provide evidence-based responses",
+      "Avoid defensiveness or dismissiveness",
+    ],
+    techniques: [
+      { name: "Acknowledge-Explore-Respond", desc: "Validate the concern, understand it fully, then address it", example: '"That\'s a valid concern about cost. Can you tell me more about your budget constraints? Here\'s how we can work within that..."' },
+      { name: "Evidence-Based Reframing", desc: "Use data and evidence to address concerns", example: '"I understand the pricing concern. Our health economics data shows total cost of care actually decreases by 15% due to fewer complications"' },
+      { name: "Comparative Context", desc: "Position objections in context of alternatives", example: '"While our upfront cost is higher, compared to current therapy, patients see better outcomes with fewer side effects"' },
+    ],
+  },
+  conversation_management: {
+    principles: [
+      "Balance structure with flexibility",
+      "Guide conversations toward productive outcomes",
+      "Manage time and topics effectively",
+      "Maintain focus on customer priorities",
+    ],
+    techniques: [
+      { name: "Agenda Setting", desc: "Establish clear conversation objectives collaboratively", example: '"I\'d like to cover your current challenges and how we might help. What else would be valuable to discuss today?"' },
+      { name: "Transition Statements", desc: "Smoothly move between topics while maintaining flow", example: '"That\'s helpful context on your patient population. Let me show you how our efficacy data applies specifically to that group"' },
+      { name: "Time Management", desc: "Respect customer time while covering key topics", example: '"I know we have 20 minutes - let me focus on the two areas you mentioned as priorities"' },
+    ],
+  },
+  adaptive_response: {
+    principles: [
+      "Read and respond to customer signals in real-time",
+      "Adjust approach when current tactics aren't working",
+      "Flex between different communication styles",
+      "Pivot based on new information",
+    ],
+    techniques: [
+      { name: "Real-Time Adjustment", desc: "Modify approach based on customer responses", example: '"I notice you\'re more interested in safety than efficacy - let me focus there first"' },
+      { name: "Style Matching", desc: "Adapt communication style to customer preferences", example: '"You seem to prefer detailed data - let me walk you through the full study results"' },
+      { name: "Course Correction", desc: "Recognize when to change direction", example: '"I can see this isn\'t resonating - let me try a different approach. What specific outcomes matter most to you?"' },
+    ],
+  },
+  commitment_generation: {
+    principles: [
+      "Ask for specific commitments, not vague next steps",
+      "Earn the right to ask through value delivery",
+      "Make commitment requests clear and reasonable",
+      "Confirm commitments explicitly",
+    ],
+    techniques: [
+      { name: "Direct Ask", desc: "Request specific next steps clearly", example: '"Based on what we\'ve discussed, would you be willing to trial this with 10 patients?"' },
+      { name: "Assumptive Close", desc: "Propose next steps as natural progression", example: '"I\'ll send you the formulary documentation today, and let\'s schedule a follow-up for next week"' },
+      { name: "Commitment Confirmation", desc: "Explicitly confirm agreed-upon next steps", example: '"Just to confirm - you\'ll review this with your team and we\'ll reconnect on Thursday at 2pm. Does that work?"' },
+    ],
+  },
+};
+
+// Transform SOT data + framework content into complete frameworks for UI display
 const signalFrameworks = SIGNAL_CAPABILITIES.map(cap => ({
   id: cap.id,
   title: cap.label,
   subtitle: cap.measurement ? `(${cap.measurement})` : "",
   description: cap.definition,
-  principles: [
-    "Ask open-ended questions that encourage detailed responses",
-    "Focus questions on customer priorities, not product features",
-    "Use questions to uncover underlying needs and concerns",
-    "Adapt questions based on customer responses and context",
-  ],
-  techniques: [
-    { name: "Discovery Questions", desc: "Ask about current challenges, goals, and decision criteria", example: '"What are your biggest challenges with your current treatment approach?"' },
-    { name: "Implication Questions", desc: "Explore the consequences of current problems", example: '"How does this impact your patient outcomes and practice efficiency?"' },
-    { name: "Need-Payoff Questions", desc: "Help customers articulate the value of solving their problems", example: '"If we could address this, what would that mean for your practice?"' },
-  ],
+  principles: FRAMEWORK_CONTENT[cap.id]?.principles || [],
+  techniques: FRAMEWORK_CONTENT[cap.id]?.techniques || [],
 }));
 
 const discModel = {

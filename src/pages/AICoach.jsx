@@ -7,30 +7,6 @@ import { createPageUrl } from "../utils";
 import ReactMarkdown from "react-markdown";
 import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
-import { SIGNAL_CAPABILITIES, GOVERNANCE } from "@/components/roleplay/signalIntelligenceSOT";
-
-// Build a compact RAG context string from the SOT — injected into every LLM call
-const SOT_CONTEXT = `
-SIGNAL INTELLIGENCE™ — SOURCE OF TRUTH (AUTHORITATIVE — DO NOT DEVIATE)
-${GOVERNANCE.scoringRule}
-${GOVERNANCE.canonicalStatement}
-
-CAPABILITIES (canonical definitions — use these exactly, never paraphrase or invent):
-${SIGNAL_CAPABILITIES.map(c =>
-  `[${c.id}] ${c.label} (${c.measurement}): ${c.definition}
-   Canonical: "${c.canonical}"
-   Coaching: ${c.coaching.join(" | ")}`
-).join("\n\n")}
-
-OVERLAP RULES (never conflate these):
-${GOVERNANCE.overlapRules.map(r => `• ${r}`).join("\n")}
-
-GUARDRAILS:
-- Never invent capability names, sub-metrics, or scores not listed above
-- Never infer intent, emotion, or personality — observable behavior only
-- Score 3 = effective/acceptable (NOT average)
-- If you cannot ground a claim in this SOT, say so explicitly
-`;
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -58,7 +34,6 @@ function parseSessionContext() {
 
 export default function AICoach() {
   const [messages, setMessages] = useState([]);
-  const [sessionId] = useState(() => `coach_${Date.now()}`);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sessionContext] = useState(() => parseSessionContext());
@@ -110,7 +85,6 @@ Please give me specific, actionable feedback that directly addresses these misal
     const userMsg = text || input;
     if (!userMsg.trim()) return;
 
-    const displayMsg = silent ? null : userMsg;
     const newMessages = silent
       ? [...messages, { role: "user", content: userMsg, hidden: true }]
       : [...messages, { role: "user", content: userMsg }];
@@ -229,10 +203,10 @@ Respond as the AI Coach. Provide helpful, specific feedback grounded in observab
               sessionData={
                 messages.filter(m => !m.hidden).length > 0
                   ? {
-                      title: "AI Coach Session",
-                      duration: `${messages.filter(m => !m.hidden).length} messages`,
-                      summary: sessionSummary || "Generating summary…",
-                    }
+                    title: "AI Coach Session",
+                    duration: `${messages.filter(m => !m.hidden).length} messages`,
+                    summary: sessionSummary || "Generating summary…",
+                  }
                   : null
               }
               onRefresh={() => generateSessionSummary(messages)}
@@ -342,22 +316,22 @@ Respond as the AI Coach. Provide helpful, specific feedback grounded in observab
                         <div className="prose prose-sm max-w-none text-gray-700 space-y-3">
                           <ReactMarkdown
                             components={{
-                              p: ({ node, children, ...props }) => {
+                              p: ({ children, ...props }) => {
                                 const text = String(children ?? "").trim();
                                 if (!text) return null;
                                 return <p className="leading-relaxed mb-2" {...props}>{children}</p>;
                               },
-                              ul: ({ node, ...props }) => <ul className="list-disc pl-5 space-y-1.5 my-2" {...props} />,
-                              ol: ({ node, ...props }) => <ol className="list-decimal pl-5 space-y-1.5 my-2" {...props} />,
-                              li: ({ node, children, ...props }) => {
+                              ul: ({ ...props }) => <ul className="list-disc pl-5 space-y-1.5 my-2" {...props} />,
+                              ol: ({ ...props }) => <ol className="list-decimal pl-5 space-y-1.5 my-2" {...props} />,
+                              li: ({ children, ...props }) => {
                                 const text = String(children ?? "").trim();
                                 if (!text) return null;
                                 return <li className="text-sm text-gray-700 leading-relaxed" {...props}>{children}</li>;
                               },
-                              h1: ({ node, ...props }) => <h1 className="text-base font-bold mt-4 mb-2" {...props} />,
-                              h2: ({ node, ...props }) => <h2 className="text-sm font-bold mt-3 mb-1.5" {...props} />,
-                              h3: ({ node, ...props }) => <h3 className="text-sm font-semibold mt-3 mb-1" {...props} />,
-                              strong: ({ node, ...props }) => <strong className="font-semibold text-gray-900" {...props} />,
+                              h1: ({ ...props }) => <h1 className="text-base font-bold mt-4 mb-2" {...props} />,
+                              h2: ({ ...props }) => <h2 className="text-sm font-bold mt-3 mb-1.5" {...props} />,
+                              h3: ({ ...props }) => <h3 className="text-sm font-semibold mt-3 mb-1" {...props} />,
+                              strong: ({ ...props }) => <strong className="font-semibold text-gray-900" {...props} />,
                             }}
                           >
                             {msg.content}

@@ -101,7 +101,7 @@ export default function Layout({ children, currentPageName }) {
       const timestamp = Date.now();
       const seed = Math.random().toString(36).substring(7) + timestamp;
       const sessionId = Math.random().toString(36).substring(2, 10);
-      
+
       const themes = [
         "crafting questions that make HCPs pause and think, not just answer on autopilot",
         "picking up on the subtle cues when someone's interest level shifts mid-conversation",
@@ -116,9 +116,9 @@ export default function Layout({ children, currentPageName }) {
         "turning a brief hallway encounter into a meaningful touchpoint",
         "following up in a way that feels helpful rather than pushy"
       ];
-      
+
       const theme = themes[Math.floor(Math.random() * themes.length)];
-      
+
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

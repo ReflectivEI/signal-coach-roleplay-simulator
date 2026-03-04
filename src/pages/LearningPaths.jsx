@@ -236,7 +236,7 @@ export default function LearningPaths() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessions })
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         if (data.learningPaths) {
@@ -279,7 +279,7 @@ export default function LearningPaths() {
       const path = paths.find(p => p.capability === capabilityId);
       const score = path?.avg_score || "no score yet";
       const sessionCount = path?.session_count || 0;
-      
+
       const prompt = `You are a sales coaching expert. Generate a personalized learning recommendation for a pharmaceutical sales representative who needs to improve their "${cap.label}" capability.
 
 Current Performance: ${score}/5 (based on ${sessionCount} roleplay sessions)
@@ -299,7 +299,7 @@ Provide a clear, actionable recommendation using this markdown structure:
 [3-4 specific metrics]
 
 Keep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
-      
+
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -308,11 +308,11 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
           max_tokens: 800
         })
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         const recommendation = data.response || "";
-        
+
         if (recommendation && recommendation.trim().length > 0) {
           setPaths(prev =>
             prev.map(p =>
