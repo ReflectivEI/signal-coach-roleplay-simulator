@@ -273,10 +273,15 @@ export default function LearningPaths() {
   };
 
   const generateAIRecommendation = async (capabilityId) => {
+    console.log('🔵 generateAIRecommendation called with:', capabilityId);
+    console.log('🔵 Current selectedCap:', selectedCap);
+    console.log('🔵 Current generatingAI:', generatingAI);
     setGeneratingAI(capabilityId);
     try {
       const cap = CAPABILITY_META[capabilityId];
+      console.log('🔵 CAPABILITY_META lookup:', cap);
       const path = paths.find(p => p.capability === capabilityId);
+      console.log('🔵 Found path:', path);
       const score = path?.avg_score || "no score yet";
       const sessionCount = path?.session_count || 0;
 
@@ -300,6 +305,7 @@ Provide a clear, actionable recommendation using this markdown structure:
 
 Keep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
 
+      console.log('🔵 About to call /api/llm/invoke');
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -309,11 +315,14 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
         })
       });
 
+      console.log('🔵 Fetch response:', res.status, res.statusText);
       if (res.ok) {
         const data = await res.json();
+        console.log('🔵 API response data:', data);
         const recommendation = data.response || "";
 
         if (recommendation && recommendation.trim().length > 0) {
+          console.log('🔵 Updating paths with recommendation');
           setPaths(prev =>
             prev.map(p =>
               p.capability === capabilityId
@@ -321,11 +330,16 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 : p
             )
           );
+        } else {
+          console.log('⚠️  Empty recommendation received');
         }
+      } else {
+        console.log('❌ Fetch failed with status:', res.status);
       }
     } catch (err) {
-      console.error('Generate AI recommendation error:', err);
+      console.error('❌ Generate AI recommendation error:', err);
     } finally {
+      console.log('🔵 Setting generatingAI to false');
       setGeneratingAI(false);
     }
   };
@@ -450,7 +464,10 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                       )}
                     </div>
                     <button
-                      onClick={() => generateAIRecommendation(selectedCap)}
+                      onClick={() => {
+                        console.log('🔵 Button clicked! selectedCap:', selectedCap);
+                        generateAIRecommendation(selectedCap);
+                      }}
                       disabled={generatingAI === selectedCap}
                       className="inline-flex items-center gap-1.5 rounded-full border font-semibold text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all flex-shrink-0"
                     >
