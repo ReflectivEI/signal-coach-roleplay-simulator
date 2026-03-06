@@ -11,6 +11,8 @@ import {
   deriveInitialState, deriveInitialTemperature,
   transitionState, transitionTemperature, transitionSeverity,
   buildHCPProfile, buildHCPDialoguePrompt,
+  detectHcpDisagreement, escalateForDisagreement,
+  TEMPERATURES,
 } from "./hcpSimulationEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -108,30 +110,15 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
           isOpening: true,
         });
 
-        const res = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: systemPrompt })
-        });
-        if (!res.ok) throw new Error('Failed to init');
-        const data = await res.json();
-        // Strip any leaked stage directions (brackets, asterisks, parens)
-        const rawOpeningRaw = data.response || data.text || data.content || '';
-        const rawOpening = typeof rawOpeningRaw === 'string' ? rawOpeningRaw : String(rawOpeningRaw);
-        const openingDialogue = rawOpening
-          .replace(/\*[^*]*\*/g, '')
-          .replace(/\([^)]*\)/g, '')
-          .replace(/\[[^\]]*\]/g, '')
-          .trim()
-          .split('\n')[0];
-
+        // Initialize turn 0: REP SPEAKS FIRST (not HCP)
+        // Rep now speaks first to open the interaction
         setTurns([{
           turnNumber: 0,
           hcpStateBefore: initialState,
           temperatureBefore: initialTemp,
           severityBefore: 0,
           cueBefore: initialProfile.lockedCue,
-          hcpDialogueBefore: openingDialogue,
+          hcpDialogueBefore: null,
           repMessage: null,
           alignment: null,
           hcpStateAfter: null,
@@ -156,8 +143,21 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
     // The turn the rep is responding to = last turn in the array (which has a hcpDialogueBefore but no repMessage yet)
     const respondingToTurn = turns[turns.length - 1];
     const prevState = respondingToTurn.hcpStateBefore;
-    const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
+    let prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
+
+    // CHECK FOR CURRENT TURN'S HCP DISAGREEMENT ESCALATION
+    // If the HCP in the turn we're responding to disagreed, escalate their emotional temperature
+    // This means their emotional state escalates as they prepare to respond to the rep's message
+    if (respondingToTurn.hcpDisagreed) {
+      const escalatedIndex = escalateForDisagreement(
+        TEMPERATURES.indexOf(prevTemp),
+        respondingToTurn.disagreementInfo
+      );
+      const clampedIndex = Math.max(0, Math.min(escalatedIndex, TEMPERATURES.length - 1));
+      prevTemp = TEMPERATURES[clampedIndex];
+      console.log(`Applied HCP Disagreement Escalation | Original: ${respondingToTurn.temperatureBefore} | Escalated: ${prevTemp}`);
+    }
 
     // 1. Score alignment against the locked state + temperature the rep SAW
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
@@ -225,6 +225,13 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       console.error('HCP dialogue generation error:', err);
     }
 
+    // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
+    // If the HCP disagreed with the rep's suggestion, flag this for the NEXT turn's temperature escalation
+    const disagreementInfo = detectHcpDisagreement(nextHcpDialogue);
+    if (disagreementInfo.disagrees) {
+      console.log(`HCP Disagreement Detected in Turn ${turns.length} | Strong: ${disagreementInfo.strongDisagree} | Mild: ${disagreementInfo.mildDisagree}`);
+    }
+
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
     if (coachingResult.shouldShow) setCoachingTip(coachingResult);
@@ -240,6 +247,8 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       repMessage: null,
       alignment: null,
       hcpStateAfter: null,
+      hcpDisagreed: disagreementInfo.disagrees,
+      disagreementInfo: disagreementInfo,
     };
 
     const updatedTurns = [...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn];

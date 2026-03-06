@@ -286,6 +286,36 @@ export function transitionState(currentState, repMessage, currentTemperature) {
   return currentState;
 }
 
+// ─── HCP DISAGREEMENT DETECTION ────────────────────────────────────────────────
+// Detects when HCP has disagreed or shown resistance in their response.
+// This is used to escalate emotional state to show irritation/disconnection.
+export function detectHcpDisagreement(hcpResponse) {
+  const msg = hcpResponse.toLowerCase();
+  
+  // Strong disagreement patterns
+  const strongDisagree = /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi.m not (convinced|sold|buying|interested)|\bthat.s (wrong|incorrect|not true|not accurate)|\bcan.t recommend|\bwon.t (prescribe|use)|\bskeptical|\bdoubt\b|\b(not|isn.t) (helpful|beneficial|relevant|applicable)/i.test(msg);
+  
+  // Mild disagreement patterns
+  const mildDisagree = /\bhesitant|\bunsure|\bconcern|\bquestion (whether|if)|\bneed more (evidence|data|proof)|\bneed to think|\bneed to (review|check)|\bnot sure (yet|about)|\blet me (think|review)/i.test(msg);
+  
+  return { strongDisagree, mildDisagree, disagrees: strongDisagree || mildDisagree };
+}
+
+// ─── EMOTIONAL ESCALATION FOR DISAGREEMENT ────────────────────────────────────
+// When HCP disagrees, escalate temperature to show frustration/coldness
+// Input: currentTempIndex (number 0-3) or temperature name (string), disagreeInfo object
+// Output: escalated temperature index
+export function escalateForDisagreement(currentTempIndex, disagreeInfo) {
+  if (!disagreeInfo.disagrees) return currentTempIndex;
+  
+  // Handle both number and string inputs
+  let idx = typeof currentTempIndex === 'number' ? currentTempIndex : TEMP_INDEX[currentTempIndex] ?? 1;
+  
+  // Both strong and mild disagreement escalate temperature by 1 level
+  // This shows frustration, coldness, or disconnection
+  return Math.min(idx + 1, TEMPERATURES.length - 1);
+}
+
 // ─── TONE DIRECTIVES ────────────────────────────────────────────────────────────
 export function getToneDirectives(state, temperature) {
   const base = {
