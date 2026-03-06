@@ -473,6 +473,12 @@ Keep your spoken words PROFESSIONAL and CLINICAL focused on:
 - Professional boundaries (if needed)
 - Scientific/medical content
 
+PUNCTUATION RULES:
+- All questions MUST end with a question mark (?)
+- Statements end with a period (.)
+- Multiple sentences should be clear and punctuated properly
+- Do NOT have dialogue end without proper punctuation
+
 DO NOT SAY things like:
 ✗ "I'm disappointed in your tone"
 ✗ "I expect more professional behavior"  
@@ -489,7 +495,12 @@ ${historyText
     
 REMINDER: Your physical/emotional state is shown through the cue ("${lockedCue}").
 Keep your SPOKEN WORDS professional and clinically focused.
-If the rep has been unprofessional, reflect this through BREVITY, FORMALITY, and DIRECTNESS — not explicit criticism.`
+If the rep has been unprofessional, reflect this through BREVITY, FORMALITY, and DIRECTNESS — not explicit criticism.
+
+PUNCTUATION REQUIREMENT:
+- Every question must end with a question mark (?)
+- Every statement must end with a period (.)
+- Do NOT output dialogue without proper ending punctuation.`
     : `\nThe sales rep has just entered. This is your OPENING LINE.
 OPENING RULES (strictly enforced):
 - React to the rep's arrival — express YOUR OWN current state, mindset, or reality
@@ -498,6 +509,7 @@ OPENING RULES (strictly enforced):
 - DO NOT invite the rep to share anything — this is your reaction, not a welcome
 - Your dialogue MUST match the physical context above: "${lockedCue}"
 - 1–2 sentences MAX
-- Output ONLY your spoken words — no asterisks, no stage directions, no parentheticals`
+- Output ONLY your spoken words — no asterisks, no stage directions, no parentheticals
+- CRITICAL: All questions must end with ? and all statements with .`
 }`;
 }
