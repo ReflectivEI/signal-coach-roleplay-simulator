@@ -695,7 +695,7 @@ GUARDRAIL: All feedback must describe observable behavior. Do NOT assess empathy
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
-              <CapabilityFeedbackPanel messages={flatMessages} scenario={scenario} />
+              <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
             </div>
           )}
         </div>

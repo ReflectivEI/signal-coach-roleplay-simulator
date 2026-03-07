@@ -23,7 +23,7 @@ const colorMap = {
   green: { btn: "bg-green-50 hover:bg-green-100 text-green-700 border-green-200", badge: "bg-green-100 text-green-700", result: "border-green-200 bg-green-50" },
 };
 
-export default function CapabilityFeedbackPanel({ messages, scenario }) {
+export default function CapabilityFeedbackPanel({ messages, turns = [], scenario }) {
   const focusCaps = scenario?.focus_capabilities || [];
   const [capFeedback, setCapFeedback] = useState({});
   const [loading, setLoading] = useState({});
@@ -33,12 +33,25 @@ export default function CapabilityFeedbackPanel({ messages, scenario }) {
     .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
     .join("\n");
 
+  const scoredTurns = turns.filter((t) => t.alignment?.metrics);
+  const getCapabilityAverage = (capId) => {
+    const scores = scoredTurns
+      .map((t) => t.alignment?.metrics?.[capId]?.score)
+      .filter((score) => typeof score === "number");
+    if (scores.length === 0) return null;
+    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
+  };
+
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
     setExpanded((prev) => ({ ...prev, [cap.id]: true }));
     try {
       const clipTrans = transcript.substring(0, 2000);
-      const prompt = `As a sales coach, evaluate this capability: ${cap.label}\nMetric: ${cap.question}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide: 1) Score 1-5 with rationale, 2) Specific evidence from the transcript, 3) One concrete behavior to adjust, 4) Coaching cue for next call.`;
+      const deterministicScore = getCapabilityAverage(cap.id);
+      const scoreLine = deterministicScore !== null
+        ? `Deterministic Score (locked, do not change): ${deterministicScore}/5`
+        : `Deterministic Score: not available yet`;
+      const prompt = `As a sales coach, analyze this capability using the fixed deterministic score below (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\n${scoreLine}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale that explains this fixed score using observable behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed score above.`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -95,6 +108,9 @@ export default function CapabilityFeedbackPanel({ messages, scenario }) {
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
+                {getCapabilityAverage(cap.id) !== null && (
+                  <span className="text-xs font-semibold text-gray-500">Score {getCapabilityAverage(cap.id)}/5</span>
+                )}
                 {hasFeedback && (
                   <span className="text-xs text-gray-400">{cap.question}</span>
                 )}
