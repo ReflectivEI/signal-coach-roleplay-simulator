@@ -56,6 +56,81 @@ const stateLabels = {
   'disengaging': '↗ Disengaging',
 };
 
+function getCapabilityLabel(capId) {
+  return SIGNAL_CAPABILITIES.find(c => c.id === capId)?.label || capId.replace(/_/g, ' ');
+}
+
+function asBulletLines(items, fallback = 'None observed.') {
+  if (!Array.isArray(items) || items.length === 0) return [`- ${fallback}`];
+  return items.map(item => `- ${String(item).trim()}`).filter(Boolean);
+}
+
+function buildSessionFeedbackMarkdown({
+  scenario,
+  overallScore,
+  topStrengths,
+  topImprovements,
+  rubricFlags,
+  positives,
+  misalignments,
+  ai,
+}) {
+  const safeScore = overallScore ?? 0;
+  const aiOverview = typeof ai?.overview === 'string' ? ai.overview.trim() : '';
+  const aiStrengths = Array.isArray(ai?.strengths) ? ai.strengths : [];
+  const aiImprovements = Array.isArray(ai?.improvements) ? ai.improvements : [];
+  const aiSignalAlignment = Array.isArray(ai?.signal_alignment) ? ai.signal_alignment : [];
+  const aiActions = Array.isArray(ai?.actions) ? ai.actions : [];
+
+  const deterministicStrengths = topStrengths.map(({ id, score }) => `${getCapabilityLabel(id)} (${score.toFixed(1)}/5)`);
+  const deterministicImprovements = topImprovements.map(({ id, score }) => `${getCapabilityLabel(id)} (${score.toFixed(1)}/5)`);
+
+  return [
+    `## Session Feedback`,
+    ``,
+    `**Scenario:** ${scenario.title}`,
+    `**HCP Type:** ${scenario.hcp_category}`,
+    `**Difficulty:** ${scenario.difficulty}`,
+    ``,
+    `## 1) Overall Alignment Score`,
+    `- **${safeScore.toFixed(1)}/5** (deterministic Signal Intelligence score)`,
+    ...(aiOverview ? [`- ${aiOverview}`] : []),
+    ``,
+    `## 2) Capabilities Done Well`,
+    `### Deterministic top capabilities`,
+    ...asBulletLines(deterministicStrengths, 'No high-performing capabilities identified yet.'),
+    ``,
+    `### Coaching evidence`,
+    ...asBulletLines(aiStrengths, 'No additional strengths generated.'),
+    ``,
+    `## 3) Capabilities to Develop`,
+    `### Deterministic focus areas`,
+    ...asBulletLines(deterministicImprovements, 'No low-scoring capabilities identified.'),
+    ``,
+    `### Coaching evidence`,
+    ...asBulletLines(aiImprovements, 'No additional development insights generated.'),
+    ``,
+    `## 4) Signal–Response Alignment`,
+    `### Rubric flags (deterministic)`,
+    ...asBulletLines(rubricFlags, 'No rubric alignment issues detected.'),
+    ``,
+    `### Notable positives`,
+    ...asBulletLines(positives, 'No notable positives captured.'),
+    ``,
+    `### Notable misalignments`,
+    ...asBulletLines(misalignments, 'No notable misalignments captured.'),
+    ...(aiSignalAlignment.length > 0
+      ? [``, `### Coaching interpretation`, ...asBulletLines(aiSignalAlignment)]
+      : []),
+    ``,
+    `## 5) Specific Action Items`,
+    ...asBulletLines(aiActions, 'Tie one key study finding to this HCP’s practice impact before asking for next-step commitment.'),
+    ``,
+    `---`,
+    `Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, or personality.`
+  ].join('\n');
+}
+
 export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
@@ -342,12 +417,28 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
         ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
         : '';
 
+      const overallScore = scoredTurns.length > 0
+        ? Math.round((scoredTurns.reduce((sum, t) => sum + t.alignment.score, 0) / scoredTurns.length) * 10) / 10
+        : null;
+
+      const avgCapScoresNumeric = Object.fromEntries(
+        Object.entries(capAccum).map(([cap, v]) => [cap, v.total / v.count])
+      );
+
+      const sortedCaps = Object.entries(avgCapScoresNumeric)
+        .map(([id, score]) => ({ id, score }))
+        .sort((a, b) => b.score - a.score);
+
+      const topStrengths = sortedCaps.slice(0, 3);
+      const topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
+
       // Build feedback prompt with Signal Intelligence SOT + scoring data
       const prompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.
 
 ${FEEDBACK_SOT}
 
 SESSION SCORING DATA (deterministic, turn-by-turn):
+Overall deterministic score: ${overallScore ?? 0}/5
 ${capSummary}
 
 POSITIVES OBSERVED (turn-by-turn):
@@ -365,25 +456,53 @@ Difficulty: ${scenario.difficulty}
 Conversation Transcript:
 ${historyText}
 
-Provide comprehensive Signal Intelligence coaching feedback:
-1. **Overall Alignment Score** — reference the scoring data above
-2. **Capabilities Done Well** — cite specific turn behaviors, reference canonical capability labels
-3. **Capabilities to Develop** — cite specific misalignments, use impact-based feedback language ("This may reduce trust / credibility / access")
-4. **Signal–Response Alignment** — address any rubric flags above using the exact feedback language provided
-5. **Specific Action Items** — 2-3 concrete behavioral changes for next session
+Return STRICT JSON only (no markdown, no prose outside JSON):
+{
+  "overview": "one concise paragraph",
+  "strengths": ["2-4 bullets"],
+  "improvements": ["2-4 bullets"],
+  "signal_alignment": ["1-3 bullets"],
+  "actions": ["2-3 concrete next-session actions"]
+}
 
-GUARDRAIL: All feedback must describe observable behavior. Do NOT assess empathy, intent, emotional intelligence, or personality.`;
-      
+IMPORTANT:
+- Do not generate any numeric scores.
+- Use deterministic scores above as source of truth.
+- Observable behavior only.`;
+
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, response_json_schema: { type: 'object' }, max_tokens: 900 })
       });
-      
+
       if (res.ok) {
         const data = await res.json();
-        const fbRaw = data.response || data.text || data.content || '';
-        setFeedback(typeof fbRaw === 'string' ? fbRaw : String(fbRaw));
+        const raw = data.response;
+        let ai = null;
+
+        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+          ai = raw;
+        } else if (typeof raw === 'string') {
+          try {
+            ai = JSON.parse(raw);
+          } catch {
+            ai = { overview: raw };
+          }
+        }
+
+        const feedbackMarkdown = buildSessionFeedbackMarkdown({
+          scenario,
+          overallScore,
+          topStrengths,
+          topImprovements,
+          rubricFlags: allRubricFlags,
+          positives: allPositives.slice(0, 6),
+          misalignments: allMisalignments.slice(0, 6),
+          ai,
+        });
+
+        setFeedback(feedbackMarkdown);
       } else {
         setFeedback("Unable to generate session feedback. Please try again.");
       }
