@@ -371,13 +371,11 @@ export function getToneDirectives(state, temperature) {
     let text = String(dialogue).replace(/\s+/g, ' ').trim();
     if (!text) return text;
 
-    const questionStarterPattern = /\b(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
+    // Only match question words at the START of a sentence (not anywhere in the sentence)
+    // "Am I looking?" = question | "I am looking." = statement
+    const questionStarterPattern = /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
 
-    text = text.replace(
-      /\b(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b([^?.!]*?)\./gi,
-      (match, starter, body) => `${starter}${body}?`
-    );
-
+    // Split into sentences and process each individually
     const sentences = text.match(/[^?.!]+[?.!]?/g) || [text];
     const normalized = sentences
       .map((rawSentence) => {
