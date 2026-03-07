@@ -17,11 +17,31 @@ const suggestedQuestions = [
 ];
 
 const contentTools = [
-  { label: "Draft Opening", prompt: "Draft me a compelling opening statement for a first HCP visit. Make it signal-intelligence focused and non-product-first." },
-  { label: "Objection Responses", prompt: "Generate 3 different response options for the objection: 'I already have a preferred treatment and I'm not looking to change.'" },
-  { label: "Follow-up Email", prompt: "Write a professional follow-up email to send after a productive HCP meeting. Keep it brief, value-focused, and referencing the Signal Intelligence framework." },
-  { label: "Improve My Message", prompt: "I want you to help me improve a message. Ask me to paste it and then suggest improvements using Signal Intelligence principles." },
-  { label: "Content Ideas", prompt: "Generate 5 creative ways I can add value to my next HCP conversation beyond just presenting product data." },
+  { 
+    label: "Draft Opening", 
+    examplePrompt: "Draft me a compelling opening statement for a first HCP visit. Make it signal-intelligence focused and non-product-first.",
+    followUpPrompt: "Now, please share your specific situation (HCP type, territory, context) so I can draft a more tailored opening for your needs."
+  },
+  { 
+    label: "Objection Responses", 
+    examplePrompt: "Generate 3 different response options for this common objection: 'I already have a preferred treatment and I'm not looking to change.'",
+    followUpPrompt: "Now, please share the specific objection you're facing so I can generate tailored response options for you."
+  },
+  { 
+    label: "Follow-up Email", 
+    examplePrompt: "Write a professional follow-up email to send after a productive HCP meeting. Keep it brief, value-focused, and referencing the Signal Intelligence framework.",
+    followUpPrompt: "Now, please share details about your meeting (HCP type, what was discussed, key points) so I can draft a customized follow-up email."
+  },
+  { 
+    label: "Improve My Message", 
+    examplePrompt: "I can help you improve your message using Signal Intelligence principles. Please share the message you'd like me to review.",
+    followUpPrompt: null // This one goes straight to user input
+  },
+  { 
+    label: "Content Ideas", 
+    examplePrompt: "Here are 5 creative ways you can add value to your next HCP conversation beyond just presenting product data: [example ideas]",
+    followUpPrompt: "Now, please share your specific situation (HCP type, therapeutic area, relationship stage) so I can suggest more targeted value-add ideas."
+  },
 ];
 
 // Parse roleplay session context from URL if navigated from a session
@@ -39,6 +59,7 @@ export default function AICoach() {
   const [sessionContext] = useState(() => parseSessionContext());
   const [sessionSummary, setSessionSummary] = useState(null);
   const [generatingSummary, setGeneratingSummary] = useState(false);
+  const [contentToolMode, setContentToolMode] = useState(null); // Track which content tool is active
   const messagesEndRef = useRef(null);
 
   // Auto-open with session context if navigated from a roleplay
@@ -81,7 +102,7 @@ ${situation ? `**My situation / what I was trying to do:** ${situation}` : ""}
 Please give me specific, actionable feedback that directly addresses these misalignments and how to improve them, grounded in Signal Intelligence™ principles.`;
   }
 
-  const sendMessage = async (text, silent = false) => {
+  const sendMessage = async (text, silent = false, isContentToolExample = false) => {
     const userMsg = text || input;
     if (!userMsg.trim()) return;
 
@@ -113,26 +134,57 @@ COACHING MANDATE: When the user asks for feedback, directly reference these spec
 
     // Call LLM endpoint with conversation and context
     try {
-      const prompt = `You are an expert sales coach specializing in pharmaceutical sales and coaching representatives on Signal Intelligence behaviors. You provide personalized, compassionate feedback based on their roleplay performance and conversational patterns.
+      const systemPrompt = `You are an expert sales coach specializing in pharmaceutical sales and coaching representatives on Signal Intelligence behaviors. You provide personalized, compassionate feedback based on conversational patterns and specific situations.
+
+IMPORTANT GUIDELINES:
+- ONLY discuss this current conversation. DO NOT reference "previous sessions", "former conversations", or "past roleplays"
+- Focus on helping the user improve question quality and conversation skills
+- NEVER offer to do roleplay practice with the user. Instead, if relevant, recommend "I recommend practicing this in the Role Play Simulator to test it out with an HCP"
+- Keep feedback specific and actionable
+- Ground all advice in Signal Intelligence™ principles
+- Be encouraging but honest
 
 ${sessionCtxBlock}
 
 Conversation so far:
 ${conversationHistory}
 
-Respond as the AI Coach. Provide helpful, specific feedback grounded in observable behaviors from their roleplay session. Be encouraging but honest about areas for improvement.`;
+Respond as the AI Coach. Provide helpful, specific feedback grounded in observable behaviors from the current conversation. Be encouraging but honest about areas for improvement.`;
+
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt: systemPrompt })
       });
       if (res.ok) {
         const data = await res.json();
         const coachResponse = (data.response || data.text || data.content || '');
         const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
-        const updatedMessages = [...newMessages, { role: "assistant", content: coachText }];
+        
+        let finalResponse = coachText;
+        // Add "Example:" prefix if this is a content tool example
+        if (isContentToolExample) {
+          finalResponse = `Example:\n\n${coachText}`;
+        }
+        
+        const updatedMessages = [...newMessages, { role: "assistant", content: finalResponse }];
         setMessages(updatedMessages);
-        generateSessionSummary(updatedMessages);
+        
+        // If this was a content tool example, also show the follow-up prompt
+        if (isContentToolExample && contentToolMode) {
+          const toolData = contentTools.find(t => t.label === contentToolMode);
+          if (toolData?.followUpPrompt) {
+            setTimeout(() => {
+              const followUpMsg = {
+                role: "assistant",
+                content: `\n\n${toolData.followUpPrompt}`
+              };
+              setMessages([...updatedMessages, followUpMsg]);
+            }, 500);
+          }
+        } else {
+          generateSessionSummary(updatedMessages);
+        }
       } else {
         setMessages([...newMessages, { role: "assistant", content: "I encountered an issue generating feedback. Please try again." }]);
       }
@@ -240,8 +292,14 @@ Respond as the AI Coach. Provide helpful, specific feedback grounded in observab
             {contentTools.map((tool) => (
               <button
                 key={tool.label}
-                onClick={() => sendMessage(tool.prompt)}
-                disabled={isLoading}
+                onClick={() => {
+                  if (contentToolMode === null) {
+                    // Enter tool mode: show example
+                    setContentToolMode(tool.label);
+                    sendMessage(tool.examplePrompt, false, true);
+                  }
+                }}
+                disabled={isLoading || contentToolMode !== null}
                 className="px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-full hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 transition-all disabled:opacity-50"
               >
                 {tool.label}
@@ -393,14 +451,41 @@ Respond as the AI Coach. Provide helpful, specific feedback grounded in observab
 
         {/* Input */}
         <div className="px-6 py-4 border-t border-gray-200 bg-white">
+          {contentToolMode && (
+            <div className="mb-3 flex items-center gap-2 text-xs bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+              <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+              <span className="text-teal-700 font-medium">Using: {contentToolMode}</span>
+              <button
+                type="button"
+                onClick={() => setContentToolMode(null)}
+                className="ml-auto text-teal-600 hover:text-teal-700 font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
           <form
-            onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (contentToolMode && input.trim()) {
+                // In content tool mode: send follow-up with user's specific context
+                const tool = contentTools.find(t => t.label === contentToolMode);
+                if (tool) {
+                  const followUpText = `${tool.followUpPrompt}\n\nUser's situation: ${input}`;
+                  setContentToolMode(null); // Exit tool mode
+                  sendMessage(followUpText);
+                }
+              } else if (!contentToolMode) {
+                // Normal conversation mode
+                sendMessage();
+              }
+            }}
             className="flex gap-3 max-w-3xl mx-auto"
           >
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
+              placeholder={contentToolMode ? `Share your specific situation for ${contentToolMode}...` : "Type your message..."}
               className="flex-1"
               disabled={isLoading}
             />
