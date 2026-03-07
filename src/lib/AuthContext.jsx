@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
 
   const checkAppState = async () => {
     // Always use local demo mode - no external API calls
-    setUser({ name: 'Demo User', email: 'demo@reflectivai.com', role: 'admin' });
+    setUser({ name: 'Demo User', email: 'demo@reflectiv-ai.com', role: 'admin' });
     setIsAuthenticated(true);
     setIsLoadingPublicSettings(false);
     setIsLoadingAuth(false);

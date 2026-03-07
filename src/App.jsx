@@ -12,6 +12,12 @@ const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
+// Extract Login component separately for public access
+const LoginPage = Pages.Login;
+const PublicPages = Object.fromEntries(
+  Object.entries(Pages).filter(([key]) => key !== 'Login')
+);
+
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
@@ -47,7 +53,7 @@ const AuthenticatedApp = () => {
           <MainPage />
         </LayoutWrapper>
       } />
-      {Object.entries(Pages).map(([path, Page]) => (
+      {Object.entries(PublicPages).map(([path, Page]) => (
         <Route
           key={path}
           path={`/${path}`}
@@ -65,18 +71,24 @@ const AuthenticatedApp = () => {
 
 
 function App() {
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <NavigationTracker />
-          <AuthenticatedApp />
+          <Routes>
+            {/* Public Login Route */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/Login" element={<LoginPage />} />
+            
+            {/* Protected App Routes */}
+            <Route path="*" element={<AuthenticatedApp />} />
+          </Routes>
         </Router>
         <Toaster />
       </QueryClientProvider>
     </AuthProvider>
-  )
+  );
 }
 
 export default App
