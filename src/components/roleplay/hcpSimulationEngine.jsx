@@ -365,6 +365,43 @@ export function getToneDirectives(state, temperature) {
   };
 }
 
+  export function normalizeHcpDialoguePunctuation(dialogue) {
+    if (!dialogue) return dialogue;
+
+    let text = String(dialogue).replace(/\s+/g, ' ').trim();
+    if (!text) return text;
+
+    const questionStarterPattern = /\b(Who|What|When|Where|Why|How|Is|Are|Am|Do|Does|Did|Can|Could|Will|Would|Should|Have|Has|Had|May|Might)\b/i;
+
+    text = text.replace(
+      /\b(Who|What|When|Where|Why|How|Is|Are|Am|Do|Does|Did|Can|Could|Will|Would|Should|Have|Has|Had|May|Might)\b([^?.!]*?)\./gi,
+      (match, starter, body) => `${starter}${body}?`
+    );
+
+    const sentences = text.match(/[^?.!]+[?.!]?/g) || [text];
+    const normalized = sentences
+      .map((rawSentence) => {
+        const sentence = rawSentence.trim();
+        if (!sentence) return '';
+
+        const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim();
+        const isQuestion = questionStarterPattern.test(withoutEndPunct);
+
+        if (isQuestion) return `${withoutEndPunct}?`;
+        if (/[?.!]$/.test(sentence)) return sentence;
+        return `${withoutEndPunct}.`;
+      })
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    if (!/[?.!]$/.test(normalized)) {
+      return `${normalized}.`;
+    }
+
+    return normalized;
+  }
+
 // ─── CUE SELECTION ─────────────────────────────────────────────────────────────
 /**
  * Select a cue deterministically. Uses session + turn + state + severity as seed.

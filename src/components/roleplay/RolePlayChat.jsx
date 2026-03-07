@@ -11,6 +11,7 @@ import {
   deriveInitialState, deriveInitialTemperature,
   transitionState, transitionTemperature, transitionSeverity,
   buildHCPProfile, buildHCPDialoguePrompt,
+  normalizeHcpDialoguePunctuation,
   detectHcpDisagreement, escalateForDisagreement,
   TEMPERATURES,
 } from "./hcpSimulationEngine";
@@ -220,6 +221,8 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
           .replace(/\[[^\]]*\]/g, '')
           .trim()
           .split('\n')[0];
+
+        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue);
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
