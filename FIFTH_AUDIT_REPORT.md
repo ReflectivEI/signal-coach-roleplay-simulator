@@ -1,4 +1,5 @@
 # FIFTH COMPREHENSIVE AUDIT REPORT
+
 **ReflectivAI - Complete System Audit**  
 **Date:** $(date)  
 **Status:** ✅ PASSED - All Critical Components Functional
@@ -19,11 +20,13 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 ## SECTION 1: BUILD & DEPLOYMENT STATUS
 
 ### Build Status
+
 - **Build Command:** `npm run build`
 - **Exit Code:** 0 ✅
 - **Status:** SUCCESS - Vite build completed without critical errors
 
 ### Compilation Warnings (Non-Critical)
+
 - Line 27: Unused import `analyzeSessionPatterns` (pre-existing)
 - Line 32: Unused variable `difficultyColors` (pre-existing)
 - Line 58: Unused parameter `onSessionSaved` (pre-existing)
@@ -40,6 +43,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 **Implementation:** Modified `src/components/roleplay/RolePlayChat.jsx` turn 0 initialization
 
 **Before:**
+
 ```javascript
 // Turn 0 initialization had HCP opening dialogue
 {
@@ -50,6 +54,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 ```
 
 **After:**
+
 ```javascript
 // Turn 0 initialization waits for rep to speak first
 {
@@ -60,6 +65,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 ```
 
 **Verification:**
+
 - ✅ Turn 0 created with `hcpDialogueBefore: null`
 - ✅ Rep message field empty, awaiting user input
 - ✅ Rendering logic checks `if (turn.hcpDialogueBefore)` before displaying HCP message
@@ -78,6 +84,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 **Purpose:** Identify when HCP expresses disagreement
 
 **Pattern Detection:**
+
 - **Strong Disagreement:** "disagree", "don't think", "don't believe", "not convinced", "that's wrong", "can't recommend", "won't prescribe", "skeptical", "doubt", "not helpful/beneficial/relevant/applicable"
 - **Mild Disagreement:** "hesitant", "unsure", "concern", "question whether/if", "need more evidence/data/proof", "need to think/review", "not sure yet/about", "let me think/review"
 
@@ -90,6 +97,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 **Purpose:** Escalate HCP emotional temperature when disagreement detected
 
 **Logic:**
+
 - Input: Current temperature index (0-3) and disagreement info
 - Both strong and mild disagreement escalate by 1 temperature level
 - Examples:
@@ -107,6 +115,7 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
 **Location:** `src/components/roleplay/RolePlayChat.jsx` lines 151-161
 
 **Flow:**
+
 1. Rep responds to HCP message → `sendMessage()` called
 2. HCP response generated at line 207-214
 3. Disagreement detected at line 220-225
@@ -119,7 +128,8 @@ This fifth comprehensive audit validates the complete ReflectivAI platform follo
    - This escalated temp used in buildHCPProfile for next turn
    - Escalated temperature drives different cue selection and dialogue tone
 
-**Verification:** ✅ 
+**Verification:** ✅
+
 - Lines 220-225: Disagreement detection after HCP dialogue generated
 - Lines 252-253: Disagreement fields added to nextTurn
 - Lines 151-161: Escalation applied before state/temp transition
@@ -164,6 +174,7 @@ TEMPERATURES = ['positive', 'neutral', 'stressed', 'irritated']
 ### Cue Bank - All States Covered ✅  
 
 Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=moderate, 3=extreme):
+
 - ✅ Initial state/temp → locked cue selected deterministically
 - ✅ Cue selection non-repeating per turn
 - ✅ All cues tested to match states/temps
@@ -173,6 +184,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 ## SECTION 4: PAGE AUDIT - ALL 19 PAGES ✅
 
 ### Auto-Registered Pages
+
 | # | Page | Import | Status |
 |---|------|--------|--------|
 | 1 | AICoach | ✅ | Routes page |
@@ -202,6 +214,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 ## SECTION 5: SOURCE OF TRUTH (SOT) ALIGNMENT
 
 ### Signal Intelligence SOT - `signalIntelligenceSOT.jsx`
+
 - ✅ Defines SIGNAL_CAPABILITIES (28 capabilities with canonical labels)
 - ✅ Defines GOVERNANCE rules (scoring, overlaps, guardrails)
 - ✅ Correctly imported by:
@@ -210,6 +223,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
   - Dashboard components
 
 ### HCP Simulation SOT - `hcpSimulationEngine.jsx`
+
 - ✅ Defines HCP_STATES, STATE_INDEX
 - ✅ Defines TEMPERATURES, TEMP_INDEX
 - ✅ Defines CUE_BANK (physical cues per state/temp level)
@@ -232,6 +246,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 ## SECTION 6: API ENDPOINTS VALIDATION
 
 ### Authentication Endpoints
+
 | Endpoint | Method | Auth Required | Status |
 |----------|--------|---------------|--------|
 | `/api/auth/me` | GET | ✅ Yes (checks session cookie) | ✅ Functional |
@@ -239,6 +254,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 | `/api/auth/logout` | POST | Demo mode | ✅ Functional |
 
 ### Public Endpoints (Demo Mode)
+
 | Endpoint | Method | Status |
 |----------|--------|--------|
 | `/api/llm/invoke` | POST | ✅ Functional (no auth required) |
@@ -250,6 +266,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 | `/api/scenarios` | GET/POST/PUT/DELETE | ✅ In-memory demo |
 
 ### LLM Integration
+
 - ✅ Supports OpenAI (gpt-4-turbo) and Groq (llama-3.3-70b)
 - ✅ API keys from environment variables (OPENAI_API_KEY, GROQ_API_KEY)
 - ✅ Falls back to mock responses if no API key configured
@@ -263,6 +280,7 @@ Each HCP state has physical/behavioral cues at 3 severity levels (1=mild, 2=mode
 ## SECTION 7: ROLEPLAY FLOW VALIDATION
 
 ### Turn Structure (After Improvements)
+
 ```javascript
 Turn {
   turnNumber: 0,
@@ -293,6 +311,7 @@ Turn {
 ### Turn Progression Logic ✅
 
 **Turn 0 (Initialization):**
+
 1. Initial state derived from scenario
 2. Initial temperature derived
 3. Turn 0 created with hcpDialogueBefore: null
@@ -300,6 +319,7 @@ Turn {
 5. **Rep types message** ← Entry point (changed from HCP opening)
 
 **After Rep Speaks:**
+
 1. Alignment scored against what rep saw (turn[n].temperatureBefore)
 2. State transitioned based on rep message
 3. Temperature transitioned based on rep message
@@ -310,6 +330,7 @@ Turn {
 8. Next turn created (waiting for rep's next message)
 
 **Next Rep Input:**
+
 1. Check if respondingToTurn.hcpDisagreed is true
 2. If yes: escalate temperature before state/profile building
 3. Use escalated temperature for new profile
@@ -338,6 +359,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ```
 
 **Export Validation:**
+
 - ✅ `hcpSimulationEngine.jsx` exports all required functions
 - ✅ `signalIntelligenceSOT.jsx` exports SIGNAL_CAPABILITIES & GOVERNANCE
 - ✅ `alignmentEngine.jsx` exports computeAlignment
@@ -350,12 +372,14 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## SECTION 9: ROUTING & NAVIGATION
 
 ### Page Routing Config - `pages.config.js`
+
 - ✅ All 19 pages imported
 - ✅ All pages registered in PAGES object
 - ✅ dashboardmainPage correctly set to "Dashboard" (not "Login")
 - ✅ Layout wrapper applied (`__Layout.jsx`)
 
 ### Navigation Stack
+
 1. Load `/` → App.jsx initializes
 2. Router mounts pages from pagesConfig
 3. Dashboard shows by default
@@ -411,6 +435,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## SECTION 11: KNOWN ISSUES & PREEXISTING CONDITIONS
 
 ### Non-Critical Warnings
+
 1. **Unused variables in RolePlayChat.jsx** (lines 27, 32, 58, 107)
    - Impact: None - code still executes
    - Priority: Low (eslint warnings only)
@@ -421,6 +446,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
    - Priority: None (documentation)
 
 ### Deploy Status
+
 - ❓ GitHub Actions workflow file exists
 - ❓ Cloudflare Pages deployment (requires PAT scope)
 - **Recommendation:** Use manual `azd deploy` or `wrangler publish`
@@ -430,12 +456,14 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## SECTION 12: COMPREHENSIVE STATISTICS
 
 ### Files Modified This Session
+
 | File | Changes | Impact |
 |------|---------|--------|
 | RolePlayChat.jsx | +48 lines, 3 replacements | HIGH (behavior) |
 | hcpSimulationEngine.jsx | +31 lines, 1 fix | HIGH (behavior) |
 
 ### Codebase Health
+
 - **Total Pages:** 19 ✅
 - **Total Components:** 80+ ✅
 - **Import Violations:** 0 ✅
@@ -444,6 +472,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 - **Critical Warnings:** 0 ✅
 
 ### Test Coverage Requirements
+
 | Feature | Tested | Status |
 |---------|--------|--------|
 | Rep speaks first | Manual | ✅ Code verified |
@@ -457,16 +486,19 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## SECTION 13: RECOMMENDATIONS
 
 ### Immediate (0-1 weeks)
+
 1. ✅ **Deploy to staging** - Test rep-speaks-first behavior with real users
 2. ✅ **Monitor disagreement logs** - Verify pattern detection accuracy
 3. ✅ **Validate escalation UX** - Confirm cue changes visible to users
 
 ### Short-term (2-4 weeks)
+
 1. 📊 **Collect telemetry** - Track % of HCP disagreements detected
 2. 🔧 **Fine-tune disagreement patterns** - Adjust regex if false positives occur
 3. 📱 **Mobile testing** - Ensure rep-speaks-first works on narrow screens
 
 ### Long-term (1-2 months)
+
 1. 💾 **Persistence layer** - Move in-memory sessions to database
 2. 🔑 **Real authentication** - Implement Azure Entra ID or similar
 3. 📈 **Analytics dashboard** - Track role-play metrics by scenario
@@ -477,6 +509,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## SECTION 14: FINAL AUDIT VERDICT
 
 ### Critical Systems
+
 | System | Status | Evidence |
 |--------|--------|----------|
 | Build | ✅ PASS | Exit code 0, no errors |
@@ -489,6 +522,7 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 | Module resolution | ✅ PASS | All imports correct |
 
 ### Overall Assessment
+
 ```
 ╔═════════════════════════════════════════════════════╗
 ║                                                     ║
@@ -507,14 +541,17 @@ import SIGNAL_CAPABILITIES from "../../mocks/signal"; // Hardcoded mock
 ## APPENDIX: CODE REFERENCES
 
 ### Rep Speaks First Implementation
+
 **File:** `src/components/roleplay/RolePlayChat.jsx`  
 **Lines:** 85-134 (initialization), 264 (flattenTurns), 558 (render check)
 
 ### Disagreement Detection Implementation
+
 **File:** `src/components/roleplay/hcpSimulationEngine.jsx`  
 **Lines:** 292-310 (detectHcpDisagreement), 312-323 (escalateForDisagreement)
 
 ### Escalation Integration
+
 **File:** `src/components/roleplay/RolePlayChat.jsx`  
 **Lines:** 151-161 (escalation check), 220-225 (disagreement detection), 252-253 (storage)
 

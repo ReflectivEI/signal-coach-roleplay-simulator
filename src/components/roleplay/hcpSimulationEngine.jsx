@@ -371,10 +371,10 @@ export function getToneDirectives(state, temperature) {
     let text = String(dialogue).replace(/\s+/g, ' ').trim();
     if (!text) return text;
 
-    const questionStarterPattern = /\b(Who|What|When|Where|Why|How|Is|Are|Am|Do|Does|Did|Can|Could|Will|Would|Should|Have|Has|Had|May|Might)\b/i;
+    const questionStarterPattern = /\b(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
 
     text = text.replace(
-      /\b(Who|What|When|Where|Why|How|Is|Are|Am|Do|Does|Did|Can|Could|Will|Would|Should|Have|Has|Had|May|Might)\b([^?.!]*?)\./gi,
+      /\b(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b([^?.!]*?)\./gi,
       (match, starter, body) => `${starter}${body}?`
     );
 
