@@ -67,6 +67,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
   const [coachingTip, setCoachingTip] = useState(null);
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   // Stable session ID for deterministic cue selection
   const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
   const sid = sessionIdRef.current;
@@ -76,15 +77,21 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
-    toggleListening, speak, stopSpeaking,
+    toggleListening, stopListening, speak, stopSpeaking,
   } = useVoice({
     onTranscript: (text) => setInput((prev) => prev ? prev + " " + text : text),
     voiceSettings,
   });
 
   useEffect(() => {
-    if (activeTab === "chat") messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, activeTab]);
+    if (activeTab === "chat") {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      // Auto-focus input after each turn when not loading
+      if (!isLoading && !isEnding) {
+        setTimeout(() => inputRef.current?.focus(), 100);
+      }
+    }
+  }, [turns, activeTab, isLoading, isEnding]);
 
   // ─── INIT ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -122,6 +129,8 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
         setTurns([]);
       } finally {
         setIsLoading(false);
+        // Auto-focus input on initial load
+        setTimeout(() => inputRef.current?.focus(), 200);
       }
     };
     init();
@@ -133,6 +142,11 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
     const repMessage = input.trim();
     setInput("");
     setIsLoading(true);
+    
+    // Stop mic if it's still listening when message is sent
+    if (isListening) {
+      stopListening();
+    }
 
     // The turn the rep is responding to = last turn in the array (which has a hcpDialogueBefore but no repMessage yet)
     const respondingToTurn = turns[turns.length - 1];
@@ -255,6 +269,9 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
     setIsLoading(false);
     speak(nextHcpDialogue);
+    
+    // Auto-focus input after HCP responds
+    setTimeout(() => inputRef.current?.focus(), 100);
   };
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -622,8 +639,22 @@ GUARDRAIL: All feedback must describe observable behavior. Do NOT assess empathy
                 <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
+                      ref={inputRef}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        // Stop mic when user starts typing manually
+                        if (isListening && e.target.value.length > input.length) {
+                          stopListening();
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        // Submit on Enter (without Shift)
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
                       placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
                       disabled={isLoading || isEnding}
                       className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
