@@ -12,6 +12,7 @@ jobs:
     name: Build and Deploy to Cloudflare Pages
     env:
       CF_PAGES_PROJECT: reflectiv-ai
+      CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
     
     steps:
       - name: Checkout code
@@ -32,38 +33,36 @@ jobs:
       - name: Validate Cloudflare credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "::error::Missing GitHub secret CLOUDFLARE_API_TOKEN"
             exit 1
           fi
 
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "::error::Missing GitHub secret CLOUDFLARE_ACCOUNT_ID"
+          if ! echo "$CF_ACCOUNT_ID" | grep -Eq '^[a-f0-9]{32}$'; then
+            echo "::error::Workflow CF_ACCOUNT_ID must be a 32-character lowercase hex string"
             exit 1
           fi
 
-          if ! echo "$CLOUDFLARE_ACCOUNT_ID" | grep -Eq '^[a-f0-9]{32}$'; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID must be a 32-character lowercase hex string"
-            exit 1
-          fi
-
-          echo "Cloudflare credentials are present and account ID format is valid."
+          echo "Cloudflare API token is present and account ID format is valid."
 
       - name: Validate Pages project access
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler pages project list --json > /tmp/cf-pages-projects.json
-          node -e "const fs=require('fs'); const projects=JSON.parse(fs.readFileSync('/tmp/cf-pages-projects.json','utf8')); const target=process.env.CF_PAGES_PROJECT; if(!Array.isArray(projects)||!projects.some(p=>p&&p.name===target)){console.error('::error::Cloudflare Pages project not found or token lacks access: '+target); process.exit(1);} console.log('Cloudflare Pages project access verified: '+target);"
+          set -e
+          RESPONSE=$(curl -sS -X GET \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PAGES_PROJECT}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json")
+
+          echo "$RESPONSE" | node -e "const fs=require('fs');const body=JSON.parse(fs.readFileSync(0,'utf8'));if(body.success!==true){const errs=(body.errors||[]).map(e=>e.message).join('; ')||'Unknown Cloudflare API error';console.error('::error::Cloudflare Pages project validation failed: '+errs);process.exit(1)};console.log('Cloudflare Pages project access verified: '+(body.result?.name||process.env.CF_PAGES_PROJECT));"
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
           command: pages deploy dist/client --project-name=${{ env.CF_PAGES_PROJECT }} --branch=main
 
       - name: Create GitHub Deployment
@@ -90,10 +89,4 @@ jobs:
               description: 'Deployment to Cloudflare Pages completed successfully'
             });
 
-      - name: Deployment Failed
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.setFailed('Cloudflare Pages deployment failed. Check the logs above for details. Common issues: 1) Missing secrets (CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID), 2) Incorrect project name, 3) Build errors.')
 
