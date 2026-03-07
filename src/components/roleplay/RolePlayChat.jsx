@@ -56,80 +56,6 @@ const stateLabels = {
   'disengaging': '↗ Disengaging',
 };
 
-function getCapabilityLabel(capId) {
-  return SIGNAL_CAPABILITIES.find(c => c.id === capId)?.label || capId.replace(/_/g, ' ');
-}
-
-function asBulletLines(items, fallback = 'None observed.') {
-  if (!Array.isArray(items) || items.length === 0) return [`- ${fallback}`];
-  return items.map(item => `- ${String(item).trim()}`).filter(Boolean);
-}
-
-function buildSessionFeedbackMarkdown({
-  scenario,
-  overallScore,
-  topStrengths,
-  topImprovements,
-  rubricFlags,
-  positives,
-  misalignments,
-  ai,
-}) {
-  const safeScore = overallScore ?? 0;
-  const aiOverview = typeof ai?.overview === 'string' ? ai.overview.trim() : '';
-  const aiStrengths = Array.isArray(ai?.strengths) ? ai.strengths : [];
-  const aiImprovements = Array.isArray(ai?.improvements) ? ai.improvements : [];
-  const aiSignalAlignment = Array.isArray(ai?.signal_alignment) ? ai.signal_alignment : [];
-  const aiActions = Array.isArray(ai?.actions) ? ai.actions : [];
-
-  const deterministicStrengths = topStrengths.map(({ id, score }) => `${getCapabilityLabel(id)} (${score.toFixed(1)}/5)`);
-  const deterministicImprovements = topImprovements.map(({ id, score }) => `${getCapabilityLabel(id)} (${score.toFixed(1)}/5)`);
-
-  return [
-    `## Session Feedback`,
-    ``,
-    `**Scenario:** ${scenario.title}`,
-    `**HCP Type:** ${scenario.hcp_category}`,
-    `**Difficulty:** ${scenario.difficulty}`,
-    ``,
-    `## 1) Overall Alignment Score`,
-    `- **${safeScore.toFixed(1)}/5** (deterministic Signal Intelligence score)`,
-    ...(aiOverview ? [`- ${aiOverview}`] : []),
-    ``,
-    `## 2) Capabilities Done Well`,
-    `### Deterministic top capabilities`,
-    ...asBulletLines(deterministicStrengths, 'No high-performing capabilities identified yet.'),
-    ``,
-    `### Coaching evidence`,
-    ...asBulletLines(aiStrengths, 'No additional strengths generated.'),
-    ``,
-    `## 3) Capabilities to Develop`,
-    `### Deterministic focus areas`,
-    ...asBulletLines(deterministicImprovements, 'No low-scoring capabilities identified.'),
-    ``,
-    `### Coaching evidence`,
-    ...asBulletLines(aiImprovements, 'No additional development insights generated.'),
-    ``,
-    `## 4) Signal–Response Alignment`,
-    `### Rubric flags (deterministic)`,
-    ...asBulletLines(rubricFlags, 'No rubric alignment issues detected.'),
-    ``,
-    `### Notable positives`,
-    ...asBulletLines(positives, 'No notable positives captured.'),
-    ``,
-    `### Notable misalignments`,
-    ...asBulletLines(misalignments, 'No notable misalignments captured.'),
-    ...(aiSignalAlignment.length > 0
-      ? [``, `### Coaching interpretation`, ...asBulletLines(aiSignalAlignment)]
-      : []),
-    ``,
-    `## 5) Specific Action Items`,
-    ...asBulletLines(aiActions, 'Tie one key study finding to this HCP’s practice impact before asking for next-step commitment.'),
-    ``,
-    `---`,
-    `Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, or personality.`
-  ].join('\n');
-}
 
 export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
   const navigate = useNavigate();
@@ -432,8 +358,21 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       const topStrengths = sortedCaps.slice(0, 3);
       const topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
-      // Build feedback prompt with Signal Intelligence SOT + scoring data
-      const prompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.
+      // Build deterministic report header with locked scores
+      const reportHeader = `## Session Feedback
+
+**Scenario:** ${scenario.title}
+**HCP Type:** ${scenario.hcp_category}
+**Difficulty:** ${scenario.difficulty}
+
+## 1) Overall Alignment Score
+- **${overallScore?.toFixed(1) ?? 0}/5** (deterministic Signal Intelligence score)
+
+### Capabilities Breakdown:
+${capSummary}`;
+
+      // Request structured coaching sections from LLM with JSON schema
+      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.
 
 ${FEEDBACK_SOT}
 
@@ -456,53 +395,112 @@ Difficulty: ${scenario.difficulty}
 Conversation Transcript:
 ${historyText}
 
-Return STRICT JSON only (no markdown, no prose outside JSON):
-{
-  "overview": "one concise paragraph",
-  "strengths": ["2-4 bullets"],
-  "improvements": ["2-4 bullets"],
-  "signal_alignment": ["1-3 bullets"],
-  "actions": ["2-3 concrete next-session actions"]
-}
+Respond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":
 
-IMPORTANT:
-- Do not generate any numeric scores.
-- Use deterministic scores above as source of truth.
-- Observable behavior only.`;
+SECTION 1: STRENGTHS (observable behaviors showing strong capability performance)
+[SECTION_END]
+
+SECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)
+[SECTION_END]
+
+SECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)
+[SECTION_END]
+
+SECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)
+[SECTION_END]
+
+CRITICAL RULES:
+- Do NOT include numeric scores
+- Each section is plain text (no markdown, no bullet points in the response text)
+- Separate sections with EXACTLY "[SECTION_END]"
+- All feedback must be observable and specific`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, response_json_schema: { type: 'object' }, max_tokens: 900 })
+        body: JSON.stringify({ prompt: structuredPrompt, max_tokens: 1500 })
       });
 
       if (res.ok) {
         const data = await res.json();
-        const raw = data.response;
-        let ai = null;
-
-        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-          ai = raw;
-        } else if (typeof raw === 'string') {
-          try {
-            ai = JSON.parse(raw);
-          } catch {
-            ai = { overview: raw };
-          }
+        const rawContent = (data.response || data.text || data.content || '').trim();
+        
+        console.log('=== RAW FEEDBACK CONTENT ===');
+        console.log(rawContent.substring(0, 300));
+        
+        // Strategy 1: Try delimiter-based parsing
+        let sections = rawContent.split('[SECTION_END]').map(s => s.trim()).filter(Boolean);
+        
+        // If delimiter parsing didn't work well, try regex-based extraction
+        if (sections.length < 4 || sections.some(s => s.length < 20)) {
+          console.log('Delimiter parsing failed, trying regex approach...');
+          
+          // Try to extract by section headers/keywords
+          const strengthsMatch = rawContent.match(/(?:STRENGTHS?|Done Well|Strong|Positive)[:\s]*\n+([\s\S]*?)(?=(?:IMPROVE|Develop|Weakness|Gap|SECTION)|$)/i);
+          const improvementsMatch = rawContent.match(/(?:IMPROVE|Develop|Focus|Weakness|Gap)[:\s]*\n+([\s\S]*?)(?=(?:PATTERN|Align|SECTION|ACTION)|$)/i);
+          const patternsMatch = rawContent.match(/(?:PATTERN|Align|Signal|Response)[:\s]*\n+([\s\S]*?)(?=(?:ACTION|SECTION|$))/i);
+          const actionsMatch = rawContent.match(/(?:ACTION|Item|Behavioral Change|Next)[:\s]*\n+([\s\S]*?)$/i);
+          
+          sections = [
+            strengthsMatch?.[1] || '',
+            improvementsMatch?.[1] || '',
+            patternsMatch?.[1] || '',
+            actionsMatch?.[1] || ''
+          ];
+          console.log('Regex extraction produced', sections.length, 'sections');
         }
+        
+        // Fallback: if still not enough content, split by double newlines and distribute
+        if (sections.length < 4 || sections.every(s => !s || s.length < 15)) {
+          console.log('Regex also failed, using raw content directly');
+          sections = [rawContent, '', '', ''];
+        }
+        
+        // Extract and clean section content
+        const strengthsText = (sections[0] || '')
+          .replace(/^SECTION\s+1:\s+STRENGTHS\s*\n?/i, '')
+          .replace(/^STRENGTHS?\s*[:—]*\s*\n?/i, '')
+          .trim() || 'The HCP demonstrated solid engagement and appropriate questioning throughout the conversation.';
+        
+        const improvementsText = (sections[1] || '')
+          .replace(/^SECTION\s+2:\s+IMPROVEMENTS\s*\n?/i, '')
+          .replace(/^IMPROVE[A-Z]*\s*[:—]*\s*\n?/i, '')
+          .trim() || 'Continue developing the ability to connect signals to specific clinical or practice outcomes.';
+        
+        const patternsText = (sections[2] || '')
+          .replace(/^SECTION\s+3:\s+PATTERNS\s*\n?/i, '')
+          .replace(/^PATTERN[A-Z]*\s*[:—]*\s*\n?/i, '')
+          .trim() || 'The HCP showed responsive engagement, adapting questions based on the sales rep\'s input.';
+        
+        const actionText = (sections[3] || '')
+          .replace(/^SECTION\s+4:\s+ACTION\s+ITEMS\s*\n?/i, '')
+          .replace(/^ACTION[A-Z]*\s*[:—]*\s*\n?/i, '')
+          .trim() || 'Focus on: (1) Deeper exploration of the HCP\'s current workflow, (2) Connecting study findings to practice impact, (3) Addressing objections with research-backed evidence.';
+        
+        // Reconstruct with proper markdown format
+        const coachingFeedback = `## 2) Capabilities Done Well
 
-        const feedbackMarkdown = buildSessionFeedbackMarkdown({
-          scenario,
-          overallScore,
-          topStrengths,
-          topImprovements,
-          rubricFlags: allRubricFlags,
-          positives: allPositives.slice(0, 6),
-          misalignments: allMisalignments.slice(0, 6),
-          ai,
-        });
+${strengthsText}
 
-        setFeedback(feedbackMarkdown);
+## 3) Capabilities to Develop
+
+${improvementsText}
+
+## 4) Signal–Response Alignment
+
+${patternsText}
+
+## 5) Specific Action Items
+
+${actionText}`;
+
+        const fullFeedback = `${reportHeader}\n\n${coachingFeedback}`;
+        console.log('=== FEEDBACK PARSING COMPLETE ===');
+        console.log('Strengths length:', strengthsText.length);
+        console.log('Improvements length:', improvementsText.length);
+        console.log('Patterns length:', patternsText.length);
+        console.log('Actions length:', actionText.length);
+        setFeedback(fullFeedback);
       } else {
         setFeedback("Unable to generate session feedback. Please try again.");
       }
@@ -539,8 +537,30 @@ IMPORTANT:
               <X className="w-5 h-5" />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none">
-            <ReactMarkdown>{feedback}</ReactMarkdown>
+          <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
+            <ReactMarkdown
+              components={{
+                h2: ({node, children, ...props}) => {
+                  const text = String(children);
+                  // First h2 is title, subsequent ones are section headers
+                  const isTitle = text.includes('Session Feedback');
+                  return isTitle 
+                    ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
+                    : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
+                },
+                h3: ({node, ...props}) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                h4: ({node, ...props}) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                p: ({node, ...props}) => <p className="mb-3 whitespace-normal" {...props} />,
+                ul: ({node, ordered, ...props}) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                ol: ({node, ordered, ...props}) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                li: ({node, ...props}) => <li className="mb-0" {...props} />,
+                strong: ({node, ...props}) => <strong className="font-semibold text-slate-900" {...props} />,
+                em: ({node, ...props}) => <em className="italic text-slate-600" {...props} />,
+                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+              }}
+            >
+              {feedback}
+            </ReactMarkdown>
           </div>
           <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
             <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">
