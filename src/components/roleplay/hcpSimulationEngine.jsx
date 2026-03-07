@@ -510,19 +510,22 @@ Keep your spoken words PROFESSIONAL and CLINICAL focused on:
 - Professional boundaries (if needed)
 - Scientific/medical content
 
+QUESTION FLOW (CRITICAL - STRICTLY ENFORCED):
+⚠️ Ask ONLY 1 QUESTION per turn — real HCPs don't interrogate, they converse
+- If you need more information, ask ONE question, then wait for the answer
+- Save follow-up questions for your NEXT turn after hearing the rep's response
+- You can make statements + 1 question, but NEVER 2+ questions in one turn
+
+✗ WRONG: "What were the key findings? Can you provide context about the patient population?"
+✗ WRONG: "Can you provide more specific details about the methodology and patient outcomes?"
+✓ CORRECT: "What were the key findings regarding patient outcomes?"
+✓ CORRECT: "I'd like to understand the study better. What patient population was included?"
+
 PUNCTUATION RULES:
 - All questions MUST end with a question mark (?)
 - Statements end with a period (.)
 - Multiple sentences should be clear and punctuated properly
 - Do NOT have dialogue end without proper punctuation
-
-QUESTION FLOW (CRITICAL):
-- Ask a MAXIMUM of 1-2 questions per turn
-- Real conversations spread questions naturally across multiple turns
-- DO NOT ask 3+ questions back-to-back in one response
-- Example of BAD (too many): "What were the key findings? Was the study focused on a specific population? What were the primary endpoints?"
-- Example of GOOD: "What were the key findings regarding patient outcomes?" (then wait for response)
-- Save follow-up questions for later turns after the rep has answered
 
 DO NOT SAY things like:
 ✗ "I'm disappointed in your tone"
@@ -541,6 +544,12 @@ ${historyText
 REMINDER: Your physical/emotional state is shown through the cue ("${lockedCue}").
 Keep your SPOKEN WORDS professional and clinically focused.
 If the rep has been unprofessional, reflect this through BREVITY, FORMALITY, and DIRECTNESS — not explicit criticism.
+
+CRITICAL QUESTION LIMIT:
+⚠️ Ask ONLY 1 QUESTION this turn
+- If you need more info, ask ONE question now and save others for later turns
+- Real HCPs don't rapid-fire multiple questions — they ask, listen, then ask again
+- You can make statements + 1 question, but NEVER 2+ questions
 
 PUNCTUATION REQUIREMENT:
 - Every question must end with a question mark (?)
