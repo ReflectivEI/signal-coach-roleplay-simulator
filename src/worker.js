@@ -253,7 +253,7 @@ async function handleAppSettings(pathname) {
 // LLM: Invoke AI for coaching, analysis, or generation
 async function handleLlmInvoke(request, env) {
     const body = await request.json().catch(() => ({}));
-    const { prompt, response_json_schema, max_tokens = 2000, temperature = 0.7 } = body;
+    const { prompt, response_json_schema, max_tokens = 2000, temperature = 0.7, roleplay = false } = body;
 
     if (!prompt) {
         return new Response(
@@ -287,15 +287,17 @@ async function handleLlmInvoke(request, env) {
     }
 
     try {
-        const systemPrompt = `You are an expert sales coach helping healthcare professionals improve their sales skills. 
+        // For roleplay, use the client's prompt as-is (it contains full HCP behavioral instructions)
+        // Client prompt should be treated as system instructions for roleplay
+        // For other uses, add generic coaching system prompt
+        const messages = roleplay
+            ? [{ role: "system", content: prompt }]
+            : [
+                { role: "system", content: `You are an expert sales coach helping healthcare professionals improve their sales skills. 
 You provide behavioral feedback, coaching insights, scenario generation, and performance analysis.
-Always respond with actionable, behavior-specific feedback.${response_json_schema ? "\nFormat your response as valid JSON matching the provided schema." : ""
-            }`;
-
-        const messages = [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
-        ];
+Always respond with actionable, behavior-specific feedback.${response_json_schema ? "\nFormat your response as valid JSON matching the provided schema." : ""}` },
+                { role: "user", content: prompt }
+            ];
 
         const model = body?.model || (provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4-turbo");
 

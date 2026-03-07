@@ -1,4 +1,5 @@
 # Role Play Simulator Comprehensive Audit Report
+
 **Date**: February 13, 2025  
 **Scope**: Complete roleplay functionality audit — engine, chat, alignment, voice, UI  
 **Status**: 🔴 CRITICAL ISSUES IDENTIFIED  
@@ -10,6 +11,7 @@
 Comprehensive audit of the roleplay simulator revealed **2 critical logic bugs** and **1 performance optimization opportunity**. All issues affect conversation flow and scoring accuracy.
 
 ### Issues Identified
+
 1. 🔴 **CRITICAL**: HCP disagreement temperature escalation timing bug  
 2. 🟡 **MEDIUM**: Turn 0 initialization generates unused HCP opening (LLM waste)  
 3. 🟢 **MINOR**: Punctuation normalizer regex could be more robust  
@@ -26,7 +28,7 @@ Comprehensive audit of the roleplay simulator revealed **2 critical logic bugs**
 
 The HCP disagreement detection and temperature escalation logic has a **timing bug** that causes the escalated temperature to be applied to the **wrong turn**.
 
-#### Current Flow (INCORRECT):
+#### Current Flow (INCORRECT)
 
 ```javascript
 // Turn N ends with HCP saying: "I'm not convinced..."
@@ -46,7 +48,7 @@ if (respondingToTurn.hcpDisagreed) {  // <-- This is from Turn N's HCP dialogue
 const alignment = computeAlignment(prevState, repMessage, null, prevTemp, ...);
 ```
 
-#### The Bug:
+#### The Bug
 
 1. **Turn N**: HCP says "I'm not convinced..." → `hcpDisagreed: true` is recorded on **Turn N+1**
 2. **Turn N+1**: Rep responds to Turn N's HCP dialogue
@@ -54,20 +56,21 @@ const alignment = computeAlignment(prevState, repMessage, null, prevTemp, ...);
 4. **Line 167**: Score alignment using escalated temperature
 5. **Result**: Rep is scored against a temperature they **never saw** (it escalated AFTER they spoke)
 
-### Impact:
+### Impact
 
 - **Alignment scores are incorrect**: Rep is penalized for not adapting to a temperature that hadn't escalated yet
 - **Cascading escalation**: Temperature keeps escalating even when rep adapts correctly
 - **User frustration**: Scores don't match perceived conversation quality
 
-### Root Cause:
+### Root Cause
 
 The disagreement escalation should affect **Turn N+2**, not Turn N+1:
+
 - Turn N: HCP disagrees
 - Turn N+1: Rep responds (scored against original temperature)
 - Turn N+2: HCP's emotional state escalates (shows irritation from disagreement)
 
-### Correct Flow:
+### Correct Flow
 
 ```javascript
 // DON'T escalate prevTemp before scoring
@@ -94,7 +97,7 @@ if (respondingToTurn.hcpDisagreed) {
 
 The turn 0 initialization generates a **complete HCP opening dialogue** via the LLM (lines 113-120), but then **immediately discards it** by setting `hcpDialogueBefore: null` (line 138).
 
-#### Code Flow:
+#### Code Flow
 
 ```javascript
 // Lines 113-119: Build full system prompt for HCP opening
@@ -118,17 +121,17 @@ setTurns([{
 }]);
 ```
 
-### Impact:
+### Impact
 
 - **LLM compute wasted**: Full prompt generation and dialogue creation thrown away
 - **Code confusion**: Generates opening but never uses it (misleading for maintainers)
 - **Performance**: Adds ~500-1000ms to session initialization
 
-### Root Cause:
+### Root Cause
 
 The code was refactored to have **rep speak first** (correct behavior), but the LLM call to generate HCP opening was never removed.
 
-### Fix:
+### Fix
 
 Remove the unused LLM call entirely:
 
@@ -177,12 +180,12 @@ text.replace(
 
 For the sentence: `"What is the issue. Let me know."` → Only the first `.` is replaced.
 
-### Impact:
+### Impact
 
 - **Edge case only**: Multi-sentence questions are rare in HCP dialogue
 - **Low severity**: Doesn't affect 99% of conversations
 
-### Recommendation:
+### Recommendation
 
 Current implementation is **acceptable**. The sentence-by-sentence processing (lines 522-540) catches most cases.
 
@@ -191,24 +194,28 @@ Current implementation is **acceptable**. The sentence-by-sentence processing (l
 ## Architecture Review: ✅ STRENGTHS
 
 ### State Machine Design
+
 - Deterministic state transitions with clear rules
 - Severity ladder (0-2) adds nuance to emotional expression
 - CUE_BANK provides 84 unique cues (7 states × 3 severities × 4 cues)
 - Hash-based cue selection ensures consistency
 
 ### Alignment Engine
+
 - Comprehensive 8-capability scoring with 16+ sub-metrics
 - Observable behavior focus (no intent inference)
 - Turn-by-turn scoring with rubric validation
 - Signal Intelligence SOT integration
 
 ### Voice Integration
+
 - Browser-native Web Speech API (zero latency)
 - Interim transcript display for real-time feedback
 - Graceful degradation when voice unavailable
 - Voice settings (rate, volume, pitch) configurable
 
 ### Coaching Overlay
+
 - Deterministic tip selection (no LLM calls)
 - Context-aware suggestions by state × misalignment type
 - Severity levels (info, warning, critical)
@@ -218,14 +225,16 @@ Current implementation is **acceptable**. The sentence-by-sentence processing (l
 
 ## Code Quality: ✅ WELL-STRUCTURED
 
-### Strengths:
+### Strengths
+
 - Clear separation of concerns (engine, chat, alignment, voice)
 - Comprehensive inline documentation
 - Immutable state patterns (Object.freeze on profiles)
 - Single source of truth architecture (hcpProfile)
 - Deterministic behavior (no Math.random, hash-based selection)
 
-### Minor Recommendations:
+### Minor Recommendations
+
 - Add TypeScript types for turn objects
 - Extract LLM prompt templates to separate file
 - Add unit tests for state transition edge cases
@@ -264,16 +273,19 @@ Current implementation is **acceptable**. The sentence-by-sentence processing (l
 ## Recommended Fixes (Priority Order)
 
 ### 1. 🔴 FIX CRITICAL: Temperature Escalation Timing
+
 **Location**: RolePlayChat.jsx lines 148-167  
 **Change**: Move escalation AFTER alignment scoring  
 **Impact**: Correct alignment scores, proper conversation flow  
 
 ### 2. 🟡 FIX MEDIUM: Remove Turn 0 LLM Call
+
 **Location**: RolePlayChat.jsx lines 108-120  
 **Change**: Delete unused opening dialogue generation  
 **Impact**: 500ms faster session start, code clarity  
 
 ### 3. 🟢 OPTIONAL: Enhance Punctuation Normalizer
+
 **Location**: hcpSimulationEngine.jsx lines 506-545  
 **Change**: Add greedy mode for multi-sentence questions  
 **Impact**: Edge case handling (low value)  

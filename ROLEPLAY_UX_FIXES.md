@@ -1,4 +1,5 @@
 # Role Play Simulator UX Fixes
+
 **Date**: March 7, 2026  
 **Commit**: 2663051  
 **Status**: ✅ DEPLOYED  
@@ -13,7 +14,8 @@
 
 **Root Cause**: No auto-focus mechanism after state updates (turns, loading states).
 
-**Solution**: 
+**Solution**:
+
 - Added `inputRef` to manage input field focus
 - Implemented auto-focus triggers at 3 key moments:
   1. **On component mount** (200ms delay for stability)
@@ -21,6 +23,7 @@
   3. **When switching back to chat tab** (immediate)
 
 **Code Changes** ([RolePlayChat.jsx](src/components/roleplay/RolePlayChat.jsx)):
+
 ```javascript
 // Added inputRef
 const inputRef = useRef(null);
@@ -47,7 +50,8 @@ const sendMessage = async () => {
 };
 ```
 
-**Impact**: 
+**Impact**:
+
 - ✅ Zero-friction conversation flow
 - ✅ Users can type immediately without clicking
 - ✅ Maintains focus across tab switches
@@ -60,11 +64,13 @@ const sendMessage = async () => {
 
 **Root Cause**: No logic to stop speech recognition on form submission.
 
-**Solution**: 
+**Solution**:
+
 - Stop mic automatically when message is sent
 - Prevents accidental post-submission recording
 
 **Code Changes**:
+
 ```javascript
 const sendMessage = async () => {
   // ... validation
@@ -79,6 +85,7 @@ const sendMessage = async () => {
 ```
 
 **Impact**:
+
 - ✅ Clean voice workflow
 - ✅ No accidental recording after submission
 - ✅ Mic state properly synchronized with conversation flow
@@ -91,12 +98,14 @@ const sendMessage = async () => {
 
 **Root Cause**: No detection of typing activity during voice recording.
 
-**Solution**: 
+**Solution**:
+
 - Detect manual typing while mic is listening
 - Auto-stop mic when user starts typing
 - Only triggers on input growth (not deletion)
 
 **Code Changes**:
+
 ```javascript
 <Input
   ref={inputRef}
@@ -113,6 +122,7 @@ const sendMessage = async () => {
 ```
 
 **Impact**:
+
 - ✅ Seamless transition from voice to text input
 - ✅ Clear input method (voice OR text, not both)
 - ✅ Reduced user confusion
@@ -125,12 +135,14 @@ const sendMessage = async () => {
 
 **Root Cause**: No keyboard event handler on input field.
 
-**Solution**: 
+**Solution**:
+
 - Added `onKeyDown` handler for Enter key
 - Submit on Enter (without Shift modifier)
 - Preserves Shift+Enter for multi-line (future feature)
 
 **Code Changes**:
+
 ```javascript
 <Input
   // ...
@@ -146,6 +158,7 @@ const sendMessage = async () => {
 ```
 
 **Impact**:
+
 - ✅ Faster message submission
 - ✅ Standard chat UX pattern
 - ✅ Power user keyboard workflow
@@ -157,11 +170,13 @@ const sendMessage = async () => {
 ### Focus Management Strategy
 
 **Timing Delays Explained**:
+
 - **200ms on mount**: Ensures DOM is fully rendered before focus
 - **100ms after HCP response**: Allows React state updates to complete
 - **Conditional focus**: Only focus when on chat tab and not loading
 
 **Why setTimeout?**:
+
 - React state updates are asynchronous
 - DOM updates may not be complete immediately
 - Small delays ensure stable focus without race conditions
@@ -169,6 +184,7 @@ const sendMessage = async () => {
 ### Voice Control Integration
 
 **stopListening() Usage**:
+
 ```javascript
 // Already exported from useVoice hook:
 const {
@@ -184,6 +200,7 @@ const {
 ### Keyboard Event Handling
 
 **Enter Key Logic**:
+
 - `e.key === 'Enter'` → Detects Enter key
 - `!e.shiftKey` → Ensures Shift is not pressed
 - `e.preventDefault()` → Prevents default form submission
@@ -193,14 +210,16 @@ const {
 
 ## User Experience Improvements
 
-### Before Fixes:
+### Before Fixes
+
 ❌ Click input field after each HCP response  
 ❌ Manually stop mic after sending message  
 ❌ Confusion when typing with mic on  
 ❌ Only mouse-click submission available  
 ❌ 5+ friction points per conversation turn  
 
-### After Fixes:
+### After Fixes
+
 ✅ Input auto-focused on every turn  
 ✅ Mic auto-stops on message send  
 ✅ Typing auto-stops mic  
@@ -228,7 +247,8 @@ const {
 
 **Commit**: `2663051`  
 **Branch**: `main`  
-**Files Changed**: 
+**Files Changed**:
+
 - `src/components/roleplay/RolePlayChat.jsx` (+35 lines, -4 lines)
 
 **GitHub Actions**: Cloudflare Pages deployment triggered automatically
@@ -243,7 +263,7 @@ Potential UX improvements identified but not implemented:
 2. **Voice feedback**: Audio cue when mic starts/stops
 3. **Typing indicator**: Show "Rep is typing..." during input
 4. **Auto-save drafts**: Persist input across page reloads
-5. **Keyboard shortcuts**: 
+5. **Keyboard shortcuts**:
    - `Cmd/Ctrl + M` → Toggle mic
    - `Esc` → Cancel current input
    - `Cmd/Ctrl + Enter` → Force send (bypassing Enter handler)
