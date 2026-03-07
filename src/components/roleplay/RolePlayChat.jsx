@@ -95,7 +95,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
 
-        // Build a locked profile for turn 0 so cue and dialogue are always consistent
+        // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
           sessionId: sid,
           turnNumber: 0,
@@ -104,15 +104,8 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
           severity: 0,
         });
 
-        // Use the full buildHCPDialoguePrompt to guarantee state/cue/dialogue alignment
-        const systemPrompt = buildHCPDialoguePrompt({
-          scenario,
-          hcpProfile: initialProfile,
-          isOpening: true,
-        });
-
         // Initialize turn 0: REP SPEAKS FIRST (not HCP)
-        // Rep now speaks first to open the interaction
+        // No HCP dialogue needed — rep opens the interaction
         setTurns([{
           turnNumber: 0,
           hcpStateBefore: initialState,
@@ -144,30 +137,33 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
     // The turn the rep is responding to = last turn in the array (which has a hcpDialogueBefore but no repMessage yet)
     const respondingToTurn = turns[turns.length - 1];
     const prevState = respondingToTurn.hcpStateBefore;
-    let prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
+    const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
 
-    // CHECK FOR CURRENT TURN'S HCP DISAGREEMENT ESCALATION
-    // If the HCP in the turn we're responding to disagreed, escalate their emotional temperature
-    // This means their emotional state escalates as they prepare to respond to the rep's message
-    if (respondingToTurn.hcpDisagreed) {
-      const escalatedIndex = escalateForDisagreement(
-        TEMPERATURES.indexOf(prevTemp),
-        respondingToTurn.disagreementInfo
-      );
-      const clampedIndex = Math.max(0, Math.min(escalatedIndex, TEMPERATURES.length - 1));
-      prevTemp = TEMPERATURES[clampedIndex];
-      console.log(`Applied HCP Disagreement Escalation | Original: ${respondingToTurn.temperatureBefore} | Escalated: ${prevTemp}`);
-    }
-
     // 1. Score alignment against the locked state + temperature the rep SAW
+    // IMPORTANT: Score BEFORE any temperature escalation from disagreement
+    // The rep responds to what they observed, not to future emotional escalation
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
     const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
 
-    // 2. Transition structural state, temperature, severity (all deterministic)
+    // 2. Transition structural state and base temperature (deterministic)
     const nextHcpState = transitionState(prevState, repMessage, prevTemp);
-    const nextTemp = transitionTemperature(prevTemp, repMessage);
+    let nextTemp = transitionTemperature(prevTemp, repMessage);
     const nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
+
+    // 3. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
+    // If the HCP disagreed in the turn we just responded to, their emotional temperature
+    // escalates for the NEXT turn (not the current alignment scoring)
+    if (respondingToTurn.hcpDisagreed) {
+      const escalatedIndex = escalateForDisagreement(
+        TEMPERATURES.indexOf(nextTemp),
+        respondingToTurn.disagreementInfo
+      );
+      const clampedIndex = Math.max(0, Math.min(escalatedIndex, TEMPERATURES.length - 1));
+      nextTemp = TEMPERATURES[clampedIndex];
+      console.log(`Applied HCP Disagreement Escalation to Next Turn | Base: ${transitionTemperature(prevTemp, repMessage)} | Escalated: ${nextTemp}`);
+    }
+
     simStateRef.current = { temperature: nextTemp, severity: nextSev };
 
     // 3. Lock rep's response
