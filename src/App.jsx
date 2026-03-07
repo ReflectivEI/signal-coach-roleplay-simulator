@@ -12,12 +12,6 @@ const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
-// Extract Login component separately for public access
-const LoginPage = Pages.Login;
-const PublicPages = Object.fromEntries(
-  Object.entries(Pages).filter(([key]) => key !== 'Login')
-);
-
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
@@ -45,15 +39,22 @@ const AuthenticatedApp = () => {
     }
   }
 
-  // Render the main app
+  // Render the main app (all protected and public routes)
   return (
     <Routes>
+      {/* Login pages - public access */}
+      <Route path="/login" element={<Pages.Login />} />
+      <Route path="/Login" element={<Pages.Login />} />
+      
+      {/* Home page */}
       <Route path="/" element={
         <LayoutWrapper currentPageName={mainPageKey}>
           <MainPage />
         </LayoutWrapper>
       } />
-      {Object.entries(PublicPages).map(([path, Page]) => (
+      
+      {/* All other pages */}
+      {Object.entries(Pages).filter(([key]) => key !== 'Login').map(([path, Page]) => (
         <Route
           key={path}
           path={`/${path}`}
@@ -64,6 +65,8 @@ const AuthenticatedApp = () => {
           }
         />
       ))}
+      
+      {/* Catch-all for undefined routes */}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
@@ -76,14 +79,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <NavigationTracker />
-          <Routes>
-            {/* Public Login Route */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/Login" element={<LoginPage />} />
-            
-            {/* Protected App Routes */}
-            <Route path="*" element={<AuthenticatedApp />} />
-          </Routes>
+          <AuthenticatedApp />
         </Router>
         <Toaster />
       </QueryClientProvider>
