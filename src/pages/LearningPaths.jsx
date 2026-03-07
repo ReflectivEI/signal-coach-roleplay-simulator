@@ -276,10 +276,22 @@ export default function LearningPaths() {
     console.log('🔵 generateAIRecommendation called with:', capabilityId);
     console.log('🔵 Current selectedCap:', selectedCap);
     console.log('🔵 Current generatingAI:', generatingAI);
+    
+    if (!capabilityId) {
+      console.warn('⚠️  No capability ID provided to generateAIRecommendation');
+      return;
+    }
+    
     setGeneratingAI(capabilityId);
     try {
       const cap = CAPABILITY_META[capabilityId];
       console.log('🔵 CAPABILITY_META lookup:', cap);
+      
+      if (!cap) {
+        console.error('❌ Capability not found in CAPABILITY_META:', capabilityId);
+        return;
+      }
+      
       const path = paths.find(p => p.capability === capabilityId);
       console.log('🔵 Found path:', path);
       const score = path?.avg_score || "no score yet";
@@ -305,7 +317,7 @@ Provide a clear, actionable recommendation using this markdown structure:
 
 Keep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
 
-      console.log('🔵 About to call /api/llm/invoke');
+      console.log('🔵 About to call /api/llm/invoke with prompt length:', prompt.length);
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -316,6 +328,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
       });
 
       console.log('🔵 Fetch response:', res.status, res.statusText);
+      
       if (res.ok) {
         const data = await res.json();
         console.log('🔵 API response data:', data);
@@ -330,14 +343,25 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 : p
             )
           );
+          console.log('✅ Recommendation successfully set for capability:', capabilityId);
         } else {
-          console.log('⚠️  Empty recommendation received');
+          console.log('⚠️  Empty recommendation received from API');
+          console.log('⚠️  Full response object:', data);
         }
       } else {
-        console.log('❌ Fetch failed with status:', res.status);
+        const errorText = await res.text();
+        console.error('❌ Fetch failed with status:', res.status);
+        console.error('❌ Error response:', errorText);
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error('❌ Error details:', errorData);
+        } catch (e) {
+          // Not JSON, ignore
+        }
       }
     } catch (err) {
       console.error('❌ Generate AI recommendation error:', err);
+      console.error('❌ Error stack:', err.stack);
     } finally {
       console.log('🔵 Setting generatingAI to false');
       setGeneratingAI(false);
