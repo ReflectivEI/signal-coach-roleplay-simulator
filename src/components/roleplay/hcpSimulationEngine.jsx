@@ -516,6 +516,14 @@ PUNCTUATION RULES:
 - Multiple sentences should be clear and punctuated properly
 - Do NOT have dialogue end without proper punctuation
 
+QUESTION FLOW (CRITICAL):
+- Ask a MAXIMUM of 1-2 questions per turn
+- Real conversations spread questions naturally across multiple turns
+- DO NOT ask 3+ questions back-to-back in one response
+- Example of BAD (too many): "What were the key findings? Was the study focused on a specific population? What were the primary endpoints?"
+- Example of GOOD: "What were the key findings regarding patient outcomes?" (then wait for response)
+- Save follow-up questions for later turns after the rep has answered
+
 DO NOT SAY things like:
 ✗ "I'm disappointed in your tone"
 ✗ "I expect more professional behavior"  
