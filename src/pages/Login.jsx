@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('demo@reflectivai.com');
-  const [password, setPassword] = useState('letmein');
+  const [username, setUsername] = useState('demo@reflectiv-ai.com');
+  const [password, setPassword] = useState('demo123');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = (e) => {
@@ -41,7 +41,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="demo@reflectivai.com"
+                placeholder="demo@reflectiv-ai.com"
               />
             </div>
 
@@ -55,7 +55,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="letmein"
+                placeholder="demo123"
               />
             </div>
 
