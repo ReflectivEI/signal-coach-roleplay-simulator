@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     name: Build and Deploy to Cloudflare Pages
     env:
-      CF_PAGES_PROJECT: reflectiv-ai
       CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
     
     steps:
@@ -46,24 +45,29 @@ jobs:
 
           echo "Cloudflare API token is present and account ID format is valid."
 
-      - name: Validate Pages project access
+      - name: Resolve Pages project
+        id: resolve_project
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREFERRED_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
         run: |
           set -e
           RESPONSE=$(curl -sS -X GET \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/${CF_PAGES_PROJECT}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json")
 
-          echo "$RESPONSE" | node -e "const fs=require('fs');const body=JSON.parse(fs.readFileSync(0,'utf8'));if(body.success!==true){const errs=(body.errors||[]).map(e=>e.message).join('; ')||'Unknown Cloudflare API error';console.error('::error::Cloudflare Pages project validation failed: '+errs);process.exit(1)};console.log('Cloudflare Pages project access verified: '+(body.result?.name||process.env.CF_PAGES_PROJECT));"
+          RESOLVED_PROJECT=$(echo "$RESPONSE" | node -e "const fs=require('fs');const body=JSON.parse(fs.readFileSync(0,'utf8'));if(body.success!==true){const errs=(body.errors||[]).map(e=>e.message).join('; ')||'Unknown Cloudflare API error';console.error('::error::Cloudflare Pages API request failed: '+errs);process.exit(1)};const projects=Array.isArray(body.result)?body.result:[];const names=projects.map(p=>p&&p.name).filter(Boolean);if(names.length===0){console.error('::error::No Cloudflare Pages projects found for this account/token');process.exit(1)};const preferred=(process.env.PREFERRED_PAGES_PROJECT||'').trim();if(preferred){if(names.includes(preferred)){console.log(preferred);process.exit(0)};console.error('::error::Configured CLOUDFLARE_PAGES_PROJECT not found: '+preferred+' | Available: '+names.join(', '));process.exit(1)};if(names.includes('reflectiv-ai')){console.log('reflectiv-ai');process.exit(0)};if(names.length===1){console.error('::warning::CLOUDFLARE_PAGES_PROJECT not set; auto-selected only available project: '+names[0]);console.log(names[0]);process.exit(0)};console.error('::error::Multiple Pages projects found. Set repository variable CLOUDFLARE_PAGES_PROJECT. Available: '+names.join(', '));process.exit(1);")
+
+          echo "Using Cloudflare Pages project: ${RESOLVED_PROJECT}"
+          echo "project=${RESOLVED_PROJECT}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist/client --project-name=${{ env.CF_PAGES_PROJECT }} --branch=main
+          command: pages deploy dist/client --project-name=${{ steps.resolve_project.outputs.project }} --branch=main
 
       - name: Create GitHub Deployment
         if: success()
