@@ -242,7 +242,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         let finalResponse = coachText;
         // Add "Example Answer:" prefix if this is a content tool example
         if (isContentToolExample) {
-          finalResponse = `Example Answer:\n\n${coachText}`;
+          finalResponse = `Example:\n\n${coachText}`;
         }
 
         // Add Role Play Simulator links
