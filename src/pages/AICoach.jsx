@@ -94,6 +94,7 @@ function parseSessionContext() {
 }
 
 export default function AICoach() {
+  const [activeTab, setActiveTab] = useState(TABS.GENERAL_COACHING);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -167,7 +168,7 @@ Please give me specific, actionable feedback that directly addresses these misal
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
     // Tab-aware topic guidance logic
     const userMsg = text || input;
-    const currentTab = props?.activeTab || TABS.GENERAL_COACHING;
+    const currentTab = activeTab;
     const guidanceResponse = respondToQuestion(userMsg, currentTab);
     if (!userMsg.trim()) return;
 
