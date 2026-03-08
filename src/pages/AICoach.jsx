@@ -552,8 +552,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                 // In content tool mode: send follow-up with user's specific context + topic constraint
                 const tool = contentTools.find(t => t.label === contentToolMode);
                 if (tool) {
-                  const scopeConstraint = `\n\nSCOPE CONSTRAINT: Stay strictly within the ${contentToolMode} tool. Do not provide general coaching or discuss unrelated topics. After completing this request, ask if they need further help with this tool or want to return to general coaching.`;
-                  const followUpText = `${tool.followUpPrompt}\n\nUser's specific context: ${input}${scopeConstraint}`;
+                    const followUpText = `${tool.followUpPrompt}\n\nUser's specific context: ${input}`;
                   setContentToolMode(null); // Exit tool mode
                   sendMessage(followUpText);
                 }
