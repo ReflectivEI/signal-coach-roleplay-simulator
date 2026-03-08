@@ -1,18 +1,25 @@
 // Engagement scoring and state update
+/**
+ * Robust engagement scoring and state update for enterprise reliability.
+ * - Scores rep input for clinical value, relevance, clarity, and professionalism.
+ * - Decays engagement for repeated low-value turns.
+ * - Maps scores to engagement levels, emotional valence, stance, and momentum.
+ * - Handles time pressure and reaction triggers.
+ */
 export function updateTurnState(prevState, repMessage, prevEngagementScore, conversationHistory) {
-  // Score rep input
   let scoreDelta = 0;
-  const msg = repMessage.toLowerCase();
+  const msg = repMessage ? repMessage.toLowerCase() : '';
+  // Score for clinical value and professionalism
   if (/\bstrong clinical question\b|patient-relevant insight|credible information|clear value/.test(msg)) scoreDelta += 2;
   else if (/\brelevant question\b|concise useful point|acknowledge|value/.test(msg)) scoreDelta += 1;
   else if (/\bvague opener\b|repeats|weak|low-value/.test(msg)) scoreDelta -= 1;
   else if (/\bpromotional\b|unconvincing|wastes time|ignores/.test(msg)) scoreDelta -= 2;
-  // Clamp and decay
+  // Clamp score between 0 and 5
   let engagementScore = Math.max(0, Math.min(5, prevEngagementScore + scoreDelta));
   // Decay for consecutive low-value turns
-  const lowValueTurns = conversationHistory.slice(-3).filter(t => /vague|weak|low-value|promotional/.test((t.repMessage || '').toLowerCase())).length;
+  const lowValueTurns = conversationHistory.slice(-3).filter(t => t.repMessage && /vague|weak|low-value|promotional/.test(t.repMessage.toLowerCase())).length;
   if (lowValueTurns >= 2) engagementScore = Math.max(0, engagementScore - 1);
-  // Map score to level
+  // Map score to engagement level
   let engagementLevel = 'low';
   if (engagementScore >= 4) engagementLevel = 'high';
   else if (engagementScore >= 2) engagementLevel = 'medium';
@@ -35,10 +42,10 @@ export function updateTurnState(prevState, repMessage, prevEngagementScore, conv
   let conversationalMomentum = 'flat';
   if (scoreDelta > 0) conversationalMomentum = 'improving';
   else if (scoreDelta < 0) conversationalMomentum = 'declining';
-  // Time pressure (stub: could be scenario or rep input)
+  // Time pressure
   let timePressure = 'moderate';
   if (/\bneed 30 minutes\b|busy|rush|tight/.test(msg)) timePressure = 'high';
-  // Return turn_state
+  // Return robust turn state
   return {
     engagementScore,
     engagementLevel,

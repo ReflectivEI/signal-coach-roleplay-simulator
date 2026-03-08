@@ -29,16 +29,12 @@ ${SIGNAL_CAPABILITIES.map(c => `• ${c.label} [${c.id}]: ${c.canonicalQuestion}
 Overlap rules: ${GOVERNANCE.overlapRules.join(" | ")}
 GUARDRAIL: Never invent capabilities, sub-metrics, or scores not listed above. Observable behavior only — no intent inference.`;
 import { computeAlignment } from "./alignmentEngine";
-import CoachingOverlay, { shouldTriggerCoaching, analyzeSessionPatterns } from "./CoachingOverlay";
+import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 
-const difficultyColors = {
-  beginner: "bg-slate-100 text-slate-700",
-  intermediate: "bg-slate-100 text-slate-700",
-  advanced: "bg-slate-100 text-slate-700",
-};
+// ...existing code...
 
 const stateColors = {
   'neutral': 'bg-slate-100 text-slate-600 border-slate-200',
@@ -61,7 +57,7 @@ const stateLabels = {
 };
 
 
-export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
+export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
   const [input, setInput] = useState("");
@@ -76,7 +72,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
   // Stable session ID for deterministic cue selection
   const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
   const sid = sessionIdRef.current;
-  // eslint-disable-next-line no-unused-vars
+  // ...existing code...
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
 
@@ -118,19 +114,19 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
         // Initialize turn 0: REP SPEAKS FIRST (not HCP)
         // No HCP dialogue needed — rep opens the interaction
-          setTurns([
-            {
-              turnNumber: 0,
-              hcpStateBefore: initialState,
-              temperatureBefore: initialTemp,
-              severityBefore: 0,
-              cueBefore: initialProfile.lockedCue,
-              hcpDialogueBefore: null, // Rep speaks first, no HCP dialogue
-              repMessage: null,
-              alignment: null,
-              hcpStateAfter: null,
-            }
-          ]);
+        setTurns([
+          {
+            turnNumber: 0,
+            hcpStateBefore: initialState,
+            temperatureBefore: initialTemp,
+            severityBefore: 0,
+            cueBefore: initialProfile.lockedCue,
+            hcpDialogueBefore: null, // Rep speaks first, no HCP dialogue
+            repMessage: null,
+            alignment: null,
+            hcpStateAfter: null,
+          }
+        ]);
       } catch (err) {
         console.error('Init error:', err);
         setTurns([]);
@@ -394,8 +390,8 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
         .map(([id, score]) => ({ id, score }))
         .sort((a, b) => b.score - a.score);
 
-      const topStrengths = sortedCaps.slice(0, 3);
-      const topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
+      const _topStrengths = sortedCaps.slice(0, 3);
+      const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
       // Build deterministic report header with locked scores
       const reportHeader = `## Session Feedback
@@ -579,7 +575,7 @@ ${actionText}`;
           <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
             <ReactMarkdown
               components={{
-                h2: ({ node, children, ...props }) => {
+                h2: ({ _node, children, ...props }) => {
                   const text = String(children);
                   // First h2 is title, subsequent ones are section headers
                   const isTitle = text.includes('Session Feedback');
@@ -587,15 +583,15 @@ ${actionText}`;
                     ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
                     : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
                 },
-                h3: ({ node, ...props }) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: ({ node, ...props }) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: ({ node, ...props }) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: ({ node, ordered, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: ({ node, ordered, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: ({ node, ...props }) => <li className="mb-0" {...props} />,
-                strong: ({ node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: ({ node, ...props }) => <em className="italic text-slate-600" {...props} />,
-                blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                h3: ({ _node, ...props }) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                h4: ({ _node, ...props }) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                p: ({ _node, ...props }) => <p className="mb-3 whitespace-normal" {...props} />,
+                ul: ({ _node, _ordered, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                ol: ({ _node, _ordered, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                li: ({ _node, ...props }) => <li className="mb-0" {...props} />,
+                strong: ({ _node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                em: ({ _node, ...props }) => <em className="italic text-slate-600" {...props} />,
+                blockquote: ({ _node, ...props }) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
               }}
             >
               {feedback}

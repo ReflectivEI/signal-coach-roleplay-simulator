@@ -152,6 +152,16 @@ const CUE_BANK = {
     'The HCP sits upright, hands folded, and listens without interruption.',
     'The HCP offers a polite nod, signaling readiness for your perspective.',
     'The HCP maintains a professional demeanor, showing openness to new information.',
+    'The HCP glances up from their desk, expression open and unhurried.',
+    'The HCP nods once in acknowledgment, posture relaxed, no visible tension.',
+    'The HCP gestures for you to continue, eyes attentive.',
+    'The HCP listens quietly, hands folded, waiting for your input.',
+    'The HCP offers a slight smile, signaling comfort and openness.',
+    'The HCP leans back, arms resting, showing calm interest.',
+    'The HCP makes brief eye contact, then returns to their notes.',
+    'The HCP sits upright, attentive but not tense.',
+    'The HCP glances at the door, then refocuses on you.',
+    'The HCP maintains a neutral expression, ready for your next point.',
   ],
   'engaged': [
     'The HCP leans forward, hands on the desk, actively responding to your ideas.',
@@ -164,6 +174,16 @@ const CUE_BANK = {
     'The HCP references a recent case, drawing parallels to your proposal.',
     'The HCP offers a handshake or fist bump, signaling partnership.',
     'The HCP smiles and takes notes, clearly valuing your input.',
+    'The HCP beams, eyes crinkling with genuine delight.',
+    'The HCP offers a compliment, boosting your confidence.',
+    'The HCP maintains eye contact, smile unwavering.',
+    'The HCP gestures to the whiteboard, inviting collaboration.',
+    'The HCP leans in, voice encouraging, eager for your ideas.',
+    'The HCP gives a thumbs up, affirming your approach.',
+    'The HCP laughs, breaking tension and building rapport.',
+    'The HCP nods repeatedly, showing strong agreement.',
+    'The HCP expresses gratitude for your input.',
+    'The HCP mirrors your enthusiasm, creating a collaborative atmosphere.',
   ],
   'time-pressured': [
     'The HCP glances at the clock, then gestures for you to be concise.',
@@ -365,7 +385,7 @@ function hashInt(str) {
  * Enhanced selectCue that can use contextual information for better body language matching.
  * Falls back to deterministic selection if context not provided.
  */
-export function selectCue(sessionId, turnNumber, hcpState, severity = 0, hcpDialogue = '', repMessage = '', conversationHistory = []) {
+export function selectCue(sessionId, turnNumber, hcpState, _severity = 0, hcpDialogue = '', repMessage = '', conversationHistory = []) {
   // If dialogue and message provided, use contextual generation
   if (hcpDialogue || repMessage) {
     return generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue, repMessage, conversationHistory);
