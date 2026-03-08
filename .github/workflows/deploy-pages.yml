@@ -73,7 +73,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist/client --project-name=reflect-ai-now --branch=main
+          command: deploy
 
       - name: Create GitHub Deployment
         if: success()
