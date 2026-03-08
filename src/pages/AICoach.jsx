@@ -553,12 +553,9 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             onSubmit={(e) => {
               e.preventDefault();
               if (contentToolMode && input.trim()) {
-                // In content tool mode: send only the tool's follow-up prompt
-                const tool = contentTools.find(t => t.label === contentToolMode);
-                if (tool) {
-                  setContentToolMode(null); // Exit tool mode
-                  sendMessage(tool.followUpPrompt);
-                }
+                // In content tool mode: send user input as message, then exit tool mode
+                setContentToolMode(null);
+                sendMessage(input);
               } else if (!contentToolMode) {
                 // Normal conversation mode
                 sendMessage();
