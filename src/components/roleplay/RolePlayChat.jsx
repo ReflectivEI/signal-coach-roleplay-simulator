@@ -14,6 +14,7 @@ import {
   normalizeHcpDialoguePunctuation,
   detectHcpDisagreement, escalateForDisagreement,
   TEMPERATURES,
+  updateTurnState,
 } from "./hcpSimulationEngine";
 import {
   generateContextualCue,
