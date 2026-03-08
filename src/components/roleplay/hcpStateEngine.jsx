@@ -37,11 +37,10 @@ export function deriveInitialState(scenario) {
   if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
     return 'irritated';
   }
-  if (/engag|curio|interest|open|recept|enthusiast|new|innovative|data|evidence|clinical/.test(text)) {
+  if (/engag|curio|interest|open|recept|enthusiast/.test(text)) {
     return 'engaged';
   }
-  // Default to engaged instead of neutral — more interesting baseline for coaching
-  return 'engaged';
+  return 'neutral';
 }
 
 /**
@@ -52,21 +51,21 @@ export function transitionState(currentState, repMessage) {
   const msg = repMessage.toLowerCase();
   const idx = STATE_INDEX[currentState] ?? 0;
 
-  // HARD ESCALATE +2 for insults, hostility, disrespect, competence attacks
-  const hardEscalate = /you suck|i hate you|hate you|you.re (terrible|awful|bad|pathetic|useless|worthless|disgusting)|bad doctor|incompetent|you don.t know|stupid|idiot|wrong about|you.re wrong|disrespect|rude|unprofessional|get out|leave|get lost|trash|garbage/.test(msg);
+  // Escalate +2 for insults / competence attacks
+  const hardEscalate = /bad doctor|incompetent|you don.t know|stupid|idiot|wrong about|you.re wrong|terrible|awful|you should|you must|you have to/.test(msg);
   if (hardEscalate) {
     return HCP_STATES[Math.min(idx + 2, HCP_STATES.length - 1)];
   }
 
-  // SOFT ESCALATE +1 for pressure / repetition / demand language
-  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|have to|must/.test(msg);
+  // Escalate +1 for pressure / repetition / demand language
+  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you/.test(msg);
   if (softEscalate) {
     return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
   }
 
-  // DE-ESCALATE -1 ONLY for strong acknowledgment / humility / respect
-  const strongDeEscalate = /i apologize|i.m sorry|my mistake|you.re right|i respect that|that.s fair|i understand|i hear you/.test(msg);
-  if (strongDeEscalate && idx > 0) {
+  // De-escalate -1 for acknowledgment / constraint recognition / alternative offer
+  const deEscalate = /i understand|i hear you|makes sense|fair point|i appreciate|given your time|briefly|just one thing|when works for you|no pressure|whenever you.re ready|i can follow up|that.s helpful|thank you for sharing/.test(msg);
+  if (deEscalate) {
     return HCP_STATES[Math.max(idx - 1, 0)];
   }
 
@@ -80,10 +79,10 @@ export function getToneDirectives(state) {
   const directives = {
     'neutral': {
       maxSentences: 3,
-      tone: 'professional and composed',
+      tone: 'professional and measured',
       warmth: 'moderate',
-      pacing: 'measured',
-      instruction: 'Respond as a professional HCP would — engaged with the conversation, asking clarifying questions when needed. Professional but personable. Show genuine interest in clinical details. Reference your experience or patient outcomes.',
+      pacing: 'relaxed',
+      instruction: 'Respond professionally. Neither warm nor cold. Open but not enthusiastic.',
     },
     'engaged': {
       maxSentences: 3,

@@ -222,7 +222,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: systemPrompt, roleplay: true, temperature: nextTemp })
+        body: JSON.stringify({ prompt: systemPrompt, roleplay: true })
       });
       if (res.ok) {
         const data = await res.json();
