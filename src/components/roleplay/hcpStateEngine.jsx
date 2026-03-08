@@ -134,51 +134,161 @@ export function getToneDirectives(state) {
  * Get the observable cue description for a given state.
  * These are varied, locked per turn, and derived deterministically.
  * seed = simple hash of sessionId + turnNumber + state.
+ * 
+ * ENHANCED: Cues now include specific body language that matches dialogue themes
+ * (e.g., busy/frazzled, irritation, etc.) to provide observable signals rep can respond to.
  */
+
+// Extended cue bank with more specific, contextualized body language
 const CUE_BANK = {
   'neutral': [
     'The HCP pauses at their desk, making brief eye contact, posture relaxed.',
     'The HCP sets down their pen and turns to face you, expression neutral.',
     'The HCP nods once in acknowledgment, showing no particular urgency or resistance.',
     'The HCP crosses their arms loosely, listening without visible enthusiasm or pushback.',
+    'The HCP leans back slightly in their chair, waiting for you to continue. Attentive but measured.',
+    'The HCP\'s gaze is steady but unfocused — they\'re listening but reserving judgment.',
   ],
   'engaged': [
     'The HCP leans slightly forward, making sustained eye contact and nodding as you speak.',
     'The HCP sets aside their chart and turns fully toward you, expression attentive.',
     'The HCP asks a clarifying question mid-sentence, showing active interest in the topic.',
     'The HCP\'s body language opens — shoulders back, direct eye contact, a slight smile.',
+    'The HCP leans forward with genuine interest, eyebrows slightly raised as they listen.',
+    'The HCP nods actively and says "Tell me more" or similar, showing they\'re engaged.',
   ],
   'time-pressured': [
     'The HCP glances at their watch mid-sentence. A nurse approaches with a patient file.',
     'The HCP is already walking toward a patient room. They slow down but don\'t stop.',
     'The HCP checks their phone, then looks up with a tight expression. The waiting room is full.',
     'The HCP\'s pager buzzes. They acknowledge you with a glance but their weight shifts toward the door.',
+    'The HCP looks frazzled — hair slightly disheveled, expression tense. They keep one eye on their computer screen.',
+    'The HCP stands while speaking with you, clearly pressed for time. They shift their weight, ready to move at any moment.',
+    'The HCP glances at the clock on the wall, then back at you with a tightness around their mouth.',
+    'The HCP\'s shoulders are raised slightly with tension. They speak quickly, abbreviating words.',
   ],
   'resistant': [
     'The HCP\'s expression tightens. They cross their arms and make limited eye contact.',
     'The HCP tilts their head, expression skeptical. They tap a finger on the desk slowly.',
     'The HCP exhales audibly and leans back in their chair, creating visible distance.',
     'The HCP\'s tone flattens. They give a short, noncommittal response and wait.',
+    'The HCP\'s jaw visibly tightens. They look away, then back at you with doubt in their eyes.',
+    'The HCP maintains steady, challenging eye contact. Their mouth is set in a thin line.',
+    'The HCP narrows their eyes slightly, expression hardening. They don\'t nod — they just listen.',
   ],
   'boundary-setting': [
     'The HCP holds up one hand briefly — a clear physical stop signal — before speaking.',
     'The HCP takes a deliberate breath, straightens up, and establishes direct eye contact before responding.',
     'The HCP places their pen down and folds their hands. Their tone shifts to formal and measured.',
     'The HCP steps back slightly and faces you squarely, signaling a firm limit is being communicated.',
+    'The HCP sits up straighter, their posture now rigid. Their voice becomes clipped and precise.',
+    'The HCP makes a subtle "stop" gesture with their hand while maintaining firm eye contact.',
   ],
   'irritated': [
     'The HCP\'s jaw tightens. They look away briefly before responding with a clipped tone.',
     'The HCP closes their chart with a snap and turns to face you, expression sharp.',
     'The HCP exhales sharply through their nose, brow furrowed, eyes flat.',
     'The HCP\'s response is delivered while already turning away — the interaction is clearly wearing on them.',
+    'The HCP\'s eyes roll briefly before they answer. Their tone is visibly strained.',
+    'The HCP\'s nostrils flare slightly. Their response comes faster, clipped. Clearly annoyed.',
+    'The HCP leans back and crosses their arms tightly. Their expression is closed off and irritated.',
+    'The HCP speaks while looking at their desk, not at you. Their tone is curt and dismissive.',
   ],
   'disengaging': [
     'The HCP begins moving toward the hallway, glancing back over their shoulder to respond.',
     'The HCP looks past you to the waiting room and picks up their clipboard. The conversation is ending.',
     'The HCP closes their laptop and stands up. Their body language signals the interaction is over.',
     'The HCP takes a step toward the door, offering only a brief acknowledgment before reaching for the handle.',
+    'The HCP is already pulling on their white coat. They give you a polite but final nod.',
+    'The HCP stands and extends their hand for a handshake that signals closure. They\'re done.',
+    'The HCP begins walking away mid-conversation, offering a brief comment over their shoulder.',
   ],
 };
+
+/**
+ * ENHANCED: Analyze the rep's recent question for quality issues.
+ * Returns object with detected issues: { pushy, redundant, poorlyThoughtOut, demanding }
+ * These help select cues that show HCP irritation or impatience.
+ */
+export function analyzeQuestionQuality(repMessage, conversationHistory = []) {
+  if (!repMessage) return { pushy: false, redundant: false, poorlyThoughtOut: false, demanding: false };
+
+  const msg = repMessage.toLowerCase().trim();
+  
+  // Detect pushy/demanding language
+  const pushy = /now\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|you must|you have to|you should/.test(msg);
+  
+  // Detect redundancy (same question asked multiple times)
+  const lastThreeMsgs = conversationHistory.slice(-3).map(t => (t.repMessage || '').toLowerCase());
+  const currentQ = msg.split(/[?!.]/, 1)[0]; // First sentence
+  const redundant = lastThreeMsgs.some(prev => {
+    if (!prev) return false;
+    const prevQ = prev.split(/[?!.]/, 1)[0];
+    return prevQ.length > 10 && currentQ.includes(prevQ.substring(0, 15));
+  });
+  
+  // Detect poorly thought-out signals (vague, incomplete, disorganized)
+  const poorlyThoughtOut = /uh|um|like|basically|i guess|i think|maybe|could you|would you|uh hmm/.test(msg) && msg.length < 30;
+  
+  // Detect demanding tone
+  const demanding = /^(tell me|give me|explain|prove|answer|respond|stop|don't|don.t)/.test(msg);
+
+  return { pushy, redundant, poorlyThoughtOut, demanding };
+}
+
+/**
+ * ENHANCED: Generate a contextual cue that reacts to dialogue quality.
+ * If rep's question is pushy/redundant/poorly thought out, HCP shows irritation/impatience.
+ */
+export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue = '', repMessage = '', conversationHistory = []) {
+  // Get the base cue for the state
+  const baseCues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
+  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
+  const baseCue = baseCues[seed % baseCues.length];
+
+  // Analyze dialogue for business-related cues
+  if (hcpDialogue && hcpState === 'time-pressured') {
+    const busyIndicators = /busy|rush|patient|meeting|waiting|tight|schedule|need to go|see you soon|later|quickly/.test(hcpDialogue.toLowerCase());
+    if (busyIndicators) {
+      // Add more frazzled body language cues
+      const timePressCues = [
+        baseCue, // Keep some randomness
+        'The HCP looks visibly stressed, glancing repeatedly at their watch. Their leg bounces with restlessness.',
+        'The HCP\'s speech quickens. They tap their fingers on the desk in a rapid rhythm, clearly anxious to move.',
+        'The HCP maintains a polite facade but their eyes keep drifting to the door.',
+      ];
+      return timePressCues[seed % timePressCues.length];
+    }
+  }
+
+  // Analyze question quality for irritation cues
+  const questionQuality = analyzeQuestionQuality(repMessage, conversationHistory);
+  if (hcpState === 'irritated') {
+    if (questionQuality.pushy || questionQuality.redundant || questionQuality.demanding) {
+      // Use more intense irritation cues
+      const irritationCues = [
+        'The HCP\'s jaw visibly clenches. They take a breath before responding, clearly holding back frustration.',
+        'The HCP closes their eyes for a moment, as if counting to ten. When they open them, their expression is hard.',
+        'The HCP\'s fingers drum impatiently on the desk. They respond with barely concealed annoyance.',
+        baseCue,
+      ];
+      return irritationCues[seed % irritationCues.length];
+    }
+  }
+
+  // For resistant state, if question is poorly thought out, add skeptical emphasis
+  if (hcpState === 'resistant' && questionQuality.poorlyThoughtOut) {
+    const skepticalCues = [
+      'The HCP raises an eyebrow slowly, expression becoming more skeptical. They wait for you to finish.',
+      'The HCP looks confused for a moment, as if trying to understand what you\'re saying.',
+      baseCue,
+    ];
+    return skepticalCues[seed % skepticalCues.length];
+  }
+
+  // Default to base cue
+  return baseCue;
+}
 
 /**
  * Simple deterministic hash for cue selection (no Math.random).
@@ -191,7 +301,17 @@ function hashInt(str) {
   return Math.abs(h);
 }
 
-export function selectCue(sessionId, turnNumber, hcpState) {
+/**
+ * Enhanced selectCue that can use contextual information for better body language matching.
+ * Falls back to deterministic selection if context not provided.
+ */
+export function selectCue(sessionId, turnNumber, hcpState, severity = 0, hcpDialogue = '', repMessage = '', conversationHistory = []) {
+  // If dialogue and message provided, use contextual generation
+  if (hcpDialogue || repMessage) {
+    return generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue, repMessage, conversationHistory);
+  }
+  
+  // Fallback: deterministic selection from base cue bank
   const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
   return cues[seed % cues.length];

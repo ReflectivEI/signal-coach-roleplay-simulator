@@ -419,6 +419,8 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0) {
  * This is the single source of truth — everything downstream reads from here.
  */
 export function buildHCPProfile({ sessionId, turnNumber, structuralState, temperature, severity }) {
+  // selectCue signature updated to accept optional dialogue/message context for enhanced body language
+  // If context not provided, falls back to deterministic static selection
   const lockedCue = selectCue(sessionId, turnNumber, structuralState, severity);
   const toneDirectives = getToneDirectives(structuralState, temperature);
 
