@@ -148,6 +148,10 @@ const CUE_BANK = {
     'The HCP turns fully toward you, hands relaxed, signaling genuine consideration.',
     'The HCP glances at the chart, then back to you, ready to engage on your topic.',
     'The HCP holds steady eye contact, waiting for your next point.',
+    'The HCP reviews your materials, then gestures for you to continue.',
+    'The HCP sits upright, hands folded, and listens without interruption.',
+    'The HCP offers a polite nod, signaling readiness for your perspective.',
+    'The HCP maintains a professional demeanor, showing openness to new information.',
   ],
   'engaged': [
     'The HCP leans forward, hands on the desk, actively responding to your ideas.',
@@ -156,6 +160,10 @@ const CUE_BANK = {
     'The HCP maintains unwavering eye contact, nodding in sync with your statements.',
     'The HCP nods slowly, mirroring your energy and showing deep alignment.',
     'The HCP shifts closer, posture energized, ready to collaborate.',
+    'The HCP gestures animatedly, building on your suggestions.',
+    'The HCP references a recent case, drawing parallels to your proposal.',
+    'The HCP offers a handshake or fist bump, signaling partnership.',
+    'The HCP smiles and takes notes, clearly valuing your input.',
   ],
   'time-pressured': [
     'The HCP glances at the clock, then gestures for you to be concise.',
@@ -166,6 +174,8 @@ const CUE_BANK = {
     'The HCP looks toward the hallway, impatient, body angled away from the conversation.',
     'The HCP taps the desk, eyes scanning for an exit.',
     'The HCP keeps writing, barely looking up, signaling limited bandwidth.',
+    'The HCP glances at a waiting patient list, then signals for brevity.',
+    'The HCP checks their watch, then summarizes the discussion to move things along.',
   ],
   'resistant': [
     'The HCP folds their arms, leans back, and raises an eyebrow, challenging your assertion.',
@@ -174,6 +184,10 @@ const CUE_BANK = {
     'The HCP tilts their head, arms crossed, and asks for clarification.',
     'The HCP pauses, gaze fixed, unconvinced by your rationale.',
     'The HCP looks back at the chart, then responds with a guarded tone.',
+    'The HCP sighs quietly, then requests more data or references.',
+    'The HCP glances at a colleague, seeking validation for their skepticism.',
+    'The HCP makes a note, then asks a pointed follow-up question.',
+    'The HCP maintains a closed posture, signaling reluctance to proceed.',
   ],
   'boundary-setting': [
     'The HCP holds up one hand, palm outward, firmly setting a conversational boundary.',
@@ -182,6 +196,10 @@ const CUE_BANK = {
     'The HCP steps back, posture rigid, and requests a shift in focus.',
     'The HCP makes a stop gesture, maintains firm eye contact, and redirects the conversation.',
     'The HCP straightens, arms at their sides, and closes the topic with authority.',
+    'The HCP refers to institutional policy, reinforcing the boundary.',
+    'The HCP glances at the time, then reiterates the need to move on.',
+    'The HCP summarizes the boundary, ensuring clarity for all parties.',
+    'The HCP signals for a topic change, then waits for your response.',
   ],
   'irritated': [
     'The HCP\'s jaw tightens, eyes narrowed, and they respond with clipped phrases.',
@@ -192,6 +210,8 @@ const CUE_BANK = {
     'The HCP\'s nostrils flare, posture rigid, and they cut the conversation short.',
     'The HCP leans back, arms crossed, and offers minimal feedback.',
     'The HCP speaks curtly, avoids eye contact, and signals impatience.',
+    'The HCP drums their fingers on the desk, then sighs audibly.',
+    'The HCP glances at the door, clearly ready to end the conversation.',
   ],
   'disengaging': [
     'The HCP begins moving toward the hallway, gathering their belongings as they signal closure.',
@@ -201,6 +221,9 @@ const CUE_BANK = {
     'The HCP pulls on their white coat, offers a handshake, and leaves promptly.',
     'The HCP stands, signals closure with a firm handshake, and departs.',
     'The HCP walks away, delivers a brief comment over their shoulder, and exits.',
+    'The HCP checks their schedule, then signals the need to wrap up.',
+    'The HCP glances at a waiting patient, then ends the conversation politely.',
+    'The HCP summarizes next steps, then departs efficiently.',
   ],
 };
 
