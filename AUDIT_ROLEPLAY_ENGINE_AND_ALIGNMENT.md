@@ -12,6 +12,7 @@
 The ReflectivAI roleplay simulator is **well-architected, deterministic, and pedagogically sound**. The system successfully implements a sophisticated behavioral state machine for HCP simulation with a comprehensive 8-capability alignment scoring rubric.
 
 **Key Strengths:**
+
 - ✅ **Fully deterministic** (no randomness) — reproducible, fair scoring
 - ✅ **Immutable HCP profiles** — cue and dialogue guaranteed to match state
 - ✅ **Observable behavior focus** — scores what reps can see and control
@@ -19,6 +20,7 @@ The ReflectivAI roleplay simulator is **well-architected, deterministic, and ped
 - ✅ **Clear separation of concerns** — state engine, alignment engine, simulation engine, orchestration
 
 **Critical Areas Requiring Attention:**
+
 - ⚠️ **Regex pattern detection** — false positives in some scoring conditions
 - ⚠️ **Wind-up vs. escalation logic** — severity escalation calculation could be clearer
 - ⚠️ **Pattern validation** — some regex patterns overlap and could trigger unintentionally
@@ -108,6 +110,7 @@ neutral (0) → engaged (1) → time-pressured (2) → resistant (3)
 | De-escalation (I understand, fair point) | -1 | Always |
 
 ✅ **Strengths:**
+
 - Multiple escalation vectors (hard +2, medium +1, soft +1 with condition)
 - De-escalation always available
 - State ladder prevents "jumping" (e.g., neutral→irritated in one turn)
@@ -124,6 +127,7 @@ if (softEscalate && tempIsHot) return HCP_STATES[Math.min(idx + 1, ...)];
 **Problem:** Pressure language like "you need to" or "immediately" only escalates if temperature is already hot. This means in a neutral/cold conversation, a rep can repeatedly use demanding language without escalating the HCP state until temperature rises first.
 
 **Example scenario:**
+
 1. Rep: "You should really consider this" (pressure language)
 2. HCP: Responds in `stressed` temperature
 3. Rep: "You need to commit now" (hard pressure again)
@@ -142,6 +146,7 @@ if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
 **Problem:** A rep saying "I don't actually know the exact number" gets treated the same as "I made that up" — both trigger +1 escalation. The first is honest and humbling; the second is devastating.
 
 **Recommendation:** Distinguish between:
+
 - Honest uncertainty ("I don't actually know the mechanism") → no escalation
 - Fabrication admission ("I made that up") → hard escalate +2
 
@@ -151,6 +156,7 @@ if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
 **Severity:** Escalation memory (0=mild, 1=moderate, 2=strong) — selects HCP cue tier
 
 **Current relationship:**
+
 - Temperature and state transition independently
 - Severity is computed from alignment + state transitions
 - Temperature feeds into HCP dialogue prompt but doesn't directly escalate state
@@ -160,6 +166,7 @@ if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
 ⚠️ **Issue 3: Temperature Escalation Timing**
 
 From RolePlayChat.jsx (line ~180):
+
 ```javascript
 // Temperature escalates for NEXT turn if HCP disagreed in current turn
 if (respondingToTurn.hcpDisagreed) {
@@ -169,6 +176,7 @@ if (respondingToTurn.hcpDisagreed) {
 ```
 
 **Problem:** HCP disagreement is detected at the **END** of a turn, but temperature escalation applies to the **NEXT** turn. This 1-turn delay may cause:
+
 - Rep doesn't perceive temperature escalation immediately
 - Rep's next message is scored against old temperature
 - Feeling of "slow responsibility learning"
@@ -193,6 +201,7 @@ export function deriveInitialState(scenario) {
 ⚠️ **Issue 4: Keyword Overlap in Regex Patterns**
 
 Example: "I'm resistant to change, but I'm interested in learning more"
+
 - Matches `/resist/` → returns 'resistant'
 - Never reaches check for `/interest/`
 
@@ -220,6 +229,7 @@ Example: "I'm resistant to change, but I'm interested in learning more"
 **Overall Score:** `avg(all 8 capability scores)` clamped to [1, 5]
 
 ✅ **Strengths:**
+
 - Equal weighting prevents gaming (no high-score shortcuts)
 - Sub-metrics are concrete and observable
 - Asymmetric scoring (e.g., Objection Nav only scored if `hcpState ∈ {resistant, boundary-setting}`)
@@ -235,6 +245,7 @@ providesEvidence:
 ```
 
 **False positive case:** Rep says "I understand your clinical skepticism, but here are my data points..."
+
 - Matches `/research/` in "research-backed"
 - Triggers `providesEvidence = true`
 - Even though it's in a de-escalating context
@@ -252,12 +263,14 @@ pitchesTooEarly:
 ```
 
 **False positive case:** Rep says "Our research team published findings, given your interest in the disease state..."
+
 - Matches `/our|clinical data/`
 - Then checks negative lookahead for `/given your/`
 - But the negative lookahead is case-sensitive? No, lc applies first.
 - **Actually OK here.**
 
 **But another false positive:** Rep says "Our product works by..." in response to "How does it work?"
+
 - Not actually pitching too early (was asked directly)
 - Still triggers penalty
 
@@ -295,6 +308,7 @@ export function transitionSeverity(currentSeverity, alignment, prevState, nextSt
 **Current outcome:** Rep gets hit twice — lower score + harsher HCP cues next turn.
 
 **This is intentional pedagogically** (teaches consequences), but the logic should be clear:
+
 - State escalates based on message content
 - Severity escalates based on communication quality (alignment)
 
@@ -303,6 +317,7 @@ export function transitionSeverity(currentSeverity, alignment, prevState, nextSt
 ⚠️ **Issue 8: HCP Disagreement Escalation Timing**
 
 From RolePlayChat.jsx (line ~175):
+
 ```javascript
 // HCP disagreed in turn we just responded to
 if (respondingToTurn.hcpDisagreed) {
@@ -312,6 +327,7 @@ if (respondingToTurn.hcpDisagreed) {
 ```
 
 **Flow:**
+
 1. Rep responds to HCP
 2. HCP generates dialogue (may disagree)
 3. Disagreement detected
@@ -319,10 +335,12 @@ if (respondingToTurn.hcpDisagreed) {
 5. Rep sees cooler HCP in next turn
 
 **Problem:** Rep is responding to the HCP's new (cooler) temperature, but the rep's message was scored against the old (warmer) temperature. This 1-turn lag means:
+
 - Rep can't immediately see consequence of causing disagreement
 - Next turn's alignment scoring uses old temperature baseline
 
 **Example:**
+
 1. Rep: "But clinical data shows..." (challenging)
 2. HCP (warm): "I appreciate your evidence. Does your company support ongoing training?"
    - Contains mild disagreement ("Does your company support...")
@@ -358,6 +376,7 @@ export function computeAlignmentRubric(hcpState, p) {
 **Example:** Rep does de-escalate AND offers next step, but engagement still drops.
 
 Current logic:
+
 ```javascript
 if (engagementDrop && !p.deEscalates && !p.isBrief && p.continuesMonologue) {
   // Only flagged if ALL conditions true
@@ -409,6 +428,7 @@ export function buildHCPProfile({ sessionId, turnNumber, structuralState, temper
 With **deterministic hashing**, same (session, turn, state, severity) always returns same cue.
 
 **Problem:** Cues are locked **per turn**, meaning the same HCP profile could repeat if:
+
 - Session continues to 100+ turns
 - Hash collisions occur
 - New scenarios reuse session IDs
@@ -434,6 +454,7 @@ QUESTION FLOW (CRITICAL - STRICTLY ENFORCED):
 ```
 
 ✅ **Strengths:**
+
 - Clear separation: cue = body language, dialogue = words only
 - Explicitly forbids meta-commentary ("I'm disappointed")
 - Enforces single-question-per-turn discipline
@@ -449,6 +470,7 @@ a patient, a schedule, your pager. 1-2 sentences MAX. Do not elaborate.
 ```
 
 **Problem:** "Reference time explicitly" is vague. LLM may generate:
+
 - ✅ "I have a patient waiting—what's the bottom line?"
 - ❌ "It's 2:30 PM and I have limited time."
 - ❌ "I only have 3 minutes." (too literal, breaks immersion)
@@ -512,6 +534,7 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
 **Input:** "Don't you agree with this approach"
 
 **Processing:**
+
 - Starts with "Don't" → not in pattern
 - Doesn't match question starters
 - Treated as statement: "Don't you agree with this approach**.**"
@@ -556,6 +579,7 @@ const nextHcpState = transitionState(prevState, repMessage, prevTemp);
 ```
 
 **Problem:** No record of WHY state transitioned. Coaching UI can only show:
+
 - "State changed from neutral to irritated"
 - But NOT: "Because you used demanding language + temperature was already stressed"
 
@@ -636,6 +660,7 @@ try {
 **File:** `hcpSimulationEngine.jsx`, line ~250
 
 **Problem:**
+
 ```javascript
 const softEscalate = /\bjust do it\b|\bwhy won.t you\b|.../;
 const tempIsHot = currentTemperature === 'stressed' || currentTemperature === 'irritated';
@@ -645,6 +670,7 @@ if (softEscalate && tempIsHot) return ...+1;
 Rep can repeat demanding language indefinitely without escalating state if temperature is neutral/positive.
 
 **Fix:**
+
 ```javascript
 // Soft escalate +1 ALWAYS on second occurrence within session
 if (softEscalate) {
@@ -669,6 +695,7 @@ if (softEscalate) {
 **File:** `alignmentEngine.jsx`, line ~158
 
 **Problem:**
+
 ```javascript
 multipleQuestions: qc > 2,  // Penalizes 3+ questions
 ```
@@ -676,6 +703,7 @@ multipleQuestions: qc > 2,  // Penalizes 3+ questions
 Example: "What are your main concerns about safety, efficacy, and implementation timeline?" = 3 questions grammatically, 1 ask logically. Gets penalized for Contextual Relevance -1.
 
 **Fix:**
+
 ```javascript
 // Better heuristic: count by interrogative punctuation + lack of conjunctions
 const hasConjunctions = /\b(and|or|but|while|if)\b/i.test(msg);
@@ -695,6 +723,7 @@ const multipleQuestions = sentenceQuestions.filter(q => q > 0).length > 1;
 **File:** `alignmentEngine.jsx`, line ~110
 
 **Problem:**
+
 ```javascript
 providesEvidence: /\b(data|study|trial|clinical|evidence|research|...)\b/.test(lc)
 ```
@@ -702,6 +731,7 @@ providesEvidence: /\b(data|study|trial|clinical|evidence|research|...)\b/.test(l
 Triggers on "I understand your clinical concerns" or "I appreciate your research approach" — not actually providing evidence.
 
 **Fix:**
+
 ```javascript
 providesEvidence: /((?:study|trial|data|evidence|research)\s*(?:shows?|demonstrated|indicates?|suggests))/i.test(msg),
 ```
@@ -715,6 +745,7 @@ Requires evidence keyword to be connected to a main verb (shows, demonstrated, i
 **File:** `hcpSimulationEngine.jsx`, line ~260
 
 **Problem:**
+
 ```javascript
 const selfSabotage = /\bi don.t (actually |really )?know\b|.../.test(msg);
 if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
@@ -723,6 +754,7 @@ if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
 "I don't actually know the mechanism" (honest) == "I made that up" (fabrication). Both escalate state.
 
 **Fix:**
+
 ```javascript
 const honestUncertainty = /\bi don.?t actually know|i.?m not sure|i.?d need to check/i;
 const obviousFabrication = /\bi made (it|that|this) up\b|i fabricated|that.?s false|i lied/i;
@@ -782,23 +814,23 @@ if (honestUncertainty.test(msg) && !obviousFabrication.test(msg)) {
 
 ### Short-term (1-2 Sprints)
 
-5. **Add transition reason logging** — explain to user WHY state/temp changed.
-6. **Enhance opening message examples** — provide specific dialogue examples for each state.
-7. **Fix rubric false negatives** — flag engagement drop + length, separate from de-escalation success.
-8. **Add rhetorical question detection** — improve punctuation normalization.
+1. **Add transition reason logging** — explain to user WHY state/temp changed.
+2. **Enhance opening message examples** — provide specific dialogue examples for each state.
+3. **Fix rubric false negatives** — flag engagement drop + length, separate from de-escalation success.
+4. **Add rhetorical question detection** — improve punctuation normalization.
 
 ### Medium-term (Next Quarter)
 
-9. **Expand cue variety** — add 2-4 more cues per severity tier to reduce repetition in long sessions.
-10. **Implement transition tracking** — log which transition rule fired for analytics/debugging.
-11. **Add LLM failure monitoring** — detect and log when dialogue generation fails silently.
-12. **Create transition documentation** — publish clear rules for state/temp escalation as coaching material.
+1. **Expand cue variety** — add 2-4 more cues per severity tier to reduce repetition in long sessions.
+2. **Implement transition tracking** — log which transition rule fired for analytics/debugging.
+3. **Add LLM failure monitoring** — detect and log when dialogue generation fails silently.
+4. **Create transition documentation** — publish clear rules for state/temp escalation as coaching material.
 
 ### Strategic (Long-term)
 
-13. **Consider multi-state transitions** — allow occasional state "jumps" on extreme behavior (e.g., severe insult → disengaging immediately).
-14. **Add scenario difficulty tuning** — let Scenario Builders set escalation sensitivity per HCP type.
-15. **Implement peer comparison mode** — show how other reps handled same scenario (fairness check).
+1. **Consider multi-state transitions** — allow occasional state "jumps" on extreme behavior (e.g., severe insult → disengaging immediately).
+2. **Add scenario difficulty tuning** — let Scenario Builders set escalation sensitivity per HCP type.
+3. **Implement peer comparison mode** — show how other reps handled same scenario (fairness check).
 
 ---
 
@@ -826,6 +858,7 @@ The ReflectivAI roleplay simulator is **production-ready** with **excellent peda
 **Address Issues #1-4 before next major release** to prevent gaming and fix false positives. The remaining issues are refinements that improve UX and clarity without affecting core functionality.
 
 **Overall Assessment:** ⭐⭐⭐⭐ (4/5)  
+
 - Deduct 1 star for regex false positives and soft escalation context-dependency
 - Excellent architecture and pedagogical design
 - Minor improvements needed for edge cases and transparency

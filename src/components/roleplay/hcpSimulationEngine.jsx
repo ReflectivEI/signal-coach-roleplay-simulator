@@ -291,13 +291,13 @@ export function transitionState(currentState, repMessage, currentTemperature) {
 // This is used to escalate emotional state to show irritation/disconnection.
 export function detectHcpDisagreement(hcpResponse) {
   const msg = hcpResponse.toLowerCase();
-  
+
   // Strong disagreement patterns
   const strongDisagree = /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi.m not (convinced|sold|buying|interested)|\bthat.s (wrong|incorrect|not true|not accurate)|\bcan.t recommend|\bwon.t (prescribe|use)|\bskeptical|\bdoubt\b|\b(not|isn.t) (helpful|beneficial|relevant|applicable)/i.test(msg);
-  
+
   // Mild disagreement patterns
   const mildDisagree = /\bhesitant|\bunsure|\bconcern|\bquestion (whether|if)|\bneed more (evidence|data|proof)|\bneed to think|\bneed to (review|check)|\bnot sure (yet|about)|\blet me (think|review)/i.test(msg);
-  
+
   return { strongDisagree, mildDisagree, disagrees: strongDisagree || mildDisagree };
 }
 
@@ -307,10 +307,10 @@ export function detectHcpDisagreement(hcpResponse) {
 // Output: escalated temperature index
 export function escalateForDisagreement(currentTempIndex, disagreeInfo) {
   if (!disagreeInfo.disagrees) return currentTempIndex;
-  
+
   // Handle both number and string inputs
   let idx = typeof currentTempIndex === 'number' ? currentTempIndex : TEMP_INDEX[currentTempIndex] ?? 1;
-  
+
   // Both strong and mild disagreement escalate temperature by 1 level
   // This shows frustration, coldness, or disconnection
   return Math.min(idx + 1, TEMPERATURES.length - 1);
@@ -365,40 +365,40 @@ export function getToneDirectives(state, temperature) {
   };
 }
 
-  export function normalizeHcpDialoguePunctuation(dialogue) {
-    if (!dialogue) return dialogue;
+export function normalizeHcpDialoguePunctuation(dialogue) {
+  if (!dialogue) return dialogue;
 
-    let text = String(dialogue).replace(/\s+/g, ' ').trim();
-    if (!text) return text;
+  let text = String(dialogue).replace(/\s+/g, ' ').trim();
+  if (!text) return text;
 
-    // Only match question words at the START of a sentence (not anywhere in the sentence)
-    // "Am I looking?" = question | "I am looking." = statement
-    const questionStarterPattern = /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
+  // Only match question words at the START of a sentence (not anywhere in the sentence)
+  // "Am I looking?" = question | "I am looking." = statement
+  const questionStarterPattern = /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
 
-    // Split into sentences and process each individually
-    const sentences = text.match(/[^?.!]+[?.!]?/g) || [text];
-    const normalized = sentences
-      .map((rawSentence) => {
-        const sentence = rawSentence.trim();
-        if (!sentence) return '';
+  // Split into sentences and process each individually
+  const sentences = text.match(/[^?.!]+[?.!]?/g) || [text];
+  const normalized = sentences
+    .map((rawSentence) => {
+      const sentence = rawSentence.trim();
+      if (!sentence) return '';
 
-        const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim();
-        const isQuestion = questionStarterPattern.test(withoutEndPunct);
+      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim();
+      const isQuestion = questionStarterPattern.test(withoutEndPunct);
 
-        if (isQuestion) return `${withoutEndPunct}?`;
-        if (/[?.!]$/.test(sentence)) return sentence;
-        return `${withoutEndPunct}.`;
-      })
-      .filter(Boolean)
-      .join(' ')
-      .trim();
+      if (isQuestion) return `${withoutEndPunct}?`;
+      if (/[?.!]$/.test(sentence)) return sentence;
+      return `${withoutEndPunct}.`;
+    })
+    .filter(Boolean)
+    .join(' ')
+    .trim();
 
-    if (!/[?.!]$/.test(normalized)) {
-      return `${normalized}.`;
-    }
-
-    return normalized;
+  if (!/[?.!]$/.test(normalized)) {
+    return `${normalized}.`;
   }
+
+  return normalized;
+}
 
 // ─── CUE SELECTION ─────────────────────────────────────────────────────────────
 /**
@@ -539,7 +539,7 @@ INSTEAD, let unprofessional behavior be reflected through:
 → Redirecting to clinical facts only
 → Signaling the conversation is ending
 ${historyText
-    ? `\nCONVERSATION HISTORY:\n${historyText}\n\nRespond directly to what the rep just said, staying true to your locked state and cue above.
+      ? `\nCONVERSATION HISTORY:\n${historyText}\n\nRespond directly to what the rep just said, staying true to your locked state and cue above.
     
 REMINDER: Your physical/emotional state is shown through the cue ("${lockedCue}").
 Keep your SPOKEN WORDS professional and clinically focused.
@@ -555,7 +555,7 @@ PUNCTUATION REQUIREMENT:
 - Every question must end with a question mark (?)
 - Every statement must end with a period (.)
 - Do NOT output dialogue without proper ending punctuation.`
-    : `\nThe sales rep has just entered. This is your OPENING LINE.
+      : `\nThe sales rep has just entered. This is your OPENING LINE.
 OPENING RULES (strictly enforced):
 - React to the rep's arrival — express YOUR OWN current state, mindset, or reality
 - DO NOT ask the rep any questions — they have not spoken yet
@@ -565,5 +565,5 @@ OPENING RULES (strictly enforced):
 - 1–2 sentences MAX
 - Output ONLY your spoken words — no asterisks, no stage directions, no parentheticals
 - CRITICAL: All questions must end with ? and all statements with .`
-}`;
+    }`;
 }

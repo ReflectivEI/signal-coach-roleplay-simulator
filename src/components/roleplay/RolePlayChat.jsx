@@ -15,6 +15,9 @@ import {
   detectHcpDisagreement, escalateForDisagreement,
   TEMPERATURES,
 } from "./hcpSimulationEngine";
+import {
+  generateContextualCue,
+} from "./hcpStateEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
 // Compact SOT block injected into end-session LLM feedback prompt
@@ -246,17 +249,30 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       console.log(`HCP Disagreement Detected in Turn ${turns.length} | Strong: ${disagreementInfo.strongDisagree} | Mild: ${disagreementInfo.mildDisagree}`);
     }
 
+    // 6.6 GENERATE CONTEXTUAL CUE — MATCHES DIALOGUE + QUESTION QUALITY
+    // After dialogue is generated, create a contextual cue that matches what the HCP said
+    // and responds to the quality of the rep's question (pushy, redundant, etc.)
+    const contextualCue = generateContextualCue(
+      sid,
+      nextTurnNumber,
+      nextHcpState,
+      nextHcpDialogue,
+      repMessage,
+      prevTurns
+    );
+
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
     if (coachingResult.shouldShow) setCoachingTip(coachingResult);
 
-    // 8. Lock next turn with cue from profile (guaranteed to match state)
+    // 8. Lock next turn with contextual cue (matches dialogue + question quality)
+    // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
     const nextTurn = {
       turnNumber: nextTurnNumber,
       hcpStateBefore: nextHcpState,
       temperatureBefore: nextTemp,
       severityBefore: nextSev,
-      cueBefore: nextProfile.lockedCue,
+      cueBefore: contextualCue,
       hcpDialogueBefore: nextHcpDialogue,
       repMessage: null,
       alignment: null,

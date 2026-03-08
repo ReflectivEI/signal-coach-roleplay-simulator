@@ -214,10 +214,10 @@ export function analyzeQuestionQuality(repMessage, conversationHistory = []) {
   if (!repMessage) return { pushy: false, redundant: false, poorlyThoughtOut: false, demanding: false };
 
   const msg = repMessage.toLowerCase().trim();
-  
+
   // Detect pushy/demanding language
   const pushy = /now\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|you must|you have to|you should/.test(msg);
-  
+
   // Detect redundancy (same question asked multiple times)
   const lastThreeMsgs = conversationHistory.slice(-3).map(t => (t.repMessage || '').toLowerCase());
   const currentQ = msg.split(/[?!.]/, 1)[0]; // First sentence
@@ -226,10 +226,10 @@ export function analyzeQuestionQuality(repMessage, conversationHistory = []) {
     const prevQ = prev.split(/[?!.]/, 1)[0];
     return prevQ.length > 10 && currentQ.includes(prevQ.substring(0, 15));
   });
-  
+
   // Detect poorly thought-out signals (vague, incomplete, disorganized)
   const poorlyThoughtOut = /uh|um|like|basically|i guess|i think|maybe|could you|would you|uh hmm/.test(msg) && msg.length < 30;
-  
+
   // Detect demanding tone
   const demanding = /^(tell me|give me|explain|prove|answer|respond|stop|don't|don.t)/.test(msg);
 
@@ -310,7 +310,7 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, hcpDial
   if (hcpDialogue || repMessage) {
     return generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue, repMessage, conversationHistory);
   }
-  
+
   // Fallback: deterministic selection from base cue bank
   const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
