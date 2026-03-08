@@ -60,28 +60,28 @@ const suggestedQuestions = [
 const contentTools = [
   {
     label: "Opening",
-    examplePrompt: "Draft compelling opening statements for a first HCP visit that are Signal Intelligence-focused and non-product-first. Provide 3 options:\n\n1. For a Specialist (Oncologist, Cardiologist, etc.)\n2. For Primary Care / Family Medicine\n3. For a Surgeon / Procedure-Based Specialist\n\nEach opening should lead with curiosity about their priorities, establish credibility, and avoid any product mention.",
-    followUpPrompt: "[DRAFT OPENING TOOL] Please share your HCP context (HCP type, specialty, therapeutic area, relationship status). I will create a specific opening tailored to your situation. Stay focused on the opening conversation only."
+    examplePrompt: "Draft 3 opening statements for a first HCP visit, tailored to the rep's context.",
+    followUpPrompt: "Please share your HCP context (type, specialty, area, relationship). I'll create a specific opening for you."
   },
   {
     label: "Objection Responses",
     examplePrompt: "Generate 3 different response options for this common objection: 'I already have a preferred treatment and I'm not looking to change.'",
-    followUpPrompt: "[OBJECTION RESPONSES TOOL] Please share the specific objection you're facing or the concern you need to address. I will generate response options for this objection only."
+    followUpPrompt: "Please share the objection or concern you need to address. I'll generate response options for you."
   },
   {
     label: "Follow-up Email",
     examplePrompt: "Write a professional follow-up email to send after a productive HCP meeting. Keep it brief, value-focused, and referencing the Signal Intelligence framework.",
-    followUpPrompt: "[FOLLOW-UP EMAIL TOOL] Please share your meeting details (HCP type, key discussion points, outcomes). I will draft a professional follow-up email based on this meeting only."
+    followUpPrompt: "Share your meeting details (HCP type, key points, outcomes). I'll draft a follow-up email for you."
   },
   {
     label: "Improve My Message",
     examplePrompt: "I can help you improve your message using Signal Intelligence principles. Please share the message you'd like me to review.",
-    followUpPrompt: "[IMPROVE MY MESSAGE TOOL] Please paste the message you want to improve. I will provide feedback and suggestions for that message only."
+    followUpPrompt: "Paste the message you'd like to improve. I'll provide feedback and suggestions."
   },
   {
     label: "Content Ideas",
     examplePrompt: "Here are 5 creative ways you can add value to your next HCP conversation beyond just presenting product data: [example ideas]",
-    followUpPrompt: "[CONTENT IDEAS TOOL] Please share your specific situation (HCP type, therapeutic area, relationship stage). I will suggest value-add ideas for your specific context only."
+    followUpPrompt: "Share your situation (HCP type, area, relationship stage). I'll suggest value-add ideas for your context."
   },
 ];
 
