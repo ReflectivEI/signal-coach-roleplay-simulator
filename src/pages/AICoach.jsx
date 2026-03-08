@@ -549,12 +549,11 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             onSubmit={(e) => {
               e.preventDefault();
               if (contentToolMode && input.trim()) {
-                // In content tool mode: send follow-up with user's specific context + topic constraint
+                // In content tool mode: send only the tool's follow-up prompt
                 const tool = contentTools.find(t => t.label === contentToolMode);
                 if (tool) {
-                    const followUpText = `${tool.followUpPrompt}\n\nUser's specific context: ${input}`;
                   setContentToolMode(null); // Exit tool mode
-                  sendMessage(followUpText);
+                  sendMessage(tool.followUpPrompt);
                 }
               } else if (!contentToolMode) {
                 // Normal conversation mode
