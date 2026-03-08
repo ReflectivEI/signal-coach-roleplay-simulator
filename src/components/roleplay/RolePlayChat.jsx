@@ -856,23 +856,35 @@ ${actionText}`;
 
               {/* Input */}
               <div className="px-5 py-3 border-t flex-shrink-0 bg-white">
-                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    if (isLoading || isEnding) return;
+                    const message = input.trim();
+                    if (!message) return;
+                    setInput(""); // clear input immediately
+                    sendMessage(message);
+                  }}
+                  className="flex gap-2"
+                >
                   <div className="relative flex-1">
                     <Input
                       ref={inputRef}
                       value={input}
-                      onChange={(e) => {
+                      onChange={e => {
                         setInput(e.target.value);
-                        // Stop mic when user starts typing manually
                         if (isListening && e.target.value.length > input.length) {
                           stopListening();
                         }
                       }}
-                      onKeyDown={(e) => {
-                        // Submit on Enter (without Shift)
+                      onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          sendMessage();
+                          if (isLoading || isEnding) return;
+                          const message = input.trim();
+                          if (!message) return;
+                          setInput("");
+                          sendMessage(message);
                         }
                       }}
                       placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
