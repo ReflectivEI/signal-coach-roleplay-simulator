@@ -102,6 +102,24 @@ ${situation ? `**My situation / what I was trying to do:** ${situation}` : ""}
 Please give me specific, actionable feedback that directly addresses these misalignments and how to improve them, grounded in Signal Intelligence™ principles.`;
   }
 
+  const addRolePlayLinks = (text) => {
+    // Convert recommendation text to markdown link to Role Play Simulator
+    const rpsUrl = createPageUrl("RolePlaySimulator");
+    return text
+      .replace(
+        /I recommend practicing this in the Role Play Simulator/g,
+        `[I recommend practicing this in the Role Play Simulator](${rpsUrl})`
+      )
+      .replace(
+        /visit the Role Play Simulator/g,
+        `[visit the Role Play Simulator](${rpsUrl})`
+      )
+      .replace(
+        /the Role Play Simulator page/g,
+        `[the Role Play Simulator page](${rpsUrl})`
+      );
+  };
+
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
     const userMsg = text || input;
     if (!userMsg.trim()) return;
@@ -170,6 +188,9 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         if (isContentToolExample) {
           finalResponse = `Example:\n\n${coachText}`;
         }
+        
+        // Add Role Play Simulator links
+        finalResponse = addRolePlayLinks(finalResponse);
         
         const updatedMessages = [...newMessages, { role: "assistant", content: finalResponse }];
         setMessages(updatedMessages);
