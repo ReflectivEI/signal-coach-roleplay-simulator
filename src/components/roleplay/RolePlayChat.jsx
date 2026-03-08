@@ -678,8 +678,8 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              {/* Scenario Opening Scene */}
-              {scenario.opening_scene && turns.length === 1 && !turns[0].repMessage && (
+              {/* Always show scenario opening scene as first message */}
+              {scenario.opening_scene && (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 font-medium">
                   {scenario.opening_scene}
                 </div>
