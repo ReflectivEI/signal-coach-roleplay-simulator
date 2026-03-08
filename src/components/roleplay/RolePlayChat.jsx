@@ -563,7 +563,7 @@ ${actionText}`;
                 size="sm"
                 className="text-xs border-teal-400 text-teal-600 hover:bg-teal-50"
                 onClick={() => {
-                  // Aggregate all misalignments and positives from turns
+                  // Restore previous AI Coach trigger logic
                   const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
                   const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
                   const capScores = {};
