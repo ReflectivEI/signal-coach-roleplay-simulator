@@ -277,14 +277,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // After dialogue is generated, create a contextual cue that matches what the HCP said
     // and responds to the quality of the rep's question (pushy, redundant, etc.)
     // Always match cue to the same state/context as the generated HCP dialogue
-    const contextualCue = generateContextualCue(
-      sid,
-      nextTurnNumber,
-      nextHcpState,
-      nextHcpDialogue,
-      repMessage,
-      prevTurns
-    );
+    // Alignment check: ensure cues, emotional state, dialogue, and context are logically consistent
+    let contextualCue;
+    if (overrideExit) {
+      // Constrain HCP behavior: closure only, no questions or escalation
+      nextHcpDialogue = 'Understood. We can continue later. What time works for you?';
+      contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
+    } else {
+      contextualCue = generateContextualCue(
+        sid,
+        nextTurnNumber,
+        nextHcpState,
+        nextHcpDialogue,
+        repMessage,
+        prevTurns
+      );
+    }
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
