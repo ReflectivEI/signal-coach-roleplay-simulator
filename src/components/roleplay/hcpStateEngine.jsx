@@ -268,18 +268,56 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
   const baseCue = baseCues[seed % baseCues.length];
 
-  // Analyze dialogue for business-related cues
-  if (hcpDialogue && hcpState === 'time-pressured') {
-    const busyIndicators = /busy|rush|patient|meeting|waiting|tight|schedule|need to go|see you soon|later|quickly/.test(hcpDialogue.toLowerCase());
-    if (busyIndicators) {
-      // Add more frazzled body language cues
+  // Enhanced: Select cue based on keywords and sentiment in HCP dialogue
+  if (hcpDialogue) {
+    const lowerDialogue = hcpDialogue.toLowerCase();
+    if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient/.test(lowerDialogue)) {
+      // Time-pressured cues
       const timePressCues = [
-        baseCue, // Keep some randomness
-        'The HCP looks visibly stressed, glancing repeatedly at their watch. Their leg bounces with restlessness.',
-        'The HCP\'s speech quickens. They tap their fingers on the desk in a rapid rhythm, clearly anxious to move.',
-        'The HCP maintains a polite facade but their eyes keep drifting to the door.',
+        'The HCP glances at the clock, then gestures for you to be concise.',
+        'The HCP checks their phone, then looks up, signaling urgency in their response.',
+        'The HCP\'s pager buzzes; they stand and motion toward the door, prompting a quick wrap-up.',
+        'The HCP keeps writing, barely looking up, signaling limited bandwidth.',
+        'The HCP looks toward the hallway, impatient, body angled away from the conversation.',
       ];
       return timePressCues[seed % timePressCues.length];
+    }
+    if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp/.test(lowerDialogue)) {
+      // Irritation cues
+      const irritationCues = [
+        'The HCP\'s jaw visibly clenches. They take a breath before responding, clearly holding back frustration.',
+        'The HCP closes their eyes for a moment, as if counting to ten. When they open them, their expression is hard.',
+        'The HCP\'s fingers drum impatiently on the desk. They respond with barely concealed annoyance.',
+        'The HCP speaks curtly, avoids eye contact, and signals impatience.',
+      ];
+      return irritationCues[seed % irritationCues.length];
+    }
+    if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant/.test(lowerDialogue)) {
+      // Skeptical cues
+      const skepticalCues = [
+        'The HCP raises an eyebrow slowly, expression becoming more skeptical. They wait for you to finish.',
+        'The HCP looks confused for a moment, as if trying to understand what you\'re saying.',
+        'The HCP pauses, gaze fixed, unconvinced by your rationale.',
+      ];
+      return skepticalCues[seed % skepticalCues.length];
+    }
+    if (/boundary|limit|policy|move on|topic change|end discussion|closure/.test(lowerDialogue)) {
+      // Boundary-setting cues
+      const boundaryCues = [
+        'The HCP holds up one hand, palm outward, firmly setting a conversational boundary.',
+        'The HCP sits up straighter, voice clipped, and states their limits clearly.',
+        'The HCP folds their hands, tone formal, signaling the end of discussion on this topic.',
+      ];
+      return boundaryCues[seed % boundaryCues.length];
+    }
+    if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond/.test(lowerDialogue)) {
+      // Engaged cues
+      const engagedCues = [
+        'The HCP leans forward, hands on the desk, actively responding to your ideas.',
+        'The HCP sets aside their chart, body language open, and listens with visible enthusiasm.',
+        'A broad smile crosses the HCP\'s face as they echo your key points.',
+      ];
+      return engagedCues[seed % engagedCues.length];
     }
   }
 
@@ -308,7 +346,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
     return skepticalCues[seed % skepticalCues.length];
   }
 
-  // Default to base cue
+  // Default: base cue
   return baseCue;
 }
 
