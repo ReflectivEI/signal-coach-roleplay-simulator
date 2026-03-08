@@ -124,7 +124,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
           temperatureBefore: initialTemp,
           severityBefore: 0,
           cueBefore: initialProfile.lockedCue,
-          hcpDialogueBefore: null,
+          hcpDialogueBefore: "I'm doing well, thank you. What brings you here today to discuss treatment optimization in stable HIV patients?",
           repMessage: null,
           alignment: null,
           hcpStateAfter: null,
@@ -739,7 +739,7 @@ ${actionText}`;
                   <div key={i} className="space-y-2">
                     {turn.cueBefore && (
                       <div className="flex justify-start pl-1">
-                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border ${stateColors[turn.hcpStateBefore] || 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
                           {turn.cueBefore}
                         </p>
                       </div>
