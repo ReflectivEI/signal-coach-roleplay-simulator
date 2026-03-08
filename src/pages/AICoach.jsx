@@ -172,6 +172,14 @@ Please give me specific, actionable feedback that directly addresses these misal
     const guidanceResponse = respondToQuestion(userMsg, currentTab);
     if (!userMsg.trim()) return;
 
+    // Content tool prompt logic
+    let showToolPrompt = false;
+    if (contentToolMode) {
+      // Only show tool prompt if this is the first message in the thread
+      const toolMessages = messages.filter(m => m.role === "user" && m.content && m.content.includes(contentToolMode));
+      showToolPrompt = toolMessages.length === 0;
+    }
+
     const newMessages = silent
       ? [...messages, { role: "user", content: userMsg, hidden: true }]
       : [...messages, { role: "user", content: userMsg }];
