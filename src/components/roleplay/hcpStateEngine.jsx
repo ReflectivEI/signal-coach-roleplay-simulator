@@ -390,8 +390,11 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
     // Enhanced: HCP dialogue tone and context
     if (hcpDialogue) {
       const lowerDialogue = hcpDialogue.toLowerCase();
+      const lowerRep = repMessage.toLowerCase();
       // Use recent repMessage and conversationHistory for context
-      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient/.test(lowerDialogue) || /concise|brief|quick/.test(repMessage.toLowerCase())) {
+      const recentDialogue = conversationHistory.slice(-3).map(t => t.hcpDialogue).filter(Boolean).join(' ').toLowerCase();
+      // Granular phrase matching
+      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient|wrap up|short on time/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const timePressCues = CUE_BANK['time-pressured'] || [];
         if (timePressCues.length > 0) {
           let cueIdx = seed % timePressCues.length;
@@ -401,7 +404,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp/.test(lowerDialogue) || /angry|hate|suck|frustrated/.test(repMessage.toLowerCase())) {
+      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp|angry|hate|suck|frustrated|rude|argument/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const irritationCues = CUE_BANK['irritated'] || [];
         if (irritationCues.length > 0) {
           let cueIdx = seed % irritationCues.length;
@@ -411,7 +414,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant/.test(lowerDialogue) || /confused|unclear|doubt/.test(repMessage.toLowerCase())) {
+      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant|unclear|hesitant|not sure/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const skepticalCues = CUE_BANK['resistant'] || [];
         if (skepticalCues.length > 0) {
           let cueIdx = seed % skepticalCues.length;
@@ -421,7 +424,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/boundary|limit|policy|move on|topic change|end discussion|closure/.test(lowerDialogue) || /boundary|limit|end/.test(repMessage.toLowerCase())) {
+      if (/boundary|limit|policy|move on|topic change|end discussion|closure|firm stance|stop/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const boundaryCues = CUE_BANK['boundary-setting'] || [];
         if (boundaryCues.length > 0) {
           let cueIdx = seed % boundaryCues.length;
@@ -431,7 +434,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond/.test(lowerDialogue) || /engaged|collaborate|enthusiasm/.test(repMessage.toLowerCase())) {
+      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond|open|positive|interested|lean in/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const engagedCues = CUE_BANK['engaged'] || [];
         if (engagedCues.length > 0) {
           let cueIdx = seed % engagedCues.length;
@@ -440,6 +443,22 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
         } else {
           return fallbackCue();
         }
+      }
+      // Prioritize cues referencing specific dialogue content
+      if (lowerDialogue.includes('calendar')) {
+        return 'The HCP checks their calendar, then signals urgency.';
+      }
+      if (lowerDialogue.includes('phone')) {
+        return 'The HCP checks their phone, then looks up, signaling urgency in their response.';
+      }
+      if (lowerDialogue.includes('door')) {
+        return 'The HCP stands and motions toward the door, prompting a quick wrap-up.';
+      }
+      if (lowerDialogue.includes('smile')) {
+        return 'A broad smile crosses the HCP’s face as they echo your key points.';
+      }
+      if (lowerDialogue.includes('frown')) {
+        return 'The HCP frowns, signaling irritation.';
       }
     }
   // Get the base cue for the state
