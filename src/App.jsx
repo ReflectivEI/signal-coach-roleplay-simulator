@@ -6,6 +6,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import PrivateRoute from './lib/PrivateRoute';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -45,29 +46,31 @@ const AuthenticatedApp = () => {
       {/* Login pages - public access */}
       <Route path="/login" element={<Pages.Login />} />
       <Route path="/Login" element={<Pages.Login />} />
-      
-      {/* Home page */}
+
+      {/* Home page and all other pages - protected */}
       <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
+        <PrivateRoute>
+          <LayoutWrapper currentPageName={mainPageKey}>
+            <MainPage />
+          </LayoutWrapper>
+        </PrivateRoute>
       } />
-      
-      {/* All other pages */}
       {Object.entries(Pages).filter(([key]) => key !== 'Login').map(([path, Page]) => (
         <Route
           key={path}
           path={`/${path}`}
           element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
+            <PrivateRoute>
+              <LayoutWrapper currentPageName={path}>
+                <Page />
+              </LayoutWrapper>
+            </PrivateRoute>
           }
         />
       ))}
-      
+
       {/* Catch-all for undefined routes */}
-      <Route path="*" element={<PageNotFound />} />
+      <Route path="*" element={<PrivateRoute><PageNotFound /></PrivateRoute>} />
     </Routes>
   );
 };
