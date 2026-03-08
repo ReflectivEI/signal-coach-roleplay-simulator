@@ -9,7 +9,8 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
-    // Clear localStorage to trigger local demo mode in AuthContext
+    // Store login email for AuthContext
+    localStorage.setItem('login_email', username);
     localStorage.removeItem('app_id');
     localStorage.removeItem('token');
 
