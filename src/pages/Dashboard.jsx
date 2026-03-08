@@ -8,17 +8,17 @@ import MyAssignments from "@/components/rep/MyAssignments";
 
 export default function Dashboard() {
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto font-sans">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            Welcome to Reflectiv<span className="text-teal-500">AI</span>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-brand-navy tracking-wide mb-2">
+            Welcome to Reflectiv<span className="text-brand-teal">AI</span>
           </h1>
-          <p className="text-gray-600 mt-1">Master signal intelligence and sales excellence in Life Sciences</p>
+          <p className="text-lg text-gray-700 mt-1 font-medium">Master signal intelligence and sales excellence in Life Sciences</p>
         </div>
-        <Button variant="outline" className="mt-4 md:mt-0 flex items-center gap-2 text-sm">
-          <Download className="w-4 h-4" />
+        <Button variant="outline" className="mt-4 md:mt-0 flex items-center gap-2 text-lg font-semibold border-brand-teal text-brand-teal hover:bg-brand-teal hover:text-white transition-all duration-200">
+          <Download className="w-5 h-5" />
           Export Report
         </Button>
       </div>
@@ -30,9 +30,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         {/* Quick Actions */}
         <div className="lg:col-span-3">
-          <h2 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h2>
-          <p className="text-sm text-gray-600 mb-4">Start your coaching journey</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <h2 className="text-2xl font-bold text-brand-navy mb-2 tracking-wide">Quick Actions</h2>
+          <p className="text-md text-brand-teal mb-4 font-medium">Start your coaching journey</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <QuickActionCard
               icon={Bot}
               title="AI Coach"
