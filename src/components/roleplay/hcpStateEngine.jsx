@@ -387,10 +387,11 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
         }
       }
     }
-    // HCP dialogue tone: if dialogue contains keywords, select matching cues
+    // Enhanced: HCP dialogue tone and context
     if (hcpDialogue) {
       const lowerDialogue = hcpDialogue.toLowerCase();
-      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient/.test(lowerDialogue)) {
+      // Use recent repMessage and conversationHistory for context
+      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient/.test(lowerDialogue) || /concise|brief|quick/.test(repMessage.toLowerCase())) {
         const timePressCues = CUE_BANK['time-pressured'] || [];
         if (timePressCues.length > 0) {
           let cueIdx = seed % timePressCues.length;
@@ -400,7 +401,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp/.test(lowerDialogue)) {
+      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp/.test(lowerDialogue) || /angry|hate|suck|frustrated/.test(repMessage.toLowerCase())) {
         const irritationCues = CUE_BANK['irritated'] || [];
         if (irritationCues.length > 0) {
           let cueIdx = seed % irritationCues.length;
@@ -410,7 +411,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant/.test(lowerDialogue)) {
+      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant/.test(lowerDialogue) || /confused|unclear|doubt/.test(repMessage.toLowerCase())) {
         const skepticalCues = CUE_BANK['resistant'] || [];
         if (skepticalCues.length > 0) {
           let cueIdx = seed % skepticalCues.length;
@@ -420,7 +421,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/boundary|limit|policy|move on|topic change|end discussion|closure/.test(lowerDialogue)) {
+      if (/boundary|limit|policy|move on|topic change|end discussion|closure/.test(lowerDialogue) || /boundary|limit|end/.test(repMessage.toLowerCase())) {
         const boundaryCues = CUE_BANK['boundary-setting'] || [];
         if (boundaryCues.length > 0) {
           let cueIdx = seed % boundaryCues.length;
@@ -430,7 +431,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
           return fallbackCue();
         }
       }
-      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond/.test(lowerDialogue)) {
+      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond/.test(lowerDialogue) || /engaged|collaborate|enthusiasm/.test(repMessage.toLowerCase())) {
         const engagedCues = CUE_BANK['engaged'] || [];
         if (engagedCues.length > 0) {
           let cueIdx = seed % engagedCues.length;

@@ -717,6 +717,17 @@ function computeAlignmentRubric(hcpState, p) {
  */
 export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
   const p = detectPatterns(repMessage);
+  // Robust misalignment: track repeated/aggressive responses
+  let repeatedAggressive = false;
+  let repeatedMisalignment = false;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    let lastAggressive = window.sessionStorage.getItem('lastAggressive') === 'true';
+    let lastMisalignments = window.sessionStorage.getItem('lastMisalignments') || '';
+    repeatedAggressive = lastAggressive && p.isAggressive;
+    repeatedMisalignment = lastMisalignments === repMessage;
+    window.sessionStorage.setItem('lastAggressive', p.isAggressive ? 'true' : 'false');
+    window.sessionStorage.setItem('lastMisalignments', repMessage);
+  }
 
   const STATE_LABELS = {
     'neutral': 'Neutral State',
@@ -752,19 +763,27 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   const globalMisalignments = [];
   let universalPenalty = 0;
   if (p.isAggressive) {
-    universalPenalty -= 2;
+    universalPenalty = -99; // Force minimum score
     globalMisalignments.push('Aggressive or profane language used — damages all capability scores');
+    if (repeatedAggressive) {
+      universalPenalty -= 2;
+      globalMisalignments.push('Repeated aggressive language — session at risk of termination.');
+    }
   }
   if (p.isDismissive) {
     universalPenalty -= 1;
     globalMisalignments.push('Dismissive language used — ignores HCP signal across all dimensions');
+  }
+  if (repeatedMisalignment) {
+    universalPenalty -= 2;
+    globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
   const rubricMisalignments = computeAlignmentRubric(hcpState, p);
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
+  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
