@@ -1,3 +1,44 @@
+// Tab definitions
+const TABS = {
+  OPENING: "Opening",
+  OBJECTION_HANDLING: "Objection Handling",
+  CLOSING: "Closing / Next Steps",
+  PRODUCT_KNOWLEDGE: "Product Knowledge",
+  DISEASE_KNOWLEDGE: "Disease Knowledge",
+  MARKET_KNOWLEDGE: "Market / Market Conditions",
+  GENERAL_COACHING: "General Coaching",
+};
+
+// Function to detect question topic
+function detectTopic(question) {
+  const topics = {
+    "objection": TABS.OBJECTION_HANDLING,
+    "closing": TABS.CLOSING,
+    "product": TABS.PRODUCT_KNOWLEDGE,
+    "disease": TABS.DISEASE_KNOWLEDGE,
+    "market": TABS.MARKET_KNOWLEDGE,
+    "general": TABS.GENERAL_COACHING,
+  };
+  for (const [key, tab] of Object.entries(topics)) {
+    if (question.toLowerCase().includes(key)) {
+      return tab;
+    }
+  }
+  return TABS.GENERAL_COACHING;
+}
+
+// Function to respond based on current tab and detected topic
+function respondToQuestion(question, currentTab) {
+  const detectedTopic = detectTopic(question);
+  if (detectedTopic === currentTab) {
+    return `That’s a great question. Since you're in the ${currentTab} section, here's a quick response to help you: [brief answer].`;
+  }
+  if (detectedTopic === TABS.GENERAL_COACHING || detectedTopic === currentTab) {
+    return `That’s a valuable question. It relates most closely to ${detectedTopic}. Since this section focuses on ${currentTab}, you’ll get more structured coaching in the ${detectedTopic}. I can give you a quick perspective here, or you can explore it more deeply there.`;
+  } else {
+    return `That’s a valuable question. It relates most closely to ${detectedTopic}. Since this section focuses on ${currentTab}, you’ll get more structured coaching in the ${detectedTopic}. For deeper coaching and examples, explore the ${detectedTopic} section. [Go to ${detectedTopic} →]`;
+  }
+}
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +165,11 @@ Please give me specific, actionable feedback that directly addresses these misal
   };
 
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
+    // Tab-aware topic guidance logic
+    const userMsg = text || input;
+    const currentTab = props?.activeTab || TABS.GENERAL_COACHING;
+    const guidanceResponse = respondToQuestion(userMsg, currentTab);
+    // Optionally, prepend guidance to the AI Coach response
     const userMsg = text || input;
     if (!userMsg.trim()) return;
 
