@@ -58,6 +58,8 @@ const stateLabels = {
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
+  // Fallback opening scene if scenario.opening_scene is missing
+  const openingScene = scenario.opening_scene || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -679,9 +681,9 @@ ${actionText}`;
           {activeTab === "chat" && (
             <>
               {/* Show scenario opening scene only before rep's first message */}
-              {scenario.opening_scene && turns.length === 1 && !turns[0].repMessage && (
+              {turns.length === 1 && !turns[0].repMessage && (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 font-medium">
-                  {scenario.opening_scene}
+                  {openingScene}
                 </div>
               )}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
