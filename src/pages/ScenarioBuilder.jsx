@@ -223,7 +223,7 @@ export default function ScenarioBuilder() {
               <label className="text-xs font-semibold text-gray-600 mb-1 block flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5" /> Signal Intelligence Focus Capabilities
               </label>
-              <p className="text-xs text-gray-400 mb-2">Tag which capabilities this scenario is designed to practice. These will be prioritized in role-play feedback.</p>
+                <p className="text-xs text-gray-400 mb-2">All 8 Signal Intelligence capabilities will be practiced and evaluated in every scenario.</p>
               <CapabilityTagger
                 selected={form.focus_capabilities}
                 onChange={(caps) => setForm({ ...form, focus_capabilities: caps })}
@@ -276,7 +276,7 @@ export default function ScenarioBuilder() {
                   </div>
                   {s.focus_capabilities?.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
-                      {s.focus_capabilities.map((c) => <CapabilityBadge key={c} capId={c} />)}
+                       {SIGNAL_CAPABILITIES.map((c) => <CapabilityBadge key={c.id} capId={c.id} />)}
                     </div>
                   )}
                 </div>
