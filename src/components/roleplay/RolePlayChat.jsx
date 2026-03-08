@@ -140,6 +140,26 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
+        // Track if exit state is active and if scheduling is confirmed
+        let exitStateActive = false;
+        let schedulingConfirmed = false;
+        // Check previous turns for exit/scheduling confirmation
+        for (let i = turns.length - 1; i >= 0; i--) {
+          const t = turns[i];
+          if (t.repMessage && /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time|pick up my son|have another meeting|need to go|have to pick up)\b/i.test(t.repMessage)) {
+            exitStateActive = true;
+          }
+          if (t.hcpDialogueBefore && /\b(what time works|when will you return|see you at|sounds good|confirmed|scheduled|we can continue|see you then|let's follow up|let's pick up|we can finish|we can continue|catch up later|follow up|another time|next time)\b/i.test(t.hcpDialogueBefore)) {
+            schedulingConfirmed = true;
+            break;
+          }
+        }
+
+        // If scheduling is confirmed, do not generate further HCP turns
+        if (exitStateActive && schedulingConfirmed) {
+          setIsLoading(false);
+          return;
+        }
     if (!input.trim() || isLoading) return;
     const repMessage = input.trim();
     setInput("");
