@@ -286,7 +286,21 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
   // Get the base cue for the state
   const baseCues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
-  const baseCue = baseCues[seed % baseCues.length];
+  // Prevent cue repetition: check last 4 cues in conversationHistory
+  const recentCues = conversationHistory.slice(-4).map(t => t.cueBefore).filter(Boolean);
+  let cueIdx = seed % baseCues.length;
+  let baseCue = baseCues[cueIdx];
+  // If baseCue is in recentCues, select next available cue
+  if (recentCues.includes(baseCue)) {
+    for (let i = 1; i < baseCues.length; i++) {
+      const altIdx = (cueIdx + i) % baseCues.length;
+      const altCue = baseCues[altIdx];
+      if (!recentCues.includes(altCue)) {
+        baseCue = altCue;
+        break;
+      }
+    }
+  }
 
   // Enhanced: Select cue based on keywords and sentiment in HCP dialogue
   if (hcpDialogue) {
