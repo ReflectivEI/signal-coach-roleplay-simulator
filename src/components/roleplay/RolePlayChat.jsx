@@ -118,17 +118,19 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
         // Initialize turn 0: REP SPEAKS FIRST (not HCP)
         // No HCP dialogue needed — rep opens the interaction
-        setTurns([{
-          turnNumber: 0,
-          hcpStateBefore: initialState,
-          temperatureBefore: initialTemp,
-          severityBefore: 0,
-          cueBefore: initialProfile.lockedCue,
-          hcpDialogueBefore: "I'm doing well, thank you. What brings you here today to discuss treatment optimization in stable HIV patients?",
-          repMessage: null,
-          alignment: null,
-          hcpStateAfter: null,
-        }]);
+          setTurns([
+            {
+              turnNumber: 0,
+              hcpStateBefore: initialState,
+              temperatureBefore: initialTemp,
+              severityBefore: 0,
+              cueBefore: initialProfile.lockedCue,
+              hcpDialogueBefore: null, // Rep speaks first, no HCP dialogue
+              repMessage: null,
+              alignment: null,
+              hcpStateAfter: null,
+            }
+          ]);
       } catch (err) {
         console.error('Init error:', err);
         setTurns([]);
