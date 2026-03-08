@@ -184,9 +184,9 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
         
         let finalResponse = coachText;
-        // Add "Example:" prefix if this is a content tool example
+        // Add "Example Answer:" prefix if this is a content tool example
         if (isContentToolExample) {
-          finalResponse = `Example:\n\n${coachText}`;
+          finalResponse = `Example Answer:\n\n${coachText}`;
         }
         
         // Add Role Play Simulator links
