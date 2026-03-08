@@ -140,78 +140,66 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
-            // Enhanced role tracking and state memory for EXIT_OR_SCHEDULING
-            // 1. Detect rep exit/scheduling intent
-            const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time|pick up my son|have another meeting|need to go|have to pick up|bye|goodbye|see you then|so sorry|nanny called)\b/i;
-            const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|see you then|see you at|scheduled|confirmed|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-            const repGoodbyeIntent = /\b(bye|goodbye|see you then|see you at|so sorry|gotta run|thanks|thank you)\b/i;
-            // 2. Detect if follow-up time is already confirmed in transcript
-            let followUpTimeConfirmed = false;
-            let repHasExited = false;
-            for (let i = turns.length - 1; i >= 0; i--) {
-              const t = turns[i];
-              if (t.repMessage && repGoodbyeIntent.test(t.repMessage)) {
-                repHasExited = true;
-              }
-              if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
-                followUpTimeConfirmed = true;
-                break;
-              }
-            }
-
-            // 3. If rep intent is exiting OR scheduling is already resolved, force HCP state = EXIT_OR_SCHEDULING
-            let exitOrSchedulingState = false;
-            if (repExitIntent.test(repMessage) || followUpTimeConfirmed) {
-              exitOrSchedulingState = true;
-            }
-
-            // 4. In EXIT_OR_SCHEDULING: allowed dialogue patterns only
-            if (exitOrSchedulingState) {
-              if (!followUpTimeConfirmed) {
-                nextHcpDialogue = 'Understood. What time works for you later today?';
-                contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
-              } else if (!repHasExited) {
-                nextHcpDialogue = 'Confirmed. We can continue at the scheduled time.';
-                contextualCue = 'The HCP nods, closes their notes, and ends the conversation.';
-              } else {
-                nextHcpDialogue = 'Understood. We will talk this afternoon.';
-                contextualCue = 'The HCP stands, turns toward the door, and closes the interaction.';
-              }
-              // Hard stop: after scheduling confirmation + rep goodbye, do not generate another substantive HCP question
-              setTurns([...turns, {
-                turnNumber: turns.length,
-                hcpStateBefore: 'disengaging',
-                temperatureBefore: 'neutral',
-                severityBefore: 0,
-                cueBefore: contextualCue,
-                hcpDialogueBefore: nextHcpDialogue,
-                repMessage: repMessage,
-                alignment: null,
-                hcpStateAfter: null,
-              }]);
-              setIsLoading(false);
-              return;
-            }
-        // Track if exit state is active and if scheduling is confirmed
-        let exitStateActive = false;
-        let schedulingConfirmed = false;
-        // Check previous turns for exit/scheduling confirmation
-        for (let i = turns.length - 1; i >= 0; i--) {
-          const t = turns[i];
-          if (t.repMessage && /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time|pick up my son|have another meeting|need to go|have to pick up)\b/i.test(t.repMessage)) {
-            exitStateActive = true;
-          }
-          if (t.hcpDialogueBefore && /\b(what time works|when will you return|see you at|sounds good|confirmed|scheduled|we can continue|see you then|let's follow up|let's pick up|we can finish|we can continue|catch up later|follow up|another time|next time)\b/i.test(t.hcpDialogueBefore)) {
-            schedulingConfirmed = true;
-            break;
-          }
-        }
-
-        // If scheduling is confirmed, do not generate further HCP turns
-        if (exitStateActive && schedulingConfirmed) {
-          setIsLoading(false);
-          return;
-        }
+    // Declare all variables at the top
+    let nextHcpDialogue = '';
+    let contextualCue = '';
+    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time|pick up my son|have another meeting|need to go|have to pick up|bye|goodbye|see you then|so sorry|nanny called)\b/i;
+    const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|see you then|see you at|scheduled|confirmed|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
+    const repGoodbyeIntent = /\b(bye|goodbye|see you then|see you at|so sorry|gotta run|thanks|thank you)\b/i;
+    let followUpTimeConfirmed = false;
+    let repHasExited = false;
+    let exitOrSchedulingState = false;
+    let exitStateActive = false;
+    let schedulingConfirmed = false;
+    // Check previous turns for exit/scheduling confirmation and rep exit
+    for (let i = turns.length - 1; i >= 0; i--) {
+      const t = turns[i];
+      if (t.repMessage && repGoodbyeIntent.test(t.repMessage)) {
+        repHasExited = true;
+      }
+      if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
+        followUpTimeConfirmed = true;
+        schedulingConfirmed = true;
+        break;
+      }
+      if (t.repMessage && repExitIntent.test(t.repMessage)) {
+        exitStateActive = true;
+      }
+    }
+    if (repExitIntent.test(input.trim()) || followUpTimeConfirmed) {
+      exitOrSchedulingState = true;
+    }
+    // If scheduling is confirmed, do not generate further HCP turns
+    if (exitStateActive && schedulingConfirmed) {
+      setIsLoading(false);
+      return;
+    }
+    // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
+    if (exitOrSchedulingState) {
+      if (!followUpTimeConfirmed) {
+        nextHcpDialogue = 'Understood. What time works for you later today?';
+        contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
+      } else if (!repHasExited) {
+        nextHcpDialogue = 'Confirmed. We can continue at the scheduled time.';
+        contextualCue = 'The HCP nods, closes their notes, and ends the conversation.';
+      } else {
+        nextHcpDialogue = 'Understood. We will talk this afternoon.';
+        contextualCue = 'The HCP stands, turns toward the door, and closes the interaction.';
+      }
+      setTurns([...turns, {
+        turnNumber: turns.length,
+        hcpStateBefore: 'disengaging',
+        temperatureBefore: 'neutral',
+        severityBefore: 0,
+        cueBefore: contextualCue,
+        hcpDialogueBefore: nextHcpDialogue,
+        repMessage: input.trim(),
+        alignment: null,
+        hcpStateAfter: null,
+      }]);
+      setIsLoading(false);
+      return;
+    }
     if (!input.trim() || isLoading) return;
     const repMessage = input.trim();
     setInput("");
@@ -307,7 +295,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    let nextHcpDialogue = "I see. Let me consider that.";
+    nextHcpDialogue = "I see. Let me consider that.";
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
@@ -350,7 +338,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // and responds to the quality of the rep's question (pushy, redundant, etc.)
     // Always match cue to the same state/context as the generated HCP dialogue
     // Alignment check: ensure cues, emotional state, dialogue, and context are logically consistent
-    let contextualCue;
+    contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
       nextHcpDialogue = 'Understood. We can continue later. What time works for you?';
