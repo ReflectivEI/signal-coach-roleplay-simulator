@@ -9,6 +9,13 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
 
+    // Enforce password check for admin
+    if (username === 'legal@reflectiv-ai.com' && password !== 'Tony123#') {
+      alert('Incorrect password.');
+      setLoading(false);
+      return;
+    }
+
     // Store login email for AuthContext
     localStorage.setItem('login_email', username);
     localStorage.removeItem('app_id');
