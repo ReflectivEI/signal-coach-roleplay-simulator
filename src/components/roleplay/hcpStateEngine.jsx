@@ -37,10 +37,11 @@ export function deriveInitialState(scenario) {
   if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
     return 'irritated';
   }
-  if (/engag|curio|interest|open|recept|enthusiast/.test(text)) {
+  if (/engag|curio|interest|open|recept|enthusiast|new|innovative|data|evidence|clinical/.test(text)) {
     return 'engaged';
   }
-  return 'neutral';
+  // Default to engaged instead of neutral — more interesting baseline for coaching
+  return 'engaged';
 }
 
 /**
@@ -58,17 +59,19 @@ export function transitionState(currentState, repMessage) {
   }
 
   // Escalate +1 for pressure / repetition / demand language
-  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you/.test(msg);
+  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|have you considered|don.t you think/.test(msg);
   if (softEscalate) {
     return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
   }
 
-  // De-escalate -1 for acknowledgment / constraint recognition / alternative offer
-  const deEscalate = /i understand|i hear you|makes sense|fair point|i appreciate|given your time|briefly|just one thing|when works for you|no pressure|whenever you.re ready|i can follow up|that.s helpful|thank you for sharing/.test(msg);
-  if (deEscalate) {
+  // De-escalate -1 ONLY for strong acknowledgment + humility + respect of constraints
+  // Much stricter threshold — don't de-escalate easily
+  const strongDeEscalate = /absolutely i understand|i appreciate your time constraints|i hear your concern and that.s valid|i completely respect that|thank you for being direct with me|that.s a fair point/.test(msg);
+  if (strongDeEscalate && idx > 0) {
     return HCP_STATES[Math.max(idx - 1, 0)];
   }
 
+  // Stay in current state — don't default to dropping back
   return currentState;
 }
 
@@ -79,17 +82,17 @@ export function getToneDirectives(state) {
   const directives = {
     'neutral': {
       maxSentences: 3,
-      tone: 'professional and measured',
+      tone: 'professional and composed',
       warmth: 'moderate',
-      pacing: 'relaxed',
-      instruction: 'Respond professionally. Neither warm nor cold. Open but not enthusiastic.',
+      pacing: 'measured',
+      instruction: 'Respond as a professional HCP would — engaged with the conversation, asking clarifying questions when needed. Professional but personable. Show genuine interest in clinical details. Reference your experience or patient outcomes.',
     },
     'engaged': {
       maxSentences: 3,
-      tone: 'curious and collaborative',
-      warmth: 'high',
-      pacing: 'comfortable',
-      instruction: 'Show genuine interest. Ask a follow-up question or lean into the topic. Be collaborative.',
+      tone: 'curious, collaborative, and professional',
+      warmth: 'moderate-to-high',
+      pacing: 'natural',
+      instruction: 'Engage actively with the sales rep. Ask probing clinical questions. Show genuine curiosity about their evidence and clinical reasoning. Reference your patient population or practice context. Be collaborative but demanding of evidence.',
     },
     'time-pressured': {
       maxSentences: 2,

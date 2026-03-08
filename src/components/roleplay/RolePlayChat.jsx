@@ -146,7 +146,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
     const repMessage = input.trim();
     setInput("");
     setIsLoading(true);
-    
+
     // Stop mic if it's still listening when message is sent
     if (isListening) {
       stopListening();
@@ -286,7 +286,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
     setIsLoading(false);
     speak(nextHcpDialogue);
-    
+
     // Auto-focus input after HCP responds
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -440,23 +440,23 @@ CRITICAL RULES:
       if (res.ok) {
         const data = await res.json();
         const rawContent = (data.response || data.text || data.content || '').trim();
-        
+
         console.log('=== RAW FEEDBACK CONTENT ===');
         console.log(rawContent.substring(0, 300));
-        
+
         // Strategy 1: Try delimiter-based parsing
         let sections = rawContent.split('[SECTION_END]').map(s => s.trim()).filter(Boolean);
-        
+
         // If delimiter parsing didn't work well, try regex-based extraction
         if (sections.length < 4 || sections.some(s => s.length < 20)) {
           console.log('Delimiter parsing failed, trying regex approach...');
-          
+
           // Try to extract by section headers/keywords
           const strengthsMatch = rawContent.match(/(?:STRENGTHS?|Done Well|Strong|Positive)[:\s]*\n+([\s\S]*?)(?=(?:IMPROVE|Develop|Weakness|Gap|SECTION)|$)/i);
           const improvementsMatch = rawContent.match(/(?:IMPROVE|Develop|Focus|Weakness|Gap)[:\s]*\n+([\s\S]*?)(?=(?:PATTERN|Align|SECTION|ACTION)|$)/i);
           const patternsMatch = rawContent.match(/(?:PATTERN|Align|Signal|Response)[:\s]*\n+([\s\S]*?)(?=(?:ACTION|SECTION|$))/i);
           const actionsMatch = rawContent.match(/(?:ACTION|Item|Behavioral Change|Next)[:\s]*\n+([\s\S]*?)$/i);
-          
+
           sections = [
             strengthsMatch?.[1] || '',
             improvementsMatch?.[1] || '',
@@ -465,34 +465,34 @@ CRITICAL RULES:
           ];
           console.log('Regex extraction produced', sections.length, 'sections');
         }
-        
+
         // Fallback: if still not enough content, split by double newlines and distribute
         if (sections.length < 4 || sections.every(s => !s || s.length < 15)) {
           console.log('Regex also failed, using raw content directly');
           sections = [rawContent, '', '', ''];
         }
-        
+
         // Extract and clean section content
         const strengthsText = (sections[0] || '')
           .replace(/^SECTION\s+1:\s+STRENGTHS\s*\n?/i, '')
           .replace(/^STRENGTHS?\s*[:—]*\s*\n?/i, '')
           .trim() || 'The HCP demonstrated solid engagement and appropriate questioning throughout the conversation.';
-        
+
         const improvementsText = (sections[1] || '')
           .replace(/^SECTION\s+2:\s+IMPROVEMENTS\s*\n?/i, '')
           .replace(/^IMPROVE[A-Z]*\s*[:—]*\s*\n?/i, '')
           .trim() || 'Continue developing the ability to connect signals to specific clinical or practice outcomes.';
-        
+
         const patternsText = (sections[2] || '')
           .replace(/^SECTION\s+3:\s+PATTERNS\s*\n?/i, '')
           .replace(/^PATTERN[A-Z]*\s*[:—]*\s*\n?/i, '')
           .trim() || 'The HCP showed responsive engagement, adapting questions based on the sales rep\'s input.';
-        
+
         const actionText = (sections[3] || '')
           .replace(/^SECTION\s+4:\s+ACTION\s+ITEMS\s*\n?/i, '')
           .replace(/^ACTION[A-Z]*\s*[:—]*\s*\n?/i, '')
           .trim() || 'Focus on: (1) Deeper exploration of the HCP\'s current workflow, (2) Connecting study findings to practice impact, (3) Addressing objections with research-backed evidence.';
-        
+
         // Reconstruct with proper markdown format
         const coachingFeedback = `## 2) Capabilities Done Well
 
@@ -556,23 +556,23 @@ ${actionText}`;
           <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
             <ReactMarkdown
               components={{
-                h2: ({node, children, ...props}) => {
+                h2: ({ node, children, ...props }) => {
                   const text = String(children);
                   // First h2 is title, subsequent ones are section headers
                   const isTitle = text.includes('Session Feedback');
-                  return isTitle 
+                  return isTitle
                     ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
                     : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
                 },
-                h3: ({node, ...props}) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: ({node, ...props}) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: ({node, ...props}) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: ({node, ordered, ...props}) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: ({node, ordered, ...props}) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: ({node, ...props}) => <li className="mb-0" {...props} />,
-                strong: ({node, ...props}) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: ({node, ...props}) => <em className="italic text-slate-600" {...props} />,
-                blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                h3: ({ node, ...props }) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                h4: ({ node, ...props }) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                p: ({ node, ...props }) => <p className="mb-3 whitespace-normal" {...props} />,
+                ul: ({ node, ordered, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                ol: ({ node, ordered, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                li: ({ node, ...props }) => <li className="mb-0" {...props} />,
+                strong: ({ node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                em: ({ node, ...props }) => <em className="italic text-slate-600" {...props} />,
+                blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
               }}
             >
               {feedback}
@@ -685,10 +685,10 @@ ${actionText}`;
               disabled={disabled}
               onClick={() => setActiveTab(id)}
               className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-                  ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
-                  : disabled
-                    ? "border-gray-200 text-gray-300 cursor-not-allowed"
-                    : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+                ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
+                : disabled
+                  ? "border-gray-200 text-gray-300 cursor-not-allowed"
+                  : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
                 }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -742,8 +742,8 @@ ${actionText}`;
                         {turn.alignment && (
                           <div className="flex justify-end flex-col items-end gap-1">
                             <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                                turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
-                                  'bg-slate-50 text-slate-600 border-slate-200'
+                              turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
+                                'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
                               <span className="opacity-50">·</span>
