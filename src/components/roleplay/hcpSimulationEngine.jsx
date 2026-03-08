@@ -472,15 +472,15 @@ PHYSICAL CONTEXT (IMMUTABLE — your words MUST match this):
 "${lockedCue}"
 
 VERBAL CONSISTENCY RULES:
-${structuralState === 'time-pressured' ? '→ Reference time constraints or your schedule. Keep sentences short and direct. Show urgency.' : ''}
-${structuralState === 'engaged' ? '→ Ask probing clinical questions. Show genuine curiosity about evidence and patient outcomes. Be collaborative and demanding.' : ''}
-${structuralState === 'resistant' ? '→ Express clinical skepticism. Ask for evidence. Do not validate unsubstantiated claims. Be direct about your doubts.' : ''}
-${structuralState === 'boundary-setting' ? '→ State a clear clinical decision or limit. Professional but firm. Do not waver.' : ''}
-${structuralState === 'irritated' ? '→ Brief, direct responses. Minimal elaboration. Professional but terse. Express frustration through brevity.' : ''}
-${structuralState === 'disengaging' ? '→ Signal conversation is ending. Reference next patient or task. Polite but final.' : ''}
-${structuralState === 'neutral' ? '→ Professional and engaged tone. Ask clarifying questions. Show clinical interest and real concern for patient outcomes.' : ''}
-${temperature === 'irritated' ? '→ Cooler tone. Less verbal warmth. More direct phrasing. Skeptical edge.' : ''}
-${temperature === 'stressed' ? '→ Shorter responses. Less patience for tangents. Show fatigue or overload.' : ''}
+${structuralState === 'time-pressured' ? '→ Reference time constraints or schedule. Keep sentences short and direct.' : ''}
+${structuralState === 'engaged' ? '→ Show curiosity through questions or follow-up. Acknowledge points made.' : ''}
+${structuralState === 'resistant' ? '→ Express clinical skepticism. Ask for evidence. Do not validate unsubstantiated claims.' : ''}
+${structuralState === 'boundary-setting' ? '→ State a clear clinical decision or limit. Professional but firm.' : ''}
+${structuralState === 'irritated' ? '→ Brief, direct responses. Minimal elaboration. Professional but terse.' : ''}
+${structuralState === 'disengaging' ? '→ Signal conversation is ending. Reference next patient or task. Stay professional.' : ''}
+${structuralState === 'neutral' ? '→ Professional and measured tone. Balanced, neither dismissive nor enthusiastic.' : ''}
+${temperature === 'irritated' ? '→ Cooler tone. Less verbal warmth. More direct phrasing.' : ''}
+${temperature === 'stressed' ? '→ Shorter responses. Less patience for tangents. Stay on topic.' : ''}
 
 TONE DIRECTIVE: ${toneDirectives.instruction}
 MAX SENTENCES: ${toneDirectives.maxSentences}
@@ -569,13 +569,13 @@ PUNCTUATION REQUIREMENT:
 - Do NOT output dialogue without proper ending punctuation.`
       : `\nThe sales rep has just entered. This is your OPENING LINE.
 OPENING RULES (strictly enforced):
-- Greet the rep professionally and naturally
-- You can reference your current situation or mindset (busy, interested, distracted, etc.)
-- Be personable but professional — reflect your actual state and personality
-- DO NOT ask questions (rep hasn't spoken yet), but DO show personality
+- React to the rep's arrival — express YOUR OWN current state, mindset, or reality
+- DO NOT ask the rep any questions — they have not spoken yet
+- DO NOT reference "barriers", "concerns", or "products" the rep hasn't mentioned
+- DO NOT invite the rep to share anything — this is your reaction, not a welcome
 - Your dialogue MUST match the physical context above: "${lockedCue}"
-- 2–3 sentences MAX (natural conversational opening)
+- 1–2 sentences MAX
 - Output ONLY your spoken words — no asterisks, no stage directions, no parentheticals
-- CRITICAL: All statements must end with a period (.)`
+- CRITICAL: All questions must end with ? and all statements with .`
     }`;
 }

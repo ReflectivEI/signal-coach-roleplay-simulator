@@ -52,26 +52,24 @@ export function transitionState(currentState, repMessage) {
   const msg = repMessage.toLowerCase();
   const idx = STATE_INDEX[currentState] ?? 0;
 
-  // Escalate +2 for insults / competence attacks
-  const hardEscalate = /bad doctor|incompetent|you don.t know|stupid|idiot|wrong about|you.re wrong|terrible|awful|you should|you must|you have to/.test(msg);
+  // HARD ESCALATE +2 for insults, hostility, disrespect, competence attacks
+  const hardEscalate = /you suck|i hate you|hate you|you.re (terrible|awful|bad|pathetic|useless|worthless|disgusting)|bad doctor|incompetent|you don.t know|stupid|idiot|wrong about|you.re wrong|disrespect|rude|unprofessional|get out|leave|get lost|trash|garbage/.test(msg);
   if (hardEscalate) {
     return HCP_STATES[Math.min(idx + 2, HCP_STATES.length - 1)];
   }
 
-  // Escalate +1 for pressure / repetition / demand language
-  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|have you considered|don.t you think/.test(msg);
+  // SOFT ESCALATE +1 for pressure / repetition / demand language
+  const softEscalate = /\bnow\b|immediately|just do it|you need to|i need you to|why won.t you|come on|seriously|stop|listen to me|i.m telling you|have to|must/.test(msg);
   if (softEscalate) {
     return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
   }
 
-  // De-escalate -1 ONLY for strong acknowledgment + humility + respect of constraints
-  // Much stricter threshold — don't de-escalate easily
-  const strongDeEscalate = /absolutely i understand|i appreciate your time constraints|i hear your concern and that.s valid|i completely respect that|thank you for being direct with me|that.s a fair point/.test(msg);
+  // DE-ESCALATE -1 ONLY for strong acknowledgment / humility / respect
+  const strongDeEscalate = /i apologize|i.m sorry|my mistake|you.re right|i respect that|that.s fair|i understand|i hear you/.test(msg);
   if (strongDeEscalate && idx > 0) {
     return HCP_STATES[Math.max(idx - 1, 0)];
   }
 
-  // Stay in current state — don't default to dropping back
   return currentState;
 }
 
@@ -89,10 +87,10 @@ export function getToneDirectives(state) {
     },
     'engaged': {
       maxSentences: 3,
-      tone: 'curious, collaborative, and professional',
-      warmth: 'moderate-to-high',
-      pacing: 'natural',
-      instruction: 'Engage actively with the sales rep. Ask probing clinical questions. Show genuine curiosity about their evidence and clinical reasoning. Reference your patient population or practice context. Be collaborative but demanding of evidence.',
+      tone: 'curious and collaborative',
+      warmth: 'high',
+      pacing: 'comfortable',
+      instruction: 'Show genuine interest. Ask a follow-up question or lean into the topic. Be collaborative.',
     },
     'time-pressured': {
       maxSentences: 2,
