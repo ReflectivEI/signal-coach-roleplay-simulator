@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -402,7 +402,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
       // Build deterministic report header with locked scores
-      const reportHeader = `## Session Feedback\n\n**Scenario:** ${scenario.title}\n**HCP Type:** ${scenario.hcp_category}\n**Difficulty:** ${scenario.difficulty}\n\n## 1) Overall Alignment Score\n- **${overallScore?.toFixed(1) ?? 0}/5** (deterministic Signal Intelligence score)\n\n### How Alignment Is Scored\n- Scores are calculated using the Signal Intelligence rubric:\n  - Observable behaviors only (no intent inference)\n  - Canonical capability definitions and sub-metrics\n  - Each turn is scored for alignment, misalignment, and positives\n- See rubric flags and actionable feedback below.\n\n### Capabilities Breakdown:\n${capSummary}\n\n### Actionable Feedback\n${allPositives.length > 0 ? `**Strengths:**\n${allPositives.map(p => `- ${p}`).join('\\n')}` : 'No strengths detected.'}\n\n${allMisalignments.length > 0 ? `**Misalignments:**\n${allMisalignments.map(m => `- ${m}`).join('\\n')}` : 'No misalignments detected.'}\n\n${rubricSection}\n`;
+      const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}\n\n[SECTION_END]\nStrengths\n[SECTION_END]\nImprovements\n[SECTION_END]\nPatterns\n[SECTION_END]\nAction Items\n[SECTION_END]`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
