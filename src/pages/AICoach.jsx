@@ -18,7 +18,7 @@ const suggestedQuestions = [
 
 const contentTools = [
   {
-    label: "Draft Opening",
+    label: "Opening",
     examplePrompt: "Draft compelling opening statements for a first HCP visit that are Signal Intelligence-focused and non-product-first. Provide 3 options:\n\n1. For a Specialist (Oncologist, Cardiologist, etc.)\n2. For Primary Care / Family Medicine\n3. For a Surgeon / Procedure-Based Specialist\n\nEach opening should lead with curiosity about their priorities, establish credibility, and avoid any product mention.",
     followUpPrompt: "[DRAFT OPENING TOOL] Please share your HCP context (HCP type, specialty, therapeutic area, relationship status). I will create a specific opening tailored to your situation. Stay focused on the opening conversation only."
   },
