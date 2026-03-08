@@ -30,6 +30,10 @@ function detectTopic(question) {
 // Function to respond based on current tab and detected topic
 function respondToQuestion(question, currentTab) {
   const detectedTopic = detectTopic(question);
+  // Skip clarification response for anticipated objections and answer directly
+  if (detectedTopic === TABS.OBJECTION_HANDLING && question.toLowerCase().includes("objection")) {
+    return ""; // No clarification, let LLM answer directly
+  }
   if (detectedTopic === currentTab) {
     return `That’s a great question. Since you're in the ${currentTab} section, here's a quick response to help you: [brief answer].`;
   }
@@ -94,7 +98,7 @@ function parseSessionContext() {
 }
 
 export default function AICoach() {
-  const [activeTab, setActiveTab] = useState(TABS.GENERAL_COACHING);
+  const [activeTab] = useState(TABS.GENERAL_COACHING);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -169,11 +173,11 @@ Please give me specific, actionable feedback that directly addresses these misal
     // Tab-aware topic guidance logic
     const userMsg = text || input;
     const currentTab = activeTab;
-    const guidanceResponse = respondToQuestion(userMsg, currentTab);
+    respondToQuestion(userMsg, currentTab);
     if (!userMsg.trim()) return;
 
     // Content tool prompt logic
-    let showToolPrompt = false;
+    // let showToolPrompt = false;
     if (contentToolMode) {
       // Only show tool prompt if this is the first message in the thread
       const toolMessages = messages.filter(m => m.role === "user" && m.content && m.content.includes(contentToolMode));
