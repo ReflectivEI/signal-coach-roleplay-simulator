@@ -51,7 +51,15 @@ export default function AnnotatedTranscript({ messages, scenario }) {
         if (match) parsed = JSON.parse(match[0]);
       } catch { parsed = []; }
       (parsed || []).forEach((a) => { if (a?.index !== undefined) map[a.index] = a; });
-      setAnnotations(map);
+      // Deduplicate repeated notes for same capability/type
+      const deduped = {};
+      Object.values(map).forEach((ann) => {
+        const key = `${ann.capability}-${ann.type}-${ann.note}`;
+        if (!Object.values(deduped).some(d => `${d.capability}-${d.type}-${d.note}` === key)) {
+          deduped[ann.index] = ann;
+        }
+      });
+      setAnnotations(deduped);
     } catch (err) {
       console.error('Annotation error:', err);
     } finally {

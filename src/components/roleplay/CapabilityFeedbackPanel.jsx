@@ -62,6 +62,15 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       if (!res.ok) throw new Error('Failed to get feedback');
       const data = await res.json();
       setCapFeedback((prev) => ({ ...prev, [cap.id]: data.response || data.text || data.content || '' }));
+          // Deduplicate repeated feedback notes for the same capability
+          if (data.response || data.text || data.content) {
+            const feedback = data.response || data.text || data.content || '';
+            const lines = feedback.split('\n');
+            const dedupedLines = lines.filter((line, idx, arr) => arr.indexOf(line) === idx);
+            setCapFeedback((prev) => ({ ...prev, [cap.id]: dedupedLines.join('\n') }));
+          } else {
+            setCapFeedback((prev) => ({ ...prev, [cap.id]: '' }));
+          }
     } catch (err) {
       console.error('Capability feedback error:', err);
       setCapFeedback((prev) => ({ ...prev, [cap.id]: 'Unable to generate feedback. Please try again.' }));
