@@ -7,7 +7,7 @@ export default function QuickActionCard({ icon: Icon, title, description, page, 
   return (
     <Link
       to={createPageUrl(page)}
-      className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-teal-200 hover:bg-paleYellow hover:scale-[1.03] hover:shadow-lg transition-all duration-200 group"
+      className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-100 hover:border-teal-200 hover:shadow-md transition-all duration-300 group"
     >
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
         <Icon className="w-5 h-5 text-teal-600" />

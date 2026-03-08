@@ -311,7 +311,7 @@ IMPORTANT: Generate something FRESH that feels new and specific, not a reworded 
                           to={createPageUrl(item.page)}
                           className={`flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
                             ? "text-white font-semibold"
-                            : "text-white/60 hover:text-sidebar-accent-foreground hover:bg-sidebar-accent hover:scale-[1.03] hover:shadow-lg"
+                            : "text-white/60 hover:text-white hover:bg-white/10"
                             }`}
                           style={isActive ? { background: "#39ACAC" } : {}}
                           onClick={() => {
