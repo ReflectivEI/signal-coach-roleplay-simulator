@@ -267,6 +267,7 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
     // 6.6 GENERATE CONTEXTUAL CUE — MATCHES DIALOGUE + QUESTION QUALITY
     // After dialogue is generated, create a contextual cue that matches what the HCP said
     // and responds to the quality of the rep's question (pushy, redundant, etc.)
+    // Always match cue to the same state/context as the generated HCP dialogue
     const contextualCue = generateContextualCue(
       sid,
       nextTurnNumber,
