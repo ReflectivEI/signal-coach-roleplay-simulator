@@ -20,27 +20,27 @@ const contentTools = [
   { 
     label: "Draft Opening", 
     examplePrompt: "Draft compelling opening statements for a first HCP visit that are Signal Intelligence-focused and non-product-first. Provide 3 options:\n\n1. For a Specialist (Oncologist, Cardiologist, etc.)\n2. For Primary Care / Family Medicine\n3. For a Surgeon / Procedure-Based Specialist\n\nEach opening should lead with curiosity about their priorities, establish credibility, and avoid any product mention.",
-    followUpPrompt: "Now, please share which HCP type you're meeting with and any specific context (their specialty, your therapeutic area, relationship status) so I can draft a highly tailored opening for your actual conversation."
+    followUpPrompt: "[DRAFT OPENING TOOL] Please share your HCP context (HCP type, specialty, therapeutic area, relationship status). I will create a specific opening tailored to your situation. Stay focused on the opening conversation only."
   },
   { 
     label: "Objection Responses", 
     examplePrompt: "Generate 3 different response options for this common objection: 'I already have a preferred treatment and I'm not looking to change.'",
-    followUpPrompt: "Now, please share the specific objection you're facing so I can generate tailored response options for you."
+    followUpPrompt: "[OBJECTION RESPONSES TOOL] Please share the specific objection you're facing or the concern you need to address. I will generate response options for this objection only."
   },
   { 
     label: "Follow-up Email", 
     examplePrompt: "Write a professional follow-up email to send after a productive HCP meeting. Keep it brief, value-focused, and referencing the Signal Intelligence framework.",
-    followUpPrompt: "Now, please share details about your meeting (HCP type, what was discussed, key points) so I can draft a customized follow-up email."
+    followUpPrompt: "[FOLLOW-UP EMAIL TOOL] Please share your meeting details (HCP type, key discussion points, outcomes). I will draft a professional follow-up email based on this meeting only."
   },
   { 
     label: "Improve My Message", 
     examplePrompt: "I can help you improve your message using Signal Intelligence principles. Please share the message you'd like me to review.",
-    followUpPrompt: null // This one goes straight to user input
+    followUpPrompt: "[IMPROVE MY MESSAGE TOOL] Please paste the message you want to improve. I will provide feedback and suggestions for that message only."
   },
   { 
     label: "Content Ideas", 
     examplePrompt: "Here are 5 creative ways you can add value to your next HCP conversation beyond just presenting product data: [example ideas]",
-    followUpPrompt: "Now, please share your specific situation (HCP type, therapeutic area, relationship stage) so I can suggest more targeted value-add ideas."
+    followUpPrompt: "[CONTENT IDEAS TOOL] Please share your specific situation (HCP type, therapeutic area, relationship stage). I will suggest value-add ideas for your specific context only."
   },
 ];
 
@@ -493,10 +493,11 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             onSubmit={(e) => {
               e.preventDefault();
               if (contentToolMode && input.trim()) {
-                // In content tool mode: send follow-up with user's specific context
+                // In content tool mode: send follow-up with user's specific context + topic constraint
                 const tool = contentTools.find(t => t.label === contentToolMode);
                 if (tool) {
-                  const followUpText = `${tool.followUpPrompt}\n\nUser's situation: ${input}`;
+                  const scopeConstraint = `\n\nSCOPE CONSTRAINT: Stay strictly within the ${contentToolMode} tool. Do not provide general coaching or discuss unrelated topics. After completing this request, ask if they need further help with this tool or want to return to general coaching.`;
+                  const followUpText = `${tool.followUpPrompt}\n\nUser's specific context: ${input}${scopeConstraint}`;
                   setContentToolMode(null); // Exit tool mode
                   sendMessage(followUpText);
                 }
