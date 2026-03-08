@@ -33,8 +33,8 @@ export default function LoginPage() {
         <div className="bg-white rounded-lg shadow-xl p-8">
           {/* Logo/Title */}
           <div className="text-center mb-8">
+            <img src="/public/logo.png" alt="ReflectivAI Logo" className="mx-auto mb-2 w-16 h-16" />
             <h1 className="text-3xl font-bold text-slate-900">ReflectivAI</h1>
-            <p className="text-slate-600 text-sm mt-2">Demo Login</p>
           </div>
 
           {/* Login Form */}
