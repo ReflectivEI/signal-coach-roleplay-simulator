@@ -169,8 +169,6 @@ Please give me specific, actionable feedback that directly addresses these misal
     const userMsg = text || input;
     const currentTab = props?.activeTab || TABS.GENERAL_COACHING;
     const guidanceResponse = respondToQuestion(userMsg, currentTab);
-    // Optionally, prepend guidance to the AI Coach response
-    const userMsg = text || input;
     if (!userMsg.trim()) return;
 
     const newMessages = silent
