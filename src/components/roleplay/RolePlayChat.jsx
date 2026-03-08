@@ -184,6 +184,11 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
 
     simStateRef.current = { temperature: nextTemp, severity: nextSev };
 
+    // 3. Update turn-level engagement and state
+    const prevEngagementScore = respondingToTurn.engagementScore ?? 2;
+    const conversationHistory = turns.map(t => ({ repMessage: t.repMessage, hcpDialogue: t.hcpDialogueBefore }));
+    const turnState = updateTurnState(prevState, repMessage, prevEngagementScore, conversationHistory);
+
     // 3. Lock rep's response
     const lockedRespondingTurn = {
       ...respondingToTurn,
@@ -191,6 +196,13 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       alignment,
       hcpStateAfter: nextHcpState,
       temperatureAfter: nextTemp,
+      engagementScore: turnState.engagementScore,
+      engagementLevel: turnState.engagementLevel,
+      emotionalValence: turnState.emotionalValence,
+      stance: turnState.stance,
+      reactionTrigger: turnState.reactionTrigger,
+      conversationalMomentum: turnState.conversationalMomentum,
+      timePressure: turnState.timePressure,
     };
 
     // 4. Build locked HCP profile for the NEXT turn — SINGLE SOURCE OF TRUTH
@@ -279,6 +291,13 @@ export default function RolePlayChat({ scenario, onClose, onSessionSaved }) {
       hcpStateAfter: null,
       hcpDisagreed: disagreementInfo.disagrees,
       disagreementInfo: disagreementInfo,
+      engagementScore: turnState.engagementScore,
+      engagementLevel: turnState.engagementLevel,
+      emotionalValence: turnState.emotionalValence,
+      stance: turnState.stance,
+      reactionTrigger: turnState.reactionTrigger,
+      conversationalMomentum: turnState.conversationalMomentum,
+      timePressure: turnState.timePressure,
     };
 
     const updatedTurns = [...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn];
