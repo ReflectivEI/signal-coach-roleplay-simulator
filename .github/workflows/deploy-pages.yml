@@ -16,6 +16,7 @@ jobs:
     name: Build and Deploy to Cloudflare Pages
     env:
       CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
+      CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
     
     steps:
       - name: Checkout code
@@ -72,7 +73,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist/client --project-name=${{ steps.resolve_project.outputs.project }} --branch=main
+          command: pages deploy dist/client --project-name=reflect-ai-now --branch=main
 
       - name: Create GitHub Deployment
         if: success()
