@@ -67,6 +67,9 @@ export default function AICoach() {
     if (sessionContext && messages.length === 0) {
       const intro = buildSessionContextMessage(sessionContext);
       sendMessage(intro, true);
+      // Immediately trigger coaching feedback request
+      const feedbackRequest = `Please provide specific, actionable coaching feedback for this session, referencing the scenario, detected misalignments, positives, and capability scores above. Ground your feedback in Signal Intelligence principles.`;
+      sendMessage(feedbackRequest);
     }
   }, []);
 
