@@ -162,15 +162,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
     const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
 
-    // 2. Transition structural state and base temperature (deterministic)
-    const nextHcpState = transitionState(prevState, repMessage, prevTemp);
-    let nextTemp = transitionTemperature(prevTemp, repMessage);
-    const nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
+    // 2. Detect rep interruption/leave intent and override HCP state if needed
+    let overrideExit = false;
+    const leaveIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
+    if (leaveIntent.test(repMessage)) {
+      overrideExit = true;
+    }
 
-    // 3. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
+    // 3. Transition structural state and base temperature (deterministic)
+    let nextHcpState = transitionState(prevState, repMessage, prevTemp);
+    let nextTemp = transitionTemperature(prevTemp, repMessage);
+    let nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
+
+    // 4. Override HCP state for schedule_exit/closure if rep signals leave/interruption
+    if (overrideExit) {
+      nextHcpState = 'disengaging';
+      nextTemp = 'neutral';
+      nextSev = 0;
+    }
+
+    // 5. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
     // If the HCP disagreed in the turn we just responded to, their emotional temperature
     // escalates for the NEXT turn (not the current alignment scoring)
-    if (respondingToTurn.hcpDisagreed) {
+    if (respondingToTurn.hcpDisagreed && !overrideExit) {
       const escalatedIndex = escalateForDisagreement(
         TEMPERATURES.indexOf(nextTemp),
         respondingToTurn.disagreementInfo
