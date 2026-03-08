@@ -678,6 +678,12 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
+              {/* Scenario Opening Scene */}
+              {scenario.opening_scene && turns.length === 1 && !turns[0].repMessage && (
+                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 font-medium">
+                  {scenario.opening_scene}
+                </div>
+              )}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
                 {turns.length === 0 && isLoading && (
