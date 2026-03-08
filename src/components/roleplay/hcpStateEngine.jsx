@@ -162,6 +162,16 @@ const CUE_BANK = {
     'The HCP sits upright, attentive but not tense.',
     'The HCP glances at the door, then refocuses on you.',
     'The HCP maintains a neutral expression, ready for your next point.',
+    'The HCP checks their calendar, then resumes listening.',
+    'The HCP adjusts their glasses, then nods for you to continue.',
+    'The HCP scribbles a note, then looks up with a neutral expression.',
+    'The HCP offers a brief smile, then returns to their paperwork.',
+    'The HCP stretches slightly, then focuses back on the conversation.',
+    'The HCP glances at the window, then refocuses on you.',
+    'The HCP quietly clears their throat, then waits for your input.',
+    'The HCP checks their phone, then resumes attention.',
+    'The HCP offers a courteous nod, then listens intently.',
+    'The HCP leans forward slightly, showing mild interest.',
   ],
   'engaged': [
     'The HCP leans forward, hands on the desk, actively responding to your ideas.',
@@ -184,6 +194,16 @@ const CUE_BANK = {
     'The HCP nods repeatedly, showing strong agreement.',
     'The HCP expresses gratitude for your input.',
     'The HCP mirrors your enthusiasm, creating a collaborative atmosphere.',
+    'The HCP takes notes enthusiastically, showing genuine interest.',
+    'The HCP leans forward, elbows on desk, ready to brainstorm.',
+    'The HCP offers a high five, celebrating a breakthrough.',
+    'The HCP references a shared goal, reinforcing teamwork.',
+    'The HCP smiles broadly, encouraging further discussion.',
+    'The HCP points to a chart, inviting your analysis.',
+    'The HCP shares a personal anecdote, building rapport.',
+    'The HCP offers a supportive gesture, reinforcing partnership.',
+    'The HCP nods in agreement, echoing your enthusiasm.',
+    'The HCP leans in, voice animated, eager for your perspective.',
   ],
   'time-pressured': [
     'The HCP glances at the clock, then gestures for you to be concise.',
@@ -196,6 +216,16 @@ const CUE_BANK = {
     'The HCP keeps writing, barely looking up, signaling limited bandwidth.',
     'The HCP glances at a waiting patient list, then signals for brevity.',
     'The HCP checks their watch, then summarizes the discussion to move things along.',
+    'The HCP checks their calendar, then signals urgency.',
+    'The HCP glances at the door, then prompts a quick summary.',
+    'The HCP stands up, ready to move on, signaling time constraints.',
+    'The HCP offers a brief nod, then checks their phone.',
+    'The HCP gestures for brevity, eyes focused on the clock.',
+    'The HCP quickly reviews notes, then signals to wrap up.',
+    'The HCP references a waiting patient, urging efficiency.',
+    'The HCP summarizes key points, then signals to conclude.',
+    'The HCP glances at their schedule, then prompts a final question.',
+    'The HCP offers a quick handshake, then moves toward the exit.',
   ],
   'resistant': [
     'The HCP folds their arms, leans back, and raises an eyebrow, challenging your assertion.',
@@ -208,6 +238,16 @@ const CUE_BANK = {
     'The HCP glances at a colleague, seeking validation for their skepticism.',
     'The HCP makes a note, then asks a pointed follow-up question.',
     'The HCP maintains a closed posture, signaling reluctance to proceed.',
+    'The HCP crosses their arms, then asks for supporting evidence.',
+    'The HCP offers a skeptical look, then requests clarification.',
+    'The HCP shakes their head, unconvinced by your argument.',
+    'The HCP references a conflicting study, challenging your claim.',
+    'The HCP sighs, then asks for more details.',
+    'The HCP leans back, posture closed, signaling resistance.',
+    'The HCP glances at their notes, then questions your reasoning.',
+    'The HCP offers a guarded response, then requests specifics.',
+    'The HCP frowns, then asks for additional information.',
+    'The HCP maintains a skeptical tone, then prompts you to elaborate.',
   ],
   'boundary-setting': [
     'The HCP holds up one hand, palm outward, firmly setting a conversational boundary.',
@@ -220,6 +260,16 @@ const CUE_BANK = {
     'The HCP glances at the time, then reiterates the need to move on.',
     'The HCP summarizes the boundary, ensuring clarity for all parties.',
     'The HCP signals for a topic change, then waits for your response.',
+    'The HCP raises a hand, then states the conversation limit.',
+    'The HCP offers a firm gesture, then redirects the topic.',
+    'The HCP references policy, then closes the discussion.',
+    'The HCP signals for a change, then waits for your input.',
+    'The HCP stands up, then requests a new topic.',
+    'The HCP summarizes boundaries, then prompts for agreement.',
+    'The HCP glances at their watch, then signals to move on.',
+    'The HCP offers a formal statement, then ends the topic.',
+    'The HCP closes their notebook, then requests a shift.',
+    'The HCP signals for closure, then waits for your response.',
   ],
   'irritated': [
     'The HCP\'s jaw tightens, eyes narrowed, and they respond with clipped phrases.',
@@ -232,6 +282,16 @@ const CUE_BANK = {
     'The HCP speaks curtly, avoids eye contact, and signals impatience.',
     'The HCP drums their fingers on the desk, then sighs audibly.',
     'The HCP glances at the door, clearly ready to end the conversation.',
+    'The HCP frowns, then interrupts with a sharp comment.',
+    'The HCP offers a terse response, then looks away.',
+    'The HCP sighs loudly, then signals impatience.',
+    'The HCP shakes their head, then cuts the conversation short.',
+    'The HCP leans back, posture rigid, then offers minimal feedback.',
+    'The HCP glances at their watch, then signals frustration.',
+    'The HCP offers a curt reply, then avoids eye contact.',
+    'The HCP drums their fingers, then sighs audibly.',
+    'The HCP stands up, then signals the conversation is over.',
+    'The HCP closes their notebook, then ends the discussion.',
   ],
   'disengaging': [
     'The HCP begins moving toward the hallway, gathering their belongings as they signal closure.',
@@ -244,6 +304,16 @@ const CUE_BANK = {
     'The HCP checks their schedule, then signals the need to wrap up.',
     'The HCP glances at a waiting patient, then ends the conversation politely.',
     'The HCP summarizes next steps, then departs efficiently.',
+    'The HCP stands up, then signals the conversation is ending.',
+    'The HCP offers a brief nod, then moves toward the exit.',
+    'The HCP closes their notebook, then leaves promptly.',
+    'The HCP glances at their watch, then signals closure.',
+    'The HCP offers a polite farewell, then departs.',
+    'The HCP summarizes next steps, then signals the end.',
+    'The HCP stands, then signals the conversation is over.',
+    'The HCP checks their calendar, then departs efficiently.',
+    'The HCP offers a handshake, then leaves promptly.',
+    'The HCP glances at the door, then signals the conversation is ending.',
   ],
 };
 
@@ -283,11 +353,96 @@ export function analyzeQuestionQuality(repMessage, conversationHistory = []) {
  * If rep's question is pushy/redundant/poorly thought out, HCP shows irritation/impatience.
  */
 export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue = '', repMessage = '', conversationHistory = []) {
+    // Adaptive cue selection: analyze rep message sentiment and HCP dialogue tone
+    const repSentiment = repMessage ? repMessage.toLowerCase() : '';
+    const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
+    const recentCues = conversationHistory.slice(-10).map(t => t.cueBefore).filter(Boolean);
+    // Helper for fallback cue
+    function fallbackCue() {
+      return 'The HCP maintains a neutral expression, ready for your next point.';
+    }
+    if (/thank|appreciate|helpful|good|great|positive|collaborate|open|enthusiast/.test(repSentiment)) {
+      // Positive rep sentiment: select positive/engaged cues if available
+      if (hcpState === 'engaged' || hcpState === 'neutral') {
+        const engagedCues = CUE_BANK['engaged'] || [];
+        if (engagedCues.length > 0) {
+          let cueIdx = seed % engagedCues.length;
+          let altCue = engagedCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+    }
+    if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
+      // Negative rep sentiment: select resistant/irritated cues if available
+      if (hcpState === 'resistant' || hcpState === 'irritated') {
+        const irritatedCues = CUE_BANK['irritated'] || [];
+        if (irritatedCues.length > 0) {
+          let cueIdx = seed % irritatedCues.length;
+          let altCue = irritatedCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+    }
+    // HCP dialogue tone: if dialogue contains keywords, select matching cues
+    if (hcpDialogue) {
+      const lowerDialogue = hcpDialogue.toLowerCase();
+      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient/.test(lowerDialogue)) {
+        const timePressCues = CUE_BANK['time-pressured'] || [];
+        if (timePressCues.length > 0) {
+          let cueIdx = seed % timePressCues.length;
+          let altCue = timePressCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp/.test(lowerDialogue)) {
+        const irritationCues = CUE_BANK['irritated'] || [];
+        if (irritationCues.length > 0) {
+          let cueIdx = seed % irritationCues.length;
+          let altCue = irritationCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant/.test(lowerDialogue)) {
+        const skepticalCues = CUE_BANK['resistant'] || [];
+        if (skepticalCues.length > 0) {
+          let cueIdx = seed % skepticalCues.length;
+          let altCue = skepticalCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+      if (/boundary|limit|policy|move on|topic change|end discussion|closure/.test(lowerDialogue)) {
+        const boundaryCues = CUE_BANK['boundary-setting'] || [];
+        if (boundaryCues.length > 0) {
+          let cueIdx = seed % boundaryCues.length;
+          let altCue = boundaryCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond/.test(lowerDialogue)) {
+        const engagedCues = CUE_BANK['engaged'] || [];
+        if (engagedCues.length > 0) {
+          let cueIdx = seed % engagedCues.length;
+          let altCue = engagedCues[cueIdx];
+          if (!recentCues.includes(altCue)) return altCue;
+        } else {
+          return fallbackCue();
+        }
+      }
+    }
   // Get the base cue for the state
   const baseCues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
-  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
-  // Prevent cue repetition: check last 10 cues in conversationHistory
-  const recentCues = conversationHistory.slice(-10).map(t => t.cueBefore).filter(Boolean);
   let cueIdx = seed % baseCues.length;
   let baseCue = baseCues[cueIdx];
   // If baseCue is in recentCues, select next available cue
@@ -409,12 +564,6 @@ function hashInt(str) {
  */
 export function selectCue(sessionId, turnNumber, hcpState, _severity = 0, hcpDialogue = '', repMessage = '', conversationHistory = []) {
   // If dialogue and message provided, use contextual generation
-  if (hcpDialogue || repMessage) {
-    return generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue, repMessage, conversationHistory);
-  }
-
-  // Fallback: deterministic selection from base cue bank
-  const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
-  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
-  return cues[seed % cues.length];
+  // Always use generateContextualCue for deterministic fallback
+  return generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue, repMessage, conversationHistory);
 }

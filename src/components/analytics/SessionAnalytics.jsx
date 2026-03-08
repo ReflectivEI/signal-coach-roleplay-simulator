@@ -213,12 +213,12 @@ function StatCard({ icon: Icon, label, value, sub, color = "teal" }) {
     amber: "bg-amber-50 border-amber-200 text-amber-700",
   };
   return (
-    <div className={`rounded-xl p-4 border ${styles[color]} transition-all`}>
+    <div className={`rounded-xl p-4 border ${styles[color]} transition-all`} tabIndex={0} aria-label={label} role="region">
       <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-4 h-4 opacity-70" />
-        <span className="text-xs font-semibold uppercase tracking-wide opacity-60">{label}</span>
+        <Icon className="w-4 h-4 opacity-70" aria-hidden="true" />
+        <span className="text-xs font-semibold uppercase tracking-wide opacity-60" id={`statcard-label-${label}`}>{label}</span>
       </div>
-      <div className="text-2xl font-bold">{value}</div>
+      <div className="text-2xl font-bold" aria-labelledby={`statcard-label-${label}`}>{value}</div>
       {sub && <div className="text-xs opacity-60 mt-0.5">{sub}</div>}
     </div>
   );
@@ -240,6 +240,40 @@ export default function SessionAnalytics() {
   const [dateRange, setDateRange] = useState("30");
   const [scenarioFilter, setScenarioFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("overview");
+  // Download analytics as CSV
+  function handleDownload() {
+    const header = ["Session ID", "Scenario Title", "Date", "Signal Awareness", "Signal Interpretation", "Value Connection", "Customer Engagement", "Objection Navigation", "Commitment Generation", "Conversation Management", "Adaptive Response", "Successful Strategies", "Misalignments"];
+    const rows = filtered.map(session => {
+      const scores = extractScores(session.feedback) || {};
+      const strategies = extractStrategies(session.feedback).join("; ");
+      const misalignments = extractMisalignments(session.feedback).join("; ");
+      return [
+        session.id,
+        session.scenario_title,
+        session.created_date,
+        scores.signal_awareness ?? "",
+        scores.signal_interpretation ?? "",
+        scores.value_connection ?? "",
+        scores.customer_engagement ?? "",
+        scores.objection_navigation ?? "",
+        scores.commitment_generation ?? "",
+        scores.conversation_management ?? "",
+        scores.adaptive_response ?? "",
+        strategies,
+        misalignments
+      ];
+    });
+    const csv = [header.join(","), ...rows.map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "session-analytics.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   // Demo sessions so analytics always render meaningfully
   const DEMO_SESSIONS = [
@@ -389,7 +423,16 @@ export default function SessionAnalytics() {
   const vsAvgBenchmark = overallAvg > 0 ? (overallAvg - 3.3).toFixed(1) : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" role="main" aria-label="Session Analytics Panel">
+      {/* Download Analytics Button */}
+      <div className="flex justify-end mb-2">
+        <button
+          className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded shadow-sm transition-all"
+          onClick={handleDownload}
+        >
+          Download Analytics
+        </button>
+      </div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">

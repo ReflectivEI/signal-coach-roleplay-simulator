@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +33,6 @@ import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
-
-// ...existing code...
 
 const stateColors = {
   'neutral': 'bg-slate-100 text-slate-600 border-slate-200',
@@ -72,7 +70,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // Stable session ID for deterministic cue selection
   const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
   const sid = sessionIdRef.current;
-  // ...existing code...
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
 
@@ -300,6 +297,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
     };
 
+    // Audit log turn creation
+    logAuditEvent('turn_created', {
+      turnNumber: nextTurnNumber,
+      hcpState: nextHcpState,
+      cue: contextualCue,
+      dialogue: nextHcpDialogue,
+      repMessage,
+      alignment,
+      feedback: coachingResult,
+    });
+
     const updatedTurns = [...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn];
     setTurns(updatedTurns);
 
@@ -394,61 +402,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
       // Build deterministic report header with locked scores
-      const reportHeader = `## Session Feedback
-
-**Scenario:** ${scenario.title}
-**HCP Type:** ${scenario.hcp_category}
-**Difficulty:** ${scenario.difficulty}
-
-## 1) Overall Alignment Score
-- **${overallScore?.toFixed(1) ?? 0}/5** (deterministic Signal Intelligence score)
-
-### Capabilities Breakdown:
-${capSummary}`;
-
-      // Request structured coaching sections from LLM with JSON schema
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.
-
-${FEEDBACK_SOT}
-
-SESSION SCORING DATA (deterministic, turn-by-turn):
-Overall deterministic score: ${overallScore ?? 0}/5
-${capSummary}
-
-POSITIVES OBSERVED (turn-by-turn):
-${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}
-
-MISALIGNMENTS OBSERVED (turn-by-turn):
-${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}
-${rubricSection}
-
-Session Context:
-Scenario: ${scenario.title}
-HCP Type: ${scenario.hcp_category}
-Difficulty: ${scenario.difficulty}
-
-Conversation Transcript:
-${historyText}
-
-Respond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":
-
-SECTION 1: STRENGTHS (observable behaviors showing strong capability performance)
-[SECTION_END]
-
-SECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)
-[SECTION_END]
-
-SECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)
-[SECTION_END]
-
-SECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)
-[SECTION_END]
-
-CRITICAL RULES:
-- Do NOT include numeric scores
-- Each section is plain text (no markdown, no bullet points in the response text)
-- Separate sections with EXACTLY "[SECTION_END]"
-- All feedback must be observable and specific`;
+      const reportHeader = `## Session Feedback\n\n**Scenario:** ${scenario.title}\n**HCP Type:** ${scenario.hcp_category}\n**Difficulty:** ${scenario.difficulty}\n\n## 1) Overall Alignment Score\n- **${overallScore?.toFixed(1) ?? 0}/5** (deterministic Signal Intelligence score)\n\n### How Alignment Is Scored\n- Scores are calculated using the Signal Intelligence rubric:\n  - Observable behaviors only (no intent inference)\n  - Canonical capability definitions and sub-metrics\n  - Each turn is scored for alignment, misalignment, and positives\n- See rubric flags and actionable feedback below.\n\n### Capabilities Breakdown:\n${capSummary}\n\n### Actionable Feedback\n${allPositives.length > 0 ? `**Strengths:**\n${allPositives.map(p => `- ${p}`).join('\\n')}` : 'No strengths detected.'}\n\n${allMisalignments.length > 0 ? `**Misalignments:**\n${allMisalignments.map(m => `- ${m}`).join('\\n')}` : 'No misalignments detected.'}\n\n${rubricSection}\n`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -887,4 +841,16 @@ ${actionText}`;
       </div>
     </div>
   );
+}
+
+// Audit logging utility
+function logAuditEvent(eventType, details) {
+  // Example: send to backend or local storage
+  // window.fetch('/api/audit/log', {
+  //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
+  //   body: JSON.stringify({ eventType, details, timestamp: Date.now() })
+  // });
+  // For demo, log to console
+  console.log(`[AUDIT] ${eventType}`, details);
 }
