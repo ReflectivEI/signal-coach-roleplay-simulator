@@ -1,3 +1,54 @@
+// Engagement scoring and state update
+export function updateTurnState(prevState, repMessage, prevEngagementScore, conversationHistory) {
+  // Score rep input
+  let scoreDelta = 0;
+  const msg = repMessage.toLowerCase();
+  if (/\bstrong clinical question\b|patient-relevant insight|credible information|clear value/.test(msg)) scoreDelta += 2;
+  else if (/\brelevant question\b|concise useful point|acknowledge|value/.test(msg)) scoreDelta += 1;
+  else if (/\bvague opener\b|repeats|weak|low-value/.test(msg)) scoreDelta -= 1;
+  else if (/\bpromotional\b|unconvincing|wastes time|ignores/.test(msg)) scoreDelta -= 2;
+  // Clamp and decay
+  let engagementScore = Math.max(0, Math.min(5, prevEngagementScore + scoreDelta));
+  // Decay for consecutive low-value turns
+  const lowValueTurns = conversationHistory.slice(-3).filter(t => /vague|weak|low-value|promotional/.test((t.repMessage || '').toLowerCase())).length;
+  if (lowValueTurns >= 2) engagementScore = Math.max(0, engagementScore - 1);
+  // Map score to level
+  let engagementLevel = 'low';
+  if (engagementScore >= 4) engagementLevel = 'high';
+  else if (engagementScore >= 2) engagementLevel = 'medium';
+  // Emotional valence
+  let emotionalValence = 'neutral_task_focused';
+  if (engagementScore >= 4) emotionalValence = 'positive';
+  else if (engagementScore <= 1) emotionalValence = 'negative';
+  // Stance
+  let stance = 'guarded';
+  if (engagementScore >= 4) stance = 'receptive';
+  else if (engagementScore >= 2) stance = 'focused';
+  else if (engagementScore === 0) stance = 'impatient';
+  // Reaction trigger
+  let reactionTrigger = 'neutral';
+  if (/strong clinical question/.test(msg)) reactionTrigger = 'strong clinical question';
+  else if (/patient-relevant/.test(msg)) reactionTrigger = 'patient-relevant insight';
+  else if (/vague/.test(msg)) reactionTrigger = 'vague claim';
+  else if (/promotional/.test(msg)) reactionTrigger = 'promotional wording';
+  // Momentum
+  let conversationalMomentum = 'flat';
+  if (scoreDelta > 0) conversationalMomentum = 'improving';
+  else if (scoreDelta < 0) conversationalMomentum = 'declining';
+  // Time pressure (stub: could be scenario or rep input)
+  let timePressure = 'moderate';
+  if (/\bneed 30 minutes\b|busy|rush|tight/.test(msg)) timePressure = 'high';
+  // Return turn_state
+  return {
+    engagementScore,
+    engagementLevel,
+    emotionalValence,
+    stance,
+    reactionTrigger,
+    conversationalMomentum,
+    timePressure,
+  };
+}
 /**
  * HCP Simulation Engine — Unified Deterministic Model
  *
