@@ -257,16 +257,33 @@ export default function LearningPaths() {
 
   const toggleModuleComplete = async (capabilityId, moduleId) => {
     try {
-      // In real implementation would PATCH to backend
-      setPaths(prev => prev.map(p =>
-        p.capability === capabilityId
-          ? {
-            ...p, completed_modules: p.completed_modules.includes(moduleId)
-              ? p.completed_modules.filter(m => m !== moduleId)
-              : [...p.completed_modules, moduleId]
-          }
-          : p
-      ));
+      // PATCH to backend to persist module completion
+      const res = await fetch('/api/learning-paths/complete', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capabilityId, moduleId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Update local state with new completed_modules array
+        setPaths(prev => prev.map(p =>
+          p.capability === capabilityId
+            ? { ...p, completed_modules: data.completed_modules || [] }
+            : p
+        ));
+      } else {
+        // Fallback: update local state only
+        setPaths(prev => prev.map(p =>
+          p.capability === capabilityId
+            ? {
+              ...p, completed_modules: p.completed_modules.includes(moduleId)
+                ? p.completed_modules.filter(m => m !== moduleId)
+                : [...p.completed_modules, moduleId]
+            }
+            : p
+        ));
+        console.error('Toggle module backend error:', await res.text());
+      }
     } catch (err) {
       console.error('Toggle module error:', err);
     }
