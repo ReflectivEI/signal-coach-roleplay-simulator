@@ -127,7 +127,7 @@ function RepRow({ rep, onSelect, selected }) {
         </div>
       </td>
       <td className="px-4 py-3 text-xs text-amber-700 bg-amber-50 rounded">{rep.weakCapability}</td>
-      <td className="px-4 py-3"><StatusBadge status={rep.status} /></td>
+      <td className="px-4 py-3"><span className={`text-xs font-medium ${rep.status === 'active' ? 'text-green-700' : rep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{rep.status.charAt(0).toUpperCase() + rep.status.slice(1)}</span></td>
     </tr>
   );
 }
@@ -328,7 +328,7 @@ export default function ManagerView() {
                     <div>
                       <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
                       <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
-                      <StatusBadge status={selectedRep.status} />
+                      <span className={`text-xs font-medium ${selectedRep.status === 'active' ? 'text-green-700' : selectedRep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{selectedRep.status.charAt(0).toUpperCase() + selectedRep.status.slice(1)}</span>
                     </div>
                   </div>
 
@@ -439,7 +439,7 @@ export default function ManagerView() {
                       </div>
                     </div>
                     <span className="text-xs text-gray-400 w-16 text-right">{rep.sessionsLast30} sessions</span>
-                    <StatusBadge status={rep.status} />
+                    <span className={`text-xs font-medium ${rep.status === 'active' ? 'text-green-700' : rep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{rep.status.charAt(0).toUpperCase() + rep.status.slice(1)}</span>
                   </div>
                 ))}
               </div>
