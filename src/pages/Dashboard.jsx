@@ -1,5 +1,6 @@
 import React from "react";
 import { Bot, Play, Dumbbell, GraduationCap, Download, Route } from "lucide-react";
+import { BarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import QuickActionCard from "@/components/dashboard/QuickActionCard";
 import SignalCapabilities from "@/components/dashboard/SignalCapabilities";
@@ -33,6 +34,13 @@ export default function Dashboard() {
           <h2 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h2>
           <p className="text-sm text-gray-600 mb-4">Start your coaching journey</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <QuickActionCard
+                        icon={BarChart2}
+                        title="Analytics Dashboard"
+                        description="View demo KPIs, export reports, and compliance status"
+                        page="demo-analytics"
+                        iconBg="bg-teal-50"
+                      />
             <QuickActionCard
               icon={Bot}
               title="AI Coach"
