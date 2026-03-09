@@ -236,33 +236,28 @@ export default function LearningPaths() {
   const analyzePerformanceAndBuildPaths = async () => {
     setAnalyzingAll(true);
     try {
-      // Use demo sessions for analysis
-      const demoSessions = [
-        { capability: "communication", score: 3.8 },
-        { capability: "negotiation", score: 4.2 },
-        { capability: "communication", score: 4.0 },
-        { capability: "negotiation", score: 3.5 },
-        { capability: "leadership", score: 4.5 }
-      ];
-      const res = await fetch('/api/learning-paths/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessions: demoSessions })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.learningPaths) {
-          setPaths(data.learningPaths);
+      // Call AI Advise endpoint for all capabilities
+      const updatedPaths = await Promise.all(paths.map(async (path) => {
+        const cap = CAPABILITY_META[path.capability];
+        if (!cap) return path;
+        const score = path?.avg_score || "no score yet";
+        const sessionCount = path?.session_count || 0;
+        const prompt = `You are a sales coaching expert. Generate a personalized learning recommendation for a pharmaceutical sales representative who needs to improve their \"${cap.label}\" capability.\n\nCurrent Performance: ${score}/5 (based on ${sessionCount} roleplay sessions)\n\nProvide a clear, actionable recommendation using this markdown structure:\n\n### Key Learning Objectives\n[2-3 specific, measurable objectives]\n\n### Recommended Practice Scenarios\n[3-4 specific scenarios to practice]\n\n### Skill-Building Exercises\n[3-4 concrete exercises]\n\n### Performance Metrics to Track\n[3-4 specific metrics]\n\nKeep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
+        const res = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, max_tokens: 800 })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          return { ...path, ai_recommendation: data.response || "" };
+        } else {
+          return path;
         }
-      } else {
-        // Fallback: just reload existing data
-        await loadData();
-      }
+      }));
+      setPaths(updatedPaths);
     } catch (err) {
       console.error('Analyze performance error:', err);
-      // Fallback on error
-      await loadData();
     } finally {
       setAnalyzingAll(false);
     }
