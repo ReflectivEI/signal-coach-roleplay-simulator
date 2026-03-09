@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback } from "react";
+import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import ScenarioCard from "@/components/roleplay/ScenarioCard";
@@ -13,6 +14,14 @@ const HCP_CATEGORIES = ["All HCP Types", "Prescriber / Treater", "KOL / Thought 
 const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidence-Based", "Risk-Averse", "Guideline-Anchored"];
 
 const ALL_SCENARIOS = [
+  // Modal state for AI scenario generation
+  const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
+  const [customScenario, setCustomScenario] = useState(null);
+  // Handler for AI scenario generation
+  const handleScenarioGenerated = (scenario) => {
+    setCustomScenario(scenario);
+    setShowScenarioGenerator(false);
+  };
   // ── HIV / PrEP ─────────────────────────────────────────────────────────────
   {
     id: "hiv_im_prep_lowshare",
@@ -570,23 +579,55 @@ export default function RolePlaySimulator() {
           ))}
         </div>
 
-        {/* Results count */}
+        {/* Results count and AI Generate button */}
         <div className="flex items-center justify-between mb-4">
           <p className="text-sm text-gray-500">
             <span className="font-semibold text-gray-800">{filteredScenarios.length}</span> scenario{filteredScenarios.length !== 1 ? "s" : ""} found
           </p>
-          {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
+          <div className="flex gap-2">
             <button
-              onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); }}
-              className="text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1"
+              className="bg-teal-500 hover:bg-teal-600 text-white text-xs font-semibold px-3 py-1 rounded-lg shadow-sm"
+              onClick={() => setShowScenarioGenerator(true)}
             >
-              <X className="w-3 h-3" /> Clear all filters
+              + New Scenario
             </button>
-          )}
+            {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
+              <button
+                onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); }}
+                className="text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1"
+              >
+                <X className="w-3 h-3" /> Clear all filters
+              </button>
+            )}
+          </div>
         </div>
+        {/* AI Scenario Generator Modal */}
+        {showScenarioGenerator && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+            <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full relative">
+              <AIScenarioGenerator
+                onGenerated={handleScenarioGenerated}
+                onCancel={() => setShowScenarioGenerator(false)}
+              />
+              <button
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+                onClick={() => setShowScenarioGenerator(false)}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Scenario Grid */}
-        {filteredScenarios.length > 0 ? (
+        {customScenario ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />
+            {filteredScenarios.map(s => (
+              <EnterpriseScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        ) : filteredScenarios.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
