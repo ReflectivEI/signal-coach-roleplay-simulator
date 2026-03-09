@@ -17,6 +17,10 @@ const demoCompliance = [
 
 export default function DemoAnalyticsDashboard() {
   const [exporting, setExporting] = React.useState(false);
+  const [sortField, setSortField] = React.useState('name');
+  const [sortAsc, setSortAsc] = React.useState(true);
+  const [selectedUser, setSelectedUser] = React.useState(null);
+  const [filteredUsers, setFilteredUsers] = React.useState(null);
 
   // Mock user data for enterprise analytics
   const mockUsers = [
@@ -47,9 +51,10 @@ export default function DemoAnalyticsDashboard() {
   const handleExport = () => {
     setExporting(true);
     setTimeout(() => {
+      const usersToExport = filteredUsers || mockUsers;
       const csv = [
         "Name,Role,Sessions,AvgScore,CompletedModules,Compliance",
-        ...mockUsers.map(u => `${u.name},${u.role},${u.sessions},${u.avgScore},${u.completedModules},${u.compliance ? "Yes" : "No"}`)
+        ...usersToExport.map(u => `${u.name},${u.role},${u.sessions},${u.avgScore},${u.completedModules},${u.compliance ? "Yes" : "No"}`)
       ].join("\n");
       const blob = new Blob([csv], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
@@ -73,7 +78,7 @@ export default function DemoAnalyticsDashboard() {
           <h2 className="text-lg font-semibold mb-3">Key Performance Indicators</h2>
           <ul className="grid grid-cols-5 gap-4">
             {demoKPIs.map(k => (
-              <li key={k.label} className="bg-teal-50 rounded-lg p-4 flex flex-col items-center border border-teal-100">
+              <li key={k.label} className="bg-teal-50 rounded-lg p-4 flex flex-col items-center border border-teal-100" title={`KPI: ${k.label}`}> {/* Tooltip */}
                 <div className="text-xl font-bold text-teal-700">{k.value}</div>
                 <div className="text-xs text-gray-500 mt-1">{k.label}</div>
               </li>
@@ -89,7 +94,7 @@ export default function DemoAnalyticsDashboard() {
           </button>
         </div>
 
-        {/* User Table */}
+        {/* User Table with sorting and modal */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-500" /> User Performance Overview
@@ -97,17 +102,24 @@ export default function DemoAnalyticsDashboard() {
           <table className="w-full text-xs text-left border-collapse">
             <thead>
               <tr className="bg-gray-100">
-                <th className="p-2">Name</th>
-                <th className="p-2">Role</th>
-                <th className="p-2">Sessions</th>
-                <th className="p-2">Avg Score</th>
-                <th className="p-2">Completed Modules</th>
-                <th className="p-2">Compliance</th>
+                {['name','role','sessions','avgScore','completedModules','compliance'].map(field => (
+                  <th key={field} className="p-2 cursor-pointer" onClick={() => {
+                    setSortField(field);
+                    setSortAsc(sortField === field ? !sortAsc : true);
+                  }}>
+                    {field.charAt(0).toUpperCase() + field.slice(1)}
+                    {sortField === field ? (sortAsc ? ' ▲' : ' ▼') : ''}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {mockUsers.map(u => (
-                <tr key={u.name} className="border-b last:border-b-0">
+              {[...(filteredUsers || mockUsers)].sort((a, b) => {
+                if (a[sortField] < b[sortField]) return sortAsc ? -1 : 1;
+                if (a[sortField] > b[sortField]) return sortAsc ? 1 : -1;
+                return 0;
+              }).map(u => (
+                <tr key={u.name} className="border-b last:border-b-0 hover:bg-teal-50 cursor-pointer" onClick={() => setSelectedUser(u)}>
                   <td className="p-2 font-medium text-gray-700">{u.name}</td>
                   <td className="p-2 text-gray-500">{u.role}</td>
                   <td className="p-2 text-gray-700">{u.sessions}</td>
@@ -120,6 +132,23 @@ export default function DemoAnalyticsDashboard() {
               ))}
             </tbody>
           </table>
+          {/* User detail modal */}
+          {selectedUser && (
+            <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 w-96 relative">
+                <button className="absolute top-2 right-2 text-gray-400 hover:text-gray-700" onClick={() => setSelectedUser(null)}>&times;</button>
+                <h3 className="text-lg font-bold mb-2">User Details</h3>
+                <div className="space-y-2">
+                  <div><span className="font-semibold">Name:</span> {selectedUser.name}</div>
+                  <div><span className="font-semibold">Role:</span> {selectedUser.role}</div>
+                  <div><span className="font-semibold">Sessions:</span> {selectedUser.sessions}</div>
+                  <div><span className="font-semibold">Avg Score:</span> {selectedUser.avgScore}</div>
+                  <div><span className="font-semibold">Completed Modules:</span> {selectedUser.completedModules}</div>
+                  <div><span className="font-semibold">Compliance:</span> {selectedUser.compliance ? 'Yes' : 'No'}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Trends & Visualizations */}
