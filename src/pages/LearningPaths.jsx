@@ -202,6 +202,14 @@ export default function LearningPaths() {
 
   useEffect(() => {
     loadData();
+    // Populate demo sessions for analysis
+    setSessions([
+      { capability: "communication", score: 3.8 },
+      { capability: "negotiation", score: 4.2 },
+      { capability: "communication", score: 4.0 },
+      { capability: "negotiation", score: 3.5 },
+      { capability: "leadership", score: 4.5 }
+    ]);
   }, []);
 
   const loadData = async () => {
