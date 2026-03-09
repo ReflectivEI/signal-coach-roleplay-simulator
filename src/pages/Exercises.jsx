@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dumbbell, Sparkles, Target, Info, Loader2, Wand2, MessageSquare, FileText, Lightbulb } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { formatScenarioText } from "../lib/utils";
 
 const TOPICS = [
   { id: "objection", label: "Objection Handling", icon: MessageSquare },
@@ -199,7 +200,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
               <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
             </div>
             <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
-              <ReactMarkdown>{scenarioText}</ReactMarkdown>
+              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
             </div>
           </CardContent>
         </Card>

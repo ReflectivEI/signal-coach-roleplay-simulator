@@ -1,26 +1,4 @@
-// Utility to format AI-generated scenario text
-function formatScenarioText(rawText) {
-  // Remove asterisks and extra whitespace
-  let text = rawText.replace(/\*/g, "").replace(/\n{2,}/g, "\n");
-
-  // Add section headers for common scenario parts
-  const sections = [
-    { key: "Stakeholder", regex: /(Stakeholder:|Stakeholder\s*-)/i },
-    { key: "Objective", regex: /(Objective:|Objective\s*-)/i },
-    { key: "Key Challenges", regex: /(Key Challenges:|Challenges:|Challenges\s*-)/i },
-    { key: "Mood", regex: /(Mood:|HCP Mood:|Mood\s*-)/i },
-    { key: "Opening Scene", regex: /(Opening Scene:|Scene:|Scene\s*-)/i },
-    { key: "Signal Capabilities Practiced", regex: /(Signal Capabilities:|Capabilities:|Capabilities\s*-)/i },
-  ];
-
-  sections.forEach(({ key, regex }) => {
-    text = text.replace(regex, `\n\n${key}\n`);
-  });
-
-  // Clean up multiple newlines
-  text = text.replace(/\n{3,}/g, "\n\n");
-  return text.trim();
-}
+import { formatScenarioText } from "../../lib/utils";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import RolePlayChat from "./RolePlayChat";
