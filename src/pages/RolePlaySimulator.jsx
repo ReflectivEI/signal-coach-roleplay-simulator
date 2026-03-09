@@ -13,14 +13,7 @@ const SPECIALTIES = ["All Specialties", "Internal Medicine", "Infectious Disease
 const HCP_CATEGORIES = ["All HCP Types", "Prescriber / Treater", "KOL / Thought Leader", "Non-Prescribing Influencer"];
 const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidence-Based", "Risk-Averse", "Guideline-Anchored"];
 
-// Modal state for AI scenario generation
-const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
-const [customScenario, setCustomScenario] = useState(null);
-// Handler for AI scenario generation
-const handleScenarioGenerated = (scenario) => {
-  setCustomScenario(scenario);
-  setShowScenarioGenerator(false);
-};
+// ...existing code...
 
 const ALL_SCENARIOS = [
   // ── HIV / PrEP ─────────────────────────────────────────────────────────────
@@ -431,6 +424,14 @@ const CATEGORY_COLORS = {
 };
 
 export default function RolePlaySimulator() {
+    // Modal state for AI scenario generation
+    const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
+    const [customScenario, setCustomScenario] = useState(null);
+    // Handler for AI scenario generation
+    const handleScenarioGenerated = (scenario) => {
+      setCustomScenario(scenario);
+      setShowScenarioGenerator(false);
+    };
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeDifficulty, setActiveDifficulty] = useState("All Levels");
   const [search, setSearch] = useState("");
