@@ -6,6 +6,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import DemoAnalyticsDashboard from './pages/DemoAnalyticsDashboard.jsx';
 import PrivateRoute from './lib/PrivateRoute';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
@@ -68,6 +69,15 @@ const AuthenticatedApp = () => {
           }
         />
       ))}
+
+      {/* Demo Analytics Dashboard - protected */}
+      <Route path="/demo-analytics" element={
+        <PrivateRoute>
+          <LayoutWrapper currentPageName="DemoAnalyticsDashboard">
+            <DemoAnalyticsDashboard />
+          </LayoutWrapper>
+        </PrivateRoute>
+      } />
 
       {/* Catch-all for undefined routes */}
       <Route path="*" element={<PrivateRoute><PageNotFound /></PrivateRoute>} />
