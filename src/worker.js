@@ -498,14 +498,31 @@ async function handleLearningPaths(request) {
     if (request.method === "POST" && url.pathname.endsWith("/analyze")) {
         const body = await request.json().catch(() => ({}));
         const { sessions = [] } = body;
-        // Analyze sessions to determine weak areas and generate paths
-        // In real implementation, would aggregate capability scores from sessions
-        // For now, return the existing learning paths structure
-        const analyzedPaths = learningPaths.map(path => ({
-            ...path,
-            session_count: sessions.length > 0 ? Math.floor(Math.random() * 10) + 1 : 0,
-            avg_score: sessions.length > 0 ? (Math.random() * 2 + 2.5).toFixed(1) : null
-        }));
+        // Deterministic analysis: aggregate scores and session count
+        const analyzedPaths = learningPaths.map(path => {
+            // Find sessions for this capability
+            const relevantSessions = sessions.filter(s => s.capability === path.capability);
+            let avg_score = null;
+            let session_count = relevantSessions.length;
+            if (session_count > 0) {
+                // Aggregate scores if present
+                let totalScore = 0;
+                let scoreCount = 0;
+                relevantSessions.forEach(s => {
+                    if (typeof s.score === "number") {
+                        totalScore += s.score;
+                        scoreCount++;
+                    }
+                });
+                avg_score = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : null;
+            }
+            return {
+                ...path,
+                session_count,
+                avg_score,
+                analysis_demo: true // Label as demo
+            };
+        });
         return Response.json({ learningPaths: analyzedPaths, analyzed: true });
     }
     if (request.method === "PATCH" && url.pathname.endsWith("/complete")) {
