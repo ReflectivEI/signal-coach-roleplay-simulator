@@ -606,17 +606,20 @@ export default function RolePlaySimulator() {
         {/* AI Scenario Generator Modal */}
         {showScenarioGenerator && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-            <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full relative">
-              <AIScenarioGenerator
-                onGenerated={handleScenarioGenerated}
-                onCancel={() => setShowScenarioGenerator(false)}
-              />
+            <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full relative flex flex-col" style={{ maxHeight: '90vh' }}>
               <button
-                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"
                 onClick={() => setShowScenarioGenerator(false)}
+                aria-label="Close scenario modal"
               >
                 <X className="w-5 h-5" />
               </button>
+              <div className="overflow-y-auto" style={{ maxHeight: '75vh' }}>
+                <AIScenarioGenerator
+                  onGenerated={handleScenarioGenerated}
+                  onCancel={() => setShowScenarioGenerator(false)}
+                />
+              </div>
             </div>
           </div>
         )}
