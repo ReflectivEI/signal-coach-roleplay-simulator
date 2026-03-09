@@ -225,11 +225,9 @@ export default function LearningPaths() {
       } else {
         setPaths([]);
       }
-      setSessions([]);
     } catch (err) {
       console.error('Load learning paths error:', err);
       setPaths([]);
-      setSessions([]);
     } finally {
       setLoadingPaths(false);
     }
@@ -238,11 +236,18 @@ export default function LearningPaths() {
   const analyzePerformanceAndBuildPaths = async () => {
     setAnalyzingAll(true);
     try {
-      // Analyze roleplay sessions and generate capability-specific insights
+      // Use demo sessions for analysis
+      const demoSessions = [
+        { capability: "communication", score: 3.8 },
+        { capability: "negotiation", score: 4.2 },
+        { capability: "communication", score: 4.0 },
+        { capability: "negotiation", score: 3.5 },
+        { capability: "leadership", score: 4.5 }
+      ];
       const res = await fetch('/api/learning-paths/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessions })
+        body: JSON.stringify({ sessions: demoSessions })
       });
 
       if (res.ok) {
