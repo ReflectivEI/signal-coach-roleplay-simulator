@@ -13,15 +13,16 @@ const SPECIALTIES = ["All Specialties", "Internal Medicine", "Infectious Disease
 const HCP_CATEGORIES = ["All HCP Types", "Prescriber / Treater", "KOL / Thought Leader", "Non-Prescribing Influencer"];
 const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidence-Based", "Risk-Averse", "Guideline-Anchored"];
 
+// Modal state for AI scenario generation
+const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
+const [customScenario, setCustomScenario] = useState(null);
+// Handler for AI scenario generation
+const handleScenarioGenerated = (scenario) => {
+  setCustomScenario(scenario);
+  setShowScenarioGenerator(false);
+};
+
 const ALL_SCENARIOS = [
-  // Modal state for AI scenario generation
-  const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
-  const [customScenario, setCustomScenario] = useState(null);
-  // Handler for AI scenario generation
-  const handleScenarioGenerated = (scenario) => {
-    setCustomScenario(scenario);
-    setShowScenarioGenerator(false);
-  };
   // ── HIV / PrEP ─────────────────────────────────────────────────────────────
   {
     id: "hiv_im_prep_lowshare",
