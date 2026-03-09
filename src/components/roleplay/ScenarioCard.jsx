@@ -66,34 +66,33 @@ export default function ScenarioCard({ scenario, renderAs }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
         whileHover={{ y: -2, boxShadow: "0 8px 24px rgba(26,51,77,0.10)" }}
-        className="bg-white rounded-xl border border-gray-100 overflow-hidden"
+        className="bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden font-sans"
         style={{ transition: "box-shadow 0.2s, border-color 0.2s" }}
       >
         {/* Card header — always visible */}
-        <div className="p-5">
+        <div className="p-6 pb-4">
           <div className="flex items-start justify-between gap-3 mb-2">
-            <h3 className="font-semibold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
+            <h3 className="font-extrabold text-brand-navy text-lg leading-snug flex-1 tracking-wide">{scenario.title}</h3>
             <span
-              className="text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 capitalize"
-              style={{ background: dc.bg, color: dc.text, border: `1px solid ${dc.border}` }}
+              className="text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0 capitalize border"
+              style={{ background: dc.bg, color: dc.text, borderColor: dc.border }}
             >
               {scenario.difficulty}
             </span>
           </div>
-          <p className="text-xs text-gray-500 leading-relaxed mb-4">{scenario.description}</p>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4 font-medium">{scenario.description}</p>
 
           {/* Action buttons */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-row gap-2 mt-2">
             <button
               onClick={() => setExpanded(!expanded)}
-              className="w-full py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all duration-150"
+              className="flex-1 py-2 rounded-lg border border-gray-300 text-md font-semibold text-brand-navy bg-brand-pale-yellow hover:border-brand-teal hover:bg-brand-teal hover:text-white transition-all duration-200 shadow-sm"
             >
               {expanded ? "Collapse Details" : "Expand for Details"}
             </button>
             <button
               onClick={() => setPlaying(true)}
-              className="w-full py-2 rounded-lg text-sm font-semibold text-white transition-all duration-150 hover:opacity-90"
-              style={{ background: "#39ACAC" }}
+              className="flex-1 py-2 rounded-lg text-md font-bold text-white bg-brand-teal hover:bg-brand-navy transition-all duration-200 shadow-sm"
             >
               Start Scenario
             </button>
@@ -111,26 +110,26 @@ export default function ScenarioCard({ scenario, renderAs }) {
               transition={{ duration: 0.25, ease: "easeInOut" }}
               style={{ overflow: "hidden" }}
             >
-              <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-3">
+              <div className="px-6 pb-6 border-t border-gray-200 pt-4 space-y-4">
                 {/* Stakeholder */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Stakeholder</p>
-                  <p className="text-sm text-gray-900">{getStakeholder(scenario)}</p>
+                  <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-0.5">Stakeholder</p>
+                  <p className="text-md text-brand-navy font-semibold">{getStakeholder(scenario)}</p>
                 </div>
 
                 {/* Objective */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Objective</p>
-                  <p className="text-sm text-gray-700 leading-relaxed">{getObjective(scenario)}</p>
+                  <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-0.5">Objective</p>
+                  <p className="text-md text-gray-700 leading-relaxed font-medium">{getObjective(scenario)}</p>
                 </div>
 
                 {/* Key Challenges */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Key Challenges</p>
+                  <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-1">Key Challenges</p>
                   <ul className="space-y-1">
                     {getChallenges(scenario).map((c, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "#39ACAC" }} />
+                      <li key={i} className="flex items-start gap-2 text-md text-gray-700 font-medium">
+                        <span className="mt-2 w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#39ACAC" }} />
                         {c}
                       </li>
                     ))}
@@ -138,26 +137,26 @@ export default function ScenarioCard({ scenario, renderAs }) {
                 </div>
 
                 {/* HCP Mood */}
-                <div className="pt-1 border-t border-gray-100">
-                  <p className="text-xs italic" style={{ color: hcpMoodColor }}>{getMoodLabel(scenario)}</p>
+                <div className="pt-2 border-t border-gray-200">
+                  <p className="text-xs italic font-semibold text-brand-teal">{getMoodLabel(scenario)}</p>
                 </div>
 
                 {/* Opening Scene */}
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-0.5">Opening Scene</p>
-                  <p className="text-sm italic text-gray-600 leading-relaxed">{getOpeningScene(scenario)}</p>
+                  <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-0.5">Opening Scene</p>
+                  <p className="text-md italic text-gray-600 leading-relaxed font-medium">{getOpeningScene(scenario)}</p>
                 </div>
 
                 {/* Signal Capabilities */}
                 {scenario.focus_capabilities?.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Signal Capabilities Practiced</p>
-                    <div className="flex flex-wrap gap-1.5">
+                    <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-1">Signal Capabilities Practiced</p>
+                    <div className="flex flex-wrap gap-2">
                       {scenario.focus_capabilities.map((cap) => (
                         <span
                           key={cap}
-                          className="text-xs px-2 py-0.5 rounded-full font-medium"
-                          style={{ background: "#e6f7f7", color: "#1A334D", border: "1px solid #b2e4e4" }}
+                          className="text-xs px-3 py-1 rounded-full font-semibold border"
+                          style={{ background: "#e6f7f7", color: "#1A334D", borderColor: "#b2e4e4" }}
                         >
                           {cap.replace(/_/g, " ")}
                         </span>
