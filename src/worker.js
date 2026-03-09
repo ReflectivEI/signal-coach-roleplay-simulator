@@ -110,9 +110,38 @@ const assignments = [
     { id: "a2", repId: "user1", title: "Oncology Value Messaging", status: "in_progress", dueDate: "2025-06-28", scenario: "hcp_oncologist" },
 ];
 
+// Refactored learningPaths structure for module completion and analysis
 const learningPaths = [
-    { id: "lp1", title: "Signal Awareness Mastery", desc: "Master the first pillar of Signal Intelligence", modules: 5, progress: 60 },
-    { id: "lp2", title: "Value Connection Excellence", desc: "Learn to connect product benefits to customer outcomes", modules: 4, progress: 40 },
+  {
+    capability: "signal_awareness",
+    label: "Signal Awareness",
+    completed_modules: [],
+    avg_score: 3.5,
+    session_count: 0,
+    ai_recommendation: "",
+    modules: [
+      { id: "sa_mod1", title: "Introduction to Signal Awareness" },
+      { id: "sa_mod2", title: "Identifying Key Signals" },
+      { id: "sa_mod3", title: "Signal Interpretation" },
+      { id: "sa_mod4", title: "Practical Exercises" },
+      { id: "sa_mod5", title: "Mastery Assessment" }
+    ]
+  },
+  {
+    capability: "value_connection",
+    label: "Value Connection",
+    completed_modules: [],
+    avg_score: 3.2,
+    session_count: 0,
+    ai_recommendation: "",
+    modules: [
+      { id: "vc_mod1", title: "Understanding Value Drivers" },
+      { id: "vc_mod2", title: "Connecting Product to Outcomes" },
+      { id: "vc_mod3", title: "Value Messaging" },
+      { id: "vc_mod4", title: "Practice Scenarios" }
+    ]
+  }
+  // Add more capabilities/modules as needed
 ];
 
 const knowledgeBase = [
