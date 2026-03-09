@@ -55,7 +55,7 @@ export default function DataReports() {
         <div className="flex items-center gap-2 mb-1">
           <Database className="w-5 h-5 text-teal-500" />
           <h1 className="text-2xl font-bold text-gray-900">Data and Reports</h1>
-          <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">Manager Access</Badge>
+          {/* Manager Access badge removed for compatibility */}
         </div>
         <p className="text-sm text-gray-500 mt-1">Translate natural language questions into SQL queries for sales data analysis</p>
       </div>
