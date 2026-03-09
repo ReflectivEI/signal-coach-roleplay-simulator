@@ -10,8 +10,10 @@ export function formatScenarioText(rawText) {
     { key: "Signal Capabilities Practiced", regex: /(Signal Capabilities:|Capabilities:|Capabilities\s*-)/i },
   ];
   sections.forEach(({ key, regex }) => {
-    text = text.replace(regex, `\n\n${key}\n`);
+    // Bold section header and add extra space
+    text = text.replace(regex, `\n\n**${key}**\n`);
   });
+  // Ensure double newlines between sections
   text = text.replace(/\n{3,}/g, "\n\n");
   return text.trim();
 }
