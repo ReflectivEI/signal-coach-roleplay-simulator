@@ -20,7 +20,8 @@ export default function DemoAnalyticsDashboard() {
   const [sortField, setSortField] = React.useState('name');
   const [sortAsc, setSortAsc] = React.useState(true);
   const [selectedUser, setSelectedUser] = React.useState(null);
-  const [filteredUsers, setFilteredUsers] = React.useState(null);
+  const [filterCompliance, setFilterCompliance] = React.useState('all');
+  const [hoveredBar, setHoveredBar] = React.useState(null);
 
   // Mock user data for enterprise analytics
   const mockUsers = [
@@ -28,7 +29,12 @@ export default function DemoAnalyticsDashboard() {
     { name: "Bob Johnson", role: "Manager", sessions: 5, avgScore: 4.7, completedModules: 12, compliance: true },
     { name: "Carol Lee", role: "Sales Rep", sessions: 9, avgScore: 3.9, completedModules: 6, compliance: false },
     { name: "David Kim", role: "Sales Rep", sessions: 15, avgScore: 4.5, completedModules: 10, compliance: true },
-    { name: "Eve Patel", role: "Sales Rep", sessions: 7, avgScore: 4.0, completedModules: 5, compliance: true }
+    { name: "Eve Patel", role: "Sales Rep", sessions: 7, avgScore: 4.0, completedModules: 5, compliance: true },
+    { name: "Frank Wu", role: "Sales Rep", sessions: 10, avgScore: 4.2, completedModules: 7, compliance: true },
+    { name: "Grace Lin", role: "Manager", sessions: 8, avgScore: 4.6, completedModules: 11, compliance: true },
+    { name: "Henry Ford", role: "Sales Rep", sessions: 6, avgScore: 3.8, completedModules: 4, compliance: false },
+    { name: "Ivy Chen", role: "Sales Rep", sessions: 13, avgScore: 4.4, completedModules: 9, compliance: true },
+    { name: "Jack Lee", role: "Sales Rep", sessions: 11, avgScore: 4.1, completedModules: 6, compliance: true }
   ];
 
   const demoKPIs = [
@@ -51,7 +57,9 @@ export default function DemoAnalyticsDashboard() {
   const handleExport = () => {
     setExporting(true);
     setTimeout(() => {
-      const usersToExport = filteredUsers || mockUsers;
+      const usersToExport = mockUsers.filter(u =>
+        filterCompliance === 'all' ? true : (filterCompliance === 'compliant' ? u.compliance : !u.compliance)
+      );
       const csv = [
         "Name,Role,Sessions,AvgScore,CompletedModules,Compliance",
         ...usersToExport.map(u => `${u.name},${u.role},${u.sessions},${u.avgScore},${u.completedModules},${u.compliance ? "Yes" : "No"}`)
@@ -99,6 +107,14 @@ export default function DemoAnalyticsDashboard() {
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-blue-500" /> User Performance Overview
           </h2>
+          <div className="mb-4 flex gap-2">
+            <label className="text-xs font-semibold">Filter:</label>
+            <select value={filterCompliance} onChange={e => setFilterCompliance(e.target.value)} className="text-xs border rounded px-2 py-1">
+              <option value="all">All</option>
+              <option value="compliant">Compliant</option>
+              <option value="noncompliant">Non-Compliant</option>
+            </select>
+          </div>
           <table className="w-full text-xs text-left border-collapse">
             <thead>
               <tr className="bg-gray-100">
@@ -114,22 +130,25 @@ export default function DemoAnalyticsDashboard() {
               </tr>
             </thead>
             <tbody>
-              {[...(filteredUsers || mockUsers)].sort((a, b) => {
-                if (a[sortField] < b[sortField]) return sortAsc ? -1 : 1;
-                if (a[sortField] > b[sortField]) return sortAsc ? 1 : -1;
-                return 0;
-              }).map(u => (
-                <tr key={u.name} className="border-b last:border-b-0 hover:bg-teal-50 cursor-pointer" onClick={() => setSelectedUser(u)}>
-                  <td className="p-2 font-medium text-gray-700">{u.name}</td>
-                  <td className="p-2 text-gray-500">{u.role}</td>
-                  <td className="p-2 text-gray-700">{u.sessions}</td>
-                  <td className="p-2 text-gray-700">{u.avgScore}</td>
-                  <td className="p-2 text-gray-700">{u.completedModules}</td>
-                  <td className="p-2">
-                    {u.compliance ? <ShieldCheck className="w-4 h-4 text-green-500" /> : <BarChart2 className="w-4 h-4 text-red-500" />}
-                  </td>
-                </tr>
-              ))}
+              {mockUsers
+                .filter(u => filterCompliance === 'all' ? true : (filterCompliance === 'compliant' ? u.compliance : !u.compliance))
+                .sort((a, b) => {
+                  if (a[sortField] < b[sortField]) return sortAsc ? -1 : 1;
+                  if (a[sortField] > b[sortField]) return sortAsc ? 1 : -1;
+                  return 0;
+                })
+                .map(u => (
+                  <tr key={u.name} className="border-b last:border-b-0 hover:bg-teal-50 cursor-pointer" onClick={() => setSelectedUser(u)}>
+                    <td className="p-2 font-medium text-gray-700">{u.name}</td>
+                    <td className="p-2 text-gray-500">{u.role}</td>
+                    <td className="p-2 text-gray-700">{u.sessions}</td>
+                    <td className="p-2 text-gray-700">{u.avgScore}</td>
+                    <td className="p-2 text-gray-700">{u.completedModules}</td>
+                    <td className="p-2">
+                      {u.compliance ? <ShieldCheck className="w-4 h-4 text-green-500" /> : <BarChart2 className="w-4 h-4 text-red-500" />}
+                    </td>
+                  </tr>
+                ))}
             </tbody>
           </table>
           {/* User detail modal */}
@@ -145,6 +164,7 @@ export default function DemoAnalyticsDashboard() {
                   <div><span className="font-semibold">Avg Score:</span> {selectedUser.avgScore}</div>
                   <div><span className="font-semibold">Completed Modules:</span> {selectedUser.completedModules}</div>
                   <div><span className="font-semibold">Compliance:</span> {selectedUser.compliance ? 'Yes' : 'No'}</div>
+                  <div className="mt-2 text-xs text-gray-500">Click outside or &times; to close.</div>
                 </div>
               </div>
             </div>
@@ -162,8 +182,19 @@ export default function DemoAnalyticsDashboard() {
               <div className="bg-gray-100 rounded-lg p-4">
                 <div className="flex items-end gap-1 h-32">
                   {monthlySessions.map((v, i) => (
-                    <div key={i} className="w-4 bg-teal-400 rounded-lg" style={{ height: `${v * 3}px` }}>
+                    <div
+                      key={i}
+                      className={`w-4 rounded-lg ${hoveredBar === i ? 'bg-teal-700' : 'bg-teal-400'}`}
+                      style={{ height: `${v * 3}px` }}
+                      onMouseEnter={() => setHoveredBar(i)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    >
                       <span className="block text-[10px] text-center text-teal-900 mt-1">{v}</span>
+                      {hoveredBar === i && (
+                        <div className="absolute bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700 shadow-lg" style={{ left: `${i * 32}px`, top: '-30px' }}>
+                          Month {i+1}: {v} sessions
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -177,8 +208,19 @@ export default function DemoAnalyticsDashboard() {
               <div className="bg-gray-100 rounded-lg p-4">
                 <div className="flex items-end gap-1 h-32">
                   {monthlyScores.map((v, i) => (
-                    <div key={i} className="w-4 bg-blue-400 rounded-lg" style={{ height: `${v * 20}px` }}>
+                    <div
+                      key={i}
+                      className={`w-4 rounded-lg ${hoveredBar === 'score'+i ? 'bg-blue-700' : 'bg-blue-400'}`}
+                      style={{ height: `${v * 20}px` }}
+                      onMouseEnter={() => setHoveredBar('score'+i)}
+                      onMouseLeave={() => setHoveredBar(null)}
+                    >
                       <span className="block text-[10px] text-center text-blue-900 mt-1">{v}</span>
+                      {hoveredBar === 'score'+i && (
+                        <div className="absolute bg-white border border-gray-300 rounded px-2 py-1 text-xs text-gray-700 shadow-lg" style={{ left: `${i * 32}px`, top: '-30px' }}>
+                          Month {i+1}: {v} avg score
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
