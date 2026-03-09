@@ -126,10 +126,9 @@ export default function ScenarioCard({ scenario, renderAs }) {
                 {/* Key Challenges */}
                 <div>
                   <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-1">Key Challenges</p>
-                  <ul className="space-y-1">
+                  <ul className="list-disc list-inside space-y-1">
                     {getChallenges(scenario).map((c, i) => (
-                      <li key={i} className="flex items-start gap-2 text-md text-gray-700 font-medium">
-                        <span className="mt-2 w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#39ACAC" }} />
+                      <li key={i} className="text-md text-gray-700 font-medium">
                         {c}
                       </li>
                     ))}
