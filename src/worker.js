@@ -460,17 +460,15 @@ async function handleAssignments(request) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
 
-// Learning Paths: Get learning paths
+// Learning Paths: Get, analyze, and complete modules
 async function handleLearningPaths(request) {
+    const url = new URL(request.url);
     if (request.method === "GET") {
         return Response.json({ learningPaths });
     }
-
-    // POST /api/learning-paths/analyze - analyze sessions and generate paths
-    if (request.method === "POST") {
+    if (request.method === "POST" && url.pathname.endsWith("/analyze")) {
         const body = await request.json().catch(() => ({}));
         const { sessions = [] } = body;
-
         // Analyze sessions to determine weak areas and generate paths
         // In real implementation, would aggregate capability scores from sessions
         // For now, return the existing learning paths structure
@@ -479,10 +477,28 @@ async function handleLearningPaths(request) {
             session_count: sessions.length > 0 ? Math.floor(Math.random() * 10) + 1 : 0,
             avg_score: sessions.length > 0 ? (Math.random() * 2 + 2.5).toFixed(1) : null
         }));
-
         return Response.json({ learningPaths: analyzedPaths, analyzed: true });
     }
-
+    if (request.method === "PATCH" && url.pathname.endsWith("/complete")) {
+        const body = await request.json().catch(() => ({}));
+        const { capabilityId, moduleId } = body;
+        if (!capabilityId || !moduleId) {
+            return Response.json({ error: "Missing capabilityId or moduleId" }, { status: 400 });
+        }
+        let completed_modules = [];
+        for (let path of learningPaths) {
+            if (path.capability === capabilityId) {
+                if (!path.completed_modules) path.completed_modules = [];
+                if (path.completed_modules.includes(moduleId)) {
+                    path.completed_modules = path.completed_modules.filter(m => m !== moduleId);
+                } else {
+                    path.completed_modules.push(moduleId);
+                }
+                completed_modules = path.completed_modules;
+            }
+        }
+        return Response.json({ completed_modules });
+    }
     return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
 
@@ -577,29 +593,6 @@ async function handleCustomScenarios(request) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
 
-// PATCH /api/learning-paths/complete - mark module complete/incomplete
-if (request.method === "PATCH" && request.url.endsWith("/complete")) {
-    const body = await request.json().catch(() => ({}));
-    const { capabilityId, moduleId } = body;
-    if (!capabilityId || !moduleId) {
-        return Response.json({ error: "Missing capabilityId or moduleId" }, { status: 400 });
-    }
-    let completed_modules = [];
-    // Update learningPaths array
-    for (let path of learningPaths) {
-        if (path.capability === capabilityId) {
-            if (!path.completed_modules) path.completed_modules = [];
-            if (path.completed_modules.includes(moduleId)) {
-                path.completed_modules = path.completed_modules.filter(m => m !== moduleId);
-            } else {
-                path.completed_modules.push(moduleId);
-            }
-            completed_modules = path.completed_modules;
-        }
-    }
-    return Response.json({ completed_modules });
-}
-
 // Health Check
 async function handleHealth() {
     return Response.json({
@@ -683,6 +676,10 @@ export default {
             }
 
             if (pathname === "/api/learning-paths/analyze" && request.method === "POST") {
+                return setCorsHeaders(await handleLearningPaths(request));
+            }
+
+            if (pathname === "/api/learning-paths/complete" && request.method === "PATCH") {
                 return setCorsHeaders(await handleLearningPaths(request));
             }
 
