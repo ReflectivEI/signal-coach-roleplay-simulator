@@ -1,3 +1,26 @@
+// Utility to format AI-generated scenario text
+function formatScenarioText(rawText) {
+  // Remove asterisks and extra whitespace
+  let text = rawText.replace(/\*/g, "").replace(/\n{2,}/g, "\n");
+
+  // Add section headers for common scenario parts
+  const sections = [
+    { key: "Stakeholder", regex: /(Stakeholder:|Stakeholder\s*-)/i },
+    { key: "Objective", regex: /(Objective:|Objective\s*-)/i },
+    { key: "Key Challenges", regex: /(Key Challenges:|Challenges:|Challenges\s*-)/i },
+    { key: "Mood", regex: /(Mood:|HCP Mood:|Mood\s*-)/i },
+    { key: "Opening Scene", regex: /(Opening Scene:|Scene:|Scene\s*-)/i },
+    { key: "Signal Capabilities Practiced", regex: /(Signal Capabilities:|Capabilities:|Capabilities\s*-)/i },
+  ];
+
+  sections.forEach(({ key, regex }) => {
+    text = text.replace(regex, `\n\n${key}\n`);
+  });
+
+  // Clean up multiple newlines
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import RolePlayChat from "./RolePlayChat";
@@ -42,6 +65,11 @@ export default function ScenarioCard({ scenario, renderAs }) {
   const [playing, setPlaying] = useState(false);
   const dc = difficultyColors[scenario.difficulty] || difficultyColors.intermediate;
 
+  // If scenario.description is AI-generated, format it
+  const formattedDescription = scenario.description
+    ? formatScenarioText(scenario.description)
+    : "";
+
   // When used as "button-only" inside EnterpriseScenarioCard
   if (renderAs === "button-only") {
     return (
@@ -80,7 +108,7 @@ export default function ScenarioCard({ scenario, renderAs }) {
               {scenario.difficulty}
             </span>
           </div>
-          <p className="text-sm text-gray-700 leading-relaxed mb-4 font-medium">{scenario.description}</p>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4 font-medium whitespace-pre-line">{formattedDescription}</p>
 
           {/* Action buttons */}
           <div className="flex flex-row gap-2 mt-2">
