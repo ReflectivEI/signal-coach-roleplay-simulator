@@ -95,24 +95,24 @@ Format as a detailed scenario brief that a sales rep can use for practice.`;
       ).join("\n\n")}`
       : "";
 
-    onGenerated({
-      title: preview.title,
-      description: preview.description,
-      specialty: params.specialty,
-      disease_state: params.disease_state,
-      hcp_category: params.hcp_category,
-      difficulty: params.difficulty,
-      focus_capabilities: params.focus_capabilities,
-      details: [
-        preview.hcp_persona ? `HCP Persona: ${preview.hcp_persona}` : "",
-        preview.initial_state ? `Initial State: ${preview.initial_state} — ${preview.initial_state_rationale || ""}` : "",
-        stateArcText,
-        objectionText,
-        preview.dialogue_cues?.length > 0 ? `Opening Cues:\n${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
-        preview.details || "",
-        challenge ? `Core Challenge: ${challenge}` : "",
-      ].filter(Boolean).join("\n\n"),
-    });
+      onGenerated({
+        title: preview.title,
+        description: formatScenarioText(preview.description.replace(/\*/g, "")),
+        specialty: params.specialty,
+        disease_state: params.disease_state,
+        hcp_category: params.hcp_category,
+        difficulty: params.difficulty,
+        focus_capabilities: params.focus_capabilities,
+        details: [
+          preview.hcp_persona ? `HCP Persona: ${preview.hcp_persona}` : "",
+          preview.initial_state ? `Initial State: ${preview.initial_state} — ${preview.initial_state_rationale || ""}` : "",
+          stateArcText,
+          objectionText,
+          preview.dialogue_cues?.length > 0 ? `Opening Cues:\n${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
+          preview.details || "",
+          challenge ? `Core Challenge: ${challenge}` : "",
+        ].filter(Boolean).join("\n\n"),
+      });
   };
 
   const canGenerate = params.hcp_category || params.specialty || params.challenge;
