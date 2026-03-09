@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+// ...existing code...
 import { AlertTriangle, Send, Loader2, Clock, Database, BarChart3, TrendingUp, FileText, Calendar } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 

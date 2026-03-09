@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ChevronDown, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
-import { CapabilityBadge } from "@/components/roleplay/CapabilityTagger";
+// ...existing code...
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 

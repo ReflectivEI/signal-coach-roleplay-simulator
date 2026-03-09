@@ -89,15 +89,7 @@ const MOCK_SESSIONS = [
   { id: "s5", rep_name: "David Chen", rep_id: 5, scenario: "Cardiology Formulary Review", date: "Feb 17, 2026", score: 3.8, status: "reviewed" },
 ];
 
-function StatusBadge({ status }) {
-  const cfg = {
-    active: "bg-green-100 text-green-700 border-green-200",
-    "needs-attention": "bg-amber-100 text-amber-700 border-amber-200",
-    inactive: "bg-red-100 text-red-700 border-red-200",
-  };
-  const labels = { active: "Active", "needs-attention": "Needs Attention", inactive: "Inactive" };
-  return <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${cfg[status]}`}>{labels[status]}</span>;
-}
+// ...existing code...
 
 function RepRow({ rep, onSelect, selected }) {
   const completionPct = Math.round((rep.modulesCompleted / rep.modulesAssigned) * 100);

@@ -26,7 +26,7 @@ platform to ensure:
 ✓ pages/Frameworks.js
   - Removed all emoji icons from signalFrameworks array
   - Replaced with lucide-react icons (MessageSquare, Lightbulb, Heart, Users, etc.)
-  - Removed Badge component from capability detail panels
+  - Removed badge component from capability detail panels
   - Removed all `tips` section (was showing "3 techniques" and "AI Coach" badges)
 
 ✓ pages/BehavioralMetrics.js
@@ -382,11 +382,11 @@ TOTAL CHANGES MADE:
 1. EMOJI REMOVAL: 7 files updated
    - Layout.js: Removed 💡 from Today's Tip
    - Frameworks.js: Removed all emoji icons
-   - BehavioralMetrics.js: Removed badges
-   - ScenarioBuilder.js: Removed difficulty badges
-   - KnowledgeBase.js: Removed tag badges
-   - PreCallPlanning.js: Removed sparkles emoji
-   - RolePlayChat.js: Removed theatre emoji (in components/roleplay/)
+  - BehavioralMetrics.js: Removed badge elements
+  - ScenarioBuilder.js: Removed difficulty indicators
+  - KnowledgeBase.js: Removed tag indicators
+  - PreCallPlanning.js: Removed sparkles icon
+  - RolePlayChat.js: Removed theatre icon (in components/roleplay/)
 
 2. BADGE REMOVAL: 4 files updated
    - Removed Badge components that were purely decorative

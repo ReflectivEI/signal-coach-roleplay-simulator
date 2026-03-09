@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+// ...existing code...
 import { Sparkles, TrendingUp, AlertTriangle, BookOpen, Dumbbell, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function InsightsSidebar({ onSuggestedTopic, messages = [] }) {

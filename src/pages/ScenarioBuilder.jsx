@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+// ...existing code...
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Sparkles } from "lucide-react";
-import CapabilityTagger, { CapabilityBadge } from "@/components/roleplay/CapabilityTagger";
+import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
 const diseaseStates = ["HIV", "PrEP (HIV Prevention)", "Oncology", "Cardiology", "Neurology", "Vaccines / Immunization"];
@@ -274,11 +274,7 @@ export default function ScenarioBuilder() {
                     {s.hcp_category && <span className="text-xs text-gray-300">·</span>}
                     {s.hcp_category && <span className="text-xs text-gray-400">{s.hcp_category}</span>}
                   </div>
-                  {s.focus_capabilities?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                       {SIGNAL_CAPABILITIES.map((c) => <CapabilityBadge key={c.id} capId={c.id} />)}
-                    </div>
-                  )}
+                  {/* ...existing code... */}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button
