@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatScenarioText } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -228,7 +229,7 @@ Format as a detailed scenario brief that a sales rep can use for practice.`;
             </Button>
           </div>
           <h3 className="font-bold text-gray-900">{preview.title}</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">{preview.description}</p>
+          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{formatScenarioText(preview.description)}</p>
           {preview.hcp_name && (
             <div className="text-xs text-gray-500"><span className="font-medium text-gray-700">HCP:</span> {preview.hcp_name}</div>
           )}
