@@ -577,6 +577,29 @@ async function handleCustomScenarios(request) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
 
+// PATCH /api/learning-paths/complete - mark module complete/incomplete
+if (request.method === "PATCH" && request.url.endsWith("/complete")) {
+    const body = await request.json().catch(() => ({}));
+    const { capabilityId, moduleId } = body;
+    if (!capabilityId || !moduleId) {
+        return Response.json({ error: "Missing capabilityId or moduleId" }, { status: 400 });
+    }
+    let completed_modules = [];
+    // Update learningPaths array
+    for (let path of learningPaths) {
+        if (path.capability === capabilityId) {
+            if (!path.completed_modules) path.completed_modules = [];
+            if (path.completed_modules.includes(moduleId)) {
+                path.completed_modules = path.completed_modules.filter(m => m !== moduleId);
+            } else {
+                path.completed_modules.push(moduleId);
+            }
+            completed_modules = path.completed_modules;
+        }
+    }
+    return Response.json({ completed_modules });
+}
+
 // Health Check
 async function handleHealth() {
     return Response.json({
