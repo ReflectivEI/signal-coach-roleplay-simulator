@@ -69,7 +69,7 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
   }
   // Helper: detect mood or day questions
   function isMoodQuestion(q) {
-    return /how are you|how was your (weekend|day|morning|afternoon|evening)|good day|bad day|busy|tired|stress|happy|sad/i.test(q);
+    return /how are you|how was your (weekend|day|morning|afternoon|evening)|good day|bad day|busy|tired|stress|happy|sad|how's it going|how have you been|hope you're well|hope all is well|how's your family|how's your team|how's everything|how's life|how's work|how's your week|how's your month|how's your year|how's your practice|how's your clinic|how's your staff|how's your schedule|how's your mood|how's your energy|how's your health/i.test(q);
   }
   // Helper: detect casual/personal questions
   function isCasualQuestion(q) {
@@ -77,14 +77,16 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
       /how are you/i,
       /how was your (weekend|day|morning|afternoon|evening)/i,
       /just want to chat/i,
-      /hello|hi|hey/i,
-      /thank you/i,
-      /busy/i,
-      /personal/i,
-      /family/i,
-      /life/i,
-      /doing well/i,
-      /good day|bad day/i
+      /hello|hi|hey|greetings|yo|sup|what's up|howdy/i,
+      /thank you|thanks|appreciate/i,
+      /busy|tired|exhausted|overwhelmed|swamped|hectic|crazy day|long day|rough day|easy day/i,
+      /personal|family|kids|spouse|partner|children|parents|siblings|home|house|pet|dog|cat/i,
+      /life|living|existence|routine|habits|plans|vacation|holiday|break|trip|travel/i,
+      /doing well|doing okay|doing fine|doing alright|doing good|not bad|not great|not okay|not fine|not well/i,
+      /good day|bad day|nice day|rough day|busy day|quiet day|fun day|boring day/i,
+      /how's it going|how have you been|hope you're well|hope all is well|how's your family|how's your team|how's everything|how's life|how's work|how's your week|how's your month|how's your year|how's your practice|how's your clinic|how's your staff|how's your schedule|how's your mood|how's your energy|how's your health/i,
+      /catch up|check in|touch base|see you|talk soon|chat soon|let's connect|let's meet|let's grab lunch|let's grab coffee/i,
+      /weather|sports|game|news|event|celebration|birthday|anniversary|milestone/i
     ];
     return casualPatterns.some((pat) => pat.test(q));
   }
@@ -122,12 +124,32 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
   const personality = scenario.hcp && scenario.hcp.personality ? scenario.hcp.personality : null;
   function applyPersonality(text) {
     if (!personality) return text;
-    // Empathetic example: add warmth, supportive phrases, and active listening cues
-    if (personality.name === "Empathetic") {
-      return `I appreciate your thoughtful question. ${text} I want to ensure we address your concerns and support your goals for patient care.`;
+    switch (personality.name) {
+      case "Empathetic":
+        return `I appreciate your thoughtful question. ${text} I want to ensure we address your concerns and support your goals for patient care.`;
+      case "Direct":
+        return `Let's get straight to the point. ${text} Please be concise so we can use our time efficiently.`;
+      case "Skeptical":
+        return `I have some doubts about this. ${text} Can you provide supporting evidence or clarify your claims?`;
+      case "Warm":
+        return `I'm glad we're having this conversation. ${text} Feel free to share anything on your mind.`;
+      case "Reserved":
+        return `I prefer to keep things professional. ${text} Let's focus on the clinical details.`;
+      case "Enthusiastic":
+        return `This topic excites me! ${text} I'm eager to hear your perspective.`;
+      case "Distracted":
+        return `I'm juggling a lot right now. ${text} Please keep it brief, but I'll do my best to listen.`;
+      case "Approachable":
+        return `You can always reach out to me. ${text} I'm here to help and answer any questions.`;
+      case "Formal":
+        return `Let's maintain a professional tone. ${text} Please address clinical matters directly.`;
+      case "Curious":
+        return `I'm interested in learning more. ${text} Can you elaborate or share new insights?`;
+      case "Busy":
+        return `My schedule is tight, so let's be efficient. ${text} If you have urgent matters, let me know right away.`;
+      default:
+        return text;
     }
-    // Add more personality types as needed
-    return text;
   }
 
   // Handle social/casual cues for realism and warmth
