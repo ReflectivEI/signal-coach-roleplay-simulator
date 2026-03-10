@@ -744,10 +744,7 @@ ${actionText}`;
         </div>
 
         {/* Persona strip */}
-        <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-600 flex-shrink-0 flex items-center gap-1.5">
-          <User className="w-3.5 h-3.5 text-slate-400" />
-          You are the <strong>Sales Rep</strong>. The AI is playing the <strong>{scenario.hcp_category || "HCP"}</strong>.
-        </div>
+        {/* Persona strip removed as requested */}
 
         {/* Tabs — NavPill style */}
         <div className="flex gap-1 px-4 py-2.5 border-b flex-shrink-0 bg-white">
