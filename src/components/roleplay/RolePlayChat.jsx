@@ -176,28 +176,45 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
     if (exitOrSchedulingState) {
-      if (!followUpTimeConfirmed) {
-        nextHcpDialogue = 'Understood. What time works for you later today?';
-        contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
-      } else if (!repHasExited) {
-        nextHcpDialogue = 'Confirmed. We can continue at the scheduled time.';
-        contextualCue = 'The HCP nods, closes their notes, and ends the conversation.';
-      } else {
-        nextHcpDialogue = 'Understood. We will talk this afternoon.';
-        contextualCue = 'The HCP stands, turns toward the door, and closes the interaction.';
-      }
+      // First, append the user's statement as its own turn
       setTurns([...turns, {
         turnNumber: turns.length,
-        hcpStateBefore: 'disengaging',
-        temperatureBefore: 'neutral',
-        severityBefore: 0,
-        cueBefore: contextualCue,
-        hcpDialogueBefore: nextHcpDialogue,
+        hcpStateBefore: turns.length > 0 ? turns[turns.length - 1].hcpStateBefore : 'neutral',
+        temperatureBefore: turns.length > 0 ? turns[turns.length - 1].temperatureBefore : 'neutral',
+        severityBefore: turns.length > 0 ? turns[turns.length - 1].severityBefore : 0,
+        cueBefore: null,
+        hcpDialogueBefore: null,
         repMessage: input.trim(),
         alignment: null,
         hcpStateAfter: null,
       }]);
-      setIsLoading(false);
+      // Then, append the HCP's response as a new turn
+      setTimeout(() => {
+        let nextHcpDialogue = '';
+        let contextualCue = '';
+        if (!followUpTimeConfirmed) {
+          nextHcpDialogue = 'Understood. What time works for you later today?';
+          contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
+        } else if (!repHasExited) {
+          nextHcpDialogue = 'Confirmed. We can continue at the scheduled time.';
+          contextualCue = 'The HCP nods, closes their notes, and ends the conversation.';
+        } else {
+          nextHcpDialogue = 'Understood. We will talk this afternoon.';
+          contextualCue = 'The HCP stands, turns toward the door, and closes the interaction.';
+        }
+        setTurns(prev => [...prev, {
+          turnNumber: prev.length,
+          hcpStateBefore: 'disengaging',
+          temperatureBefore: 'neutral',
+          severityBefore: 0,
+          cueBefore: contextualCue,
+          hcpDialogueBefore: nextHcpDialogue,
+          repMessage: null,
+          alignment: null,
+          hcpStateAfter: null,
+        }]);
+        setIsLoading(false);
+      }, 100);
       return;
     }
     if (!input.trim() || isLoading) return;
