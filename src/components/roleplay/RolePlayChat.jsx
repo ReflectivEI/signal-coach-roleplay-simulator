@@ -43,7 +43,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
   // Fallback opening scene if scenario.opening_scene is missing
-  const openingScene = scenario.opening_scene || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
+  // Prefer scenario.opening_scene, but also check for scenario.details or scenario.scene
+  const openingScene = scenario.opening_scene || scenario.scene || (scenario.details && scenario.details.match(/Opening Scene: ([^\n]*)/)?.[1]) || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -185,7 +186,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         hcpStateAfter: null,
       }]);
       setIsLoading(false);
-      return;
+      return; // Ensure no further turn creation occurs
     }
     if (!input.trim() || isLoading) return;
     const repMessage = input.trim();
@@ -600,23 +601,22 @@ ${actionText}`;
           <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
             <ReactMarkdown
               components={{
-                h2: ({ _node, children, ...props }) => {
+                h2: ({ children, ...props }) => {
                   const text = String(children);
-                  // First h2 is title, subsequent ones are section headers
                   const isTitle = text.includes('Session Feedback');
                   return isTitle
                     ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
                     : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
                 },
-                h3: ({ _node, ...props }) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: ({ _node, ...props }) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: ({ _node, ...props }) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: ({ _node, _ordered, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: ({ _node, _ordered, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: ({ _node, ...props }) => <li className="mb-0" {...props} />,
-                strong: ({ _node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: ({ _node, ...props }) => <em className="italic text-slate-600" {...props} />,
-                blockquote: ({ _node, ...props }) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />, 
+                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />, 
+                p: (props) => <p className="mb-3 whitespace-normal" {...props} />, 
+                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />, 
+                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />, 
+                li: (props) => <li className="mb-0" {...props} />, 
+                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />, 
+                em: (props) => <em className="italic text-slate-600" {...props} />, 
+                blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
               }}
             >
               {feedback}
@@ -741,8 +741,9 @@ ${actionText}`;
           {activeTab === "chat" && (
             <>
               {/* Show scenario opening scene only before rep's first message */}
-              {turns.length === 1 && !turns[0].repMessage && (
+              {openingScene && turns.length === 1 && !turns[0].repMessage && (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   {openingScene}
                 </div>
               )}
@@ -760,14 +761,17 @@ ${actionText}`;
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
-                    {/* Only show HCP cue if rep has spoken (i > 0 or after first repMessage) */}
-                    {turn.cueBefore && (i > 0 || (turns[0] && turns[0].repMessage)) && (
-                      <div className="flex justify-start pl-1">
-                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                          {turn.cueBefore}
-                        </p>
-                      </div>
-                    )}
+                      {/* Only show HCP cue if rep has spoken (i > 0 or after first repMessage) AND only for the latest HCP turn after rep input */}
+                      {turn.cueBefore && (i > 0 || (turns[0] && turns[0].repMessage)) &&
+                        // Only show cue for the first HCP turn after rep input, not for multiple HCP turns
+                        (!turns[i - 1] || turns[i - 1].repMessage) && (
+                          <div className="flex justify-start pl-1">
+                            <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                              {turn.cueBefore}
+                            </p>
+                          </div>
+                        )
+                      }
                     {turn.hcpDialogueBefore && (
                       <div className="flex justify-start">
                         <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
@@ -841,7 +845,7 @@ ${actionText}`;
                     const message = input.trim();
                     if (!message) return;
                     setInput(""); // clear input immediately
-                    sendMessage(message);
+                    sendMessage();
                   }}
                   className="flex gap-2"
                 >
@@ -862,7 +866,7 @@ ${actionText}`;
                           const message = input.trim();
                           if (!message) return;
                           setInput("");
-                          sendMessage(message);
+                          sendMessage();
                         }
                       }}
                       placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
