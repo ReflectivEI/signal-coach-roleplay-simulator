@@ -42,9 +42,8 @@ import VoiceControls from "./VoiceControls";
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
-  // Fallback opening scene if scenario.opening_scene is missing
-  // Prefer scenario.opening_scene, but also check for scenario.details or scenario.scene
-  const openingScene = scenario.opening_scene || scenario.scene || (scenario.details && scenario.details.match(/Opening Scene: ([^\n]*)/)?.[1]) || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
+  // Fallback opening scene logic: support both opening_scene and openingScene (snake_case and camelCase)
+  const openingScene = scenario.opening_scene || scenario.openingScene || scenario.scene || (scenario.details && scenario.details.match(/Opening Scene: ([^\n]*)/)?.[1]) || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
