@@ -70,8 +70,8 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
 
   // Fix grammatically incorrect opening lines for all scenarios
   if (/what brings you here today to discuss|regarding/i.test(questionLower)) {
-    hcpDialogue = "It's good to see you. What would you like to talk about today?";
-    cueBefore = "Dr. Chen greets you warmly, inviting you to share your thoughts.";
+    hcpDialogue = "It's good to see you. Is there something specific you'd like to discuss about ADC integration with the IO backbone, or anything else on your mind?";
+    cueBefore = `${scenario.hcp.name} greets you warmly, inviting you to share your thoughts.`;
     return {
       hcpState: "engaged",
       temperature: "neutral",
@@ -133,14 +133,14 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
     // If the detected topic aligns with the current tab, answer directly
     if (topicDetected === currentTab) {
       if (topicDetected === "Cost/Response & Toxicity") {
-        hcpDialogue = applyPersonality("Our P&T committee is focused on cost-effectiveness and managing IO toxicity. Can you explain how this ADC fits into our pathway with those concerns in mind?");
-        cueBefore = "Dr. Chen looks up from reviewing the lab results and reflects on how the ADC may be integrated into the cost-conscious and toxicity-sensitive practice.";
+        hcpDialogue = applyPersonality("Our P&T committee is focused on cost-effectiveness and managing IO toxicity. I'd love to hear your perspective on how this ADC fits into our pathway. If you have any thoughts or questions, please share.");
+        cueBefore = `${scenario.hcp.name} looks up from reviewing the lab results and reflects on how the ADC may be integrated into the cost-conscious and toxicity-sensitive practice.`;
       } else if (topicDetected === "Biomarker-Driven Subset") {
-        hcpDialogue = applyPersonality("Which specific biomarker-driven patient subset is this ADC targeting? What improvements can we expect in OS/PFS for these patients?");
-        cueBefore = "Dr. Chen considers the clinical trial data to evaluate the effectiveness of this ADC in biomarker-driven patients.";
+        hcpDialogue = applyPersonality("Which specific biomarker-driven patient subset is this ADC targeting? What improvements can we expect in OS/PFS for these patients? I'm interested in your insights.");
+        cueBefore = `${scenario.hcp.name} considers the clinical trial data to evaluate the effectiveness of this ADC in biomarker-driven patients.`;
       } else {
-        hcpDialogue = applyPersonality("That’s a great question! How does this ADC improve overall treatment in terms of patient subset, cost, and treatment management?");
-        cueBefore = "Dr. Chen leans forward, showing curiosity while considering the broader implications of ADC usage in community oncology practices.";
+        hcpDialogue = applyPersonality("That’s a great question! How does this ADC improve overall treatment in terms of patient subset, cost, and treatment management? If you have more to add, I'm happy to listen.");
+        cueBefore = `${scenario.hcp.name} leans forward, showing curiosity while considering the broader implications of ADC usage in community oncology practices.`;
       }
       // Keep conversation open for business topics
       hcpDialogue += " If you have more questions or want to discuss other aspects, I'm happy to continue.";
@@ -149,10 +149,10 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
       // Warm closure for appointment confirmation or scheduling
       if (/appointment|schedule|meet|later|afternoon|confirmed|promise/i.test(question)) {
         hcpDialogue = "Thank you again for the coffee and for swinging by. I look forward to catching up this afternoon and hearing about your latest updates.";
-        cueBefore = "Dr. Chen smiles appreciatively, expressing genuine anticipation for the upcoming meeting.";
+        cueBefore = `${scenario.hcp.name} smiles appreciatively, expressing genuine anticipation for the upcoming meeting.`;
       } else {
         hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
-        cueBefore = "Dr. Chen seems thoughtful and invites you to continue the conversation or pivot topics as needed.";
+        cueBefore = `${scenario.hcp.name} seems thoughtful and invites you to continue the conversation or pivot topics as needed.`;
       }
     }
   }
