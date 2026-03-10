@@ -68,6 +68,19 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
   let hcpDialogue = "";
   let cueBefore = "";
 
+  // Fix grammatically incorrect opening lines for all scenarios
+  if (/what brings you here today to discuss|regarding/i.test(questionLower)) {
+    hcpDialogue = "It's good to see you. What would you like to talk about today?";
+    cueBefore = "Dr. Chen greets you warmly, inviting you to share your thoughts.";
+    return {
+      hcpState: "engaged",
+      temperature: "neutral",
+      severity: 0,
+      cueBefore: cueBefore,
+      hcpDialogueBefore: hcpDialogue,
+    };
+  }
+
   // Personality integration
   const personality = scenario.hcp && scenario.hcp.personality ? scenario.hcp.personality : null;
   function applyPersonality(text) {
@@ -133,8 +146,14 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
       hcpDialogue += " If you have more questions or want to discuss other aspects, I'm happy to continue.";
     } else {
       // If the detected topic doesn't align with the current tab, provide a brief answer and redirect to the relevant tab
-      hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
-      cueBefore = "Dr. Chen seems thoughtful and invites you to continue the conversation or pivot topics as needed.";
+      // Warm closure for appointment confirmation or scheduling
+      if (/appointment|schedule|meet|later|afternoon|confirmed|promise/i.test(question)) {
+        hcpDialogue = "Thank you again for the coffee and for swinging by. I look forward to catching up this afternoon and hearing about your latest updates.";
+        cueBefore = "Dr. Chen smiles appreciatively, expressing genuine anticipation for the upcoming meeting.";
+      } else {
+        hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
+        cueBefore = "Dr. Chen seems thoughtful and invites you to continue the conversation or pivot topics as needed.";
+      }
     }
   }
 
