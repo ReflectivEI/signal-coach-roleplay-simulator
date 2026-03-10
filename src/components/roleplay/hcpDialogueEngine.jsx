@@ -1,6 +1,8 @@
-// hcpDialogueEngine.jsx - Dynamic HCP dialogue and cue recalibration for roleplay simulator (forced update 2026-03-09)
 
-// Define the scenario card
+// Robust HCP Dialogue Engine
+// Modular scenario/personality, deterministic cue selection, state tracking, advanced topic/mood detection, history-aware dialogue, improved error handling
+
+// Example scenario set (expand as needed)
 export const scenarios = [
   {
     title: "ADC Integration with IO Backbone",
@@ -58,181 +60,134 @@ export const scenarios = [
     },
     topic: "Value, Access, Cost"
   },
-  // ... Add 16 more scenarios with varied personalities: Warm, Reserved, Enthusiastic, Distracted, Approachable, Formal, Curious, Busy, etc. ...
+  // ... Add more scenarios as needed ...
 ];
 
-// Simulating HCP Dialogue and Cue Recalibration
-export function recalibrateHcpDialogueAndCue(question, currentTab, scenario = scenarios[0]) {
-  // Robust input validation
-  if (typeof question !== 'string' || !question.trim()) {
-    return {
-      severity: 0,
-      cueBefore: 'No question provided.',
-      hcpDialogueBefore: 'Could you please clarify your question?'
-    };
-  }
-  if (typeof currentTab !== 'string') currentTab = '';
-  // Defensive: scenario and personality
-  scenario = scenario || scenarios[0];
-  const personality = scenario?.hcp?.personality || null;
-  let hcpDialogue = '';
-  let cueBefore = '';
-  // Helper: detect lunch/meeting requests
-  function isLunchInvite(q) {
-    if (typeof q !== 'string') return false;
-    return /lunch|coffee|schedule|appointment|meet|catch up|visit/i.test(q);
-  }
-  // Helper: detect mood or day questions
-  function isMoodQuestion(q) {
-    if (typeof q !== 'string') return false;
-    return /how are you|how was your (weekend|day|morning|afternoon|evening)|good day|bad day|busy|tired|stress|happy|sad|how's it going|how have you been|hope you're well|hope all is well|how's your family|how's your team|how's everything|how's life|how's work|how's your week|how's your month|how's your year|how's your practice|how's your clinic|how's your staff|how's your schedule|how's your mood|how's your energy|how's your health/i.test(q);
-  }
-  // Helper: detect casual/personal questions
-  function isCasualQuestion(q) {
-    if (typeof q !== 'string') return false;
-    const casualPatterns = [
-      /how are you/i,
-      /how was your (weekend|day|morning|afternoon|evening)/i,
-      /just want to chat/i,
-      /hello|hi|hey|greetings|yo|sup|what's up|howdy/i,
-      /thank you|thanks|appreciate/i,
-      /busy|tired|exhausted|overwhelmed|swamped|hectic|crazy day|long day|rough day|easy day/i,
-      /personal|family|kids|spouse|partner|children|parents|siblings|home|house|pet|dog|cat/i,
-      /life|living|existence|routine|habits|plans|vacation|holiday|break|trip|travel/i,
-      /doing well|doing okay|doing fine|doing alright|doing good|not bad|not great|not okay|not fine|not well/i,
-      /good day|bad day|nice day|rough day|busy day|quiet day|fun day|boring day/i,
-      /how's it going|how have you been|hope you're well|hope all is well|how's your family|how's your team|how's everything|how's life|how's work|how's your week|how's your month|how's your year|how's your practice|how's your clinic|how's your staff|how's your schedule|how's your mood|how's your energy|how's your health/i,
-      /catch up|check in|touch base|see you|talk soon|chat soon|let's connect|let's meet|let's grab lunch|let's grab coffee/i,
-      /weather|sports|game|news|event|celebration|birthday|anniversary|milestone/i
-    ];
-    return casualPatterns.some((pat) => pat.test(q));
-  }
-  // Basic topic detection logic
-  const questionLower = question.toLowerCase();
-  let topicDetected = "";
-  if (questionLower.includes("cost") || questionLower.includes("response") || questionLower.includes("toxicity") || questionLower.includes("chair time")) {
-    topicDetected = "Cost/Response & Toxicity";
-  } else if (questionLower.includes("biomarker") || questionLower.includes("os") || questionLower.includes("pfs")) {
-    topicDetected = "Biomarker-Driven Subset";
-  }
-  // Forced update to clear build cache (2026-03-09)
-  function applyPersonality(text) {
-    if (!personality) return text;
-    switch (personality.name) {
-      case "Empathetic":
-        return `I appreciate your thoughtful question. ${text} I want to ensure we address your concerns and support your goals for patient care.`;
-      case "Direct":
-        return `Let's get straight to the point. ${text} Please be concise so we can use our time efficiently.`;
-      case "Skeptical":
-        return `I have some doubts about this. ${text} Can you provide supporting evidence or clarify your claims?`;
-      case "Warm":
-        return `I'm glad we're having this conversation. ${text} Feel free to share anything on your mind.`;
-      case "Reserved":
-        return `I prefer to keep things professional. ${text} Let's focus on the clinical details.`;
-      case "Enthusiastic":
-        return `This topic excites me! ${text} I'm eager to hear your perspective.`;
-      case "Distracted":
-        return `I'm juggling a lot right now. ${text} Please keep it brief, but I'll do my best to listen.`;
-      case "Approachable":
-        return `You can always reach out to me. ${text} I'm here to help and answer any questions.`;
-      case "Formal":
-        return `Let's maintain a professional tone. ${text} Please address clinical matters directly.`;
-      case "Curious":
-        return `I'm interested in learning more. ${text} Can you elaborate or share new insights?`;
-      case "Busy":
-        return `My schedule is tight, so let's be efficient. ${text} If you have urgent matters, let me know right away.`;
-      default:
-        return text;
-    }
-  }
-  try {
-    // Handle social/casual cues for realism and warmth
-    if (isLunchInvite(question)) {
-      if (personality && personality.name === "Empathetic") {
-        hcpDialogue = "Lunch sounds wonderful! I always appreciate a chance to connect outside the clinic. You know, my staff loves coffee—it's the secret to our energy. Let's find a time that works for both of us. These moments mean a lot.";
-        cueBefore = "Dr. Chen beams, genuinely interested in sharing a meal and connecting personally.";
-      } else {
-        hcpDialogue = "Thank you for the invitation. My schedule is tight, but I can try to make time for lunch soon. Let's coordinate. I appreciate your thoughtfulness.";
-        cueBefore = "Dr. Chen smiles, considering the invitation warmly.";
-      }
-      // Keep conversation open
-      hcpDialogue += " By the way, before we get to business, is there anything new with your team or family?";
-    } else if (isMoodQuestion(question) || isCasualQuestion(question)) {
-      if (personality && personality.name === "Empathetic") {
-        const anecdotes = [
-          "You know, I wish I could say I was in Italy, but my vacation was spent catching up on sleep and binge-watching old movies. Maybe next time!",
-          "No vacation for me this year, but I did manage to sneak in a few rounds of golf. Not quite Italy, but still relaxing.",
-          "I haven't taken a vacation yet, but your question makes me realize I need one! Thanks for reminding me to take a break.",
-          "Life's been busy, but moments like this—just chatting—are a breath of fresh air.",
-          "My staff keeps me on my toes, but I wouldn't trade them for anything. How's your team doing?",
-          "I always say, coffee and good company are the best medicine. Glad you stopped by!"
-        ];
-        const anecdote = anecdotes[Math.floor(Math.random() * anecdotes.length)];
-        hcpDialogue = `${anecdote} I appreciate your interest and sense of humor. It's good to connect as people. If you want to keep chatting, I'm all ears. When you're ready, we can pivot to business and talk about ADC integration.`;
-        cueBefore = "Dr. Chen responds with humor, warmth, and realism, inviting further conversation before gently pivoting to clinical topics.";
-      } else {
-        hcpDialogue = "I'm doing well, thank you. It's always nice to catch up. Anything new on your end before we talk clinical?";
-        cueBefore = "Dr. Chen smiles, keeping the conversation open and friendly.";
-      }
-    } else if (isCasualQuestion(question)) {
-      if (personality && personality.name === "Empathetic") {
-        hcpDialogue = "It's really nice to see you. Sometimes these visits mean more than you realize. If you want to just chat or schedule lunch, I'm open to it. We can talk clinical topics when you're ready, but I value these moments of connection. Anything fun planned for the weekend?";
-        cueBefore = "Dr. Chen smiles, shares warmth, and prioritizes human connection before clinical matters, inviting you to continue.";
-      } else {
-        hcpDialogue = "I'm doing well, thank you. Let's catch up a bit before we dive into clinical topics.";
-        cueBefore = "Dr. Chen smiles, keeping the conversation friendly and open.";
-      }
-    } else {
-      // If the detected topic aligns with the current tab, answer directly
-      if (topicDetected === currentTab) {
-        if (topicDetected === "Cost/Response & Toxicity") {
-          hcpDialogue = applyPersonality("Our P&T committee is focused on cost-effectiveness and managing IO toxicity. I'd love to hear your perspective on how this ADC fits into our pathway. If you have any thoughts or questions, please share.");
-          cueBefore = `${scenario.hcp?.name || 'The HCP'} looks up from reviewing the lab results and reflects on how the ADC may be integrated into the cost-conscious and toxicity-sensitive practice.`;
-        } else if (topicDetected === "Biomarker-Driven Subset") {
-          hcpDialogue = applyPersonality("Which specific biomarker-driven patient subset is this ADC targeting? What improvements can we expect in OS/PFS for these patients? I'm interested in your insights.");
-          cueBefore = `${scenario.hcp?.name || 'The HCP'} considers the clinical trial data to evaluate the effectiveness of this ADC in biomarker-driven patients.`;
-        } else {
-          hcpDialogue = applyPersonality("That’s a great question! How does this ADC improve overall treatment in terms of patient subset, cost, and treatment management? If you have more to add, I'm happy to listen.");
-          cueBefore = `${scenario.hcp?.name || 'The HCP'} leans forward, showing curiosity while considering the broader implications of ADC usage in community oncology practices.`;
-        }
-        // Keep conversation open for business topics
-        hcpDialogue += " If you have more questions or want to discuss other aspects, I'm happy to continue.";
-      } else {
-        // If the detected topic doesn't align with the current tab, provide a brief answer and redirect to the relevant tab
-        // Warm closure for appointment confirmation or scheduling
-        if (/appointment|schedule|meet|later|afternoon|confirmed|promise/i.test(question)) {
-          hcpDialogue = "Thank you again for the coffee and for swinging by. I look forward to catching up this afternoon and hearing about your latest updates.";
-          cueBefore = `${scenario.hcp?.name || 'The HCP'} smiles appreciatively, expressing genuine anticipation for the upcoming meeting.`;
-        } else {
-          hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected || 'another topic'}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
-          cueBefore = `${scenario.hcp?.name || 'The HCP'} seems thoughtful and invites you to continue the conversation or pivot topics as needed.`;
-        }
-      }
-    }
-    // Return the recalibrated cue and dialogue for the HCP
-    return {
-      severity: 0,
-      cueBefore: cueBefore || 'No cue available.',
-      hcpDialogueBefore: hcpDialogue || 'No dialogue available.'
-    };
-  } catch {
-    // Fallback for unexpected errors
-    return {
-      severity: 0,
-      cueBefore: 'An error occurred while generating the cue.',
-      hcpDialogueBefore: 'Sorry, I had trouble generating a response. Please try again.'
-    };
-  }
+// Personality effect modularization
+const personalityEffects = {
+  Empathetic: (text) => `I appreciate your thoughtful question. ${text} I want to ensure we address your concerns and support your goals for patient care.`,
+  Direct: (text) => `Let's get straight to the point. ${text} Please be concise so we can use our time efficiently.`,
+  Skeptical: (text) => `I have some doubts about this. ${text} Can you provide supporting evidence or clarify your claims?`,
+  Warm: (text) => `I'm glad we're having this conversation. ${text} Feel free to share anything on your mind.`,
+  Reserved: (text) => `I prefer to keep things professional. ${text} Let's focus on the clinical details.`,
+  Enthusiastic: (text) => `This topic excites me! ${text} I'm eager to hear your perspective.`,
+  Distracted: (text) => `I'm juggling a lot right now. ${text} Please keep it brief, but I'll do my best to listen.`,
+  Approachable: (text) => `You can always reach out to me. ${text} I'm here to help and answer any questions.`,
+  Formal: (text) => `Let's maintain a professional tone. ${text} Please address clinical matters directly.`,
+  Curious: (text) => `I'm interested in learning more. ${text} Can you elaborate or share new insights?`,
+  Busy: (text) => `My schedule is tight, so let's be efficient. ${text} If you have urgent matters, let me know right away.`,
+};
+
+// Deterministic cue selection (simple hash for demo)
+function deterministicCue(sessionId, turnNumber, state, severity, cues) {
+  const seed = Math.abs([...sessionId, ...String(turnNumber), ...state, ...String(severity)].reduce((acc, c) => acc + c.charCodeAt(0), 0));
+  return cues[seed % cues.length];
 }
 
-// Function to determine the relevant tab and adjust the conversation
-export function getTabBasedOnQuestion(question) {
-  const lowerCaseQuestion = question.toLowerCase();
-  if (lowerCaseQuestion.includes("cost") || lowerCaseQuestion.includes("response")) {
-    return "Cost/Response & Toxicity";
-  } else if (lowerCaseQuestion.includes("biomarker") || lowerCaseQuestion.includes("os") || lowerCaseQuestion.includes("pfs")) {
-    return "Biomarker-Driven Subset";
-  } else {
-    return "General"; // Default tab
+// Advanced topic/mood detection
+function detectTopic(question) {
+  const q = question.toLowerCase();
+  if (/cost|response|toxicity|chair time/.test(q)) return "Cost/Response & Toxicity";
+  if (/biomarker|os|pfs/.test(q)) return "Biomarker-Driven Subset";
+  if (/adherence|outcomes|insurance/.test(q)) return "Adherence, Outcomes, Insurance";
+  if (/value|access|containment/.test(q)) return "Value, Access, Cost";
+  return "General";
+}
+
+function detectMood(question) {
+  if (/lunch|coffee|schedule|appointment|meet|catch up|visit/i.test(question)) return "social";
+  if (/how are you|how was your|good day|bad day|busy|tired|stress|happy|sad|how's it going|how have you been|hope you're well|hope all is well/i.test(question)) return "casual";
+  return "business";
+}
+
+// History-aware dialogue (pass history array)
+function getLastRepMessage(history) {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  return history[history.length - 1]?.repMessage || null;
+}
+
+// Robust dialogue and cue recalibration
+export function recalibrateHcpDialogueAndCue({
+  question,
+  currentTab,
+  scenario = scenarios[0],
+  sessionId = "default",
+  turnNumber = 0,
+  state = "neutral",
+  severity = 0,
+  history = [],
+}) {
+  // Input validation
+  if (typeof question !== "string" || !question.trim()) {
+    return {
+      severity: 0,
+      cueBefore: "No question provided.",
+      hcpDialogueBefore: "Could you please clarify your question?",
+    };
   }
+  scenario = scenario || scenarios[0];
+  const personality = scenario?.hcp?.personality?.name || "Empathetic";
+  const effectFn = personalityEffects[personality] || ((t) => t);
+  const topic = detectTopic(question);
+  const mood = detectMood(question);
+  const lastRep = getLastRepMessage(history);
+
+  // Cue bank (expand as needed)
+  const cueBank = {
+    neutral: [
+      "The HCP glances up from the chart, expression calm and unhurried.",
+      "The HCP sets down their pen and turns slightly toward you, posture easy.",
+      "The HCP nods once in acknowledgment, shoulders relaxed.",
+    ],
+    social: [
+      "The HCP beams, genuinely interested in connecting personally.",
+      "The HCP smiles, considering the invitation warmly.",
+      "The HCP responds with humor, warmth, and realism, inviting further conversation.",
+    ],
+    casual: [
+      "The HCP smiles, keeping the conversation open and friendly.",
+      "The HCP shares warmth, prioritizing human connection before clinical matters.",
+      "The HCP responds with humor, inviting further conversation before gently pivoting to clinical topics.",
+    ],
+    business: [
+      "The HCP looks up from reviewing lab results, reflecting on integration into practice.",
+      "The HCP considers clinical trial data to evaluate effectiveness.",
+      "The HCP leans forward, showing curiosity about broader implications.",
+    ],
+  };
+
+  // Deterministic cue selection
+  const cueList = cueBank[mood] || cueBank.neutral;
+  const cueBefore = deterministicCue(sessionId, turnNumber, state, severity, cueList);
+
+  // Dialogue generation
+  let hcpDialogue = "";
+  if (mood === "social") {
+    hcpDialogue = effectFn("Lunch sounds wonderful! I always appreciate a chance to connect outside the clinic. Let's find a time that works for both of us. These moments mean a lot. By the way, before we get to business, is there anything new with your team or family?");
+  } else if (mood === "casual") {
+    hcpDialogue = effectFn("I'm doing well, thank you. It's always nice to catch up. Anything new on your end before we talk clinical?");
+  } else {
+    // Business/topic-specific
+    if (topic === currentTab) {
+      hcpDialogue = effectFn(`Let's discuss ${topic}. If you have any thoughts or questions, please share.`);
+    } else {
+      hcpDialogue = effectFn(`That's a great question! This topic seems to relate more closely to [${topic}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
+    }
+  }
+
+  // History-aware adjustment
+  if (lastRep) {
+    hcpDialogue += ` (Responding to: "${lastRep}")`;
+  }
+
+  return {
+    severity,
+    cueBefore,
+    hcpDialogueBefore: hcpDialogue || "No dialogue available.",
+  };
+}
+
+// Tab detection
+export function getTabBasedOnQuestion(question) {
+  return detectTopic(question);
 }
