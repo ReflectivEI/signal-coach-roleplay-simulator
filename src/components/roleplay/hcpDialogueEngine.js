@@ -91,24 +91,24 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
     }
   } else if (isMoodQuestion(question)) {
     if (personality && personality.name === "Empathetic") {
-      // Add personal anecdote, mood, gratitude, gentle transition
+      // Max empathy: vivid anecdotes, mood, gratitude, gentle transition
       const moods = [
-        "It's been a busy week, but I managed to get some rest over the weekend.",
-        "I just got back from vacation—it was refreshing, and I feel recharged.",
-        "It's been hectic, but seeing familiar faces always brightens my day.",
-        "I'm a bit tired, but grateful for the opportunity to connect."
+        "It's been a whirlwind lately, but I just got back from Italy—what an experience! The food, the scenery, and the time away really helped me recharge.",
+        "Honestly, it's been a challenging week, but moments like this remind me why I love connecting with people. Thank you for stopping by.",
+        "I had a wonderful vacation in Italy. The art, the culture, and the gelato were unforgettable. It's nice to return to familiar faces.",
+        "I'm a bit tired from travel, but grateful for the chance to catch up. How are you?"
       ];
       const mood = moods[Math.floor(Math.random() * moods.length)];
-      hcpDialogue = `${mood} Thank you for asking about me. How are you doing? If you have clinical updates, I'm happy to discuss them when you're ready.`;
-      cueBefore = "Dr. Chen shares a genuine moment, reflecting on their mood and inviting conversation before gently transitioning to clinical topics.";
+      hcpDialogue = `${mood} I appreciate your interest in my well-being. Let's take a moment to relax—life isn't always about clinical data! When you're ready, we can talk about ADC integration, but for now, it's good to just connect as people.`;
+      cueBefore = "Dr. Chen shares a vivid story, expresses gratitude, and gently invites clinical discussion only after real conversation.";
     } else {
       hcpDialogue = "I'm doing well, thank you. It's always good to see you. How can I help today?";
       cueBefore = "Dr. Chen offers a polite greeting, ready to engage.";
     }
   } else if (isCasualQuestion(question)) {
     if (personality && personality.name === "Empathetic") {
-      hcpDialogue = "Thank you for stopping by! It's nice to connect beyond clinical matters. If you have updates or want to schedule a time to talk, just let me know.";
-      cueBefore = "Dr. Chen smiles warmly, showing genuine appreciation for the personal connection and gently inviting clinical discussion when appropriate.";
+      hcpDialogue = "It's really nice to see you. Sometimes these visits mean more than you realize. If you want to just chat or schedule lunch, I'm open to it. We can talk clinical topics when you're ready, but I value these moments of connection.";
+      cueBefore = "Dr. Chen smiles, shares warmth, and prioritizes human connection before clinical matters.";
     } else {
       hcpDialogue = "I'm doing fine, thank you. Let's discuss the clinical aspects when you're ready.";
       cueBefore = "Dr. Chen nods politely, keeping the conversation professional.";
