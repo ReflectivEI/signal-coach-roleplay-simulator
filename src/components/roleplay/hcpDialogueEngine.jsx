@@ -196,8 +196,7 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
 
   // Return the recalibrated cue and dialogue for the HCP
   return {
-    hcpState: "engaged", // HCP's emotional state
-    temperature: "neutral", // Current emotional temperature
+    // hcpState and temperature are now dynamically derived
     severity: 0, // Severity of the current conversation
     cueBefore: cueBefore, // The context of Dr. Chen's behavior
     hcpDialogueBefore: hcpDialogue, // HCP's dialogue based on user question
