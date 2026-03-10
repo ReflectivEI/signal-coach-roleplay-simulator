@@ -89,18 +89,22 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
       hcpDialogue = "Thank you for the invitation. My schedule is tight, but I can try to make time for lunch soon. Let's coordinate.";
       cueBefore = "Dr. Chen glances at their calendar, considering the invitation.";
     }
-  } else if (isMoodQuestion(question)) {
+  } else if (isMoodQuestion(question) || isCasualQuestion(question)) {
+    // Prioritize personality/empathy for casual/personal questions, ignore state/mood
     if (personality && personality.name === "Empathetic") {
-      // Max empathy: vivid anecdotes, mood, gratitude, gentle transition
-      const moods = [
-        "It's been a whirlwind lately, but I just got back from Italy—what an experience! The food, the scenery, and the time away really helped me recharge.",
-        "Honestly, it's been a challenging week, but moments like this remind me why I love connecting with people. Thank you for stopping by.",
-        "I had a wonderful vacation in Italy. The art, the culture, and the gelato were unforgettable. It's nice to return to familiar faces.",
-        "I'm a bit tired from travel, but grateful for the chance to catch up. How are you?"
+      const anecdotes = [
+        "You know, I wish I could say I was in Italy, but my vacation was spent catching up on sleep and binge-watching old movies. Maybe next time!",
+        "No vacation for me this year, but I did manage to sneak in a few rounds of golf. Not quite Italy, but still relaxing.",
+        "I haven't taken a vacation yet, but your question makes me realize I need one! Thanks for reminding me to take a break.",
+        "Life's been busy, but moments like this—just chatting—are a breath of fresh air."
       ];
-      const mood = moods[Math.floor(Math.random() * moods.length)];
-      hcpDialogue = `${mood} I appreciate your interest in my well-being. Let's take a moment to relax—life isn't always about clinical data! When you're ready, we can talk about ADC integration, but for now, it's good to just connect as people.`;
-      cueBefore = "Dr. Chen shares a vivid story, expresses gratitude, and gently invites clinical discussion only after real conversation.";
+      const anecdote = anecdotes[Math.floor(Math.random() * anecdotes.length)];
+      hcpDialogue = `${anecdote} I appreciate your interest and sense of humor. It's good to connect as people. When you're ready, we can pivot to business and talk about ADC integration.`;
+      cueBefore = "Dr. Chen responds with humor, warmth, and realism, then gently pivots to clinical topics when appropriate.";
+    } else {
+      hcpDialogue = "I'm doing fine, thank you. Let's discuss the clinical aspects when you're ready.";
+      cueBefore = "Dr. Chen nods politely, keeping the conversation professional.";
+    }
     } else {
       hcpDialogue = "I'm doing well, thank you. It's always good to see you. How can I help today?";
       cueBefore = "Dr. Chen offers a polite greeting, ready to engage.";
