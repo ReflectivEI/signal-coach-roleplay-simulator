@@ -91,16 +91,24 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
     }
   } else if (isMoodQuestion(question)) {
     if (personality && personality.name === "Empathetic") {
-      hcpDialogue = "It's been a busy week, but I'm grateful for the chance to connect. How are you doing? Sometimes these days can be a bit overwhelming, but I try to stay positive.";
-      cueBefore = "Dr. Chen shares a genuine moment, reflecting on their mood and inviting conversation.";
+      // Add personal anecdote, mood, gratitude, gentle transition
+      const moods = [
+        "It's been a busy week, but I managed to get some rest over the weekend.",
+        "I just got back from vacation—it was refreshing, and I feel recharged.",
+        "It's been hectic, but seeing familiar faces always brightens my day.",
+        "I'm a bit tired, but grateful for the opportunity to connect."
+      ];
+      const mood = moods[Math.floor(Math.random() * moods.length)];
+      hcpDialogue = `${mood} Thank you for asking about me. How are you doing? If you have clinical updates, I'm happy to discuss them when you're ready.`;
+      cueBefore = "Dr. Chen shares a genuine moment, reflecting on their mood and inviting conversation before gently transitioning to clinical topics.";
     } else {
       hcpDialogue = "I'm doing well, thank you. It's always good to see you. How can I help today?";
       cueBefore = "Dr. Chen offers a polite greeting, ready to engage.";
     }
   } else if (isCasualQuestion(question)) {
     if (personality && personality.name === "Empathetic") {
-      hcpDialogue = "Thank you for asking! I appreciate your interest. It's important to connect as people, not just discuss clinical topics. How are you today?";
-      cueBefore = "Dr. Chen smiles warmly, showing genuine appreciation for the personal connection.";
+      hcpDialogue = "Thank you for stopping by! It's nice to connect beyond clinical matters. If you have updates or want to schedule a time to talk, just let me know.";
+      cueBefore = "Dr. Chen smiles warmly, showing genuine appreciation for the personal connection and gently inviting clinical discussion when appropriate.";
     } else {
       hcpDialogue = "I'm doing fine, thank you. Let's discuss the clinical aspects when you're ready.";
       cueBefore = "Dr. Chen nods politely, keeping the conversation professional.";
