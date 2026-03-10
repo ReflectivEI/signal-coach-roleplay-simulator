@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Sparkles, TrendingUp, AlertTriangle, BookOpen, Dumbbell, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 export default function InsightsSidebar({ onSuggestedTopic, messages = [], skillLevel = "", scenarioDescriptor = "" }) {
+    // Pattern analysis and insights logic is already present and correct.
+    // No changes needed unless you want to further clarify UI or add a button for analyzePatterns.
   const [insights, setInsights] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);

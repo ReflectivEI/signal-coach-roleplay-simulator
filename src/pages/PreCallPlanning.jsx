@@ -1,3 +1,10 @@
+import { saveAs } from "file-saver";
+const exportWord = async (plan) => {
+  const blob = new Blob([
+    `Pre-Call Plan\n\nHCP Name: ${plan.hcp_name}\nSpecialty: ${plan.specialty}\nDisease State: ${plan.disease_state}\n\nObjectives: ${plan.objectives}\n\nKey Messages: ${plan.key_messages}\n\nAnticipated Objections: ${plan.anticipated_objections}\n\nNotes: ${plan.notes}`
+  ], { type: "application/msword" });
+  saveAs(blob, `pre-call-plan-${plan.hcp_name.replace(/\s+/g, "-").toLowerCase()}.doc`);
+};
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,6 +243,9 @@ export default function PreCallPlanning() {
                     <span className="text-xs text-gray-400">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportPDF(plan)} title="Export to PDF">
                       <Download className="w-4 h-4 text-teal-500 hover:text-teal-700" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportWord(plan)} title="Export to Word">
+                      <Download className="w-4 h-4 text-blue-500 hover:text-blue-700" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
                       {expandedPlan === plan.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
