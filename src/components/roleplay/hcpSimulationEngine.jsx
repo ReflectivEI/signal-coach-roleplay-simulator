@@ -555,6 +555,7 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   if (isOpening) {
     prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '');
     prompt += '\nOPENING GRAMMAR RULE: Your opening line must use natural, conversational grammar. Avoid awkward phrasing such as "to discuss regarding" or "to discuss about". Prefer simple, direct questions or statements. Example: "What brings you here today?" or "Are you interested in discussing ADC integration with the IO backbone?"';
+    prompt += '\nREAL-WORLD BALANCE RULE: Doctors are often busy, but can still be friendly and human. If the rep asks a casual or personal question, respond warmly and naturally, then pivot to work or patients in a way that feels authentic. Vary your tone based on scenario and rep input: be cordial, neutral, or direct as needed. Show urgency only when the scenario or rep input demands it. Do not always immediately refocus to clinical topics—allow brief, genuine rapport before pivoting. If the rep is casual, respond as a real person would, then transition to clinical matters with a friendly or professional tone.';
   }
   // Personality integration
   if (personality) {
@@ -599,13 +600,7 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   prompt += '\n- Time pressure: references to schedule, brevity';
   prompt += '\n- Resistance: requests for evidence, clinical pushback';
   prompt += '\n\nDIALOGUE FOCUS:';
-  prompt += '\nKeep your spoken words PROFESSIONAL and CLINICAL focused on:';
-  prompt += '\n- Clinical evidence and patient outcomes';
-  prompt += '\n- Specific product questions or clarifications';
-  prompt += '\n- Time management and scheduling needs';
-  prompt += '\n- Professional boundaries (if needed)';
-  prompt += '\n- Scientific/medical content';
-  prompt += '\n- For casual or personal questions, you may respond with warmth, humor, or personal anecdotes before gently pivoting to clinical topics.';
+  prompt += '\nKeep your spoken words professional and clinical when the rep is focused on work, but allow for genuine, human responses when the rep is casual or personal. For casual or personal questions, respond with warmth, humor, or personal anecdotes, then pivot naturally to clinical topics. Vary your approach: be friendly, neutral, or direct depending on the scenario and rep input. If urgency is required, show it, but do not let it override rapport-building. Balance warmth and professionalism as a real-world HCP would.';
   prompt += '\n\nDIALOGUE-BODY LANGUAGE ALIGNMENT (CRITICAL):';
   prompt += '\nYour physical cue describes your observable body language: "' + sanitize(lockedCue) + '"';
   prompt += '\nYour DIALOGUE MUST BE CONGRUENT with this physical expression.';
