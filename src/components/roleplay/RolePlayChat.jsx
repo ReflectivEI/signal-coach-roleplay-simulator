@@ -338,6 +338,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         repMessage,
         prevTurns
       );
+      // Fallback: if cue is missing, use default cue for state
+      if (!contextualCue) {
+        // Import CUE_BANK and use default for state
+        const cueBank = require('./hcpStateEngine').CUE_BANK;
+        const cues = cueBank[nextHcpState] || cueBank['neutral'];
+        contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your input.';
+      }
     }
 
     // 7. Coaching overlay — driven by alignment rubric flags
