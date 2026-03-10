@@ -431,8 +431,23 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
   let text = String(dialogue).replace(/\s+/g, ' ').trim();
   if (!text) return text;
 
+  // Grammar correction for common awkward phrases
+  const grammarCorrections = [
+    { pattern: /to discuss regarding/gi, replacement: 'to discuss' },
+    { pattern: /to discuss about/gi, replacement: 'to discuss' },
+    { pattern: /to talk regarding/gi, replacement: 'to talk about' },
+    { pattern: /to talk about regarding/gi, replacement: 'to talk about' },
+    { pattern: /What brings you here today to discuss/gi, replacement: 'What brings you here today? Are you interested in discussing' },
+    { pattern: /in the context of/gi, replacement: 'regarding' },
+    { pattern: /What brings you here today to discuss regarding/gi, replacement: 'What brings you here today? Are you interested in discussing' },
+    { pattern: /What brings you here today to discuss about/gi, replacement: 'What brings you here today? Are you interested in discussing' },
+    // Add more as needed
+  ];
+  grammarCorrections.forEach(({ pattern, replacement }) => {
+    text = text.replace(pattern, replacement);
+  });
+
   // Only match question words at the START of a sentence (not anywhere in the sentence)
-  // "Am I looking?" = question | "I am looking." = statement
   const questionStarterPattern = /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
 
   // Split into sentences and process each individually
@@ -539,6 +554,7 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General');
   if (isOpening) {
     prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '');
+    prompt += '\nOPENING GRAMMAR RULE: Your opening line must use natural, conversational grammar. Avoid awkward phrasing such as "to discuss regarding" or "to discuss about". Prefer simple, direct questions or statements. Example: "What brings you here today?" or "Are you interested in discussing ADC integration with the IO backbone?"';
   }
   // Personality integration
   if (personality) {
