@@ -81,6 +81,17 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
 
   const handleAccept = () => {
     if (!preview) return;
+    // Validator: Ensure opening greeting contains warmth/empathy and business pivot
+    const opening = preview.description.match(/(Initial Greeting from the HCP:|Opening Scene:|Scene:)[^\n]*\n?/i);
+    if (opening) {
+      const openingText = opening[0].toLowerCase();
+      const hasWarmth = /welcome|glad|happy|thank|appreciate|good to see|hope|warm|empathy|understand|listening|open|friendly|support/i.test(openingText);
+      const hasPivot = /business|clinical|value|operational|let's discuss|talk about|focus on|agenda|objective|transition|pivot|professional/i.test(openingText);
+      if (!hasWarmth || !hasPivot) {
+        alert("Scenario opening must begin with warmth/empathy and then pivot to business. Please regenerate or edit.");
+        return;
+      }
+    }
     const challenge = params.challenge === "__custom__" ? params.custom_challenge : params.challenge;
 
     const stateArcText = preview.state_arc?.length > 0
