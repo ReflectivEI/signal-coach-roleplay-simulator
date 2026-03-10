@@ -1,28 +1,65 @@
 // hcpDialogueEngine.jsx - Dynamic HCP dialogue and cue recalibration for roleplay simulator
 
 // Define the scenario card
-export const scenario = {
-  title: "ADC Integration with IO Backbone",
-  hcp: {
-    name: "Dr. Robert Chen",
-    specialty: "Hematology/Oncology",
-    practice: "Community Practice",
-    keyChallenges: [
-      "Toxicity management resource constraints",
-      "P&T cost scrutiny and pathway integration",
-      "Infusion chair time limitations",
-      "Competition with established IO regimens"
-    ],
-    objective: "Define biomarker-driven patient subset with clear OS/PFS benefit and operational fit; add to order sets and tumor board review",
-    personality: {
-      name: "Empathetic",
-      description: "Shows concern for others, uses warm and supportive language, listens actively.",
-      effect: "Responds with understanding, acknowledges feelings, and offers encouragement.",
-      verbalRules: "Use phrases that show care and support. Avoid cold or dismissive language. Ask questions that invite sharing."
-    }
+export const scenarios = [
+  {
+    title: "ADC Integration with IO Backbone",
+    hcp: {
+      name: "Dr. Robert Chen",
+      specialty: "Hematology/Oncology",
+      practice: "Community Practice",
+      keyChallenges: [
+        "Toxicity management resource constraints",
+        "P&T cost scrutiny and pathway integration",
+        "Infusion chair time limitations",
+        "Competition with established IO regimens"
+      ],
+      objective: "Define biomarker-driven patient subset with clear OS/PFS benefit and operational fit; add to order sets and tumor board review",
+      personality: {
+        name: "Empathetic",
+        description: "Shows concern for others, uses warm and supportive language, listens actively.",
+        effect: "Responds with understanding, acknowledges feelings, and offers encouragement.",
+        verbalRules: "Use phrases that show care and support. Avoid cold or dismissive language. Ask questions that invite sharing."
+      }
+    },
+    topic: "Cost-Response, Toxicity Management, Pathway Integration"
   },
-  topic: "Cost-Response, Toxicity Management, Pathway Integration"
-};
+  {
+    title: "Cardiology Discovery Call",
+    hcp: {
+      name: "Dr. Lisa Patel",
+      specialty: "Cardiology",
+      practice: "Academic Medical Center",
+      keyChallenges: ["Patient adherence", "Complex comorbidities", "Insurance approval delays"],
+      objective: "Identify new approaches for improving patient adherence and outcomes.",
+      personality: {
+        name: "Direct",
+        description: "Gets to the point quickly, values efficiency, and expects concise communication.",
+        effect: "Keeps conversation brief, pivots quickly to clinical topics, and signals urgency when needed.",
+        verbalRules: "Use concise, direct language. Minimize small talk. Pivot to clinical matters efficiently."
+      }
+    },
+    topic: "Adherence, Outcomes, Insurance"
+  },
+  {
+    title: "Oncology Value Messaging",
+    hcp: {
+      name: "Dr. Maria Gomez",
+      specialty: "Oncology",
+      practice: "Hospital-Based Practice",
+      keyChallenges: ["Value-based care", "Patient access", "Cost containment"],
+      objective: "Communicate value proposition for new therapies in a cost-sensitive environment.",
+      personality: {
+        name: "Skeptical",
+        description: "Questions claims, requests evidence, and challenges rep assertions.",
+        effect: "Asks probing questions, requests supporting data, and challenges rep claims.",
+        verbalRules: "Use critical, evidence-seeking language. Ask for proof and challenge unsupported statements."
+      }
+    },
+    topic: "Value, Access, Cost"
+  },
+  // ... Add 16 more scenarios with varied personalities: Warm, Reserved, Enthusiastic, Distracted, Approachable, Formal, Curious, Busy, etc. ...
+];
 
 // Simulating HCP Dialogue and Cue Recalibration
 export function recalibrateHcpDialogueAndCue(question, currentTab) {

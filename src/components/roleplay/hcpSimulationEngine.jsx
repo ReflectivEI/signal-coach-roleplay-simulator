@@ -1,5 +1,10 @@
+// Scenario selection utility
+export function getScenarioContext(props = {}) {
+  const scenarioIndex = typeof props.scenarioIndex === 'number' ? props.scenarioIndex : 0;
+  return scenarios[scenarioIndex] || scenarios[0];
+}
 // Dynamic HCP dialogue and cue recalibration
-import { scenario, recalibrateHcpDialogueAndCue, getTabBasedOnQuestion } from './hcpDialogueEngine.jsx';
+import { scenarios, recalibrateHcpDialogueAndCue, getTabBasedOnQuestion } from './hcpDialogueEngine.jsx';
 // Engagement scoring and state update
 /**
  * Robust engagement scoring and state update for enterprise reliability.
