@@ -326,8 +326,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'Understood. We can continue later. What time works for you?';
-      contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
+      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
+      contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       contextualCue = generateContextualCue(
         sid,
@@ -342,7 +342,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         // Import CUE_BANK and use default for state
         const cueBank = require('./hcpStateEngine').CUE_BANK;
         const cues = cueBank[nextHcpState] || cueBank['neutral'];
-        contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your input.';
+        contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
       }
     }
 
