@@ -28,19 +28,19 @@ export function deriveInitialState(scenario) {
     scenario.influence_driver || '',
   ].join(' ').toLowerCase();
 
-    if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed/.test(text)) {
-      return 'time-pressured';
-    }
-    if (/resist|skeptic|doubt|won.t|not interested|disagree|pushback|challenge/.test(text)) {
-      return 'resistant';
-    }
-    if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
-      return 'irritated';
-    }
-    if (/engag|curio|interest|open|recept|enthusiast|positive|collaborate|warm|welcoming|friendly/.test(text)) {
-      return 'engaged';
-    }
-    return 'neutral';
+  if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed/.test(text)) {
+    return 'time-pressured';
+  }
+  if (/resist|skeptic|doubt|won.t|not interested|disagree|pushback|challenge/.test(text)) {
+    return 'resistant';
+  }
+  if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
+    return 'irritated';
+  }
+  if (/engag|curio|interest|open|recept|enthusiast|positive|collaborate|warm|welcoming|friendly/.test(text)) {
+    return 'engaged';
+  }
+  return 'neutral';
 }
 
 /**
@@ -388,145 +388,145 @@ export function analyzeQuestionQuality(repMessage, conversationHistory = []) {
  * If rep's question is pushy/redundant/poorly thought out, HCP shows irritation/impatience.
  */
 export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialogue = '', repMessage = '', conversationHistory = []) {
-    // Adaptive cue selection: analyze rep message sentiment and HCP dialogue tone
-    const repSentiment = repMessage ? repMessage.toLowerCase() : '';
-    const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
-    const recentCues = conversationHistory.slice(-10).map(t => t.cueBefore).filter(Boolean);
-    // Helper for fallback cue
-    function fallbackCue() {
-      return 'The HCP maintains a neutral expression, ready for your next point.';
-    }
+  // Adaptive cue selection: analyze rep message sentiment and HCP dialogue tone
+  const repSentiment = repMessage ? repMessage.toLowerCase() : '';
+  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}`);
+  const recentCues = conversationHistory.slice(-10).map(t => t.cueBefore).filter(Boolean);
+  // Helper for fallback cue
+  function fallbackCue() {
+    return 'The HCP maintains a neutral expression, ready for your next point.';
+  }
 
-      // 1. Try to extract direct action/intent from HCP dialogue
-      if (hcpDialogue) {
-        const actionPatterns = [
-          { regex: /(smil(e|es|ed|ing))/, cue: 'The HCP smiles warmly.' },
-          { regex: /(leans? forward|leans? in)/, cue: 'The HCP leans forward, showing engagement.' },
-          { regex: /(stands|standing|stood)/, cue: 'The HCP stands, signaling a transition or closure.' },
-          { regex: /(gestur(e|es|ed|ing))/, cue: 'The HCP gestures as they speak.' },
-          { regex: /(checks? (calendar|phone|watch))/, cue: 'The HCP checks their calendar or phone, signaling urgency.' },
-          { regex: /(nods?|nodding)/, cue: 'The HCP nods in acknowledgment.' },
-          { regex: /(frown(s|ed|ing)?)/, cue: 'The HCP frowns, signaling irritation.' },
-          { regex: /(shrugs?|shrugging)/, cue: 'The HCP shrugs, showing uncertainty.' },
-          { regex: /(laughs?|laughed|laughing)/, cue: 'The HCP laughs, breaking the tension.' },
-          { regex: /(sighs?|sighed|sighing)/, cue: 'The HCP sighs, showing fatigue or frustration.' },
-          { regex: /(writes?|writing|wrote|scribbles?)/, cue: 'The HCP writes a note as you speak.' },
-          { regex: /(glances?|glanced|glancing)/, cue: 'The HCP glances away briefly, then refocuses.' },
-          { regex: /(cross(es|ed|ing)? arms)/, cue: 'The HCP crosses their arms, signaling defensiveness.' },
-          { regex: /(offers?|offered|offering) (a|an)? (smile|nod|handshake|compliment)/, cue: 'The HCP offers a gesture of goodwill.' },
-          { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
-          { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
-          { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
-          { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?/, cue: 'The HCP packs up and prepares to leave.' },
-        ];
-        const lowerDialogue = hcpDialogue.toLowerCase();
-        for (const pattern of actionPatterns) {
-          if (pattern.regex.test(lowerDialogue)) {
-            return pattern.cue;
-          }
-        }
+  // 1. Try to extract direct action/intent from HCP dialogue
+  if (hcpDialogue) {
+    const actionPatterns = [
+      { regex: /(smil(e|es|ed|ing))/, cue: 'The HCP smiles warmly.' },
+      { regex: /(leans? forward|leans? in)/, cue: 'The HCP leans forward, showing engagement.' },
+      { regex: /(stands|standing|stood)/, cue: 'The HCP stands, signaling a transition or closure.' },
+      { regex: /(gestur(e|es|ed|ing))/, cue: 'The HCP gestures as they speak.' },
+      { regex: /(checks? (calendar|phone|watch))/, cue: 'The HCP checks their calendar or phone, signaling urgency.' },
+      { regex: /(nods?|nodding)/, cue: 'The HCP nods in acknowledgment.' },
+      { regex: /(frown(s|ed|ing)?)/, cue: 'The HCP frowns, signaling irritation.' },
+      { regex: /(shrugs?|shrugging)/, cue: 'The HCP shrugs, showing uncertainty.' },
+      { regex: /(laughs?|laughed|laughing)/, cue: 'The HCP laughs, breaking the tension.' },
+      { regex: /(sighs?|sighed|sighing)/, cue: 'The HCP sighs, showing fatigue or frustration.' },
+      { regex: /(writes?|writing|wrote|scribbles?)/, cue: 'The HCP writes a note as you speak.' },
+      { regex: /(glances?|glanced|glancing)/, cue: 'The HCP glances away briefly, then refocuses.' },
+      { regex: /(cross(es|ed|ing)? arms)/, cue: 'The HCP crosses their arms, signaling defensiveness.' },
+      { regex: /(offers?|offered|offering) (a|an)? (smile|nod|handshake|compliment)/, cue: 'The HCP offers a gesture of goodwill.' },
+      { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
+      { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
+      { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
+      { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?/, cue: 'The HCP packs up and prepares to leave.' },
+    ];
+    const lowerDialogue = hcpDialogue.toLowerCase();
+    for (const pattern of actionPatterns) {
+      if (pattern.regex.test(lowerDialogue)) {
+        return pattern.cue;
       }
-      // Fallback: always use neutral cue for current state
-      const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
-      return cues && cues.length > 0 ? cues[seed % cues.length] : 'The HCP listens quietly, waiting for your input.';
+    }
+  }
+  // Fallback: always use neutral cue for current state
+  const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
+  return cues && cues.length > 0 ? cues[seed % cues.length] : 'The HCP listens quietly, waiting for your input.';
 
-    // 2. Existing contextual and sentiment-based cue selection (as before)
-    if (/thank|appreciate|helpful|good|great|positive|collaborate|open|enthusiast/.test(repSentiment)) {
-      if (hcpState === 'engaged' || hcpState === 'neutral') {
-        const engagedCues = CUE_BANK['engaged'] || [];
-        if (engagedCues.length > 0) {
-          let cueIdx = seed % engagedCues.length;
-          let altCue = engagedCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
+  // 2. Existing contextual and sentiment-based cue selection (as before)
+  if (/thank|appreciate|helpful|good|great|positive|collaborate|open|enthusiast/.test(repSentiment)) {
+    if (hcpState === 'engaged' || hcpState === 'neutral') {
+      const engagedCues = CUE_BANK['engaged'] || [];
+      if (engagedCues.length > 0) {
+        let cueIdx = seed % engagedCues.length;
+        let altCue = engagedCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
       }
     }
-    if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
-      if (hcpState === 'resistant' || hcpState === 'irritated') {
-        const irritatedCues = CUE_BANK['irritated'] || [];
-        if (irritatedCues.length > 0) {
-          let cueIdx = seed % irritatedCues.length;
-          let altCue = irritatedCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
+  }
+  if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
+    if (hcpState === 'resistant' || hcpState === 'irritated') {
+      const irritatedCues = CUE_BANK['irritated'] || [];
+      if (irritatedCues.length > 0) {
+        let cueIdx = seed % irritatedCues.length;
+        let altCue = irritatedCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
       }
     }
-    // Enhanced: HCP dialogue tone and context (existing logic)
-    if (hcpDialogue) {
-      const lowerDialogue = hcpDialogue.toLowerCase();
-      const lowerRep = repMessage.toLowerCase();
-      const recentDialogue = conversationHistory.slice(-3).map(t => t.hcpDialogue).filter(Boolean).join(' ').toLowerCase();
-      if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient|wrap up|short on time/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
-        const timePressCues = CUE_BANK['time-pressured'] || [];
-        if (timePressCues.length > 0) {
-          let cueIdx = seed % timePressCues.length;
-          let altCue = timePressCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
-      }
-      if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp|angry|hate|suck|frustrated|rude|argument/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
-        const irritationCues = CUE_BANK['irritated'] || [];
-        if (irritationCues.length > 0) {
-          let cueIdx = seed % irritationCues.length;
-          let altCue = irritationCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
-      }
-      if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant|unclear|hesitant|not sure/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
-        const skepticalCues = CUE_BANK['resistant'] || [];
-        if (skepticalCues.length > 0) {
-          let cueIdx = seed % skepticalCues.length;
-          let altCue = skepticalCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
-      }
-      if (/boundary|limit|policy|move on|topic change|end discussion|closure|firm stance|stop/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
-        const boundaryCues = CUE_BANK['boundary-setting'] || [];
-        if (boundaryCues.length > 0) {
-          let cueIdx = seed % boundaryCues.length;
-          let altCue = boundaryCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
-      }
-      if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond|open|positive|interested|lean in/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
-        const engagedCues = CUE_BANK['engaged'] || [];
-        if (engagedCues.length > 0) {
-          let cueIdx = seed % engagedCues.length;
-          let altCue = engagedCues[cueIdx];
-          if (!recentCues.includes(altCue)) return altCue;
-        } else {
-          return fallbackCue();
-        }
-      }
-      // Prioritize cues referencing specific dialogue content
-      if (lowerDialogue.includes('calendar')) {
-        return 'The HCP checks their calendar, then signals urgency.';
-      }
-      if (lowerDialogue.includes('phone')) {
-        return 'The HCP checks their phone, then looks up, signaling urgency in their response.';
-      }
-      if (lowerDialogue.includes('door')) {
-        return 'The HCP stands and motions toward the door, prompting a quick wrap-up.';
-      }
-      if (lowerDialogue.includes('smile')) {
-        return 'A broad smile crosses the HCP’s face as they echo your key points.';
-      }
-      if (lowerDialogue.includes('frown')) {
-        return 'The HCP frowns, signaling irritation.';
+  }
+  // Enhanced: HCP dialogue tone and context (existing logic)
+  if (hcpDialogue) {
+    const lowerDialogue = hcpDialogue.toLowerCase();
+    const lowerRep = repMessage.toLowerCase();
+    const recentDialogue = conversationHistory.slice(-3).map(t => t.hcpDialogue).filter(Boolean).join(' ').toLowerCase();
+    if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient|wrap up|short on time/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
+      const timePressCues = CUE_BANK['time-pressured'] || [];
+      if (timePressCues.length > 0) {
+        let cueIdx = seed % timePressCues.length;
+        let altCue = timePressCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
       }
     }
+    if (/irritated|annoyed|frustrated|impatient|demand|aggressive|pushy|repeated|interrupt|curt|sharp|angry|hate|suck|frustrated|rude|argument/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
+      const irritationCues = CUE_BANK['irritated'] || [];
+      if (irritationCues.length > 0) {
+        let cueIdx = seed % irritationCues.length;
+        let altCue = irritationCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
+      }
+    }
+    if (/skeptical|doubt|confused|clarify|unconvinced|guarded|reluctant|unclear|hesitant|not sure/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
+      const skepticalCues = CUE_BANK['resistant'] || [];
+      if (skepticalCues.length > 0) {
+        let cueIdx = seed % skepticalCues.length;
+        let altCue = skepticalCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
+      }
+    }
+    if (/boundary|limit|policy|move on|topic change|end discussion|closure|firm stance|stop/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
+      const boundaryCues = CUE_BANK['boundary-setting'] || [];
+      if (boundaryCues.length > 0) {
+        let cueIdx = seed % boundaryCues.length;
+        let altCue = boundaryCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
+      }
+    }
+    if (/engaged|collaborate|enthusiasm|partnership|smile|notes|active|respond|open|positive|interested|lean in/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
+      const engagedCues = CUE_BANK['engaged'] || [];
+      if (engagedCues.length > 0) {
+        let cueIdx = seed % engagedCues.length;
+        let altCue = engagedCues[cueIdx];
+        if (!recentCues.includes(altCue)) return altCue;
+      } else {
+        return fallbackCue();
+      }
+    }
+    // Prioritize cues referencing specific dialogue content
+    if (lowerDialogue.includes('calendar')) {
+      return 'The HCP checks their calendar, then signals urgency.';
+    }
+    if (lowerDialogue.includes('phone')) {
+      return 'The HCP checks their phone, then looks up, signaling urgency in their response.';
+    }
+    if (lowerDialogue.includes('door')) {
+      return 'The HCP stands and motions toward the door, prompting a quick wrap-up.';
+    }
+    if (lowerDialogue.includes('smile')) {
+      return 'A broad smile crosses the HCP’s face as they echo your key points.';
+    }
+    if (lowerDialogue.includes('frown')) {
+      return 'The HCP frowns, signaling irritation.';
+    }
+  }
   // Get the base cue for the state
   const baseCues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
   let cueIdx = seed % baseCues.length;

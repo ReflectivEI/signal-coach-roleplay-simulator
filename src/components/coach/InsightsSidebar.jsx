@@ -153,7 +153,7 @@ export default function InsightsSidebar({ onSuggestedTopic, messages = [] }) {
                     {insights.recommended_modules.map((m, i) => (
                       <button
                         key={i}
-                        onClick={() => onSuggestedTopic(`Tell me about the "${m.module}" module and how to improve`)}
+                        onClick={() => onSuggestedTopic(`Tell me about the \"${m.module}\" module and how to improve`)}
                         className="w-full text-left bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg p-2.5 transition-colors"
                       >
                         <p className="text-xs font-medium text-blue-800">{m.module}</p>

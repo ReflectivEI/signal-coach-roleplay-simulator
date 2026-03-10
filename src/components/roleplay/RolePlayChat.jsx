@@ -42,8 +42,8 @@ import VoiceControls from "./VoiceControls";
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
-  // Fallback opening scene logic: support both opening_scene and openingScene (snake_case and camelCase)
-  const openingScene = scenario.opening_scene || scenario.openingScene || scenario.scene || (scenario.details && scenario.details.match(/Opening Scene: ([^\n]*)/)?.[1]) || "The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.";
+  // Only use unique opening scene from scenario, never fallback placeholder
+  const openingScene = scenario.opening_scene || scenario.openingScene || null;
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -478,8 +478,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
       // Build deterministic report header with locked scores
-        // Restore structuredPrompt definition for LLM feedback generation
-        const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
+      // Restore structuredPrompt definition for LLM feedback generation
+      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
       const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}`;
 
       const res = await fetch('/api/llm/invoke', {
@@ -614,14 +614,14 @@ ${actionText}`;
                     ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
                     : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
                 },
-                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />, 
-                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />, 
-                p: (props) => <p className="mb-3 whitespace-normal" {...props} />, 
-                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />, 
-                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />, 
-                li: (props) => <li className="mb-0" {...props} />, 
-                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />, 
-                em: (props) => <em className="italic text-slate-600" {...props} />, 
+                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
+                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                li: (props) => <li className="mb-0" {...props} />,
+                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+                em: (props) => <em className="italic text-slate-600" {...props} />,
                 blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
               }}
             >
@@ -744,10 +744,15 @@ ${actionText}`;
           {activeTab === "chat" && (
             <>
               {/* Show scenario opening scene for the entire session */}
-              {openingScene && (
+              {openingScene ? (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic">{openingScene}</span>
+                </div>
+              ) : (
+                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
+                  <span className="italic text-red-600">No opening scene provided for this scenario.</span>
                 </div>
               )}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
@@ -764,14 +769,14 @@ ${actionText}`;
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
-                      {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                      {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
-                        <div className="flex justify-start pl-1">
-                          <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {turn.cueBefore}
-                          </p>
-                        </div>
-                      )}
+                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
+                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                      <div className="flex justify-start pl-1">
+                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                          {turn.cueBefore}
+                        </p>
+                      </div>
+                    )}
                     {turn.hcpDialogueBefore && (
                       <div className="flex justify-start">
                         <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
