@@ -43,22 +43,22 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
 
     try {
       const prompt = `Generate a realistic pharmaceutical sales roleplay scenario for training. Use these parameters:
-- HCP Type: ${params.hcp_category || 'Any'}
-- Specialty: ${params.specialty || 'Any'}
-- Disease State: ${params.disease_state}
-- Rep Challenge: ${challenge}
-- Difficulty: ${params.difficulty}
+      - HCP Type: ${params.hcp_category || 'Any'}
+      - Specialty: ${params.specialty || 'Any'}
+      - Disease State: ${params.disease_state}
+      - Rep Challenge: ${challenge}
+      - Difficulty: ${params.difficulty}
 
-Create a detailed scenario that includes:
-1. HCP background and context
-2. Office setting description
-3. Patient population / case details
-4. HCP's current state and concerns
-5. Initial greeting from the HCP
-6. 2-3 potential objections or resistance points
-7. Success criteria for the roleplay
+      Create a detailed scenario that includes:
+      1. HCP background and context
+      2. Office setting description
+      3. Patient population / case details
+      4. HCP's current state and concerns
+      5. Initial greeting from the HCP: The HCP should always begin with warmth and empathy toward the rep, then professionally pivot to business talk (clinical, operational, or value-focused).
+      6. 2-3 potential objections or resistance points
+      7. Success criteria for the roleplay
 
-Format as a detailed scenario brief that a sales rep can use for practice.`;
+      Format as a detailed scenario brief that a sales rep can use for practice.`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

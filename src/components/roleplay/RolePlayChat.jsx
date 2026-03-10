@@ -218,8 +218,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
 
     // 1. Score alignment against the locked state + temperature the rep SAW
-    // IMPORTANT: Score BEFORE any temperature escalation from disagreement
-    // The rep responds to what they observed, not to future emotional escalation
+    // Score BEFORE any temperature escalation from disagreement
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
     const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
 
@@ -243,8 +242,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     // 5. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
-    // If the HCP disagreed in the turn we just responded to, their emotional temperature
-    // escalates for the NEXT turn (not the current alignment scoring)
+    // Escalate temperature for the NEXT turn, not for current alignment scoring
     if (respondingToTurn.hcpDisagreed && !overrideExit) {
       const escalatedIndex = escalateForDisagreement(
         TEMPERATURES.indexOf(nextTemp),
@@ -252,7 +250,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
       const clampedIndex = Math.max(0, Math.min(escalatedIndex, TEMPERATURES.length - 1));
       nextTemp = TEMPERATURES[clampedIndex];
-      console.log(`Applied HCP Disagreement Escalation to Next Turn | Base: ${transitionTemperature(prevTemp, repMessage)} | Escalated: ${nextTemp}`);
+      // This escalation is only for the next turn, not for current scoring
     }
 
     simStateRef.current = { temperature: nextTemp, severity: nextSev };
