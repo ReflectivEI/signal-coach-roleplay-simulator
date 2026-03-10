@@ -378,8 +378,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       feedback: coachingResult,
     });
 
-    const updatedTurns = [...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn];
-    setTurns(updatedTurns);
+    // Prevent duplicate HCP turns: only add one HCP turn after rep input
+    setTurns([...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn]);
 
     setIsLoading(false);
     speak(nextHcpDialogue);
