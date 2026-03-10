@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 // ...existing code...
 import { Sparkles, TrendingUp, AlertTriangle, BookOpen, Dumbbell, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
@@ -111,7 +112,7 @@ export default function InsightsSidebar({ onSuggestedTopic, messages = [] }) {
                     {insights.patterns.map((p, i) => (
                       <div key={i} className={`rounded-lg p-2.5 border ${p.type === "strength" ? "bg-green-50 border-green-100" : "bg-orange-50 border-orange-100"}`}>
                         <div className="flex items-center gap-1.5 mb-1">
-                          <Badge className={`text-xs px-1.5 py-0 ${p.type === "strength" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
+                          <Badge variant={p.type === "strength" ? "default" : "destructive"} className={`text-xs px-1.5 py-0 ${p.type === "strength" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}`}>
                             {p.type === "strength" ? "✓ Strength" : "⚠ Watch"}
                           </Badge>
                           <span className="text-xs font-medium text-gray-800">{p.title}</span>
