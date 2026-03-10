@@ -750,7 +750,7 @@ ${actionText}`;
               {openingScene && turns.length === 1 && !turns[0].repMessage && (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                  {openingScene}
+                  <span className="italic">{openingScene}</span>
                 </div>
               )}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
