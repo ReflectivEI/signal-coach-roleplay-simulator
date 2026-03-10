@@ -100,6 +100,7 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
   } else if (questionLower.includes("biomarker") || questionLower.includes("os") || questionLower.includes("pfs")) {
     topicDetected = "Biomarker-Driven Subset";
   }
+  // Forced update to clear build cache (2026-03-09)
   function applyPersonality(text) {
     if (!personality) return text;
     switch (personality.name) {
