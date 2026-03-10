@@ -702,7 +702,7 @@ ${actionText}`;
         <div className="flex items-start justify-between px-5 py-3 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-sm leading-snug">{scenario.title}</h2>
+              <h2 className="font-bold text-slate-900 text-[24px] leading-snug">{scenario.title}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 font-medium">{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
@@ -758,7 +758,7 @@ ${actionText}`;
             <>
               {/* Show scenario opening scene only before rep's first message */}
               {turns.length === 1 && !turns[0].repMessage && (
-                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 font-medium">
+                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   {openingScene}
                 </div>
               )}
@@ -776,7 +776,8 @@ ${actionText}`;
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
-                    {turn.cueBefore && (
+                    {/* Only show HCP cue if rep has spoken (i > 0 or after first repMessage) */}
+                    {turn.cueBefore && (i > 0 || (turns[0] && turns[0].repMessage)) && (
                       <div className="flex justify-start pl-1">
                         <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
                           {turn.cueBefore}
@@ -805,8 +806,7 @@ ${actionText}`;
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
-                              <span className="opacity-50">·</span>
-                              <span className="italic">{turn.alignment.ruleLabel}</span>
+                              {/* State label removed: do not display ruleLabel */}
                               {turn.alignment.misalignments.length > 0 && (
                                 <span className="truncate max-w-[260px]">⚠ {turn.alignment.misalignments[0]}</span>
                               )}
