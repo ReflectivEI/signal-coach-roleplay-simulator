@@ -1,5 +1,5 @@
 // Dynamic HCP dialogue and cue recalibration
-import { scenario, recalibrateHcpDialogueAndCue, getTabBasedOnQuestion } from './hcpDialogueEngine.js';
+import { scenario, recalibrateHcpDialogueAndCue, getTabBasedOnQuestion } from './hcpDialogueEngine.jsx';
 // Engagement scoring and state update
 /**
  * Robust engagement scoring and state update for enterprise reliability.
