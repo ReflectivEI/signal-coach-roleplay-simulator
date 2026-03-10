@@ -135,7 +135,7 @@ const ALL_SCENARIOS = [
     challenges: ["Staffing limitations for AE management","Pathway paperwork burden","Inconsistent patient education","Limited time for toxicity monitoring"],
     keyMessages: ["Template kits for patient education","Standing nurse protocols for common AEs","Streamlined pathway documentation","Toxicity call-tree for efficient triage"],
     impact: ["Improve patient safety with standardized protocols","Reduce staff burden through efficiency","Increase confidence in IO prescribing","Better patient outcomes with consistent education"],
-    sugge stedPhrasing: ["I have template kits that other infusion centers have used successfully. Would you like to see how they've streamlined patient education?","A toxicity call-tree could help your team triage more efficiently. Can I share one that's been working well?","Standing nurse protocols for common AEs could reduce the documentation burden. Would that be helpful to review?"],
+    suggestedPhrasing: ["I have template kits that other infusion centers have used successfully. Would you like to see how they've streamlined patient education?","A toxicity call-tree could help your team triage more efficiently. Can I share one that's been working well?","Standing nurse protocols for common AEs could reduce the documentation burden. Would that be helpful to review?"],
     // focus_capabilities: ["adaptive_response", "commitment_generation"],
   },
   {
