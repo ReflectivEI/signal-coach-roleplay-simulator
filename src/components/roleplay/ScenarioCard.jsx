@@ -9,7 +9,6 @@ const difficultyColors = {
   advanced: { bg: "#eff6ff", text: "#1e40af", border: "#bfdbfe" },
 };
 
-const hcpMoodColor = "#39ACAC";
 
 // Derive stakeholder label from scenario data
 function getStakeholder(scenario) {

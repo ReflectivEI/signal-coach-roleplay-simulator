@@ -215,7 +215,7 @@ export function recalibrateHcpDialogueAndCue(question, currentTab, scenario = sc
       cueBefore: cueBefore || 'No cue available.',
       hcpDialogueBefore: hcpDialogue || 'No dialogue available.'
     };
-  } catch (err) {
+  } catch {
     // Fallback for unexpected errors
     return {
       severity: 0,

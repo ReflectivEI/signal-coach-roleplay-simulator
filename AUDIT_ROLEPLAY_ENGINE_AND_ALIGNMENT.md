@@ -35,7 +35,7 @@ The ReflectivAI roleplay simulator is **well-architected, deterministic, and ped
 
 The system implements a **deterministic behavioral simulation** with three tightly integrated layers:
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │        RolePlayChat (Orchestration Layer)           │
 │  - Manages message flow and turn sequencing         │
@@ -68,7 +68,7 @@ The system implements a **deterministic behavioral simulation** with three tight
 
 **No `Math.random()` anywhere** — all selection uses deterministic hashing:
 
-```javascript
+```js
 // From hcpSimulationEngine.jsx:
 function hashInt(str) {
   let h = 5381;
@@ -103,7 +103,7 @@ neutral (0) → engaged (1) → time-pressured (2) → resistant (3)
 **Transition Logic:**
 
 | Trigger | Escalation | Condition |
-|---------|-----------|-----------|
+| --------- | ----------- | ----------- |
 | Profanity/insults (f\*\*k, stupid, idiot, bad doctor) | +2 | Always |
 | Authority challenge, demand, self-sabotage | +1 | Always |
 | Pressure/repetition (why won't you, come on) | +1 | Only if temp ∈ {stressed, irritated} |
@@ -117,7 +117,7 @@ neutral (0) → engaged (1) → time-pressured (2) → resistant (3)
 
 ⚠️ **Issue 1: Soft Escalation Condition is Uneven**
 
-```javascript
+```js
 // From hcpSimulationEngine.jsx (line ~240-250)
 const softEscalate = /.../.test(msg);
 const tempIsHot = currentTemperature === 'stressed' || currentTemperature === 'irritated';
@@ -216,7 +216,7 @@ Example: "I'm resistant to change, but I'm interested in learning more"
 **8 Capabilities** with **16 sub-metrics** scored deterministically:
 
 | Capability | Sub-Metrics | Scoring |
-|-----------|------------|---------|
+| ----------- | ------------ | --------- |
 | Signal Awareness | Contextual Relevance, Forward Value | avg(CR, FV) |
 | Signal Interpretation | Accuracy, Responsiveness | avg(Acc, Resp) |
 | Value Connection | Relevance Alignment, Outcome Translation | avg(RA, OT) |
@@ -639,7 +639,7 @@ try {
 ## PART 6: STRENGTHS SUMMARY
 
 | Aspect | Rating | Evidence |
-|--------|--------|----------|
+| -------- | -------- | ---------- |
 | **Determinism** | ✅ ✅ ✅ | No `Math.random()`, full reproducibility |
 | **State Design** | ✅ ✅ ✅ | 7-state ladder, ordinal escalation sensible |
 | **Alignment Scoring** | ✅ ✅ | 8 capabilities, clear sub-metrics, observable behaviors |
