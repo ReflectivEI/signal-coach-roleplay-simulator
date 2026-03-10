@@ -80,38 +80,41 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
     return text;
   }
 
-  // Handle social/casual cues for realism
+  // Handle social/casual cues for realism and warmth
   if (isLunchInvite(question)) {
     if (personality && personality.name === "Empathetic") {
-      hcpDialogue = "Lunch sounds great! I always appreciate a chance to connect outside the clinic. Let's find a time that works for both of us—sometimes these conversations are best over a meal.";
-      cueBefore = "Dr. Chen checks their calendar, genuinely interested in scheduling lunch.";
+      hcpDialogue = "Lunch sounds wonderful! I always appreciate a chance to connect outside the clinic. You know, my staff loves coffee—it's the secret to our energy. Let's find a time that works for both of us. These moments mean a lot.";
+      cueBefore = "Dr. Chen beams, genuinely interested in sharing a meal and connecting personally.";
     } else {
-      hcpDialogue = "Thank you for the invitation. My schedule is tight, but I can try to make time for lunch soon. Let's coordinate.";
-      cueBefore = "Dr. Chen glances at their calendar, considering the invitation.";
+      hcpDialogue = "Thank you for the invitation. My schedule is tight, but I can try to make time for lunch soon. Let's coordinate. I appreciate your thoughtfulness.";
+      cueBefore = "Dr. Chen smiles, considering the invitation warmly.";
     }
+    // Keep conversation open
+    hcpDialogue += " By the way, before we get to business, is there anything new with your team or family?";
   } else if (isMoodQuestion(question) || isCasualQuestion(question)) {
-    // Prioritize personality/empathy for casual/personal questions, ignore state/mood
     if (personality && personality.name === "Empathetic") {
       const anecdotes = [
         "You know, I wish I could say I was in Italy, but my vacation was spent catching up on sleep and binge-watching old movies. Maybe next time!",
         "No vacation for me this year, but I did manage to sneak in a few rounds of golf. Not quite Italy, but still relaxing.",
         "I haven't taken a vacation yet, but your question makes me realize I need one! Thanks for reminding me to take a break.",
-        "Life's been busy, but moments like this—just chatting—are a breath of fresh air."
+        "Life's been busy, but moments like this—just chatting—are a breath of fresh air.",
+        "My staff keeps me on my toes, but I wouldn't trade them for anything. How's your team doing?",
+        "I always say, coffee and good company are the best medicine. Glad you stopped by!"
       ];
       const anecdote = anecdotes[Math.floor(Math.random() * anecdotes.length)];
-      hcpDialogue = `${anecdote} I appreciate your interest and sense of humor. It's good to connect as people. When you're ready, we can pivot to business and talk about ADC integration.`;
-      cueBefore = "Dr. Chen responds with humor, warmth, and realism, then gently pivots to clinical topics when appropriate.";
+      hcpDialogue = `${anecdote} I appreciate your interest and sense of humor. It's good to connect as people. If you want to keep chatting, I'm all ears. When you're ready, we can pivot to business and talk about ADC integration.`;
+      cueBefore = "Dr. Chen responds with humor, warmth, and realism, inviting further conversation before gently pivoting to clinical topics.";
     } else {
-      hcpDialogue = "I'm doing fine, thank you. Let's discuss the clinical aspects when you're ready.";
-      cueBefore = "Dr. Chen nods politely, keeping the conversation professional.";
+      hcpDialogue = "I'm doing well, thank you. It's always nice to catch up. Anything new on your end before we talk clinical?";
+      cueBefore = "Dr. Chen smiles, keeping the conversation open and friendly.";
     }
   } else if (isCasualQuestion(question)) {
     if (personality && personality.name === "Empathetic") {
-      hcpDialogue = "It's really nice to see you. Sometimes these visits mean more than you realize. If you want to just chat or schedule lunch, I'm open to it. We can talk clinical topics when you're ready, but I value these moments of connection.";
-      cueBefore = "Dr. Chen smiles, shares warmth, and prioritizes human connection before clinical matters.";
+      hcpDialogue = "It's really nice to see you. Sometimes these visits mean more than you realize. If you want to just chat or schedule lunch, I'm open to it. We can talk clinical topics when you're ready, but I value these moments of connection. Anything fun planned for the weekend?";
+      cueBefore = "Dr. Chen smiles, shares warmth, and prioritizes human connection before clinical matters, inviting you to continue.";
     } else {
-      hcpDialogue = "I'm doing fine, thank you. Let's discuss the clinical aspects when you're ready.";
-      cueBefore = "Dr. Chen nods politely, keeping the conversation professional.";
+      hcpDialogue = "I'm doing well, thank you. Let's catch up a bit before we dive into clinical topics.";
+      cueBefore = "Dr. Chen smiles, keeping the conversation friendly and open.";
     }
   } else {
     // If the detected topic aligns with the current tab, answer directly
@@ -126,10 +129,12 @@ export function recalibrateHcpDialogueAndCue(question, currentTab) {
         hcpDialogue = applyPersonality("That’s a great question! How does this ADC improve overall treatment in terms of patient subset, cost, and treatment management?");
         cueBefore = "Dr. Chen leans forward, showing curiosity while considering the broader implications of ADC usage in community oncology practices.";
       }
+      // Keep conversation open for business topics
+      hcpDialogue += " If you have more questions or want to discuss other aspects, I'm happy to continue.";
     } else {
       // If the detected topic doesn't align with the current tab, provide a brief answer and redirect to the relevant tab
-      hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected}]`);
-      cueBefore = "Dr. Chen seems thoughtful and suggests that a deeper exploration of this topic might be needed in a different context.";
+      hcpDialogue = applyPersonality(`That's a great question! This topic seems to relate more closely to [${topicDetected}]. If you'd like, we can explore it further or talk about something else that's on your mind.`);
+      cueBefore = "Dr. Chen seems thoughtful and invites you to continue the conversation or pivot topics as needed.";
     }
   }
 
