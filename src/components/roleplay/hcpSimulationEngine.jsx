@@ -500,7 +500,8 @@ export function buildHCPProfile({ sessionId, turnNumber, structuralState, temper
  * Accepts a locked HCPProfile — guarantees no drift between cue and dialogue.
  */
 export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = null, isOpening = false }) {
-  const { structuralState, temperature, severity, lockedCue, toneDirectives } = hcpProfile;
+  // Add personality trait to HCP profile
+  const { structuralState, temperature, severity, lockedCue, toneDirectives, personality } = hcpProfile;
 
   // Sanitize interpolated values to ASCII only
   function sanitize(str) {
@@ -539,6 +540,13 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   if (isOpening) {
     prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '');
   }
+  // Personality integration
+  if (personality) {
+    prompt += '\n\n==============================================\nPERSONALITY TRAIT\n==============================================';
+    prompt += '\nPersonality: ' + sanitize(personality.name || personality);
+    prompt += '\nDescription: ' + sanitize(personality.description || '');
+    prompt += '\nHow this affects your responses: ' + sanitize(personality.effect || 'Let your personality influence your tone, phrasing, and approach to dialogue.');
+  }
   prompt += '\n\n==============================================\nYOUR LOCKED STATE (NON-NEGOTIABLE)\n==============================================';
   prompt += '\nBehavioral Posture: ' + sanitize(structuralState) + ' - ' + sanitize(stateDescriptions[structuralState]);
   prompt += '\nEmotional Temperature: ' + sanitize(temperature) + ' (' + sanitize(severityLabel) + ' intensity)';
@@ -554,6 +562,11 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   prompt += (structuralState === 'neutral' ? '- Professional and measured tone. Balanced, neither dismissive nor enthusiastic.' : '');
   prompt += (temperature === 'irritated' ? '- Cooler tone. Less verbal warmth. More direct phrasing.' : '');
   prompt += (temperature === 'stressed' ? '- Shorter responses. Less patience for tangents. Stay on topic.' : '');
+  // Personality modifies verbal rules
+  if (personality && personality.verbalRules) {
+    prompt += '\nPERSONALITY MODIFIERS:';
+    prompt += '\n' + sanitize(personality.verbalRules);
+  }
   prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction);
   prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences);
   prompt += '\n\n==============================================\nOUTPUT RULES (CRITICAL)\n==============================================';
@@ -576,17 +589,19 @@ export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = nul
   prompt += '\n- Time management and scheduling needs';
   prompt += '\n- Professional boundaries (if needed)';
   prompt += '\n- Scientific/medical content';
+  prompt += '\n- For casual or personal questions, you may respond with warmth, humor, or personal anecdotes before gently pivoting to clinical topics.';
   prompt += '\n\nDIALOGUE-BODY LANGUAGE ALIGNMENT (CRITICAL):';
   prompt += '\nYour physical cue describes your observable body language: "' + sanitize(lockedCue) + '"';
   prompt += '\nYour DIALOGUE MUST BE CONGRUENT with this physical expression.';
   prompt += '\nExamples of proper alignment:';
-  prompt += '\n- If cue shows "frazzled, checking watch" - dialogue should reference time pressure or being busy';
-  prompt += '\n- If cue shows "jaw clenching, irritated" - dialogue should be clipped, brief, direct (not warm and chatty)';
-  prompt += '\n- If cue shows "leaning forward, engaged" - dialogue should show genuine interest and curiosity';
-  prompt += '\n- If cue shows "arms crossed, resistant" - dialogue should express skepticism or clinical concerns';
-  prompt += '\n- If cue shows "turning away, withdrawing" - dialogue should signal conversation is ending';
+  prompt += '\n- If cue shows "frazzled, checking watch" - dialogue should reference time pressure or being busy, except for casual/personal questions where you may respond warmly.';
+  prompt += '\n- If cue shows "jaw clenching, irritated" - dialogue should be clipped, brief, direct (not warm and chatty), except for casual/personal questions where you may use humor or warmth.';
+  prompt += '\n- If cue shows "leaning forward, engaged" - dialogue should show genuine interest and curiosity.';
+  prompt += '\n- If cue shows "arms crossed, resistant" - dialogue should express skepticism or clinical concerns.';
+  prompt += '\n- If cue shows "turning away, withdrawing" - dialogue should signal conversation is ending.';
   prompt += '\nThe rep OBSERVES your body language and interprets your words through that lens.';
-  prompt += '\nInconsistency breaks the coaching moment - ensure what you SAY aligns with what your BODY SHOWS.';
+  prompt += '\nFor casual/personal questions, it is acceptable to break strict alignment and respond as a real person would.';
+  prompt += '\nInconsistency breaks the coaching moment for clinical questions, but casual/personal moments are allowed to be more human.';
   prompt += '\n\nQUESTION FLOW (CRITICAL - STRICTLY ENFORCED):';
   prompt += '\nAsk ONLY 1 QUESTION per turn - real HCPs don\'t interrogate, they converse';
   prompt += '\n- If you need more information, ask ONE question, then wait for the answer';
