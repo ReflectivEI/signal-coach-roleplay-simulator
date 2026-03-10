@@ -629,9 +629,7 @@ ${actionText}`;
             </ReactMarkdown>
           </div>
           <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">
-              ↓ Export PDF
-            </Button>
+            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">↓ Export PDF</Button>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -669,8 +667,7 @@ ${actionText}`;
                   navigate(createPageUrl("AICoach") + `?session_context=${ctx}`);
                 }}
               >
-                <Bot className="w-3 h-3 mr-1" />
-                Coach on this session
+                <Bot className="w-3 h-3 mr-1" /> Coach on this session
               </Button>
               <Button className="bg-teal-500 hover:bg-teal-600" onClick={onClose}>Done</Button>
             </div>
@@ -746,8 +743,8 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              {/* Show scenario opening scene only before rep's first message */}
-              {openingScene && turns.length === 1 && !turns[0].repMessage && (
+              {/* Show scenario opening scene for the entire session */}
+              {openingScene && (
                 <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic">{openingScene}</span>

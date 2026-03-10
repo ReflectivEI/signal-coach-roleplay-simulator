@@ -146,10 +146,6 @@ export default function ScenarioCard({ scenario, renderAs }) {
                 </div>
 
                 {/* Opening Scene */}
-                <div>
-                  <p className="text-xs font-bold text-brand-teal uppercase tracking-wider mb-0.5">Opening Scene</p>
-                  <p className="text-md italic text-gray-600 leading-relaxed font-medium">{getOpeningScene(scenario)}</p>
-                </div>
 
                 {/* Signal Capabilities */}
                 {scenario.focus_capabilities?.length > 0 && (
