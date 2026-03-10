@@ -396,8 +396,40 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
     function fallbackCue() {
       return 'The HCP maintains a neutral expression, ready for your next point.';
     }
+
+    // 1. Try to extract direct action/intent from HCP dialogue
+    if (hcpDialogue) {
+      // Look for common action/intent phrases in the dialogue
+      const actionPatterns = [
+        { regex: /(smil(e|es|ed|ing))/, cue: 'The HCP smiles warmly.' },
+        { regex: /(leans? forward|leans? in)/, cue: 'The HCP leans forward, showing engagement.' },
+        { regex: /(stands|standing|stood)/, cue: 'The HCP stands, signaling a transition or closure.' },
+        { regex: /(gestur(e|es|ed|ing))/, cue: 'The HCP gestures as they speak.' },
+        { regex: /(checks? (calendar|phone|watch))/, cue: 'The HCP checks their calendar or phone, signaling urgency.' },
+        { regex: /(nods?|nodding)/, cue: 'The HCP nods in acknowledgment.' },
+        { regex: /(frown(s|ed|ing)?)/, cue: 'The HCP frowns, signaling irritation.' },
+        { regex: /(shrugs?|shrugging)/, cue: 'The HCP shrugs, showing uncertainty.' },
+        { regex: /(laughs?|laughed|laughing)/, cue: 'The HCP laughs, breaking the tension.' },
+        { regex: /(sighs?|sighed|sighing)/, cue: 'The HCP sighs, showing fatigue or frustration.' },
+        { regex: /(writes?|writing|wrote|scribbles?)/, cue: 'The HCP writes a note as you speak.' },
+        { regex: /(glances?|glanced|glancing)/, cue: 'The HCP glances away briefly, then refocuses.' },
+        { regex: /(cross(es|ed|ing)? arms)/, cue: 'The HCP crosses their arms, signaling defensiveness.' },
+        { regex: /(offers?|offered|offering) (a|an)? (smile|nod|handshake|compliment)/, cue: 'The HCP offers a gesture of goodwill.' },
+        { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
+        { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
+        { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
+        { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?)/, cue: 'The HCP packs up and prepares to leave.' },
+      ];
+      const lowerDialogue = hcpDialogue.toLowerCase();
+      for (const pattern of actionPatterns) {
+        if (pattern.regex.test(lowerDialogue)) {
+          return pattern.cue;
+        }
+      }
+    }
+
+    // 2. Existing contextual and sentiment-based cue selection (as before)
     if (/thank|appreciate|helpful|good|great|positive|collaborate|open|enthusiast/.test(repSentiment)) {
-      // Positive rep sentiment: select positive/engaged cues if available
       if (hcpState === 'engaged' || hcpState === 'neutral') {
         const engagedCues = CUE_BANK['engaged'] || [];
         if (engagedCues.length > 0) {
@@ -410,7 +442,6 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
       }
     }
     if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
-      // Negative rep sentiment: select resistant/irritated cues if available
       if (hcpState === 'resistant' || hcpState === 'irritated') {
         const irritatedCues = CUE_BANK['irritated'] || [];
         if (irritatedCues.length > 0) {
@@ -422,13 +453,11 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
         }
       }
     }
-    // Enhanced: HCP dialogue tone and context
+    // Enhanced: HCP dialogue tone and context (existing logic)
     if (hcpDialogue) {
       const lowerDialogue = hcpDialogue.toLowerCase();
       const lowerRep = repMessage.toLowerCase();
-      // Use recent repMessage and conversationHistory for context
       const recentDialogue = conversationHistory.slice(-3).map(t => t.hcpDialogue).filter(Boolean).join(' ').toLowerCase();
-      // Granular phrase matching
       if (/busy|rush|schedule|quick|concise|limited|time|summary|brief|patient|wrap up|short on time/.test(lowerDialogue + ' ' + lowerRep + ' ' + recentDialogue)) {
         const timePressCues = CUE_BANK['time-pressured'] || [];
         if (timePressCues.length > 0) {
