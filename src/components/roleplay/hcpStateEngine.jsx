@@ -418,7 +418,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
         { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
         { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
         { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
-        { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?)/, cue: 'The HCP packs up and prepares to leave.' },
+        { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?/, cue: 'The HCP packs up and prepares to leave.' },
       ];
       const lowerDialogue = hcpDialogue.toLowerCase();
       for (const pattern of actionPatterns) {
