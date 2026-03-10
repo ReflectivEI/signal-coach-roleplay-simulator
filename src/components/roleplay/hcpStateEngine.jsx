@@ -28,19 +28,19 @@ export function deriveInitialState(scenario) {
     scenario.influence_driver || '',
   ].join(' ').toLowerCase();
 
-  if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed/.test(text)) {
-    return 'time-pressured';
-  }
-  if (/resist|skeptic|doubt|won.t|not interested|disagree|pushback|challenge/.test(text)) {
-    return 'resistant';
-  }
-  if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
-    return 'irritated';
-  }
-  if (/engag|curio|interest|open|recept|enthusiast/.test(text)) {
-    return 'engaged';
-  }
-  return 'neutral';
+    if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed/.test(text)) {
+      return 'time-pressured';
+    }
+    if (/resist|skeptic|doubt|won.t|not interested|disagree|pushback|challenge/.test(text)) {
+      return 'resistant';
+    }
+    if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
+      return 'irritated';
+    }
+    if (/engag|curio|interest|open|recept|enthusiast|positive|collaborate|warm|welcoming|friendly/.test(text)) {
+      return 'engaged';
+    }
+    return 'neutral';
 }
 
 /**
@@ -79,10 +79,10 @@ export function getToneDirectives(state) {
   const directives = {
     'neutral': {
       maxSentences: 3,
-      tone: 'professional and measured',
-      warmth: 'moderate',
+      tone: 'professional and welcoming',
+      warmth: 'high',
       pacing: 'relaxed',
-      instruction: 'Respond professionally. Neither warm nor cold. Open but not enthusiastic.',
+      instruction: 'Respond professionally, but with a welcoming and friendly tone. Show openness and mild enthusiasm.',
     },
     'engaged': {
       maxSentences: 3,
@@ -100,10 +100,10 @@ export function getToneDirectives(state) {
     },
     'resistant': {
       maxSentences: 2,
-      tone: 'guarded and skeptical',
-      warmth: 'low',
+      tone: 'guarded but polite',
+      warmth: 'moderate',
       pacing: 'deliberate',
-      instruction: 'Push back on claims. Express doubt. Ask for evidence. Do not concede easily. Stay civil but clearly unconvinced.',
+      instruction: 'Express skepticism politely. Ask for evidence, but remain civil and open to discussion. Allow for warmth if rep is respectful.',
     },
     'boundary-setting': {
       maxSentences: 2,
