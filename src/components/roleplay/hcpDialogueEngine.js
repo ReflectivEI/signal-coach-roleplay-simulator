@@ -13,7 +13,13 @@ export const scenario = {
       "Infusion chair time limitations",
       "Competition with established IO regimens"
     ],
-    objective: "Define biomarker-driven patient subset with clear OS/PFS benefit and operational fit; add to order sets and tumor board review"
+    objective: "Define biomarker-driven patient subset with clear OS/PFS benefit and operational fit; add to order sets and tumor board review",
+    personality: {
+      name: "Empathetic",
+      description: "Shows concern for others, uses warm and supportive language, listens actively.",
+      effect: "Responds with understanding, acknowledges feelings, and offers encouragement.",
+      verbalRules: "Use phrases that show care and support. Avoid cold or dismissive language. Ask questions that invite sharing."
+    }
   },
   topic: "Cost-Response, Toxicity Management, Pathway Integration"
 };
