@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, User, Bot } from "lucide-react";
+import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -34,25 +34,9 @@ import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 
-const stateColors = {
-  'neutral': 'bg-slate-100 text-slate-600 border-slate-200',
-  'engaged': 'bg-teal-100 text-teal-700 border-teal-200',
-  'time-pressured': 'bg-slate-100 text-slate-700 border-slate-200',
-  'resistant': 'bg-slate-100 text-slate-700 border-slate-200',
-  'boundary-setting': 'bg-slate-100 text-slate-700 border-slate-200',
-  'irritated': 'bg-slate-100 text-slate-700 border-slate-200',
-  'disengaging': 'bg-slate-100 text-slate-700 border-slate-200',
-};
 
-const stateLabels = {
-  'neutral': '● Neutral',
-  'engaged': '▲ Engaged',
-  'time-pressured': '⏱ Time-Pressured',
-  'resistant': '⊖ Resistant',
-  'boundary-setting': '⛔ Boundary-Setting',
-  'irritated': '⚠ Irritated',
-  'disengaging': '↗ Disengaging',
-};
+
+
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -430,7 +414,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }
 
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
-  const currentHcpState = turns.length > 0 ? turns[turns.length - 1].hcpStateBefore : null;
+
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
 
   // ─── END SESSION ──────────────────────────────────────────────────────────────
@@ -720,11 +704,7 @@ ${actionText}`;
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-slate-900 text-sm leading-snug">{scenario.title}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 font-medium">{scenario.difficulty}</span>
-              {currentHcpState && (
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${stateColors[currentHcpState]}`}>
-                  {stateLabels[currentHcpState]}
-                </span>
-              )}
+              {/* State label removed as requested */}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
