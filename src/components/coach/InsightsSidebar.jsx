@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 // ...existing code...
-import { Sparkles, TrendingUp, AlertTriangle, BookOpen, Dumbbell, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, TrendingUp, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
-export default function InsightsSidebar({ onSuggestedTopic, messages = [], skillLevel = "", scenarioDescriptor = "" }) {
+export default function InsightsSidebar({ messages = [], skillLevel = "", scenarioDescriptor = "" }) {
     // Pattern analysis and insights logic is already present and correct.
     // No changes needed unless you want to further clarify UI or add a button for analyzePatterns.
   const [insights, setInsights] = useState(null);
@@ -75,7 +74,75 @@ export default function InsightsSidebar({ onSuggestedTopic, messages = [], skill
       )}
       {expanded && (
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* ...existing code... */}
+          {/* Analyze Patterns Button */}
+          <Button
+            className="bg-teal-500 hover:bg-teal-600 w-full mb-2"
+            onClick={analyzePatterns}
+            disabled={isLoading || messages.length === 0}
+          >
+            {isLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <TrendingUp className="w-4 h-4 mr-2" />}
+            Analyze Patterns
+          </Button>
+          {/* Insights Display */}
+          {insights && typeof insights === 'object' ? (
+            <div className="space-y-3">
+              {insights.proactive_tip && (
+                <div className="bg-blue-50 border border-blue-100 rounded p-2 text-xs text-blue-900 font-semibold">{insights.proactive_tip}</div>
+              )}
+              {Array.isArray(insights.patterns) && insights.patterns.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-gray-700 mb-1">Patterns</div>
+                  <ul className="list-disc pl-5 text-xs text-gray-800">
+                    {insights.patterns.map((p, i) => (
+                      <li key={i}><span className="font-semibold">{p.name}:</span> {p.description}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(insights.strengths) && insights.strengths.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-green-700 mb-1">Strengths</div>
+                  <ul className="list-disc pl-5 text-xs text-green-800">
+                    {insights.strengths.map((s, i) => (
+                      <li key={i}><span className="font-semibold">{s.strength}:</span> {s.example}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(insights.improvement_areas) && insights.improvement_areas.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-red-700 mb-1">Improvement Areas</div>
+                  <ul className="list-disc pl-5 text-xs text-red-800">
+                    {insights.improvement_areas.map((a, i) => (
+                      <li key={i}><span className="font-semibold">{a.area}:</span> {a.suggestion}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(insights.recommended_modules) && insights.recommended_modules.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-purple-700 mb-1">Recommended Modules</div>
+                  <ul className="list-disc pl-5 text-xs text-purple-800">
+                    {insights.recommended_modules.map((m, i) => (
+                      <li key={i}><span className="font-semibold">{m.module}:</span> {m.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {Array.isArray(insights.recommended_exercises) && insights.recommended_exercises.length > 0 && (
+                <div>
+                  <div className="text-xs font-bold text-orange-700 mb-1">Recommended Exercises</div>
+                  <ul className="list-disc pl-5 text-xs text-orange-800">
+                    {insights.recommended_exercises.map((e, i) => (
+                      <li key={i}><span className="font-semibold">{e.topic}:</span> {e.reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : insights && typeof insights === 'string' ? (
+            <div className="bg-red-50 border border-red-100 rounded p-2 text-xs text-red-700">{insights}</div>
+          ) : null}
         </div>
       )}
     </div>
