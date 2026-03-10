@@ -1,58 +1,116 @@
-// Scenario selection utility
+/******************************************************************************************
+HCP Simulation Engine
+Enterprise-grade deterministic behavioral simulation for Reflectiv Role Play
+
+PART 1 OF 2
+Append PART 2 directly after this in the same file.
+
+Core responsibilities
+- Scenario context
+- Turn scoring
+- State ladder management
+- Emotional temperature model
+- Cue entropy rotation
+- Deterministic cue selection
+- Behavioral realism weighting
+******************************************************************************************/
+
+import { scenarios } from './hcpDialogueEngine.jsx'
+
+/******************************************************************************************
+SCENARIO CONTEXT
+******************************************************************************************/
+
 export function getScenarioContext(props = {}) {
-  const scenarioIndex = typeof props.scenarioIndex === 'number' ? props.scenarioIndex : 0;
-  return scenarios[scenarioIndex] || scenarios[0];
+  const scenarioIndex =
+    typeof props.scenarioIndex === 'number' ? props.scenarioIndex : 0
+
+  return scenarios[scenarioIndex] || scenarios[0]
 }
-// Dynamic HCP dialogue and cue recalibration
-import { scenarios } from './hcpDialogueEngine.jsx';
-// Engagement scoring and state update
-/**
- * Robust engagement scoring and state update for enterprise reliability.
- * - Scores rep input for clinical value, relevance, clarity, and professionalism.
- * - Decays engagement for repeated low-value turns.
- * - Maps scores to engagement levels, emotional valence, stance, and momentum.
- * - Handles time pressure and reaction triggers.
- */
-export function updateTurnState(prevState, repMessage, prevEngagementScore, conversationHistory) {
-  let scoreDelta = 0;
-  const msg = repMessage ? repMessage.toLowerCase() : '';
-  // Score for clinical value and professionalism
-  if (/\bstrong clinical question\b|patient-relevant insight|credible information|clear value/.test(msg)) scoreDelta += 2;
-  else if (/\brelevant question\b|concise useful point|acknowledge|value/.test(msg)) scoreDelta += 1;
-  else if (/\bvague opener\b|repeats|weak|low-value/.test(msg)) scoreDelta -= 1;
-  else if (/\bpromotional\b|unconvincing|wastes time|ignores/.test(msg)) scoreDelta -= 2;
-  // Clamp score between 0 and 5
-  let engagementScore = Math.max(0, Math.min(5, prevEngagementScore + scoreDelta));
-  // Decay for consecutive low-value turns
-  const lowValueTurns = conversationHistory.slice(-3).filter(t => t.repMessage && /vague|weak|low-value|promotional/.test(t.repMessage.toLowerCase())).length;
-  if (lowValueTurns >= 2) engagementScore = Math.max(0, engagementScore - 1);
-  // Map score to engagement level
-  let engagementLevel = 'low';
-  if (engagementScore >= 4) engagementLevel = 'high';
-  else if (engagementScore >= 2) engagementLevel = 'medium';
-  // Emotional valence
-  let emotionalValence = 'neutral_task_focused';
-  if (engagementScore >= 4) emotionalValence = 'positive';
-  else if (engagementScore <= 1) emotionalValence = 'negative';
-  // Stance
-  let stance = 'guarded';
-  if (engagementScore >= 4) stance = 'receptive';
-  else if (engagementScore >= 2) stance = 'focused';
-  else if (engagementScore === 0) stance = 'impatient';
-  // Reaction trigger
-  let reactionTrigger = 'neutral';
-  if (/strong clinical question/.test(msg)) reactionTrigger = 'strong clinical question';
-  else if (/patient-relevant/.test(msg)) reactionTrigger = 'patient-relevant insight';
-  else if (/vague/.test(msg)) reactionTrigger = 'vague claim';
-  else if (/promotional/.test(msg)) reactionTrigger = 'promotional wording';
-  // Momentum
-  let conversationalMomentum = 'flat';
-  if (scoreDelta > 0) conversationalMomentum = 'improving';
-  else if (scoreDelta < 0) conversationalMomentum = 'declining';
-  // Time pressure
-  let timePressure = 'moderate';
-  if (/\bneed 30 minutes\b|busy|rush|tight/.test(msg)) timePressure = 'high';
-  // Return robust turn state
+
+/******************************************************************************************
+ROBUST ENGAGEMENT SCORING
+- Scores rep input for clinical value, relevance, clarity, and professionalism
+- Decays engagement for repeated low-value turns
+- Maps scores to engagement levels, emotional valence, stance, and momentum
+- Handles time pressure and reaction triggers
+******************************************************************************************/
+
+export function updateTurnState(
+  prevState,
+  repMessage,
+  prevEngagementScore,
+  conversationHistory
+) {
+  let scoreDelta = 0
+  const msg = repMessage ? repMessage.toLowerCase() : ''
+
+  if (
+    /\bstrong clinical question\b|patient-relevant insight|credible information|clear value/.test(
+      msg
+    )
+  ) {
+    scoreDelta += 2
+  } else if (
+    /\brelevant question\b|concise useful point|acknowledge|value/.test(msg)
+  ) {
+    scoreDelta += 1
+  } else if (/\bvague opener\b|repeats|weak|low-value/.test(msg)) {
+    scoreDelta -= 1
+  } else if (/\bpromotional\b|unconvincing|wastes time|ignores/.test(msg)) {
+    scoreDelta -= 2
+  }
+
+  let engagementScore = Math.max(
+    0,
+    Math.min(5, prevEngagementScore + scoreDelta)
+  )
+
+  const lowValueTurns = conversationHistory
+    .slice(-3)
+    .filter(
+      (t) =>
+        t.repMessage &&
+        /vague|weak|low-value|promotional/.test(t.repMessage.toLowerCase())
+    ).length
+
+  if (lowValueTurns >= 2) {
+    engagementScore = Math.max(0, engagementScore - 1)
+  }
+
+  let engagementLevel = 'low'
+  if (engagementScore >= 4) engagementLevel = 'high'
+  else if (engagementScore >= 2) engagementLevel = 'medium'
+
+  let emotionalValence = 'neutral_task_focused'
+  if (engagementScore >= 4) emotionalValence = 'positive'
+  else if (engagementScore <= 1) emotionalValence = 'negative'
+
+  let stance = 'guarded'
+  if (engagementScore >= 4) stance = 'receptive'
+  else if (engagementScore >= 2) stance = 'focused'
+  else if (engagementScore === 0) stance = 'impatient'
+
+  let reactionTrigger = 'neutral'
+  if (/strong clinical question/.test(msg)) {
+    reactionTrigger = 'strong clinical question'
+  } else if (/patient-relevant/.test(msg)) {
+    reactionTrigger = 'patient-relevant insight'
+  } else if (/vague/.test(msg)) {
+    reactionTrigger = 'vague claim'
+  } else if (/promotional/.test(msg)) {
+    reactionTrigger = 'promotional wording'
+  }
+
+  let conversationalMomentum = 'flat'
+  if (scoreDelta > 0) conversationalMomentum = 'improving'
+  else if (scoreDelta < 0) conversationalMomentum = 'declining'
+
+  let timePressure = 'moderate'
+  if (/\bneed 30 minutes\b|busy|rush|tight/.test(msg)) {
+    timePressure = 'high'
+  }
+
   return {
     engagementScore,
     engagementLevel,
@@ -61,25 +119,13 @@ export function updateTurnState(prevState, repMessage, prevEngagementScore, conv
     reactionTrigger,
     conversationalMomentum,
     timePressure,
-  };
+  }
 }
-/**
- * HCP Simulation Engine — Unified Deterministic Model
- *
- * Single source of truth for:
- *   - Structural state (behavioral posture ladder)
- *   - Emotional temperature (tone gradient)
- *   - Severity level (escalation memory)
- *   - Cue selection (locked, non-repeating, state-consistent)
- *   - Tone directives (for dialogue generation)
- *
- * INVARIANT: One HCPProfile is produced per turn. Once produced it is immutable.
- * The LLM receives the profile as its constraint set and cannot contradict it.
- *
- * NO Math.random(). All selection is deterministic via hash seed.
- */
 
-// ─── STATE LADDER ─────────────────────────────────────────────────────────────
+/******************************************************************************************
+STATE LADDER
+******************************************************************************************/
+
 export const HCP_STATES = [
   'neutral',
   'engaged',
@@ -87,255 +133,390 @@ export const HCP_STATES = [
   'resistant',
   'boundary-setting',
   'irritated',
-  'disengaging',
-];
+  'disengaged',
+]
 
-export const STATE_INDEX = Object.fromEntries(HCP_STATES.map((s, i) => [s, i]));
+export const STATE_INDEX = Object.fromEntries(
+  HCP_STATES.map((s, i) => [s, i])
+)
 
-// ─── TEMPERATURE LADDER ────────────────────────────────────────────────────────
-// Independent of structural state. Affects word choice, sentence length, politeness.
-export const TEMPERATURES = ['positive', 'neutral', 'stressed', 'irritated'];
-export const TEMP_INDEX = Object.fromEntries(TEMPERATURES.map((t, i) => [t, i]));
+/******************************************************************************************
+TEMPERATURE LADDER
+Independent of structural state. Affects word choice, sentence length, politeness.
+******************************************************************************************/
 
-// ─── HASH UTILITY ──────────────────────────────────────────────────────────────
+export const TEMPERATURES = ['positive', 'neutral', 'stressed', 'irritated']
+
+export const TEMP_INDEX = Object.fromEntries(
+  TEMPERATURES.map((t, i) => [t, i])
+)
+
+/******************************************************************************************
+HASH UTILITY
+No Math.random(). Deterministic selection only.
+******************************************************************************************/
+
 function hashInt(str) {
-  let h = 5381;
+  let h = 5381
   for (let i = 0; i < str.length; i++) {
-    h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+    h = ((h * 33) ^ str.charCodeAt(i)) >>> 0
   }
-  return h;
+  return h
 }
 
-// ─── CUE BANK — expanded, severity-varied ─────────────────────────────────────
-// Each state has 3 severity tiers (0=mild, 1=moderate, 2=strong), 4 cues each = 12 per state.
-const CUE_BANK = {
-  'neutral': {
-    0: [
-      'The HCP glances up from their desk, expression open and unhurried.',
-      'The HCP sets down their pen and turns toward you with a neutral expression.',
-      'The HCP nods once in acknowledgment, posture relaxed, no visible tension.',
-      'The HCP swivels slightly in their chair to face you, arms resting loosely.',
-      'The HCP checks their calendar briefly, then returns to the conversation.',
-      'The HCP offers a polite smile, hands folded on the desk.',
-      'The HCP adjusts their glasses, listening attentively but without strong emotion.',
-      'The HCP glances at the window, then refocuses on you.',
-    ],
-    1: [
-      'The HCP pauses their work and meets your gaze briefly, waiting without enthusiasm.',
-      'The HCP places their chart on the desk and gives you their measured attention.',
-      'The HCP leans back slightly, expression impassive, clearly reserving judgment.',
-      'The HCP listens without reacting, giving away nothing through their body language.',
-      'The HCP reviews a document, then looks up with a neutral expression.',
-      'The HCP crosses their legs, posture relaxed but not engaged.',
-      'The HCP offers a brief nod, signaling acknowledgment but not interest.',
-      'The HCP checks their phone discreetly, then resumes listening.',
-    ],
-    2: [
-      'The HCP listens with arms folded loosely, expression carefully composed.',
-      'The HCP makes limited eye contact, attention divided between you and the room.',
-      'The HCP sits upright, posture contained, showing careful professional neutrality.',
-      'The HCP gives a short nod — courteous, but uncommitted.',
-      'The HCP glances at the clock, then returns to a neutral stance.',
-      'The HCP offers a restrained smile, signaling professionalism.',
-      'The HCP reviews notes silently, then looks up without expression.',
-      'The HCP shifts in their chair, maintaining a composed demeanor.',
-    ],
-  },
-  'engaged': {
-    0: [
-      'The HCP leans slightly forward, making sustained eye contact, nodding as you speak.',
-      'The HCP sets aside their chart entirely and turns fully toward you, expression attentive.',
-      'The HCP\'s posture opens — shoulders back, direct eye contact, a faint smile.',
-      'The HCP asks a brief clarifying question, leaning in as they wait for your answer.',
-      'The HCP smiles warmly, inviting further discussion.',
-      'The HCP gestures with their hands, emphasizing points of interest.',
-      'The HCP leans in, showing genuine curiosity.',
-      'The HCP mirrors your body language, signaling rapport.',
-    ],
-    1: [
-      'The HCP\'s pen stops mid-note. They look up with clear interest and wait for you to continue.',
-      'The HCP tilts their head slightly, expression curious, giving you their full attention.',
-      'The HCP uncrosses their arms and leans forward, clearly drawn into the conversation.',
-      'The HCP makes deliberate eye contact and mirrors your pace, signaling active listening.',
-      'The HCP nods enthusiastically, encouraging you to elaborate.',
-      'The HCP offers a supportive smile, showing engagement.',
-      'The HCP asks a follow-up question, deepening the conversation.',
-      'The HCP leans forward, hands clasped, ready to listen.',
-    ],
-    2: [
-      'The HCP closes their laptop and pivots fully to face you — a signal of genuine engagement.',
-      'The HCP nods in rhythm with your points, expression concentrated and open.',
-      'The HCP rests their elbows on the desk and bridges their fingers, fully present.',
-      'The HCP\'s eyes stay on yours throughout — no distraction, no glances away.',
-      'The HCP offers a broad smile, clearly invested in the conversation.',
-      'The HCP gestures animatedly, showing excitement.',
-      'The HCP maintains eye contact, signaling deep interest.',
-      'The HCP leans in, eager to hear more.',
-    ],
-  },
-  'time-pressured': {
-    0: [
-      'The HCP glances briefly at their watch while listening. A colleague waves from the hallway.',
-      'The HCP shifts their weight toward the door, still listening but visibly pulled elsewhere.',
-      'The HCP\'s pager vibrates on the desk. They silence it quickly and look back at you.',
-      'The HCP checks the wall clock once, expression politely tense, waiting room audible behind them.',
-      'The HCP glances at their phone, checking for urgent messages.',
-      'The HCP reviews their schedule, noting time constraints.',
-      'The HCP offers a quick nod, signaling limited availability.',
-      'The HCP gestures toward the door, indicating a need to move soon.',
-    ],
-    1: [
-      'The HCP is already moving toward a patient room. They stop — but only barely.',
-      'The HCP checks their phone with a tight expression, then looks up. The floor is full.',
-      'The HCP holds a patient file in hand, posture angled toward their next stop.',
-      'The HCP\'s eyes move to the door twice. A nurse pauses outside and nods toward the corridor.',
-      'The HCP glances at their watch, signaling urgency.',
-      'The HCP offers a brief, apologetic smile, then resumes their task.',
-      'The HCP gestures to a colleague, indicating a need to hurry.',
-      'The HCP reviews patient notes quickly, preparing to leave.',
-    ],
-    2: [
-      'The HCP\'s pager goes off. They glance at it and exhale — visibly deciding whether to continue.',
-      'The HCP is walking. They slow down but do not stop. Every second counts.',
-      'The HCP checks their watch mid-sentence, jaw set. The waiting room has been full for an hour.',
-      'The HCP holds up a single finger before you can start — one minute, their expression says.',
-      'The HCP offers a quick, tense smile, then moves toward the exit.',
-      'The HCP gestures impatiently, signaling a need to wrap up.',
-      'The HCP reviews their notes while walking, multitasking.',
-      'The HCP checks their pager again, confirming urgency.',
-    ],
-  },
-  'resistant': {
-    0: [
-      'The HCP\'s expression tightens slightly. They cross their arms, listening but clearly skeptical.',
-      'The HCP tilts their head, one eyebrow raised — a quiet signal of doubt.',
-      'The HCP exhales through their nose and leans back, creating visible distance.',
-      'The HCP taps a finger slowly on the desk, expression measured, giving nothing away.',
-      'The HCP reviews a report, then looks up skeptically.',
-      'The HCP offers a brief, questioning look.',
-      'The HCP leans back, arms crossed, signaling resistance.',
-      'The HCP checks their notes, then returns a guarded expression.',
-    ],
-    1: [
-      'The HCP\'s posture hardens. Arms crossed firmly, eye contact direct and challenging.',
-      'The HCP\'s jaw sets. They listen without nodding — deliberate, assessing.',
-      'The HCP sets down their pen with a quiet finality and meets your gaze steadily.',
-      'The HCP leans back further in their chair, creating clear physical and conversational distance.',
-      'The HCP offers a skeptical smile, signaling doubt.',
-      'The HCP reviews a document, then returns a challenging look.',
-      'The HCP gestures dismissively, signaling resistance.',
-      'The HCP checks their phone, then resumes a guarded posture.',
-    ],
-    2: [
-      'The HCP exhales audibly and looks away briefly before turning back with a flat expression.',
-      'The HCP\'s arms stay crossed throughout, posture guarded and completely still.',
-      'The HCP gives a slow, single nod — the kind that signals deep skepticism, not agreement.',
-      'The HCP makes deliberate eye contact without warmth, waiting for you to prove your point.',
-      'The HCP offers a terse smile, signaling skepticism.',
-      'The HCP reviews a report, then returns a flat expression.',
-      'The HCP gestures impatiently, signaling resistance.',
-      'The HCP checks their notes, then resumes a guarded stance.',
-    ],
-  },
-  'boundary-setting': {
-    0: [
-      'The HCP holds up one hand — a clear, calm stop signal — before speaking.',
-      'The HCP takes a deliberate breath and establishes direct eye contact before responding.',
-      'The HCP places their pen down and folds their hands. Their posture signals a boundary is coming.',
-      'The HCP steps back slightly and faces you squarely, expression composed and firm.',
-      'The HCP reviews their schedule, then sets a clear boundary.',
-      'The HCP offers a firm nod, signaling a limit.',
-      'The HCP gestures with their hand, establishing a boundary.',
-      'The HCP checks their notes, then resumes a composed stance.',
-    ],
-    1: [
-      'The HCP\'s hand rises with unmistakable clarity. They wait for silence before speaking.',
-      'The HCP straightens fully and looks at you directly — zero ambiguity in their body language.',
-      'The HCP sets their clipboard aside with deliberate care. Their tone will be formal.',
-      'The HCP pivots to face you squarely, feet planted, expression set.',
-      'The HCP offers a firm, composed smile, signaling a boundary.',
-      'The HCP reviews a document, then sets a clear limit.',
-      'The HCP gestures with their hand, establishing a boundary.',
-      'The HCP checks their phone, then resumes a composed stance.',
-    ],
-    2: [
-      'The HCP holds up both hands briefly — a clear, unambiguous stop.',
-      'The HCP stands slightly taller, expression locked and unreadable, clearly drawing a line.',
-      'The HCP meets your gaze without blinking. Their stillness itself is the warning.',
-      'The HCP\'s posture closes completely. There is nothing inviting in their stance.',
-      'The HCP offers a terse smile, signaling a boundary.',
-      'The HCP reviews a report, then returns a locked expression.',
-      'The HCP gestures impatiently, signaling a boundary.',
-      'The HCP checks their notes, then resumes a composed stance.',
-    ],
-  },
-  'irritated': {
-    0: [
-      'The HCP\'s jaw tightens. They look away briefly before responding with a clipped tone.',
-      'The HCP closes their chart with a definitive motion and turns toward you, expression sharp.',
-      'The HCP exhales sharply through their nose, brow furrowed, eyes flat.',
-      'The HCP\'s reply is delivered while already half-turning away.',
-      'The HCP offers a terse smile, signaling irritation.',
-      'The HCP reviews a report, then returns a sharp expression.',
-      'The HCP gestures impatiently, signaling irritation.',
-      'The HCP checks their notes, then resumes a terse stance.',
-    ],
-    1: [
-      'The HCP\'s expression hardens visibly. They set their pen down with a firm click.',
-      'The HCP looks at you with obvious impatience, arms tight at their sides.',
-      'The HCP\'s brow draws together. Their voice, when they speak, will be short.',
-      'The HCP stops mid-task and faces you — the kind of pause that signals diminishing patience.',
-      'The HCP offers a terse, impatient smile.',
-      'The HCP reviews a document, then returns a hard expression.',
-      'The HCP gestures dismissively, signaling impatience.',
-      'The HCP checks their phone, then resumes a terse stance.',
-    ],
-    2: [
-      'The HCP\'s face shows undisguised frustration. They look at you for a brief, pointed moment.',
-      'The HCP exhales hard, jaw clenched — they are clearly at the edge of what they\'ll tolerate.',
-      'The HCP says nothing at first. The silence is terse, deliberate, and uncomfortable.',
-      'The HCP turns slowly, expression flat and unforgiving. The interaction is on borrowed time.',
-      'The HCP offers a terse, frustrated smile.',
-      'The HCP reviews a report, then returns a flat expression.',
-      'The HCP gestures impatiently, signaling frustration.',
-      'The HCP checks their notes, then resumes a terse stance.',
-    ],
-  },
-  'disengaging': {
-    0: [
-      'The HCP begins moving toward the hallway, glancing back over their shoulder to reply.',
-      'The HCP looks past you toward the waiting room and picks up their clipboard.',
-      'The HCP closes their laptop and stands — the conversation is winding down.',
-      'The HCP takes a step toward the door, offering only a brief acknowledgment.',
-      'The HCP reviews their schedule, then prepares to leave.',
-      'The HCP offers a brief, polite smile, signaling disengagement.',
-      'The HCP gestures toward the exit, indicating the conversation is ending.',
-      'The HCP checks their phone, then resumes preparing to leave.',
-    ],
-    1: [
-      'The HCP is already a step toward the door. Their reply is over their shoulder.',
-      'The HCP makes deliberate eye contact with a colleague down the hall — the signal is clear.',
-      'The HCP checks their watch, then looks at the door. The body language is unambiguous.',
-      'The HCP reaches for their coat or phone — ending the interaction without saying so explicitly.',
-      'The HCP offers a brief, polite smile, signaling disengagement.',
-      'The HCP reviews a document, then prepares to leave.',
-      'The HCP gestures toward the exit, indicating the conversation is ending.',
-      'The HCP checks their phone, then resumes preparing to leave.',
-    ],
-    2: [
-      'The HCP is walking. Their final words are delivered in motion.',
-      'The HCP has their hand on the door handle. They pause, barely.',
-      'The HCP offers a polite but final nod and turns fully toward the exit.',
-      'The HCP is done. They walk without looking back, leaving the conversation behind them.',
-      'The HCP offers a brief, polite smile, signaling disengagement.',
-      'The HCP reviews a report, then prepares to leave.',
-      'The HCP gestures toward the exit, indicating the conversation is ending.',
-      'The HCP checks their notes, then resumes preparing to leave.',
-    ],
-  },
-};
+/******************************************************************************************
+CONVERSATION QUALITY
+Normalized signal used by cue entropy rotation
+Range roughly: -3 to +3
+******************************************************************************************/
 
-// ─── DERIVE INITIAL STATE ──────────────────────────────────────────────────────
+export function scoreConversationQuality(repMessage = '', conversationHistory = []) {
+  const msg = repMessage.toLowerCase()
+  let score = 0
+
+  if (
+    /\bhow are you approaching\b|\bwhat are you seeing\b|\bhow do you think about\b|\bwhere do you see\b|\bwhat tends to get in the way\b|\bwhat are your concerns\b/.test(
+      msg
+    )
+  ) {
+    score += 2
+  }
+
+  if (
+    /\bi understand\b|\bi hear you\b|\bthat makes sense\b|\bfair point\b|\bappreciate your time\b|\bgiven your schedule\b/.test(
+      msg
+    )
+  ) {
+    score += 1
+  }
+
+  if (
+    /\bpatient\b|\boutcome\b|\bworkflow\b|\bmonitoring\b|\badherence\b|\bcoverage\b|\bprior auth\b|\bprior authorization\b|\bfollow-up\b/.test(
+      msg
+    )
+  ) {
+    score += 1
+  }
+
+  if (
+    /\bjust prescribe\b|\byou should\b|\bcome on\b|\bno reason not to\b|\beveryone is doing it\b/.test(
+      msg
+    )
+  ) {
+    score -= 2
+  }
+
+  if (
+    /\bvague\b|\blow-value\b|\bweak\b|\brepeating myself\b|\bas i already said\b|\bagain\b.*\bagain\b/.test(
+      msg
+    )
+  ) {
+    score -= 1
+  }
+
+  const recentLowValueTurns = conversationHistory
+    .slice(-3)
+    .filter(
+      (t) =>
+        t.repMessage &&
+        /\bweak\b|\bvague\b|\blow-value\b|\bpromotional\b/.test(
+          t.repMessage.toLowerCase()
+        )
+    ).length
+
+  if (recentLowValueTurns >= 2) {
+    score -= 1
+  }
+
+  return Math.max(-3, Math.min(3, score))
+}
+
+/******************************************************************************************
+REP BEHAVIOR DETECTION
+Used for state weighting and severity escalation
+******************************************************************************************/
+
+export function detectRepBehavior(repMessage = '') {
+  const msg = repMessage.toLowerCase()
+
+  return {
+    pushy:
+      /\bjust do it\b|\byou need to\b|\bwhy won.t you\b|\bcome on\b|\bimmediately\b|\bi need you to\b/.test(
+        msg
+      ),
+
+    redundant_question:
+      /\bas i mentioned\b|\blike i said\b|\bagain\b.*\bquestion\b|\bjust circling back\b/.test(
+        msg
+      ),
+
+    thoughtful_question:
+      /\bhow do you\b|\bwhat are you seeing\b|\bwhere do you see\b|\bwhat would make this easier\b|\bhow are you handling\b/.test(
+        msg
+      ),
+
+    acknowledged_time_pressure:
+      /\bi know you.re busy\b|\bi know you only have a minute\b|\bi.ll keep this brief\b|\bquick question\b|\bbriefly\b/.test(
+        msg
+      ),
+
+    interrupted_hcp:
+      /\bbut\b.*\bno\b|\blet me stop you\b|\bhang on\b|\bwait\b.*\bno\b/.test(
+        msg
+      ),
+
+    empathetic_statement:
+      /\bi understand\b|\bi hear you\b|\bthat makes sense\b|\bsounds frustrating\b|\bappreciate that\b/.test(
+        msg
+      ),
+
+    clinical_value:
+      /\bstudy\b|\bdata\b|\boutcome\b|\bpatient\b|\bworkflow\b|\bmonitoring\b|\badherence\b|\bcoverage\b|\bfollow-up\b/.test(
+        msg
+      ),
+
+    promotional_language:
+      /\bbest\b|\bamazing\b|\bgame changer\b|\bperfect\b|\bno downside\b|\bmust-have\b/.test(
+        msg
+      ),
+
+    boundary_violation:
+      /\bcancel your patients\b|\bmake time\b|\byou.re overreacting\b|\bare you the doctor or am i\b/.test(
+        msg
+      ),
+  }
+}
+
+/******************************************************************************************
+TIME PRESSURE ACCUMULATION
+Higher turns increase pressure to move
+******************************************************************************************/
+
+export function computeTimePressureWeight(turnNumber = 1) {
+  if (turnNumber <= 2) return 0
+  if (turnNumber <= 4) return 1
+  if (turnNumber <= 7) return 2
+  if (turnNumber <= 10) return 3
+  return 4
+}
+
+/******************************************************************************************
+STATE TRANSITION MEMORY
+Prevents unrealistic emotional jumps
+******************************************************************************************/
+
+const STATE_TRANSITION_BASE = {
+  neutral: {
+    neutral: 4,
+    engaged: 3,
+    'time-pressured': 3,
+    resistant: 2,
+    'boundary-setting': 1,
+    irritated: 1,
+    disengaged: 1,
+  },
+
+  engaged: {
+    engaged: 5,
+    neutral: 3,
+    'time-pressured': 2,
+    resistant: 1,
+    'boundary-setting': 0.5,
+    irritated: 0.25,
+    disengaged: 0.5,
+  },
+
+  'time-pressured': {
+    'time-pressured': 5,
+    neutral: 2,
+    engaged: 1.5,
+    resistant: 2,
+    'boundary-setting': 2,
+    irritated: 2,
+    disengaged: 2,
+  },
+
+  resistant: {
+    resistant: 5,
+    neutral: 2,
+    engaged: 1,
+    'time-pressured': 2,
+    'boundary-setting': 2,
+    irritated: 2,
+    disengaged: 1.5,
+  },
+
+  'boundary-setting': {
+    'boundary-setting': 5,
+    resistant: 3,
+    irritated: 3,
+    disengaged: 2,
+    neutral: 1,
+    engaged: 0.25,
+    'time-pressured': 1.5,
+  },
+
+  irritated: {
+    irritated: 5,
+    'boundary-setting': 3,
+    disengaged: 3,
+    resistant: 2,
+    'time-pressured': 2,
+    neutral: 0.5,
+    engaged: 0.1,
+  },
+
+  disengaged: {
+    disengaged: 6,
+    irritated: 3,
+    'time-pressured': 2,
+    'boundary-setting': 2,
+    resistant: 1,
+    neutral: 0.25,
+    engaged: 0.05,
+  },
+}
+
+/******************************************************************************************
+CUE ENTROPY ROTATION
+Instead of purely random cues, weight selection based on:
+- conversation_quality
+- rep_behavior
+- previous_cue_state
+- time_elapsed
+******************************************************************************************/
+
+export function computeStateWeights({
+  conversation_quality = 0,
+  rep_behavior = {},
+  previous_cue_state = 'neutral',
+  time_elapsed = 1,
+}) {
+  const baseline = { ...(STATE_TRANSITION_BASE[previous_cue_state] || STATE_TRANSITION_BASE.neutral) }
+
+  if (conversation_quality >= 2) {
+    baseline.engaged += 3
+    baseline.neutral += 1
+    baseline.resistant -= 0.5
+    baseline.irritated -= 0.5
+  }
+
+  if (conversation_quality <= -2) {
+    baseline.resistant += 2
+    baseline.irritated += 2
+    baseline['boundary-setting'] += 1
+    baseline.engaged -= 1
+  }
+
+  if (rep_behavior.pushy) {
+    baseline.resistant += 2
+    baseline.irritated += 1.5
+    baseline['boundary-setting'] += 1
+  }
+
+  if (rep_behavior.boundary_violation) {
+    baseline['boundary-setting'] += 3
+    baseline.irritated += 2
+    baseline.disengaged += 1
+  }
+
+  if (rep_behavior.redundant_question) {
+    baseline['time-pressured'] += 1
+    baseline.resistant += 1
+  }
+
+  if (rep_behavior.thoughtful_question) {
+    baseline.engaged += 2
+    baseline.neutral += 1
+  }
+
+  if (rep_behavior.acknowledged_time_pressure) {
+    baseline.engaged += 1
+    baseline['time-pressured'] -= 1
+  }
+
+  if (rep_behavior.empathetic_statement) {
+    baseline.neutral += 1
+    baseline.engaged += 1
+    baseline.irritated -= 0.5
+  }
+
+  if (rep_behavior.promotional_language) {
+    baseline.resistant += 2
+    baseline.irritated += 1
+  }
+
+  if (rep_behavior.clinical_value) {
+    baseline.engaged += 1
+    baseline.neutral += 0.5
+  }
+
+  const timePressureWeight = computeTimePressureWeight(time_elapsed)
+  baseline['time-pressured'] += timePressureWeight * 0.75
+  baseline.disengaged += Math.max(0, timePressureWeight - 1) * 0.5
+
+  for (const key of Object.keys(baseline)) {
+    baseline[key] = Math.max(0.05, baseline[key])
+  }
+
+  return baseline
+}
+
+/******************************************************************************************
+WEIGHTED DETERMINISTIC SELECTION
+******************************************************************************************/
+
+function weightedPick(weights, seed) {
+  const entries = Object.entries(weights)
+  const total = entries.reduce((sum, [, weight]) => sum + weight, 0)
+
+  if (total <= 0) return 'neutral'
+
+  let cursor = seed % total
+
+  for (const [state, weight] of entries) {
+    if (cursor < weight) return state
+    cursor -= weight
+  }
+
+  return 'neutral'
+}
+
+/******************************************************************************************
+SEVERITY TRANSITION
+Severity increases when:
+- rep ignores the same state twice
+- violates a boundary
+- repeats commands
+Severity decreases when:
+- rep de-escalates successfully
+******************************************************************************************/
+
+export function transitionSeverity(currentSeverity, alignment, prevState, nextState, repBehavior = {}) {
+  const prevIdx = STATE_INDEX[prevState] ?? 0
+  const nextIdx = STATE_INDEX[nextState] ?? 0
+  const escalated = nextIdx > prevIdx
+  const deEscalated = nextIdx < prevIdx
+  const lowAlignment = alignment && alignment.score <= 2
+  const goodAlignment = alignment && alignment.score >= 4
+
+  let sev = currentSeverity
+
+  if (repBehavior.boundary_violation) sev += 1
+  if (repBehavior.pushy) sev += 1
+  if (escalated && lowAlignment) sev += 1
+  else if (escalated) sev += 1
+
+  if (deEscalated && goodAlignment) sev -= 1
+  if (repBehavior.empathetic_statement && goodAlignment) sev -= 1
+
+  return Math.max(0, Math.min(sev, 2))
+}
+
+/******************************************************************************************
+INITIAL STATE
+******************************************************************************************/
+
 export function deriveInitialState(scenario) {
   const text = [
     scenario.title || '',
@@ -343,406 +524,1142 @@ export function deriveInitialState(scenario) {
     scenario.details || '',
     scenario.hcp_category || '',
     scenario.influence_driver || '',
-  ].join(' ').toLowerCase();
+  ]
+    .join(' ')
+    .toLowerCase()
 
-  if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed|time-sensitive/.test(text)) return 'time-pressured';
-  if (/resist|skeptic|doubt|not interested|disagree|pushback|challenge|unconvinced/.test(text)) return 'resistant';
-  if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) return 'irritated';
-  if (/engag|curio|interest|open|recept|enthusiast|motivated/.test(text)) return 'engaged';
-  return 'neutral';
+  if (
+    /frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed|time-sensitive/.test(
+      text
+    )
+  ) {
+    return 'time-pressured'
+  }
+
+  if (
+    /resist|skeptic|doubt|not interested|disagree|pushback|challenge|unconvinced/.test(
+      text
+    )
+  ) {
+    return 'resistant'
+  }
+
+  if (/hostile|angry|irritat|annoy|rude|dismissiv/.test(text)) {
+    return 'irritated'
+  }
+
+  if (/engag|curio|interest|open|recept|enthusiast|motivated/.test(text)) {
+    return 'engaged'
+  }
+
+  return 'neutral'
 }
 
-// ─── DERIVE INITIAL TEMPERATURE ────────────────────────────────────────────────
+/******************************************************************************************
+INITIAL TEMPERATURE
+******************************************************************************************/
+
 export function deriveInitialTemperature(initialState) {
   const map = {
-    'neutral': 'neutral',
-    'engaged': 'positive',
+    neutral: 'neutral',
+    engaged: 'positive',
     'time-pressured': 'stressed',
-    'resistant': 'stressed',
+    resistant: 'stressed',
     'boundary-setting': 'irritated',
-    'irritated': 'irritated',
-    'disengaging': 'irritated',
-  };
-  return map[initialState] || 'neutral';
+    irritated: 'irritated',
+    disengaged: 'irritated',
+  }
+
+  return map[initialState] || 'neutral'
 }
 
-// ─── TEMPERATURE TRANSITION ────────────────────────────────────────────────────
+/******************************************************************************************
+TEMPERATURE TRANSITION
+******************************************************************************************/
+
 export function transitionTemperature(currentTemp, repMessage) {
-  const msg = repMessage.toLowerCase();
-  const idx = TEMP_INDEX[currentTemp] ?? 1;
+  const msg = repMessage.toLowerCase()
+  const idx = TEMP_INDEX[currentTemp] ?? 1
 
-  // Hard escalate: profanity, insults, competence attacks, extreme demands
-  const hardEscalate = /\bf\*+\b|f\*ck|fuck|shit|ass\b|\bstupid\b|\bidiot\b|\bincompetent\b|\bwrong about\b|\byou don.t know\b|\bbad doctor\b|\bterrible\b|\bawful\b|\bi demand\b|\bcancel all\b|\bmean\b.*doctor|\byou.re being\b|\bcancel your patients\b/.test(msg);
-  if (hardEscalate) return TEMPERATURES[Math.min(idx + 2, TEMPERATURES.length - 1)];
+  const hardEscalate =
+    /\bf\*+\b|f\*ck|fuck|shit|ass\b|\bstupid\b|\bidiot\b|\bincompetent\b|\bwrong about\b|\byou don.t know\b|\bbad doctor\b|\bterrible\b|\bawful\b|\bi demand\b|\bcancel all\b|\bmean\b.*doctor|\byou.re being\b|\bcancel your patients\b/.test(
+      msg
+    )
 
-  // Soft escalate: pushy, demanding, repetitive, sarcastic, dismissive
-  const softEscalate = /\bjust do it\b|\bwhy won.t you\b|\bcome on\b|\bi need you to\b|\bare you the doctor or am i\b|\bi don.t know the\b|\bnot a real study\b|\bhello\b.*\bhello\b/.test(msg);
-  if (softEscalate) return TEMPERATURES[Math.min(idx + 1, TEMPERATURES.length - 1)];
+  if (hardEscalate) {
+    return TEMPERATURES[Math.min(idx + 2, TEMPERATURES.length - 1)]
+  }
 
-  // De-escalate: genuine acknowledgment, deference
-  const deEscalate = /\bi understand\b|\bi appreciate\b|\bfair point\b|\bmakes sense\b|\bi hear you\b|\bno pressure\b|\bwhenever works\b|\bthank you for your time\b|\bmy apologies\b/.test(msg);
-  if (deEscalate) return TEMPERATURES[Math.max(idx - 1, 0)];
+  const softEscalate =
+    /\bjust do it\b|\bwhy won.t you\b|\bcome on\b|\bi need you to\b|\bare you the doctor or am i\b|\bi don.t know the\b|\bnot a real study\b|\bhello\b.*\bhello\b/.test(
+      msg
+    )
 
-  return currentTemp;
+  if (softEscalate) {
+    return TEMPERATURES[Math.min(idx + 1, TEMPERATURES.length - 1)]
+  }
+
+  const deEscalate =
+    /\bi understand\b|\bi appreciate\b|\bfair point\b|\bmakes sense\b|\bi hear you\b|\bno pressure\b|\bwhenever works\b|\bthank you for your time\b|\bmy apologies\b/.test(
+      msg
+    )
+
+  if (deEscalate) {
+    return TEMPERATURES[Math.max(idx - 1, 0)]
+  }
+
+  return currentTemp
 }
 
-// ─── SEVERITY TRANSITION ────────────────────────────────────────────────────────
-/**
- * Severity increases when: rep ignores the same state twice, violates a boundary, or repeats commands.
- * Severity decreases when the rep de-escalates successfully.
- */
-export function transitionSeverity(currentSeverity, alignment, prevState, nextState) {
-  const prevIdx = STATE_INDEX[prevState] ?? 0;
-  const nextIdx = STATE_INDEX[nextState] ?? 0;
-  const escalated = nextIdx > prevIdx;
-  const deEscalated = nextIdx < prevIdx;
-  const lowAlignment = alignment && alignment.score <= 2;
-  const goodAlignment = alignment && alignment.score >= 4;
+/******************************************************************************************
+STATE TRANSITION
+******************************************************************************************/
 
-  let sev = currentSeverity;
-  if (escalated && lowAlignment) sev = Math.min(sev + 1, 2);
-  else if (escalated) sev = Math.min(sev + 1, 2);
-  if (deEscalated && goodAlignment) sev = Math.max(sev - 1, 0);
-  return sev;
-}
-
-// ─── STATE TRANSITION ──────────────────────────────────────────────────────────
 export function transitionState(currentState, repMessage, currentTemperature) {
-  const msg = repMessage.toLowerCase();
-  const idx = STATE_INDEX[currentState] ?? 0;
+  const msg = repMessage.toLowerCase()
+  const idx = STATE_INDEX[currentState] ?? 0
 
-  // Hard escalate +2: profanity, personal attacks, extreme demands, fabricating data
-  const hardEscalate = /f\*+k|f\*ck|fuck|shit|\bstupid\b|\bidiot\b|\bincompetent\b|\bwrong about\b|\byou don.t know what\b|\bbad doctor\b|\bcancel all your patients\b|\bnot a real study\b/.test(msg);
-  if (hardEscalate) return HCP_STATES[Math.min(idx + 2, HCP_STATES.length - 1)];
+  const hardEscalate =
+    /f\*+k|f\*ck|fuck|shit|\bstupid\b|\bidiot\b|\bincompetent\b|\bwrong about\b|\byou don.t know what\b|\bbad doctor\b|\bcancel all your patients\b|\bnot a real study\b/.test(
+      msg
+    )
 
-  // Medium escalate +1: always, regardless of temperature — sarcasm, questioning authority, confessing fabrication
-  const medEscalate = /\bare you the doctor or am i\b|\bi don.t know the.*findings\b|\bwhy are you (such a|being)\b|\bmean.*doctor\b|\bneed you to be\b|\bi don.t know because\b/.test(msg);
-  if (medEscalate) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
+  if (hardEscalate) {
+    return HCP_STATES[Math.min(idx + 2, HCP_STATES.length - 1)]
+  }
 
-  // Soft escalate +1: pressure, demands — only if temperature is already stressed/irritated
-  const softEscalate = /\bjust do it\b|\bwhy won.t you\b|\bcome on\b|\bi need you to\b|\bimmediately\b|\bcancel your\b/.test(msg);
-  const tempIsHot = currentTemperature === 'stressed' || currentTemperature === 'irritated';
-  if (softEscalate && tempIsHot) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
+  const medEscalate =
+    /\bare you the doctor or am i\b|\bi don.t know the.*findings\b|\bwhy are you (such a|being)\b|\bmean.*doctor\b|\bneed you to be\b|\bi don.t know because\b/.test(
+      msg
+    )
 
-  // Soft escalate +1: any message where the rep admits they don't have the information they claimed
-  const selfSabotage = /\bi don.t (actually |really )?know\b|\bforgot (the|my)\b|\bi made (it|that|this) up\b/.test(msg);
-  if (selfSabotage) return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)];
+  if (medEscalate) {
+    return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)]
+  }
 
-  // De-escalate -1: genuine acknowledgment
-  const deEscalate = /\bi understand\b|\bi hear you\b|\bfair point\b|\bi appreciate\b|\bgiven your time\b|\bno pressure\b|\bwhenever you.re ready\b|\bi can follow up\b|\bmy apologies\b|\bthank you for sharing\b/.test(msg);
-  if (deEscalate) return HCP_STATES[Math.max(idx - 1, 0)];
+  const softEscalate =
+    /\bjust do it\b|\bwhy won.t you\b|\bcome on\b|\bi need you to\b|\bimmediately\b|\bcancel your\b/.test(
+      msg
+    )
 
-  return currentState;
+  const tempIsHot =
+    currentTemperature === 'stressed' || currentTemperature === 'irritated'
+
+  if (softEscalate && tempIsHot) {
+    return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)]
+  }
+
+  const selfSabotage =
+    /\bi don.t (actually |really )?know\b|\bforgot (the|my)\b|\bi made (it|that|this) up\b/.test(
+      msg
+    )
+
+  if (selfSabotage) {
+    return HCP_STATES[Math.min(idx + 1, HCP_STATES.length - 1)]
+  }
+
+  const deEscalate =
+    /\bi understand\b|\bi hear you\b|\bfair point\b|\bi appreciate\b|\bgiven your time\b|\bno pressure\b|\bwhenever you.re ready\b|\bi can follow up\b|\bmy apologies\b|\bthank you for sharing\b/.test(
+      msg
+    )
+
+  if (deEscalate) {
+    return HCP_STATES[Math.max(idx - 1, 0)]
+  }
+
+  return currentState
 }
 
-// ─── HCP DISAGREEMENT DETECTION ────────────────────────────────────────────────
-// Detects when HCP has disagreed or shown resistance in their response.
-// This is used to escalate emotional state to show irritation/disconnection.
+/******************************************************************************************
+DISAGREEMENT DETECTION
+******************************************************************************************/
+
 export function detectHcpDisagreement(hcpResponse) {
-  const msg = hcpResponse.toLowerCase();
+  const msg = hcpResponse.toLowerCase()
 
-  // Strong disagreement patterns
-  const strongDisagree = /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi.m not (convinced|sold|buying|interested)|\bthat.s (wrong|incorrect|not true|not accurate)|\bcan.t recommend|\bwon.t (prescribe|use)|\bskeptical|\bdoubt\b|\b(not|isn.t) (helpful|beneficial|relevant|applicable)/i.test(msg);
+  const strongDisagree =
+    /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi.m not (convinced|sold|buying|interested)|\bthat.s (wrong|incorrect|not true|not accurate)|\bcan.t recommend|\bwon.t (prescribe|use)|\bskeptical|\bdoubt\b|\b(not|isn.t) (helpful|beneficial|relevant|applicable)/i.test(
+      msg
+    )
 
-  // Mild disagreement patterns
-  const mildDisagree = /\bhesitant|\bunsure|\bconcern|\bquestion (whether|if)|\bneed more (evidence|data|proof)|\bneed to think|\bneed to (review|check)|\bnot sure (yet|about)|\blet me (think|review)/i.test(msg);
+  const mildDisagree =
+    /\bhesitant|\bunsure|\bconcern|\bquestion (whether|if)|\bneed more (evidence|data|proof)|\bneed to think|\bneed to (review|check)|\bnot sure (yet|about)|\blet me (think|review)/i.test(
+      msg
+    )
 
-  return { strongDisagree, mildDisagree, disagrees: strongDisagree || mildDisagree };
+  return {
+    strongDisagree,
+    mildDisagree,
+    disagrees: strongDisagree || mildDisagree,
+  }
 }
 
-// ─── EMOTIONAL ESCALATION FOR DISAGREEMENT ────────────────────────────────────
-// When HCP disagrees, escalate temperature to show frustration/coldness
-// Input: currentTempIndex (number 0-3) or temperature name (string), disagreeInfo object
-// Output: escalated temperature index
+/******************************************************************************************
+EMOTIONAL ESCALATION FOR DISAGREEMENT
+******************************************************************************************/
+
 export function escalateForDisagreement(currentTempIndex, disagreeInfo) {
-  if (!disagreeInfo.disagrees) return currentTempIndex;
+  if (!disagreeInfo.disagrees) return currentTempIndex
 
-  // Handle both number and string inputs
-  let idx = typeof currentTempIndex === 'number' ? currentTempIndex : TEMP_INDEX[currentTempIndex] ?? 1;
+  const idx =
+    typeof currentTempIndex === 'number'
+      ? currentTempIndex
+      : TEMP_INDEX[currentTempIndex] ?? 1
 
-  // Both strong and mild disagreement escalate temperature by 1 level
-  // This shows frustration, coldness, or disconnection
-  return Math.min(idx + 1, TEMPERATURES.length - 1);
+  return Math.min(idx + 1, TEMPERATURES.length - 1)
 }
 
-// ─── TONE DIRECTIVES ────────────────────────────────────────────────────────────
+/******************************************************************************************
+NON-REPEATING CUE MEMORY
+Keeps recent cue indices per state/tier to avoid repetitive feel
+******************************************************************************************/
+
+function getRecentCueMemory(memory = {}, state, severity) {
+  const key = `${state}:${severity}`
+  return Array.isArray(memory[key]) ? memory[key] : []
+}
+
+function setRecentCueMemory(memory = {}, state, severity, cueIndex, max = 4) {
+  const key = `${state}:${severity}`
+  const prev = getRecentCueMemory(memory, state, severity)
+  const next = [...prev, cueIndex].slice(-max)
+  return {
+    ...memory,
+    [key]: next,
+  }
+}
+
+/******************************************************************************************
+CUE BANK
+Expanded cinematic cue bank
+18 cues per severity tier
+******************************************************************************************/
+
+const CUE_BANK = {
+  neutral: {
+    0: [
+      'The HCP glances up from the chart, expression calm and unhurried, as if the room has quietly made space for this conversation.',
+      'The HCP sets down their pen and turns slightly toward you, posture easy, face giving little away.',
+      'The HCP nods once in acknowledgment, shoulders relaxed, the fluorescent light catching the edge of their glasses.',
+      'The HCP swivels a few inches in their chair to face you, one arm resting loosely on the desk.',
+      'The HCP checks the schedule on the monitor, then returns their attention to you without visible urgency.',
+      'The HCP offers a polite, restrained smile, hands folded neatly over the chart.',
+      'The HCP adjusts their glasses and listens, expression even, voice not yet invited into the scene.',
+      'The HCP glances toward the window, then back at you, as if resetting their attention.',
+      'The HCP closes the chart halfway and waits, pen still balanced between their fingers.',
+      'The HCP leans back slightly, neutral expression intact, letting the moment breathe.',
+      'The HCP rests an elbow on the chair arm and studies you with professional calm.',
+      'The HCP gives a small nod, neither encouraging nor dismissive, simply present.',
+      'The HCP smooths a page flat on the desk, then looks up, posture composed.',
+      'The HCP shifts in their chair and settles into a listening posture, expression unreadable.',
+      'The HCP lets out a quiet breath and turns their full attention toward you.',
+      'The HCP taps the capped pen once against the desk, then stills.',
+      'The HCP folds their hands together and waits with practiced neutrality.',
+      'The HCP tilts their head a fraction, face calm, as if inviting you to make your case.',
+    ],
+    1: [
+      'The HCP pauses their work and meets your gaze briefly, waiting without enthusiasm, the room still humming around them.',
+      'The HCP places the chart flat on the desk and gives you their measured attention, careful not to signal too much.',
+      'The HCP leans back slightly, expression impassive, as though reserving judgment until you earn more of the scene.',
+      'The HCP listens without reacting, body language quiet and contained, giving away almost nothing.',
+      'The HCP scans a note once more, then looks up with the same neutral expression they started with.',
+      'The HCP crosses one leg over the other, posture relaxed but not engaged.',
+      'The HCP offers a brief nod that acknowledges your presence but does not welcome momentum.',
+      'The HCP checks their phone discreetly under the edge of the chart, then returns to listening.',
+      'The HCP shifts their weight in the chair, gaze steady, expression professionally blank.',
+      'The HCP folds their arms loosely, not defensive, just measured.',
+      'The HCP glances toward the hallway for a beat before returning their attention to you.',
+      'The HCP presses their lips together lightly, listening with clinical restraint.',
+      'The HCP rests both hands on the desk and waits, posture balanced but reserved.',
+      'The HCP tips their chin once, a quiet signal to continue without assuming interest.',
+      'The HCP adjusts the stack of papers in front of them, then looks up again, expression unchanged.',
+      'The HCP sits upright with composed stillness, as though holding the conversation at a professional distance.',
+      'The HCP lets the silence sit for a second before giving you their attention again.',
+      'The HCP studies you with the calm patience of someone not yet persuaded this matters.',
+    ],
+    2: [
+      'The HCP listens with arms folded loosely, expression carefully composed, like someone keeping the room at a measured distance.',
+      'The HCP makes only limited eye contact, attention divided between you and the current demands of the clinic.',
+      'The HCP sits upright, posture contained, projecting careful professional neutrality.',
+      'The HCP gives a short nod, courteous but uncommitted, as if holding every reaction behind the curtain.',
+      'The HCP glances at the clock, then resets to a neutral posture without comment.',
+      'The HCP offers a restrained smile that reads more like professionalism than warmth.',
+      'The HCP reviews notes silently, then looks up without expression.',
+      'The HCP shifts in the chair and settles again, every movement composed and economical.',
+      'The HCP keeps their hands clasped tightly enough to suggest restraint, not openness.',
+      'The HCP listens in stillness, face calm, eyes analytical.',
+      'The HCP glances once toward the door, then back to you, the moment never quite warming.',
+      'The HCP squares the chart with the edge of the desk before meeting your gaze again.',
+      'The HCP sits almost motionless, posture formal, as if refusing to give the conversation extra energy.',
+      'The HCP breathes out slowly through their nose, expression unchanged.',
+      'The HCP rests both forearms on the chair, shoulders set, presence polite but distant.',
+      'The HCP watches you with contained attention, making no effort to signal agreement.',
+      'The HCP keeps a neutral face even as the silence stretches a beat longer than comfortable.',
+      'The HCP maintains professional stillness, the kind that says nothing has been earned yet.',
+    ],
+  },
+
+  engaged: {
+    0: [
+      'The HCP leans slightly forward, making steady eye contact, attention gathering around your words.',
+      'The HCP sets the chart aside and turns more fully toward you, expression quietly attentive.',
+      'The HCP’s posture opens, shoulders easing back as curiosity enters the frame.',
+      'The HCP asks a brief clarifying question, leaning in just slightly as they wait for your answer.',
+      'The HCP smiles warmly, the kind of expression that invites the conversation to go a little deeper.',
+      'The HCP gestures lightly with one hand, signaling genuine interest in where this is going.',
+      'The HCP leans in, eyes focused, as if a useful thread has just appeared.',
+      'The HCP mirrors your pace and body language, rapport building almost invisibly.',
+      'The HCP nods once, then again, following the logic in real time.',
+      'The HCP slides the chair a fraction closer to the desk, fully present.',
+      'The HCP’s expression softens with interest, chart forgotten for the moment.',
+      'The HCP rests a forearm on the desk, listening with active attention.',
+      'The HCP lifts their eyebrows slightly, a signal that the point has landed.',
+      'The HCP makes a quick note, then looks back up without losing the thread.',
+      'The HCP turns their torso fully toward you, no longer splitting attention with the room.',
+      'The HCP nods in a way that encourages you to keep going.',
+      'The HCP’s gaze sharpens with interest, as if the conversation has finally become worth their time.',
+      'The HCP lets a faint smile appear, signaling they are with you.',
+    ],
+    1: [
+      'The HCP’s pen stops mid-note, and they look up with clear interest, waiting for you to continue.',
+      'The HCP tilts their head slightly, expression curious, giving you their full attention.',
+      'The HCP uncrosses their arms and leans forward, drawn further into the discussion.',
+      'The HCP makes deliberate eye contact and mirrors your cadence, signaling active listening.',
+      'The HCP nods with energy, encouraging you to elaborate.',
+      'The HCP offers a supportive smile that suggests the conversation is gaining traction.',
+      'The HCP asks a follow-up question, clearly wanting to go deeper into the point.',
+      'The HCP leans forward with hands lightly clasped, fully in the exchange now.',
+      'The HCP closes the chart completely and leaves it closed.',
+      'The HCP writes a quick note without looking away for long, careful not to lose the moment.',
+      'The HCP’s expression brightens with professional curiosity.',
+      'The HCP gestures with the pen as if mapping the idea in the air.',
+      'The HCP shifts to the edge of the chair, visibly more engaged.',
+      'The HCP nods in rhythm with your key points, clearly processing them.',
+      'The HCP’s shoulders open further, skepticism replaced by active consideration.',
+      'The HCP offers a short, thoughtful smile and waits for the next detail.',
+      'The HCP glances once at the chart, then chooses you over it.',
+      'The HCP listens with the alert stillness of someone who sees practical relevance.',
+    ],
+    2: [
+      'The HCP closes the laptop and pivots fully toward you, a clear signal that the conversation now has priority.',
+      'The HCP nods in rhythm with your points, expression concentrated and open.',
+      'The HCP rests both elbows on the desk and bridges their fingers, fully present in the exchange.',
+      'The HCP’s eyes stay on yours throughout, no distraction, no glance toward the door.',
+      'The HCP offers a broad, genuine smile, clearly invested now.',
+      'The HCP gestures more animatedly, responding as if the discussion has become genuinely useful.',
+      'The HCP maintains locked-in eye contact, signaling deep interest.',
+      'The HCP leans in with the energy of someone ready to explore specifics.',
+      'The HCP pushes the remaining paperwork aside, physically clearing space for the conversation.',
+      'The HCP scribbles several notes quickly, then looks up with fresh interest.',
+      'The HCP nods before you finish, already seeing where the point connects.',
+      'The HCP’s expression sharpens with engaged concentration, almost energized.',
+      'The HCP shifts closer across the desk, fully inside the discussion now.',
+      'The HCP responds with a brief, enthusiastic question, clearly wanting more.',
+      'The HCP’s posture is completely open, shoulders relaxed, attention undivided.',
+      'The HCP’s face carries the look of someone seeing immediate practical value.',
+      'The HCP gives a quick smile that reads as genuine professional excitement.',
+      'The HCP remains fully forward, chart closed, laptop shut, conversation now center frame.',
+    ],
+  },
+
+  'time-pressured': {
+    0: [
+      'The HCP glances briefly at their watch while listening, a reminder that time is moving even if the conversation is not.',
+      'The HCP shifts their weight toward the hallway, still listening but visibly pulled elsewhere.',
+      'The HCP’s pager vibrates on the desk, and they silence it quickly before looking back.',
+      'The HCP checks the wall clock once, expression politely tense, the waiting room audible somewhere beyond the door.',
+      'The HCP glances at the phone screen for a beat, checking for urgency.',
+      'The HCP scans the schedule on the monitor and returns with a tighter posture.',
+      'The HCP offers a quick nod that signals limited availability more than engagement.',
+      'The HCP gestures lightly toward the hallway, indicating they may need to move soon.',
+      'The HCP keeps one hand on the chart as if ready to stand at any moment.',
+      'The HCP listens while half-turned toward the next obligation.',
+      'The HCP’s eyes flick once toward the door at the sound of footsteps outside.',
+      'The HCP repositions the clipboard closer to the edge of the desk, readying for departure.',
+      'The HCP takes a short breath and glances at the schedule again.',
+      'The HCP shifts in place, polite but clearly managing time in the background.',
+      'The HCP’s focus holds, but only in short bursts between glances elsewhere.',
+      'The HCP checks the hallway through the open door, then returns to you.',
+      'The HCP keeps their body angled toward the next task while letting you finish.',
+      'The HCP’s attention is present, but the clinic’s tempo is visibly winning.',
+    ],
+    1: [
+      'The HCP is already moving toward a patient room and only barely stops when you speak.',
+      'The HCP checks their phone with a tight expression, then looks up; the floor is clearly busy.',
+      'The HCP holds a patient file in one hand, posture angled toward the next stop.',
+      'The HCP’s eyes cut toward the door twice as a nurse pauses outside, waiting.',
+      'The HCP glances at their watch in a way that feels less casual and more urgent.',
+      'The HCP offers a brief apologetic smile, then resumes shuffling papers for the next patient.',
+      'The HCP gestures to a passing colleague, signaling they will be there in a moment.',
+      'The HCP reviews patient notes quickly even while listening to you.',
+      'The HCP stays standing near the desk rather than sitting back down.',
+      'The HCP keeps one foot turned toward the hallway like the scene is already ending.',
+      'The HCP’s pager lights up again, ignored for one second too long.',
+      'The HCP glances toward the exam room door at a knock, tension flickering across their face.',
+      'The HCP nods quickly, giving you enough space to speak but not enough to linger.',
+      'The HCP slides the chart under one arm, clearly preparing to transition.',
+      'The HCP’s replies come between glances at the clinic flow beyond the doorway.',
+      'The HCP checks the time mid-listen, then resets with visible effort.',
+      'The HCP offers attention in fragments, each one interrupted by something else demanding it.',
+      'The HCP remains polite, but every movement says the clock is dictating the scene.',
+    ],
+    2: [
+      'The HCP’s pager goes off again, and they exhale like someone deciding what can wait and what cannot.',
+      'The HCP is walking now, slowing just enough for the conversation but not stopping.',
+      'The HCP checks their watch mid-sentence, jaw set, as if the entire clinic is already running behind.',
+      'The HCP holds up one finger before you can start, a silent signal that time is nearly gone.',
+      'The HCP offers a quick, tight smile and shifts another step toward the exit.',
+      'The HCP gestures impatiently toward the hallway, signaling the need to wrap this up now.',
+      'The HCP reviews patient notes while moving, multitasking with practiced urgency.',
+      'The HCP checks the pager again and this time does not hide the pressure.',
+      'The HCP keeps speaking while already reaching for the door.',
+      'The HCP pauses at the threshold rather than returning to the desk.',
+      'The HCP’s attention fractures repeatedly under the weight of the clinic around them.',
+      'The HCP gives you a final sliver of time without ever fully rejoining the conversation.',
+      'The HCP glances toward a waiting nurse, apology and urgency crossing their face at once.',
+      'The HCP’s body is already committed to the next obligation, even if their words are still with you.',
+      'The HCP shortens every pause as if silence itself now costs too much.',
+      'The HCP stands with the chart tucked under one arm, every second accounted for.',
+      'The HCP speaks while in motion, the conversation surviving only because they are allowing it to.',
+      'The HCP’s posture says this interaction is balancing on borrowed time.',
+    ],
+  },
+
+  resistant: {
+    0: [
+      'The HCP’s expression tightens slightly, and they cross their arms while still listening.',
+      'The HCP tilts their head, one eyebrow raised, a quiet signal of doubt entering the frame.',
+      'The HCP exhales through their nose and leans back, creating visible distance.',
+      'The HCP taps a finger slowly on the desk, expression measured, offering no easy validation.',
+      'The HCP reviews a page in the chart, then looks up with clear skepticism.',
+      'The HCP gives a brief questioning look, as if the claim has not earned trust yet.',
+      'The HCP leans back with arms crossed, not closed off entirely, but clearly unconvinced.',
+      'The HCP checks their notes, then returns with a guarded expression.',
+      'The HCP presses their lips together, eyes narrowing a fraction.',
+      'The HCP keeps still, letting the skepticism sit plainly in the silence.',
+      'The HCP’s posture loses warmth and becomes analytical.',
+      'The HCP shifts the chart between you, almost like a shield.',
+      'The HCP studies you without nodding, waiting for a stronger point.',
+      'The HCP glances at the cited material with the look of someone already doubting it.',
+      'The HCP’s expression says they have heard claims like this before.',
+      'The HCP folds one arm across their chest and rests the other on it.',
+      'The HCP gives a slow inhale, as if patience is still available but no longer free.',
+      'The HCP watches closely, skepticism present but still civil.',
+    ],
+    1: [
+      'The HCP’s posture hardens, arms crossed firmly now, eye contact direct and challenging.',
+      'The HCP’s jaw sets as they listen, deliberate and assessing, without offering a single nod.',
+      'The HCP sets down the pen with quiet finality and meets your gaze steadily.',
+      'The HCP leans back farther in the chair, increasing both physical and conversational distance.',
+      'The HCP offers a skeptical half-smile that reads more like a challenge than agreement.',
+      'The HCP looks down at the document, then back up with sharpened doubt.',
+      'The HCP makes a small dismissive gesture with one hand, subtle but unmistakable.',
+      'The HCP checks the phone and returns with even less warmth than before.',
+      'The HCP’s brows draw in as if testing every word for weakness.',
+      'The HCP gives you the kind of stillness that demands proof, not enthusiasm.',
+      'The HCP turns the chart slightly toward themselves, reclaiming the space.',
+      'The HCP lets a beat of silence pass before responding at all.',
+      'The HCP’s posture communicates guarded judgment rather than curiosity.',
+      'The HCP looks at you like the burden of proof has just doubled.',
+      'The HCP taps the desk once and stops, as if drawing a line under the point.',
+      'The HCP’s expression remains polite, but the door to easy rapport is closing.',
+      'The HCP listens with clinical restraint, visibly unconvinced.',
+      'The HCP sits back in a way that makes the whole conversation feel less welcome.',
+    ],
+    2: [
+      'The HCP exhales audibly and looks away for a moment before returning with a flat, skeptical expression.',
+      'The HCP’s arms stay crossed throughout, posture guarded and almost completely still.',
+      'The HCP gives a slow single nod, the kind that signals deep doubt rather than agreement.',
+      'The HCP makes deliberate eye contact without warmth, waiting for you to prove your point.',
+      'The HCP offers a terse smile that carries no real softness in it.',
+      'The HCP reviews the material with visible disbelief, then looks up unmoved.',
+      'The HCP gestures once with impatience, signaling resistance more than conversation.',
+      'The HCP checks their notes and returns with a stance that has fully hardened.',
+      'The HCP’s face settles into professional skepticism with no room left for easy persuasion.',
+      'The HCP leans back so completely the distance itself becomes part of the response.',
+      'The HCP’s silence lands heavier than any interruption could.',
+      'The HCP studies you with the look of someone expecting the next claim to fail under scrutiny.',
+      'The HCP keeps their expression flat, almost severe, while waiting.',
+      'The HCP’s posture says they are still here only because professionalism requires it.',
+      'The HCP gives nothing away except doubt.',
+      'The HCP watches with a patience that feels closer to challenge than openness.',
+      'The HCP’s skepticism is now the dominant energy in the room.',
+      'The HCP holds still, guarded, unconvinced, and visibly done with weak claims.',
+    ],
+  },
+
+  'boundary-setting': {
+    0: [
+      'The HCP raises one hand, calm but unmistakable, before saying anything at all.',
+      'The HCP takes a deliberate breath and locks in direct eye contact, signaling a limit is about to be set.',
+      'The HCP places the pen down and folds both hands together, posture shifting into quiet firmness.',
+      'The HCP steps back slightly and faces you squarely, expression composed and controlled.',
+      'The HCP glances once at the schedule, then returns with a look that signals a line is being drawn.',
+      'The HCP gives a firm nod that feels more like a stop sign than agreement.',
+      'The HCP gestures once with the palm outward, establishing space.',
+      'The HCP reviews the notes briefly, then returns to stillness with composed resolve.',
+      'The HCP straightens in the chair and lets the room settle before speaking.',
+      'The HCP squares the chart on the desk as if resetting the terms of the interaction.',
+      'The HCP’s posture becomes noticeably more formal, less flexible.',
+      'The HCP’s face remains calm, but the openness is gone.',
+      'The HCP holds your gaze long enough to make the boundary visible before it is verbalized.',
+      'The HCP rests both hands flat on the desk, signaling control.',
+      'The HCP’s shoulders set with quiet finality.',
+      'The HCP gives you a measured look that says the conversation has reached an edge.',
+      'The HCP does not move much now, letting stillness carry the message.',
+      'The HCP’s calm becomes more structured, like a door being closed without noise.',
+    ],
+    1: [
+      'The HCP’s hand rises with unmistakable clarity and stays there until silence returns.',
+      'The HCP straightens fully and looks at you directly, body language leaving no ambiguity.',
+      'The HCP sets the clipboard aside with deliberate care, the tone of the scene turning formal.',
+      'The HCP pivots to face you squarely, feet planted, expression set.',
+      'The HCP offers a firm, composed smile that does not soften the boundary being drawn.',
+      'The HCP reviews a page once and then closes it, decision already made.',
+      'The HCP gestures again with the palm outward, calm but final.',
+      'The HCP checks the phone, silences it, and returns with firmer composure than before.',
+      'The HCP’s posture closes in around a decision rather than a discussion.',
+      'The HCP pauses long enough for the limit to register before speaking further.',
+      'The HCP’s eyes stay locked on yours, measured and steady.',
+      'The HCP shifts from conversational to procedural in a single beat.',
+      'The HCP lets the silence do half the work.',
+      'The HCP stands a fraction taller, signaling that the line is not negotiable.',
+      'The HCP’s stillness becomes more authoritative than any raised voice would be.',
+      'The HCP keeps the chart close, reclaiming control of the interaction.',
+      'The HCP’s face remains professional, but the warmth has dropped out completely.',
+      'The HCP no longer invites collaboration, only respect for the limit.',
+    ],
+    2: [
+      'The HCP raises both hands briefly, a clear and unambiguous stop in the middle of the scene.',
+      'The HCP stands slightly taller, expression locked and unreadable, clearly drawing a line.',
+      'The HCP meets your gaze without blinking, their stillness carrying the warning.',
+      'The HCP’s posture closes completely, nothing inviting left in the stance.',
+      'The HCP offers a terse smile that signals control, not warmth.',
+      'The HCP closes the report and sets it down with visible finality.',
+      'The HCP gestures once, impatiently this time, establishing the boundary beyond debate.',
+      'The HCP checks the notes and returns with a face that has fully hardened into resolve.',
+      'The HCP’s tone has not risen, but the room feels colder.',
+      'The HCP no longer shifts or adjusts; the decision is already set.',
+      'The HCP’s expression says the conversation moves only if it moves on their terms.',
+      'The HCP holds the silence until the limit becomes undeniable.',
+      'The HCP faces you squarely with the composure of someone ending speculation.',
+      'The HCP’s body language is controlled enough to make any further push feel like a mistake.',
+      'The HCP plants one hand on the desk and does not move it.',
+      'The HCP’s posture communicates finality before any words arrive.',
+      'The HCP no longer appears available for negotiation.',
+      'The HCP stands in calm, unmistakable closure, a line clearly drawn.',
+    ],
+  },
+  irritated: {
+    0: [
+      'The HCP’s jaw tightens slightly before they look back at you, the patience in the room beginning to thin.',
+      'The HCP closes the chart with a firmer motion than necessary and turns toward you with a sharpened expression.',
+      'The HCP exhales through their nose, brow faintly furrowed, irritation just beginning to show around the edges.',
+      'The HCP replies while half-turning back to their work, as if your timing has already cost them something.',
+      'The HCP offers a tight, polite smile that does nothing to hide their impatience.',
+      'The HCP glances at the wall clock, then back at you with a noticeably flatter expression.',
+      'The HCP taps the desk once, slow and deliberate, before speaking.',
+      'The HCP shifts the chart to the side with visible impatience, attention now more obligation than interest.',
+      'The HCP’s shoulders stiffen as they listen, posture no longer neutral.',
+      'The HCP pauses mid-note and looks up with the expression of someone whose patience is being tested.',
+      'The HCP’s eyes narrow slightly, not hostile yet, but clearly less forgiving than before.',
+      'The HCP lets a beat of silence land before responding, irritation beginning to color the pause.',
+      'The HCP presses their lips together and looks back at you with clipped attention.',
+      'The HCP adjusts their glasses with a sharper motion than before and waits for you to continue.',
+      'The HCP turns fully toward you, but the movement feels abrupt rather than open.',
+      'The HCP gives a short nod that reads less like acknowledgment and more like tolerance.',
+      'The HCP glances toward the door, then back at you, expression visibly tighter.',
+      'The HCP folds the chart closed and sets it down with restrained annoyance.',
+    ],
+    1: [
+      'The HCP’s expression hardens visibly, and they set the pen down with a firm click that carries across the desk.',
+      'The HCP looks at you with clear impatience, arms held close, body language stripped of warmth.',
+      'The HCP’s brow draws together as they listen, voice likely to come back short and controlled.',
+      'The HCP stops mid-task and faces you, the kind of stillness that signals patience is running low.',
+      'The HCP offers a terse, impatient smile that never reaches the eyes.',
+      'The HCP glances down at the document in front of them, then back up with a harder edge in their expression.',
+      'The HCP makes a small dismissive motion with one hand, as though brushing away something unhelpful.',
+      'The HCP checks their phone, sets it down, and returns with visibly less tolerance than before.',
+      'The HCP’s jaw works once before they answer, irritation kept barely under control.',
+      'The HCP sits back with a look that makes the room feel noticeably colder.',
+      'The HCP exhales audibly and fixes you with a direct, impatient stare.',
+      'The HCP lets the silence stretch just long enough to make the strain obvious.',
+      'The HCP repositions the chart sharply, reclaiming the conversation on their terms.',
+      'The HCP’s posture closes in, elbows tight, expression severe.',
+      'The HCP looks toward the hallway, then back at you, frustration now competing with professionalism.',
+      'The HCP’s response feels measured only because they are working to keep it that way.',
+      'The HCP plants one hand on the desk and listens with visible restraint.',
+      'The HCP no longer hides their impatience; it sits plainly in the room between you.',
+    ],
+    2: [
+      'The HCP’s face shows undisguised frustration, and they look at you for a brief, pointed moment before speaking.',
+      'The HCP exhales hard, jaw clenched, clearly at the edge of what they are willing to tolerate.',
+      'The HCP says nothing at first, the silence terse, deliberate, and increasingly uncomfortable.',
+      'The HCP turns slowly toward you, expression flat and unforgiving, the conversation now on borrowed time.',
+      'The HCP offers a terse, frustrated smile that feels more like a warning than courtesy.',
+      'The HCP reviews the report in front of them, then looks back up with complete impatience.',
+      'The HCP gestures sharply, once, signaling that their tolerance for this exchange is nearly gone.',
+      'The HCP checks their notes and returns with a face that has fully hardened into visible irritation.',
+      'The HCP’s eyes stay on you in the kind of stillness that makes the air feel tight.',
+      'The HCP’s body language is no longer managing annoyance so much as containing it.',
+      'The HCP’s hand tightens around the pen before they set it down with obvious force.',
+      'The HCP leans back and fixes you with the expression of someone who has stopped giving the benefit of the doubt.',
+      'The HCP’s patience feels fully spent, with professionalism now doing all the remaining work.',
+      'The HCP looks away once, collecting themselves, then returns colder than before.',
+      'The HCP’s posture is rigid enough to make any additional push feel unwise.',
+      'The HCP gives a clipped nod that signals the scene is nearing its end.',
+      'The HCP’s silence carries more frustration than words would.',
+      'The HCP remains still, severe, and visibly done with weak or pushy turns.',
+    ],
+  },
+
+  disengaged: {
+    0: [
+      'The HCP begins moving toward the hallway, glancing back over their shoulder to reply.',
+      'The HCP looks past you toward the waiting room and picks up the clipboard, attention already loosening.',
+      'The HCP closes the laptop and stands, the conversation visibly beginning to wind down.',
+      'The HCP takes a step toward the door, offering only a brief acknowledgment as they move.',
+      'The HCP reviews the schedule and starts gathering what they need for the next task.',
+      'The HCP offers a polite, brief smile that feels more like closure than warmth.',
+      'The HCP gestures lightly toward the exit, signaling the interaction is nearing its end.',
+      'The HCP checks their phone, then slides it into their pocket while preparing to leave.',
+      'The HCP shifts the chart under one arm and glances toward the next room.',
+      'The HCP’s answers begin to come with movement, not stillness.',
+      'The HCP no longer settles back into the conversation after each response.',
+      'The HCP angles their body toward the hallway, giving you only partial attention.',
+      'The HCP steps away from the desk and lets the room itself suggest the conversation is ending.',
+      'The HCP gives a short nod while reaching for the door handle area.',
+      'The HCP glances toward a passing colleague and does not fully return to the exchange.',
+      'The HCP’s attention drifts outward, toward what comes next rather than what you are saying.',
+      'The HCP starts stacking papers with the practiced efficiency of someone closing the scene.',
+      'The HCP remains polite, but their body has begun leaving before their words have.',
+    ],
+    1: [
+      'The HCP is already a step toward the door, and the reply comes partly over their shoulder.',
+      'The HCP makes deliberate eye contact with someone down the hall, the signal to you unmistakably clear.',
+      'The HCP checks the watch, then the door, body language leaving little room for ambiguity.',
+      'The HCP reaches for their coat or phone, ending the interaction without saying so directly.',
+      'The HCP offers a brief, polite smile that feels final rather than inviting.',
+      'The HCP reviews the chart once more and tucks it away, ready to move on.',
+      'The HCP gestures toward the hallway, indicating the conversation has about one beat left.',
+      'The HCP checks the phone and pockets it without returning to a listening posture.',
+      'The HCP stays angled toward the exit, no longer pretending the conversation still has momentum.',
+      'The HCP’s replies shorten as their attention shifts fully to what follows this moment.',
+      'The HCP glances at the next room while you are still speaking.',
+      'The HCP gives a quick nod and begins walking again almost immediately.',
+      'The HCP’s eyes move past you more often than toward you now.',
+      'The HCP gathers the last of the papers and does not set them back down.',
+      'The HCP pauses only briefly before continuing toward the next obligation.',
+      'The HCP offers professionalism, but no longer presence.',
+      'The HCP’s body language says the interaction is effectively over, even if no one has said it yet.',
+      'The HCP makes it clear through movement that the scene is closing.',
+    ],
+    2: [
+      'The HCP is walking now, and their final words are delivered in motion, not in conversation.',
+      'The HCP has a hand on the door handle and pauses only barely before continuing.',
+      'The HCP offers a polite but final nod and turns fully toward the exit.',
+      'The HCP is done, leaving the conversation behind without looking back.',
+      'The HCP gives a brief smile that reads as courtesy only, then continues out.',
+      'The HCP tucks the chart under one arm and moves into the hallway without rejoining the exchange.',
+      'The HCP gestures once toward the exit, signaling closure with unmistakable economy.',
+      'The HCP checks the notes one last time and resumes leaving without breaking stride.',
+      'The HCP’s attention has fully detached from the conversation now.',
+      'The HCP does not stop walking, even while finishing the sentence.',
+      'The HCP turns the corner of the desk and never really turns back.',
+      'The HCP’s final acknowledgment lands like a curtain closing on the scene.',
+      'The HCP pauses at the threshold only long enough to be polite, not available.',
+      'The HCP’s body is fully claimed by the next task, the conversation reduced to an afterthought.',
+      'The HCP gives you the last available second, and then not another one.',
+      'The HCP exits with the unmistakable finality of someone who has already moved on.',
+      'The HCP leaves the interaction intact professionally, but completely finished emotionally.',
+      'The HCP’s departure makes clear that there is no more room left in the moment.',
+    ],
+  },
+}
+
+/******************************************************************************************
+CUE SELECTION
+Deterministic, weighted, state-consistent, non-repeating
+******************************************************************************************/
+
+export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options = {}) {
+  const bank = CUE_BANK[hcpState] || CUE_BANK.neutral
+  const safeSeverity = Math.max(0, Math.min(2, severity))
+  const tier = bank[safeSeverity] || bank[0]
+
+  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}:${safeSeverity}`)
+  const recentMemory = getRecentCueMemory(options.memory, hcpState, safeSeverity)
+
+  const weightedCandidates = tier.map((cue, index) => {
+    let weight = 1
+
+    if (recentMemory.includes(index)) {
+      weight = 0.2
+    }
+
+    if (options.preferShort && cue.length < 110) {
+      weight += 0.35
+    }
+
+    if (options.preferStrongVisuals && /door|watch|pager|jaw|arms|hallway|chart|clipboard|clock/.test(cue.toLowerCase())) {
+      weight += 0.4
+    }
+
+    if (options.avoidDoorCues && /door|exit|hallway|threshold|walking/.test(cue.toLowerCase())) {
+      weight -= 0.35
+    }
+
+    return {
+      index,
+      cue,
+      weight: Math.max(0.05, weight),
+    }
+  })
+
+  const totalWeight = weightedCandidates.reduce((sum, item) => sum + item.weight, 0)
+  let cursor = seed % totalWeight
+
+  for (const item of weightedCandidates) {
+    if (cursor < item.weight) {
+      return {
+        cue: item.cue,
+        cueIndex: item.index,
+      }
+    }
+    cursor -= item.weight
+  }
+
+  return {
+    cue: tier[seed % tier.length],
+    cueIndex: seed % tier.length,
+  }
+}
+
+/******************************************************************************************
+TONE DIRECTIVES
+******************************************************************************************/
+
 export function getToneDirectives(state, temperature) {
   const base = {
-    'neutral': {
+    neutral: {
       maxSentences: 3,
-      instruction: 'Respond professionally. Neither warm nor cold. Open but not enthusiastic. No stage directions.',
+      instruction:
+        'Respond professionally. Neither warm nor cold. Open but not enthusiastic. No stage directions.',
     },
-    'engaged': {
+
+    engaged: {
       maxSentences: 3,
-      instruction: 'Show genuine interest. Ask a brief follow-up or lean into the topic. Be collaborative and warm.',
+      instruction:
+        'Show genuine interest. Ask a brief follow-up or lean into the topic. Be collaborative and warm.',
     },
+
     'time-pressured': {
       maxSentences: 2,
-      instruction: 'Be extremely brief. You are busy. Reference time explicitly — a patient, a schedule, your pager. 1-2 sentences MAX. Do not elaborate.',
+      instruction:
+        'Be extremely brief. You are busy. Reference time explicitly, a patient, a schedule, or your pager. Keep it to one or two short sentences.',
     },
-    'resistant': {
+
+    resistant: {
       maxSentences: 2,
-      instruction: 'Push back. Express doubt. Ask for evidence. Do not concede. Stay civil but clearly unconvinced.',
+      instruction:
+        'Push back. Express doubt. Ask for evidence. Do not concede. Stay civil but clearly unconvinced.',
     },
+
     'boundary-setting': {
       maxSentences: 2,
-      instruction: 'Explicitly draw a limit. State clearly what you will and will not discuss. Be unambiguous. No warmth. No apology.',
+      instruction:
+        'Explicitly draw a limit. State clearly what you will and will not discuss. Be unambiguous. No warmth. No apology.',
     },
-    'irritated': {
-      maxSentences: 1,
-      instruction: 'One sentence only. Be sharp, curt, visibly impatient. Make it clear this interaction is testing you.',
-    },
-    'disengaging': {
-      maxSentences: 1,
-      instruction: 'Signal that you are leaving. Reference a patient, a meeting, or physically move. One sentence only — you are done.',
-    },
-  };
 
-  const directive = base[state] || base['neutral'];
+    irritated: {
+      maxSentences: 1,
+      instruction:
+        'One sentence only. Be sharp, curt, visibly impatient, and controlled.',
+    },
 
-  // Temperature modifier
-  const tempMod = {
-    'positive': ' Use slightly warmer language than your state strictly requires.',
-    'neutral': '',
-    'stressed': ' Your word choice should reflect stress. Shorter sentences. Less courtesy.',
-    'irritated': ' Strip all politeness markers. Your tone is flat, tight, and done.',
-  }[temperature] || '';
+    disengaged: {
+      maxSentences: 1,
+      instruction:
+        'Signal that you are leaving. Reference a patient, a meeting, or movement toward the next task. One sentence only.',
+    },
+  }
+
+  const directive = base[state] || base.neutral
+
+  const tempMod =
+    {
+      positive: ' Use slightly warmer language than your state strictly requires.',
+      neutral: '',
+      stressed: ' Your wording should reflect stress. Shorter sentences. Less courtesy.',
+      irritated: ' Strip unnecessary politeness. Your tone is flat, tight, and nearly done.',
+    }[temperature] || ''
 
   return {
     ...directive,
     instruction: directive.instruction + tempMod,
-  };
+  }
 }
 
+/******************************************************************************************
+PUNCTUATION NORMALIZATION
+******************************************************************************************/
+
 export function normalizeHcpDialoguePunctuation(dialogue) {
-  if (!dialogue) return dialogue;
+  if (!dialogue) return dialogue
 
-  let text = String(dialogue).replace(/\s+/g, ' ').trim();
-  if (!text) return text;
+  let text = String(dialogue).replace(/\s+/g, ' ').trim()
+  if (!text) return text
 
-  // Grammar correction for common awkward phrases
   const grammarCorrections = [
     { pattern: /to discuss regarding/gi, replacement: 'to discuss' },
     { pattern: /to discuss about/gi, replacement: 'to discuss' },
     { pattern: /to talk regarding/gi, replacement: 'to talk about' },
     { pattern: /to talk about regarding/gi, replacement: 'to talk about' },
-    { pattern: /What brings you here today to discuss/gi, replacement: 'What brings you here today? Are you interested in discussing' },
+    {
+      pattern: /What brings you here today to discuss/gi,
+      replacement: 'What brings you here today? Are you interested in discussing',
+    },
     { pattern: /in the context of/gi, replacement: 'regarding' },
-    { pattern: /What brings you here today to discuss regarding/gi, replacement: 'What brings you here today? Are you interested in discussing' },
-    { pattern: /What brings you here today to discuss about/gi, replacement: 'What brings you here today? Are you interested in discussing' },
-    // Add more as needed
-  ];
+    {
+      pattern: /What brings you here today to discuss regarding/gi,
+      replacement: 'What brings you here today? Are you interested in discussing',
+    },
+    {
+      pattern: /What brings you here today to discuss about/gi,
+      replacement: 'What brings you here today? Are you interested in discussing',
+    },
+  ]
+
   grammarCorrections.forEach(({ pattern, replacement }) => {
-    text = text.replace(pattern, replacement);
-  });
+    text = text.replace(pattern, replacement)
+  })
 
-  // Only match question words at the START of a sentence (not anywhere in the sentence)
-  const questionStarterPattern = /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i;
+  const questionStarterPattern =
+    /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
 
-  // Split into sentences and process each individually
-  const sentences = text.match(/[^?.!]+[?.!]?/g) || [text];
+  const sentences = text.match(/[^?.!]+[?.!]?/g) || [text]
+
   const normalized = sentences
     .map((rawSentence) => {
-      const sentence = rawSentence.trim();
-      if (!sentence) return '';
+      const sentence = rawSentence.trim()
+      if (!sentence) return ''
 
-      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim();
-      const isQuestion = questionStarterPattern.test(withoutEndPunct);
+      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
+      const isQuestion = questionStarterPattern.test(withoutEndPunct)
 
-      if (isQuestion) return `${withoutEndPunct}?`;
-      if (/[?.!]$/.test(sentence)) return sentence;
-      return `${withoutEndPunct}.`;
+      if (isQuestion) return `${withoutEndPunct}?`
+      if (/[?.!]$/.test(sentence)) return sentence
+      return `${withoutEndPunct}.`
     })
     .filter(Boolean)
     .join(' ')
-    .trim();
+    .trim()
 
   if (!/[?.!]$/.test(normalized)) {
-    return `${normalized}.`;
+    return `${normalized}.`
   }
 
-  return normalized;
+  return normalized
 }
 
-// ─── CUE SELECTION ─────────────────────────────────────────────────────────────
-/**
- * Select a cue deterministically. Uses session + turn + state + severity as seed.
- * Severity selects the tier (0/1/2). Hash selects which cue within that tier.
- * Guarantees the cue always matches the structural state.
- */
-export function selectCue(sessionId, turnNumber, hcpState, severity = 0) {
-  const bank = CUE_BANK[hcpState] || CUE_BANK['neutral'];
-  const tier = bank[Math.min(severity, 2)];
-  const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}:${severity}`);
-  return tier[seed % tier.length];
-}
+/******************************************************************************************
+BUILD HCP PROFILE
+Single source of truth for each turn
+******************************************************************************************/
 
-// ─── BUILD HCP PROFILE ─────────────────────────────────────────────────────────
-/**
- * Build a complete, immutable HCPProfile for a turn.
- * This is the single source of truth — everything downstream reads from here.
- */
-export function buildHCPProfile({ sessionId, turnNumber, structuralState, temperature, severity }) {
-  // selectCue signature updated to accept optional dialogue/message context for enhanced body language
-  // If context not provided, falls back to deterministic static selection
-  const lockedCue = selectCue(sessionId, turnNumber, structuralState, severity);
-  const toneDirectives = getToneDirectives(structuralState, temperature);
+export function buildHCPProfile({
+  sessionId,
+  turnNumber,
+  structuralState,
+  temperature,
+  severity,
+  memory = {},
+  conversationQuality = 0,
+  repBehavior = {},
+  timeElapsed = 1,
+}) {
+  const preferShort = structuralState === 'time-pressured' || structuralState === 'disengaged'
+  const preferStrongVisuals =
+    structuralState === 'irritated' ||
+    structuralState === 'resistant' ||
+    structuralState === 'boundary-setting'
+
+  const avoidDoorCues = structuralState !== 'time-pressured' && structuralState !== 'disengaged'
+
+  const cueSelection = selectCue(sessionId, turnNumber, structuralState, severity, {
+    memory,
+    preferShort,
+    preferStrongVisuals,
+    avoidDoorCues,
+  })
+
+  const nextMemory = setRecentCueMemory(
+    memory,
+    structuralState,
+    severity,
+    cueSelection.cueIndex
+  )
+
+  const toneDirectives = getToneDirectives(structuralState, temperature)
 
   return Object.freeze({
     structuralState,
     temperature,
     severity,
     turnNumber,
-    lockedCue,
+    lockedCue: cueSelection.cue,
+    cueIndex: cueSelection.cueIndex,
     toneDirectives,
-  });
+    conversationQuality,
+    repBehavior,
+    timeElapsed,
+    memory: nextMemory,
+  })
 }
 
-// ─── SYSTEM PROMPT BUILDER ─────────────────────────────────────────────────────
-/**
- * Build the complete system prompt for HCP dialogue generation.
- * Accepts a locked HCPProfile — guarantees no drift between cue and dialogue.
- */
-export function buildHCPDialoguePrompt({ scenario, hcpProfile, historyText = null, isOpening = false }) {
-  // Add personality trait to HCP profile
-  const { structuralState, temperature, severity, lockedCue, toneDirectives, personality } = hcpProfile;
+/******************************************************************************************
+PROFILE ORCHESTRATION
+Deterministically derive next state, temperature, severity, and cue
+******************************************************************************************/
 
-  // Sanitize interpolated values to ASCII only
+export function deriveNextHCPProfile({
+  sessionId,
+  turnNumber,
+  scenario,
+  repMessage = '',
+  history = [],
+  prevProfile = null,
+  alignment = null,
+}) {
+  const previousState =
+    prevProfile?.structuralState ||
+    deriveInitialState(scenario)
+
+  const previousTemperature =
+    prevProfile?.temperature ||
+    deriveInitialTemperature(previousState)
+
+  const previousSeverity =
+    typeof prevProfile?.severity === 'number' ? prevProfile.severity : 0
+
+  const memory = prevProfile?.memory || {}
+
+  const conversationQuality = scoreConversationQuality(repMessage, history)
+  const repBehavior = detectRepBehavior(repMessage)
+
+  const timeElapsed = turnNumber
+
+  const weightedStates = computeStateWeights({
+    conversation_quality: conversationQuality,
+    rep_behavior: repBehavior,
+    previous_cue_state: previousState,
+    time_elapsed: timeElapsed,
+  })
+
+  const deterministicState = weightedPick(
+    weightedStates,
+    hashInt(`${sessionId}:${turnNumber}:state`)
+  )
+
+  const transitionedState = transitionState(
+    deterministicState,
+    repMessage,
+    previousTemperature
+  )
+
+  const transitionedTemperature = transitionTemperature(
+    previousTemperature,
+    repMessage
+  )
+
+  const severity = transitionSeverity(
+    previousSeverity,
+    alignment,
+    previousState,
+    transitionedState,
+    repBehavior
+  )
+
+  return buildHCPProfile({
+    sessionId,
+    turnNumber,
+    structuralState: transitionedState,
+    temperature: transitionedTemperature,
+    severity,
+    memory,
+    conversationQuality,
+    repBehavior,
+    timeElapsed,
+  })
+}
+
+/******************************************************************************************
+SYSTEM PROMPT BUILDER
+******************************************************************************************/
+
+export function buildHCPDialoguePrompt({
+  scenario,
+  hcpProfile,
+  historyText = null,
+  isOpening = false,
+}) {
+  const {
+    structuralState,
+    temperature,
+    severity,
+    lockedCue,
+    toneDirectives,
+    personality,
+  } = hcpProfile
+
   function sanitize(str) {
-    return String(str).replace(/[^\x00-\x7F]/g, '');
+    return String(str).replace(/[^\x00-\x7F]/g, '')
   }
 
-  const severityLabel = ['mild', 'moderate', 'strong'][severity];
-  const stateDescriptions = {
-    'neutral': 'professionally neutral - neither warm nor dismissive',
-    'engaged': 'genuinely curious and collaborative',
-    'time-pressured': 'visibly pressed for time - brief, rushed, direct',
-    'resistant': 'guarded and skeptical - unconvinced, pushing back',
-    'boundary-setting': 'firm and unambiguous - drawing a clear limit',
-    'irritated': 'visibly impatient and frustrated - clipped and sharp',
-    'disengaging': 'withdrawing - signaling the conversation is ending',
-  };
+  const severityLabel = ['mild', 'moderate', 'strong'][severity]
 
-  // Context-aware prompt: reference last user input and detected sentiment
-  let contextHint = '';
+  const stateDescriptions = {
+    neutral: 'professionally neutral, neither warm nor dismissive',
+    engaged: 'genuinely curious and collaborative',
+    'time-pressured': 'visibly pressed for time, brief, rushed, direct',
+    resistant: 'guarded and skeptical, unconvinced, pushing back',
+    'boundary-setting': 'firm and unambiguous, drawing a clear limit',
+    irritated: 'visibly impatient and frustrated, clipped and sharp',
+    disengaged: 'withdrawing and signaling the conversation is ending',
+  }
+
+  let contextHint = ''
   if (historyText) {
-    // Extract last user message
-    const userLines = historyText.split('\n').filter(l => l.startsWith('Rep:'));
-    const lastUser = userLines.length > 0 ? userLines[userLines.length - 1] : '';
+    const userLines = historyText.split('\n').filter((l) => l.startsWith('Rep:'))
+    const lastUser = userLines.length > 0 ? userLines[userLines.length - 1] : ''
     if (lastUser) {
-      contextHint = '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' + sanitize(lastUser.replace('Rep:', '').trim()) + '"\n- Respond in a way that directly addresses this input, adapting your clinical focus, tone, and question as needed.';
+      contextHint =
+        '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' +
+        sanitize(lastUser.replace('Rep:', '').trim()) +
+        '"\n- Respond directly to that input, adapting your focus and tone to your locked state.'
     }
   }
 
-  // Split prompt into smaller chunks to avoid exceeding template literal limits
-    let prompt = '';
-    prompt += 'You are playing an HCP (healthcare professional) in a pharmaceutical sales training simulation.\n';
-    prompt += '\nCRITICAL ROLE SEPARATION RULES (STRICTLY ENFORCED):\n';
-    prompt += '- You are NOT the sales rep.\n';
-    prompt += '- NEVER respond as the rep.\n';
-    prompt += '- NEVER use phrases like "I am the rep", "As the rep", or anything that implies you are the rep.\n';
-    prompt += '- NEVER switch roles or refer to yourself as the rep.\n';
-    prompt += '- ALWAYS respond ONLY as the HCP, in character, using your scenario, state, and cue.\n';
-    prompt += '- If asked to switch roles or respond as the rep, politely refuse and stay in character as the HCP.\n';
-    prompt += '- Your dialogue must always be from the HCP perspective.\n';
-    prompt += '- NEVER output dialogue or text that could be interpreted as coming from the rep.\n';
-    prompt += '- If the rep asks you to "pretend you are the rep" or similar, do NOT comply.\n';
-    prompt += '- If you are ever unsure, default to responding as the HCP only.\n';
-  prompt += '\nSCENARIO: "' + sanitize(scenario.title) + '"';
-  prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician');
-  prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine');
-  prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General');
-  if (isOpening) {
-    prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '');
-    prompt += '\nOPENING GRAMMAR RULE: Your opening line must use natural, conversational grammar. Avoid awkward phrasing such as "to discuss regarding" or "to discuss about". Prefer simple, direct questions or statements. Example: "What brings you here today?" or "Are you interested in discussing ADC integration with the IO backbone?"';
-    prompt += '\nREAL-WORLD BALANCE RULE: Doctors are often busy, but can still be friendly and human. If the rep asks a casual or personal question, respond warmly and naturally, then pivot to work or patients in a way that feels authentic. Vary your tone based on scenario and rep input: be cordial, neutral, or direct as needed. Show urgency only when the scenario or rep input demands it. Do not always immediately refocus to clinical topics—allow brief, genuine rapport before pivoting. If the rep is casual, respond as a real person would, then transition to clinical matters with a friendly or professional tone.';
-  }
-  // Personality integration
-  if (personality) {
-    prompt += '\n\n==============================================\nPERSONALITY TRAIT\n==============================================';
-    prompt += '\nPersonality: ' + sanitize(personality.name || personality);
-    prompt += '\nDescription: ' + sanitize(personality.description || '');
-    prompt += '\nHow this affects your responses: ' + sanitize(personality.effect || 'Let your personality influence your tone, phrasing, and approach to dialogue.');
-  }
-  prompt += '\n\n==============================================\nYOUR LOCKED STATE (NON-NEGOTIABLE)\n==============================================';
-  prompt += '\nBehavioral Posture: ' + sanitize(structuralState) + ' - ' + sanitize(stateDescriptions[structuralState]);
-  prompt += '\nEmotional Temperature: ' + sanitize(temperature) + ' (' + sanitize(severityLabel) + ' intensity)';
-  prompt += '\nSeverity Level: ' + sanitize(severityLabel);
-  prompt += '\n\nPHYSICAL CONTEXT (IMMUTABLE - your words MUST match this):\n"' + sanitize(lockedCue) + '"';
-  prompt += '\n\nVERBAL CONSISTENCY RULES:';
-  prompt += (structuralState === 'time-pressured' ? '- Reference time constraints or schedule. Keep sentences short and direct.' : '');
-  prompt += (structuralState === 'engaged' ? '- Show curiosity through questions or follow-up. Acknowledge points made.' : '');
-  prompt += (structuralState === 'resistant' ? '- Express clinical skepticism. Ask for evidence. Do not validate unsubstantiated claims.' : '');
-  prompt += (structuralState === 'boundary-setting' ? '- State a clear clinical decision or limit. Professional but firm.' : '');
-  prompt += (structuralState === 'irritated' ? '- Brief, direct responses. Minimal elaboration. Professional but terse.' : '');
-  prompt += (structuralState === 'disengaging' ? '- Signal conversation is ending. Reference next patient or task. Stay professional.' : '');
-  prompt += (structuralState === 'neutral' ? '- Professional and measured tone. Balanced, neither dismissive nor enthusiastic.' : '');
-  prompt += (temperature === 'irritated' ? '- Cooler tone. Less verbal warmth. More direct phrasing.' : '');
-  prompt += (temperature === 'stressed' ? '- Shorter responses. Less patience for tangents. Stay on topic.' : '');
-  // Personality modifies verbal rules
-  if (personality && personality.verbalRules) {
-    prompt += '\nPERSONALITY MODIFIERS:';
-    prompt += '\n' + sanitize(personality.verbalRules);
-  }
-  prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction);
-  prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences);
-  prompt += '\n\n==============================================\nOUTPUT RULES (CRITICAL)\n==============================================';
-  prompt += '\n- Output ONLY your spoken dialogue as an HCP professional';
-  prompt += '\n- Absolutely NO stage directions, action text, or parentheticals';
-  prompt += '\n- DO NOT contradict the physical context above (it shows your body language separately)';
-  prompt += '\n- Stay in character completely';
-  prompt += '\n\nEMOTIONAL EXPRESSION RULE:';
-  prompt += '\nYour EMOTIONAL STATE is ALREADY COMMUNICATED through the physical cue shown above ("' + sanitize(lockedCue) + '").';
-  prompt += '\nDO NOT verbally express emotions like disappointment, frustration, or irritation in your dialogue.';
-  prompt += '\nInstead, your emotional state manifests as BEHAVIORAL changes:';
-  prompt += '\n- Cooler states: less warmth, fewer courtesies, more directness';
-  prompt += '\n- Warmer states: more questions, acknowledgment, collaborative language';
-  prompt += '\n- Time pressure: references to schedule, brevity';
-  prompt += '\n- Resistance: requests for evidence, clinical pushback';
-  prompt += '\n\nDIALOGUE FOCUS:';
-  prompt += '\nKeep your spoken words professional and clinical when the rep is focused on work, but allow for genuine, human responses when the rep is casual or personal. For casual or personal questions, respond with warmth, humor, or personal anecdotes, then pivot naturally to clinical topics. Vary your approach: be friendly, neutral, or direct depending on the scenario and rep input. If urgency is required, show it, but do not let it override rapport-building. Balance warmth and professionalism as a real-world HCP would.';
-  prompt += '\n\nDIALOGUE-BODY LANGUAGE ALIGNMENT (CRITICAL):';
-  prompt += '\nYour physical cue describes your observable body language: "' + sanitize(lockedCue) + '"';
-  prompt += '\nYour DIALOGUE MUST BE CONGRUENT with this physical expression.';
-  prompt += '\nExamples of proper alignment:';
-  prompt += '\n- If cue shows "frazzled, checking watch" - dialogue should reference time pressure or being busy, except for casual/personal questions where you may respond warmly.';
-  prompt += '\n- If cue shows "jaw clenching, irritated" - dialogue should be clipped, brief, direct (not warm and chatty), except for casual/personal questions where you may use humor or warmth.';
-  prompt += '\n- If cue shows "leaning forward, engaged" - dialogue should show genuine interest and curiosity.';
-  prompt += '\n- If cue shows "arms crossed, resistant" - dialogue should express skepticism or clinical concerns.';
-  prompt += '\n- If cue shows "turning away, withdrawing" - dialogue should signal conversation is ending.';
-  prompt += '\nThe rep OBSERVES your body language and interprets your words through that lens.';
-  prompt += '\nFor casual/personal questions, it is acceptable to break strict alignment and respond as a real person would.';
-  prompt += '\nInconsistency breaks the coaching moment for clinical questions, but casual/personal moments are allowed to be more human.';
-  prompt += '\n\nQUESTION FLOW (CRITICAL - STRICTLY ENFORCED):';
-  prompt += '\nAsk ONLY 1 QUESTION per turn - real HCPs don\'t interrogate, they converse';
-  prompt += '\n- If you need more information, ask ONE question, then wait for the answer';
-  prompt += '\n- Save follow-up questions for your NEXT turn after hearing the rep\'s response';
-  prompt += '\n- You can make statements + 1 question, but NEVER 2+ questions in one turn';
-  prompt += '\n\nWRONG: "What were the key findings? Can you provide context about the patient population?"';
-  prompt += '\nWRONG: "Can you provide more specific details about the methodology and patient outcomes?"';
-  prompt += '\nCORRECT: "What were the key findings regarding patient outcomes?"';
-  prompt += '\nCORRECT: "I\'d like to understand the study better. What patient population was included?"';
-  prompt += '\n\nPUNCTUATION RULES:';
-  prompt += '\n- All questions MUST end with a question mark (?)';
-  prompt += '\n- Statements end with a period (.)';
-  prompt += '\n- Multiple sentences should be clear and punctuated properly';
-  prompt += '\n- Do NOT have dialogue end without proper punctuation';
-  prompt += '\n\nDO NOT SAY things like:';
-  prompt += '\n"I\'m disappointed in your tone"';
-  prompt += '\n"I expect more professional behavior"';
-  prompt += '\n"That was inappropriate"';
-  prompt += '\n"Let\'s keep this respectful"';
-  prompt += '\n\nINSTEAD, let unprofessional behavior be reflected through:';
-  prompt += '\n- Cooler, more formal language';
-  prompt += '\n- Shorter, more clipped responses';
-  prompt += '\n- Redirecting to clinical facts only';
-  prompt += '\n- Signaling the conversation is ending';
+  let prompt = ''
 
-  prompt += contextHint;
-  if (historyText) {
-    prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText) + '\n\nRespond directly to what the rep just said, staying true to your locked state and cue above. REMINDER: Your physical/emotional state is shown through the cue ("' + sanitize(lockedCue) + '"). Keep your SPOKEN WORDS professional and clinically focused. If the rep has been unprofessional, reflect this through BREVITY, FORMALITY, and DIRECTNESS - not explicit criticism. QUESTION LIMIT: Ask ONLY 1 QUESTION this turn. PUNCTUATION REQUIREMENT: - Every question must end with a question mark (?) - Every statement must end with a period (.) - Do NOT output dialogue without proper ending punctuation.';
-  } else {
-    prompt += '\nThe sales rep has just entered. This is your OPENING LINE. OPENING RULES (strictly enforced): - React to the rep\'s arrival - express YOUR OWN current state, mindset, or reality - DO NOT ask the rep any questions - they have not spoken yet - DO NOT reference "barriers", "concerns", or "products" the rep hasn\'t mentioned - DO NOT invite the rep to share anything - this is your reaction, not a welcome - Your dialogue MUST match the physical context above: "' + sanitize(lockedCue) + '" - 1-2 sentences MAX - Output ONLY your spoken words - no asterisks, no stage directions, no parentheticals - All questions must end with ? and all statements with .';
+  prompt += 'You are playing an HCP in a pharmaceutical sales training simulation.\n'
+  prompt += '\nROLE RULES:\n'
+  prompt += '- You are NOT the sales rep.\n'
+  prompt += '- Respond ONLY as the HCP.\n'
+  prompt += '- Never switch roles.\n'
+  prompt += '- Never narrate stage directions.\n'
+  prompt += '- Output only spoken dialogue.\n'
+
+  prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
+  prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
+  prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
+  prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
+
+  if (isOpening) {
+    prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '')
+    prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
+    prompt += '\nREALISM RULE: Doctors may be busy, but can still be human, cordial, neutral, or direct depending on context.'
   }
-  return prompt;
+
+  if (personality) {
+    prompt += '\n\nPERSONALITY TRAIT: ' + sanitize(personality.name || personality)
+    prompt += '\nDESCRIPTION: ' + sanitize(personality.description || '')
+    prompt += '\nEFFECT: ' + sanitize(personality.effect || 'Let this trait shape tone and phrasing naturally.')
+  }
+
+  prompt += '\n\nLOCKED STATE:\n'
+  prompt +=
+    'Behavioral Posture: ' +
+    sanitize(structuralState) +
+    ' - ' +
+    sanitize(stateDescriptions[structuralState] || '')
+  prompt +=
+    '\nEmotional Temperature: ' +
+    sanitize(temperature) +
+    ' (' +
+    sanitize(severityLabel) +
+    ' intensity)'
+  prompt += '\nSeverity Level: ' + sanitize(severityLabel)
+
+  prompt += '\n\nPHYSICAL CONTEXT:\n"' + sanitize(lockedCue) + '"'
+
+  prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction)
+  prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences)
+
+  prompt += '\n\nOUTPUT RULES:\n'
+  prompt += '- Output only your spoken dialogue as the HCP.\n'
+  prompt += '- No stage directions, action lines, or parentheticals.\n'
+  prompt += '- Your words must be congruent with the physical context.\n'
+  prompt += '- Stay in character completely.\n'
+
+  prompt += '\nQUESTION RULE:\n'
+  prompt += '- Ask only one question per turn, if any.\n'
+  prompt += '- Never ask multiple questions in a single turn.\n'
+
+  prompt += '\nPUNCTUATION RULE:\n'
+  prompt += '- Every question must end with a question mark.\n'
+  prompt += '- Every statement must end with a period.\n'
+
+  prompt += contextHint
+
+  if (historyText) {
+    prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText)
+    prompt +=
+      '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue.'
+  } else {
+    prompt +=
+      '\n\nThe sales rep has just entered. This is your opening line. React naturally to the rep’s arrival and your current state. Do not ask the rep a question in the opening unless it is completely natural and brief.'
+  }
+
+  return prompt
 }
+
+/******************************************************************************************
+CONVENIENCE HELPER
+Returns profile + worker-safe metadata bundle
+******************************************************************************************/
+
+export function buildTurnSimulationBundle({
+  sessionId,
+  turnNumber,
+  scenario,
+  repMessage = '',
+  history = [],
+  prevProfile = null,
+  alignment = null,
+  historyText = null,
+  isOpening = false,
+}) {
+  const profile = deriveNextHCPProfile({
+    sessionId,
+    turnNumber,
+    scenario,
+    repMessage,
+    history,
+    prevProfile,
+    alignment,
+  })
+
+  const prompt = buildHCPDialoguePrompt({
+    scenario,
+    hcpProfile: profile,
+    historyText,
+    isOpening,
+  })
+
+  return {
+    profile,
+    prompt,
+    cue: profile.lockedCue,
+    state: profile.structuralState,
+    severity: profile.severity,
+    temperature: profile.temperature,
+    memory: profile.memory,
+  }
+}
+
+/******************************************************************************************
+EXPORTS
+******************************************************************************************/
+
+export { CUE_BANK }
