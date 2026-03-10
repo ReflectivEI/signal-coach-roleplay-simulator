@@ -24,7 +24,7 @@ Comprehensive audit of the roleplay simulator revealed **2 critical logic bugs**
 **Lines**: 148-167  
 **Severity**: 🔴 CRITICAL  
 
-### The Problem
+### The Problem (Turn 0 Initialization)
 
 The HCP disagreement detection and temperature escalation logic has a **timing bug** that causes the escalated temperature to be applied to the **wrong turn**.
 
@@ -56,13 +56,13 @@ const alignment = computeAlignment(prevState, repMessage, null, prevTemp, ...);
 4. **Line 167**: Score alignment using escalated temperature
 5. **Result**: Rep is scored against a temperature they **never saw** (it escalated AFTER they spoke)
 
-### Impact
+### Impact (Turn 0 Initialization)
 
 - **Alignment scores are incorrect**: Rep is penalized for not adapting to a temperature that hadn't escalated yet
 - **Cascading escalation**: Temperature keeps escalating even when rep adapts correctly
 - **User frustration**: Scores don't match perceived conversation quality
 
-### Root Cause
+### Root Cause (Turn 0 Initialization)
 
 The disagreement escalation should affect **Turn N+2**, not Turn N+1:
 
@@ -93,7 +93,7 @@ if (respondingToTurn.hcpDisagreed) {
 **Lines**: 108-141  
 **Severity**: 🟡 MEDIUM (performance + clarity)  
 
-### The Problem
+### The Problem (Other Issue)
 
 The turn 0 initialization generates a **complete HCP opening dialogue** via the LLM (lines 113-120), but then **immediately discards it** by setting `hcpDialogueBefore: null` (line 138).
 
@@ -121,7 +121,7 @@ setTurns([{
 }]);
 ```
 
-### Impact
+### Impact (Other Issue)
 
 - **LLM compute wasted**: Full prompt generation and dialogue creation thrown away
 - **Code confusion**: Generates opening but never uses it (misleading for maintainers)

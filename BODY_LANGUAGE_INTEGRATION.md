@@ -40,7 +40,7 @@ Location: `src/components/roleplay/hcpStateEngine.jsx` (lines 130-207)
   "nodding as rep speaks, taking notes",
   "relaxed posture with open body language"
 ]
-```
+```text
 
 ### Component 2: Question Quality Analyzer (`hcpStateEngine.jsx`)
 

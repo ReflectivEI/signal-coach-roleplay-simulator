@@ -62,7 +62,7 @@ The system implements a **deterministic behavioral simulation** with three tight
 │  - Constructs LLM system prompt      │
 │  - Locks cue/state/dialogue together │
 └─────────────────────────────────────┘
-```
+```text
 
 ### Deterministic Guarantees
 
@@ -83,7 +83,7 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0) {
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}:${severity}`);
   return tier[seed % tier.length];
 }
-```
+```text
 
 ✅ **Impact:** Every turn is completely reproducible. Same session ID + turn = same cue, same HCP state, same dialogue constraints.
 
@@ -95,10 +95,10 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0) {
 
 **7-state ladder** (ordinal escalation):
 
-```
+```text
 neutral (0) → engaged (1) → time-pressured (2) → resistant (3) 
             → boundary-setting (4) → irritated (5) → disengaging (6)
-```
+```text
 
 **Transition Logic:**
 
@@ -122,7 +122,7 @@ neutral (0) → engaged (1) → time-pressured (2) → resistant (3)
 const softEscalate = /.../.test(msg);
 const tempIsHot = currentTemperature === 'stressed' || currentTemperature === 'irritated';
 if (softEscalate && tempIsHot) return HCP_STATES[Math.min(idx + 1, ...)];
-```
+```text
 
 **Problem:** Pressure language like "you need to" or "immediately" only escalates if temperature is already hot. This means in a neutral/cold conversation, a rep can repeatedly use demanding language without escalating the HCP state until temperature rises first.
 

@@ -4,7 +4,7 @@ export function getScenarioContext(props = {}) {
   return scenarios[scenarioIndex] || scenarios[0];
 }
 // Dynamic HCP dialogue and cue recalibration
-import { scenarios, recalibrateHcpDialogueAndCue, getTabBasedOnQuestion } from './hcpDialogueEngine.jsx';
+import { scenarios } from './hcpDialogueEngine.jsx';
 // Engagement scoring and state update
 /**
  * Robust engagement scoring and state update for enterprise reliability.
