@@ -397,36 +397,38 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
       return 'The HCP maintains a neutral expression, ready for your next point.';
     }
 
-    // 1. Try to extract direct action/intent from HCP dialogue
-    if (hcpDialogue) {
-      // Look for common action/intent phrases in the dialogue
-      const actionPatterns = [
-        { regex: /(smil(e|es|ed|ing))/, cue: 'The HCP smiles warmly.' },
-        { regex: /(leans? forward|leans? in)/, cue: 'The HCP leans forward, showing engagement.' },
-        { regex: /(stands|standing|stood)/, cue: 'The HCP stands, signaling a transition or closure.' },
-        { regex: /(gestur(e|es|ed|ing))/, cue: 'The HCP gestures as they speak.' },
-        { regex: /(checks? (calendar|phone|watch))/, cue: 'The HCP checks their calendar or phone, signaling urgency.' },
-        { regex: /(nods?|nodding)/, cue: 'The HCP nods in acknowledgment.' },
-        { regex: /(frown(s|ed|ing)?)/, cue: 'The HCP frowns, signaling irritation.' },
-        { regex: /(shrugs?|shrugging)/, cue: 'The HCP shrugs, showing uncertainty.' },
-        { regex: /(laughs?|laughed|laughing)/, cue: 'The HCP laughs, breaking the tension.' },
-        { regex: /(sighs?|sighed|sighing)/, cue: 'The HCP sighs, showing fatigue or frustration.' },
-        { regex: /(writes?|writing|wrote|scribbles?)/, cue: 'The HCP writes a note as you speak.' },
-        { regex: /(glances?|glanced|glancing)/, cue: 'The HCP glances away briefly, then refocuses.' },
-        { regex: /(cross(es|ed|ing)? arms)/, cue: 'The HCP crosses their arms, signaling defensiveness.' },
-        { regex: /(offers?|offered|offering) (a|an)? (smile|nod|handshake|compliment)/, cue: 'The HCP offers a gesture of goodwill.' },
-        { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
-        { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
-        { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
-        { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?/, cue: 'The HCP packs up and prepares to leave.' },
-      ];
-      const lowerDialogue = hcpDialogue.toLowerCase();
-      for (const pattern of actionPatterns) {
-        if (pattern.regex.test(lowerDialogue)) {
-          return pattern.cue;
+      // 1. Try to extract direct action/intent from HCP dialogue
+      if (hcpDialogue) {
+        const actionPatterns = [
+          { regex: /(smil(e|es|ed|ing))/, cue: 'The HCP smiles warmly.' },
+          { regex: /(leans? forward|leans? in)/, cue: 'The HCP leans forward, showing engagement.' },
+          { regex: /(stands|standing|stood)/, cue: 'The HCP stands, signaling a transition or closure.' },
+          { regex: /(gestur(e|es|ed|ing))/, cue: 'The HCP gestures as they speak.' },
+          { regex: /(checks? (calendar|phone|watch))/, cue: 'The HCP checks their calendar or phone, signaling urgency.' },
+          { regex: /(nods?|nodding)/, cue: 'The HCP nods in acknowledgment.' },
+          { regex: /(frown(s|ed|ing)?)/, cue: 'The HCP frowns, signaling irritation.' },
+          { regex: /(shrugs?|shrugging)/, cue: 'The HCP shrugs, showing uncertainty.' },
+          { regex: /(laughs?|laughed|laughing)/, cue: 'The HCP laughs, breaking the tension.' },
+          { regex: /(sighs?|sighed|sighing)/, cue: 'The HCP sighs, showing fatigue or frustration.' },
+          { regex: /(writes?|writing|wrote|scribbles?)/, cue: 'The HCP writes a note as you speak.' },
+          { regex: /(glances?|glanced|glancing)/, cue: 'The HCP glances away briefly, then refocuses.' },
+          { regex: /(cross(es|ed|ing)? arms)/, cue: 'The HCP crosses their arms, signaling defensiveness.' },
+          { regex: /(offers?|offered|offering) (a|an)? (smile|nod|handshake|compliment)/, cue: 'The HCP offers a gesture of goodwill.' },
+          { regex: /(waves?|waved|waving)/, cue: 'The HCP waves, signaling the end of the conversation.' },
+          { regex: /(clenches?|clenched|clenching) (jaw|fist|teeth)/, cue: 'The HCP clenches their jaw, holding back frustration.' },
+          { regex: /(avoids?|avoided|avoiding) eye contact/, cue: 'The HCP avoids eye contact, signaling discomfort.' },
+          { regex: /(packs?|packed|packing) up|leaves?|leaving|exits?/, cue: 'The HCP packs up and prepares to leave.' },
+        ];
+        const lowerDialogue = hcpDialogue.toLowerCase();
+        for (const pattern of actionPatterns) {
+          if (pattern.regex.test(lowerDialogue)) {
+            return pattern.cue;
+          }
         }
       }
-    }
+      // Fallback: always use neutral cue for current state
+      const cues = CUE_BANK[hcpState] || CUE_BANK['neutral'];
+      return cues && cues.length > 0 ? cues[seed % cues.length] : 'The HCP listens quietly, waiting for your input.';
 
     // 2. Existing contextual and sentiment-based cue selection (as before)
     if (/thank|appreciate|helpful|good|great|positive|collaborate|open|enthusiast/.test(repSentiment)) {
