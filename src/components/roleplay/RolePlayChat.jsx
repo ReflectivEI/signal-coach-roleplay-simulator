@@ -762,15 +762,12 @@ ${actionText}`;
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
                       {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                      {turn.cueBefore && turn.repMessage == null && (
-                        // Only show cue if previous turn is a rep turn (repMessage is not null)
-                        (i === 0 || turns[i - 1]?.repMessage != null) && (
-                          <div className="flex justify-start pl-1">
-                            <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                              {turn.cueBefore}
-                            </p>
-                          </div>
-                        )
+                      {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                        <div className="flex justify-start pl-1">
+                          <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                            {turn.cueBefore}
+                          </p>
+                        </div>
                       )}
                     {turn.hcpDialogueBefore && (
                       <div className="flex justify-start">
