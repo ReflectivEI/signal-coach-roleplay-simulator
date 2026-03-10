@@ -24,7 +24,7 @@ function ScoreBar({ score }) {
   );
 }
 
-export default function LiveMetricsPanel({ turns }) {
+export default function LiveMetricsPanel({ turns, scenario }) {
   const scoredTurns = turns.filter(t => t.alignment?.metrics);
 
   if (scoredTurns.length === 0) {
@@ -106,9 +106,25 @@ export default function LiveMetricsPanel({ turns }) {
         })}
       </div>
 
-      <p className="text-xs text-gray-400 italic leading-relaxed border-t border-gray-100 pt-3">
-        Observable signals only — not empathy, intent, or personality.
-      </p>
+      {/* Scenario Objectives & Key Challenges */}
+      {scenario && (
+        <div className="mt-4 border-t border-gray-100 pt-3">
+          <div className="mb-2">
+            <span className="text-xs font-bold text-gray-800">Scenario Objectives</span>
+            <p className="text-xs text-gray-700 mt-1">{scenario.hcp?.objective || 'No objective specified.'}</p>
+          </div>
+          <div>
+            <span className="text-xs font-bold text-gray-800">Key Challenges</span>
+            <ul className="text-xs text-gray-700 mt-1 list-disc pl-4">
+              {scenario.hcp?.keyChallenges?.length > 0
+                ? scenario.hcp.keyChallenges.map((challenge, idx) => (
+                    <li key={idx}>{challenge}</li>
+                  ))
+                : <li>No key challenges specified.</li>}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

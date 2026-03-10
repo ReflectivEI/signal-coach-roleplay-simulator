@@ -957,7 +957,7 @@ ${actionText}`;
           <p className="text-xs mt-0.5" style={{ color: "#39ACAC" }}>Turn-by-turn Signal Intelligence scoring</p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <LiveMetricsPanel turns={turns} />
+          <LiveMetricsPanel turns={turns} scenario={scenario} />
         </div>
       </div>
     </div>
