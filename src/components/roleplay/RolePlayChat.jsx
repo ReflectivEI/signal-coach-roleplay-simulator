@@ -127,9 +127,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
-    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time|pick up my son|have another meeting|need to go|have to pick up|bye|goodbye|see you then|so sorry|nanny called)\b/i;
-    const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|see you then|see you at|scheduled|confirmed|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-    const repGoodbyeIntent = /\b(bye|goodbye|see you then|see you at|so sorry|gotta run|thanks|thank you)\b/i;
+    // Only match explicit exit/scheduling phrases, not generic confirmations or product names
+    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|can we finish|can we continue|let's pick up|pick up later|pick up my son|have another meeting|need to go|have to pick up|nanny called)\b/i;
+    const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
+    const repGoodbyeIntent = /\b(bye|goodbye|so sorry|gotta run)\b/i;
     let followUpTimeConfirmed = false;
     let repHasExited = false;
     let exitOrSchedulingState = false;
@@ -151,7 +152,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
     if (repExitIntent.test(input.trim()) || followUpTimeConfirmed) {
-      exitOrSchedulingState = true;
+      exitOrSchedulingState = repExitIntent.test(input.trim()) || followUpTimeConfirmed;
     }
     // If scheduling is confirmed, do not generate further HCP turns
     if (exitStateActive && schedulingConfirmed) {
@@ -160,32 +161,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
     if (exitOrSchedulingState) {
-      // Append only one HCP turn after rep input
-      let nextHcpDialogue = '';
-      let contextualCue = '';
-      if (!followUpTimeConfirmed) {
-        nextHcpDialogue = 'Understood. What time works for you later today?';
-        contextualCue = 'The HCP stands, checks their calendar, and signals the conversation is ending.';
-      } else if (!repHasExited) {
-        nextHcpDialogue = 'Confirmed. We can continue at the scheduled time.';
-        contextualCue = 'The HCP nods, closes their notes, and ends the conversation.';
-      } else {
-        nextHcpDialogue = 'Understood. We will talk this afternoon.';
-        contextualCue = 'The HCP stands, turns toward the door, and closes the interaction.';
+      // Only end session if rep explicitly signals exit intent
+      if (repExitIntent.test(input.trim())) {
+        let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
+        let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
+        setTurns([...turns, {
+          turnNumber: turns.length,
+          hcpStateBefore: 'disengaging',
+          temperatureBefore: 'neutral',
+          severityBefore: 0,
+          cueBefore: contextualCue,
+          hcpDialogueBefore: nextHcpDialogue,
+          repMessage: input.trim(),
+          alignment: null,
+          hcpStateAfter: null,
+        }]);
+        setIsLoading(false);
+        return; // Ensure no further turn creation occurs
       }
-      setTurns([...turns, {
-        turnNumber: turns.length,
-        hcpStateBefore: 'disengaging',
-        temperatureBefore: 'neutral',
-        severityBefore: 0,
-        cueBefore: contextualCue,
-        hcpDialogueBefore: nextHcpDialogue,
-        repMessage: input.trim(),
-        alignment: null,
-        hcpStateAfter: null,
-      }]);
-      setIsLoading(false);
-      return; // Ensure no further turn creation occurs
     }
     if (!input.trim() || isLoading) return;
     const repMessage = input.trim();
