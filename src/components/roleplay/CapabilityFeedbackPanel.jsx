@@ -91,10 +91,16 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Zap className="w-3.5 h-3.5 text-teal-500" />
-        <span className="text-xs font-semibold text-gray-700">Capability Feedback</span>
-        <span className="text-xs text-gray-400">— click any to analyze</span>
+      <div className="flex items-center mb-2">
+        <Zap className="w-3.5 h-3.5 text-teal-500 mr-2" />
+        <span className="font-bold text-sm text-gray-900">Overall: {(() => {
+          // Calculate overall average across all capabilities
+          const capIds = CAPABILITIES.map(c => c.id);
+          const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+          if (scores.length === 0) return "N/A";
+          return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
+        })()}</span>
+        <span style={{ marginLeft: '16px' }} className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric - click any metric below to analyze</span>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
