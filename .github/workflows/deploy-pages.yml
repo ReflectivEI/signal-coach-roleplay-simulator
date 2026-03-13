@@ -76,7 +76,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: deploy
+          command: pages deploy dist --project-name=${{ steps.resolve_project.outputs.project }}
 
       - name: Create GitHub Deployment
         if: success()
@@ -102,5 +102,4 @@ jobs:
               environment_url: 'https://reflectiv-ai.com',
               description: 'Deployment to Cloudflare Pages completed successfully'
             });
-
 

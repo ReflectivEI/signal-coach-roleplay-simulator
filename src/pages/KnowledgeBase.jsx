@@ -308,6 +308,19 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
         <p className="text-sm text-gray-600 mt-1">Industry guides, communication templates, and peer-shared best practices</p>
       </div>
 
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[
+          { label: "Curated Articles", value: articles.length, tone: "bg-teal-50 border-teal-200 text-teal-800" },
+          { label: "Communication Templates", value: communicationTemplates.length, tone: "bg-slate-50 border-slate-200 text-slate-800" },
+          { label: "Signal Intelligence Capabilities", value: SIGNAL_CAPABILITIES.length, tone: "bg-amber-50 border-amber-200 text-amber-800" },
+        ].map((item) => (
+          <div key={item.label} className={`rounded-xl border px-4 py-3 ${item.tone}`}>
+            <p className="text-xs uppercase tracking-wide font-semibold opacity-80">{item.label}</p>
+            <p className="text-2xl font-bold mt-1">{item.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* AI Q&A */}
       <Card className="mb-8 border-teal-100">
         <CardContent className="p-6 space-y-4">
