@@ -128,7 +128,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let nextHcpDialogue = '';
     let contextualCue = '';
     // Only match explicit exit/scheduling phrases, not generic confirmations or product names
-    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|can we finish|can we continue|let's pick up|pick up later|pick up my son|have another meeting|need to go|have to pick up|nanny called)\b/i;
+    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
     const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
     const repGoodbyeIntent = /\b(bye|goodbye|so sorry|gotta run)\b/i;
     let followUpTimeConfirmed = false;
@@ -763,11 +763,11 @@ ${actionText}`;
 
         {/* Tabs — NavPill style */}
         <div className="flex gap-1 px-4 py-2.5 border-b flex-shrink-0 bg-white">
-          {[
+          {([
             { id: "chat", label: "Live Chat", icon: MessageSquare },
             { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
             { id: "capabilities", label: "Capability Feedback", icon: Zap, disabled: repTurnsCount < 1 },
-          ].map(({ id, label, icon: Icon, disabled }) => (
+          ]).map(({ id, label, icon: Icon, disabled }) => (
             <button
               key={id}
               disabled={disabled}
@@ -922,9 +922,9 @@ ${actionText}`;
                           sendMessage();
                         }
                       }}
-                      placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
-                      disabled={isLoading || isEnding}
-                      className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
+                      placeholder={isListening ? "Listening…" : "Your response as the sales rep...")
+                    disabled={isLoading || isEnding}
+                    className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
                     />
                     {isListening && interim && (
                       <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none truncate pr-4">
@@ -962,7 +962,29 @@ ${actionText}`;
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
-              <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
+              {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
+              <div className="mb-6">
+                <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
+              </div>
+              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel, unchanged */}
+              {feedback && (
+                <div className="mt-6">
+                  <ReactMarkdown
+                    components={{
+                      h2: ({ children, ...props }) => <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>,
+                      h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                      h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                      p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
+                      ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                      ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                      li: (props) => <li className="mb-0" {...props} />,
+                      strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+                      em: (props) => <em className="italic text-slate-600" {...props} />,
+                      blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                    }}
+                  >{feedback}</ReactMarkdown>
+                </div>
+              )}
             </div>
           )}
         </div>
