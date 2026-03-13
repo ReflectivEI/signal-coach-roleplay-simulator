@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, User, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -34,16 +34,30 @@ import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 
+const stateColors = {
+  'neutral': 'bg-slate-100 text-slate-600 border-slate-200',
+  'engaged': 'bg-teal-100 text-teal-700 border-teal-200',
+  'time-pressured': 'bg-slate-100 text-slate-700 border-slate-200',
+  'resistant': 'bg-slate-100 text-slate-700 border-slate-200',
+  'boundary-setting': 'bg-slate-100 text-slate-700 border-slate-200',
+  'irritated': 'bg-slate-100 text-slate-700 border-slate-200',
+  'disengaging': 'bg-slate-100 text-slate-700 border-slate-200',
+};
 
-
-
+const stateLabels = {
+  'neutral': '● Neutral',
+  'engaged': '▲ Engaged',
+  'time-pressured': '⏱ Time-Pressured',
+  'resistant': '⊖ Resistant',
+  'boundary-setting': '⛔ Boundary-Setting',
+  'irritated': '⚠ Irritated',
+  'disengaging': '↗ Disengaging',
+};
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
-  // Only use unique opening scene from scenario, never fallback placeholder
-  const openingScene = scenario.opening_scene || scenario.openingScene || null;
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -124,62 +138,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
-    // Declare all variables at the top
-    let nextHcpDialogue = '';
-    let contextualCue = '';
-    // Only match explicit exit/scheduling phrases, not generic confirmations or product names
-    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|can we finish|can we continue|let's pick up|pick up later|pick up my son|have another meeting|need to go|have to pick up|nanny called)\b/i;
-    const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-    const repGoodbyeIntent = /\b(bye|goodbye|so sorry|gotta run)\b/i;
-    let followUpTimeConfirmed = false;
-    let repHasExited = false;
-    let exitOrSchedulingState = false;
-    let exitStateActive = false;
-    let schedulingConfirmed = false;
-    // Check previous turns for exit/scheduling confirmation and rep exit
-    for (let i = turns.length - 1; i >= 0; i--) {
-      const t = turns[i];
-      if (t.repMessage && repGoodbyeIntent.test(t.repMessage)) {
-        repHasExited = true;
-      }
-      if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
-        followUpTimeConfirmed = true;
-        schedulingConfirmed = true;
-        break;
-      }
-      if (t.repMessage && repExitIntent.test(t.repMessage)) {
-        exitStateActive = true;
-      }
-    }
-    if (repExitIntent.test(input.trim()) || followUpTimeConfirmed) {
-      exitOrSchedulingState = repExitIntent.test(input.trim()) || followUpTimeConfirmed;
-    }
-    // If scheduling is confirmed, do not generate further HCP turns
-    if (exitStateActive && schedulingConfirmed) {
-      setIsLoading(false);
-      return;
-    }
-    // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
-    if (exitOrSchedulingState) {
-      // Only end session if rep explicitly signals exit intent
-      if (repExitIntent.test(input.trim())) {
-        let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
-        let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-        setTurns([...turns, {
-          turnNumber: turns.length,
-          hcpStateBefore: 'disengaging',
-          temperatureBefore: 'neutral',
-          severityBefore: 0,
-          cueBefore: contextualCue,
-          hcpDialogueBefore: nextHcpDialogue,
-          repMessage: input.trim(),
-          alignment: null,
-          hcpStateAfter: null,
-        }]);
-        setIsLoading(false);
-        return; // Ensure no further turn creation occurs
-      }
-    }
     if (!input.trim() || isLoading) return;
     const repMessage = input.trim();
     setInput("");
@@ -197,39 +155,27 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
 
     // 1. Score alignment against the locked state + temperature the rep SAW
-    // Score BEFORE any temperature escalation from disagreement
+    // IMPORTANT: Score BEFORE any temperature escalation from disagreement
+    // The rep responds to what they observed, not to future emotional escalation
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
     const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
 
-    // 2. Detect rep interruption/leave intent and override HCP state if needed
-    let overrideExit = false;
-    const leaveIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
-    if (leaveIntent.test(repMessage)) {
-      overrideExit = true;
-    }
-
-    // 3. Transition structural state and base temperature (deterministic)
-    let nextHcpState = transitionState(prevState, repMessage, prevTemp);
+    // 2. Transition structural state and base temperature (deterministic)
+    const nextHcpState = transitionState(prevState, repMessage, prevTemp);
     let nextTemp = transitionTemperature(prevTemp, repMessage);
-    let nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
+    const nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
 
-    // 4. Override HCP state for schedule_exit/closure if rep signals leave/interruption
-    if (overrideExit) {
-      nextHcpState = 'disengaging';
-      nextTemp = 'neutral';
-      nextSev = 0;
-    }
-
-    // 5. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
-    // Escalate temperature for the NEXT turn, not for current alignment scoring
-    if (respondingToTurn.hcpDisagreed && !overrideExit) {
+    // 3. APPLY HCP DISAGREEMENT ESCALATION TO NEXT TEMPERATURE
+    // If the HCP disagreed in the turn we just responded to, their emotional temperature
+    // escalates for the NEXT turn (not the current alignment scoring)
+    if (respondingToTurn.hcpDisagreed) {
       const escalatedIndex = escalateForDisagreement(
         TEMPERATURES.indexOf(nextTemp),
         respondingToTurn.disagreementInfo
       );
       const clampedIndex = Math.max(0, Math.min(escalatedIndex, TEMPERATURES.length - 1));
       nextTemp = TEMPERATURES[clampedIndex];
-      // This escalation is only for the next turn, not for current scoring
+      console.log(`Applied HCP Disagreement Escalation to Next Turn | Base: ${transitionTemperature(prevTemp, repMessage)} | Escalated: ${nextTemp}`);
     }
 
     simStateRef.current = { temperature: nextTemp, severity: nextSev };
@@ -273,7 +219,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    nextHcpDialogue = "I see. Let me consider that.";
+    let nextHcpDialogue = "I see. Let me consider that.";
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
@@ -315,29 +261,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // After dialogue is generated, create a contextual cue that matches what the HCP said
     // and responds to the quality of the rep's question (pushy, redundant, etc.)
     // Always match cue to the same state/context as the generated HCP dialogue
-    // Alignment check: ensure cues, emotional state, dialogue, and context are logically consistent
-    contextualCue = undefined;
-    if (overrideExit) {
-      // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
-      contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-    } else {
-      contextualCue = generateContextualCue(
-        sid,
-        nextTurnNumber,
-        nextHcpState,
-        nextHcpDialogue,
-        repMessage,
-        prevTurns
-      );
-      // Fallback: if cue is missing, use default cue for state
-      if (!contextualCue) {
-        // Import CUE_BANK and use default for state
-        const cueBank = require('./hcpStateEngine').CUE_BANK;
-        const cues = cueBank[nextHcpState] || cueBank['neutral'];
-        contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
-      }
-    }
+    const contextualCue = generateContextualCue(
+      sid,
+      nextTurnNumber,
+      nextHcpState,
+      nextHcpDialogue,
+      repMessage,
+      prevTurns
+    );
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
@@ -377,8 +308,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       feedback: coachingResult,
     });
 
-    // Prevent duplicate HCP turns: only add one HCP turn after rep input
-    setTurns([...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn]);
+    const updatedTurns = [...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn];
+    setTurns(updatedTurns);
 
     setIsLoading(false);
     speak(nextHcpDialogue);
@@ -398,7 +329,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }
 
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
-
+  const currentHcpState = turns.length > 0 ? turns[turns.length - 1].hcpStateBefore : null;
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
 
   // ─── END SESSION ──────────────────────────────────────────────────────────────
@@ -471,9 +402,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
 
       // Build deterministic report header with locked scores
-      // Restore structuredPrompt definition for LLM feedback generation
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}`;
+      const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}\n\n[SECTION_END]\nStrengths\n[SECTION_END]\nImprovements\n[SECTION_END]\nPatterns\n[SECTION_END]\nAction Items\n[SECTION_END]`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -554,62 +483,7 @@ ${patternsText}
 
 ${actionText}`;
 
-        // Build Session Coaching Snapshot for Section 1
-        const capabilityNames = [
-          "Signal Awareness",
-          "Signal Interpretation",
-          "Value Connection",
-          "Customer Engagement Monitoring",
-          "Objection Navigation",
-          "Conversation Management",
-          "Adaptive Response",
-          "Commitment Generation"
-        ];
-        // Map canonical capability keys to display names
-        const capabilityKeyMap = {
-          signal_awareness: "Signal Awareness",
-          signal_interpretation: "Signal Interpretation",
-          value_connection: "Value Connection",
-          customer_engagement_monitoring: "Customer Engagement Monitoring",
-          objection_navigation: "Objection Navigation",
-          conversation_management: "Conversation Management",
-          adaptive_response: "Adaptive Response",
-          commitment_generation: "Commitment Generation"
-        };
-        // Build capability snapshot
-        const capabilitySnapshot = capabilityNames.map(name => {
-          // Find canonical key
-          const key = Object.keys(capabilityKeyMap).find(k => capabilityKeyMap[k] === name);
-          const score = avgCapScores[key] !== undefined ? avgCapScores[key] : null;
-          // Find a brief recap from turn data
-          let recap = "Capability not clearly observed during this session.";
-          if (score !== null && score > 0) {
-            // Find a turn with this capability
-            const turn = scoredTurns.find(t => t.alignment?.metrics && t.alignment.metrics[key]);
-            if (turn && turn.alignment.metrics[key]?.recap) {
-              recap = turn.alignment.metrics[key].recap;
-            } else {
-              // Fallback: generate a short recap
-              recap = score >= 4 ? "Strong demonstration of this capability." : score <= 2 ? "Needs improvement in this capability." : "Moderate performance observed.";
-            }
-          }
-          return `- ${name} (${score !== null ? score : "N/A"}): ${recap}`;
-        }).join("\n");
-
-        // Derive conversation stage/outcome
-        let stageLabel = "Session Completed";
-        if (scenario && scenario.difficulty) stageLabel = scenario.difficulty;
-        // Short session summary
-        let sessionSummary = "This session provided an opportunity to demonstrate key sales capabilities in a realistic scenario. Overall, the rep engaged effectively and responded to signals with appropriate actions.";
-        if (turns.length > 2) {
-          sessionSummary = `The rep navigated the conversation with ${scenario.title}, adapting responses to the HCP's cues and maintaining engagement throughout. Key strengths included responsiveness and signal interpretation.`;
-        }
-
-        // Section 1: Session Coaching Snapshot
-        const coachingSnapshot = `## 1. Session Coaching Snapshot\n\n**Overall Session Score:** ${overallScore ?? "N/A"}/5\n**Interaction Outcome:** ${stageLabel}\n\n${sessionSummary}\n\n**Capability Snapshot:**\n${capabilitySnapshot}`;
-
-        // Sections 2–5 remain unchanged
-        const fullFeedback = `${coachingSnapshot}\n\n${coachingFeedback}`;
+        const fullFeedback = `${reportHeader}\n\n${coachingFeedback}`;
         console.log('=== FEEDBACK PARSING COMPLETE ===');
         console.log('Strengths length:', strengthsText.length);
         console.log('Improvements length:', improvementsText.length);
@@ -655,36 +529,39 @@ ${actionText}`;
           <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
             <ReactMarkdown
               components={{
-                h2: ({ children, ...props }) => {
+                h2: ({ _node, children, ...props }) => {
                   const text = String(children);
+                  // First h2 is title, subsequent ones are section headers
                   const isTitle = text.includes('Session Feedback');
                   return isTitle
                     ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
                     : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
                 },
-                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: (props) => <li className="mb-0" {...props} />,
-                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: (props) => <em className="italic text-slate-600" {...props} />,
-                blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                h3: ({ _node, ...props }) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
+                h4: ({ _node, ...props }) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
+                p: ({ _node, ...props }) => <p className="mb-3 whitespace-normal" {...props} />,
+                ul: ({ _node, _ordered, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                ol: ({ _node, _ordered, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                li: ({ _node, ...props }) => <li className="mb-0" {...props} />,
+                strong: ({ _node, ...props }) => <strong className="font-semibold text-slate-900" {...props} />,
+                em: ({ _node, ...props }) => <em className="italic text-slate-600" {...props} />,
+                blockquote: ({ _node, ...props }) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
               }}
             >
               {feedback}
             </ReactMarkdown>
           </div>
           <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">↓ Export PDF</Button>
+            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">
+              ↓ Export PDF
+            </Button>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 className="text-xs border-teal-400 text-teal-600 hover:bg-teal-50"
                 onClick={() => {
-                  // Restore previous AI Coach trigger logic
+                  // Aggregate all misalignments and positives from turns
                   const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
                   const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
                   const capScores = {};
@@ -715,7 +592,8 @@ ${actionText}`;
                   navigate(createPageUrl("AICoach") + `?session_context=${ctx}`);
                 }}
               >
-                <Bot className="w-3 h-3 mr-1" /> Coach on this session
+                <Bot className="w-3 h-3 mr-1" />
+                Coach on this session
               </Button>
               <Button className="bg-teal-500 hover:bg-teal-600" onClick={onClose}>Done</Button>
             </div>
@@ -737,9 +615,13 @@ ${actionText}`;
         <div className="flex items-start justify-between px-5 py-3 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-[24px] leading-snug">{scenario.title}</h2>
+              <h2 className="font-bold text-slate-900 text-sm leading-snug">{scenario.title}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 font-medium">{scenario.difficulty}</span>
-              {/* State label removed as requested */}
+              {currentHcpState && (
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${stateColors[currentHcpState]}`}>
+                  {stateLabels[currentHcpState]}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
@@ -759,7 +641,10 @@ ${actionText}`;
         </div>
 
         {/* Persona strip */}
-        {/* Persona strip removed as requested */}
+        <div className="px-5 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-600 flex-shrink-0 flex items-center gap-1.5">
+          <User className="w-3.5 h-3.5 text-slate-400" />
+          You are the <strong>Sales Rep</strong>. The AI is playing the <strong>{scenario.hcp_category || "HCP"}</strong>.
+        </div>
 
         {/* Tabs — NavPill style */}
         <div className="flex gap-1 px-4 py-2.5 border-b flex-shrink-0 bg-white">
@@ -791,18 +676,6 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              {/* Show scenario opening scene for the entire session */}
-              {openingScene ? (
-                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                  <span className="italic">{openingScene}</span>
-                </div>
-              ) : (
-                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                  <span className="italic text-red-600">No opening scene provided for this scenario.</span>
-                </div>
-              )}
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
                 {turns.length === 0 && isLoading && (
@@ -817,8 +690,7 @@ ${actionText}`;
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
-                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                    {turn.cueBefore && (
                       <div className="flex justify-start pl-1">
                         <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
                           {turn.cueBefore}
@@ -847,7 +719,8 @@ ${actionText}`;
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
-                              {/* State label removed: do not display ruleLabel */}
+                              <span className="opacity-50">·</span>
+                              <span className="italic">{turn.alignment.ruleLabel}</span>
                               {turn.alignment.misalignments.length > 0 && (
                                 <span className="truncate max-w-[260px]">⚠ {turn.alignment.misalignments[0]}</span>
                               )}
@@ -891,34 +764,22 @@ ${actionText}`;
 
               {/* Input */}
               <div className="px-5 py-3 border-t flex-shrink-0 bg-white">
-                <form
-                  onSubmit={e => {
-                    e.preventDefault();
-                    if (isLoading || isEnding) return;
-                    const message = input.trim();
-                    if (!message) return;
-                    setInput(""); // clear input immediately
-                    sendMessage();
-                  }}
-                  className="flex gap-2"
-                >
+                <form onSubmit={(e) => { e.preventDefault(); sendMessage(); }} className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
                       ref={inputRef}
                       value={input}
-                      onChange={e => {
+                      onChange={(e) => {
                         setInput(e.target.value);
+                        // Stop mic when user starts typing manually
                         if (isListening && e.target.value.length > input.length) {
                           stopListening();
                         }
                       }}
-                      onKeyDown={e => {
+                      onKeyDown={(e) => {
+                        // Submit on Enter (without Shift)
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          if (isLoading || isEnding) return;
-                          const message = input.trim();
-                          if (!message) return;
-                          setInput("");
                           sendMessage();
                         }
                       }}
@@ -975,7 +836,7 @@ ${actionText}`;
           <p className="text-xs mt-0.5" style={{ color: "#39ACAC" }}>Turn-by-turn Signal Intelligence scoring</p>
         </div>
         <div className="flex-1 overflow-y-auto">
-          <LiveMetricsPanel turns={turns} scenario={scenario} />
+          <LiveMetricsPanel turns={turns} />
         </div>
       </div>
     </div>
