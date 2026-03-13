@@ -45,6 +45,12 @@ const SECTIONS = [
   { id: "chat", label: "Ask AI Coach" },
 ];
 
+const RESOURCE_LINKS = [
+  { title: "Market Insights — McKinsey Life Sciences", href: "https://www.mckinsey.com/industries/life-sciences/our-insights", description: "Customer and market trends shaping biotech and pharma strategy." },
+  { title: "Life Sciences Commercial Insights", href: "https://www.fiercepharma.com", description: "Recent biotech and pharma market developments." },
+  { title: "FDA Newsroom", href: "https://www.fda.gov/news-events", description: "Regulatory announcements and policy updates." },
+];
+
 function FaqItem({ item, idx }) {
   const [open, setOpen] = useState(false);
   return (
@@ -199,6 +205,24 @@ export default function HelpCenter() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Help Center</h1>
         <p className="text-sm text-gray-500 mt-1">Documentation, guidance, and AI-powered coaching support</p>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Featured Resources</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {RESOURCE_LINKS.map((link) => (
+            <a
+              key={link.title}
+              href={link.href}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl border border-gray-200 p-3 hover:border-teal-300 hover:bg-teal-50 transition-colors"
+            >
+              <p className="text-sm font-semibold text-[#1A334D]">{link.title}</p>
+              <p className="text-xs text-gray-600 mt-1">{link.description}</p>
+            </a>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
