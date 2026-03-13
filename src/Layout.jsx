@@ -243,10 +243,10 @@ export default function Layout({ children, currentPageName }) {
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{item.label}</span>
                           {!isActive && (
-                            <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
-                              style={{ background: "#39ACAC", color: "#ffffff", boxShadow: "0 6px 20px rgba(57,172,172,0.3)" }}
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-semibold opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200"
+                              style={{ background: "#39ACAC", color: "#ffffff", border: "1px solid #79caca" }}
                             >
-                              Open {item.label}
+                              Open
                             </span>
                           )}
                         </Link>

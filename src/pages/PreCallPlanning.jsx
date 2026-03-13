@@ -149,7 +149,7 @@ export default function PreCallPlanning() {
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
           <ClipboardList className="w-7 h-7 text-gray-400" />
           <div>
@@ -157,9 +157,16 @@ export default function PreCallPlanning() {
             <p className="text-sm text-gray-500">Prepare for your HCP conversations</p>
           </div>
         </div>
-        <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
-          <Plus className="w-4 h-4 mr-1" /> New Plan
-        </Button>
+        <div className="flex items-center gap-2">
+          {plans.length > 0 && (
+            <Button variant="outline" onClick={() => exportPDF(plans[0])}>
+              <Download className="w-4 h-4 mr-1" /> Export Latest PDF
+            </Button>
+          )}
+          <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New Plan
+          </Button>
+        </div>
       </div>
 
       {/* Info Banner */}

@@ -379,8 +379,8 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
             <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search articles, topics, or tags..." className="pl-10" />
           </div>
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="mb-6">
-            <TabsList className="bg-gray-100 flex-wrap h-auto gap-1 p-1">
-              {categories.map((cat) => <TabsTrigger key={cat} value={cat} className="text-xs">{cat}</TabsTrigger>)}
+            <TabsList className="bg-transparent flex-wrap h-auto gap-2 p-0">
+              {categories.map((cat) => <TabsTrigger key={cat} value={cat} className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">{cat}</TabsTrigger>)}
             </TabsList>
           </Tabs>
           <div className="space-y-4">
@@ -547,7 +547,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           {/* Category Filter */}
           <div className="flex flex-wrap gap-2">
             {SNIPPET_CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={() => setSnippetCatFilter(cat.id)} className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${snippetCatFilter === cat.id ? "border-transparent text-white" : "border-gray-200 text-gray-600 bg-white hover:border-teal-200 hover:text-teal-700"}`} style={snippetCatFilter === cat.id ? { background: "#39ACAC" } : {}}>
+              <button key={cat.id} onClick={() => setSnippetCatFilter(cat.id)} className={`text-sm px-4 py-2 rounded-full border font-semibold transition-all hover:-translate-y-0.5 ${snippetCatFilter === cat.id ? "border-[#1A334D] text-white" : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"}`} style={snippetCatFilter === cat.id ? { background: "#39ACAC" } : {}}>
                 {cat.label}
               </button>
             ))}

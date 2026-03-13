@@ -277,12 +277,12 @@ export default function ManagerView() {
       </div>
 
       <Tabs defaultValue="reps">
-        <TabsList className="mb-6 bg-gray-100 flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="reps" className="text-xs flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Rep Overview</TabsTrigger>
-          <TabsTrigger value="territory" className="text-xs flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Territory Analytics</TabsTrigger>
-          <TabsTrigger value="modules" className="text-xs flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5" /> Training Modules</TabsTrigger>
-          <TabsTrigger value="sessions" className="text-xs flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> Session Feedback</TabsTrigger>
-          <TabsTrigger value="snippets" className="text-xs flex items-center gap-1.5"><Star className="w-3.5 h-3.5" /> Curate Snippets</TabsTrigger>
+        <TabsList className="mb-6 bg-transparent flex-wrap h-auto gap-2 p-0">
+          <TabsTrigger value="reps" className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Rep Overview</TabsTrigger>
+          <TabsTrigger value="territory" className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Territory Analytics</TabsTrigger>
+          <TabsTrigger value="modules" className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5" /> Training Modules</TabsTrigger>
+          <TabsTrigger value="sessions" className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" /> Session Feedback</TabsTrigger>
+          <TabsTrigger value="snippets" className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] flex items-center gap-1.5"><Star className="w-3.5 h-3.5" /> Curate Snippets</TabsTrigger>
         </TabsList>
 
         {/* ── REP OVERVIEW TAB ── */}

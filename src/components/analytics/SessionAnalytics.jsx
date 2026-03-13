@@ -495,11 +495,11 @@ export default function SessionAnalytics() {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="trends" className="text-xs">Capability Trends</TabsTrigger>
-              <TabsTrigger value="patterns" className="text-xs">Patterns & Strategies</TabsTrigger>
-              <TabsTrigger value="scenarios" className="text-xs">By Scenario</TabsTrigger>
+            <TabsList className="bg-transparent flex-wrap gap-2 h-auto p-0">
+              <TabsTrigger value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">Overview</TabsTrigger>
+              <TabsTrigger value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">Capability Trends</TabsTrigger>
+              <TabsTrigger value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">Patterns & Strategies</TabsTrigger>
+              <TabsTrigger value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">By Scenario</TabsTrigger>
             </TabsList>
           </Tabs>
 

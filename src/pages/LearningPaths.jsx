@@ -466,14 +466,20 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 {
                   title: "Territory Planning Essentials",
                   lessons: ["Micro-lesson: Segment high-value HCPs", "Practice: Objection-ready call opener", "Assessment: 5-question readiness check"],
+                  actionLabel: "Open Exercises",
+                  actionPage: "Exercises",
                 },
                 {
                   title: "Evidence-to-Value Communication",
                   lessons: ["Micro-lesson: Translate trial endpoints", "Practice: 2-minute value framing", "Assessment: Score your response alignment"],
+                  actionLabel: "Open AI Coach",
+                  actionPage: "AICoach",
                 },
                 {
                   title: "Commitment & Next-Step Conversion",
                   lessons: ["Micro-lesson: Low-friction closes", "Practice: Ask-for-commitment drills", "Assessment: Follow-up quality rubric"],
+                  actionLabel: "Open Role Play",
+                  actionPage: "RolePlaySimulator",
                 },
               ].map((track) => (
                 <div key={track.title} className="rounded-xl border border-gray-200 p-3">
@@ -481,6 +487,10 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                   <ul className="mt-1.5 list-disc pl-4 text-xs text-gray-600 space-y-0.5">
                     {track.lessons.map((lesson) => <li key={lesson}>{lesson}</li>)}
                   </ul>
+                  <Link to={createPageUrl(track.actionPage)} className="inline-flex mt-2 items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">
+                    {track.actionLabel}
+                  </Link>
+                  
                 </div>
               ))}
             </div>

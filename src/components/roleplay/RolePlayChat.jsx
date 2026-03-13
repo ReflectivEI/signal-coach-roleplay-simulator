@@ -670,6 +670,30 @@ ${actionText}`;
         {/* Persona strip */}
         {/* Persona strip removed as requested */}
 
+
+        {/* Scenario context summary (kept at top under specialty line) */}
+        {(descriptionText || openingScene) && (
+          <div className="px-3 md:px-4 pb-2 border-b bg-white space-y-2">
+            {descriptionText && (
+              <div className="px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-700">
+                <span className="font-bold uppercase text-slate-600 text-[11px]">Scenario Description</span><br />
+                <span className="leading-relaxed">{descriptionText}</span>
+              </div>
+            )}
+            {openingScene ? (
+              <div className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
+                <span className="italic">{openingScene}</span>
+              </div>
+            ) : (
+              <div className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
+                <span className="italic text-red-600">No opening scene provided for this scenario.</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tabs — NavPill style */}
         <div className="flex gap-1 px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white overflow-x-auto">
           {([
@@ -705,24 +729,6 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              {/* Show scenario description + opening scene for the session */}
-              {descriptionText && (
-                <div className="mx-4 mt-3 mb-1 px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-700">
-                  <span className="font-bold uppercase text-slate-600 text-[11px]">Scenario Description</span><br />
-                  <span className="leading-relaxed">{descriptionText}</span>
-                </div>
-              )}
-              {openingScene ? (
-                <div className="mx-4 mt-2 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                  <span className="italic">{openingScene}</span>
-                </div>
-              ) : (
-                <div className="mx-4 mt-2 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                  <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                  <span className="italic text-red-600">No opening scene provided for this scenario.</span>
-                </div>
-              )}
               <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-4">
 
                 {turns.length === 0 && isLoading && (
