@@ -231,7 +231,7 @@ export default function Layout({ children, currentPageName }) {
                       >
                         <Link
                           to={createPageUrl(item.page)}
-                          className={`flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
+                          className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
                             ? "text-white font-semibold"
                             : "text-white/60 hover:text-white hover:bg-white/10"
                             }`}
@@ -242,6 +242,13 @@ export default function Layout({ children, currentPageName }) {
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{item.label}</span>
+                          {!isActive && (
+                            <span className="pointer-events-none absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200"
+                              style={{ background: "#39ACAC", color: "#ffffff", boxShadow: "0 6px 20px rgba(57,172,172,0.3)" }}
+                            >
+                              Open {item.label}
+                            </span>
+                          )}
                         </Link>
                       </motion.div>
                     );

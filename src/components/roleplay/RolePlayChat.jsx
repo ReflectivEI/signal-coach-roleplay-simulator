@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { Send, X, MessageSquare, Highlighter, Zap, Bot, ListChecks } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -64,6 +64,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     onTranscript: (text) => setInput((prev) => prev ? prev + " " + text : text),
     voiceSettings,
   });
+
+  const objectiveText = scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.";
+  const challengeItems = Array.isArray(scenario.challenges)
+    ? scenario.challenges
+    : String(scenario.challenges || "")
+      .split(/\n|;/)
+      .map((v) => v.replace(/^[-*\s]+/, "").trim())
+      .filter(Boolean);
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -618,7 +626,7 @@ ${actionText}`;
 
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex" style={{ background: "#f0f4f8" }}>
+    <div className="fixed inset-0 z-50 flex flex-col lg:flex-row" style={{ background: "#f0f4f8" }}>
       {/* Left: Chat Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
@@ -626,7 +634,7 @@ ${actionText}`;
         <div className="flex items-start justify-between px-5 py-3 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-[24px] leading-snug">{scenario.title}</h2>
+              <h2 className="font-bold text-slate-900 text-[20px] md:text-[24px] leading-snug">{scenario.title}</h2>
               <span className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 font-medium">{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
@@ -677,14 +685,27 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
+              <div className="mx-4 mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-teal-700 mb-1.5">
+                  <ListChecks className="w-3.5 h-3.5" /> Scenario Objectives & Challenges
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed mb-2"><span className="font-semibold text-[#1A334D]">Objective:</span> {objectiveText}</p>
+                {challengeItems.length > 0 && (
+                  <ul className="list-disc pl-4 space-y-1 text-xs text-slate-700">
+                    {challengeItems.slice(0, 4).map((challenge, idx) => (
+                      <li key={idx}>{challenge}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               {/* Show scenario opening scene for the entire session */}
               {openingScene ? (
-                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <div className="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic">{openingScene}</span>
                 </div>
               ) : (
-                <div className="mb-4 px-5 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <div className="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic text-red-600">No opening scene provided for this scenario.</span>
                 </div>
