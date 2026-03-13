@@ -112,10 +112,10 @@ export default function AICoach() {
   useEffect(() => {
     if (sessionContext && messages.length === 0) {
       const intro = buildSessionContextMessage(sessionContext);
-      sendMessage(intro, true);
-      // Immediately trigger coaching feedback request
-      const feedbackRequest = `Please provide specific, actionable coaching feedback for this session, referencing the scenario, detected misalignments, positives, and capability scores above. Ground your feedback in Signal Intelligence principles.`;
-      sendMessage(feedbackRequest);
+      const autoCoachPrompt = `${intro}
+
+Please provide a concise, compelling coaching synopsis with clear section headers aligned to Signal Intelligence capabilities, based only on this session context.`;
+      sendMessage(autoCoachPrompt, true);
     }
   }, []);
 
