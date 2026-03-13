@@ -433,7 +433,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       positives: allPositives,
       capabilityScores: avgCapabilityScores,
       overallScore,
-      feedback,
+      source: "roleplay_end_feedback",
     }));
 
     navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
