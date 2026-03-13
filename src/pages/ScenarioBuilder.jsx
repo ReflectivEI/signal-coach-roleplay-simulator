@@ -31,6 +31,12 @@ const emptyForm = {
   focus_capabilities: [],
 };
 
+const cleanScenarioText = (value = "") => String(value)
+  .replace(/^[\s*-]+/gm, "")
+  .replace(/\*\*/g, "")
+  .replace(/\n{3,}/g, "\n\n")
+  .trim();
+
 export default function ScenarioBuilder() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -120,6 +126,19 @@ export default function ScenarioBuilder() {
             setForm({ ...emptyForm, ...generated });
           }}
         />
+      )}
+
+      {editingId === null && (
+        <div className="mb-6 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-[#1A334D]">Need a custom scenario for your next simulation?</p>
+            <p className="text-xs text-gray-600">Use + New Scenario for manual control, or AI Generate for a fast first draft you can refine.</p>
+          </div>
+          <Button className="bg-[#1A334D] hover:bg-[#152a3f]" onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}>
+            <Plus className="w-4 h-4 mr-1" />
+            + New Scenario
+          </Button>
+        </div>
       )}
 
       {/* Edit / New Form */}
@@ -310,8 +329,8 @@ export default function ScenarioBuilder() {
 
               {expandedId === s.id && (
                 <div className="px-5 pb-4 pt-0 border-t border-gray-100 bg-gray-50 space-y-2">
-                  {s.description && <p className="text-sm text-gray-600 leading-relaxed">{s.description}</p>}
-                  {s.details && <p className="text-xs text-gray-500 leading-relaxed">{s.details}</p>}
+                  {s.description && <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{cleanScenarioText(s.description)}</p>}
+                  {s.details && <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-line">{cleanScenarioText(s.details)}</p>}
                   {!s.description && !s.details && <p className="text-xs text-gray-400 italic">No additional details.</p>}
                 </div>
               )}
