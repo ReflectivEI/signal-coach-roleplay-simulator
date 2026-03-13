@@ -393,6 +393,53 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
+  // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
+  const showLiveMetricsPanel = false;
+
+  const exportFeedbackPDF = () => {
+    if (!feedback) return;
+    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openCoachingOnSession = () => {
+    const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
+    const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
+    const capScores = {};
+    const capCounts = {};
+    turns.forEach(t => {
+      if (!t.alignment?.metrics) return;
+      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
+        capScores[cap] = (capScores[cap] || 0) + val.score;
+        capCounts[cap] = (capCounts[cap] || 0) + 1;
+      });
+    });
+    const avgCapabilityScores = Object.fromEntries(
+      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
+    );
+    const overallScore = turns.filter(t => t.alignment).length > 0
+      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
+      : null;
+
+    const sessionContext = encodeURIComponent(JSON.stringify({
+      scenarioTitle: scenario.title,
+      hcpCategory: scenario.hcp_category,
+      specialty: scenario.specialty,
+      misalignments: allMisalignments,
+      positives: allPositives,
+      capabilityScores: avgCapabilityScores,
+      overallScore,
+      source: "roleplay_end_feedback",
+    }));
+
+    navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
+  };
 
   const exportFeedbackPDF = () => {
     if (!feedback) return;
@@ -907,16 +954,22 @@ ${actionText}`;
         </div>
       </div>
 
-      {/* Right: Live Behavioral Metrics Panel */}
-      <div className="w-80 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0" style={{ background: "#1A334D" }}>
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider">Behavioral Metrics</h3>
-          <p className="text-xs mt-0.5" style={{ color: "#39ACAC" }}>Turn-by-turn Signal Intelligence scoring</p>
+      {/* Keep metrics component mounted (for parity/diagnostics), but hidden from rep UI to prevent score-gaming. */}
+      {showLiveMetricsPanel ? (
+        <div className="w-80 flex-shrink-0 bg-white border-l border-gray-200 flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0" style={{ background: "#1A334D" }}>
+            <h3 className="text-xs font-bold text-white uppercase tracking-wider">Behavioral Metrics</h3>
+            <p className="text-xs mt-0.5" style={{ color: "#39ACAC" }}>Turn-by-turn Signal Intelligence scoring</p>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <LiveMetricsPanel turns={turns} scenario={scenario} />
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto">
+      ) : (
+        <div className="hidden" aria-hidden="true">
           <LiveMetricsPanel turns={turns} scenario={scenario} />
         </div>
-      </div>
+      )}
     </div>
   );
 }
