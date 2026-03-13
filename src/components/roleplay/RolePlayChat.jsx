@@ -627,12 +627,12 @@ ${actionText}`;
 
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex flex-col lg:flex-row" style={{ background: "#f0f4f8" }}>
+    <div className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden" style={{ background: "#f0f4f8" }}>
       {/* Left: Chat Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-5 py-3 border-b flex-shrink-0 bg-white">
+        <div className="flex items-start justify-between gap-3 px-3 md:px-5 py-3 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-slate-900 text-[20px] md:text-[24px] leading-snug">{scenario.title}</h2>
@@ -671,7 +671,7 @@ ${actionText}`;
         {/* Persona strip removed as requested */}
 
         {/* Tabs — NavPill style */}
-        <div className="flex gap-1 px-4 py-2.5 border-b flex-shrink-0 bg-white">
+        <div className="flex gap-1 px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white overflow-x-auto">
           {([
             { id: "chat", label: "Live Chat", icon: MessageSquare },
             { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
@@ -723,7 +723,7 @@ ${actionText}`;
                   <span className="italic text-red-600">No opening scene provided for this scenario.</span>
                 </div>
               )}
-              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-4">
 
                 {turns.length === 0 && isLoading && (
                   <div className="flex justify-center py-8">
@@ -748,7 +748,7 @@ ${actionText}`;
                     {turn.hcpDialogueBefore && (
                       <div className="flex justify-start">
                         <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                        <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                        <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
                           {turn.hcpDialogueBefore}
                         </div>
                       </div>
@@ -810,7 +810,7 @@ ${actionText}`;
               />
 
               {/* Input */}
-              <div className="px-5 py-3 border-t flex-shrink-0 bg-white">
+              <div className="px-3 md:px-5 py-3 border-t flex-shrink-0 bg-white pb-[max(12px,env(safe-area-inset-bottom))]">
                 <form
                   onSubmit={e => {
                     e.preventDefault();
@@ -820,7 +820,7 @@ ${actionText}`;
                     setInput(""); // clear input immediately
                     sendMessage();
                   }}
-                  className="flex gap-2"
+                  className="flex gap-2 items-center"
                 >
                   <div className="relative flex-1">
                     <Input
