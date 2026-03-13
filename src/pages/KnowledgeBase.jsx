@@ -380,7 +380,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           </div>
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="mb-6">
             <TabsList className="bg-transparent flex-wrap h-auto gap-2 p-0">
-              {categories.map((cat) => <TabsTrigger key={cat} value={cat} className="text-sm px-4 py-2 rounded-full border border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">{cat}</TabsTrigger>)}
+              {categories.map((cat) => <TabsTrigger key={cat} value={cat} className="text-sm px-4 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">{cat}</TabsTrigger>)}
             </TabsList>
           </Tabs>
           <div className="space-y-4">

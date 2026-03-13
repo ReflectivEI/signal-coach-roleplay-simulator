@@ -207,12 +207,12 @@ export default function PreCallPlanning() {
                     type="button"
                     onClick={() => aiAssist(key)}
                     disabled={aiGenerating !== null || (!form.hcp_name && !form.specialty && !form.disease_state)}
-                    className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 border border-teal-200 rounded-full px-2.5 py-1 hover:bg-teal-50 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {aiGenerating === key ? (
                       <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
                     ) : (
-                      <><Wand2 className="w-3 h-3" /> AI Draft</>
+                      <><Wand2 className="w-3 h-3" /> AI Assistance</>
                     )}
                   </button>
                 </div>
@@ -324,10 +324,15 @@ export default function PreCallPlanning() {
                       { label: "Notes", value: plan.notes },
                     ].filter(f => f.value).map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{value}</p>
                       </div>
                     ))}
+                    <div className="pt-1">
+                      <Button variant="outline" onClick={() => exportPDF(plan)} className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]">
+                        <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>

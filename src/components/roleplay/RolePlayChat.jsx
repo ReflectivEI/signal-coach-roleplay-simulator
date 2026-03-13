@@ -74,6 +74,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .map((v) => v.replace(/^[-*\s]+/, "").trim())
       .filter(Boolean);
 
+  const difficultyStyleMap = {
+    beginner: { background: "#dcfce7", color: "#15803d", borderColor: "#86efac" },
+    intermediate: { background: "#fef3c7", color: "#b45309", borderColor: "#fcd34d" },
+    advanced: { background: "#fce7f3", color: "#be185d", borderColor: "#f9a8d4" },
+  };
+  const difficultyStyle = difficultyStyleMap[String(scenario.difficulty || '').toLowerCase()] || { background: "#e5e7eb", color: "#4b5563", borderColor: "#d1d5db" };
+
   useEffect(() => {
     if (activeTab === "chat") {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -636,10 +643,10 @@ ${actionText}`;
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-slate-900 text-[20px] md:text-[24px] leading-snug">{scenario.title}</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full border border-gray-300 text-gray-600 font-medium">{scenario.difficulty}</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize" style={difficultyStyle}>{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
+            <p className="text-xs text-slate-600 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
 
           <div className="hidden xl:flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-3 min-w-[420px] max-w-[520px]">
@@ -673,24 +680,23 @@ ${actionText}`;
 
         {/* Scenario context summary (kept at top under specialty line) */}
         {(descriptionText || openingScene) && (
-          <div className="px-3 md:px-4 pb-2 border-b bg-white space-y-2">
-            {descriptionText && (
-              <div className="px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-700">
-                <span className="font-bold uppercase text-slate-600 text-[11px]">Scenario Description</span><br />
-                <span className="leading-relaxed">{descriptionText}</span>
+          <div className="px-3 md:px-4 pb-2 border-b bg-white">
+            <div className="rounded-xl border border-gray-200 bg-white p-3 grid grid-cols-1 lg:grid-cols-2 gap-2">
+              {descriptionText && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="font-bold uppercase text-slate-700 text-[11px] mb-0.5">Scenario Description</p>
+                  <p className="text-[12px] text-slate-700 leading-snug">{descriptionText}</p>
+                </div>
+              )}
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="font-bold uppercase text-brand-teal text-[11px] mb-0.5">Opening Scene</p>
+                {openingScene ? (
+                  <p className="text-[12px] text-amber-800 leading-snug italic">{openingScene}</p>
+                ) : (
+                  <p className="text-[12px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
+                )}
               </div>
-            )}
-            {openingScene ? (
-              <div className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                <span className="italic">{openingScene}</span>
-              </div>
-            ) : (
-              <div className="px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
-                <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
-                <span className="italic text-red-600">No opening scene provided for this scenario.</span>
-              </div>
-            )}
+            </div>
           </div>
         )}
 

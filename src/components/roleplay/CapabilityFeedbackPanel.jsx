@@ -132,7 +132,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2">
-      <div className="flex items-center mb-2">
+      <div className="grid grid-cols-[1fr_96px] items-center gap-2 mb-2">
         <Zap className="w-3.5 h-3.5 text-teal-500 mr-2" />
         <span className="font-bold text-sm text-gray-900">Overall: {(() => {
           // Calculate overall average across all capabilities
@@ -142,6 +142,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
         })()}</span>
         <span style={{ marginLeft: '16px' }} className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric - click any metric below to analyze</span>
+      <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
@@ -160,7 +161,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
         return (
           <div key={cap.id} className={`rounded-lg border ${hasFeedback ? colors.result : "border-gray-200 bg-white"} overflow-hidden`}>
-            <div className="flex items-center justify-between px-3 py-2">
+            <div className="grid grid-cols-[1fr_96px] items-center gap-2 px-3 py-2">
               <div className="flex items-center gap-2">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
@@ -168,15 +169,15 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
                   <span className="text-xs font-semibold text-gray-500">Score {getCapabilityAverage(cap.id)}/5</span>
                 )}
                 {hasFeedback && (
-                  <span className="text-xs text-gray-400">{cap.question}</span>
+                  <span className="text-xs text-gray-600">{cap.question}</span>
                 )}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-center gap-1">
                 {!hasFeedback && !isLoading && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className={`text-xs h-6 px-2 border ${colors.btn}`}
+                    className={`text-xs h-7 px-3 border ${colors.btn}`}
                     onClick={() => requestCapabilityFeedback(cap)}
                   >
                     Analyze
@@ -191,10 +192,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               </div>
             </div>
             {hasFeedback && isExpanded && (
-              <div className="px-3 pb-3 text-xs prose prose-xs max-w-none border-t border-gray-100 pt-2">
+              <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2">
                 <ReactMarkdown
                   components={{
-                    p: (props) => <p className="mb-2 leading-6 text-slate-700" {...props} />,
+                    p: (props) => <p className="mb-1 leading-5 text-[15px] text-slate-700" {...props} />,
                     strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                   }}
                 >{capFeedback[cap.id]}</ReactMarkdown>
