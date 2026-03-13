@@ -583,14 +583,14 @@ ${actionText}`;
           const score = avgCapScores[key] !== undefined ? avgCapScores[key] : null;
           // Find a brief recap from turn data
           let recap = "Capability not clearly observed during this session.";
-          if (score !== null && score > 0) {
+          if (score !== null && Number(score) > 0) {
             // Find a turn with this capability
             const turn = scoredTurns.find(t => t.alignment?.metrics && t.alignment.metrics[key]);
             if (turn && turn.alignment.metrics[key]?.recap) {
               recap = turn.alignment.metrics[key].recap;
             } else {
               // Fallback: generate a short recap
-              recap = score >= 4 ? "Strong demonstration of this capability." : score <= 2 ? "Needs improvement in this capability." : "Moderate performance observed.";
+              recap = Number(score) >= 4 ? "Strong demonstration of this capability." : Number(score) <= 2 ? "Needs improvement in this capability." : "Moderate performance observed.";
             }
           }
           return `- ${name} (${score !== null ? score : "N/A"}): ${recap}`;
@@ -677,7 +677,7 @@ ${actionText}`;
             </ReactMarkdown>
           </div>
           <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs">↓ Export PDF</Button>
+            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">↓ Export PDF</Button>
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -717,7 +717,8 @@ ${actionText}`;
               >
                 <Bot className="w-3 h-3 mr-1" /> Coach on this session
               </Button>
-              <Button className="bg-teal-500 hover:bg-teal-600" onClick={onClose}>Done</Button>
+              <Button type="button" onClick={onClose} className="border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">Close</Button>
+              <Button type="button" onClick={onClose} className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded">Done</Button>
             </div>
           </div>
         </div>
@@ -942,7 +943,7 @@ ${actionText}`;
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!input.trim() && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90">
+                  <Button type="submit" disabled={isLoading || isEnding || (!input.trim() && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
