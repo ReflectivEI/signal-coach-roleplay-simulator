@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList, Plus, FileText, Trash2, Info, Sparkles, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format } from "date-fns";
 
 export default function PreCallPlanning() {
@@ -19,6 +19,8 @@ export default function PreCallPlanning() {
   const [form, setForm] = useState({ hcp_name: "", specialty: "", disease_state: "", objectives: "", key_messages: "", anticipated_objections: "", notes: "" });
   const [plans, setPlans] = useState([]);
   const [aiGenerating, setAiGenerating] = useState(null); // which field is being generated
+  const [predictiveInputs, setPredictiveInputs] = useState({ prescribing_habit: "", access_barrier: "" });
+  const [predictiveTips, setPredictiveTips] = useState([]);
   const isLoading = false;
 
   const aiAssist = async (field) => {
@@ -45,6 +47,30 @@ export default function PreCallPlanning() {
       setForm(prev => ({ ...prev, [field]: 'AI service unavailable.' }));
     }
     setAiGenerating(null);
+  };
+
+
+  const generatePredictiveTips = () => {
+    const habit = predictiveInputs.prescribing_habit.toLowerCase();
+    const barrier = predictiveInputs.access_barrier.toLowerCase();
+    const tips = [];
+
+    if (habit.includes("legacy") || habit.includes("older") || habit.includes("stable")) {
+      tips.push("Lead with switch criteria and real-world outcomes for stable patients eligible for optimization.");
+    } else {
+      tips.push("Open with patient-segment opportunities and one high-impact use case tied to this specialty.");
+    }
+
+    if (barrier.includes("prior") || barrier.includes("pa") || barrier.includes("access")) {
+      tips.push("Prepare a prior-auth workflow script and bring one payer-specific support resource to reduce friction.");
+    } else if (barrier.includes("time") || barrier.includes("staff")) {
+      tips.push("Use a 90-second value narrative and propose nurse/pharmacist-enabled follow-up to save clinic time.");
+    } else {
+      tips.push("Map likely objections in advance and pre-wire one response linked to measurable patient impact.");
+    }
+
+    tips.push("Close the call by confirming a concrete next step with owner and date (e.g., chart pull, patient list review, follow-up).");
+    setPredictiveTips(tips.slice(0, 3));
   };
 
   const createPlan = (data) => {
@@ -123,7 +149,7 @@ export default function PreCallPlanning() {
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
           <ClipboardList className="w-7 h-7 text-gray-400" />
           <div>
@@ -131,9 +157,16 @@ export default function PreCallPlanning() {
             <p className="text-sm text-gray-500">Prepare for your HCP conversations</p>
           </div>
         </div>
-        <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
-          <Plus className="w-4 h-4 mr-1" /> New Plan
-        </Button>
+        <div className="flex items-center gap-2">
+          {plans.length > 0 && (
+            <Button variant="outline" onClick={() => exportPDF(plans[0])}>
+              <Download className="w-4 h-4 mr-1" /> Export Latest PDF
+            </Button>
+          )}
+          <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New Plan
+          </Button>
+        </div>
       </div>
 
       {/* Info Banner */}
@@ -174,12 +207,12 @@ export default function PreCallPlanning() {
                     type="button"
                     onClick={() => aiAssist(key)}
                     disabled={aiGenerating !== null || (!form.hcp_name && !form.specialty && !form.disease_state)}
-                    className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 border border-teal-200 rounded-full px-2.5 py-1 hover:bg-teal-50 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {aiGenerating === key ? (
                       <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
                     ) : (
-                      <><Wand2 className="w-3 h-3" /> AI Draft</>
+                      <><Wand2 className="w-3 h-3" /> AI Assistance</>
                     )}
                   </button>
                 </div>
@@ -197,6 +230,32 @@ export default function PreCallPlanning() {
                 />
               </div>
             ))}
+
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">Predictive Prep Assistant</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Input
+                  value={predictiveInputs.prescribing_habit}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, prescribing_habit: e.target.value }))}
+                  placeholder="Prescribing habit (e.g., prefers legacy regimen)"
+                />
+                <Input
+                  value={predictiveInputs.access_barrier}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, access_barrier: e.target.value }))}
+                  placeholder="Barrier (e.g., PA workload, access, staffing)"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-500">Generate top 3 recommendations before your next HCP discussion.</p>
+                <Button type="button" variant="outline" className="text-xs" onClick={generatePredictiveTips}>Generate Top 3</Button>
+              </div>
+              {predictiveTips.length > 0 && (
+                <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
+                  {predictiveTips.map((tip) => <li key={tip}>{tip}</li>)}
+                </ul>
+              )}
+            </div>
+
             <div className="flex gap-3 justify-between items-center">
               <p className="text-xs text-gray-400">
                 Enter HCP name, specialty, or disease state to unlock AI assistance
@@ -265,10 +324,15 @@ export default function PreCallPlanning() {
                       { label: "Notes", value: plan.notes },
                     ].filter(f => f.value).map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{value}</p>
                       </div>
                     ))}
+                    <div className="pt-1">
+                      <Button variant="outline" onClick={() => exportPDF(plan)} className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]">
+                        <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>

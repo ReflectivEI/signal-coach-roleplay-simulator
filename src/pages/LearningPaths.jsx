@@ -457,6 +457,59 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
           </div>
         )}
 
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700 mb-3">Starter Lesson Tracks</p>
+            <div className="space-y-3">
+              {[
+                {
+                  title: "Territory Planning Essentials",
+                  lessons: ["Micro-lesson: Segment high-value HCPs", "Practice: Objection-ready call opener", "Assessment: 5-question readiness check"],
+                  actionLabel: "Open Exercises",
+                  actionPage: "Exercises",
+                },
+                {
+                  title: "Evidence-to-Value Communication",
+                  lessons: ["Micro-lesson: Translate trial endpoints", "Practice: 2-minute value framing", "Assessment: Score your response alignment"],
+                  actionLabel: "Open AI Coach",
+                  actionPage: "AICoach",
+                },
+                {
+                  title: "Commitment & Next-Step Conversion",
+                  lessons: ["Micro-lesson: Low-friction closes", "Practice: Ask-for-commitment drills", "Assessment: Follow-up quality rubric"],
+                  actionLabel: "Open Role Play",
+                  actionPage: "RolePlaySimulator",
+                },
+              ].map((track) => (
+                <div key={track.title} className="rounded-xl border border-gray-200 p-3">
+                  <p className="text-sm font-semibold text-gray-900">{track.title}</p>
+                  <ul className="mt-1.5 list-disc pl-4 text-xs text-gray-600 space-y-0.5">
+                    {track.lessons.map((lesson) => <li key={lesson}>{lesson}</li>)}
+                  </ul>
+                  <Link to={createPageUrl(track.actionPage)} className="inline-flex mt-2 items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">
+                    {track.actionLabel}
+                  </Link>
+                  
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#1A334D] mb-2">Client Customization Workspace</p>
+            <p className="text-sm text-gray-600 leading-relaxed mb-3">
+              Teams can layer client selling frameworks, messaging templates, and territory playbooks on top of the Signal Intelligence™ foundation without changing scoring science.
+            </p>
+            <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
+              <p className="text-xs font-bold text-teal-700 mb-1">Predictive planning concept</p>
+              <p className="text-xs text-gray-700">
+                Input prescribing trends + access barriers and ReflectivAI can suggest top 3 prep recommendations to prioritize in the next HCP conversation.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: Capability List */}
           <div className="space-y-2">
