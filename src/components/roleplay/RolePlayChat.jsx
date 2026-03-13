@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, MessageSquare, Highlighter, Zap } from "lucide-react";
+import { Send, X, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
 import AnnotatedTranscript from "./AnnotatedTranscript";
@@ -392,6 +393,51 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
+
+  const exportFeedbackPDF = () => {
+    if (!feedback) return;
+    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openCoachingOnSession = () => {
+    const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
+    const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
+    const capScores = {};
+    const capCounts = {};
+    turns.forEach(t => {
+      if (!t.alignment?.metrics) return;
+      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
+        capScores[cap] = (capScores[cap] || 0) + val.score;
+        capCounts[cap] = (capCounts[cap] || 0) + 1;
+      });
+    });
+    const avgCapabilityScores = Object.fromEntries(
+      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
+    );
+    const overallScore = turns.filter(t => t.alignment).length > 0
+      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
+      : null;
+
+    const sessionContext = encodeURIComponent(JSON.stringify({
+      scenarioTitle: scenario.title,
+      hcpCategory: scenario.hcp_category,
+      specialty: scenario.specialty,
+      misalignments: allMisalignments,
+      positives: allPositives,
+      capabilityScores: avgCapabilityScores,
+      overallScore,
+      feedback,
+    }));
+
+    navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
+  };
 
   // ─── END SESSION ──────────────────────────────────────────────────────────────
   const endSession = async () => {
@@ -835,6 +881,25 @@ ${actionText}`;
                       blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
                     }}
                   >{feedback}</ReactMarkdown>
+                  <div className="mt-6 border-t border-slate-200 pt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportFeedbackPDF}
+                      className="text-xs border-gray-300"
+                    >
+                      Export to PDF
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs border-teal-400 text-teal-700 hover:bg-teal-50"
+                      onClick={openCoachingOnSession}
+                    >
+                      <Bot className="w-3.5 h-3.5 mr-1" />
+                      Get Coaching on Session
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
