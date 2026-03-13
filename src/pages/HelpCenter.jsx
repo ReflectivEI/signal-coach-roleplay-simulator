@@ -51,7 +51,7 @@ const RESOURCE_LINKS = [
   { title: "FDA Newsroom", href: "https://www.fda.gov/news-events", description: "Regulatory announcements and policy updates." },
 ];
 
-function FaqItem({ item, idx }) {
+function FaqItem({ item, idx: _idx }) {
   const [open, setOpen] = useState(false);
   return (
     <motion.div

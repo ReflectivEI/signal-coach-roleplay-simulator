@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList, Plus, FileText, Trash2, Info, Sparkles, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format } from "date-fns";
 
 export default function PreCallPlanning() {
@@ -19,6 +19,8 @@ export default function PreCallPlanning() {
   const [form, setForm] = useState({ hcp_name: "", specialty: "", disease_state: "", objectives: "", key_messages: "", anticipated_objections: "", notes: "" });
   const [plans, setPlans] = useState([]);
   const [aiGenerating, setAiGenerating] = useState(null); // which field is being generated
+  const [predictiveInputs, setPredictiveInputs] = useState({ prescribing_habit: "", access_barrier: "" });
+  const [predictiveTips, setPredictiveTips] = useState([]);
   const isLoading = false;
 
   const aiAssist = async (field) => {
@@ -45,6 +47,30 @@ export default function PreCallPlanning() {
       setForm(prev => ({ ...prev, [field]: 'AI service unavailable.' }));
     }
     setAiGenerating(null);
+  };
+
+
+  const generatePredictiveTips = () => {
+    const habit = predictiveInputs.prescribing_habit.toLowerCase();
+    const barrier = predictiveInputs.access_barrier.toLowerCase();
+    const tips = [];
+
+    if (habit.includes("legacy") || habit.includes("older") || habit.includes("stable")) {
+      tips.push("Lead with switch criteria and real-world outcomes for stable patients eligible for optimization.");
+    } else {
+      tips.push("Open with patient-segment opportunities and one high-impact use case tied to this specialty.");
+    }
+
+    if (barrier.includes("prior") || barrier.includes("pa") || barrier.includes("access")) {
+      tips.push("Prepare a prior-auth workflow script and bring one payer-specific support resource to reduce friction.");
+    } else if (barrier.includes("time") || barrier.includes("staff")) {
+      tips.push("Use a 90-second value narrative and propose nurse/pharmacist-enabled follow-up to save clinic time.");
+    } else {
+      tips.push("Map likely objections in advance and pre-wire one response linked to measurable patient impact.");
+    }
+
+    tips.push("Close the call by confirming a concrete next step with owner and date (e.g., chart pull, patient list review, follow-up).");
+    setPredictiveTips(tips.slice(0, 3));
   };
 
   const createPlan = (data) => {
@@ -197,6 +223,32 @@ export default function PreCallPlanning() {
                 />
               </div>
             ))}
+
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">Predictive Prep Assistant</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Input
+                  value={predictiveInputs.prescribing_habit}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, prescribing_habit: e.target.value }))}
+                  placeholder="Prescribing habit (e.g., prefers legacy regimen)"
+                />
+                <Input
+                  value={predictiveInputs.access_barrier}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, access_barrier: e.target.value }))}
+                  placeholder="Barrier (e.g., PA workload, access, staffing)"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-500">Generate top 3 recommendations before your next HCP discussion.</p>
+                <Button type="button" variant="outline" className="text-xs" onClick={generatePredictiveTips}>Generate Top 3</Button>
+              </div>
+              {predictiveTips.length > 0 && (
+                <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
+                  {predictiveTips.map((tip) => <li key={tip}>{tip}</li>)}
+                </ul>
+              )}
+            </div>
+
             <div className="flex gap-3 justify-between items-center">
               <p className="text-xs text-gray-400">
                 Enter HCP name, specialty, or disease state to unlock AI assistance
