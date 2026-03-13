@@ -7,7 +7,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, BookOpen, Play, GraduationCap, ArrowRight, Trophy } from "lucide-react";
+import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, BookOpen, Play, GraduationCap, ArrowRight } from "lucide-react";
 import { subDays, isAfter, parseISO, format } from "date-fns";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -495,11 +495,11 @@ export default function SessionAnalytics() {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-              <TabsTrigger value="trends" className="text-xs">Capability Trends</TabsTrigger>
-              <TabsTrigger value="patterns" className="text-xs">Patterns & Strategies</TabsTrigger>
-              <TabsTrigger value="scenarios" className="text-xs">By Scenario</TabsTrigger>
+            <TabsList className="bg-transparent flex-wrap gap-2 h-auto p-0">
+              <TabsTrigger value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTrigger>
+              <TabsTrigger value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTrigger>
+              <TabsTrigger value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTrigger>
+              <TabsTrigger value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -584,7 +584,7 @@ export default function SessionAnalytics() {
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <p className="text-xs font-bold text-gray-800">{cap.capability}</p>
-                        <p className="text-xs text-gray-400">Avg: {cap.score}/5 · Benchmark: {cap.benchmark}/5</p>
+                        <p className="text-xs text-gray-500">Avg: {cap.score}/5 · Benchmark: {cap.benchmark}/5</p>
                       </div>
                       <span className={`text-sm font-bold px-2 py-0.5 rounded ${cap.score >= cap.benchmark ? "text-teal-600 bg-teal-50" : "text-orange-600 bg-orange-50"}`}>
                         {cap.score >= cap.benchmark ? "↑" : "↓"} {cap.score}/5

@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { Sparkles, Loader2, ArrowRight, Play, BookOpen, Target, RefreshCw } from "lucide-react";
+import { Sparkles, Loader2, ArrowRight, Play, BookOpen, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import ReactMarkdown from "react-markdown";
 
 const priorityColor = {
   high: "bg-red-100 text-red-700 border-red-200",
@@ -78,13 +77,14 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
           {weakCapabilities.length > 0 && (
             <div className="space-y-1.5">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Likely Focus Areas:</p>
-              {weakCapabilities.map(c => (
-                <div key={c.key} className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-                  <span className="text-xs text-slate-300">{c.capability}</span>
-                  <span className="text-xs text-orange-400 font-bold">{c.score}/5</span>
-                </div>
-              ))}
+              <div className="flex flex-wrap gap-2">
+                {weakCapabilities.map(c => (
+                  <div key={c.key} className="inline-flex items-center gap-2 text-sm border border-[#1A334D] bg-[#e6f7f7] text-[#1A334D] rounded-full px-3 py-1 hover:-translate-y-0.5 hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-white transition-all">
+                    <span>{c.capability}</span>
+                    <span className="text-orange-500 font-bold">{c.score}/5</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

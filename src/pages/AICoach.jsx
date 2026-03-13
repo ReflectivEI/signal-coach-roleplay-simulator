@@ -52,6 +52,7 @@ import { createPageUrl } from "../utils";
 import ReactMarkdown from "react-markdown";
 import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
+import TodaysTipCard from "@/components/shared/TodaysTipCard";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -111,11 +112,7 @@ export default function AICoach() {
   // Auto-open with session context if navigated from a roleplay
   useEffect(() => {
     if (sessionContext && messages.length === 0) {
-      const intro = buildSessionContextMessage(sessionContext);
-      sendMessage(intro, true);
-      // Immediately trigger coaching feedback request
-      const feedbackRequest = `Please provide specific, actionable coaching feedback for this session, referencing the scenario, detected misalignments, positives, and capability scores above. Ground your feedback in Signal Intelligence principles.`;
-      sendMessage(feedbackRequest);
+      generateAutoSessionCoaching(sessionContext);
     }
   }, []);
 
@@ -125,6 +122,7 @@ export default function AICoach() {
 
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [reactions, setReactions] = useState({});
+  const [chatResetKey, setChatResetKey] = useState(0);
 
   // Build a rich context message from roleplay alignment data
   function buildSessionContextMessage(ctx) {
@@ -167,6 +165,52 @@ Please give me specific, actionable feedback that directly addresses these misal
         /the Role Play Simulator page/g,
         `[the Role Play Simulator page](${rpsUrl})`
       );
+  };
+
+  const generateAutoSessionCoaching = async (ctx) => {
+    setIsLoading(true);
+    try {
+      const contextMessage = buildSessionContextMessage(ctx);
+      const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
+
+Session context:
+${contextMessage}
+
+Produce a concise coaching synopsis with EXACTLY these section headers:
+## Session Snapshot
+## Strengths to Keep
+## Gaps to Fix
+## Next-call Playbook
+
+Rules:
+- Use only observable behavior from provided context
+- Tie recommendations to Signal Intelligence capabilities
+- Keep it practical and specific
+- No filler preamble`; 
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const coachResponse = (data.response || data.text || data.content || '');
+        const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
+        const finalResponse = addRolePlayLinks(coachText);
+        const updatedMessages = [{ role: "assistant", content: finalResponse }];
+        setMessages(updatedMessages);
+        generateSessionSummary(updatedMessages);
+      } else {
+        setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+      }
+    } catch (err) {
+      console.error('Auto session coaching error:', err);
+      setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
@@ -320,6 +364,18 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
     setReactions(prev => ({ ...prev, [idx]: prev[idx] === type ? null : type }));
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setSessionSummary(null);
+    setGeneratingSummary(false);
+    setContentToolMode(null);
+    setReactions({});
+    setCopiedIdx(null);
+    setIsLoading(false);
+    setChatResetKey((k) => k + 1);
+  };
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
       {/* Main Chat Area */}
@@ -332,7 +388,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900">AI Coach</h1>
-              <p className="text-xs text-gray-500">Your personal pharma sales coaching assistant</p>
+              <p className="text-xs text-gray-600">Your personal pharma sales coaching assistant</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -359,7 +415,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
               variant="outline"
               size="sm"
               className="bg-teal-500 text-white hover:bg-teal-600 text-xs"
-              onClick={() => setMessages([])}
+              onClick={handleNewChat}
             >
               <RefreshCw className="w-3 h-3 mr-1" />
               New Chat
@@ -395,19 +451,23 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="max-w-3xl mx-auto mb-5">
+            <TodaysTipCard className="shadow-sm border-yellow-300 bg-yellow-50" />
+          </div>
           {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <MessageSquare className="w-16 h-16 text-gray-200 mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Start a Conversation</h2>
-              <p className="text-sm text-gray-500 max-w-md mb-8">
+            <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+              <MessageSquare className="w-14 h-14 text-gray-200 mb-4 mx-auto" />
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Start a Conversation</h2>
+              <p className="text-sm text-gray-500 max-w-xl mx-auto mb-6">
                 Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
               </p>
-              <div className="w-full max-w-lg space-y-3">
+              <div className="w-full max-w-2xl mx-auto grid grid-cols-1 gap-3">
                 {suggestedQuestions.map((q) => (
                   <button
                     key={q}
                     onClick={() => sendMessage(q)}
-                    className="w-full p-3 text-sm text-left text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all"
+                    className="w-full p-3 text-sm text-left text-gray-700 bg-gray-50 border border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={q}
                   >
                     {q}
                   </button>
@@ -577,7 +637,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         </div>
       </div>
 
-      <InsightsSidebar onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
+      <InsightsSidebar key={`insights-${chatResetKey}`} onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
     </div>
   );
 }

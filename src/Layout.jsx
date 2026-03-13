@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
   BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight,
-  ChevronDown, Bell, User, Moon, PenSquare, TrendingUp, RefreshCw, UserCircle, Users, Route
+  ChevronDown, Bell, User, Moon, PenSquare, TrendingUp, UserCircle, Users, Route
 } from "lucide-react";
 
 const navSections = [
@@ -62,98 +62,20 @@ const navSections = [
   },
 ];
 
-const DEFAULT_TIP = "When engaging with healthcare professionals, prioritize building trust by actively listening to their concerns and responding thoughtfully.";
 
 export default function Layout({ children, currentPageName }) {
   const [openSections, setOpenSections] = useState(
     navSections.reduce((acc, s) => ({ ...acc, [s.label]: s.defaultOpen }), {})
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [tip, setTip] = useState(DEFAULT_TIP);
-  const [tipLoading, setTipLoading] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
   const { user: authUser, logout } = useAuth();
-
-  // Auto-generate tip on mount
-  useEffect(() => {
-    refreshTip();
-  }, []);
 
   useEffect(() => {
     const handler = (e) => { if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const TIP_FALLBACKS = [
-    DEFAULT_TIP,
-    "Mirror the HCP's pace: if they are time-pressed, lead with one clear value point before asking anything.",
-    "When you hear skepticism, acknowledge it first — then offer one concrete data point tied to patient impact.",
-    "Ask one forward-driving question after every objection to keep momentum and uncover next-step intent.",
-    "Close each conversation with a specific commitment: who will do what by when.",
-    "Before framing value, confirm the HCP's priority — relevance you haven't verified is noise.",
-  ];
-
-  const refreshTip = useCallback(async () => {
-    setTipLoading(true);
-    try {
-      const timestamp = Date.now();
-      const seed = Math.random().toString(36).substring(7) + timestamp;
-      const sessionId = Math.random().toString(36).substring(2, 10);
-
-      const themes = [
-        "crafting questions that make HCPs pause and think, not just answer on autopilot",
-        "picking up on the subtle cues when someone's interest level shifts mid-conversation",
-        "translating clinical evidence into language that connects with their specific practice challenges",
-        "responding to objections in a way that deepens trust rather than triggers defensiveness",
-        "ending every interaction with crystal-clear next steps that both parties actually remember",
-        "establishing credibility quickly with a skeptical or time-pressed HCP",
-        "pivoting smoothly when the conversation goes off-track without being awkward",
-        "demonstrating value in under 90 seconds when you have limited face time",
-        "using data to support your message without overwhelming the conversation",
-        "reading body language to know when to push forward vs. when to pause and listen",
-        "turning a brief hallway encounter into a meaningful touchpoint",
-        "following up in a way that feels helpful rather than pushy"
-      ];
-
-      const theme = themes[Math.floor(Math.random() * themes.length)];
-
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `You're a pharmaceutical sales coach giving fresh daily advice. Today's focus: "${theme}". Session: ${sessionId}. Seed: ${seed}.
-
-Generate ONE UNIQUE practical tip. Requirements:
-- Write like you're texting advice to a peer, not lecturing
-- Make it instantly actionable for their next HCP interaction  
-- Keep it to 1-2 sentences maximum
-- Be SPECIFIC with your example or technique
-- MUST be completely different from these common tips: "listen first", "ask open questions", "show value", "be confident"
-- Focus specifically on: ${theme}
-- NO generic advice. Make it tactical and memorable.
-
-IMPORTANT: Generate something FRESH that feels new and specific, not a reworded version of standard sales advice.`,
-          temperature: 0.92,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        let tipText = (data.response || data.text || data.content || '').trim();
-        // Strip markdown code block if present
-        tipText = tipText.replace(/^```[a-z]*\n?|\n?```$/g, '').trim();
-        // Remove quotes if LLM added them
-        tipText = tipText.replace(/^["']|["']$/g, '').trim();
-        setTip(tipText || TIP_FALLBACKS[Math.floor(Math.random() * TIP_FALLBACKS.length)]);
-      } else {
-        setTip(TIP_FALLBACKS[Math.floor(Math.random() * TIP_FALLBACKS.length)]);
-      }
-    } catch {
-      setTip(TIP_FALLBACKS[Math.floor(Math.random() * TIP_FALLBACKS.length)]);
-    } finally {
-      setTipLoading(false);
-    }
   }, []);
 
   const toggleSection = (label) => {
@@ -309,7 +231,7 @@ IMPORTANT: Generate something FRESH that feels new and specific, not a reworded 
                       >
                         <Link
                           to={createPageUrl(item.page)}
-                          className={`flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
+                          className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
                             ? "text-white font-semibold"
                             : "text-white/60 hover:text-white hover:bg-white/10"
                             }`}
@@ -320,6 +242,13 @@ IMPORTANT: Generate something FRESH that feels new and specific, not a reworded 
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{item.label}</span>
+                          {!isActive && (
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-semibold opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200"
+                              style={{ background: "#39ACAC", color: "#ffffff", border: "1px solid #79caca" }}
+                            >
+                              Open
+                            </span>
+                          )}
                         </Link>
                       </motion.div>
                     );
@@ -330,24 +259,6 @@ IMPORTANT: Generate something FRESH that feels new and specific, not a reworded 
           ))}
         </nav>
 
-        {/* Today's Tip — pale yellow accent matching marketing palette */}
-        <div className="p-3 m-3 rounded-lg border" style={{ background: "#fefce8", borderColor: "#fde68a" }}>
-          <div className="flex items-center gap-2 text-xs font-bold mb-1.5" style={{ color: "#1A334D" }}>
-            <span className="w-4 h-4 rounded-full border-2 border-yellow-500"></span>
-            <span className="flex-1">Today's Tip</span>
-            <button
-              onClick={refreshTip}
-              disabled={tipLoading}
-              className="rounded p-0.5 hover:bg-yellow-100 transition-colors"
-              title="Refresh tip"
-            >
-              <RefreshCw className={`w-3 h-3 ${tipLoading ? "animate-spin" : ""}`} style={{ color: "#1A334D" }} />
-            </button>
-          </div>
-          <p className="text-xs leading-relaxed" style={{ color: "#374151" }}>
-            {tipLoading ? "Generating tip…" : tip}
-          </p>
-        </div>
       </aside>
 
       {/* Main content */}

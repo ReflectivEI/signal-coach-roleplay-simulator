@@ -12,6 +12,54 @@ const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
   metrics: c.coreMetrics.map(m => m.name).join(", ")
 }));
 
+const FEEDBACK_SECTION_CANONICAL = {
+  brief_rationale: "Brief rationale",
+  specific_evidence: "Specific evidence from the transcript",
+  concrete_adjustment: "One concrete behavior to adjust",
+  coaching_cue: "Coaching cue for next call",
+};
+
+function normalizeCapabilityFeedback(rawFeedback = "") {
+  const rawLines = String(rawFeedback)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const dedupedLines = rawLines.filter((line, idx, arr) => arr.indexOf(line) === idx);
+
+  const normalized = dedupedLines.map((line) => {
+    const clean = line.replace(/^[-*]\s*/, "").trim();
+
+    if (/^(?:\d+[.)-]?\s*)?(brief\s+rationale)\s*[:\-]?/i.test(clean)) {
+      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(brief\s+rationale)\s*[:\-]?\s*/i, "").trim();
+      return body
+        ? `**${FEEDBACK_SECTION_CANONICAL.brief_rationale}:** ${body}`
+        : `**${FEEDBACK_SECTION_CANONICAL.brief_rationale}:**`;
+    }
+    if (/^(?:\d+[.)-]?\s*)?(specific\s+evidence(?:\s+from\s+the\s+transcript)?)\s*[:\-]?/i.test(clean)) {
+      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(specific\s+evidence(?:\s+from\s+the\s+transcript)?)\s*[:\-]?\s*/i, "").trim();
+      return body
+        ? `**${FEEDBACK_SECTION_CANONICAL.specific_evidence}:** ${body}`
+        : `**${FEEDBACK_SECTION_CANONICAL.specific_evidence}:**`;
+    }
+    if (/^(?:\d+[.)-]?\s*)?(?:one\s+)?concrete\s+behavior\s+to\s+adjust\s*[:\-]?/i.test(clean)) {
+      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(?:one\s+)?concrete\s+behavior\s+to\s+adjust\s*[:\-]?\s*/i, "").trim();
+      return body
+        ? `**${FEEDBACK_SECTION_CANONICAL.concrete_adjustment}:** ${body}`
+        : `**${FEEDBACK_SECTION_CANONICAL.concrete_adjustment}:**`;
+    }
+    if (/^(?:\d+[.)-]?\s*)?coaching\s+cue(?:\s+for\s+next\s+call)?\s*[:\-]?/i.test(clean)) {
+      const body = clean.replace(/^(?:\d+[.)-]?\s*)?coaching\s+cue(?:\s+for\s+next\s+call)?\s*[:\-]?\s*/i, "").trim();
+      return body
+        ? `**${FEEDBACK_SECTION_CANONICAL.coaching_cue}:** ${body}`
+        : `**${FEEDBACK_SECTION_CANONICAL.coaching_cue}:**`;
+    }
+    return clean;
+  });
+
+  return normalized.join("\n\n");
+}
+
 const colorMap = {
   teal: { btn: "bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-200", badge: "bg-teal-100 text-teal-700", result: "border-teal-200 bg-teal-50" },
   blue: { btn: "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200", badge: "bg-blue-100 text-blue-700", result: "border-blue-200 bg-blue-50" },
@@ -61,16 +109,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
       if (!res.ok) throw new Error('Failed to get feedback');
       const data = await res.json();
-      setCapFeedback((prev) => ({ ...prev, [cap.id]: data.response || data.text || data.content || '' }));
-          // Deduplicate repeated feedback notes for the same capability
-          if (data.response || data.text || data.content) {
-            const feedback = data.response || data.text || data.content || '';
-            const lines = feedback.split('\n');
-            const dedupedLines = lines.filter((line, idx, arr) => arr.indexOf(line) === idx);
-            setCapFeedback((prev) => ({ ...prev, [cap.id]: dedupedLines.join('\n') }));
-          } else {
-            setCapFeedback((prev) => ({ ...prev, [cap.id]: '' }));
-          }
+      const feedbackText = data.response || data.text || data.content || '';
+      const normalizedFeedback = normalizeCapabilityFeedback(feedbackText);
+      setCapFeedback((prev) => ({ ...prev, [cap.id]: normalizedFeedback }));
     } catch (err) {
       console.error('Capability feedback error:', err);
       setCapFeedback((prev) => ({ ...prev, [cap.id]: 'Unable to generate feedback. Please try again.' }));
@@ -90,17 +131,21 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   }
 
   return (
-    <div className="px-4 py-3 space-y-2">
-      <div className="flex items-center mb-2">
-        <Zap className="w-3.5 h-3.5 text-teal-500 mr-2" />
-        <span className="font-bold text-sm text-gray-900">Overall: {(() => {
-          // Calculate overall average across all capabilities
-          const capIds = CAPABILITIES.map(c => c.id);
-          const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-          if (scores.length === 0) return "N/A";
-          return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
-        })()}</span>
-        <span style={{ marginLeft: '16px' }} className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric - click any metric below to analyze</span>
+    <div className="px-4 py-3 space-y-2.5">
+      <div className="grid grid-cols-[1fr_88px] items-end gap-2 mb-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Zap className="w-3.5 h-3.5 text-teal-500" />
+            <span className="font-bold text-sm text-gray-900">Overall: {(() => {
+              const capIds = CAPABILITIES.map(c => c.id);
+              const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+              if (scores.length === 0) return "N/A";
+              return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
+            })()}</span>
+          </div>
+          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+        </div>
+        <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
@@ -119,23 +164,23 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
         return (
           <div key={cap.id} className={`rounded-lg border ${hasFeedback ? colors.result : "border-gray-200 bg-white"} overflow-hidden`}>
-            <div className="flex items-center justify-between px-3 py-2">
-              <div className="flex items-center gap-2">
+            <div className="grid grid-cols-[1fr_96px] items-center gap-2 px-3 py-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
                 {getCapabilityAverage(cap.id) !== null && (
                   <span className="text-xs font-semibold text-gray-500">Score {getCapabilityAverage(cap.id)}/5</span>
                 )}
                 {hasFeedback && (
-                  <span className="text-xs text-gray-400">{cap.question}</span>
+                  <span className="text-xs text-gray-600">{cap.question}</span>
                 )}
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center justify-center gap-1">
                 {!hasFeedback && !isLoading && (
                   <Button
                     size="sm"
                     variant="outline"
-                    className={`text-xs h-6 px-2 border ${colors.btn}`}
+                    className={`text-xs h-7 px-3 border ${colors.btn}`}
                     onClick={() => requestCapabilityFeedback(cap)}
                   >
                     Analyze
@@ -150,8 +195,13 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               </div>
             </div>
             {hasFeedback && isExpanded && (
-              <div className="px-3 pb-3 text-xs prose prose-xs max-w-none border-t border-gray-100 pt-2">
-                <ReactMarkdown>{capFeedback[cap.id]}</ReactMarkdown>
+              <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2">
+                <ReactMarkdown
+                  components={{
+                    p: (props) => <p className="mb-2 leading-5 text-[16px] text-slate-700" {...props} />,
+                    strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+                  }}
+                >{capFeedback[cap.id]}</ReactMarkdown>
               </div>
             )}
           </div>

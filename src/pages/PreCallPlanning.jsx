@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { ClipboardList, Plus, FileText, Trash2, Info, Sparkles, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
+import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format } from "date-fns";
 
 export default function PreCallPlanning() {
@@ -19,6 +19,8 @@ export default function PreCallPlanning() {
   const [form, setForm] = useState({ hcp_name: "", specialty: "", disease_state: "", objectives: "", key_messages: "", anticipated_objections: "", notes: "" });
   const [plans, setPlans] = useState([]);
   const [aiGenerating, setAiGenerating] = useState(null); // which field is being generated
+  const [predictiveInputs, setPredictiveInputs] = useState({ prescribing_habit: "", access_barrier: "" });
+  const [predictiveTips, setPredictiveTips] = useState([]);
   const isLoading = false;
 
   const aiAssist = async (field) => {
@@ -45,6 +47,30 @@ export default function PreCallPlanning() {
       setForm(prev => ({ ...prev, [field]: 'AI service unavailable.' }));
     }
     setAiGenerating(null);
+  };
+
+
+  const generatePredictiveTips = () => {
+    const habit = predictiveInputs.prescribing_habit.toLowerCase();
+    const barrier = predictiveInputs.access_barrier.toLowerCase();
+    const tips = [];
+
+    if (habit.includes("legacy") || habit.includes("older") || habit.includes("stable")) {
+      tips.push("Lead with switch criteria and real-world outcomes for stable patients eligible for optimization.");
+    } else {
+      tips.push("Open with patient-segment opportunities and one high-impact use case tied to this specialty.");
+    }
+
+    if (barrier.includes("prior") || barrier.includes("pa") || barrier.includes("access")) {
+      tips.push("Prepare a prior-auth workflow script and bring one payer-specific support resource to reduce friction.");
+    } else if (barrier.includes("time") || barrier.includes("staff")) {
+      tips.push("Use a 90-second value narrative and propose nurse/pharmacist-enabled follow-up to save clinic time.");
+    } else {
+      tips.push("Map likely objections in advance and pre-wire one response linked to measurable patient impact.");
+    }
+
+    tips.push("Close the call by confirming a concrete next step with owner and date (e.g., chart pull, patient list review, follow-up).");
+    setPredictiveTips(tips.slice(0, 3));
   };
 
   const createPlan = (data) => {
@@ -123,17 +149,24 @@ export default function PreCallPlanning() {
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
-          <ClipboardList className="w-7 h-7 text-gray-400" />
+          <ClipboardList className="w-7 h-7 text-gray-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pre-Call Planning</h1>
-            <p className="text-sm text-gray-500">Prepare for your HCP conversations</p>
+            <p className="text-sm text-gray-600">Prepare for your HCP conversations</p>
           </div>
         </div>
-        <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
-          <Plus className="w-4 h-4 mr-1" /> New Plan
-        </Button>
+        <div className="flex items-center gap-2">
+          {plans.length > 0 && (
+            <Button variant="outline" onClick={() => exportPDF(plans[0])}>
+              <Download className="w-4 h-4 mr-1" /> Export Latest PDF
+            </Button>
+          )}
+          <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
+            <Plus className="w-4 h-4 mr-1" /> New Plan
+          </Button>
+        </div>
       </div>
 
       {/* Info Banner */}
@@ -174,12 +207,12 @@ export default function PreCallPlanning() {
                     type="button"
                     onClick={() => aiAssist(key)}
                     disabled={aiGenerating !== null || (!form.hcp_name && !form.specialty && !form.disease_state)}
-                    className="flex items-center gap-1 text-xs text-teal-600 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 border border-teal-200 rounded-full px-2.5 py-1 hover:bg-teal-50 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {aiGenerating === key ? (
                       <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
                     ) : (
-                      <><Wand2 className="w-3 h-3" /> AI Draft</>
+                      <><Wand2 className="w-3 h-3" /> AI Assistance</>
                     )}
                   </button>
                 </div>
@@ -197,8 +230,34 @@ export default function PreCallPlanning() {
                 />
               </div>
             ))}
+
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-3 space-y-2">
+              <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">Predictive Prep Assistant</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <Input
+                  value={predictiveInputs.prescribing_habit}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, prescribing_habit: e.target.value }))}
+                  placeholder="Prescribing habit (e.g., prefers legacy regimen)"
+                />
+                <Input
+                  value={predictiveInputs.access_barrier}
+                  onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, access_barrier: e.target.value }))}
+                  placeholder="Barrier (e.g., PA workload, access, staffing)"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-600">Generate top 3 recommendations before your next HCP discussion.</p>
+                <Button type="button" variant="outline" className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] hover:-translate-y-0.5 transition-all" onClick={generatePredictiveTips}>Generate Top 3</Button>
+              </div>
+              {predictiveTips.length > 0 && (
+                <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
+                  {predictiveTips.map((tip) => <li key={tip}>{tip}</li>)}
+                </ul>
+              )}
+            </div>
+
             <div className="flex gap-3 justify-between items-center">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">
                 Enter HCP name, specialty, or disease state to unlock AI assistance
               </p>
               <div className="flex gap-2">
@@ -219,7 +278,7 @@ export default function PreCallPlanning() {
         <div className="text-center py-20 bg-white rounded-xl border border-gray-100">
           <FileText className="w-16 h-16 text-gray-200 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Plans Yet</h3>
-          <p className="text-sm text-gray-500 mb-6">Create your first Pre-Call Plan to start preparing for HCP conversations.</p>
+          <p className="text-sm text-gray-600 mb-6">Create your first Pre-Call Plan to start preparing for HCP conversations.</p>
           <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4 mr-1" /> Create Your First Plan
           </Button>
@@ -235,12 +294,12 @@ export default function PreCallPlanning() {
                     <div className="flex gap-2 mt-1 flex-wrap">
                       {plan.specialty && <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5">{plan.specialty}</span>}
                       {plan.disease_state && <span className="text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5">{plan.disease_state}</span>}
-                      <span className="text-xs bg-gray-50 text-gray-500 border border-gray-200 rounded-full px-2 py-0.5 capitalize">{plan.status || "draft"}</span>
+                      <span className="text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5 capitalize">{plan.status || "draft"}</span>
                     </div>
-                    {plan.objectives && <p className="text-sm text-gray-500 mt-2 line-clamp-2">{plan.objectives}</p>}
+                    {plan.objectives && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{plan.objectives}</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
+                    <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportPDF(plan)} title="Export to PDF">
                       <Download className="w-4 h-4 text-teal-500 hover:text-teal-700" />
                     </Button>
@@ -248,10 +307,10 @@ export default function PreCallPlanning() {
                       <Download className="w-4 h-4 text-blue-500 hover:text-blue-700" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
-                      {expandedPlan === plan.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                      {expandedPlan === plan.id ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronDown className="w-4 h-4 text-gray-600" />}
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deletePlan(plan.id)}>
-                      <Trash2 className="w-4 h-4 text-gray-400" />
+                      <Trash2 className="w-4 h-4 text-gray-600" />
                     </Button>
                   </div>
                 </div>
@@ -265,10 +324,15 @@ export default function PreCallPlanning() {
                       { label: "Notes", value: plan.notes },
                     ].filter(f => f.value).map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{label}</p>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{value}</p>
                       </div>
                     ))}
+                    <div className="pt-1">
+                      <Button variant="outline" onClick={() => exportPDF(plan)} className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]">
+                        <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
