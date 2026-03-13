@@ -52,6 +52,7 @@ import { createPageUrl } from "../utils";
 import ReactMarkdown from "react-markdown";
 import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
+import TodaysTipCard from "@/components/shared/TodaysTipCard";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -450,19 +451,23 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="max-w-3xl mx-auto mb-5">
+            <TodaysTipCard className="shadow-sm" />
+          </div>
           {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <MessageSquare className="w-16 h-16 text-gray-200 mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Start a Conversation</h2>
-              <p className="text-sm text-gray-500 max-w-md mb-8">
+            <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+              <MessageSquare className="w-14 h-14 text-gray-200 mb-4 mx-auto" />
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Start a Conversation</h2>
+              <p className="text-sm text-gray-500 max-w-xl mx-auto mb-6">
                 Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
               </p>
-              <div className="w-full max-w-lg space-y-3">
+              <div className="w-full max-w-2xl mx-auto grid grid-cols-1 gap-3">
                 {suggestedQuestions.map((q) => (
                   <button
                     key={q}
                     onClick={() => sendMessage(q)}
-                    className="w-full p-3 text-sm text-left text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all"
+                    className="w-full p-3 text-sm text-left text-gray-700 bg-gray-50 border border-gray-200 rounded-xl hover:border-teal-300 hover:bg-teal-50 transition-all whitespace-nowrap overflow-hidden text-ellipsis"
+                    title={q}
                   >
                     {q}
                   </button>
