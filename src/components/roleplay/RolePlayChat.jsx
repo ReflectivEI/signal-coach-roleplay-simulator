@@ -882,6 +882,15 @@ ${actionText}`;
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
+              <div className="px-4 pt-4 pb-2">
+                <button
+                  onClick={endSession}
+                  disabled={isEnding || repTurnsCount < 2}
+                  className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 2-5" : "Generate Sections 2-5"}
+                </button>
+              </div>
               {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
               <div className="mb-6">
                 <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
