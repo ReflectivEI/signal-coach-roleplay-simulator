@@ -26,12 +26,6 @@ const THEMES = [
   { id: "soft", pageBg: "#f8fafc", cardBorder: "border-cyan-200", accent: "text-cyan-700" },
 ];
 
-const THEMES = [
-  { id: "teal", pageBg: "#f0f4f8", cardBorder: "border-gray-200", accent: "text-teal-700" },
-  { id: "navy", pageBg: "#eef2f7", cardBorder: "border-slate-300", accent: "text-slate-700" },
-  { id: "soft", pageBg: "#f8fafc", cardBorder: "border-cyan-200", accent: "text-cyan-700" },
-];
-
 export default function Dashboard() {
   const [themeIndex, setThemeIndex] = useState(0);
   const [notice, setNotice] = useState("Pipeline forecasting summary updated 2 min ago.");

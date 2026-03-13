@@ -10,7 +10,7 @@ export default function PerformanceAnalytics() {
           <BarChart3 className="w-5 h-5 text-teal-500" />
           <h1 className="text-2xl font-bold text-gray-900">Performance Analytics</h1>
         </div>
-        <p className="text-gray-500 text-sm">Signal Intelligence scores, misalignment patterns, and capability trends across your role-play sessions.</p>
+        <p className="text-gray-600 text-sm">Signal Intelligence scores, misalignment patterns, and capability trends across your role-play sessions.</p>
       </div>
       <SessionAnalytics />
     </div>

@@ -131,18 +131,21 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   }
 
   return (
-    <div className="px-4 py-3 space-y-2">
-      <div className="grid grid-cols-[1fr_96px] items-center gap-2 mb-2">
-        <Zap className="w-3.5 h-3.5 text-teal-500 mr-2" />
-        <span className="font-bold text-sm text-gray-900">Overall: {(() => {
-          // Calculate overall average across all capabilities
-          const capIds = CAPABILITIES.map(c => c.id);
-          const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-          if (scores.length === 0) return "N/A";
-          return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
-        })()}</span>
-        <span style={{ marginLeft: '16px' }} className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric - click any metric below to analyze</span>
-      <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
+    <div className="px-4 py-3 space-y-2.5">
+      <div className="grid grid-cols-[1fr_88px] items-end gap-2 mb-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Zap className="w-3.5 h-3.5 text-teal-500" />
+            <span className="font-bold text-sm text-gray-900">Overall: {(() => {
+              const capIds = CAPABILITIES.map(c => c.id);
+              const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+              if (scores.length === 0) return "N/A";
+              return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
+            })()}</span>
+          </div>
+          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+        </div>
+        <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
@@ -162,7 +165,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
         return (
           <div key={cap.id} className={`rounded-lg border ${hasFeedback ? colors.result : "border-gray-200 bg-white"} overflow-hidden`}>
             <div className="grid grid-cols-[1fr_96px] items-center gap-2 px-3 py-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
                 {getCapabilityAverage(cap.id) !== null && (
@@ -195,7 +198,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2">
                 <ReactMarkdown
                   components={{
-                    p: (props) => <p className="mb-1 leading-5 text-[15px] text-slate-700" {...props} />,
+                    p: (props) => <p className="mb-2 leading-5 text-[16px] text-slate-700" {...props} />,
                     strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                   }}
                 >{capFeedback[cap.id]}</ReactMarkdown>

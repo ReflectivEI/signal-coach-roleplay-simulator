@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Search, Sparkles, Send, Copy, Wand2, Loader2, Zap, BookOpen, MessageCircle, ChevronDown, ChevronUp, Users, Star, Heart, Plus, Shield, Trophy, ArrowRight } from "lucide-react";
+import { Search, Sparkles, Send, Copy, Wand2, Loader2, Zap, BookOpen, MessageCircle, ChevronDown, ChevronUp, Users, Heart, Plus, Trophy } from "lucide-react";
 import NavPill from "@/components/ui/NavPill";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 

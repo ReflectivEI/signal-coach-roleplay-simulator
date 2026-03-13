@@ -151,10 +151,10 @@ export default function PreCallPlanning() {
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
-          <ClipboardList className="w-7 h-7 text-gray-400" />
+          <ClipboardList className="w-7 h-7 text-gray-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Pre-Call Planning</h1>
-            <p className="text-sm text-gray-500">Prepare for your HCP conversations</p>
+            <p className="text-sm text-gray-600">Prepare for your HCP conversations</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -246,8 +246,8 @@ export default function PreCallPlanning() {
                 />
               </div>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs text-gray-500">Generate top 3 recommendations before your next HCP discussion.</p>
-                <Button type="button" variant="outline" className="text-xs" onClick={generatePredictiveTips}>Generate Top 3</Button>
+                <p className="text-xs text-gray-600">Generate top 3 recommendations before your next HCP discussion.</p>
+                <Button type="button" variant="outline" className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] hover:-translate-y-0.5 transition-all" onClick={generatePredictiveTips}>Generate Top 3</Button>
               </div>
               {predictiveTips.length > 0 && (
                 <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
@@ -257,7 +257,7 @@ export default function PreCallPlanning() {
             </div>
 
             <div className="flex gap-3 justify-between items-center">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">
                 Enter HCP name, specialty, or disease state to unlock AI assistance
               </p>
               <div className="flex gap-2">
@@ -278,7 +278,7 @@ export default function PreCallPlanning() {
         <div className="text-center py-20 bg-white rounded-xl border border-gray-100">
           <FileText className="w-16 h-16 text-gray-200 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Plans Yet</h3>
-          <p className="text-sm text-gray-500 mb-6">Create your first Pre-Call Plan to start preparing for HCP conversations.</p>
+          <p className="text-sm text-gray-600 mb-6">Create your first Pre-Call Plan to start preparing for HCP conversations.</p>
           <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4 mr-1" /> Create Your First Plan
           </Button>
@@ -294,12 +294,12 @@ export default function PreCallPlanning() {
                     <div className="flex gap-2 mt-1 flex-wrap">
                       {plan.specialty && <span className="text-xs bg-gray-100 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5">{plan.specialty}</span>}
                       {plan.disease_state && <span className="text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5">{plan.disease_state}</span>}
-                      <span className="text-xs bg-gray-50 text-gray-500 border border-gray-200 rounded-full px-2 py-0.5 capitalize">{plan.status || "draft"}</span>
+                      <span className="text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded-full px-2 py-0.5 capitalize">{plan.status || "draft"}</span>
                     </div>
-                    {plan.objectives && <p className="text-sm text-gray-500 mt-2 line-clamp-2">{plan.objectives}</p>}
+                    {plan.objectives && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{plan.objectives}</p>}
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-gray-400">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
+                    <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportPDF(plan)} title="Export to PDF">
                       <Download className="w-4 h-4 text-teal-500 hover:text-teal-700" />
                     </Button>
@@ -307,10 +307,10 @@ export default function PreCallPlanning() {
                       <Download className="w-4 h-4 text-blue-500 hover:text-blue-700" />
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
-                      {expandedPlan === plan.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                      {expandedPlan === plan.id ? <ChevronUp className="w-4 h-4 text-gray-600" /> : <ChevronDown className="w-4 h-4 text-gray-600" />}
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deletePlan(plan.id)}>
-                      <Trash2 className="w-4 h-4 text-gray-400" />
+                      <Trash2 className="w-4 h-4 text-gray-600" />
                     </Button>
                   </div>
                 </div>
@@ -324,7 +324,7 @@ export default function PreCallPlanning() {
                       { label: "Notes", value: plan.notes },
                     ].filter(f => f.value).map(({ label, value }) => (
                       <div key={label}>
-                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">{label}</p>
                         <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{value}</p>
                       </div>
                     ))}

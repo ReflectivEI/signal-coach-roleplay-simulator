@@ -388,7 +388,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900">AI Coach</h1>
-              <p className="text-xs text-gray-500">Your personal pharma sales coaching assistant</p>
+              <p className="text-xs text-gray-600">Your personal pharma sales coaching assistant</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -452,7 +452,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
           <div className="max-w-3xl mx-auto mb-5">
-            <TodaysTipCard className="shadow-sm" />
+            <TodaysTipCard className="shadow-sm border-yellow-300 bg-yellow-50" />
           </div>
           {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
             <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
