@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { Send, X, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -130,18 +130,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Only match explicit exit/scheduling phrases, not generic confirmations or product names
     const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
     const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-    const repGoodbyeIntent = /\b(bye|goodbye|so sorry|gotta run)\b/i;
     let followUpTimeConfirmed = false;
-    let repHasExited = false;
     let exitOrSchedulingState = false;
     let exitStateActive = false;
     let schedulingConfirmed = false;
     // Check previous turns for exit/scheduling confirmation and rep exit
     for (let i = turns.length - 1; i >= 0; i--) {
       const t = turns[i];
-      if (t.repMessage && repGoodbyeIntent.test(t.repMessage)) {
-        repHasExited = true;
-      }
       if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
         followUpTimeConfirmed = true;
         schedulingConfirmed = true;
@@ -401,6 +396,51 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
 
+  const exportFeedbackPDF = () => {
+    if (!feedback) return;
+    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openCoachingOnSession = () => {
+    const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
+    const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
+    const capScores = {};
+    const capCounts = {};
+    turns.forEach(t => {
+      if (!t.alignment?.metrics) return;
+      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
+        capScores[cap] = (capScores[cap] || 0) + val.score;
+        capCounts[cap] = (capCounts[cap] || 0) + 1;
+      });
+    });
+    const avgCapabilityScores = Object.fromEntries(
+      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
+    );
+    const overallScore = turns.filter(t => t.alignment).length > 0
+      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
+      : null;
+
+    const sessionContext = encodeURIComponent(JSON.stringify({
+      scenarioTitle: scenario.title,
+      hcpCategory: scenario.hcp_category,
+      specialty: scenario.specialty,
+      misalignments: allMisalignments,
+      positives: allPositives,
+      capabilityScores: avgCapabilityScores,
+      overallScore,
+      feedback,
+    }));
+
+    navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
+  };
+
   // ─── END SESSION ──────────────────────────────────────────────────────────────
   const endSession = async () => {
     setIsEnding(true);
@@ -473,8 +513,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       // Build deterministic report header with locked scores
       // Restore structuredPrompt definition for LLM feedback generation
       const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}`;
-
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -554,62 +592,7 @@ ${patternsText}
 
 ${actionText}`;
 
-        // Build Session Coaching Snapshot for Section 1
-        const capabilityNames = [
-          "Signal Awareness",
-          "Signal Interpretation",
-          "Value Connection",
-          "Customer Engagement Monitoring",
-          "Objection Navigation",
-          "Conversation Management",
-          "Adaptive Response",
-          "Commitment Generation"
-        ];
-        // Map canonical capability keys to display names
-        const capabilityKeyMap = {
-          signal_awareness: "Signal Awareness",
-          signal_interpretation: "Signal Interpretation",
-          value_connection: "Value Connection",
-          customer_engagement_monitoring: "Customer Engagement Monitoring",
-          objection_navigation: "Objection Navigation",
-          conversation_management: "Conversation Management",
-          adaptive_response: "Adaptive Response",
-          commitment_generation: "Commitment Generation"
-        };
-        // Build capability snapshot
-        const capabilitySnapshot = capabilityNames.map(name => {
-          // Find canonical key
-          const key = Object.keys(capabilityKeyMap).find(k => capabilityKeyMap[k] === name);
-          const score = avgCapScores[key] !== undefined ? avgCapScores[key] : null;
-          // Find a brief recap from turn data
-          let recap = "Capability not clearly observed during this session.";
-          if (score !== null && Number(score) > 0) {
-            // Find a turn with this capability
-            const turn = scoredTurns.find(t => t.alignment?.metrics && t.alignment.metrics[key]);
-            if (turn && turn.alignment.metrics[key]?.recap) {
-              recap = turn.alignment.metrics[key].recap;
-            } else {
-              // Fallback: generate a short recap
-              recap = Number(score) >= 4 ? "Strong demonstration of this capability." : Number(score) <= 2 ? "Needs improvement in this capability." : "Moderate performance observed.";
-            }
-          }
-          return `- ${name} (${score !== null ? score : "N/A"}): ${recap}`;
-        }).join("\n");
-
-        // Derive conversation stage/outcome
-        let stageLabel = "Session Completed";
-        if (scenario && scenario.difficulty) stageLabel = scenario.difficulty;
-        // Short session summary
-        let sessionSummary = "This session provided an opportunity to demonstrate key sales capabilities in a realistic scenario. Overall, the rep engaged effectively and responded to signals with appropriate actions.";
-        if (turns.length > 2) {
-          sessionSummary = `The rep navigated the conversation with ${scenario.title}, adapting responses to the HCP's cues and maintaining engagement throughout. Key strengths included responsiveness and signal interpretation.`;
-        }
-
-        // Section 1: Session Coaching Snapshot
-        const coachingSnapshot = `## 1. Session Coaching Snapshot\n\n**Overall Session Score:** ${overallScore ?? "N/A"}/5\n**Interaction Outcome:** ${stageLabel}\n\n${sessionSummary}\n\n**Capability Snapshot:**\n${capabilitySnapshot}`;
-
-        // Sections 2–5 remain unchanged
-        const fullFeedback = `${coachingSnapshot}\n\n${coachingFeedback}`;
+        const fullFeedback = coachingFeedback;
         console.log('=== FEEDBACK PARSING COMPLETE ===');
         console.log('Strengths length:', strengthsText.length);
         console.log('Improvements length:', improvementsText.length);
@@ -628,103 +611,8 @@ ${actionText}`;
   };
 
   // ─── FEEDBACK VIEW ────────────────────────────────────────────────────────────
-  const exportFeedbackPDF = () => {
-    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (feedback) {
-    return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-teal-600" />
-              <h2 className="font-bold text-slate-900">Session Feedback</h2>
-            </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
-            <ReactMarkdown
-              components={{
-                h2: ({ children, ...props }) => {
-                  const text = String(children);
-                  const isTitle = text.includes('Session Feedback');
-                  return isTitle
-                    ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
-                    : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
-                },
-                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: (props) => <li className="mb-0" {...props} />,
-                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: (props) => <em className="italic text-slate-600" {...props} />,
-                blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
-              }}
-            >
-              {feedback}
-            </ReactMarkdown>
-          </div>
-          <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">↓ Export PDF</Button>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs border-teal-400 text-teal-600 hover:bg-teal-50"
-                onClick={() => {
-                  // Restore previous AI Coach trigger logic
-                  const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
-                  const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
-                  const capScores = {};
-                  const capCounts = {};
-                  turns.forEach(t => {
-                    if (!t.alignment?.metrics) return;
-                    Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-                      capScores[cap] = (capScores[cap] || 0) + val.score;
-                      capCounts[cap] = (capCounts[cap] || 0) + 1;
-                    });
-                  });
-                  const avgCapScores = Object.fromEntries(
-                    Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
-                  );
-                  const overallScore = turns.filter(t => t.alignment).length > 0
-                    ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
-                    : null;
-
-                  const ctx = encodeURIComponent(JSON.stringify({
-                    scenarioTitle: scenario.title,
-                    hcpCategory: scenario.hcp_category,
-                    specialty: scenario.specialty,
-                    misalignments: allMisalignments,
-                    positives: allPositives,
-                    capabilityScores: avgCapScores,
-                    overallScore,
-                  }));
-                  navigate(createPageUrl("AICoach") + `?session_context=${ctx}`);
-                }}
-              >
-                <Bot className="w-3 h-3 mr-1" /> Coach on this session
-              </Button>
-              <Button type="button" onClick={onClose} className="border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">Close</Button>
-              <Button type="button" onClick={onClose} className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded">Done</Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Consolidated flow: Sections 2–5 now render inside the End & Get Feedback tab below
+  // CapabilityFeedbackPanel, instead of opening a separate modal overlay.
 
   const flatMessages = flattenTurns(turns);
 
@@ -745,14 +633,6 @@ ${actionText}`;
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
           <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-            <button
-              onClick={endSession}
-              disabled={isEnding || repTurnsCount < 2}
-              className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isEnding ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-              End & Get Feedback
-            </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
             </button>
@@ -767,12 +647,17 @@ ${actionText}`;
           {([
             { id: "chat", label: "Live Chat", icon: MessageSquare },
             { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "Capability Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
           ]).map(({ id, label, icon: Icon, disabled }) => (
             <button
               key={id}
               disabled={disabled}
-              onClick={() => setActiveTab(id)}
+              onClick={() => {
+                setActiveTab(id);
+                if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
+                  endSession();
+                }
+              }}
               className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
                 ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
                 : disabled
@@ -967,23 +852,47 @@ ${actionText}`;
               <div className="mb-6">
                 <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
               </div>
-              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel, unchanged */}
+              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel */}
+              {isEnding && (
+                <div className="mx-4 mb-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+                  Generating final evaluation sections…
+                </div>
+              )}
               {feedback && (
-                <div className="mt-6">
+                <div className="mx-4 mb-8 mt-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <ReactMarkdown
                     components={{
-                      h2: ({ children, ...props }) => <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>,
+                      h2: ({ children, ...props }) => <h2 className="text-xl font-bold text-slate-900 mt-7 mb-3 first:mt-0" {...props}>{children}</h2>,
                       h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
                       h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                      p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
-                      ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                      ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                      p: (props) => <p className="mb-4 leading-7 text-slate-700" {...props} />,
+                      ul: (props) => <ul className="list-disc list-inside mb-4 space-y-2 ml-1" {...props} />,
+                      ol: (props) => <ol className="list-decimal list-inside mb-4 space-y-2 ml-1" {...props} />,
                       li: (props) => <li className="mb-0" {...props} />,
                       strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                       em: (props) => <em className="italic text-slate-600" {...props} />,
                       blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
                     }}
                   >{feedback}</ReactMarkdown>
+                  <div className="mt-6 border-t border-slate-200 pt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={exportFeedbackPDF}
+                      className="text-xs border-gray-300"
+                    >
+                      Export to PDF
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs border-teal-400 text-teal-700 hover:bg-teal-50"
+                      onClick={openCoachingOnSession}
+                    >
+                      <Bot className="w-3.5 h-3.5 mr-1" />
+                      Get Coaching on Session
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
