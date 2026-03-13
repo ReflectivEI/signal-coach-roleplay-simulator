@@ -46,7 +46,7 @@ const SECTIONS = [
 ];
 
 const RESOURCE_LINKS = [
-  { title: "Signal Intelligence Blog", href: "https://reflectiv.ai", description: "Fresh enablement guidance and product updates." },
+  { title: "Market Insights — McKinsey Life Sciences", href: "https://www.mckinsey.com/industries/life-sciences/our-insights", description: "Customer and market trends shaping biotech and pharma strategy." },
   { title: "Life Sciences Commercial Insights", href: "https://www.fiercepharma.com", description: "Recent biotech and pharma market developments." },
   { title: "FDA Newsroom", href: "https://www.fda.gov/news-events", description: "Regulatory announcements and policy updates." },
 ];

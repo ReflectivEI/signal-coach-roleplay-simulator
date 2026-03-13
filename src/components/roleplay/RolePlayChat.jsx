@@ -66,6 +66,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   });
 
   const objectiveText = scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.";
+  const descriptionText = scenario.description || scenario.context || "";
   const challengeItems = Array.isArray(scenario.challenges)
     ? scenario.challenges
     : String(scenario.challenges || "")
@@ -631,7 +632,7 @@ ${actionText}`;
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-3 border-b flex-shrink-0 bg-white">
+        <div className="flex items-start justify-between gap-4 px-5 py-3 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="font-bold text-slate-900 text-[20px] md:text-[24px] leading-snug">{scenario.title}</h2>
@@ -640,7 +641,26 @@ ${actionText}`;
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
-          <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+
+          <div className="hidden xl:flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-3 min-w-[420px] max-w-[520px]">
+            <ListChecks className="w-4 h-4 text-teal-700 mt-0.5 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">Scenario Support</p>
+              <p className="text-xs text-slate-700 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
+              {challengeItems.length > 0 && (
+                <div className="mt-1.5">
+                  <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
+                  <ul className="list-disc pl-4 text-xs text-slate-700 space-y-0.5 mt-1">
+                    {challengeItems.slice(0, 3).map((challenge, idx) => (
+                      <li key={idx}>{challenge}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 ml-1 flex-shrink-0">
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
             </button>
@@ -685,27 +705,20 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              <div className="mx-4 mt-3 rounded-xl border border-teal-100 bg-teal-50/60 p-3">
-                <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-teal-700 mb-1.5">
-                  <ListChecks className="w-3.5 h-3.5" /> Scenario Objectives & Challenges
+              {/* Show scenario description + opening scene for the session */}
+              {descriptionText && (
+                <div className="mx-4 mt-3 mb-1 px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-700">
+                  <span className="font-bold uppercase text-slate-600 text-[11px]">Scenario Description</span><br />
+                  <span className="leading-relaxed">{descriptionText}</span>
                 </div>
-                <p className="text-xs text-slate-700 leading-relaxed mb-2"><span className="font-semibold text-[#1A334D]">Objective:</span> {objectiveText}</p>
-                {challengeItems.length > 0 && (
-                  <ul className="list-disc pl-4 space-y-1 text-xs text-slate-700">
-                    {challengeItems.slice(0, 4).map((challenge, idx) => (
-                      <li key={idx}>{challenge}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              {/* Show scenario opening scene for the entire session */}
+              )}
               {openingScene ? (
-                <div className="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <div className="mx-4 mt-2 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic">{openingScene}</span>
                 </div>
               ) : (
-                <div className="mx-4 mt-3 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
+                <div className="mx-4 mt-2 mb-1 px-4 py-3 rounded-lg bg-amber-50 border border-amber-200 text-[12px] text-amber-800 font-medium">
                   <span className="font-bold uppercase text-brand-teal text-xs">Opening Scene</span><br />
                   <span className="italic text-red-600">No opening scene provided for this scenario.</span>
                 </div>
