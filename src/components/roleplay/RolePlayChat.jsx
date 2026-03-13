@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { Send, X, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -130,18 +130,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Only match explicit exit/scheduling phrases, not generic confirmations or product names
     const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
     const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-    const repGoodbyeIntent = /\b(bye|goodbye|so sorry|gotta run)\b/i;
     let followUpTimeConfirmed = false;
-    let repHasExited = false;
     let exitOrSchedulingState = false;
     let exitStateActive = false;
     let schedulingConfirmed = false;
     // Check previous turns for exit/scheduling confirmation and rep exit
     for (let i = turns.length - 1; i >= 0; i--) {
       const t = turns[i];
-      if (t.repMessage && repGoodbyeIntent.test(t.repMessage)) {
-        repHasExited = true;
-      }
       if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
         followUpTimeConfirmed = true;
         schedulingConfirmed = true;
@@ -473,8 +468,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       // Build deterministic report header with locked scores
       // Restore structuredPrompt definition for LLM feedback generation
       const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const reportHeader = `Session Rubric Breakdown\n\n${capSummary}\n${rubricSection}`;
-
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -745,14 +738,6 @@ ${actionText}`;
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
           <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-            <button
-              onClick={endSession}
-              disabled={isEnding || repTurnsCount < 2}
-              className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isEnding ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-              End & Get Feedback
-            </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
             </button>
@@ -767,7 +752,7 @@ ${actionText}`;
           {([
             { id: "chat", label: "Live Chat", icon: MessageSquare },
             { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "Capability Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
           ]).map(({ id, label, icon: Icon, disabled }) => (
             <button
               key={id}
@@ -963,6 +948,15 @@ ${actionText}`;
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
+              <div className="px-4 pt-4 pb-2">
+                <button
+                  onClick={endSession}
+                  disabled={isEnding || repTurnsCount < 2}
+                  className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 2-5" : "Generate Sections 2-5"}
+                </button>
+              </div>
               {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
               <div className="mb-6">
                 <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
