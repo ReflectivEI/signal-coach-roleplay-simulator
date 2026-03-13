@@ -438,52 +438,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       source: "roleplay_end_feedback",
     }));
 
-    navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
-  };
-
-  const exportFeedbackPDF = () => {
-    if (!feedback) return;
-    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const openCoachingOnSession = () => {
-    const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
-    const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
-    const capScores = {};
-    const capCounts = {};
-    turns.forEach(t => {
-      if (!t.alignment?.metrics) return;
-      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-        capScores[cap] = (capScores[cap] || 0) + val.score;
-        capCounts[cap] = (capCounts[cap] || 0) + 1;
-      });
-    });
-    const avgCapabilityScores = Object.fromEntries(
-      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
-    );
-    const overallScore = turns.filter(t => t.alignment).length > 0
-      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
-      : null;
-
-    const sessionContext = encodeURIComponent(JSON.stringify({
-      scenarioTitle: scenario.title,
-      hcpCategory: scenario.hcp_category,
-      specialty: scenario.specialty,
-      misalignments: allMisalignments,
-      positives: allPositives,
-      capabilityScores: avgCapabilityScores,
-      overallScore,
-      source: "roleplay_end_feedback",
-    }));
-
-    navigate(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
+    window.location.assign(createPageUrl("AICoach") + `?session_context=${sessionContext}`);
   };
 
   // ─── END SESSION ──────────────────────────────────────────────────────────────
