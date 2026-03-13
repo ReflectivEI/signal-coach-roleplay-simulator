@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
-import { createPageUrl } from "@/utils";
+import { Send, X, MessageSquare, Highlighter, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
 import AnnotatedTranscript from "./AnnotatedTranscript";
@@ -40,7 +38,6 @@ import VoiceControls from "./VoiceControls";
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
-  const navigate = useNavigate();
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
@@ -621,103 +618,8 @@ ${actionText}`;
   };
 
   // ─── FEEDBACK VIEW ────────────────────────────────────────────────────────────
-  const exportFeedbackPDF = () => {
-    const content = `SESSION FEEDBACK - ${scenario.title}\nDate: ${new Date().toLocaleDateString()}\n\n${feedback}`;
-    const blob = new Blob([content], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `session-feedback-${scenario.title.replace(/\s+/g, "-").toLowerCase()}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (feedback) {
-    return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-teal-600" />
-              <h2 className="font-bold text-slate-900">Session Feedback</h2>
-            </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-6 py-5 max-w-none text-sm leading-relaxed text-slate-700">
-            <ReactMarkdown
-              components={{
-                h2: ({ children, ...props }) => {
-                  const text = String(children);
-                  const isTitle = text.includes('Session Feedback');
-                  return isTitle
-                    ? <h2 className="text-xl font-bold text-slate-900 mb-4" {...props}>{children}</h2>
-                    : <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>;
-                },
-                h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
-                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                li: (props) => <li className="mb-0" {...props} />,
-                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-                em: (props) => <em className="italic text-slate-600" {...props} />,
-                blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
-              }}
-            >
-              {feedback}
-            </ReactMarkdown>
-          </div>
-          <div className="px-6 py-4 border-t flex justify-between items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportFeedbackPDF} className="text-xs border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">↓ Export PDF</Button>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs border-teal-400 text-teal-600 hover:bg-teal-50"
-                onClick={() => {
-                  // Restore previous AI Coach trigger logic
-                  const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
-                  const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
-                  const capScores = {};
-                  const capCounts = {};
-                  turns.forEach(t => {
-                    if (!t.alignment?.metrics) return;
-                    Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-                      capScores[cap] = (capScores[cap] || 0) + val.score;
-                      capCounts[cap] = (capCounts[cap] || 0) + 1;
-                    });
-                  });
-                  const avgCapScores = Object.fromEntries(
-                    Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
-                  );
-                  const overallScore = turns.filter(t => t.alignment).length > 0
-                    ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
-                    : null;
-
-                  const ctx = encodeURIComponent(JSON.stringify({
-                    scenarioTitle: scenario.title,
-                    hcpCategory: scenario.hcp_category,
-                    specialty: scenario.specialty,
-                    misalignments: allMisalignments,
-                    positives: allPositives,
-                    capabilityScores: avgCapScores,
-                    overallScore,
-                  }));
-                  navigate(createPageUrl("AICoach") + `?session_context=${ctx}`);
-                }}
-              >
-                <Bot className="w-3 h-3 mr-1" /> Coach on this session
-              </Button>
-              <Button type="button" onClick={onClose} className="border border-gray-300 rounded px-2 py-1 bg-white hover:bg-gray-100">Close</Button>
-              <Button type="button" onClick={onClose} className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded">Done</Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Consolidated flow: Sections 2–5 now render inside the End & Get Feedback tab below
+  // CapabilityFeedbackPanel, instead of opening a separate modal overlay.
 
   const flatMessages = flattenTurns(turns);
 
