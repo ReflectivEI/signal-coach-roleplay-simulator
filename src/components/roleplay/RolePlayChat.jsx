@@ -544,62 +544,7 @@ ${patternsText}
 
 ${actionText}`;
 
-        // Build Session Coaching Snapshot for Section 1
-        const capabilityNames = [
-          "Signal Awareness",
-          "Signal Interpretation",
-          "Value Connection",
-          "Customer Engagement Monitoring",
-          "Objection Navigation",
-          "Conversation Management",
-          "Adaptive Response",
-          "Commitment Generation"
-        ];
-        // Map canonical capability keys to display names
-        const capabilityKeyMap = {
-          signal_awareness: "Signal Awareness",
-          signal_interpretation: "Signal Interpretation",
-          value_connection: "Value Connection",
-          customer_engagement_monitoring: "Customer Engagement Monitoring",
-          objection_navigation: "Objection Navigation",
-          conversation_management: "Conversation Management",
-          adaptive_response: "Adaptive Response",
-          commitment_generation: "Commitment Generation"
-        };
-        // Build capability snapshot
-        const capabilitySnapshot = capabilityNames.map(name => {
-          // Find canonical key
-          const key = Object.keys(capabilityKeyMap).find(k => capabilityKeyMap[k] === name);
-          const score = avgCapScores[key] !== undefined ? avgCapScores[key] : null;
-          // Find a brief recap from turn data
-          let recap = "Capability not clearly observed during this session.";
-          if (score !== null && Number(score) > 0) {
-            // Find a turn with this capability
-            const turn = scoredTurns.find(t => t.alignment?.metrics && t.alignment.metrics[key]);
-            if (turn && turn.alignment.metrics[key]?.recap) {
-              recap = turn.alignment.metrics[key].recap;
-            } else {
-              // Fallback: generate a short recap
-              recap = Number(score) >= 4 ? "Strong demonstration of this capability." : Number(score) <= 2 ? "Needs improvement in this capability." : "Moderate performance observed.";
-            }
-          }
-          return `- ${name} (${score !== null ? score : "N/A"}): ${recap}`;
-        }).join("\n");
-
-        // Derive conversation stage/outcome
-        let stageLabel = "Session Completed";
-        if (scenario && scenario.difficulty) stageLabel = scenario.difficulty;
-        // Short session summary
-        let sessionSummary = "This session provided an opportunity to demonstrate key sales capabilities in a realistic scenario. Overall, the rep engaged effectively and responded to signals with appropriate actions.";
-        if (turns.length > 2) {
-          sessionSummary = `The rep navigated the conversation with ${scenario.title}, adapting responses to the HCP's cues and maintaining engagement throughout. Key strengths included responsiveness and signal interpretation.`;
-        }
-
-        // Section 1: Session Coaching Snapshot
-        const coachingSnapshot = `## 1. Session Coaching Snapshot\n\n**Overall Session Score:** ${overallScore ?? "N/A"}/5\n**Interaction Outcome:** ${stageLabel}\n\n${sessionSummary}\n\n**Capability Snapshot:**\n${capabilitySnapshot}`;
-
-        // Sections 2–5 remain unchanged
-        const fullFeedback = `${coachingSnapshot}\n\n${coachingFeedback}`;
+        const fullFeedback = coachingFeedback;
         console.log('=== FEEDBACK PARSING COMPLETE ===');
         console.log('Strengths length:', strengthsText.length);
         console.log('Improvements length:', improvementsText.length);
@@ -659,7 +604,12 @@ ${actionText}`;
             <button
               key={id}
               disabled={disabled}
-              onClick={() => setActiveTab(id)}
+              onClick={() => {
+                setActiveTab(id);
+                if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
+                  endSession();
+                }
+              }}
               className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
                 ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
                 : disabled
@@ -863,17 +813,22 @@ ${actionText}`;
               <div className="mb-6">
                 <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
               </div>
-              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel, unchanged */}
+              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel */}
+              {isEnding && (
+                <div className="mx-4 mb-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+                  Generating final evaluation sections…
+                </div>
+              )}
               {feedback && (
-                <div className="mt-6">
+                <div className="mx-4 mb-8 mt-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <ReactMarkdown
                     components={{
-                      h2: ({ children, ...props }) => <h2 className="text-lg font-bold text-slate-900 mt-6 mb-3 pt-4 border-t border-slate-200" {...props}>{children}</h2>,
+                      h2: ({ children, ...props }) => <h2 className="text-xl font-bold text-slate-900 mt-7 mb-3 first:mt-0" {...props}>{children}</h2>,
                       h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
                       h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                      p: (props) => <p className="mb-3 whitespace-normal" {...props} />,
-                      ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1.5 ml-2" {...props} />,
-                      ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1.5 ml-2" {...props} />,
+                      p: (props) => <p className="mb-4 leading-7 text-slate-700" {...props} />,
+                      ul: (props) => <ul className="list-disc list-inside mb-4 space-y-2 ml-1" {...props} />,
+                      ol: (props) => <ol className="list-decimal list-inside mb-4 space-y-2 ml-1" {...props} />,
                       li: (props) => <li className="mb-0" {...props} />,
                       strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                       em: (props) => <em className="italic text-slate-600" {...props} />,
