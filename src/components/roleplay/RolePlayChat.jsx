@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, CheckCircle, Loader2, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
+import { Send, X, BarChart3, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -738,14 +738,6 @@ ${actionText}`;
             <p className="text-xs text-slate-500 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
           <div className="flex items-center gap-2 ml-3 flex-shrink-0">
-            <button
-              onClick={endSession}
-              disabled={isEnding || repTurnsCount < 2}
-              className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isEnding ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-              End & Get Feedback
-            </button>
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
             </button>
@@ -760,7 +752,7 @@ ${actionText}`;
           {([
             { id: "chat", label: "Live Chat", icon: MessageSquare },
             { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "Capability Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
           ]).map(({ id, label, icon: Icon, disabled }) => (
             <button
               key={id}
@@ -956,6 +948,15 @@ ${actionText}`;
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
+              <div className="px-4 pt-4 pb-2">
+                <button
+                  onClick={endSession}
+                  disabled={isEnding || repTurnsCount < 2}
+                  className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 2-5" : "Generate Sections 2-5"}
+                </button>
+              </div>
               {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
               <div className="mb-6">
                 <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
