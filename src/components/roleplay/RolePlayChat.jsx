@@ -923,7 +923,7 @@ ${actionText}`;
                           sendMessage();
                         }
                       }}
-                      placeholder={isListening ? "Listening…" : "Your response as the sales rep...")
+                        placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
                     disabled={isLoading || isEnding}
                     className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
                     />
