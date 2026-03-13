@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 // ...existing code...
 import { Sparkles, TrendingUp, Loader2, ChevronDown, ChevronUp } from "lucide-react";
@@ -9,6 +9,13 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
   const [insights, setInsights] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
+
+  useEffect(() => {
+    if (messages.length === 0) {
+      setInsights(null);
+      setIsLoading(false);
+    }
+  }, [messages.length]);
 
   const analyzePatterns = async () => {
     setIsLoading(true);

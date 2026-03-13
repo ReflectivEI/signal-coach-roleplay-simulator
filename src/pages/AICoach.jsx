@@ -111,11 +111,7 @@ export default function AICoach() {
   // Auto-open with session context if navigated from a roleplay
   useEffect(() => {
     if (sessionContext && messages.length === 0) {
-      const intro = buildSessionContextMessage(sessionContext);
-      sendMessage(intro, true);
-      // Immediately trigger coaching feedback request
-      const feedbackRequest = `Please provide specific, actionable coaching feedback for this session, referencing the scenario, detected misalignments, positives, and capability scores above. Ground your feedback in Signal Intelligence principles.`;
-      sendMessage(feedbackRequest);
+      generateAutoSessionCoaching(sessionContext);
     }
   }, []);
 
@@ -125,6 +121,7 @@ export default function AICoach() {
 
   const [copiedIdx, setCopiedIdx] = useState(null);
   const [reactions, setReactions] = useState({});
+  const [chatResetKey, setChatResetKey] = useState(0);
 
   // Build a rich context message from roleplay alignment data
   function buildSessionContextMessage(ctx) {
@@ -167,6 +164,52 @@ Please give me specific, actionable feedback that directly addresses these misal
         /the Role Play Simulator page/g,
         `[the Role Play Simulator page](${rpsUrl})`
       );
+  };
+
+  const generateAutoSessionCoaching = async (ctx) => {
+    setIsLoading(true);
+    try {
+      const contextMessage = buildSessionContextMessage(ctx);
+      const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
+
+Session context:
+${contextMessage}
+
+Produce a concise coaching synopsis with EXACTLY these section headers:
+## Session Snapshot
+## Strengths to Keep
+## Gaps to Fix
+## Next-call Playbook
+
+Rules:
+- Use only observable behavior from provided context
+- Tie recommendations to Signal Intelligence capabilities
+- Keep it practical and specific
+- No filler preamble`; 
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const coachResponse = (data.response || data.text || data.content || '');
+        const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
+        const finalResponse = addRolePlayLinks(coachText);
+        const updatedMessages = [{ role: "assistant", content: finalResponse }];
+        setMessages(updatedMessages);
+        generateSessionSummary(updatedMessages);
+      } else {
+        setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+      }
+    } catch (err) {
+      console.error('Auto session coaching error:', err);
+      setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
@@ -320,6 +363,18 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
     setReactions(prev => ({ ...prev, [idx]: prev[idx] === type ? null : type }));
   };
 
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setSessionSummary(null);
+    setGeneratingSummary(false);
+    setContentToolMode(null);
+    setReactions({});
+    setCopiedIdx(null);
+    setIsLoading(false);
+    setChatResetKey((k) => k + 1);
+  };
+
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
       {/* Main Chat Area */}
@@ -359,7 +414,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
               variant="outline"
               size="sm"
               className="bg-teal-500 text-white hover:bg-teal-600 text-xs"
-              onClick={() => setMessages([])}
+              onClick={handleNewChat}
             >
               <RefreshCw className="w-3 h-3 mr-1" />
               New Chat
@@ -577,7 +632,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         </div>
       </div>
 
-      <InsightsSidebar onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
+      <InsightsSidebar key={`insights-${chatResetKey}`} onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
     </div>
   );
 }
