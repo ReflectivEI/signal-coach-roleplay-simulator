@@ -253,7 +253,6 @@ export default function ManagerView() {
             <Users className="w-4 h-4 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Manager View</h1>
-          <span className="text-xs bg-amber-100 text-amber-800 border border-amber-200 rounded-full px-2.5 py-0.5 font-medium">Manager Only</span>
         </div>
         <p className="text-sm text-gray-500">Territory performance, rep activity, and training alignment across your team.</p>
       </div>
@@ -555,9 +554,9 @@ export default function ManagerView() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className={`text-sm font-bold px-2 py-0.5 rounded-lg ${session.score >= 4 ? "bg-teal-50 text-teal-700" : session.score >= 3.3 ? "bg-blue-50 text-blue-700" : "bg-orange-50 text-orange-700"}`}>{session.score}/5</span>
                     {session.status === "reviewed" ? (
-                      <span className="text-xs bg-green-100 text-green-700 border border-green-200 rounded-full px-2 py-0.5 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Reviewed</span>
+                      <span className="text-xs text-green-700 font-semibold flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Reviewed</span>
                     ) : (
-                      <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5">Needs Feedback</span>
+                      <span className="text-xs text-amber-700 font-semibold">Needs Feedback</span>
                     )}
                   </div>
                 </div>
