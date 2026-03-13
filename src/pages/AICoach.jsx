@@ -111,11 +111,7 @@ export default function AICoach() {
   // Auto-open with session context if navigated from a roleplay
   useEffect(() => {
     if (sessionContext && messages.length === 0) {
-      const intro = buildSessionContextMessage(sessionContext);
-      sendMessage(intro, true);
-      // Immediately trigger coaching feedback request
-      const feedbackRequest = `Please provide specific, actionable coaching feedback for this session, referencing the scenario, detected misalignments, positives, and capability scores above. Ground your feedback in Signal Intelligence principles.`;
-      sendMessage(feedbackRequest);
+      generateAutoSessionCoaching(sessionContext);
     }
   }, []);
 
@@ -167,6 +163,52 @@ Please give me specific, actionable feedback that directly addresses these misal
         /the Role Play Simulator page/g,
         `[the Role Play Simulator page](${rpsUrl})`
       );
+  };
+
+  const generateAutoSessionCoaching = async (ctx) => {
+    setIsLoading(true);
+    try {
+      const contextMessage = buildSessionContextMessage(ctx);
+      const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
+
+Session context:
+${contextMessage}
+
+Produce a concise coaching synopsis with EXACTLY these section headers:
+## Session Snapshot
+## Strengths to Keep
+## Gaps to Fix
+## Next-call Playbook
+
+Rules:
+- Use only observable behavior from provided context
+- Tie recommendations to Signal Intelligence capabilities
+- Keep it practical and specific
+- No filler preamble`; 
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const coachResponse = (data.response || data.text || data.content || '');
+        const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
+        const finalResponse = addRolePlayLinks(coachText);
+        const updatedMessages = [{ role: "assistant", content: finalResponse }];
+        setMessages(updatedMessages);
+        generateSessionSummary(updatedMessages);
+      } else {
+        setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+      }
+    } catch (err) {
+      console.error('Auto session coaching error:', err);
+      setMessages([{ role: "assistant", content: "I encountered an issue generating coaching for this session. Please try again." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const sendMessage = async (text, silent = false, isContentToolExample = false) => {
