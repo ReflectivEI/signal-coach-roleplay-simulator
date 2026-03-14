@@ -32,6 +32,7 @@ import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
+import { getDifficultyVisuals } from "./difficultyStyles";
 
 
 
@@ -74,12 +75,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .map((v) => v.replace(/^[-*\s]+/, "").trim())
       .filter(Boolean);
 
-  const difficultyStyleMap = {
-    beginner: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    intermediate: "bg-amber-100 text-amber-700 border-amber-200",
-    advanced: "bg-rose-100 text-rose-700 border-rose-200",
-  };
-  const difficultyStyle = difficultyStyleMap[String(scenario.difficulty || '').toLowerCase()] || "bg-slate-100 text-slate-600 border-slate-200";
+  const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -649,15 +645,15 @@ ${actionText}`;
             <p className="text-xs text-slate-700 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
 
-          <div className="hidden xl:flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-3 min-w-[420px] max-w-[520px]">
-            <ListChecks className="w-4 h-4 text-teal-700 mt-0.5 flex-shrink-0" />
+          <div className="hidden lg:flex items-start gap-3 rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3 min-w-[440px] max-w-[580px]">
+            <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
             <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">Scenario Support</p>
-              <p className="text-xs text-slate-700 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
+              <p className="text-sm text-slate-800 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
               {challengeItems.length > 0 && (
-                <div className="mt-1.5">
+                <div className="mt-2 rounded-xl border border-teal-200 bg-white px-3 py-2 shadow-sm">
                   <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
-                  <ul className="list-disc pl-4 text-xs text-slate-700 space-y-0.5 mt-1">
+                  <ul className="list-disc pl-4 text-xs text-slate-700 space-y-1 mt-1">
                     {challengeItems.slice(0, 3).map((challenge, idx) => (
                       <li key={idx}>{challenge}</li>
                     ))}
@@ -680,21 +676,24 @@ ${actionText}`;
 
         {/* Scenario context summary (kept at top under specialty line) */}
         {(descriptionText || openingScene) && (
-          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-white">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-2.5 grid grid-cols-1 lg:grid-cols-2 gap-2">
-              {descriptionText && (
-                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
-                  <p className="text-[12px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
-                </div>
-              )}
-              <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2">
-                <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
-                {openingScene ? (
-                  <p className="text-[12px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
-                ) : (
-                  <p className="text-[12px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
+          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+            <div className="rounded-2xl border border-slate-300 bg-white p-2.5 max-w-[980px] shadow-sm">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
+              <div className="flex flex-col lg:flex-row lg:items-stretch gap-2">
+                {descriptionText && (
+                  <div className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 lg:max-w-[470px] shadow-sm">
+                    <p className="font-bold uppercase text-slate-700 text-[11px] tracking-wide mb-1">Scenario Description</p>
+                    <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">{descriptionText}</p>
+                  </div>
                 )}
+                <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 lg:max-w-[470px] shadow-sm">
+                  <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
+                  {openingScene ? (
+                    <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
+                  ) : (
+                    <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
