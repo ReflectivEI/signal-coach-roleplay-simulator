@@ -43,6 +43,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
+  const openingSceneNormalized = String(openingScene || "").toLowerCase().trim();
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -75,8 +76,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   )
     .map((v) => String(v || "").replace(/^[-*\s]+/, "").trim())
     .filter(Boolean)
-    .filter((item) => !/^opening\s*scene\b/i.test(item));
-
+    .filter((item) => {
+      const lower = item.toLowerCase();
+      if (/^opening\s*scene\b/i.test(item)) return false;
+      if (openingSceneNormalized && lower.includes(openingSceneNormalized.slice(0, 40))) return false;
+      return true;
+    });
   const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
 
   useEffect(() => {

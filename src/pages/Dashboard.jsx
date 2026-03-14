@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bot,
   Play,
@@ -18,16 +18,24 @@ import QuickActionCard from "@/components/dashboard/QuickActionCard";
 import SignalCapabilities from "@/components/dashboard/SignalCapabilities";
 import AIDailyInsights from "@/components/dashboard/AIDailyInsights";
 
-const THEMES = [
-  { id: "teal", pageBg: "#f0f4f8", cardBorder: "border-gray-200", accent: "text-teal-700" },
-  { id: "navy", pageBg: "#eef2f7", cardBorder: "border-slate-300", accent: "text-slate-700" },
-  { id: "soft", pageBg: "#f8fafc", cardBorder: "border-cyan-200", accent: "text-cyan-700" },
-];
+const DASHBOARD_THEME = {
+  light: { pageBg: "#f0f4f8", cardBorder: "border-gray-200", accent: "text-teal-700", text: "text-gray-900", subtext: "text-gray-600" },
+  dark: { pageBg: "#0f172a", cardBorder: "border-slate-700", accent: "text-cyan-300", text: "text-slate-100", subtext: "text-slate-300" },
+};
 
 export default function Dashboard() {
-  const [themeIndex, setThemeIndex] = useState(0);
+  const [colorMode, setColorMode] = useState(() => localStorage.getItem("dashboard-color-mode") || "light");
   const notice = "Pipeline forecasting summary updated 2 min ago.";
-  const theme = THEMES[themeIndex];
+  const theme = DASHBOARD_THEME[colorMode] || DASHBOARD_THEME.light;
+
+  useEffect(() => {
+    localStorage.setItem("dashboard-color-mode", colorMode);
+    if (colorMode === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [colorMode]);
 
   const quickActions = useMemo(() => ([
     { icon: BarChart2, title: "Analytics Dashboard", description: "View demo KPIs, export reports, and compliance status", page: "demo-analytics", iconBg: "bg-teal-50" },
@@ -67,10 +75,10 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+          <h1 className={`text-2xl md:text-3xl font-bold ${theme.text}`}>
             Welcome to Reflectiv<span className="text-teal-500">AI</span>
           </h1>
-          <p className="text-gray-600 mt-1">Master signal intelligence and sales excellence in Life Sciences</p>
+          <p className={`${theme.subtext} mt-1`}>Master signal intelligence and sales excellence in Life Sciences</p>
           <p className={`text-xs mt-1 ${theme.accent}`}>{notice}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -78,7 +86,7 @@ export default function Dashboard() {
             <Download className="w-4 h-4" />
             Export to PDF
           </Button>
-          <Button variant="outline" className="text-sm" onClick={() => setThemeIndex((i) => (i + 1) % THEMES.length)}>
+          <Button variant="outline" className="text-sm" onClick={() => setColorMode((m) => (m === "dark" ? "light" : "dark"))}>
             Color Mode
           </Button>
         </div>
