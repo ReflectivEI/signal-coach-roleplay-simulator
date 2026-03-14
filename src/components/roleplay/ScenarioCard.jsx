@@ -2,12 +2,7 @@ import { formatScenarioText } from "../../lib/utils";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import RolePlayChat from "./RolePlayChat";
-
-const difficultyColors = {
-  beginner: { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" },
-  intermediate: { bg: "#fefce8", text: "#854d0e", border: "#fde68a" },
-  advanced: { bg: "#eff6ff", text: "#1e40af", border: "#bfdbfe" },
-};
+import { getDifficultyVisuals } from "./difficultyStyles";
 
 
 // Derive stakeholder label from scenario data
@@ -40,7 +35,7 @@ function getOpeningScene(scenario) {
 export default function ScenarioCard({ scenario, renderAs }) {
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
-  const dc = difficultyColors[scenario.difficulty] || difficultyColors.intermediate;
+  const dc = getDifficultyVisuals(scenario.difficulty).style;
 
   // If scenario.description is AI-generated, format it
   const formattedDescription = scenario.description
@@ -80,7 +75,7 @@ export default function ScenarioCard({ scenario, renderAs }) {
             <h3 className="font-extrabold text-brand-navy text-lg leading-snug flex-1 tracking-wide">{scenario.title}</h3>
             <span
               className="text-xs font-semibold px-3 py-1 rounded-full flex-shrink-0 capitalize border"
-              style={{ background: dc.bg, color: dc.text, borderColor: dc.border }}
+              style={dc}
             >
               {scenario.difficulty}
             </span>
