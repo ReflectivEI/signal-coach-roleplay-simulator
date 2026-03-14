@@ -677,15 +677,15 @@ ${actionText}`;
         {/* Scenario context summary (kept at top under specialty line) */}
         {(descriptionText || openingScene) && (
           <div className="px-3 md:px-4 pt-0.5 pb-1 border-b bg-white">
-            <div className="rounded-xl border border-slate-300 bg-slate-50/90 px-2 py-1">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-0.5 lg:gap-0">
-              {descriptionText && (
-                <div className="rounded-lg bg-white/95 px-2 py-1 lg:pr-2.5 lg:border-r lg:border-slate-200">
-                  <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
-                  <p className="text-[10.5px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
-                </div>
-              )}
-                <div className="rounded-lg border border-amber-200 bg-amber-50/85 px-2 py-1 lg:ml-1.5">
+            <div className="rounded-xl border border-slate-300 bg-slate-50/90 p-1.5 max-w-[880px]">
+              <div className="flex flex-col lg:flex-row lg:items-stretch gap-1.5">
+                {descriptionText && (
+                  <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 lg:max-w-[420px]">
+                    <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
+                    <p className="text-[10.5px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
+                  </div>
+                )}
+                <div className="rounded-lg border border-amber-200 bg-amber-50/85 px-2 py-1.5 lg:max-w-[430px]">
                   <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
                   {openingScene ? (
                     <p className="text-[10.5px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>

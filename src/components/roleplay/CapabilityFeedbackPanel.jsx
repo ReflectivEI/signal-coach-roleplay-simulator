@@ -132,21 +132,20 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2.5">
-      <div className="grid grid-cols-[minmax(0,1fr)_96px] grid-rows-[auto_auto] items-start gap-x-2 mb-1">
-        <div className="min-w-0 col-start-1 row-start-1">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <Zap className="w-3.5 h-3.5 text-teal-500" />
-            <span className="font-bold text-sm text-gray-900">Overall: {(() => {
-              const capIds = CAPABILITIES.map(c => c.id);
-              const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-              if (scores.length === 0) return "N/A";
-              return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
-            })()}</span>
-          </div>
+      <div className="mb-1">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <Zap className="w-3.5 h-3.5 text-teal-500" />
+          <span className="font-bold text-sm text-gray-900">Overall: {(() => {
+            const capIds = CAPABILITIES.map(c => c.id);
+            const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+            if (scores.length === 0) return "N/A";
+            return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
+          })()}</span>
         </div>
-        <div className="col-start-2 row-start-1" />
-        <p className="text-xs text-gray-700 col-start-1 row-start-2">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
-        <span className="text-sm font-semibold text-gray-700 text-center self-center col-start-2 row-start-2">Analyze</span>
+        <div className="grid grid-cols-[minmax(0,1fr)_96px] items-center gap-x-2">
+          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+          <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
+        </div>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
