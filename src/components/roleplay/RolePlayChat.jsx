@@ -677,20 +677,22 @@ ${actionText}`;
         {/* Scenario context summary (kept at top under specialty line) */}
         {(descriptionText || openingScene) && (
           <div className="px-3 md:px-4 pt-1 pb-1 border-b bg-white">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-1.5 grid grid-cols-1 lg:grid-cols-2 gap-1">
+            <div className="rounded-xl border border-slate-300 bg-slate-50/85 px-2.5 py-1.5">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-1 lg:gap-0">
               {descriptionText && (
-                <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                <div className="rounded-lg bg-white/90 px-2 py-1 lg:pr-3 lg:border-r lg:border-slate-200">
                   <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
                   <p className="text-[11px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
                 </div>
               )}
-              <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1.5">
-                <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
-                {openingScene ? (
-                  <p className="text-[11px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
-                ) : (
-                  <p className="text-[11px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
-                )}
+                <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1 lg:ml-2">
+                  <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
+                  {openingScene ? (
+                    <p className="text-[11px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
+                  ) : (
+                    <p className="text-[11px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
