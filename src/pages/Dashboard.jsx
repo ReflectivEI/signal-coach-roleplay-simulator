@@ -24,18 +24,24 @@ const DASHBOARD_THEME = {
 };
 
 export default function Dashboard() {
-  const [colorMode, setColorMode] = useState(() => localStorage.getItem("dashboard-color-mode") || "light");
+  const [colorMode, setColorMode] = useState(() => localStorage.getItem("app-color-mode") || "light");
   const notice = "Pipeline forecasting summary updated 2 min ago.";
   const theme = DASHBOARD_THEME[colorMode] || DASHBOARD_THEME.light;
 
   useEffect(() => {
-    localStorage.setItem("dashboard-color-mode", colorMode);
-    if (colorMode === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    localStorage.setItem("app-color-mode", colorMode);
+    window.dispatchEvent(new CustomEvent("app-color-mode-changed", { detail: colorMode }));
   }, [colorMode]);
+
+  useEffect(() => {
+    const sync = (e) => setColorMode(e?.detail || localStorage.getItem("app-color-mode") || "light");
+    window.addEventListener("storage", sync);
+    window.addEventListener("app-color-mode-changed", sync);
+    return () => {
+      window.removeEventListener("storage", sync);
+      window.removeEventListener("app-color-mode-changed", sync);
+    };
+  }, []);
 
   const quickActions = useMemo(() => ([
     { icon: BarChart2, title: "Analytics Dashboard", description: "View demo KPIs, export reports, and compliance status", page: "demo-analytics", iconBg: "bg-teal-50" },

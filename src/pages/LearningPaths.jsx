@@ -29,6 +29,18 @@ const LEVEL_COLORS = {
 function ScoreBar({ score, color }) {
   const pct = score ? ((score - 1) / 4) * 100 : 0;
   const barColor = score < 2 ? "#ef4444" : score < 3 ? "#f97316" : score < 4 ? "#39ACAC" : "#22c55e";
+
+
+  const pushWorkspaceTipsToPlanning = () => {
+    if (workspaceTips.length === 0) return;
+    localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
+    window.location.href = createPageUrl("PreCallPlanning");
+  };
+
+  const openRolePlayFromWorkspace = () => {
+    localStorage.setItem("workspace-context", JSON.stringify(workspaceInputs));
+    window.location.href = createPageUrl("RolePlaySimulator");
+  };
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -563,6 +575,10 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
                   {workspaceTips.map((tip) => <li key={tip}>{tip}</li>)}
                 </ul>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={pushWorkspaceTipsToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Use in Pre-Call Planning</button>
+                  <button onClick={openRolePlayFromWorkspace} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Practice in Role Play</button>
+                </div>
               </div>
             )}
           </div>

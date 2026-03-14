@@ -955,14 +955,14 @@ ${actionText}`;
                       variant="outline"
                       size="sm"
                       onClick={exportFeedbackPDF}
-                      className="text-xs border-gray-300"
+                      className="text-xs border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                     >
                       Export to PDF
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-teal-400 text-teal-700 hover:bg-teal-50"
+                      className="text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700 hover:border-teal-700"
                       onClick={openCoachingOnSession}
                     >
                       <Bot className="w-3.5 h-3.5 mr-1" />

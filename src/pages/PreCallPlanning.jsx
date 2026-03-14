@@ -5,7 +5,7 @@ const exportWord = async (plan) => {
   ], { type: "application/msword" });
   saveAs(blob, `pre-call-plan-${plan.hcp_name.replace(/\s+/g, "-").toLowerCase()}.doc`);
 };
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,16 @@ export default function PreCallPlanning() {
   const [predictiveInputs, setPredictiveInputs] = useState({ prescribing_habit: "", access_barrier: "" });
   const [predictiveTips, setPredictiveTips] = useState([]);
   const isLoading = false;
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem("precall-predictive-tips") || "[]");
+      if (Array.isArray(cached) && cached.length > 0) {
+        setPredictiveTips(cached.slice(0, 3));
+      }
+    } catch {}
+  }, []);
+
 
   const aiAssist = async (field) => {
     if (!form.hcp_name && !form.specialty && !form.disease_state) return;
