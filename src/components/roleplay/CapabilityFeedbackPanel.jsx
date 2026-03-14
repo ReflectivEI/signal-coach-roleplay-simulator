@@ -132,7 +132,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2.5">
-      <div className="mb-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-1.5 mb-0.5">
           <Zap className="w-3.5 h-3.5 text-teal-500" />
           <span className="font-bold text-sm text-gray-900">Overall: {(() => {
@@ -144,7 +144,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
           <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
-          <span className="text-xs font-bold uppercase tracking-wide text-gray-600 text-center">Analyze</span>
+          <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-gray-700 text-center">Analyze</span>
         </div>
       </div>
       {focusCaps.length > 0 && (
@@ -163,7 +163,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
         const isExpanded = expanded[cap.id];
 
         return (
-          <div key={cap.id} className={`rounded-xl border ${hasFeedback ? colors.result : "border-gray-200 bg-white"} overflow-hidden shadow-[0_1px_0_rgba(15,23,42,0.03)]`}>
+          <div key={cap.id} className={`rounded-xl border ${hasFeedback ? colors.result : "border-gray-300 bg-white"} overflow-hidden shadow-sm`}>
             <div className="grid grid-cols-[1fr_110px] items-center gap-2 px-3 py-2.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
@@ -180,7 +180,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
                   <Button
                     size="sm"
                     variant="outline"
-                    className={`text-xs h-8 px-4 border font-semibold ${colors.btn}`}
+                    className={`text-xs h-8 px-4 border-2 font-bold ${colors.btn}`}
                     onClick={() => requestCapabilityFeedback(cap)}
                   >
                     Analyze
