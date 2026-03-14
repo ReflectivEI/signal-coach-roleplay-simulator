@@ -9,8 +9,6 @@ import {
   Sparkles,
   Workflow,
   ShieldCheck,
-  Bell,
-  Palette,
   Mail,
   MessageSquareShare,
 } from "lucide-react";
@@ -28,8 +26,7 @@ const THEMES = [
 
 export default function Dashboard() {
   const [themeIndex, setThemeIndex] = useState(0);
-  const [notice, setNotice] = useState("Pipeline forecasting summary updated 2 min ago.");
-  const [showNotifications, setShowNotifications] = useState(false);
+  const notice = "Pipeline forecasting summary updated 2 min ago.";
   const theme = THEMES[themeIndex];
 
   const quickActions = useMemo(() => ([
@@ -81,22 +78,11 @@ export default function Dashboard() {
             <Download className="w-4 h-4" />
             Export to PDF
           </Button>
-          <Button variant="outline" className="text-sm" onClick={() => { setShowNotifications((v) => !v); setNotice("3 new manager notifications in the last hour."); }}>
-            <Bell className="w-4 h-4 mr-1" /> Notifications
-          </Button>
           <Button variant="outline" className="text-sm" onClick={() => setThemeIndex((i) => (i + 1) % THEMES.length)}>
-            <Palette className="w-4 h-4 mr-1" /> Color Mode
+            Color Mode
           </Button>
         </div>
       </div>
-
-      {showNotifications && (
-        <div className="mb-4 rounded-xl border border-teal-200 bg-teal-50 p-3 text-sm text-[#1A334D]">
-          <p className="font-semibold">Notifications</p>
-          <p className="text-xs text-gray-700 mt-1">• 3 new manager insights are ready.</p>
-          <p className="text-xs text-gray-700">• 1 learning path recommendation was refreshed.</p>
-        </div>
-      )}
 
       <AIDailyInsights />
 

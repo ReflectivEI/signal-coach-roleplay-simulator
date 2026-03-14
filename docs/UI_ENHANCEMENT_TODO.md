@@ -1,39 +1,32 @@
-# UI Enhancement Implementation Checklist
+# UI Enhancement TODO Tracker
 
-This checklist tracks the enterprise-grade UI/UX alignment items requested for ReflectivAI.
+This checklist captures the requested enterprise UI unification work and tracks implementation status.
 
-## Role Play Scenario Experience
-- [x] Move **Scenario Description** and **Opening Scene** into a compact top container below specialty and above tabs.
-- [x] Apply thin bordered, rounded containers for subtle separation/readability.
-- [x] Align Capability Feedback header/action column so **Analyze** aligns with descriptor ending in “analyze.”
-- [x] Add period to “click any metric below to analyze.” descriptor.
-- [x] Increase Capability Analysis readability (larger body font, tighter intra-line spacing).
-- [x] Match in-session difficulty pill styling to Role Play card styling.
+## 1) Pre-Call Planning export workflow
+- [x] Add embedded **Export Template PDF** pill at bottom of page.
+- [x] Keep **Export Latest PDF** available and disabled when no plans exist.
+- [x] Ensure export still works when plan fields are empty (template fallback filename/content).
 
-## Pre-Call Planning
-- [x] Keep visible PDF export entry point at header (**Export Latest PDF**).
-- [x] Add in-card expanded export CTA (**Export to PDF**) at template bottom section.
-- [x] Rename **AI Draft** to **AI Assistance**.
-- [x] Improve AI Assistance button contrast (darker teal/border) with hover animation.
-- [x] Apply similar high-visibility hover affordance to adjacent action pills (e.g., Generate Top 3).
+## 2) Dashboard controls + naming
+- [x] Remove top-level Notifications control that was not producing intuitive visible output.
+- [x] Keep AI Insights refresh only within AI Insights panel (single source of refresh action).
+- [x] Rename appearance preference language to **Color Mode** with Auto / Light / Dark options.
 
-## Dashboard
-- [x] Remove **Render** action from dashboard header.
-- [x] Rename **Change Theme** to **Color Mode**.
-- [x] Improve **Notifications** behavior with visible dropdown/panel content.
-- [x] Remove **My Assigned Training** and keep lower sections raised.
+## 3) Knowledge Base clickable affordance consistency
+- [x] Style **Summarize** action with the same pill affordance and hover behavior used by other clickable pills.
+- [ ] Complete affordance unification audit across all remaining pages/components.
 
-## AI Coach
-- [x] Restore/keep **Today’s Tip** visual card treatment (pale yellow background + border + refresh affordance) above chat-start block.
+## 4) Performance Analytics + Manager View visual unification
+- [x] Apply brand-forward shell/header cleanup to Performance Analytics.
+- [x] Reduce KPI color sprawl in Manager View to brand-aligned palette (teal/navy/amber emphasis).
+- [ ] Continue full enterprise-grade layout normalization across deeper Manager View sections.
 
-## Knowledge Base + Shared Pill Behavior
-- [x] Ensure topic/category pills use consistent hover color transition to teal (border/text/background).
-- [x] Enforce clickable affordance via consistent subtle hover animation where applicable.
+## 5) Brand color integrity (teal / white / navy / pale yellow)
+- [x] Begin palette normalization in touched pages.
+- [ ] Complete full-app color and typography audit for remaining pages.
 
-## Cross-Page Theme/Readability Standardization
-- [x] Darken washed-out light-gray text in key workflow pages (Role Play, Pre-Call Planning, Manager View, Session Analytics, AI Coach, Performance Analytics).
-- [ ] Continue full-site pass for remaining low-contrast text tokens and non-standard hover states.
-
-## Manager View + Performance Analytics Modernization
-- [x] Normalize top-level tab pill behavior/colors for clearer unified interaction states.
-- [ ] Continue deeper visual simplification (color-count reduction, badge consistency, typography scale harmonization).
+## 6) Cross-page UI unification follow-ups
+- [ ] Standardize interactive control patterns (pill hover/focus/active/disabled) in shared design tokens.
+- [ ] Standardize section-header typography scale and spacing system.
+- [ ] Standardize badge colors/semantics for capability and status indicators.
+- [ ] Run final visual QA sweep across Dashboard, Knowledge Base, Performance Analytics, Manager View, and RolePlay Simulator.
