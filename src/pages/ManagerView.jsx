@@ -244,7 +244,7 @@ export default function ManagerView() {
     : TRAINING_MODULES.filter(m => m.capability === selectedCapabilityFilter);
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto bg-slate-50/60 rounded-2xl">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-1">
@@ -259,20 +259,28 @@ export default function ManagerView() {
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { label: "Active Reps", value: REPS.filter(r => r.status === "active").length, total: REPS.length, icon: Users, color: "text-teal-600 bg-teal-50 border-teal-200" },
-          { label: "Team Sessions (30d)", value: totalSessions, sub: "across all reps", icon: Play, color: "text-blue-600 bg-blue-50 border-blue-200" },
-          { label: "Team Avg Score", value: `${avgTeamScore}/5`, sub: "vs 3.3 benchmark", icon: BarChart3, color: "text-purple-600 bg-purple-50 border-purple-200" },
-          { label: "Needs Attention", value: atRisk, sub: "reps below threshold", icon: AlertTriangle, color: "text-amber-600 bg-amber-50 border-amber-200" },
-        ].map(({ label, value, sub, icon: Icon, color }) => (
-          <div key={label} className={`rounded-xl border p-4 ${color.split(" ").slice(1).join(" ")}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <Icon className={`w-4 h-4 ${color.split(" ")[0]}`} />
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+          { label: "Active Reps", value: REPS.filter(r => r.status === "active").length, total: REPS.length, icon: Users, tone: "teal" },
+          { label: "Team Sessions (30d)", value: totalSessions, sub: "across all reps", icon: Play, tone: "navy" },
+          { label: "Team Avg Score", value: `${avgTeamScore}/5`, sub: "vs 3.3 benchmark", icon: BarChart3, tone: "teal" },
+          { label: "Needs Attention", value: atRisk, sub: "reps below threshold", icon: AlertTriangle, tone: "amber" },
+        ].map(({ label, value, sub, icon: Icon, tone }) => {
+          const toneMap = {
+            teal: { icon: "text-teal-700", card: "bg-teal-50 border-teal-200", value: "text-teal-800" },
+            navy: { icon: "text-[#1A334D]", card: "bg-slate-100 border-slate-300", value: "text-[#1A334D]" },
+            amber: { icon: "text-amber-700", card: "bg-amber-50 border-amber-200", value: "text-amber-800" },
+          };
+          const t = toneMap[tone] || toneMap.navy;
+          return (
+            <div key={label} className={`rounded-xl border p-4 ${t.card}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Icon className={`w-4 h-4 ${t.icon}`} />
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+              </div>
+              <p className={`text-2xl font-bold ${t.value}`}>{value}</p>
+              {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
             </div>
-            <p className={`text-2xl font-bold ${color.split(" ")[0]}`}>{value}</p>
-            {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <Tabs defaultValue="reps">
