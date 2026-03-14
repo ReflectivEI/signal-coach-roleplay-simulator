@@ -68,12 +68,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   const objectiveText = scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.";
   const descriptionText = scenario.description || scenario.context || "";
-  const challengeItems = Array.isArray(scenario.challenges)
+  const challengeItems = (Array.isArray(scenario.challenges)
     ? scenario.challenges
     : String(scenario.challenges || "")
       .split(/\n|;/)
-      .map((v) => v.replace(/^[-*\s]+/, "").trim())
-      .filter(Boolean);
+  )
+    .map((v) => String(v || "").replace(/^[-*\s]+/, "").trim())
+    .filter(Boolean)
+    .filter((item) => !/^opening\s*scene\b/i.test(item));
 
   const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
 
@@ -659,7 +661,7 @@ ${actionText}`;
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
               {(descriptionText || openingScene) && (
                 <div className="lg:col-span-8 rounded-2xl border border-slate-300 bg-white p-2.5 shadow-sm">
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
@@ -760,12 +762,6 @@ ${actionText}`;
                   </div>
                 )}
 
-                {turns.length <= 1 && !isLoading && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Conversation Starter</p>
-                    <p className="text-sm text-slate-700 mt-1">Use the objective and opening scene above, then send your first response as the sales rep to begin the simulation.</p>
-                  </div>
-                )}
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
