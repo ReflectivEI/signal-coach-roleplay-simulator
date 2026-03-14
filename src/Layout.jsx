@@ -106,7 +106,7 @@ export default function Layout({ children, currentPageName }) {
 
 
   return (
-    <div className={`flex h-screen overflow-hidden ${colorMode === "dark" ? "dark" : ""}`} style={{ background: colorMode === "dark" ? "#0b1220" : "#f0f4f8" }}>
+    <div className={`flex h-screen overflow-hidden ${colorMode === "dark" ? "dark" : ""}`} style={{ background: colorMode === "dark" ? "#111827" : "#f0f4f8" }}>
       <style>{`
         :root {
           --brand-navy:   #1A334D;
@@ -289,9 +289,9 @@ export default function Layout({ children, currentPageName }) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-md hover:bg-gray-100"
+              className="p-1.5 rounded-md transition-colors" style={{ background: "transparent", color: colorMode === "dark" ? "#cbd5e1" : "#6b7280" }}
             >
-              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
@@ -303,26 +303,26 @@ export default function Layout({ children, currentPageName }) {
                 <path d="M20 10 C24 14 24 22 20 26 C16 22 16 14 20 10Z" fill="white" />
               </svg>
               <div className="flex items-baseline gap-0">
-                <span className="font-bold text-sm tracking-wide" style={{ color: "#1A334D" }}>Reflectiv</span>
+                <span className="font-bold text-sm tracking-wide" style={{ color: colorMode === "dark" ? "#e2e8f0" : "#1A334D" }}>Reflectiv</span>
                 <span className="font-bold text-sm tracking-wide" style={{ color: "#39ACAC" }}>AI</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af" }}>
+            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }}>
               <Bell className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af" }}>
+            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }}>
               <User className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af" }} onClick={() => setColorMode((m) => (m === "dark" ? "light" : "dark"))}>
+            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }} onClick={() => setColorMode((m) => (m === "dark" ? "light" : "dark"))}>
               <Moon className="w-4 h-4" />
             </button>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto" style={{ background: colorMode === "dark" ? "#0b1220" : "#f0f4f8" }}>
+        <main className="flex-1 overflow-y-auto" style={{ background: colorMode === "dark" ? "#111827" : "#f0f4f8" }}>
           {children}
         </main>
       </div>

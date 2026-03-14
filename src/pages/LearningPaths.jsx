@@ -31,6 +31,17 @@ function ScoreBar({ score, color }) {
   const barColor = score < 2 ? "#ef4444" : score < 3 ? "#f97316" : score < 4 ? "#39ACAC" : "#22c55e";
 
 
+  const copyWorkspaceTips = async () => {
+    if (workspaceTips.length === 0) return;
+    const text = workspaceTips.map((tip, i) => `${i + 1}. ${tip}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setWorkspaceStatus("Recommendations copied.");
+    } catch {
+      setWorkspaceStatus("Unable to copy recommendations.");
+    }
+  };
+
   const pushWorkspaceTipsToPlanning = () => {
     if (workspaceTips.length === 0) return;
     localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
@@ -215,6 +226,7 @@ export default function LearningPaths() {
   const [loadingPaths, setLoadingPaths] = useState(true);
   const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
   const [workspaceTips, setWorkspaceTips] = useState([]);
+  const [workspaceStatus, setWorkspaceStatus] = useState("");
 
   useEffect(() => {
     loadData();
@@ -436,6 +448,12 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     const barrier = workspaceInputs.barrier.toLowerCase();
     const tips = [];
 
+    if (!framework && !template && !barrier) {
+      setWorkspaceStatus("Add at least one input to generate recommendations.");
+      setWorkspaceTips([]);
+      return;
+    }
+
     tips.push(framework
       ? `Lead with the ${workspaceInputs.framework} framework in your opener and anchor it to one measurable patient-impact outcome.`
       : "Lead with a single framework-based opener tied to one measurable patient-impact outcome.");
@@ -448,6 +466,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
 
     tips.push("Close with a concrete owner + date next step and log it into your pre-call planning workflow.");
     setWorkspaceTips(tips.slice(0, 3));
+    setWorkspaceStatus("Recommendations generated.");
   };
 
   return (
@@ -568,6 +587,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
               >
                 Generate Top 3 Recommendations
               </Button>
+              {workspaceStatus && <p className="text-[11px] text-slate-600">{workspaceStatus}</p>}
             </div>
             {workspaceTips.length > 0 && (
               <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 p-3">
@@ -578,6 +598,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button onClick={pushWorkspaceTipsToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Use in Pre-Call Planning</button>
                   <button onClick={openRolePlayFromWorkspace} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Practice in Role Play</button>
+                  <button onClick={copyWorkspaceTips} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Copy Recommendations</button>
                 </div>
               </div>
             )}
