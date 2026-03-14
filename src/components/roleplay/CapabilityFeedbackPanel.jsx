@@ -132,8 +132,8 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2.5">
-      <div className="grid grid-cols-[1fr_96px] items-start gap-x-2 mb-1">
-        <div className="min-w-0">
+      <div className="grid grid-cols-[minmax(0,1fr)_96px] grid-rows-[auto_auto] items-start gap-x-2 mb-1">
+        <div className="min-w-0 col-start-1 row-start-1">
           <div className="flex items-center gap-1.5 mb-0.5">
             <Zap className="w-3.5 h-3.5 text-teal-500" />
             <span className="font-bold text-sm text-gray-900">Overall: {(() => {
@@ -144,9 +144,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
             })()}</span>
           </div>
         </div>
-        <div />
-        <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
-        <span className="text-sm font-semibold text-gray-700 text-center self-center">Analyze</span>
+        <div className="col-start-2 row-start-1" />
+        <p className="text-xs text-gray-700 col-start-1 row-start-2">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+        <span className="text-sm font-semibold text-gray-700 text-center self-center col-start-2 row-start-2">Analyze</span>
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
@@ -199,7 +199,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2">
                 <ReactMarkdown
                   components={{
-                    p: (props) => <p className="mb-1.5 leading-[1.4] text-[16px] text-slate-800" {...props} />,
+                    p: (props) => <p className="mb-1 leading-[1.4] text-[16px] text-slate-800" {...props} />,
                     strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                   }}
                 >{capFeedback[cap.id]}</ReactMarkdown>
