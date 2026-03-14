@@ -110,7 +110,7 @@ export default function PreCallPlanning() {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(26, 51, 77);
-    doc.text(plan.hcp_name, margin, y + 4);
+    doc.text(plan.hcp_name || "Pre-Call Planning Template", margin, y + 4);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 100, 100);
@@ -144,9 +144,24 @@ export default function PreCallPlanning() {
     doc.setTextColor(180, 180, 180);
     doc.text("ReflectivAI · Signal Intelligence™ Pre-Call Planning", pageWidth / 2, 290, { align: "center" });
 
-    doc.save(`pre-call-plan-${plan.hcp_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+    const safeName = (plan.hcp_name || "template").trim().replace(/\s+/g, "-").toLowerCase() || "template";
+    doc.save(`pre-call-plan-${safeName}.pdf`);
   };
 
+
+
+  const exportTemplatePDF = async () => {
+    const templatePlan = {
+      hcp_name: "",
+      specialty: "",
+      disease_state: "",
+      objectives: "",
+      key_messages: "",
+      anticipated_objections: "",
+      notes: "",
+    };
+    await exportPDF(templatePlan);
+  };
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-6 gap-2">
@@ -158,11 +173,15 @@ export default function PreCallPlanning() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {plans.length > 0 && (
-            <Button variant="outline" onClick={() => exportPDF(plans[0])}>
-              <Download className="w-4 h-4 mr-1" /> Export Latest PDF
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            onClick={() => plans.length > 0 && exportPDF(plans[0])}
+            disabled={plans.length === 0}
+            className="border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
+          >
+            <Download className="w-4 h-4 mr-1" /> Export Latest PDF
+          </Button>
           <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4 mr-1" /> New Plan
           </Button>
@@ -207,7 +226,7 @@ export default function PreCallPlanning() {
                     type="button"
                     onClick={() => aiAssist(key)}
                     disabled={aiGenerating !== null || (!form.hcp_name && !form.specialty && !form.disease_state)}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-teal-700 border border-teal-200 rounded-full px-2.5 py-1 hover:bg-teal-50 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-teal-800 border border-teal-300 bg-teal-100/70 shadow-sm rounded-full px-2.5 py-1 hover:bg-teal-200 hover:-translate-y-0.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {aiGenerating === key ? (
                       <><Loader2 className="w-3 h-3 animate-spin" /> Generating...</>
@@ -247,7 +266,7 @@ export default function PreCallPlanning() {
               </div>
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-gray-600">Generate top 3 recommendations before your next HCP discussion.</p>
-                <Button type="button" variant="outline" className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] hover:-translate-y-0.5 transition-all" onClick={generatePredictiveTips}>Generate Top 3</Button>
+                <Button type="button" variant="outline" className="text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] hover:-translate-y-0.5 transition-all shadow-sm" onClick={generatePredictiveTips}>Generate Top 3</Button>
               </div>
               {predictiveTips.length > 0 && (
                 <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
@@ -329,7 +348,7 @@ export default function PreCallPlanning() {
                       </div>
                     ))}
                     <div className="pt-1">
-                      <Button variant="outline" onClick={() => exportPDF(plan)} className="text-xs border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]">
+                      <Button variant="outline" onClick={() => exportPDF(plan)} className="w-full sm:w-auto text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-[#f8fbff] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]">
                         <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF
                       </Button>
                     </div>
@@ -340,6 +359,32 @@ export default function PreCallPlanning() {
           ))}
         </div>
       )}
+
+      <div className="mt-8 rounded-xl border border-teal-200 bg-teal-50/70 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#1A334D]">Field-Ready Export</p>
+          <p className="text-xs text-slate-600">Export your most recent plan or a blank pre-call template for use in the field.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            onClick={exportTemplatePDF}
+          >
+            <Download className="w-3.5 h-3.5 mr-1" /> Export Template PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
+            onClick={() => plans.length > 0 && exportPDF(plans[0])}
+            disabled={plans.length === 0}
+            title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
+          >
+            <Download className="w-3.5 h-3.5 mr-1" /> Export Latest PDF
+          </Button>
+        </div>
+      </div>
+
     </div>
   );
 }
