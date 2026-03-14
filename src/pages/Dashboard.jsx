@@ -9,7 +9,6 @@ import {
   Sparkles,
   Workflow,
   ShieldCheck,
-  Palette,
   Mail,
   MessageSquareShare,
 } from "lucide-react";
@@ -80,7 +79,7 @@ export default function Dashboard() {
             Export to PDF
           </Button>
           <Button variant="outline" className="text-sm" onClick={() => setThemeIndex((i) => (i + 1) % THEMES.length)}>
-            <Palette className="w-4 h-4 mr-1" /> Color Mode
+            Color Mode
           </Button>
         </div>
       </div>

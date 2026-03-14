@@ -180,7 +180,7 @@ export default function PreCallPlanning() {
             className="border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
             title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
           >
-            <Download className="w-4 h-4 mr-1" /> Export Latest PDF
+            <Download className="w-4 h-4 mr-1" /> Export to PDF (Latest Plan)
           </Button>
           <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
             <Plus className="w-4 h-4 mr-1" /> New Plan
@@ -371,7 +371,7 @@ export default function PreCallPlanning() {
             className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
             onClick={exportTemplatePDF}
           >
-            <Download className="w-3.5 h-3.5 mr-1" /> Export Template PDF
+            <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF (Template)
           </Button>
           <Button
             variant="outline"
@@ -380,7 +380,7 @@ export default function PreCallPlanning() {
             disabled={plans.length === 0}
             title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
           >
-            <Download className="w-3.5 h-3.5 mr-1" /> Export Latest PDF
+            <Download className="w-3.5 h-3.5 mr-1" /> Export to PDF (Latest Plan)
           </Button>
         </div>
       </div>
