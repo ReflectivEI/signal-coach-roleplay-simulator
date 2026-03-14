@@ -760,6 +760,13 @@ ${actionText}`;
                   </div>
                 )}
 
+                {turns.length <= 1 && !isLoading && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Conversation Starter</p>
+                    <p className="text-sm text-slate-700 mt-1">Use the objective and opening scene above, then send your first response as the sales rep to begin the simulation.</p>
+                  </div>
+                )}
+
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
                     {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
