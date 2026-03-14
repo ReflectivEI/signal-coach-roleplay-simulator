@@ -700,6 +700,14 @@ ${actionText}`;
                     </ul>
                   </div>
                 )}
+                <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 lg:max-w-[470px] shadow-sm">
+                  <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
+                  {openingScene ? (
+                    <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
+                  ) : (
+                    <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
