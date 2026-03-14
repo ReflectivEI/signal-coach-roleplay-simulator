@@ -458,7 +458,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             <div className="max-w-3xl mx-auto rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
               <MessageSquare className="w-14 h-14 text-gray-200 mb-4 mx-auto" />
               <h2 className="text-3xl font-bold text-gray-900 mb-2">Start a Conversation</h2>
-              <p className="text-sm text-gray-500 max-w-xl mx-auto mb-6">
+              <p className="text-sm text-gray-600 max-w-xl mx-auto mb-6">
                 Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
               </p>
               <div className="w-full max-w-2xl mx-auto grid grid-cols-1 gap-3">
