@@ -110,7 +110,7 @@ export default function PreCallPlanning() {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(26, 51, 77);
-    doc.text(plan.hcp_name, margin, y + 4);
+    doc.text(plan.hcp_name || "Pre-Call Planning Template", margin, y + 4);
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 100, 100);
@@ -144,9 +144,24 @@ export default function PreCallPlanning() {
     doc.setTextColor(180, 180, 180);
     doc.text("ReflectivAI · Signal Intelligence™ Pre-Call Planning", pageWidth / 2, 290, { align: "center" });
 
-    doc.save(`pre-call-plan-${plan.hcp_name.replace(/\s+/g, "-").toLowerCase()}.pdf`);
+    const safeName = (plan.hcp_name || "template").trim().replace(/\s+/g, "-").toLowerCase() || "template";
+    doc.save(`pre-call-plan-${safeName}.pdf`);
   };
 
+
+
+  const exportTemplatePDF = async () => {
+    const templatePlan = {
+      hcp_name: "",
+      specialty: "",
+      disease_state: "",
+      objectives: "",
+      key_messages: "",
+      anticipated_objections: "",
+      notes: "",
+    };
+    await exportPDF(templatePlan);
+  };
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
       <div className="flex items-start justify-between mb-6 gap-2">
@@ -344,6 +359,32 @@ export default function PreCallPlanning() {
           ))}
         </div>
       )}
+
+      <div className="mt-8 rounded-xl border border-teal-200 bg-teal-50/70 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#1A334D]">Field-Ready Export</p>
+          <p className="text-xs text-slate-600">Export your most recent plan or a blank pre-call template for use in the field.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            onClick={exportTemplatePDF}
+          >
+            <Download className="w-3.5 h-3.5 mr-1" /> Export Template PDF
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
+            onClick={() => plans.length > 0 && exportPDF(plans[0])}
+            disabled={plans.length === 0}
+            title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
+          >
+            <Download className="w-3.5 h-3.5 mr-1" /> Export Latest PDF
+          </Button>
+        </div>
+      </div>
+
     </div>
   );
 }
