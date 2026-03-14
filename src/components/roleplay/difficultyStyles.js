@@ -21,3 +21,4 @@ export function getDifficultyVisuals(difficulty) {
   const key = String(difficulty || "").toLowerCase();
   return difficultyVisualSystem[key] || difficultyVisualSystem.fallback;
 }
+

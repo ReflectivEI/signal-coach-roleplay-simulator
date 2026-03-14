@@ -676,20 +676,20 @@ ${actionText}`;
 
         {/* Scenario context summary (kept at top under specialty line) */}
         {(descriptionText || openingScene) && (
-          <div className="px-3 md:px-4 pt-1.5 pb-1.5 border-b bg-white">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-2 grid grid-cols-1 lg:grid-cols-2 gap-1.5">
+          <div className="px-3 md:px-4 pt-1 pb-1 border-b bg-white">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-1.5 grid grid-cols-1 lg:grid-cols-2 gap-1">
               {descriptionText && (
-                <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5">
+                <div className="rounded-lg border border-slate-200 bg-white px-2 py-1.5">
                   <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
-                  <p className="text-[12px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
+                  <p className="text-[11px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
                 </div>
               )}
-              <div className="rounded-lg border border-amber-200 bg-amber-50/75 px-2.5 py-1.5">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1.5">
                 <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
                 {openingScene ? (
-                  <p className="text-[12px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
+                  <p className="text-[11px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
                 ) : (
-                  <p className="text-[12px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
+                  <p className="text-[11px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
                 )}
               </div>
             </div>
