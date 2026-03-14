@@ -5,6 +5,8 @@ import {
   BarChart3, Award, Clock, Sparkles, ArrowRight, Circle
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 import { MODULE_LIBRARY, CAPABILITY_META, getUrgency } from "@/components/learningpath/ModuleLibrary";
 import { Link } from "react-router-dom";
@@ -27,6 +29,29 @@ const LEVEL_COLORS = {
 function ScoreBar({ score, color }) {
   const pct = score ? ((score - 1) / 4) * 100 : 0;
   const barColor = score < 2 ? "#ef4444" : score < 3 ? "#f97316" : score < 4 ? "#39ACAC" : "#22c55e";
+
+
+  const copyWorkspaceTips = async () => {
+    if (workspaceTips.length === 0) return;
+    const text = workspaceTips.map((tip, i) => `${i + 1}. ${tip}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setWorkspaceStatus("Recommendations copied.");
+    } catch {
+      setWorkspaceStatus("Unable to copy recommendations.");
+    }
+  };
+
+  const pushWorkspaceTipsToPlanning = () => {
+    if (workspaceTips.length === 0) return;
+    localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
+    window.location.href = createPageUrl("PreCallPlanning");
+  };
+
+  const openRolePlayFromWorkspace = () => {
+    localStorage.setItem("workspace-context", JSON.stringify(workspaceInputs));
+    window.location.href = createPageUrl("RolePlaySimulator");
+  };
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -199,6 +224,9 @@ export default function LearningPaths() {
   const [analyzingAll, setAnalyzingAll] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [loadingPaths, setLoadingPaths] = useState(true);
+  const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
+  const [workspaceTips, setWorkspaceTips] = useState([]);
+  const [workspaceStatus, setWorkspaceStatus] = useState("");
 
   useEffect(() => {
     loadData();
@@ -414,6 +442,33 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     return totalModules > 0 ? Math.round((totalCompleted / totalModules) * 100) : 0;
   })();
 
+  const generateWorkspaceTips = () => {
+    const framework = workspaceInputs.framework.toLowerCase();
+    const template = workspaceInputs.template.toLowerCase();
+    const barrier = workspaceInputs.barrier.toLowerCase();
+    const tips = [];
+
+    if (!framework && !template && !barrier) {
+      setWorkspaceStatus("Add at least one input to generate recommendations.");
+      setWorkspaceTips([]);
+      return;
+    }
+
+    tips.push(framework
+      ? `Lead with the ${workspaceInputs.framework} framework in your opener and anchor it to one measurable patient-impact outcome.`
+      : "Lead with a single framework-based opener tied to one measurable patient-impact outcome.");
+
+    if (template.includes("objection") || barrier.includes("objection") || barrier.includes("pa") || barrier.includes("access")) {
+      tips.push("Use your objection template early and pre-wire one payer/access response before discussing product detail.");
+    } else {
+      tips.push("Use your selected messaging template to guide a 90-second value narrative before advancing to next-step asks.");
+    }
+
+    tips.push("Close with a concrete owner + date next step and log it into your pre-call planning workflow.");
+    setWorkspaceTips(tips.slice(0, 3));
+    setWorkspaceStatus("Recommendations generated.");
+  };
+
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Header */}
@@ -443,7 +498,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
+      <div className="max-w-7xl mx-auto px-6 md:px-10 py-6">
         {sessions.length === 0 && paths.length === 0 && !loadingPaths && (
           <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-12 text-center mb-8">
             <Play className="w-12 h-12 mx-auto mb-4 text-gray-300" />
@@ -458,9 +513,12 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
         )}
 
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700 mb-3">Starter Lesson Tracks</p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6 items-start">
+          <div className="lg:col-span-8 bg-white rounded-2xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Starter Lesson Tracks</p>
+              <span className="text-xs text-slate-500">Focused, field-ready practice</span>
+            </div>
             <div className="space-y-3">
               {[
                 {
@@ -483,34 +541,71 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 },
               ].map((track) => (
                 <div key={track.title} className="rounded-xl border border-gray-200 p-3">
-                  <p className="text-sm font-semibold text-gray-900">{track.title}</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-gray-900">{track.title}</p>
+                    <Link to={createPageUrl(track.actionPage)} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all whitespace-nowrap">
+                      {track.actionLabel}
+                    </Link>
+                  </div>
                   <ul className="mt-1.5 list-disc pl-4 text-xs text-gray-600 space-y-0.5">
                     {track.lessons.map((lesson) => <li key={lesson}>{lesson}</li>)}
                   </ul>
-                  <Link to={createPageUrl(track.actionPage)} className="inline-flex mt-2 items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">
-                    {track.actionLabel}
-                  </Link>
-                  
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#1A334D] mb-2">Client Customization Workspace</p>
-            <p className="text-sm text-gray-600 leading-relaxed mb-3">
-              Teams can layer client selling frameworks, messaging templates, and territory playbooks on top of the Signal Intelligence™ foundation without changing scoring science.
+            <p className="text-xs text-gray-600 leading-relaxed mb-3">
+              Add your client framework and barrier context to generate actionable prep recommendations.
             </p>
-            <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
-              <p className="text-xs font-bold text-teal-700 mb-1">Predictive planning concept</p>
-              <p className="text-xs text-gray-700">
-                Input prescribing trends + access barriers and ReflectivAI can suggest top 3 prep recommendations to prioritize in the next HCP conversation.
-              </p>
+            <div className="space-y-2">
+              <Input
+                value={workspaceInputs.framework}
+                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, framework: e.target.value }))}
+                placeholder="Client framework (e.g., ABC Value Sequence)"
+                className="h-8 text-xs"
+              />
+              <Input
+                value={workspaceInputs.template}
+                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, template: e.target.value }))}
+                placeholder="Messaging template (e.g., objection handling)"
+                className="h-8 text-xs"
+              />
+              <Input
+                value={workspaceInputs.barrier}
+                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, barrier: e.target.value }))}
+                placeholder="Primary barrier (e.g., PA, staffing, access)"
+                className="h-8 text-xs"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={generateWorkspaceTips}
+                className="w-full rounded-full h-8 text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+              >
+                Generate Top 3 Recommendations
+              </Button>
+              {workspaceStatus && <p className="text-[11px] text-slate-600">{workspaceStatus}</p>}
             </div>
+            {workspaceTips.length > 0 && (
+              <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 p-3">
+                <p className="text-xs font-bold text-teal-700 mb-1">Recommended Actions</p>
+                <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
+                  {workspaceTips.map((tip) => <li key={tip}>{tip}</li>)}
+                </ul>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button onClick={pushWorkspaceTipsToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Use in Pre-Call Planning</button>
+                  <button onClick={openRolePlayFromWorkspace} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Practice in Role Play</button>
+                  <button onClick={copyWorkspaceTips} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Copy Recommendations</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Capability List */}
           <div className="space-y-2">
             <div className="flex items-center justify-between mb-3">
