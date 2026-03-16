@@ -637,6 +637,36 @@ ${actionText}`;
 
   const flatMessages = flattenTurns(turns);
 
+  const renderRoleplayTabs = (containerClassName = "") => (
+    <div className={`flex gap-1 overflow-x-auto ${containerClassName}`}>
+      {([
+        { id: "chat", label: "Live Chat", icon: MessageSquare },
+        { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
+        { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+      ]).map(({ id, label, icon: Icon, disabled }) => (
+        <button
+          key={id}
+          disabled={disabled}
+          onClick={() => {
+            setActiveTab(id);
+            if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
+              endSession();
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
+            ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
+            : disabled
+              ? "border-gray-200 text-gray-300 cursor-not-allowed"
+              : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden" style={{ background: "#f0f4f8" }}>
@@ -711,37 +741,18 @@ ${actionText}`;
                 )}
               </div>
             </div>
+            <div className="mt-2 pt-2 border-t border-slate-200/70">
+              {renderRoleplayTabs()}
+            </div>
           </div>
         )}
 
-        {/* Tabs — NavPill style */}
-        <div className="flex gap-1 px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white overflow-x-auto">
-          {([
-            { id: "chat", label: "Live Chat", icon: MessageSquare },
-            { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
-          ]).map(({ id, label, icon: Icon, disabled }) => (
-            <button
-              key={id}
-              disabled={disabled}
-              onClick={() => {
-                setActiveTab(id);
-                if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
-                  endSession();
-                }
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-                ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
-                : disabled
-                  ? "border-gray-200 text-gray-300 cursor-not-allowed"
-                  : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-                }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+          <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
+            {renderRoleplayTabs()}
+          </div>
+        )}
+
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
