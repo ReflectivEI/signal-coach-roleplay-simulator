@@ -5,7 +5,7 @@
 
 import {
   MessageCircle, Users, FileText, ShieldAlert, CheckCircle2,
-  Brain, BookOpen, Lightbulb, Target, TrendingUp, Zap,
+  Brain, TrendingUp, Zap,
   Eye, Ear, Heart, Compass, RefreshCw, Star
 } from "lucide-react";
 

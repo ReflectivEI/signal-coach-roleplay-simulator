@@ -129,14 +129,14 @@ export default function AICoach() {
     const { scenarioTitle, hcpCategory, specialty, misalignments = [], positives = [], capabilityScores = {}, overallScore, situation } = ctx;
     const misStr = misalignments.length > 0 ? misalignments.map(m => `• ${m}`).join("\n") : "None detected";
     const posStr = positives.length > 0 ? positives.map(p => `• ${p}`).join("\n") : "None noted";
-    const capStr = Object.entries(capabilityScores).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" | ");
+    const capStr = Object.keys(capabilityScores).map((k) => k.replace(/_/g, " ")).join(" | ");
 
     return `I just completed a roleplay session and need context-aware feedback.
 
 **Scenario:** ${scenarioTitle || "Unknown"}
 **HCP:** ${hcpCategory || "HCP"} — ${specialty || "General"}
-**Overall Alignment Summary:** Deterministic qualitative analysis available
-${capStr ? `**Capability Scores:** ${capStr}` : ""}
+**Overall Alignment Summary:** Deterministic behavioral summary available
+${capStr ? `**Capability Areas:** ${capStr}` : ""}
 
 **What I Did Well:**
 ${posStr}
@@ -188,10 +188,10 @@ Rules:
 - Keep it practical and specific
 - No filler preamble`; 
 
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
       });
 
       if (res.ok) {
@@ -246,10 +246,10 @@ Rules:
 ACTIVE ROLEPLAY SESSION CONTEXT (inject as primary coaching lens):
 - Scenario: "${sessionContext.scenarioTitle}"
 - HCP: ${sessionContext.hcpCategory}, ${sessionContext.specialty}
-- Overall Alignment Summary: Deterministic qualitative analysis available
+- Overall Alignment Summary: Deterministic behavioral summary available
 - Detected Misalignments: ${(sessionContext.misalignments || []).join(" | ") || "None"}
 - Positives: ${(sessionContext.positives || []).join(" | ") || "None"}
-- Capability Scores: ${Object.entries(sessionContext.capabilityScores || {}).map(([k, v]) => `${k.replace(/_/g, ' ')}=${v}`).join(", ")}
+- Capability Areas: ${Object.keys(sessionContext.capabilityScores || {}).map((k) => k.replace(/_/g, ' ')).join(", ")}
 
 COACHING MANDATE: When the user asks for feedback, directly reference these specific misalignments and positives. Quote behaviors, not traits. Provide concrete alternative language or actions for each misalignment.
 ` : "";
@@ -277,10 +277,10 @@ ${conversationHistory}
 
 Respond as the AI Coach. If this is a knowledge/info question, provide a comprehensive answer. If this is a coaching request, provide helpful feedback grounded in observable patterns and behaviors.`;
 
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: systemPrompt })
+        body: JSON.stringify({ messages: [{ role: 'system', content: systemPrompt }] })
       });
       if (res.ok) {
         const data = await res.json();
@@ -333,12 +333,10 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
       const conversationText = visibleMessages
         .map((m) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
         .join("\n");
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `Analyze this AI Coach conversation and provide a brief 2-3 sentence summary of the key coaching insights and action items discussed. Be conversational and focused on practical takeaways:\n\n${conversationText}`,
-        })
+        body: JSON.stringify({ messages: [{ role: 'user', content: `Analyze this AI Coach conversation and provide a brief 2-3 sentence summary of the key coaching insights and action items discussed. Be conversational and focused on practical takeaways:\n\n${conversationText}` }] })
       });
       if (res.ok) {
         const data = await res.json();

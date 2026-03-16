@@ -6,7 +6,7 @@ const METRIC_IDS = [
   'question_quality',
   'listening_responsiveness',
   'making_it_matter',
-  'customer_engagement_cues',
+  'customer_engagement_cues_cues',
   'objection_handling',
   'conversation_control',
   'adaptability',

@@ -757,7 +757,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     question_quality:         scoreSignalAwareness(hcpState, temperature, p),
     listening_responsiveness:    scoreSignalInterpretation(hcpState, temperature, p),
     making_it_matter:         scoreValueConnection(hcpState, temperature, p),
-    customer_engagement_cues:      scoreCustomerEngagement(hcpState, temperature, p),
+    customer_engagement_cues_cues:      scoreCustomerEngagement(hcpState, temperature, p),
     objection_handling:     scoreObjectionNavigation(hcpState, temperature, p),
     conversation_control:  scoreConversationManagement(hcpState, temperature, p),
     adaptability:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),

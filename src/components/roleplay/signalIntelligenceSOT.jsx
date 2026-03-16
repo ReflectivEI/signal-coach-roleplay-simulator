@@ -135,7 +135,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Value Framing is strong when relevance is clear and impact is unmistakable.",
   },
   {
-    id: "customer_engagement_cues",
+    id: "customer_engagement_cues_cues",
     label: "Customer Engagement Monitoring",
     measurement: "Customer Engagement Cues",
     canonicalQuestion: "Did the rep notice changes in momentum and participation?",

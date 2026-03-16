@@ -190,10 +190,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       const metricSignals = metrics?.[cap.id];
       const prompt = `As a sales coach, analyze this capability using only observable behavior from the transcript and deterministic findings (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\nKey strengths detected: ${(metricSignals?.positives || []).slice(0, 3).join(' | ') || 'None detected'}\nKey gaps detected: ${(metricSignals?.misalignments || []).slice(0, 3).join(' | ') || 'None detected'}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale grounded in behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output numeric scores.`;
 
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 500 })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
       });
 
       if (!res.ok) throw new Error('Failed to get feedback');
@@ -222,10 +222,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
         .join("\n");
       const prompt = `As a sales coach, provide an overall session analysis using deterministic observations below (do NOT rescore).\n\nCapability findings:\n${capabilitySummary}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale grounded in behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output numeric scores.`;
 
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 650 })
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
       });
 
       if (!res.ok) throw new Error('Failed to get overall feedback');

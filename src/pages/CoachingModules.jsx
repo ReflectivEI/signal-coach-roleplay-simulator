@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronDown, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
+import { ChevronRight, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 // ...existing code...
