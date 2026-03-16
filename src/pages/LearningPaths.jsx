@@ -29,8 +29,6 @@ const LEVEL_COLORS = {
 function ScoreBar({ score, color }) {
   const pct = score ? ((score - 1) / 4) * 100 : 0;
   const barColor = score < 2 ? "#ef4444" : score < 3 ? "#f97316" : score < 4 ? "#39ACAC" : "#22c55e";
-
-
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -206,6 +204,28 @@ export default function LearningPaths() {
   const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
   const [workspaceTips, setWorkspaceTips] = useState([]);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
+
+  const copyWorkspaceTips = async () => {
+    if (workspaceTips.length === 0) return;
+    const text = workspaceTips.map((tip, i) => `${i + 1}. ${tip}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setWorkspaceStatus("Recommendations copied.");
+    } catch {
+      setWorkspaceStatus("Unable to copy recommendations.");
+    }
+  };
+
+  const pushWorkspaceTipsToPlanning = () => {
+    if (workspaceTips.length === 0) return;
+    localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
+    window.location.href = createPageUrl("PreCallPlanning");
+  };
+
+  const openRolePlayFromWorkspace = () => {
+    localStorage.setItem("workspace-context", JSON.stringify(workspaceInputs));
+    window.location.href = createPageUrl("RolePlaySimulator");
+  };
 
   useEffect(() => {
     loadData();

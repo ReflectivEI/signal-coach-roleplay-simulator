@@ -637,8 +637,8 @@ ${actionText}`;
 
   const flatMessages = flattenTurns(turns);
 
-  const renderRoleplayTabs = (containerClassName = "") => (
-    <div className={`flex gap-1 overflow-x-auto ${containerClassName}`}>
+  const renderTabPills = () => (
+    <div className="flex gap-1 px-3 md:px-4 py-2.5 flex-shrink-0 bg-white overflow-x-auto">
       {([
         { id: "chat", label: "Live Chat", icon: MessageSquare },
         { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
@@ -753,6 +753,18 @@ ${actionText}`;
           </div>
         )}
 
+        {/* Tabs — NavPill style */}
+        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) ? (
+          <div className="px-3 md:px-4 pb-2 border-b bg-gradient-to-b from-slate-50 to-white">
+            <div className="rounded-xl border border-slate-200 bg-white">
+              {renderTabPills()}
+            </div>
+          </div>
+        ) : (
+          <div className="border-b">
+            {renderTabPills()}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
