@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
+import { summarizeSessionMetrics } from "@/lib/eqMetricsAggregator";
 
 const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
   id: c.id,
@@ -25,6 +26,17 @@ const OVERALL_SECTION_CANONICAL = {
   strengths: "What the rep did well across capabilities",
   gap: "Biggest cross-capability gap to improve next",
   adjustment: "One concrete adjustment for the next role-play",
+};
+
+const METRIC_LABEL_MAP = {
+  question_quality: "Question Quality",
+  listening_responsiveness: "Listening & Responsiveness",
+  making_it_matter: "Making It Matter",
+  customer_engagement_cues: "Customer Engagement Cues",
+  objection_handling: "Objection Handling",
+  conversation_control: "Conversation Control",
+  adaptability: "Adaptability",
+  commitment_gaining: "Commitment Gaining",
 };
 
 function normalizeOverallFeedback(rawFeedback = "") {
@@ -181,6 +193,17 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   };
 
   const overallScore = typeof latestTurn?.alignment?.score === 'number' ? latestTurn.alignment.score : null;
+  const metricResults = Object.entries(metrics).map(([id, metric]) => ({
+    id,
+    score: metric?.score,
+    components: metric?.subScores || {},
+    metricsVersion: metric?.metricsVersion || latestTurn?.alignment?.metricsVersion,
+  }));
+  const eqSummary = metricResults.length === 8 ? summarizeSessionMetrics(metricResults) : null;
+  const strongestLabel = eqSummary?.strongestMetric ? (METRIC_LABEL_MAP[eqSummary.strongestMetric] || eqSummary.strongestMetric) : "N/A";
+  const weakestLabel = eqSummary?.weakestMetric ? (METRIC_LABEL_MAP[eqSummary.weakestMetric] || eqSummary.weakestMetric) : "N/A";
+  const strengthLabels = (eqSummary?.strengths || []).map((id) => METRIC_LABEL_MAP[id] || id);
+  const gapLabels = (eqSummary?.gaps || []).map((id) => METRIC_LABEL_MAP[id] || id);
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
@@ -293,6 +316,23 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           </div>
         )}
       </div>
+      {eqSummary && (
+        <div className="mb-3 rounded-xl border border-slate-300 bg-white px-3 py-2.5 shadow-sm">
+          <p className="text-xs font-bold text-slate-800 mb-1">Session EQ Summary</p>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-700">
+            <span className="font-semibold">Overall Average</span>
+            <span>{eqSummary.overallAverage ?? "N/A"}</span>
+            <span className="font-semibold">Strongest Metric</span>
+            <span>{strongestLabel}</span>
+            <span className="font-semibold">Weakest Metric</span>
+            <span>{weakestLabel}</span>
+            <span className="font-semibold">Strengths</span>
+            <span>{strengthLabels.length > 0 ? strengthLabels.join(", ") : "No standout strengths yet"}</span>
+            <span className="font-semibold">Gaps</span>
+            <span>{gapLabels.length > 0 ? gapLabels.join(", ") : "No immediate gaps detected"}</span>
+          </div>
+        </div>
+      )}
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
           ⭐ <span className="font-semibold">Scenario focus:</span> {focusCaps.map((id) => CAPABILITIES.find((c) => c.id === id)?.label).filter(Boolean).join(", ")}
