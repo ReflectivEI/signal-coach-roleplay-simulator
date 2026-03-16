@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo } from "react";
 import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Quantify at-risk patient pool from STI volume","Review TAF-based PrEP renal safety advantages","Propose nurse-led PrEP/lab cadence","Streamlined quarterly follow-up protocol"],
     impact: ["Reduce new HIV infections in at-risk population","Improve clinic PrEP initiation rates by 30%","Establish standardized monitoring workflow","Protect high-risk patients proactively"],
     suggestedPhrasing: ["I noticed your STI testing volume suggests there may be patients who could benefit from PrEP. Can we review the data together?","TAF-based PrEP offers renal safety advantages that may address your monitoring concerns. Would you like to see the comparison data?","What if we set up a nurse-led protocol to handle quarterly labs and follow-ups? This could reduce your workload significantly."],
-    // focus_capabilities: ["signal_awareness", "conversation_management"],
+    // focus_capabilities: ["question_quality", "conversation_control"],
   },
   {
     id: "hiv_np_highshare_access",
@@ -55,7 +55,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Implement twice-weekly PA batching protocol","Partner with specialty pharmacy for benefits checks","Identify patients on older regimens with commercial coverage for optimization","Streamlined hub enrollment process"],
     impact: ["Increase patient access to optimal PrEP regimen","Reduce staff burnout from PA processing","Optimize eligible patients to newer regimens","Improve clinic efficiency by 25%"],
     suggestedPhrasing: ["Your PrEP adoption is excellent. What if we could reduce the PA burden by batching them twice weekly?","I can connect you with our specialty pharmacy partner to handle benefits verification. Would that help free up your staff?","There may be patients on older regimens with commercial coverage who could benefit from newer options without additional PA. Can we identify them together?"],
-    // focus_capabilities: ["objection_navigation", "value_connection"],
+    // focus_capabilities: ["objection_handling", "making_it_matter"],
   },
   {
     id: "hiv_pa_treat_switch_slowdown",
@@ -75,7 +75,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Long-term durability and resistance barrier data","Simplified regimen improves adherence","Create candidate list by labs/adherence flags","Schedule switch day with counseling script"],
     impact: ["Improve long-term treatment outcomes","Reduce pill burden for eligible patients","Proactive resistance prevention","Enhanced patient satisfaction"],
     suggestedPhrasing: ["Even with stable, suppressed patients, there may be opportunities to simplify regimens. Can we review which patients might benefit?","The resistance barrier data for single-tablet regimens is compelling for long-term durability. Would you like to see the latest studies?","What if we scheduled a quarterly optimization day to systematically review candidates? I can provide a counseling script to streamline the process."],
-    // focus_capabilities: ["signal_interpretation", "commitment_generation"],
+    // focus_capabilities: ["listening_responsiveness", "commitment_gaining"],
   },
   {
     id: "hiv_np_cab_growth",
@@ -95,7 +95,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Adopt eligibility checklist for long-acting candidates","Review resistance history before initiation","Establish missed-dose action plan","Set up injection calendar system"],
     impact: ["Prevent treatment failures from inappropriate selection","Protect long-term regimen options","Improve patient outcomes with proper screening","Reduce virologic breakthrough risk"],
     suggestedPhrasing: ["I understand patients are asking for long-acting options. Would an eligibility checklist help ensure we're selecting the right candidates?","Resistance history is critical for CAB success. Can I share a screening protocol that other practices have found helpful?","What's your current approach for missed-dose scenarios? I have some resources that could help with patient counseling."],
-    // focus_capabilities: ["signal_awareness", "value_connection"],
+    // focus_capabilities: ["question_quality", "making_it_matter"],
   },
   // ── Oncology ────────────────────────────────────────────────────────────────
   {
@@ -116,7 +116,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Biomarker-driven patient selection criteria","Clear delta OS/PFS vs standard of care","AE mitigation and management protocols","NCCN category of evidence alignment"],
     impact: ["Expand treatment options for biomarker+ patients","Improve progression-free survival","Establish clear pathway position","Enhance tumor board decision-making"],
     suggestedPhrasing: ["For your biomarker-positive patients, the OS/PFS data shows a clear benefit. Would you like to review the subset analysis?","I understand chair time is a concern. The infusion protocol is designed to fit within your existing workflow. Can I walk you through it?","This aligns with the NCCN category of evidence. Would it help to present this to your tumor board?"],
-    // focus_capabilities: ["value_connection", "objection_navigation"],
+    // focus_capabilities: ["making_it_matter", "objection_handling"],
   },
   {
     id: "onc_np_pathway_ops",
@@ -136,7 +136,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Template kits for patient education","Standing nurse protocols for common AEs","Streamlined pathway documentation","Toxicity call-tree for efficient triage"],
     impact: ["Improve patient safety with standardized protocols","Reduce staff burden through efficiency","Increase confidence in IO prescribing","Better patient outcomes with consistent education"],
     suggestedPhrasing: ["I have template kits that other infusion centers have used successfully. Would you like to see how they've streamlined patient education?","A toxicity call-tree could help your team triage more efficiently. Can I share one that's been working well?","Standing nurse protocols for common AEs could reduce the documentation burden. Would that be helpful to review?"],
-    // focus_capabilities: ["adaptive_response", "commitment_generation"],
+    // focus_capabilities: ["adaptability", "commitment_gaining"],
   },
   {
     id: "onc_pa_gu_oral_onc_tminus7",
@@ -156,7 +156,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["T-7 onboarding checklist implementation","Early hub enrollment at prescription","Day-10 toxicity tele-visit protocol","Refill safeguard system"],
     impact: ["Eliminate treatment interruptions","Improve medication adherence rates","Earlier toxicity detection and management","Better patient outcomes through continuity"],
     suggestedPhrasing: ["If we enroll patients in the hub at T-7, we can avoid those day-25 refill gaps. Would you like to see the onboarding checklist?","A day-10 toxicity tele-visit catches issues early before they become serious. How does that fit with your current workflow?","Early benefits verification prevents surprises at the pharmacy. Can I show you how other GU practices have implemented this?"],
-    // focus_capabilities: ["signal_interpretation", "conversation_management"],
+    // focus_capabilities: ["listening_responsiveness", "conversation_control"],
   },
   {
     id: "onc-kol",
@@ -176,7 +176,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Novel mechanism of action","Phase 3 overall survival data","Quality of life improvements","Patient support program"],
     impact: ["Establish key opinion leader relationship","Open door for clinical data presentation","Potential speaker/advisory opportunity","Regional practice influence"],
     suggestedPhrasing: ["I know your time is valuable. I have one piece of data I think you'll find compelling—may I share it briefly?","Your publications in HER2+ breast cancer are impressive. Our Phase 3 data addresses some of the gaps you've written about.","Would a peer-to-peer with one of our investigators be more valuable than a follow-up with me?"],
-    // focus_capabilities: ["signal_awareness", "adaptive_response"],
+    // focus_capabilities: ["question_quality", "adaptability"],
   },
   // ── Cardiology ──────────────────────────────────────────────────────────────
   {
@@ -197,7 +197,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Discharge GDMT checklist implementation","Pharmacy tech copay assistance enrollment","Start SGLT2 before discharge when eligible","Convert ACE/ARB to ARNI within 48-72h per protocol"],
     impact: ["Reduce 30-day HF readmissions by 20%","Improve SGLT2 uptake to 48%+ in 90 days","Eliminate day-30 refill gaps","Better mortality outcomes with complete GDMT"],
     suggestedPhrasing: ["Starting SGLT2 before discharge captures patients while they're still in the system. What would it take to add this to your discharge protocol?","A pharmacy tech can handle copay assistance enrollment, freeing up your fellows for clinical work. Would that help?","The 48-72h window for ARNI conversion is evidence-based. Can I share the protocol that other HF centers are using?"],
-    // focus_capabilities: ["value_connection", "commitment_generation"],
+    // focus_capabilities: ["making_it_matter", "commitment_gaining"],
   },
   {
     id: "cv_np_ckd_sglt2_calendar",
@@ -217,7 +217,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["SGLT2i renal safety data in CKD Stage 3","Standardized titration calendar template","Sick-day rules patient education","Follow-up lab monitoring protocol"],
     impact: ["Expand SGLT2i access to CKD patients","Improve cardiorenal outcomes","Reduce HF hospitalizations in rural population","Build provider confidence in CKD prescribing"],
     suggestedPhrasing: ["The DAPA-CKD and EMPA-KIDNEY trials show SGLT2i are safe in Stage 3 CKD. Would you like to review the renal outcomes?","A titration calendar takes the guesswork out of dosing. Can I share a template you could customize for your practice?","Sick-day rules are critical for patient safety. I have a one-pager that explains this in patient-friendly language."],
-    focus_capabilities: ["objection_navigation", "signal_interpretation"],
+    focus_capabilities: ["objection_handling", "listening_responsiveness"],
   },
   {
     id: "cv_pa_postmi_transitions",
@@ -237,7 +237,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["In-hospital SGLT2 initiation protocol","ARNI conversion within 48-72h timeline","Day-7 pharmacy follow-up call","Transition checklist with accountable owners"],
     impact: ["Reduce 30-day readmissions to benchmark","Improve complete GDMT at discharge","Better post-MI survival outcomes","Seamless transition to outpatient care"],
     suggestedPhrasing: ["Deferring GDMT to the PCP often means it doesn't happen. What if we started SGLT2 here before discharge?","A day-7 pharmacy follow-up call catches refill issues before they become gaps. Would that help with your readmission rates?","A transition checklist with clear accountability could ensure nothing falls through the cracks. Can I share what's working at other centers?"],
-    // focus_capabilities: ["adaptive_response", "conversation_management"],
+    // focus_capabilities: ["adaptability", "conversation_control"],
   },
   {
     id: "card-formulary",
@@ -257,7 +257,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Reduction in hospitalizations","Total cost of care savings","Improved patient outcomes","Physician feedback data"],
     impact: ["Formulary access for 2,000+ HF patients","Reduced administrative burden for prescribers","Improved patient access to therapy","Potential system-wide adoption"],
     suggestedPhrasing: ["When you factor in reduced hospitalizations, the total cost of care actually decreases. May I walk you through the pharmacoeconomic analysis?","Physicians in similar health systems have shared positive feedback on patient outcomes. Would it help to hear their experience?","Preferred formulary status would remove barriers for your prescribers. What additional data would support that decision?"],
-    // focus_capabilities: ["value_connection", "objection_navigation"],
+    // focus_capabilities: ["making_it_matter", "objection_handling"],
   },
   // ── Vaccines ─────────────────────────────────────────────────────────────────
   {
@@ -278,7 +278,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Pre-book age-appropriate vaccine mix early","Calendarize clinic days before season","EHR prompts for 65+ high-dose selection","Standing orders in LTC facilities"],
     impact: ["Increase 65+ flu coverage by 15%","Reduce hospitalizations in high-risk patients","Optimize clinic efficiency","Improve LTC protection rates"],
     suggestedPhrasing: ["Pre-booking the age-appropriate vaccine mix early ensures you have the right formulations when patients arrive. Can we plan this together?","SMS reminders have shown 20% improvement in show rates. Would you like to see how to integrate this with your EHR?","Standing orders in LTC facilities streamline the process significantly. I can help you implement this if you're interested."],
-    // focus_capabilities: ["signal_awareness", "commitment_generation"],
+    // focus_capabilities: ["question_quality", "commitment_gaining"],
   },
   {
     id: "vac_np_primary_care_capture",
@@ -298,7 +298,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Standing orders for routine vaccinations","Morning huddle vaccination checklist","Fixed weekend clinic calendar","Standardized VIS documentation workflow"],
     impact: ["Improve vaccination capture rates by 20%","Reduce documentation errors","Consistent patient access on weekends","Streamlined staff workflow"],
     suggestedPhrasing: ["A morning huddle checklist ensures everyone knows who needs vaccinations that day. Would that help with staff rotation?","Fixed weekend clinic schedules are easier for patients to remember. What would it take to make Saturdays consistent?","Standing orders remove the need for individual physician authorization. Can I show you how other practices have set this up?"],
-    // focus_capabilities: ["adaptive_response", "signal_interpretation"],
+    // focus_capabilities: ["adaptability", "listening_responsiveness"],
   },
   // ── COVID-19 ─────────────────────────────────────────────────────────────────
   {
@@ -319,7 +319,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Rapid DDI screening protocol","Standing infusion slot reservation","48-hour initiation as quality metric","Partner scheduling for IV options"],
     impact: ["Reduce time to antiviral initiation","Improve outcomes in high-risk patients","Decrease COVID hospitalizations","Standardize treatment approach"],
     suggestedPhrasing: ["A rapid DDI screening protocol could help you prescribe Paxlovid more confidently. Would you like to see one?","What if we reserved standing infusion slots for remdesivir candidates? That way capacity isn't a barrier.","48-hour initiation is the key quality metric. How close are you currently, and what's the biggest bottleneck?"],
-    // focus_capabilities: ["conversation_management", "objection_navigation"],
+    // focus_capabilities: ["conversation_control", "objection_handling"],
   },
   {
     id: "covid_pulm_np_postcovid_adherence",
@@ -339,7 +339,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Same-day eRx template for eligible patients","Patient one-pager on treatment expectations","Day-2 positive routing to NP tele-start","Standardized rebound education"],
     impact: ["Reduce time to treatment initiation","Improve patient adherence and expectations","Decrease hospitalization rates","Better patient satisfaction with care"],
     suggestedPhrasing: ["A same-day eRx template gets treatment started before the callback delay. Would that work for your workflow?","Patients often have questions about rebound symptoms. This one-pager addresses the most common concerns.","Routing day-2 positives directly to an NP tele-start could catch more patients in the therapeutic window. How does that sound?"],
-    // focus_capabilities: ["signal_awareness", "adaptive_response"],
+    // focus_capabilities: ["question_quality", "adaptability"],
   },
   // ── Neurology ────────────────────────────────────────────────────────────────
   {
@@ -360,7 +360,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Clinical differentiation data","Patient adherence benefits","Long-term cost effectiveness","Real-world outcomes"],
     impact: ["Reduce PA turnaround to 24-48 hours","Improve physician satisfaction","Faster patient access to therapy","Reduced disease progression"],
     suggestedPhrasing: ["I understand cost containment is critical. Our real-world data shows reduced relapse rates that translate to lower long-term costs.","Physicians have expressed frustration with approval delays. What would make the PA process work better for everyone?","Would you consider a streamlined approval pathway for patients who meet specific clinical criteria?"],
-    // focus_capabilities: ["objection_navigation", "value_connection"],
+    // focus_capabilities: ["objection_handling", "making_it_matter"],
   },
   // ── Immunology ───────────────────────────────────────────────────────────────
   {
@@ -381,7 +381,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Rapid onset of action","Favorable safety profile","Patient convenience features","Access and affordability programs"],
     impact: ["Expand treatment options for RA patients","Improve outcomes in inadequate responders","Establish early adoption in practice","Build foundation for broader use"],
     suggestedPhrasing: ["For patients who haven't responded adequately to current biologics, this offers a new mechanism. Would you like to identify potential candidates?","The rapid onset of action means patients may see improvement sooner. Can I share the timeline data?","Our patient support program handles coverage questions, so your staff doesn't have to. Would that be helpful?"],
-    // focus_capabilities: ["signal_interpretation", "commitment_generation"],
+    // focus_capabilities: ["listening_responsiveness", "commitment_gaining"],
   },
   // ── Rare Disease ─────────────────────────────────────────────────────────────
   {
@@ -402,7 +402,7 @@ const ALL_SCENARIOS = [
     keyMessages: ["Red flag symptoms","Diagnostic algorithm","Early treatment benefits","Patient identification support"],
     impact: ["Reduce diagnostic odyssey for patients","Earlier intervention and treatment","Improved long-term outcomes","Regional center of excellence potential"],
     suggestedPhrasing: ["Patients with this condition often present with symptoms that could be mistaken for other disorders. I have a red flag checklist that might help with early identification.","The average diagnostic delay is 5 years. A simple screening algorithm could help identify candidates sooner. Would you like to see it?","We offer patient identification support to help find undiagnosed patients in your system. Can I explain how it works?"],
-    // focus_capabilities: ["signal_awareness", "value_connection"],
+    // focus_capabilities: ["question_quality", "making_it_matter"],
   },
 ];
 
