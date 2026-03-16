@@ -30,6 +30,7 @@
 
 import { SIGNAL_CAPABILITIES } from './signalIntelligenceSOT';
 import { CANONICAL_METRICS_VERSION, validateMetricResults } from '@/lib/signal-intelligence-schema';
+import { detectMetricDrift, logScoringExecution, validateMetricIntegrity } from '@/lib/scoringDiagnostics';
 
 // ─── METRIC DEFINITIONS (canonical, from SOT) ──────────────────────────────────
 export const METRIC_DEFINITIONS = SIGNAL_CAPABILITIES.map(c => ({
@@ -720,6 +721,9 @@ function computeAlignmentRubric(hcpState, p) {
  * @returns alignment object
  */
 export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
+  const startTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now()
+    : Date.now();
   const p = detectPatterns(repMessage);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
@@ -804,6 +808,23 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     metricsVersion: CANONICAL_METRICS_VERSION,
   }));
   validateMetricResults(metricsList);
+
+  if (import.meta.env.DEV) {
+    validateMetricIntegrity(metricsList);
+    detectMetricDrift(metricsList);
+    const endTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+      ? performance.now()
+      : Date.now();
+    const durationMs = endTs - startTs;
+    const metadata = _unused && typeof _unused === 'object' ? _unused : {};
+    logScoringExecution({
+      scenarioId: metadata.scenarioId,
+      turnIndex: metadata.turnIndex,
+      metricsVersion: CANONICAL_METRICS_VERSION,
+      metricResults: metricsList,
+      durationMs,
+    });
+  }
 
   Object.values(metricResults).forEach((metric) => {
     metric.metricsVersion = CANONICAL_METRICS_VERSION;
