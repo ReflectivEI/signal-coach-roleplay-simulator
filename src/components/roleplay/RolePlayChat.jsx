@@ -34,9 +34,16 @@ import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
 
+function escapeHTML(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-
-
+function sanitizeUserMessage(text) {
+  return escapeHTML(String(text || "").trim());
+}
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -186,7 +193,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           severityBefore: 0,
           cueBefore: contextualCue,
           hcpDialogueBefore: nextHcpDialogue,
-          repMessage: input.trim(),
+          repMessage: sanitizeUserMessage(input),
           alignment: null,
           hcpStateAfter: null,
         }]);
@@ -194,8 +201,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return; // Ensure no further turn creation occurs
       }
     }
-    if (!input.trim() || isLoading) return;
-    const repMessage = input.trim();
+    if (!sanitizeUserMessage(input) || isLoading) return;
+    const repMessage = sanitizeUserMessage(input);
     setInput("");
     setIsLoading(true);
 
@@ -812,7 +819,7 @@ ${actionText}`;
                   onSubmit={e => {
                     e.preventDefault();
                     if (isLoading || isEnding) return;
-                    const message = input.trim();
+                    const message = sanitizeUserMessage(input);
                     if (!message) return;
                     setInput(""); // clear input immediately
                     sendMessage();
@@ -833,7 +840,7 @@ ${actionText}`;
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           if (isLoading || isEnding) return;
-                          const message = input.trim();
+                          const message = sanitizeUserMessage(input);
                           if (!message) return;
                           setInput("");
                           sendMessage();
@@ -859,7 +866,7 @@ ${actionText}`;
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!input.trim() && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
+                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
