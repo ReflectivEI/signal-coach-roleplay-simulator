@@ -428,9 +428,12 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                         <button key={id} onClick={() => setSummaryLengths(prev => ({ ...prev, [idx]: id }))} className={`text-xs px-2 py-1 transition-colors ${(summaryLengths[idx] || "brief") === id ? "bg-teal-500 text-white" : "text-gray-600 hover:bg-gray-50"}`}>{label}</button>
                       ))}
                     </div>
-                    <Button variant="outline" size="sm" className="text-xs flex-1" onClick={() => summarizeArticle(idx)} disabled={summarizingIdx === idx}>
-                      {summarizingIdx === idx ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Summarizing...</> : <><Zap className="w-3 h-3 mr-1" /> Summarize</>}
-                    </Button>
+                    <NavPill
+                      onClick={() => summarizeArticle(idx)}
+                      className={`flex-1 justify-center ${summarizingIdx === idx ? "opacity-60 pointer-events-none" : ""}`}
+                    >
+                      {summarizingIdx === idx ? <><Loader2 className="w-3 h-3 animate-spin" /> Summarizing...</> : <><Zap className="w-3 h-3" /> Summarize</>}
+                    </NavPill>
                     <NavPill onClick={() => injectToQA(article.title)}><Sparkles className="w-3 h-3" /> Ask AI</NavPill>
                   </div>
                 </CardContent>

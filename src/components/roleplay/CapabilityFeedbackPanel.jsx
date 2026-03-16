@@ -76,6 +76,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   const [capFeedback, setCapFeedback] = useState({});
   const [loading, setLoading] = useState({});
   const [expanded, setExpanded] = useState({});
+  const [overallFeedback, setOverallFeedback] = useState("");
+  const [overallLoading, setOverallLoading] = useState(false);
+  const [overallExpanded, setOverallExpanded] = useState(false);
 
   const transcript = messages
     .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
@@ -89,6 +92,13 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     if (scores.length === 0) return null;
     return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
   };
+
+  const overallScore = (() => {
+    const capIds = CAPABILITIES.map(c => c.id);
+    const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+    if (scores.length === 0) return null;
+    return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
+  })();
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
@@ -120,6 +130,41 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     }
   };
 
+  const requestOverallFeedback = async () => {
+    setOverallLoading(true);
+    setOverallExpanded(true);
+    try {
+      const clipTrans = transcript.substring(0, 3000);
+      const scoreLine = overallScore !== null
+        ? `Overall deterministic score (locked, do not change): ${overallScore}/5`
+        : "Overall deterministic score: not available yet";
+      const capabilityScoreLines = CAPABILITIES
+        .map((cap) => {
+          const score = getCapabilityAverage(cap.id);
+          return `${cap.label}: ${score !== null ? `${score}/5` : "N/A"}`;
+        })
+        .join("\n");
+      const prompt = `As a sales coach, provide an overall session analysis using the fixed deterministic scoring summary below (do NOT rescore).\n${scoreLine}\n\nCapability score breakdown:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall score using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed deterministic scores above.`;
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, max_tokens: 650 })
+      });
+
+      if (!res.ok) throw new Error('Failed to get overall feedback');
+      const data = await res.json();
+      const feedbackText = data.response || data.text || data.content || '';
+      const normalizedFeedback = normalizeCapabilityFeedback(feedbackText);
+      setOverallFeedback(normalizedFeedback || 'Unable to generate overall analysis. Please try again.');
+    } catch (err) {
+      console.error('Overall feedback error:', err);
+      setOverallFeedback('Unable to generate overall analysis. Please try again.');
+    } finally {
+      setOverallLoading(false);
+    }
+  };
+
   const toggleExpand = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   if (messages.filter((m) => m.role === "user").length < 2) {
@@ -132,20 +177,42 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2.5">
-      <div className="grid grid-cols-[1fr_88px] items-end gap-2 mb-1">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <Zap className="w-3.5 h-3.5 text-teal-500" />
-            <span className="font-bold text-sm text-gray-900">Overall: {(() => {
-              const capIds = CAPABILITIES.map(c => c.id);
-              const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-              if (scores.length === 0) return "N/A";
-              return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
-            })()}</span>
-          </div>
-          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+      <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <Zap className="w-3.5 h-3.5 text-teal-500" />
+          <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
-        <span className="text-sm font-semibold text-gray-700 text-center">Analyze</span>
+        <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
+          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+          <div className="flex items-center justify-center gap-1">
+            {!overallFeedback && !overallLoading && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-8 px-4 border-2 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                onClick={requestOverallFeedback}
+              >
+                Analyze
+              </Button>
+            )}
+            {overallLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+            {overallFeedback && !overallLoading && (
+              <button onClick={() => setOverallExpanded((prev) => !prev)} className="text-gray-500 hover:text-gray-700">
+                {overallExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
+        </div>
+        {overallFeedback && overallExpanded && (
+          <div className="mt-2 border-t border-slate-200 pt-2.5 prose prose-sm max-w-none">
+            <ReactMarkdown
+              components={{
+                p: (props) => <p className="mb-1 leading-[1.45] text-[14px] text-slate-800" {...props} />,
+                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+              }}
+            >{overallFeedback}</ReactMarkdown>
+          </div>
+        )}
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
@@ -163,8 +230,8 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
         const isExpanded = expanded[cap.id];
 
         return (
-          <div key={cap.id} className={`rounded-lg border ${hasFeedback ? colors.result : "border-gray-200 bg-white"} overflow-hidden`}>
-            <div className="grid grid-cols-[1fr_96px] items-center gap-2 px-3 py-2">
+          <div key={cap.id} className={`rounded-xl border ${hasFeedback ? colors.result : "border-gray-300 bg-white"} overflow-hidden shadow-sm`}>
+            <div className="grid grid-cols-[1fr_110px] items-center gap-2 px-3 py-2.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
@@ -180,7 +247,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
                   <Button
                     size="sm"
                     variant="outline"
-                    className={`text-xs h-7 px-3 border ${colors.btn}`}
+                    className={`text-xs h-8 px-4 border-2 font-bold ${colors.btn}`}
                     onClick={() => requestCapabilityFeedback(cap)}
                   >
                     Analyze
@@ -195,10 +262,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               </div>
             </div>
             {hasFeedback && isExpanded && (
-              <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2">
+              <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2.5 bg-white/70">
                 <ReactMarkdown
                   components={{
-                    p: (props) => <p className="mb-2 leading-5 text-[16px] text-slate-700" {...props} />,
+                    p: (props) => <p className="mb-1 leading-[1.45] text-[14px] text-slate-800" {...props} />,
                     strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
                   }}
                 >{capFeedback[cap.id]}</ReactMarkdown>
