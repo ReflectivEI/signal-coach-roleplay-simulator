@@ -468,29 +468,6 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     setWorkspaceStatus("Recommendations generated.");
   };
 
-
-
-  const copyWorkspaceTips = async () => {
-    if (workspaceTips.length === 0) return;
-    const text = workspaceTips.map((tip, i) => `${i + 1}. ${tip}`).join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setWorkspaceStatus("Recommendations copied.");
-    } catch {
-      setWorkspaceStatus("Unable to copy recommendations.");
-    }
-  };
-
-  const pushWorkspaceTipsToPlanning = () => {
-    if (workspaceTips.length === 0) return;
-    localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
-    window.location.href = createPageUrl("PreCallPlanning");
-  };
-
-  const openRolePlayFromWorkspace = () => {
-    localStorage.setItem("workspace-context", JSON.stringify(workspaceInputs));
-    window.location.href = createPageUrl("RolePlaySimulator");
-  };
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Header */}
