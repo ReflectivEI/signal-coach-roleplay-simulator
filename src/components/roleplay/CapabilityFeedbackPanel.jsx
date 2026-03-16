@@ -33,6 +33,8 @@ function normalizeOverallFeedback(rawFeedback = "") {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  if (rawLines.length === 0) return "";
+
   const sections = {
     brief_rationale: [],
     strengths: [],
@@ -42,17 +44,23 @@ function normalizeOverallFeedback(rawFeedback = "") {
 
   let currentSection = "";
 
+  const cleanLine = (line) => line
+    .replace(/^[-*]\s*/, "")
+    .replace(/^\d+[.)-]?\s*/, "")
+    .replace(/^section\s*\d+\s*:\s*/i, "")
+    .replace(/^[#]+\s*/, "")
+    .trim();
+
   const detectSection = (line) => {
-    const clean = line
-      .replace(/^[-*]\s*/, "")
-      .replace(/^\d+[.)-]?\s*/, "")
-      .replace(/^[#]+\s*/, "")
-      .trim();
+    const clean = cleanLine(line);
 
     if (/^brief\s+rationale/i.test(clean)) return "brief_rationale";
+    if (/^strengths?\b/i.test(clean)) return "strengths";
     if (/^what\s+the\s+rep\s+did\s+well/i.test(clean)) return "strengths";
+    if (/^improvements?\b/i.test(clean)) return "gap";
     if (/^biggest\s+cross[-\s]capability\s+gap/i.test(clean)) return "gap";
     if (/^one\s+concrete\s+adjustment/i.test(clean)) return "adjustment";
+    if (/^action\s*items?\b/i.test(clean)) return "adjustment";
     return "";
   };
 
@@ -60,11 +68,14 @@ function normalizeOverallFeedback(rawFeedback = "") {
     const section = detectSection(line);
     if (section) {
       currentSection = section;
-      const body = line
-        .replace(/^[-*]\s*/, "")
-        .replace(/^\d+[.)-]?\s*/, "")
-        .replace(/^[#]+\s*/, "")
-        .replace(/^[^:]+:\s*/, "")
+      const body = cleanLine(line)
+        .replace(/^brief\s+rationale\s*:?\s*/i, "")
+        .replace(/^strengths?\s*:?\s*/i, "")
+        .replace(/^what\s+the\s+rep\s+did\s+well(?:\s+across\s+capabilities)?\s*:?\s*/i, "")
+        .replace(/^improvements?\s*:?\s*/i, "")
+        .replace(/^biggest\s+cross[-\s]capability\s+gap\s+to\s+improve\s+next\s*:?\s*/i, "")
+        .replace(/^one\s+concrete\s+adjustment\s+for\s+the\s+next\s+role[-\s]play\s*:?\s*/i, "")
+        .replace(/^action\s*items?\s*:?\s*/i, "")
         .trim();
       if (body) sections[currentSection].push(body);
       return;
@@ -74,7 +85,7 @@ function normalizeOverallFeedback(rawFeedback = "") {
     sections[currentSection].push(line.replace(/^[-*]\s*/, "").trim());
   });
 
-  return [
+  const structured = [
     ["brief_rationale", OVERALL_SECTION_CANONICAL.brief_rationale],
     ["strengths", OVERALL_SECTION_CANONICAL.strengths],
     ["gap", OVERALL_SECTION_CANONICAL.gap],
@@ -83,7 +94,12 @@ function normalizeOverallFeedback(rawFeedback = "") {
     .filter(([key]) => sections[key].length > 0)
     .map(([key, label]) => `### ${label}\n${sections[key].join("\n")}`)
     .join("\n\n");
+
+  if (structured) return structured;
+
+  return `### ${OVERALL_SECTION_CANONICAL.brief_rationale}\n${rawLines.join("\n")}`;
 }
+
 function normalizeCapabilityFeedback(rawFeedback = "") {
   const rawLines = String(rawFeedback)
     .split("\n")
@@ -221,7 +237,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       const data = await res.json();
       const feedbackText = data.response || data.text || data.content || '';
       const normalizedFeedback = normalizeOverallFeedback(feedbackText);
-      setOverallFeedback(normalizedFeedback || 'Unable to generate overall analysis. Please try again.');
+      setOverallFeedback(normalizedFeedback || feedbackText || 'Unable to generate overall analysis. Please try again.');
     } catch (err) {
       console.error('Overall feedback error:', err);
       setOverallFeedback('Unable to generate overall analysis. Please try again.');
