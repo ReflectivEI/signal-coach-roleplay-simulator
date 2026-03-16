@@ -103,3 +103,10 @@ Any automated agent modifying this repository must:
 1. Read `docs/PLATFORM_GUARDRAILS.md`.
 2. Verify compliance before modifying scoring-related code.
 3. Refuse modifications that violate these constraints.
+
+## 11) MESSAGE RENDERING RULES
+
+- Chat messages must preserve punctuation.
+- Question marks must never be removed.
+- Sanitization may only escape HTML.
+- Agents modifying chat rendering must verify punctuation integrity.

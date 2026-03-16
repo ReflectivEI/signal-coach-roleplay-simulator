@@ -45,6 +45,21 @@ function sanitizeUserMessage(text) {
   return escapeHTML(String(text || "").trim());
 }
 
+function sanitizeRenderedMessage(text, source = "unknown") {
+  const originalText = String(text || "");
+  const renderedText = escapeHTML(originalText);
+
+  if (
+    import.meta.env.DEV
+    && originalText.includes("?")
+    && !renderedText.includes("?")
+  ) {
+    console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source });
+  }
+
+  return renderedText;
+}
+
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -317,15 +332,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const data = await res.json();
         const raw = (data.response || data.text || data.content || '');
         const rawStr = typeof raw === 'string' ? raw : String(raw);
-        // Strip any leaked stage directions (asterisks, parens, brackets)
-        nextHcpDialogue = rawStr
-          .replace(/\*[^*]*\*/g, '')
-          .replace(/\([^)]*\)/g, '')
-          .replace(/\[[^\]]*\]/g, '')
-          .trim()
-          .split('\n')[0];
+        nextHcpDialogue = rawStr.trim().split('\n')[0];
+
+        if (
+          import.meta.env.DEV
+          && rawStr.includes("?")
+          && !nextHcpDialogue.includes("?")
+        ) {
+          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
+        }
 
         nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue);
+
+        if (
+          import.meta.env.DEV
+          && rawStr.includes("?")
+          && !nextHcpDialogue.includes("?")
+        ) {
+          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
+        }
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
@@ -745,7 +770,7 @@ ${actionText}`;
                     {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
                       <div className="flex justify-start pl-1">
                         <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                          {turn.cueBefore}
+                          {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
                         </p>
                       </div>
                     )}
@@ -753,7 +778,7 @@ ${actionText}`;
                       <div className="flex justify-start">
                         <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
                         <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                          {turn.hcpDialogueBefore}
+                          {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                         </div>
                       </div>
                     )}
@@ -761,7 +786,7 @@ ${actionText}`;
                       <div className="flex justify-end">
                         <div className="flex flex-col items-end gap-1">
                           <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
-                            {turn.repMessage}
+                            {sanitizeRenderedMessage(turn.repMessage, "user-message")}
                           </div>
                           {turn.alignment && (
                             <>
