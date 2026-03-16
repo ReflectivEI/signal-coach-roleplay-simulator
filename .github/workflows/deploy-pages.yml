@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Pages
+name: Build and Deploy to Cloudflare Pages
 
 on:
   push:
@@ -11,21 +11,17 @@ permissions:
   deployments: write
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-    name: Build and Deploy to Cloudflare Pages
+    name: Build application
     env:
-      # Opt into GitHub Actions Node.js 24 runtime to avoid Node 20 deprecation breakage.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-      CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
-      CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
-    
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: 'npm'
@@ -36,70 +32,40 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Check deploy secret availability
-        id: cf_token
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN is not configured; skipping Cloudflare deployment steps."
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Cloudflare Pages
+    needs: build
+    continue-on-error: true
+    if: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+      CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
+      CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
 
-      - name: Install Wrangler globally
-        if: steps.cf_token.outputs.available == 'true'
-        continue-on-error: true
-        run: npm install -g wrangler
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
 
-      - name: Validate Cloudflare credentials
-        if: steps.cf_token.outputs.available == 'true'
-        continue-on-error: true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::error::Missing GitHub secret CLOUDFLARE_API_TOKEN"
-            exit 1
-          fi
+      - name: Install dependencies
+        run: npm ci
 
-          if ! echo "$CF_ACCOUNT_ID" | grep -Eq '^[a-f0-9]{32}$'; then
-            echo "::error::Workflow CF_ACCOUNT_ID must be a 32-character lowercase hex string"
-            exit 1
-          fi
-
-          echo "Cloudflare API token is present and account ID format is valid."
-
-      - name: Resolve Pages project
-        if: steps.cf_token.outputs.available == 'true'
-        continue-on-error: true
-        id: resolve_project
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          # PREFERRED_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
-          GIT_BRANCH: ${{ github.ref_name }}
-        run: |
-          set -e
-          RESPONSE=$(curl -sS -X GET \
-            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json")
-
-          RESOLVED_PROJECT=$(echo "$RESPONSE" | node -e "const fs=require('fs');const body=JSON.parse(fs.readFileSync(0,'utf8'));if(body.success!==true){const errs=(body.errors||[]).map(e=>e.message).join('; ')||'Unknown Cloudflare API error';console.error('::error::Cloudflare Pages API request failed: '+errs);process.exit(1)};const projects=Array.isArray(body.result)?body.result:[];const names=projects.map(p=>p&&p.name).filter(Boolean);if(names.length===0){console.error('::error::No Cloudflare Pages projects found for this account/token');process.exit(1)};const preferred=(process.env.PREFERRED_PAGES_PROJECT||'').trim();if(preferred){if(names.includes(preferred)){console.log(preferred);process.exit(0)};console.error('::error::Configured CLOUDFLARE_PAGES_PROJECT not found: '+preferred+' | Available: '+names.join(', '));process.exit(1)};const branch=(process.env.GIT_BRANCH||'').trim();const pick=(candidates)=>candidates.find(n=>names.includes(n));if(branch==='main'){const mainPick=pick(['reflect-ai-now','reflectiv-ai']);if(mainPick){console.error('::notice::Auto-selected production project for main branch: '+mainPick);console.log(mainPick);process.exit(0)}}else{const nonMainPick=pick(['reflect-ai-now','reflectivei-dev']);if(nonMainPick){console.error('::notice::Auto-selected non-main project for branch '+branch+': '+nonMainPick);console.log(nonMainPick);process.exit(0)}}const repoMatch=names.find(n=>/reflect/i.test(n)&&/app/i.test(n)&&/(prod|staging|dev)/i.test(n));if(repoMatch){console.error('::notice::Auto-selected best-match project: '+repoMatch);console.log(repoMatch);process.exit(0)};if(names.length===1){console.error('::warning::CLOUDFLARE_PAGES_PROJECT not set; auto-selected only available project: '+names[0]);console.log(names[0]);process.exit(0)};console.error('::error::Multiple Pages projects found. Set repository variable CLOUDFLARE_PAGES_PROJECT. Available: '+names.join(', '));process.exit(1);")
-
-          echo "Using Cloudflare Pages project: ${RESOLVED_PROJECT}"
-          echo "project=${RESOLVED_PROJECT}" >> "$GITHUB_OUTPUT"
+      - name: Build application
+        run: npm run build
 
       - name: Deploy to Cloudflare Pages
         id: deploy_pages
-        if: steps.cf_token.outputs.available == 'true'
-        continue-on-error: true
         uses: cloudflare/wrangler-action@v3
+        continue-on-error: true
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ steps.resolve_project.outputs.project }}
+          command: pages deploy dist --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }}
 
       - name: Report deploy non-blocking status
         if: always() && steps.cf_token.outputs.available == 'true'
@@ -111,7 +77,7 @@ jobs:
           fi
 
       - name: Create GitHub Deployment
-        if: steps.cf_token.outputs.available == 'true' && steps.deploy_pages.outcome == 'success'
+        if: steps.deploy_pages.outcome == 'success'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -125,7 +91,6 @@ jobs:
               required_contexts: [],
               description: 'Deployment to Cloudflare Pages'
             });
-            
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
