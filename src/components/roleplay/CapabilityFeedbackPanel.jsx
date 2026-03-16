@@ -28,7 +28,14 @@ const OVERALL_SECTION_CANONICAL = {
 };
 
 function normalizeOverallFeedback(rawFeedback = "") {
-  const rawLines = String(rawFeedback)
+  const preparedText = String(rawFeedback)
+    .replace(/\r/g, "")
+    .replace(/(SECTION\s*\d+\s*:)/gi, "\n$1")
+    .replace(/\s+(\d+[.)]\s*(?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play)\s*:)/gi, "\n$1")
+    .replace(/\s+((?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play|Strengths|Improvements|Action Items)\s*:)/gi, "\n$1")
+    .trim();
+
+  const rawLines = preparedText
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
@@ -92,12 +99,12 @@ function normalizeOverallFeedback(rawFeedback = "") {
     ["adjustment", OVERALL_SECTION_CANONICAL.adjustment],
   ]
     .filter(([key]) => sections[key].length > 0)
-    .map(([key, label]) => `### ${label}\n${sections[key].join("\n")}`)
+    .map(([key, label]) => `### ${label}\n${sections[key].join("\n\n")}`)
     .join("\n\n");
 
   if (structured) return structured;
 
-  return `### ${OVERALL_SECTION_CANONICAL.brief_rationale}\n${rawLines.join("\n")}`;
+  return `### ${OVERALL_SECTION_CANONICAL.brief_rationale}\n${rawLines.join("\n\n")}`;
 }
 
 function normalizeCapabilityFeedback(rawFeedback = "") {

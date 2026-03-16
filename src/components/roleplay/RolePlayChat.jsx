@@ -674,9 +674,9 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border-2 border-slate-300 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-50 px-3 py-2.5 shadow-sm ring-1 ring-white/70 min-w-0">
-                        <p className="font-bold uppercase text-slate-700 text-[11px] tracking-wide mb-1">Scenario Description</p>
-                        <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">{descriptionText}</p>
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                        <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{descriptionText}</p>
                       </div>
                     )}
                     <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
