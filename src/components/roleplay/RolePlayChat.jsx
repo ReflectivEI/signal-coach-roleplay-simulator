@@ -704,9 +704,9 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border border-slate-300 bg-slate-100 px-3 py-2 shadow-sm min-w-0">
-                        <p className="font-bold uppercase text-slate-700 text-[11px] tracking-wide mb-1">Scenario Description</p>
-                        <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">{descriptionText}</p>
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                        <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{descriptionText}</p>
                       </div>
                     )}
                     <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
@@ -741,6 +741,15 @@ ${actionText}`;
                 )}
               </div>
             </div>
+            <div className="mt-2 pt-2 border-t border-slate-200/70">
+              {renderRoleplayTabs()}
+            </div>
+          </div>
+        )}
+
+        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+          <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
+            {renderRoleplayTabs()}
           </div>
         )}
 

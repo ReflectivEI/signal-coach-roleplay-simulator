@@ -67,6 +67,15 @@ jobs:
           accountId: ${{ env.CF_ACCOUNT_ID }}
           command: pages deploy dist --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }}
 
+      - name: Report deploy non-blocking status
+        if: always() && steps.cf_token.outputs.available == 'true'
+        run: |
+          if [ "${{ steps.resolve_project.outcome }}" != "success" ]; then
+            echo "::warning::Cloudflare project resolution failed; build succeeded and deployment was skipped/non-blocking."
+          elif [ "${{ steps.resolve_project.outputs.project }}" = "" ]; then
+            echo "::warning::Cloudflare project name is empty; deployment step was non-blocking."
+          fi
+
       - name: Create GitHub Deployment
         if: steps.deploy_pages.outcome == 'success'
         continue-on-error: true

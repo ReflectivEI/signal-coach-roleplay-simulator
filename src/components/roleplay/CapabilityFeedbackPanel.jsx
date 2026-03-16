@@ -19,6 +19,94 @@ const FEEDBACK_SECTION_CANONICAL = {
   coaching_cue: "Coaching cue for next call",
 };
 
+
+const OVERALL_SECTION_CANONICAL = {
+  brief_rationale: "Brief rationale",
+  strengths: "What the rep did well across capabilities",
+  gap: "Biggest cross-capability gap to improve next",
+  adjustment: "One concrete adjustment for the next role-play",
+};
+
+function normalizeOverallFeedback(rawFeedback = "") {
+  const preparedText = String(rawFeedback)
+    .replace(/\r/g, "")
+    .replace(/(SECTION\s*\d+\s*:)/gi, "\n$1")
+    .replace(/\s+(\d+[.)]\s*(?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play)\s*:)/gi, "\n$1")
+    .replace(/\s+((?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play|Strengths|Improvements|Action Items)\s*:)/gi, "\n$1")
+    .trim();
+
+  const rawLines = preparedText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (rawLines.length === 0) return "";
+
+  const sections = {
+    brief_rationale: [],
+    strengths: [],
+    gap: [],
+    adjustment: [],
+  };
+
+  let currentSection = "";
+
+  const cleanLine = (line) => line
+    .replace(/^[-*]\s*/, "")
+    .replace(/^\d+[.)-]?\s*/, "")
+    .replace(/^section\s*\d+\s*:\s*/i, "")
+    .replace(/^[#]+\s*/, "")
+    .trim();
+
+  const detectSection = (line) => {
+    const clean = cleanLine(line);
+
+    if (/^brief\s+rationale/i.test(clean)) return "brief_rationale";
+    if (/^strengths?\b/i.test(clean)) return "strengths";
+    if (/^what\s+the\s+rep\s+did\s+well/i.test(clean)) return "strengths";
+    if (/^improvements?\b/i.test(clean)) return "gap";
+    if (/^biggest\s+cross[-\s]capability\s+gap/i.test(clean)) return "gap";
+    if (/^one\s+concrete\s+adjustment/i.test(clean)) return "adjustment";
+    if (/^action\s*items?\b/i.test(clean)) return "adjustment";
+    return "";
+  };
+
+  rawLines.forEach((line) => {
+    const section = detectSection(line);
+    if (section) {
+      currentSection = section;
+      const body = cleanLine(line)
+        .replace(/^brief\s+rationale\s*:?\s*/i, "")
+        .replace(/^strengths?\s*:?\s*/i, "")
+        .replace(/^what\s+the\s+rep\s+did\s+well(?:\s+across\s+capabilities)?\s*:?\s*/i, "")
+        .replace(/^improvements?\s*:?\s*/i, "")
+        .replace(/^biggest\s+cross[-\s]capability\s+gap\s+to\s+improve\s+next\s*:?\s*/i, "")
+        .replace(/^one\s+concrete\s+adjustment\s+for\s+the\s+next\s+role[-\s]play\s*:?\s*/i, "")
+        .replace(/^action\s*items?\s*:?\s*/i, "")
+        .trim();
+      if (body) sections[currentSection].push(body);
+      return;
+    }
+
+    if (!currentSection) return;
+    sections[currentSection].push(line.replace(/^[-*]\s*/, "").trim());
+  });
+
+  const structured = [
+    ["brief_rationale", OVERALL_SECTION_CANONICAL.brief_rationale],
+    ["strengths", OVERALL_SECTION_CANONICAL.strengths],
+    ["gap", OVERALL_SECTION_CANONICAL.gap],
+    ["adjustment", OVERALL_SECTION_CANONICAL.adjustment],
+  ]
+    .filter(([key]) => sections[key].length > 0)
+    .map(([key, label]) => `### ${label}\n${sections[key].join("\n\n")}`)
+    .join("\n\n");
+
+  if (structured) return structured;
+
+  return `### ${OVERALL_SECTION_CANONICAL.brief_rationale}\n${rawLines.join("\n\n")}`;
+}
+
 function normalizeCapabilityFeedback(rawFeedback = "") {
   const rawLines = String(rawFeedback)
     .split("\n")
@@ -76,6 +164,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   const [capFeedback, setCapFeedback] = useState({});
   const [loading, setLoading] = useState({});
   const [expanded, setExpanded] = useState({});
+  const [overallFeedback, setOverallFeedback] = useState("");
+  const [overallLoading, setOverallLoading] = useState(false);
+  const [overallExpanded, setOverallExpanded] = useState(false);
 
   const transcript = messages
     .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
@@ -89,6 +180,13 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     if (scores.length === 0) return null;
     return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
   };
+
+  const overallScore = (() => {
+    const capIds = CAPABILITIES.map(c => c.id);
+    const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+    if (scores.length === 0) return null;
+    return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
+  })();
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
@@ -120,6 +218,41 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     }
   };
 
+  const requestOverallFeedback = async () => {
+    setOverallLoading(true);
+    setOverallExpanded(true);
+    try {
+      const clipTrans = transcript.substring(0, 3000);
+      const scoreLine = overallScore !== null
+        ? `Overall deterministic score (locked, do not change): ${overallScore}/5`
+        : "Overall deterministic score: not available yet";
+      const capabilityScoreLines = CAPABILITIES
+        .map((cap) => {
+          const score = getCapabilityAverage(cap.id);
+          return `${cap.label}: ${score !== null ? `${score}/5` : "N/A"}`;
+        })
+        .join("\n");
+      const prompt = `As a sales coach, provide an overall session analysis using the fixed deterministic scoring summary below (do NOT rescore).\n${scoreLine}\n\nCapability score breakdown:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall score using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed deterministic scores above.`;
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, max_tokens: 650 })
+      });
+
+      if (!res.ok) throw new Error('Failed to get overall feedback');
+      const data = await res.json();
+      const feedbackText = data.response || data.text || data.content || '';
+      const normalizedFeedback = normalizeOverallFeedback(feedbackText);
+      setOverallFeedback(normalizedFeedback || feedbackText || 'Unable to generate overall analysis. Please try again.');
+    } catch (err) {
+      console.error('Overall feedback error:', err);
+      setOverallFeedback('Unable to generate overall analysis. Please try again.');
+    } finally {
+      setOverallLoading(false);
+    }
+  };
+
   const toggleExpand = (id) => setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
 
   if (messages.filter((m) => m.role === "user").length < 2) {
@@ -135,17 +268,42 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-1.5 mb-0.5">
           <Zap className="w-3.5 h-3.5 text-teal-500" />
-          <span className="font-bold text-sm text-gray-900">Overall: {(() => {
-            const capIds = CAPABILITIES.map(c => c.id);
-            const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-            if (scores.length === 0) return "N/A";
-            return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10 + "/5";
-          })()}</span>
+          <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
           <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
-          <span className="text-xs font-extrabold uppercase tracking-[0.12em] text-gray-700 text-center">Analyze</span>
+          <div className="flex items-center justify-center gap-1">
+            {!overallFeedback && !overallLoading && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-8 px-4 border-2 font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300"
+                onClick={requestOverallFeedback}
+              >
+                Analyze
+              </Button>
+            )}
+            {overallLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+            {overallFeedback && !overallLoading && (
+              <button onClick={() => setOverallExpanded((prev) => !prev)} className="text-gray-500 hover:text-gray-700">
+                {overallExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+            )}
+          </div>
         </div>
+        {overallFeedback && overallExpanded && (
+          <div className="mt-2 border-t border-slate-200 pt-2.5 rounded-lg bg-white/80 px-3 py-3">
+            <ReactMarkdown
+              components={{
+                h3: (props) => <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1 mt-3 first:mt-0" {...props} />,
+                p: (props) => <p className="mb-1.5 leading-[1.55] text-[13px] text-slate-800" {...props} />,
+                ul: (props) => <ul className="list-disc pl-5 mb-1.5 text-[13px] text-slate-800 space-y-1" {...props} />,
+                li: (props) => <li className="leading-[1.5]" {...props} />,
+                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+              }}
+            >{overallFeedback}</ReactMarkdown>
+          </div>
+        )}
       </div>
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
