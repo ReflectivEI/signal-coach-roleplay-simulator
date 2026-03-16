@@ -25,10 +25,11 @@
  *   - No intent inference, no emotion scoring, no outcome bias
  *   - 3 = effective / acceptable (NOT average)
  *   - Single behavior maps to ONE primary capability (no double-counting)
- *   - metricsVersion: 'SI-v2-locked-2026-02-11'
+ *   - metricsVersion: 'SI-v2-locked-2026'
  */
 
 import { SIGNAL_CAPABILITIES } from './signalIntelligenceSOT';
+import { CANONICAL_METRICS_VERSION, validateMetricResults } from '@/lib/signal-intelligence-schema';
 
 // ─── METRIC DEFINITIONS (canonical, from SOT) ──────────────────────────────────
 export const METRIC_DEFINITIONS = SIGNAL_CAPABILITIES.map(c => ({
@@ -146,12 +147,15 @@ function detectPatterns(msg) {
 }
 
 // ─── SCORING HELPERS ───────────────────────────────────────────────────────────
-function roundHalfUp(n) { return Math.floor(n + 0.5); }
+function roundHalfUp(value, decimals = 1) {
+  const factor = Math.pow(10, decimals);
+  return Math.round((value + Number.EPSILON) * factor) / factor;
+}
 function avg(...scores) {
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  return Math.floor(mean * 10 + 0.5) / 10;
+  return roundHalfUp(mean, 1);
 }
-function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v))); }
+function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v, 1))); }
 
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
 function scoreSignalAwareness(hcpState, temperature, p) {
@@ -750,14 +754,14 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   };
 
   const metricResults = {
-    signal_awareness:         scoreSignalAwareness(hcpState, temperature, p),
-    signal_interpretation:    scoreSignalInterpretation(hcpState, temperature, p),
-    value_connection:         scoreValueConnection(hcpState, temperature, p),
-    customer_engagement:      scoreCustomerEngagement(hcpState, temperature, p),
-    objection_navigation:     scoreObjectionNavigation(hcpState, temperature, p),
-    conversation_management:  scoreConversationManagement(hcpState, temperature, p),
-    adaptive_response:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
-    commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
+    question_quality:         scoreSignalAwareness(hcpState, temperature, p),
+    listening_responsiveness:    scoreSignalInterpretation(hcpState, temperature, p),
+    making_it_matter:         scoreValueConnection(hcpState, temperature, p),
+    customer_engagement_cues_cues:      scoreCustomerEngagement(hcpState, temperature, p),
+    objection_handling:     scoreObjectionNavigation(hcpState, temperature, p),
+    conversation_control:  scoreConversationManagement(hcpState, temperature, p),
+    adaptability:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
+    commitment_gaining:    scoreCommitmentGeneration(hcpState, temperature, p),
   };
 
   const globalMisalignments = [];
@@ -783,7 +787,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
+  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, roundHalfUp(rawAvg + universalPenalty, 1)));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
@@ -793,8 +797,21 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   });
   allMisalignments.push(...rubricMisalignments);
 
+  const metricsList = Object.entries(metricResults).map(([id, metric]) => ({
+    id,
+    score: metric.score,
+    components: metric.subScores || {},
+    metricsVersion: CANONICAL_METRICS_VERSION,
+  }));
+  validateMetricResults(metricsList);
+
+  Object.values(metricResults).forEach((metric) => {
+    metric.metricsVersion = CANONICAL_METRICS_VERSION;
+  });
+
   return {
     score: overallScore,
+    metricsVersion: CANONICAL_METRICS_VERSION,
     metrics: metricResults,
     ruleLabel: STATE_LABELS[hcpState] || 'Unknown State',
     ruleDescription: STATE_DESCRIPTIONS[hcpState] || '',
