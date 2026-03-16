@@ -32,6 +32,7 @@ import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
+import { getDifficultyVisuals } from "./difficultyStyles";
 
 
 
@@ -42,6 +43,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
+  const openingSceneNormalized = String(openingScene || "").toLowerCase().trim();
+  const openingSceneSignature = openingSceneNormalized.split(/\s+/).filter(Boolean).slice(0, 8).join(" ");
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
@@ -67,19 +70,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   const objectiveText = scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.";
   const descriptionText = scenario.description || scenario.context || "";
-  const challengeItems = Array.isArray(scenario.challenges)
+  const challengeItems = (Array.isArray(scenario.challenges)
     ? scenario.challenges
     : String(scenario.challenges || "")
       .split(/\n|;/)
-      .map((v) => v.replace(/^[-*\s]+/, "").trim())
-      .filter(Boolean);
-
-  const difficultyStyleMap = {
-    beginner: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    intermediate: "bg-amber-100 text-amber-700 border-amber-200",
-    advanced: "bg-rose-100 text-rose-700 border-rose-200",
-  };
-  const difficultyStyle = difficultyStyleMap[String(scenario.difficulty || '').toLowerCase()] || "bg-slate-100 text-slate-600 border-slate-200";
+  )
+    .map((v) => String(v || "").replace(/^[-*\s]+/, "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const lower = item.toLowerCase();
+      if (/^opening\s*scene\b/i.test(item)) return false;
+      if (lower.includes("opening scene")) return false;
+      if (openingSceneSignature && lower.includes(openingSceneSignature)) return false;
+      return true;
+    });
+  const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -632,6 +637,36 @@ ${actionText}`;
 
   const flatMessages = flattenTurns(turns);
 
+  const renderRoleplayTabs = (containerClassName = "") => (
+    <div className={`flex gap-1 overflow-x-auto ${containerClassName}`}>
+      {([
+        { id: "chat", label: "Live Chat", icon: MessageSquare },
+        { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
+        { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+      ]).map(({ id, label, icon: Icon, disabled }) => (
+        <button
+          key={id}
+          disabled={disabled}
+          onClick={() => {
+            setActiveTab(id);
+            if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
+              endSession();
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
+            ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
+            : disabled
+              ? "border-gray-200 text-gray-300 cursor-not-allowed"
+              : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden" style={{ background: "#f0f4f8" }}>
@@ -649,24 +684,6 @@ ${actionText}`;
             <p className="text-xs text-slate-700 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
           </div>
 
-          <div className="hidden xl:flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 px-4 py-3 min-w-[420px] max-w-[520px]">
-            <ListChecks className="w-4 h-4 text-teal-700 mt-0.5 flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-teal-700">Scenario Support</p>
-              <p className="text-xs text-slate-700 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
-              {challengeItems.length > 0 && (
-                <div className="mt-1.5">
-                  <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
-                  <ul className="list-disc pl-4 text-xs text-slate-700 space-y-0.5 mt-1">
-                    {challengeItems.slice(0, 3).map((challenge, idx) => (
-                      <li key={idx}>{challenge}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-
           <div className="flex items-center gap-2 ml-1 flex-shrink-0">
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
@@ -678,56 +695,64 @@ ${actionText}`;
         {/* Persona strip removed as requested */}
 
 
-        {/* Scenario context summary (kept at top under specialty line) */}
-        {(descriptionText || openingScene) && (
-          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-white">
-            <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-2.5 grid grid-cols-1 lg:grid-cols-2 gap-2">
-              {descriptionText && (
-                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                  <p className="font-bold uppercase text-slate-700 text-[10px] tracking-wide mb-0.5">Scenario Description</p>
-                  <p className="text-[12px] text-slate-700 leading-snug line-clamp-2">{descriptionText}</p>
+        {/* Scenario context summary */}
+        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+              {(descriptionText || openingScene) && (
+                <div className="lg:col-span-8 rounded-2xl border border-slate-300 bg-white p-2.5 shadow-sm">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {descriptionText && (
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                        <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{descriptionText}</p>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                      <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
+                      {openingScene ? (
+                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
+                      ) : (
+                        <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
-              <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2">
-                <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
-                {openingScene ? (
-                  <p className="text-[12px] text-amber-900 leading-snug italic line-clamp-2">{openingScene}</p>
-                ) : (
-                  <p className="text-[12px] text-red-600 leading-snug italic">No opening scene provided for this scenario.</p>
+
+              <div className="lg:col-span-4 rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
+                    <p className="text-sm text-slate-800 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
+                  </div>
+                </div>
+                {challengeItems.length > 0 && (
+                  <div className="mt-2 rounded-xl border border-teal-200 bg-white px-3 py-2 shadow-sm">
+                    <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
+                    <ul className="list-disc pl-4 text-xs text-slate-700 space-y-1 mt-1">
+                      {challengeItems.slice(0, 3).map((challenge, idx) => (
+                        <li key={idx}>{challenge}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-slate-200/70">
+              {renderRoleplayTabs()}
             </div>
           </div>
         )}
 
-        {/* Tabs — NavPill style */}
-        <div className="flex gap-1 px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white overflow-x-auto">
-          {([
-            { id: "chat", label: "Live Chat", icon: MessageSquare },
-            { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
-          ]).map(({ id, label, icon: Icon, disabled }) => (
-            <button
-              key={id}
-              disabled={disabled}
-              onClick={() => {
-                setActiveTab(id);
-                if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
-                  endSession();
-                }
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-                ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
-                : disabled
-                  ? "border-gray-200 text-gray-300 cursor-not-allowed"
-                  : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-                }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+          <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
+            {renderRoleplayTabs()}
+          </div>
+        )}
+
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -746,6 +771,7 @@ ${actionText}`;
                     </div>
                   </div>
                 )}
+
 
                 {turns.map((turn, i) => (
                   <div key={i} className="space-y-2">
@@ -934,14 +960,14 @@ ${actionText}`;
                       variant="outline"
                       size="sm"
                       onClick={exportFeedbackPDF}
-                      className="text-xs border-gray-300"
+                      className="text-xs border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                     >
                       Export to PDF
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs border-teal-400 text-teal-700 hover:bg-teal-50"
+                      className="text-xs border-teal-600 bg-teal-600 text-white hover:bg-teal-700 hover:border-teal-700"
                       onClick={openCoachingOnSession}
                     >
                       <Bot className="w-3.5 h-3.5 mr-1" />
