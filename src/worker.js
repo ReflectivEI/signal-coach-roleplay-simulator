@@ -113,7 +113,7 @@ const assignments = [
 // Refactored learningPaths structure for module completion and analysis
 const learningPaths = [
   {
-    capability: "signal_awareness",
+    capability: "question_quality",
     label: "Signal Awareness",
     completed_modules: [],
     avg_score: 3.5,
@@ -128,7 +128,7 @@ const learningPaths = [
     ]
   },
   {
-    capability: "value_connection",
+    capability: "making_it_matter",
     label: "Value Connection",
     completed_modules: [],
     avg_score: 3.2,
@@ -160,7 +160,7 @@ const knowledgeBase = [
         id: "2",
         title: "Value Connection: Framing ROI",
         content: "Guide customers through understanding the business value and ROI of your solution.",
-        category: "value_connection",
+        category: "making_it_matter",
         curated: true,
         source: "Sales Excellence Framework",
         tags: ["value", "roi", "framing"],
@@ -257,11 +257,11 @@ async function handleAppSettings(pathname) {
             knowledge_base: true
         },
         capabilities: [
-            "signal_awareness",
-            "signal_interpretation",
-            "value_connection",
-            "objection_navigation",
-            "commitment_generation"
+            "question_quality",
+            "listening_responsiveness",
+            "making_it_matter",
+            "objection_handling",
+            "commitment_gaining"
         ],
         scenarios: {
             specialty_count: 12,

@@ -26,9 +26,9 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
   const generate = async () => {
     setLoading(true);
     try {
-      const weakCapString = weakCapabilities.map(c => `${c.label}: ${c.score}/5`).join(", ");
-      const strongCapString = topCapabilities.map(c => `${c.label}: ${c.score}/5`).join(", ");
-      const prompt = `Sales coaching insights for ${totalSessions} sessions (avg score: ${overallAvg}/5):\nWeakest areas: ${weakCapString || "none"}\nStrongest areas: ${strongCapString || "none"}\n\nProvide 3 specific, actionable coaching recommendations (1-2 sentences each).`;
+      const weakCapString = weakCapabilities.map(c => c.label).join(', ');
+      const strongCapString = topCapabilities.map(c => c.label).join(', ');
+      const prompt = `Sales coaching insights for ${totalSessions} sessions.\nWeakest areas: ${weakCapString || 'none'}\nStrongest areas: ${strongCapString || 'none'}\n\nProvide 3 specific, actionable coaching recommendations (1-2 sentences each).`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
