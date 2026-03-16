@@ -34,9 +34,16 @@ import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
 
+function escapeHTML(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-
-
+function sanitizeUserMessage(text) {
+  return escapeHTML(String(text || "").trim());
+}
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -186,7 +193,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           severityBefore: 0,
           cueBefore: contextualCue,
           hcpDialogueBefore: nextHcpDialogue,
-          repMessage: input.trim(),
+          repMessage: sanitizeUserMessage(input),
           alignment: null,
           hcpStateAfter: null,
         }]);
@@ -194,8 +201,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return; // Ensure no further turn creation occurs
       }
     }
-    if (!input.trim() || isLoading) return;
-    const repMessage = input.trim();
+    if (!sanitizeUserMessage(input) || isLoading) return;
+    const repMessage = sanitizeUserMessage(input);
     setInput("");
     setIsLoading(true);
 
@@ -295,10 +302,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         historyText,
         isOpening: false,
       });
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/roleplay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: systemPrompt, roleplay: true })
+        body: JSON.stringify({
+          mode: 'roleplay',
+          action: 'continue',
+          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
+          history: flattenTurns(prevTurns),
+          userInput: systemPrompt,
+        })
       });
       if (res.ok) {
         const data = await res.json();
@@ -432,21 +445,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const openCoachingOnSession = () => {
     const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
     const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
-    const capScores = {};
-    const capCounts = {};
-    turns.forEach(t => {
-      if (!t.alignment?.metrics) return;
-      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-        capScores[cap] = (capScores[cap] || 0) + val.score;
-        capCounts[cap] = (capCounts[cap] || 0) + 1;
-      });
-    });
-    const avgCapabilityScores = Object.fromEntries(
-      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
+    const latestScoredTurn = [...turns].reverse().find((t) => t.alignment?.metrics);
+    const capabilityScores = Object.fromEntries(
+      Object.entries(latestScoredTurn?.alignment?.metrics || {}).map(([cap, val]) => [cap, val.score])
     );
-    const overallScore = turns.filter(t => t.alignment).length > 0
-      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
-      : null;
+    const overallScore = latestScoredTurn?.alignment?.score ?? null;
 
     const sessionContext = encodeURIComponent(JSON.stringify({
       scenarioTitle: scenario.title,
@@ -454,7 +457,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       specialty: scenario.specialty,
       misalignments: allMisalignments,
       positives: allPositives,
-      capabilityScores: avgCapabilityScores,
+      capabilityScores,
       overallScore,
       source: "roleplay_end_feedback",
     }));
@@ -471,39 +474,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
         .join("\n");
 
-      // Build turn-by-turn scoring summary (per-capability averages)
       const scoredTurns = turns.filter(t => t.alignment?.metrics);
-      const capAccum = {};
-      scoredTurns.forEach(t => {
-        Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-          if (!capAccum[cap]) capAccum[cap] = { total: 0, count: 0 };
-          capAccum[cap].total += val.score;
-          capAccum[cap].count += 1;
-        });
-      });
-      const avgCapScores = Object.fromEntries(
-        Object.entries(capAccum).map(([cap, v]) => [cap, (v.total / v.count).toFixed(1)])
-      );
-      // Build sub-metric detail for richer coaching context
-      const subMetricAccum = {};
-      scoredTurns.forEach(t => {
-        Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-          if (!val.subScores) return;
-          Object.entries(val.subScores).forEach(([sub, score]) => {
-            if (!subMetricAccum[cap]) subMetricAccum[cap] = {};
-            if (!subMetricAccum[cap][sub]) subMetricAccum[cap][sub] = { total: 0, count: 0 };
-            subMetricAccum[cap][sub].total += score;
-            subMetricAccum[cap][sub].count += 1;
-          });
-        });
-      });
-      const capSummary = Object.entries(avgCapScores)
-        .map(([cap, score]) => {
-          const subs = subMetricAccum[cap];
-          const subLine = subs
-            ? Object.entries(subs).map(([s, v]) => `  ↳ ${s.replace(/_/g, ' ')}: ${(v.total / v.count).toFixed(1)}/5`).join('\n')
-            : '';
-          return `• ${cap.replace(/_/g, ' ')}: ${score}/5${subLine ? '\n' + subLine : ''}`;
+      const latestScoredTurn = scoredTurns.length > 0 ? scoredTurns[scoredTurns.length - 1] : null;
+      const capSummary = Object.entries(latestScoredTurn?.alignment?.metrics || {})
+        .map(([cap, metric]) => {
+          const subLine = Object.entries(metric.subScores || {})
+            .map(([s, score]) => `  ↳ ${s.replace(/_/g, ' ')}: ${score}`)
+            .join('\n');
+          return `• ${cap.replace(/_/g, ' ')}${subLine ? '\n' + subLine : ''}`;
         })
         .join('\n');
 
@@ -516,28 +494,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
         : '';
 
-      const overallScore = scoredTurns.length > 0
-        ? Math.round((scoredTurns.reduce((sum, t) => sum + t.alignment.score, 0) / scoredTurns.length) * 10) / 10
-        : null;
-
-      const avgCapScoresNumeric = Object.fromEntries(
-        Object.entries(capAccum).map(([cap, v]) => [cap, v.total / v.count])
-      );
-
-      const sortedCaps = Object.entries(avgCapScoresNumeric)
-        .map(([id, score]) => ({ id, score }))
-        .sort((a, b) => b.score - a.score);
-
-      const _topStrengths = sortedCaps.slice(0, 3);
-      const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
-
-      // Build deterministic report header with locked scores
-      // Restore structuredPrompt definition for LLM feedback generation
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const res = await fetch('/api/llm/invoke', {
+      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
+      const res = await fetch('/api/roleplay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: structuredPrompt, max_tokens: 1500 })
+        body: JSON.stringify({
+          mode: 'roleplay',
+          action: 'end',
+          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
+          history: turns,
+          userInput: structuredPrompt,
+        })
       });
 
       if (res.ok) {
@@ -791,34 +758,34 @@ ${actionText}`;
                       </div>
                     )}
                     {turn.repMessage && (
-                      <div className="space-y-1">
-                        <div className="flex justify-end">
+                      <div className="flex justify-end">
+                        <div className="flex flex-col items-end gap-1">
                           <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
                             {turn.repMessage}
                           </div>
-                        </div>
-                        {turn.alignment && (
-                          <div className="flex justify-end flex-col items-end gap-1">
-                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                              turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
-                                'bg-slate-50 text-slate-600 border-slate-200'
-                              }`}>
-                              <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
-                              {/* State label removed: do not display ruleLabel */}
-                              {turn.alignment.misalignments.length > 0 && (
-                                <span className="truncate max-w-[260px]">⚠ {turn.alignment.misalignments[0]}</span>
-                              )}
-                              {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
-                                <span className="text-green-600 truncate max-w-[260px]">✓ {turn.alignment.positives[0]}</span>
-                              )}
-                            </div>
-                            {turn.alignment.rubricAlignmentFlags?.length > 0 && (
-                              <div className="max-w-[90%] px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
-                                {turn.alignment.rubricAlignmentFlags[0]}
+                          {turn.alignment && (
+                            <>
+                              <div className={`px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                                turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
+                                  'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}>
+                                <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
+                                {/* State label removed: do not display ruleLabel */}
+                                {turn.alignment.misalignments.length > 0 && (
+                                  <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">⚠ {turn.alignment.misalignments[0]}</div>
+                                )}
+                                {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
+                                  <div className="mt-0.5 max-w-[420px] break-words whitespace-normal text-green-600">✓ {turn.alignment.positives[0]}</div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        )}
+                              {turn.alignment.rubricAlignmentFlags?.length > 0 && (
+                                <div className="max-w-[420px] break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
+                                  {turn.alignment.rubricAlignmentFlags[0]}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -852,7 +819,7 @@ ${actionText}`;
                   onSubmit={e => {
                     e.preventDefault();
                     if (isLoading || isEnding) return;
-                    const message = input.trim();
+                    const message = sanitizeUserMessage(input);
                     if (!message) return;
                     setInput(""); // clear input immediately
                     sendMessage();
@@ -873,7 +840,7 @@ ${actionText}`;
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           if (isLoading || isEnding) return;
-                          const message = input.trim();
+                          const message = sanitizeUserMessage(input);
                           if (!message) return;
                           setInput("");
                           sendMessage();
@@ -899,7 +866,7 @@ ${actionText}`;
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!input.trim() && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
+                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
