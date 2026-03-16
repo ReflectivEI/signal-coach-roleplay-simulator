@@ -1,11 +1,11 @@
 /**
- * Signal Intelligence Behavioral Metrics Specification (SI-v2-locked-2026-02-11)
+ * Signal Intelligence Behavioral Metrics Specification (SI-v2-locked-2026)
  * 
  * Canonical metric definitions. All metrics scale 1.0–5.0, 1 decimal precision.
  * 3.0 = effective baseline. No ML, no intent inference, observable behavior only.
  */
 
-export const METRICS_VERSION = 'SI-v2-locked-2026-02-11';
+export const METRICS_VERSION = 'SI-v2-locked-2026';
 
 export type BehavioralMetricId =
   | 'question_quality'

@@ -129,13 +129,13 @@ export default function AICoach() {
     const { scenarioTitle, hcpCategory, specialty, misalignments = [], positives = [], capabilityScores = {}, overallScore, situation } = ctx;
     const misStr = misalignments.length > 0 ? misalignments.map(m => `• ${m}`).join("\n") : "None detected";
     const posStr = positives.length > 0 ? positives.map(p => `• ${p}`).join("\n") : "None noted";
-    const capStr = Object.entries(capabilityScores).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}/5`).join(" | ");
+    const capStr = Object.entries(capabilityScores).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" | ");
 
     return `I just completed a roleplay session and need context-aware feedback.
 
 **Scenario:** ${scenarioTitle || "Unknown"}
 **HCP:** ${hcpCategory || "HCP"} — ${specialty || "General"}
-**Overall Alignment Score:** ${overallScore || "?"}/5
+**Overall Alignment Summary:** Deterministic qualitative analysis available
 ${capStr ? `**Capability Scores:** ${capStr}` : ""}
 
 **What I Did Well:**
@@ -246,10 +246,10 @@ Rules:
 ACTIVE ROLEPLAY SESSION CONTEXT (inject as primary coaching lens):
 - Scenario: "${sessionContext.scenarioTitle}"
 - HCP: ${sessionContext.hcpCategory}, ${sessionContext.specialty}
-- Overall Alignment Score: ${sessionContext.overallScore}/5
+- Overall Alignment Summary: Deterministic qualitative analysis available
 - Detected Misalignments: ${(sessionContext.misalignments || []).join(" | ") || "None"}
 - Positives: ${(sessionContext.positives || []).join(" | ") || "None"}
-- Capability Scores: ${Object.entries(sessionContext.capabilityScores || {}).map(([k, v]) => `${k.replace(/_/g, ' ')}=${v}/5`).join(", ")}
+- Capability Scores: ${Object.entries(sessionContext.capabilityScores || {}).map(([k, v]) => `${k.replace(/_/g, ' ')}=${v}`).join(", ")}
 
 COACHING MANDATE: When the user asks for feedback, directly reference these specific misalignments and positives. Quote behaviors, not traits. Provide concrete alternative language or actions for each misalignment.
 ` : "";

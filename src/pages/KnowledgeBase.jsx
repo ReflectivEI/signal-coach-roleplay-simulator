@@ -11,12 +11,12 @@ import NavPill from "@/components/ui/NavPill";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 const communicationTemplates = [
-  { title: "Feel-Felt-Found", capability: "objection_navigation", content: "I understand how you feel. Other physicians have felt the same way. What they've found is that [benefit/outcome]." },
-  { title: "Acknowledge-Bridge-Close", capability: "commitment_generation", content: "That's an important consideration. [Acknowledge]. What we've seen is [bridge to benefit]. How would [closing question]?" },
-  { title: "Problem-Agitate-Solve", capability: "value_connection", content: "Many physicians struggle with [problem]. This leads to [negative impact]. [Your solution] addresses this by [benefit]." },
-  { title: "Before-After-Bridge", capability: "value_connection", content: "Before [your solution], patients experienced [challenge]. After, they [improved outcome]. The bridge is [your specific benefit]." },
-  { title: "Assumptive Next Step", capability: "commitment_generation", content: "Based on what we've discussed, would it make sense to [specific next action]? I can [support offer]." },
-  { title: "Trial Close with Options", capability: "commitment_generation", content: "Would you prefer to start with [option A] or [option B]? Either way, I'll ensure [support commitment]." },
+  { title: "Feel-Felt-Found", capability: "objection_handling", content: "I understand how you feel. Other physicians have felt the same way. What they've found is that [benefit/outcome]." },
+  { title: "Acknowledge-Bridge-Close", capability: "commitment_gaining", content: "That's an important consideration. [Acknowledge]. What we've seen is [bridge to benefit]. How would [closing question]?" },
+  { title: "Problem-Agitate-Solve", capability: "making_it_matter", content: "Many physicians struggle with [problem]. This leads to [negative impact]. [Your solution] addresses this by [benefit]." },
+  { title: "Before-After-Bridge", capability: "making_it_matter", content: "Before [your solution], patients experienced [challenge]. After, they [improved outcome]. The bridge is [your specific benefit]." },
+  { title: "Assumptive Next Step", capability: "commitment_gaining", content: "Based on what we've discussed, would it make sense to [specific next action]? I can [support offer]." },
+  { title: "Trial Close with Options", capability: "commitment_gaining", content: "Would you prefer to start with [option A] or [option B]? Either way, I'll ensure [support commitment]." },
 ];
 
 // Build capability labels from SOT
