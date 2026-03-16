@@ -742,14 +742,14 @@ ${actionText}`;
               </div>
             </div>
             <div className="mt-2 pt-2 border-t border-slate-200/70">
-              {renderRoleplayTabs()}
+              {renderTabPills()}
             </div>
           </div>
         )}
 
         {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
-            {renderRoleplayTabs()}
+            {renderTabPills()}
           </div>
         )}
 
