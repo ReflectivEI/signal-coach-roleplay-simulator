@@ -279,6 +279,138 @@ async function handleAppSettings(pathname) {
     return Response.json(settings);
 }
 
+
+function invalidRequestFormat() {
+    return new Response(
+        JSON.stringify({ error: "Invalid request format" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+}
+
+function buildPromptFromMessages(messages = []) {
+    return messages
+        .filter((m) => m && typeof m.content === "string" && typeof m.role === "string")
+        .map((m) => `${m.role.toUpperCase()}: ${m.content}`)
+        .join("\n");
+}
+
+function normalizeHistoryEntry(item) {
+    if (typeof item === "string") return item;
+    if (item && typeof item === "object") {
+        if (typeof item.content === "string") return `${item.role || "unknown"}: ${item.content}`;
+        if (typeof item.repMessage === "string" || typeof item.hcpDialogue === "string") {
+            return `rep: ${item.repMessage || ""}\nhcp: ${item.hcpDialogue || ""}`;
+        }
+    }
+    return "";
+}
+
+function buildRoleplayPrompt({ action, scenarioId, history = [], userInput = "" }) {
+    const historyText = Array.isArray(history)
+        ? history.map(normalizeHistoryEntry).filter(Boolean).join("\n")
+        : "";
+
+    if (action === "start") {
+        return [
+            "You are roleplaying as a healthcare professional in a sales conversation.",
+            `Scenario ID: ${scenarioId}`,
+            historyText ? `Prior context:\n${historyText}` : "",
+            userInput ? `User opening input: ${userInput}` : "",
+            "Provide the opening HCP response in plain text."
+        ].filter(Boolean).join("\n\n");
+    }
+
+    if (action === "continue") {
+        return [
+            "Continue the roleplay as the same healthcare professional.",
+            `Scenario ID: ${scenarioId}`,
+            historyText ? `Conversation history:\n${historyText}` : "",
+            `Latest user input: ${userInput}`,
+            "Respond with the next HCP reply in plain text."
+        ].filter(Boolean).join("\n\n");
+    }
+
+    return [
+        "Finalize this roleplay session with concise behavioral feedback.",
+        `Scenario ID: ${scenarioId}`,
+        historyText ? `Conversation history:\n${historyText}` : "",
+        userInput ? `Final user note: ${userInput}` : "",
+        "Return a concise summary and next-step recommendation in plain text."
+    ].filter(Boolean).join("\n\n");
+}
+
+async function handleApiChat(request, env) {
+    const body = await request.json().catch(() => null);
+    const messages = body?.messages;
+
+    if (!Array.isArray(messages) || messages.length === 0 || !messages.every(m => m && typeof m.role === "string" && typeof m.content === "string")) {
+        return invalidRequestFormat();
+    }
+
+    console.log("route=/api/chat");
+
+    const prompt = buildPromptFromMessages(messages);
+    const llmRequest = new Request("http://internal/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt })
+    });
+
+    return handleLlmInvoke(llmRequest, env);
+}
+
+async function handleApiRoleplay(request, env) {
+    const body = await request.json().catch(() => null);
+    const { mode, action, scenarioId, history = [], userInput = "" } = body || {};
+
+    const validAction = action === "start" || action === "continue" || action === "end";
+    if (mode !== "roleplay" || !validAction || typeof scenarioId !== "string" || !Array.isArray(history) || typeof userInput !== "string") {
+        return invalidRequestFormat();
+    }
+
+    console.log(`route=/api/roleplay action=${action} scenarioId=${scenarioId}`);
+
+    const prompt = buildRoleplayPrompt({ action, scenarioId, history, userInput });
+    const llmRequest = new Request("http://internal/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, roleplay: true })
+    });
+
+    const llmResponse = await handleLlmInvoke(llmRequest, env);
+    const llmData = await llmResponse.clone().json().catch(() => ({}));
+
+    if (action === "end") {
+        const transcript = history.map(normalizeHistoryEntry).filter(Boolean).join("\n");
+
+        const sessionRequest = new Request("http://internal/api/roleplay/sessions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                scenarioId,
+                sessionData: { mode, action },
+                turns: history,
+                feedback: llmData?.response || "",
+                scores: body?.scores || {},
+                transcript
+            })
+        });
+
+        const sessionResponse = await handleRolePlaySessions(sessionRequest);
+        const sessionData = await sessionResponse.clone().json().catch(() => ({}));
+
+        return Response.json({
+            ...llmData,
+            action,
+            scenarioId,
+            session: sessionData?.session || null,
+            sessionStored: !!sessionData?.success
+        });
+    }
+
+    return Response.json({ ...llmData, action, scenarioId });
+}
+
 // LLM: Invoke AI for coaching, analysis, or generation
 async function handleLlmInvoke(request, env) {
     const body = await request.json().catch(() => ({}));
@@ -651,6 +783,8 @@ async function handleHealth() {
             "POST /api/auth/logout",
             "GET /api/apps/public/prod/public-settings/by-id/:appId",
             "POST /api/llm/invoke",
+            "POST /api/chat",
+            "POST /api/roleplay",
             "POST /api/logs/user",
             "GET /api/snippets",
             "GET /api/assignments",
@@ -703,6 +837,14 @@ export default {
 
             if (pathname === "/api/llm/invoke" && request.method === "POST") {
                 return setCorsHeaders(await handleLlmInvoke(request, env));
+            }
+
+            if (pathname === "/api/chat" && request.method === "POST") {
+                return setCorsHeaders(await handleApiChat(request, env));
+            }
+
+            if (pathname === "/api/roleplay" && request.method === "POST") {
+                return setCorsHeaders(await handleApiRoleplay(request, env));
             }
 
             if (pathname === "/api/logs/user" && request.method === "POST") {
