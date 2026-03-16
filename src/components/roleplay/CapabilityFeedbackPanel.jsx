@@ -19,6 +19,71 @@ const FEEDBACK_SECTION_CANONICAL = {
   coaching_cue: "Coaching cue for next call",
 };
 
+
+const OVERALL_SECTION_CANONICAL = {
+  brief_rationale: "Brief rationale",
+  strengths: "What the rep did well across capabilities",
+  gap: "Biggest cross-capability gap to improve next",
+  adjustment: "One concrete adjustment for the next role-play",
+};
+
+function normalizeOverallFeedback(rawFeedback = "") {
+  const rawLines = String(rawFeedback)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const sections = {
+    brief_rationale: [],
+    strengths: [],
+    gap: [],
+    adjustment: [],
+  };
+
+  let currentSection = "";
+
+  const detectSection = (line) => {
+    const clean = line
+      .replace(/^[-*]\s*/, "")
+      .replace(/^\d+[.)-]?\s*/, "")
+      .replace(/^[#]+\s*/, "")
+      .trim();
+
+    if (/^brief\s+rationale/i.test(clean)) return "brief_rationale";
+    if (/^what\s+the\s+rep\s+did\s+well/i.test(clean)) return "strengths";
+    if (/^biggest\s+cross[-\s]capability\s+gap/i.test(clean)) return "gap";
+    if (/^one\s+concrete\s+adjustment/i.test(clean)) return "adjustment";
+    return "";
+  };
+
+  rawLines.forEach((line) => {
+    const section = detectSection(line);
+    if (section) {
+      currentSection = section;
+      const body = line
+        .replace(/^[-*]\s*/, "")
+        .replace(/^\d+[.)-]?\s*/, "")
+        .replace(/^[#]+\s*/, "")
+        .replace(/^[^:]+:\s*/, "")
+        .trim();
+      if (body) sections[currentSection].push(body);
+      return;
+    }
+
+    if (!currentSection) return;
+    sections[currentSection].push(line.replace(/^[-*]\s*/, "").trim());
+  });
+
+  return [
+    ["brief_rationale", OVERALL_SECTION_CANONICAL.brief_rationale],
+    ["strengths", OVERALL_SECTION_CANONICAL.strengths],
+    ["gap", OVERALL_SECTION_CANONICAL.gap],
+    ["adjustment", OVERALL_SECTION_CANONICAL.adjustment],
+  ]
+    .filter(([key]) => sections[key].length > 0)
+    .map(([key, label]) => `### ${label}\n${sections[key].join("\n")}`)
+    .join("\n\n");
+}
 function normalizeCapabilityFeedback(rawFeedback = "") {
   const rawLines = String(rawFeedback)
     .split("\n")
@@ -155,7 +220,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       if (!res.ok) throw new Error('Failed to get overall feedback');
       const data = await res.json();
       const feedbackText = data.response || data.text || data.content || '';
-      const normalizedFeedback = normalizeCapabilityFeedback(feedbackText);
+      const normalizedFeedback = normalizeOverallFeedback(feedbackText);
       setOverallFeedback(normalizedFeedback || 'Unable to generate overall analysis. Please try again.');
     } catch (err) {
       console.error('Overall feedback error:', err);
@@ -204,10 +269,13 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           </div>
         </div>
         {overallFeedback && overallExpanded && (
-          <div className="mt-2 border-t border-slate-200 pt-2.5 prose prose-sm max-w-none">
+          <div className="mt-2 border-t border-slate-200 pt-2.5 rounded-lg bg-white/80 px-3 py-3">
             <ReactMarkdown
               components={{
-                p: (props) => <p className="mb-1 leading-[1.45] text-[14px] text-slate-800" {...props} />,
+                h3: (props) => <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1 mt-3 first:mt-0" {...props} />,
+                p: (props) => <p className="mb-1.5 leading-[1.55] text-[13px] text-slate-800" {...props} />,
+                ul: (props) => <ul className="list-disc pl-5 mb-1.5 text-[13px] text-slate-800 space-y-1" {...props} />,
+                li: (props) => <li className="leading-[1.5]" {...props} />,
                 strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
               }}
             >{overallFeedback}</ReactMarkdown>
