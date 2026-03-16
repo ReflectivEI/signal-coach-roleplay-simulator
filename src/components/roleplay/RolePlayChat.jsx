@@ -758,34 +758,34 @@ ${actionText}`;
                       </div>
                     )}
                     {turn.repMessage && (
-                      <div className="space-y-1">
-                        <div className="flex justify-end">
+                      <div className="flex justify-end">
+                        <div className="flex flex-col items-end gap-1">
                           <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
                             {turn.repMessage}
                           </div>
-                        </div>
-                        {turn.alignment && (
-                          <div className="flex justify-end flex-col items-end gap-1">
-                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                              turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
-                                'bg-slate-50 text-slate-600 border-slate-200'
-                              }`}>
-                              <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
-                              {/* State label removed: do not display ruleLabel */}
-                              {turn.alignment.misalignments.length > 0 && (
-                                <span className="truncate max-w-[260px]">⚠ {turn.alignment.misalignments[0]}</span>
-                              )}
-                              {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
-                                <span className="text-green-600 truncate max-w-[260px]">✓ {turn.alignment.positives[0]}</span>
-                              )}
-                            </div>
-                            {turn.alignment.rubricAlignmentFlags?.length > 0 && (
-                              <div className="max-w-[90%] px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
-                                {turn.alignment.rubricAlignmentFlags[0]}
+                          {turn.alignment && (
+                            <>
+                              <div className={`px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                                turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
+                                  'bg-slate-50 text-slate-600 border-slate-200'
+                                }`}>
+                                <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
+                                {/* State label removed: do not display ruleLabel */}
+                                {turn.alignment.misalignments.length > 0 && (
+                                  <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">⚠ {turn.alignment.misalignments[0]}</div>
+                                )}
+                                {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
+                                  <div className="mt-0.5 max-w-[420px] break-words whitespace-normal text-green-600">✓ {turn.alignment.positives[0]}</div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        )}
+                              {turn.alignment.rubricAlignmentFlags?.length > 0 && (
+                                <div className="max-w-[420px] break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
+                                  {turn.alignment.rubricAlignmentFlags[0]}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
