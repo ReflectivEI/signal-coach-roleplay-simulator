@@ -637,6 +637,36 @@ ${actionText}`;
 
   const flatMessages = flattenTurns(turns);
 
+  const renderTabPills = () => (
+    <div className="flex gap-1 px-3 md:px-4 py-2.5 flex-shrink-0 bg-white overflow-x-auto">
+      {([
+        { id: "chat", label: "Live Chat", icon: MessageSquare },
+        { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
+        { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
+      ]).map(({ id, label, icon: Icon, disabled }) => (
+        <button
+          key={id}
+          disabled={disabled}
+          onClick={() => {
+            setActiveTab(id);
+            if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
+              endSession();
+            }
+          }}
+          className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
+            ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
+            : disabled
+              ? "border-gray-200 text-gray-300 cursor-not-allowed"
+              : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+            }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden" style={{ background: "#f0f4f8" }}>
@@ -709,47 +739,23 @@ ${actionText}`;
                     </ul>
                   </div>
                 )}
-                <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 lg:max-w-[470px] shadow-sm">
-                  <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
-                  {openingScene ? (
-                    <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
-                  ) : (
-                    <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
-                  )}
-                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* Tabs — NavPill style */}
-        <div className="flex gap-1 px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white overflow-x-auto">
-          {([
-            { id: "chat", label: "Live Chat", icon: MessageSquare },
-            { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
-            { id: "capabilities", label: "End & Get Feedback", icon: Zap, disabled: repTurnsCount < 1 },
-          ]).map(({ id, label, icon: Icon, disabled }) => (
-            <button
-              key={id}
-              disabled={disabled}
-              onClick={() => {
-                setActiveTab(id);
-                if (id === "capabilities" && repTurnsCount >= 2 && !feedback && !isEnding) {
-                  endSession();
-                }
-              }}
-              className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-                ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
-                : disabled
-                  ? "border-gray-200 text-gray-300 cursor-not-allowed"
-                  : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-                }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) ? (
+          <div className="px-3 md:px-4 pb-2 border-b bg-gradient-to-b from-slate-50 to-white">
+            <div className="rounded-xl border border-slate-200 bg-white">
+              {renderTabPills()}
+            </div>
+          </div>
+        ) : (
+          <div className="border-b">
+            {renderTabPills()}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
