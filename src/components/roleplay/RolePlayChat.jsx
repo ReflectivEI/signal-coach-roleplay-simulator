@@ -753,19 +753,6 @@ ${actionText}`;
           </div>
         )}
 
-        {/* Tabs — NavPill style */}
-        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) ? (
-          <div className="px-3 md:px-4 pb-2 border-b bg-gradient-to-b from-slate-50 to-white">
-            <div className="rounded-xl border border-slate-200 bg-white">
-              {renderTabPills()}
-            </div>
-          </div>
-        ) : (
-          <div className="border-b">
-            {renderTabPills()}
-          </div>
-        )}
-
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
 
