@@ -742,26 +742,13 @@ ${actionText}`;
               </div>
             </div>
             <div className="mt-2 pt-2 border-t border-slate-200/70">
-              {renderRoleplayTabs()}
+              {renderTabPills()}
             </div>
           </div>
         )}
 
         {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
-            {renderRoleplayTabs()}
-          </div>
-        )}
-
-        {/* Tabs — NavPill style */}
-        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) ? (
-          <div className="px-3 md:px-4 pb-2 border-b bg-gradient-to-b from-slate-50 to-white">
-            <div className="rounded-xl border border-slate-200 bg-white">
-              {renderTabPills()}
-            </div>
-          </div>
-        ) : (
-          <div className="border-b">
             {renderTabPills()}
           </div>
         )}
