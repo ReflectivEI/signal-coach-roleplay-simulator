@@ -1334,6 +1334,15 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
     text = text.replace(pattern, replacement)
   })
 
+  // Split run-on constructions where a statement is followed by a question clause.
+  // Example: "I'm familiar with the journal, what specific aspect..." ->
+  // "I'm familiar with the journal. What specific aspect...?"
+  text = text
+    .replace(/,\s+(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, '. $1')
+    .replace(/\.\s*\?/g, '?')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+
   const questionStarterPattern =
     /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
 
