@@ -434,6 +434,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return hardenTextSurface(`${warmAcknowledge} ${businessBridge} ${focusQuestion}`);
     };
 
+    const buildFollowUpScenarioFallback = () => {
+      const context = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.toLowerCase();
+      const prepFocus = /\bprep|hiv|sti\b/.test(context);
+
+      const repWords = String(repMessage || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+      const repPreview = repWords.slice(0, 8).join(" ");
+
+      const acknowledgment = repPreview
+        ? `I hear you on ${repPreview}.`
+        : "I hear you.";
+
+      const focusedQuestion = prepFocus
+        ? "Can you connect that directly to improving patient access to PrEP in my current workflow?"
+        : "Can you connect that directly to what I should change in my current workflow?";
+
+      return hardenTextSurface(`${acknowledgment} ${focusedQuestion}`);
+    };
+
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : "I see. Let me consider that.";
@@ -479,12 +501,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
         }
+      } else {
+        nextHcpDialogue = isFirstHcpResponse
+          ? buildFirstTurnScenarioFallback()
+          : buildFollowUpScenarioFallback();
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
     }
 
-    const groundedFallback = buildFirstTurnScenarioFallback();
+    const groundedFallback = isFirstHcpResponse
+      ? buildFirstTurnScenarioFallback()
+      : buildFollowUpScenarioFallback();
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
       nextHcpDialogue = groundedFallback;
     }
@@ -611,12 +639,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const displayItems = displayTurns.flatMap((turn, index) => {
     const items = [];
 
-    if (turn.repMessage) {
-      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
-    }
-
     if (turn.hcpDialogueBefore) {
       items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
+    }
+
+    if (turn.repMessage) {
+      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
     }
 
     return items;
