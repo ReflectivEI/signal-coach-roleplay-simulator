@@ -33,59 +33,35 @@ import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
+import { normalizeMessage } from "@/lib/messageNormalization";
+import { normalizeTone } from "@/lib/conversationToneNormalization";
 
+function escapeHTML(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
+function sanitizeUserMessage(text) {
+  return escapeHTML(String(text || "").trim());
+}
 
+function sanitizeRenderedMessage(text, source = "unknown") {
+  const originalText = String(text || "");
+  const normalizedText = normalizeMessage(originalText);
+  const toneNormalizedText = normalizeTone(normalizedText);
+  const renderedText = escapeHTML(toneNormalizedText);
 
-
-function hardenTextSurface(text) {
-  let value = String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!value) return "";
-
-  value = value
-    .replace(/\bi\b/g, "I")
-    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
-    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
-    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
-
-  if (!/[.!?]$/.test(value)) {
-    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
-    value += looksLikeQuestion ? "?" : ".";
+  if (
+    import.meta.env.DEV
+    && originalText.includes("?")
+    && !renderedText.includes("?")
+  ) {
+    console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source });
   }
 
-  return value;
-}
-
-function extractScenarioKeywords(scenario) {
-  const combined = [
-    scenario?.title,
-    scenario?.description,
-    scenario?.context,
-    scenario?.opening_scene,
-    scenario?.openingScene,
-    scenario?.objective,
-    scenario?.goal,
-    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
-  ].join(" ").toLowerCase();
-
-  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
-  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
-}
-
-function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
-  const value = String(text || "").toLowerCase();
-  const rep = String(repMessage || "").toLowerCase();
-  if (!value) return false;
-
-  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
-  if (genericOnly) return false;
-
-  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
-  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
-  return scenarioHits > 0 || repHits > 0;
+  return renderedText;
 }
 
 function hardenTextSurface(text) {
@@ -97,57 +73,6 @@ function hardenTextSurface(text) {
 
   value = value
     .replace(/\bi\b/g, "I")
-    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
-    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
-    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
-
-  if (!/[.!?]$/.test(value)) {
-    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
-    value += looksLikeQuestion ? "?" : ".";
-  }
-
-  return value;
-}
-
-function extractScenarioKeywords(scenario) {
-  const combined = [
-    scenario?.title,
-    scenario?.description,
-    scenario?.context,
-    scenario?.opening_scene,
-    scenario?.openingScene,
-    scenario?.objective,
-    scenario?.goal,
-    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
-  ].join(" ").toLowerCase();
-
-  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
-  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
-}
-
-function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
-  const value = String(text || "").toLowerCase();
-  const rep = String(repMessage || "").toLowerCase();
-  if (!value) return false;
-
-  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
-  if (genericOnly) return false;
-
-  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
-  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
-  return scenarioHits > 0 || repHits > 0;
-}
-
-function hardenTextSurface(text) {
-  let value = String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!value) return "";
-
-  value = value
-    .replace(/\bi\b/g, "I")
-    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
     .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());
 
@@ -209,6 +134,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
+  const sendInFlightRef = useRef(false);
+  const activeRequestIdRef = useRef(0);
+  const lastSubmittedTurnKeyRef = useRef("");
+  const loggedTurnKeysRef = useRef(new Set());
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -293,7 +222,27 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }, [scenario]);
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
-  const sendMessage = async () => {
+  const sendMessage = async (rawInput = input) => {
+    if (sendInFlightRef.current) return;
+
+    // TURN ORDER RULE
+    // Rep and HCP messages must alternate.
+    // Rep → HCP → Rep → HCP
+    // Multiple rep messages in a row are not allowed.
+    const lastTurn = turns[turns.length - 1];
+    const lastRenderedSpeakerIsRep = Boolean(lastTurn?.repMessage);
+    const awaitingHcpResponse = lastTurn && !lastTurn.repMessage && Boolean(lastTurn.hcpDialogueBefore);
+    const canSendOnOpeningTurn = lastTurn && lastTurn.turnNumber === 0 && !lastTurn.repMessage && !lastTurn.hcpDialogueBefore;
+    if (lastRenderedSpeakerIsRep || (!awaitingHcpResponse && !canSendOnOpeningTurn)) {
+      return;
+    }
+
+    const normalizedRawInput = String(rawInput || "").trim().toLowerCase();
+    const candidateTurnKey = `${lastTurn?.turnNumber ?? -1}::${normalizedRawInput}`;
+    if (candidateTurnKey && candidateTurnKey === lastSubmittedTurnKeyRef.current) {
+      return;
+    }
+
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
@@ -316,8 +265,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         exitStateActive = true;
       }
     }
-    if (repExitIntent.test(input.trim()) || followUpTimeConfirmed) {
-      exitOrSchedulingState = repExitIntent.test(input.trim()) || followUpTimeConfirmed;
+    if (repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed) {
+      exitOrSchedulingState = repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed;
     }
     // If scheduling is confirmed, do not generate further HCP turns
     if (exitStateActive && schedulingConfirmed) {
@@ -327,7 +276,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
     if (exitOrSchedulingState) {
       // Only end session if rep explicitly signals exit intent
-      if (repExitIntent.test(input.trim())) {
+      if (repExitIntent.test(String(rawInput).trim())) {
         let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
         let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
         setTurns([...turns, {
@@ -337,7 +286,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           severityBefore: 0,
           cueBefore: contextualCue,
           hcpDialogueBefore: nextHcpDialogue,
-          repMessage: input.trim(),
+          repMessage: sanitizeUserMessage(rawInput),
           alignment: null,
           hcpStateAfter: null,
         }]);
@@ -345,10 +294,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return; // Ensure no further turn creation occurs
       }
     }
-    if (!input.trim() || isLoading) return;
-    const repMessage = normalizeRepQuestionPunctuation(input);
-    setInput("");
-    setIsLoading(true);
+    if (!sanitizeUserMessage(rawInput) || isLoading) return;
+
+    sendInFlightRef.current = true;
+    const requestId = ++activeRequestIdRef.current;
+    lastSubmittedTurnKeyRef.current = candidateTurnKey;
+    try {
+      const repMessage = sanitizeUserMessage(rawInput);
+      setInput("");
+      setIsLoading(true);
 
     // Stop mic if it's still listening when message is sent
     if (isListening) {
@@ -357,6 +311,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // The turn the rep is responding to = last turn in the array (which has a hcpDialogueBefore but no repMessage yet)
     const respondingToTurn = turns[turns.length - 1];
+    if (!respondingToTurn || respondingToTurn.repMessage) {
+      setIsLoading(false);
+      return;
+    }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
@@ -364,7 +322,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // 1. Score alignment against the locked state + temperature the rep SAW
     // Score BEFORE any temperature escalation from disagreement
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
-    const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
+    const repLower = String(repMessage || "").toLowerCase();
+    const priorRepTurnsCount = turns.filter((t) => !!t.repMessage).length;
+    const greetingSignals = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hows it going|how was your weekend|nice to meet you|good to see you|thanks for your time)\b/;
+    const businessSignals = /\b(prep|hiv|sti|cab|cabotegravir|injectable|screening|resistance|adherence|study|trial|data|results|efficacy|durability|monitoring|protocol|materials?|brochure|resource|patients?)\b/;
+    const isPleasantryOnly = greetingSignals.test(repLower) && !businessSignals.test(repLower);
+    const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
+
+    let alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
+    if (inPleasantryGracePeriod) {
+      const normalizedMetrics = Object.fromEntries(
+        Object.entries(alignment?.metrics || {}).map(([cap, val]) => [
+          cap,
+          { ...val, score: 3, reason: "Pleasantry grace period (opening social exchange)." },
+        ])
+      );
+
+      alignment = {
+        ...alignment,
+        score: 3,
+        positives: [],
+        misalignments: [],
+        rubricAlignmentFlags: [],
+        metrics: normalizedMetrics,
+      };
+    }
 
     // 2. Detect rep interruption/leave intent and override HCP state if needed
     let overrideExit = false;
@@ -447,28 +429,105 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && priorHcpDialogueTurns === 0
     );
 
-    const buildFirstTurnScenarioFallback = () => {
-      const openingContext = String(
-        scenario.opening_scene
-        || scenario.openingScene
-        || scenario.description
-        || scenario.context
-        || ''
-      ).trim();
-      const openingLower = openingContext.toLowerCase();
-      const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|patients)\b/.test(openingLower);
-      const repPreview = String(repMessage || '').replace(/[?.!]+$/g, '').trim().split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
-      const acknowledgment = repPreview
-        ? `I hear you on ${repPreview}.`
-        : 'Thanks for reaching out.';
+    const scenarioContext = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.trim();
+    const scenarioLower = scenarioContext.toLowerCase();
+    const scenarioPressured = /\b(busy|behind|limited time|short on time|time pressure|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow friction|backlog)\b/.test(scenarioLower);
+    const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
+    const scenarioCabFocus = /\bcab|cabotegravir|injectable|long-acting\b/.test(scenarioLower);
+    const scenarioScreeningFocus = /\bscreening|resistance|adherence|candidacy|criteria\b/.test(scenarioLower);
+    const scenarioMonitoringFocus = /\bmonitoring|follow-up|durability|protocol|renal|labs?\b/.test(scenarioLower);
 
-      if (pressured) {
-        return `${acknowledgment} I'm under time pressure right now, so keep this focused on what matters most for my patients.`;
+    const buildFirstTurnScenarioFallback = () => {
+      const warmGreeting = inPleasantryGracePeriod
+        ? "I'm doing well, thanks for asking."
+        : "Thanks for checking in.";
+
+      if (scenarioPrepFocus && scenarioPressured) {
+        return `${warmGreeting} I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?`;
       }
 
-      return `${acknowledgment} Given the situation in my practice, what specifically do you want to focus on first?`;
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
+      }
+
+      if (scenarioMonitoringFocus) {
+        return `${warmGreeting} I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?`;
+      }
+
+      if (scenarioPressured) {
+        return `${warmGreeting} I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?`;
+      }
+
+      return scenarioPrepFocus
+        ? `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today regarding PrEP access for my patients?`
+        : `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today?`;
     };
 
+    const buildFollowUpScenarioFallback = () => {
+      const repLower = String(repMessage || "").toLowerCase();
+      const mentionsStudy = /\b(study|trial|data|results|evidence|jama|publication|published|findings|methodology|duration)\b/.test(repLower);
+      const mentionsMaterials = /\b(material|materials|brochure|handout|leave-behind|leave behind|resource|resources|printout|one-pager|flyer)\b/.test(repLower);
+
+      if (mentionsStudy) {
+        return "I'd like to know more about the study's methodology. What was the duration of the study?";
+      }
+
+      if (mentionsMaterials && scenarioPrepFocus) {
+        return "Are the materials you'll be leaving going to help my patients understand how to gain access to PrEP without jumping through so many hoops?";
+      }
+
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return "Before we move forward, what practical steps would you recommend so we can confirm candidacy and screening requirements for long-acting cabotegravir?";
+      }
+
+      if (scenarioMonitoringFocus) {
+        return "What is the most practical monitoring plan we can apply consistently without overloading the clinic team?";
+      }
+
+      const repTopicTokens = repLower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today", "patient", "patients"]).has(w))
+        .slice(0, 5);
+      const repTopic = repTopicTokens.join(" ");
+
+      if (scenarioPrepFocus) {
+        return repTopic
+          ? `You mentioned ${repTopic}. Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`
+          : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
+      }
+
+      return repTopic
+        ? `You mentioned ${repTopic}. Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`
+        : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
+    };
+
+    const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
+      const value = String(dialogue || "").toLowerCase();
+      if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
+        return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
+      }
+      if (isFirstTurn && scenarioCabFocus && scenarioScreeningFocus) {
+        return "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.";
+      }
+      if (isFirstTurn && scenarioMonitoringFocus) {
+        return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
+      }
+      if (/methodology|duration|study/.test(value)) {
+        return "The HCP leans forward, scanning the details with focused interest while keeping an eye on the clock.";
+      }
+      if (/materials|jumping through so many hoops|access to prep|access/.test(value)) {
+        return "The HCP sets paperwork aside briefly, concern visible as they focus on practical patient access barriers.";
+      }
+      if (/candidacy|screening|resistance|cabotegravir|long-acting/.test(value)) {
+        return "The HCP scans the screening checklist, then pauses, focused on whether this approach is safe and practical for the right patients.";
+      }
+      return scenarioPressured
+        ? "The HCP keeps one hand on pending paperwork, attentive but clearly pressed for time."
+        : "The HCP listens attentively, maintaining steady eye contact while waiting for a practical answer.";
+    };
+
+    let usedDeterministicFallback = false;
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : "I see. Let me consider that.";
@@ -480,22 +539,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         historyText,
         isOpening: isFirstHcpResponse,
       });
-      const res = await fetch('/api/llm/invoke', {
+      const res = await fetch('/api/roleplay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: systemPrompt, roleplay: true })
+        body: JSON.stringify({
+          mode: 'roleplay',
+          action: 'continue',
+          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
+          history: flattenTurns(prevTurns),
+          userInput: systemPrompt,
+        })
       });
       if (res.ok) {
         const data = await res.json();
         const raw = (data.response || data.text || data.content || '');
         const rawStr = typeof raw === 'string' ? raw : String(raw);
-        // Strip any leaked stage directions (asterisks, parens, brackets)
-        nextHcpDialogue = rawStr
-          .replace(/\*[^*]*\*/g, '')
-          .replace(/\([^)]*\)/g, '')
-          .replace(/\[[^\]]*\]/g, '')
-          .trim()
-          .split('\n')[0];
+        nextHcpDialogue = rawStr.trim().split('\n')[0];
 
         if (
           import.meta.env.DEV
@@ -514,13 +573,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
         }
+      } else {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = isFirstHcpResponse
+          ? buildFirstTurnScenarioFallback()
+          : buildFollowUpScenarioFallback();
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
+      usedDeterministicFallback = true;
+      nextHcpDialogue = isFirstHcpResponse
+        ? buildFirstTurnScenarioFallback()
+        : buildFollowUpScenarioFallback();
     }
 
-    const groundedFallback = buildFirstTurnScenarioFallback();
+    const groundedFallback = isFirstHcpResponse
+      ? buildFirstTurnScenarioFallback()
+      : buildFollowUpScenarioFallback();
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+      usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
 
@@ -550,12 +621,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         repMessage,
         prevTurns
       );
-      // Fallback: if cue is missing, use default cue for state
-      if (!contextualCue) {
-        // Import CUE_BANK and use default for state
-        const cueBank = require('./hcpStateEngine').CUE_BANK;
-        const cues = cueBank[nextHcpState] || cueBank['neutral'];
-        contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
+      // Fallback: keep deterministic cue behavior without external cue bank dependency
+      if (!contextualCue || usedDeterministicFallback) {
+        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
       }
     }
 
@@ -588,25 +656,52 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
     };
 
-    // Audit log turn creation
-    logAuditEvent('turn_created', {
-      turnNumber: nextTurnNumber,
-      hcpState: nextHcpState,
-      cue: contextualCue,
-      dialogue: nextHcpDialogue,
-      repMessage,
-      alignment,
-      feedback: coachingResult,
-    });
+    if (requestId !== activeRequestIdRef.current) {
+      return;
+    }
 
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
-    setTurns([...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn]);
+    setTurns((prevTurnsState) => {
+      const currentRespondingTurn = prevTurnsState[prevTurnsState.length - 1];
+      if (!currentRespondingTurn) return prevTurnsState;
+      if (currentRespondingTurn.turnNumber !== respondingToTurn.turnNumber) return prevTurnsState;
+      if (currentRespondingTurn.repMessage) return prevTurnsState;
 
-    setIsLoading(false);
-    speak(nextHcpDialogue);
+      const replaced = [...prevTurnsState.slice(0, prevTurnsState.length - 1), lockedRespondingTurn];
+      const hasNextTurnAlready = prevTurnsState.some(
+        (t) => t.turnNumber === nextTurn.turnNumber && !t.repMessage && t.hcpDialogueBefore
+      );
+      if (hasNextTurnAlready) {
+        return replaced;
+      }
 
-    // Auto-focus input after HCP responds
-    setTimeout(() => inputRef.current?.focus(), 100);
+      const turnAuditKey = `${nextTurn.turnNumber}::${repMessage}`;
+      if (!loggedTurnKeysRef.current.has(turnAuditKey)) {
+        loggedTurnKeysRef.current.add(turnAuditKey);
+        logAuditEvent('turn_created', {
+          turnNumber: nextTurnNumber,
+          hcpState: nextHcpState,
+          cue: contextualCue,
+          dialogue: nextHcpDialogue,
+          repMessage,
+          alignment,
+          feedback: coachingResult,
+        });
+      }
+
+      return [...replaced, nextTurn];
+    });
+
+      setIsLoading(false);
+      if (requestId === activeRequestIdRef.current) {
+        speak(nextHcpDialogue);
+      }
+
+      // Auto-focus input after HCP responds
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } finally {
+      sendInFlightRef.current = false;
+    }
   };
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -635,12 +730,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const displayItems = displayTurns.flatMap((turn, index) => {
     const items = [];
 
-    if (turn.repMessage) {
-      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
+    if (turn.hcpDialogueBefore) {
+      items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
     }
 
-    if (turn.hcpDialogueBefore || turn.cueBefore) {
-      items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
+    if (turn.repMessage) {
+      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
     }
 
     return items;
@@ -649,15 +744,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = false;
-
-  const renderSafeMessage = (text, source = "unknown") => {
-    try {
-      return sanitizeRenderedMessage(text, source);
-    } catch (err) {
-      console.error("ROLEPLAY_RENDER_SANITIZE_FALLBACK", { source, err });
-      return escapeHTML(String(text || ""));
-    }
-  };
 
   const exportFeedbackPDF = () => {
     if (!feedback) return;
@@ -674,21 +760,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const openCoachingOnSession = () => {
     const allMisalignments = [...new Set(turns.flatMap(t => t.alignment?.misalignments || []))];
     const allPositives = [...new Set(turns.flatMap(t => t.alignment?.positives || []))];
-    const capScores = {};
-    const capCounts = {};
-    turns.forEach(t => {
-      if (!t.alignment?.metrics) return;
-      Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-        capScores[cap] = (capScores[cap] || 0) + val.score;
-        capCounts[cap] = (capCounts[cap] || 0) + 1;
-      });
-    });
-    const avgCapabilityScores = Object.fromEntries(
-      Object.entries(capScores).map(([cap, total]) => [cap, Math.round((total / capCounts[cap]) * 10) / 10])
+    const latestScoredTurn = [...turns].reverse().find((t) => t.alignment?.metrics);
+    const capabilityScores = Object.fromEntries(
+      Object.entries(latestScoredTurn?.alignment?.metrics || {}).map(([cap, val]) => [cap, val.score])
     );
-    const overallScore = turns.filter(t => t.alignment).length > 0
-      ? Math.round(turns.filter(t => t.alignment).reduce((s, t) => s + t.alignment.score, 0) / turns.filter(t => t.alignment).length * 10) / 10
-      : null;
+    const overallScore = latestScoredTurn?.alignment?.score ?? null;
 
     const sessionContext = encodeURIComponent(JSON.stringify({
       scenarioTitle: scenario.title,
@@ -696,7 +772,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       specialty: scenario.specialty,
       misalignments: allMisalignments,
       positives: allPositives,
-      capabilityScores: avgCapabilityScores,
+      capabilityScores,
       overallScore,
       source: "roleplay_end_feedback",
     }));
@@ -713,39 +789,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
         .join("\n");
 
-      // Build turn-by-turn scoring summary (per-capability averages)
       const scoredTurns = turns.filter(t => t.alignment?.metrics);
-      const capAccum = {};
-      scoredTurns.forEach(t => {
-        Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-          if (!capAccum[cap]) capAccum[cap] = { total: 0, count: 0 };
-          capAccum[cap].total += val.score;
-          capAccum[cap].count += 1;
-        });
-      });
-      const avgCapScores = Object.fromEntries(
-        Object.entries(capAccum).map(([cap, v]) => [cap, (v.total / v.count).toFixed(1)])
-      );
-      // Build sub-metric detail for richer coaching context
-      const subMetricAccum = {};
-      scoredTurns.forEach(t => {
-        Object.entries(t.alignment.metrics).forEach(([cap, val]) => {
-          if (!val.subScores) return;
-          Object.entries(val.subScores).forEach(([sub, score]) => {
-            if (!subMetricAccum[cap]) subMetricAccum[cap] = {};
-            if (!subMetricAccum[cap][sub]) subMetricAccum[cap][sub] = { total: 0, count: 0 };
-            subMetricAccum[cap][sub].total += score;
-            subMetricAccum[cap][sub].count += 1;
-          });
-        });
-      });
-      const capSummary = Object.entries(avgCapScores)
-        .map(([cap, score]) => {
-          const subs = subMetricAccum[cap];
-          const subLine = subs
-            ? Object.entries(subs).map(([s, v]) => `  ↳ ${s.replace(/_/g, ' ')}: ${(v.total / v.count).toFixed(1)}/5`).join('\n')
-            : '';
-          return `• ${cap.replace(/_/g, ' ')}: ${score}/5${subLine ? '\n' + subLine : ''}`;
+      const latestScoredTurn = scoredTurns.length > 0 ? scoredTurns[scoredTurns.length - 1] : null;
+      const capSummary = Object.entries(latestScoredTurn?.alignment?.metrics || {})
+        .map(([cap, metric]) => {
+          const subLine = Object.entries(metric.subScores || {})
+            .map(([s, score]) => `  ↳ ${s.replace(/_/g, ' ')}: ${score}`)
+            .join('\n');
+          return `• ${cap.replace(/_/g, ' ')}${subLine ? '\n' + subLine : ''}`;
         })
         .join('\n');
 
@@ -758,28 +809,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
         : '';
 
-      const overallScore = scoredTurns.length > 0
-        ? Math.round((scoredTurns.reduce((sum, t) => sum + t.alignment.score, 0) / scoredTurns.length) * 10) / 10
-        : null;
-
-      const avgCapScoresNumeric = Object.fromEntries(
-        Object.entries(capAccum).map(([cap, v]) => [cap, v.total / v.count])
-      );
-
-      const sortedCaps = Object.entries(avgCapScoresNumeric)
-        .map(([id, score]) => ({ id, score }))
-        .sort((a, b) => b.score - a.score);
-
-      const _topStrengths = sortedCaps.slice(0, 3);
-      const _topImprovements = [...sortedCaps].sort((a, b) => a.score - b.score).slice(0, 3);
-
-      // Build deterministic report header with locked scores
-      // Restore structuredPrompt definition for LLM feedback generation
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nOverall deterministic score: ${overallScore ?? 0}/5\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const res = await fetch('/api/llm/invoke', {
+      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
+      const res = await fetch('/api/roleplay', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: structuredPrompt, max_tokens: 1500 })
+        body: JSON.stringify({
+          mode: 'roleplay',
+          action: 'end',
+          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
+          history: turns,
+          userInput: structuredPrompt,
+        })
       });
 
       if (res.ok) {
@@ -946,15 +986,15 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
                         <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
-                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{descriptionText}</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
                       <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
                       {openingScene ? (
-                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{openingScene}</p>
                       ) : (
                         <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
                       )}
@@ -1001,7 +1041,7 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 flex flex-col gap-4">
 
                 {turns.length === 0 && isLoading && (
                   <div className="flex justify-center py-8">
@@ -1049,26 +1089,26 @@ ${actionText}`;
 
                   if (item.kind === "rep") {
                     return (
-                      <div key={item.key} className="flex flex-col items-end gap-1">
-                        <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
-                          {renderSafeMessage(turn.repMessage, "user-message")}
+                      <div key={item.key} className="ml-auto w-fit max-w-[80%] flex flex-col items-stretch gap-1">
+                        <div className="w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
+                          {sanitizeRenderedMessage(turn.repMessage, "user-message")}
                         </div>
                         {turn.alignment && (
                           <>
-                            <div className={`px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                            <div className={`w-full px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
                               {turn.alignment.misalignments.length > 0 && (
-                                <span className="min-w-0 whitespace-normal break-words">⚠ {turn.alignment.misalignments[0]}</span>
+                                <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">⚠ {turn.alignment.misalignments[0]}</div>
                               )}
                               {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
-                                <span className="text-green-600 min-w-0 whitespace-normal break-words">✓ {turn.alignment.positives[0]}</span>
+                                <div className="mt-0.5 max-w-[420px] break-words whitespace-normal text-green-600">✓ {turn.alignment.positives[0]}</div>
                               )}
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
-                              <div className="w-full px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic whitespace-normal break-words">
+                              <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
                                 {turn.alignment.rubricAlignmentFlags[0]}
                               </div>
                             )}
@@ -1080,19 +1120,19 @@ ${actionText}`;
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
+                      {turn.cueBefore && (
+                        <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
+                          <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                          </p>
+                        </div>
+                      )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-snug bg-slate-100 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
-                        </div>
-                      )}
-                      {turn.cueBefore && (
-                        <div className="pl-1">
-                          <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
-                          </p>
                         </div>
                       )}
                     </div>
@@ -1127,10 +1167,9 @@ ${actionText}`;
                   onSubmit={e => {
                     e.preventDefault();
                     if (isLoading || isEnding) return;
-                    const message = normalizeRepQuestionPunctuation(input);
+                    const message = sanitizeUserMessage(input);
                     if (!message) return;
-                    setInput(""); // clear input immediately
-                    sendMessage();
+                    sendMessage(input);
                   }}
                   className="flex gap-2 items-center"
                 >
@@ -1146,12 +1185,9 @@ ${actionText}`;
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
+                          // Single submit path: let <form onSubmit> handle send to avoid duplicate turn creation.
                           e.preventDefault();
-                          if (isLoading || isEnding) return;
-                          const message = input.trim();
-                          if (!message) return;
-                          setInput("");
-                          sendMessage();
+                          e.currentTarget.form?.requestSubmit();
                         }
                       }}
                         placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
@@ -1174,7 +1210,7 @@ ${actionText}`;
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!input.trim() && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
+                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
@@ -1285,18 +1321,4 @@ function logAuditEvent(eventType, details) {
   // });
   // For demo, log to console
   console.log(`[AUDIT] ${eventType}`, details);
-}
-function normalizeRepQuestionPunctuation(rawText) {
-  const text = String(rawText || '').trim();
-  if (!text) return '';
-
-  const withoutTrailingPunctuation = text.replace(/[?!.,;:]+$/g, '').trim();
-  const containsQuestionSignal = /\?|\b(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/i.test(text);
-
-  if (containsQuestionSignal) {
-    const noInternalQuestionMarks = withoutTrailingPunctuation.replace(/\?/g, '').trim();
-    return `${noInternalQuestionMarks}?`;
-  }
-
-  return /[.!]$/.test(text) ? text : `${withoutTrailingPunctuation}.`;
 }
