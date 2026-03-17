@@ -321,50 +321,16 @@ function buildRepGuidance(turn, allTurns = []) {
   return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
 }
 
-function extractMeaningfulFragment(text, fallbackLabel) {
-  const value = String(text || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!value) return fallbackLabel;
-  return value.length > 110 ? `${value.slice(0, 107).trimEnd()}…` : value;
+function buildOpeningTurnGuidance(turn, scenario) {
+  if (!turn || turn.turnNumber !== 0) return null;
+
+  const openingScene = String(scenario?.opening_scene || scenario?.openingScene || "").trim();
+  const objective = String(scenario?.objective || scenario?.goal || "").trim();
+  const openingSnippet = openingScene ? openingScene.split(/\s+/).slice(0, 12).join(" ") : "the opening scene";
+  const objectiveSnippet = objective ? objective.split(/\s+/).slice(0, 12).join(" ") : "the session objective";
+
+  return `⚠ Opening-turn alignment: Anchor your next response to "${openingSnippet}" and connect it to "${objectiveSnippet}" before adding product detail.`;
 }
-
-function composeContextAwareGuidance(turn, scenario = {}, baseGuidance = "") {
-  const scenarioDescription = extractMeaningfulFragment(
-    scenario?.description || scenario?.context,
-    "the scenario description",
-  );
-  const openingScene = extractMeaningfulFragment(
-    scenario?.opening_scene || scenario?.openingScene,
-    "the opening scene",
-  );
-  const hcpLine = extractMeaningfulFragment(turn?.hcpDialogueBefore, "the latest HCP line");
-  const repLine = extractMeaningfulFragment(turn?.repMessage, "your latest response");
-
-  return `${baseGuidance} Context check: In this scenario (${scenarioDescription}) and opening scene (${openingScene}), tie your next line directly to HCP signal "${hcpLine}" and refine your prior point "${repLine}".`;
-}
-
-function buildContextAwareGuidance(turn, allTurns = [], scenario = {}) {
-  const baseGuidance = buildRepGuidance(turn, allTurns);
-  if (!baseGuidance) return null;
-
-  const candidate = composeContextAwareGuidance(turn, scenario, baseGuidance);
-  const recentGuidanceWindow = allTurns
-    .filter((t) => t.turnNumber < turn.turnNumber && t.repMessage)
-    .slice(-15)
-    .map((t) => {
-      const priorBase = buildRepGuidance(t, allTurns);
-      if (!priorBase) return "";
-      return composeContextAwareGuidance(t, scenario, priorBase);
-    })
-    .map((tip) => String(tip).trim())
-    .filter(Boolean);
-
-  if (!recentGuidanceWindow.includes(candidate)) return candidate;
-
-  return `${candidate} Priority now: anchor to turn ${turn.turnNumber} specifics before advancing.`;
-}
-
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -815,6 +781,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "The HCP listens attentively, maintaining steady eye contact while waiting for a practical answer.";
     };
 
+    let usedDeterministicFallback = false;
     nextHcpDialogue = "";
 
     try {
@@ -848,7 +815,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
         }
 
-        nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue).trim());
+        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
 
         if (
           import.meta.env.DEV
@@ -858,12 +825,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
         }
       } else {
+        usedDeterministicFallback = true;
         nextHcpDialogue = isFirstHcpResponse
           ? buildFirstTurnScenarioFallback()
           : buildFollowUpScenarioFallback();
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
+      usedDeterministicFallback = true;
       nextHcpDialogue = isFirstHcpResponse
         ? buildFirstTurnScenarioFallback()
         : buildFollowUpScenarioFallback();
@@ -881,18 +850,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ? buildFirstTurnScenarioFallback()
       : buildNonRepeatingScenarioFallback(previousHcpDialogue);
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage) && String(nextHcpDialogue || "").split(/\s+/).length < 6) {
-      nextHcpDialogue = hardenTextSurface(groundedFallback);
+      usedDeterministicFallback = true;
+      nextHcpDialogue = groundedFallback;
     }
 
     if (!isFirstHcpResponse) {
       const nextNorm = String(nextHcpDialogue || "").trim().toLowerCase();
       const prevNorm = String(previousHcpDialogue || "").trim().toLowerCase();
       if (nextNorm && prevNorm && nextNorm === prevNorm) {
-        nextHcpDialogue = hardenTextSurface(buildNonRepeatingScenarioFallback(previousHcpDialogue));
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildNonRepeatingScenarioFallback(previousHcpDialogue);
       }
     }
-
-    nextHcpDialogue = hardenTextSurface(nextHcpDialogue);
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
     // If the HCP disagreed with the rep's suggestion, flag this for the NEXT turn's temperature escalation
@@ -909,7 +878,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front.';
+      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
@@ -1221,8 +1190,8 @@ ${actionText}`;
 
   const flatMessages = flattenTurns(turns);
 
-  const renderTabPills = (containerClassName = "") => (
-    <div className={`flex gap-1 px-2 py-2 flex-shrink-0 bg-transparent overflow-x-auto justify-center ${containerClassName}`}>
+  const renderTabPills = () => (
+    <div className="flex gap-1 px-3 md:px-4 py-2.5 flex-shrink-0 bg-white overflow-x-auto">
       {([
         { id: "chat", label: "Live Chat", icon: MessageSquare },
         { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
@@ -1261,7 +1230,7 @@ ${actionText}`;
         <div className="flex items-start justify-between gap-3 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-[18px] md:text-[21px] leading-snug">{scenario.title}</h2>
+              <h2 className="font-bold text-slate-900 text-[18px] md:text-[22px] leading-snug">{scenario.title}</h2>
               <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${difficultyStyle}`}>{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
@@ -1305,11 +1274,12 @@ ${actionText}`;
                 </div>
               )}
 
-              <div className="lg:col-span-4">
-                <div className="mb-1.5 rounded-xl border border-slate-200 bg-white/90">
-                  {renderTabPills("py-1")}
+              <div className="lg:col-span-4 rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3">
+                <div className="mb-2.5 flex justify-center">
+                  <div className="rounded-xl border border-slate-200 bg-white/90 min-h-[42px] flex items-center justify-center w-full">
+                    {renderTabPills()}
+                  </div>
                 </div>
-                <div className="rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3">
                 <div className="flex items-start gap-3">
                   <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0">
@@ -1327,15 +1297,14 @@ ${actionText}`;
                     </ul>
                   </div>
                 )}
-                </div>
               </div>
             </div>
           </div>
         )}
 
         {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 py-1 border-b bg-white flex-shrink-0">
-            <div className="rounded-xl border border-slate-200 bg-white min-h-[42px] flex items-center">
+          <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
+            <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
               {renderTabPills()}
             </div>
           </div>
@@ -1396,12 +1365,12 @@ ${actionText}`;
 
                   if (item.kind === "rep") {
                     return (
-                      <div key={item.key} className="ml-auto w-full max-w-[96%] lg:max-w-[98%] flex flex-col items-end gap-1">
-                        <div className="flex items-start justify-end w-full gap-2">
-                          <div className="w-fit max-w-[min(100%,calc(100%-3rem))] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
+                      <div key={item.key} className="ml-auto w-full max-w-[96%] flex flex-col items-stretch gap-1">
+                        <div className="flex items-start justify-end gap-2 w-full">
+                          <div className="w-8 h-8 rounded-full bg-teal-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1">REP</div>
+                          <div className="rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium max-w-[94%]" style={{ background: "#39ACAC", color: "white" }}>
                             {sanitizeRenderedMessage(turn.repMessage, "user-message")}
                           </div>
-                          <div className="w-8 h-8 rounded-full bg-[#1A334D] text-white flex items-center justify-center text-[10px] font-extrabold flex-shrink-0 mt-1">REP</div>
                         </div>
                         {turn.alignment && (
                           <>
@@ -1409,7 +1378,7 @@ ${actionText}`;
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{buildContextAwareGuidance(turn, turns, scenario)}</div>
+                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{openingTurnGuidance || buildRepGuidance(turn, turns)}</div>
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
                               <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
@@ -1432,9 +1401,9 @@ ${actionText}`;
                         </div>
                       )}
                       {turn.hcpDialogueBefore && (
-                        <div className="flex items-start w-full">
+                        <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[min(100%,calc(100%-2.75rem))] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="max-w-[96%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
