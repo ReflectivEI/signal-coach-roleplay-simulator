@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dumbbell, Sparkles, Target, Info, Loader2, Wand2, MessageSquare, FileText, Lightbulb } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { formatScenarioText } from "../lib/utils";
 
 const TOPICS = [
   { id: "objection", label: "Objection Handling", icon: MessageSquare },
@@ -50,13 +49,10 @@ Make questions practical and scenario-based where possible.`;
       if (res.ok) {
         const data = await res.json();
         try {
-          let jsonStr = typeof data.response === 'string' ? data.response : String(data.response);
-          // Strip markdown code block if present
-          jsonStr = jsonStr.replace(/^```json\n?|\n?```$/g, '').trim();
+          const jsonStr = typeof data.response === 'string' ? data.response : String(data.response);
           const parsed = JSON.parse(jsonStr);
           setQuestions(Array.isArray(parsed) ? parsed : []);
-        } catch (e) {
-          console.error('Quiz parse error:', e);
+        } catch {
           setQuestions([]);
         }
       } else {
@@ -156,7 +152,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <Button
               className="w-full bg-teal-500 hover:bg-teal-600"
               onClick={generateQuiz}
-              disabled={isGenerating}
+              disabled={isGenerating || isGeneratingScenario}
             >
               {isGenerating ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</>
@@ -179,7 +175,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <Button
               className="w-full bg-teal-500 hover:bg-teal-600"
               onClick={generateScenario}
-              disabled={isGeneratingScenario}
+              disabled={isGenerating || isGeneratingScenario}
             >
               {isGeneratingScenario ? (
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</>
@@ -200,7 +196,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
               <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
             </div>
             <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
-              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
+              <ReactMarkdown>{scenarioText}</ReactMarkdown>
             </div>
           </CardContent>
         </Card>
