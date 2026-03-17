@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +24,10 @@ const TOPICS = [
 ];
 
 function safeParseJsonArray(raw) {
-  const text = String(raw || "").replace(/^```json\n?|\n?```$/g, "").trim();
+  const text = String(raw || "")
+    .replace(/^```json\n?|\n?```$/g, "")
+    .trim();
+
   try {
     const parsed = JSON.parse(text);
     return Array.isArray(parsed) ? parsed : [];
@@ -34,7 +36,8 @@ function safeParseJsonArray(raw) {
     const last = text.lastIndexOf("]");
     if (first >= 0 && last > first) {
       try {
-        return JSON.parse(text.slice(first, last + 1));
+        const sliced = JSON.parse(text.slice(first, last + 1));
+        return Array.isArray(sliced) ? sliced : [];
       } catch {
         return [];
       }
@@ -61,11 +64,24 @@ function normalizeQuizQuestions(rawQuestions = []) {
       if (correctIndex === null && typeof q.correctAnswer === "string") {
         const clean = q.correctAnswer.trim();
         const letterMatch = clean.match(/^[A-Da-d]$/);
-        if (letterMatch) correctIndex = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
-        else correctIndex = options.findIndex((o) => o.toLowerCase() === clean.toLowerCase());
+        if (letterMatch) {
+          correctIndex = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
+        } else {
+          correctIndex = options.findIndex(
+            (o) => o.toLowerCase() === clean.toLowerCase()
+          );
+        }
       }
 
-      if (!question || options.length < 4 || correctIndex == null || correctIndex < 0 || correctIndex > 3) return null;
+      if (
+        !question ||
+        options.length < 4 ||
+        correctIndex == null ||
+        correctIndex < 0 ||
+        correctIndex > 3
+      ) {
+        return null;
+      }
 
       return {
         question,
@@ -80,12 +96,17 @@ function normalizeQuizQuestions(rawQuestions = []) {
 
 function normalizeLLMText(data = {}) {
   const raw = data?.response ?? data?.text ?? data?.content ?? "";
-  if (typeof raw === "string") return raw.replace(/^```[\w]*\n?|\n?```$/g, "").trim();
+
+  if (typeof raw === "string") {
+    return raw.replace(/^```[\w]*\n?|\n?```$/g, "").trim();
+  }
+
   if (raw && typeof raw === "object") {
     if (typeof raw.scenario === "string") return raw.scenario.trim();
     if (typeof raw.content === "string") return raw.content.trim();
     return JSON.stringify(raw, null, 2).trim();
   }
+
   return String(raw || "").trim();
 }
 
@@ -98,6 +119,13 @@ export default function Exercises() {
   const [scenarioText, setScenarioText] = useState(null);
   const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
 
+  const selectedTopicLabel = useMemo(
+    () =>
+      TOPICS.find((t) => t.id === selectedTopic)?.label ||
+      "Signal Intelligence and Life Sciences Sales",
+    [selectedTopic]
+  );
+
   const resetGeneratedContent = () => {
     setQuestions([]);
     setScenarioText(null);
@@ -105,19 +133,11 @@ export default function Exercises() {
     setShowResults({});
   };
 
-  const selectedTopicLabel = useMemo(
-    () => TOPICS.find((t) => t.id === selectedTopic)?.label || "Signal Intelligence and Life Sciences Sales",
-    [selectedTopic]
-  );
-
   const generateQuiz = async () => {
-    if (!selectedTopic) {
-      setQuestions([]);
-      return;
-    }
     setIsGenerating(true);
     setSelectedAnswers({});
     setShowResults({});
+
     try {
       const prompt = `Generate exactly 5 multiple-choice quiz questions for pharmaceutical sales reps on this focus topic: "${selectedTopicLabel}".
 
@@ -138,10 +158,10 @@ Return ONLY valid JSON array with this exact schema:
   }
 ]`;
 
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1400 })
+      const res = await fetch("/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, max_tokens: 1400 }),
       });
 
       if (!res.ok) {
@@ -154,7 +174,7 @@ Return ONLY valid JSON array with this exact schema:
       const normalized = normalizeQuizQuestions(parsed);
       setQuestions(normalized);
     } catch (err) {
-      console.error('Quiz generation error:', err);
+      console.error("Quiz generation error:", err);
       setQuestions([]);
     } finally {
       setIsGenerating(false);
@@ -162,11 +182,8 @@ Return ONLY valid JSON array with this exact schema:
   };
 
   const generateScenario = async () => {
-    if (!selectedTopic) {
-      setScenarioText(null);
-      return;
-    }
     setIsGeneratingScenario(true);
+
     try {
       const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
 
@@ -178,20 +195,23 @@ Return ONLY valid JSON array with this exact schema:
 6. Best approach and expected outcome
 
 Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1000 })
+
+      const res = await fetch("/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, max_tokens: 1000 }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const scenario = normalizeLLMText(data);
-        setScenarioText(scenario || "Unable to generate scenario. Please try again.");
-      } else {
+
+      if (!res.ok) {
         setScenarioText("Unable to generate scenario. Please try again.");
+        return;
       }
+
+      const data = await res.json();
+      const scenario = normalizeLLMText(data);
+      setScenarioText(scenario || "Unable to generate scenario. Please try again.");
     } catch (err) {
-      console.error('Scenario generation error:', err);
+      console.error("Scenario generation error:", err);
       setScenarioText("Unable to generate scenario. Please try again.");
     } finally {
       setIsGeneratingScenario(false);
@@ -232,10 +252,11 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <button
               key={t.id}
               onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
-                ? "bg-teal-500 text-white border-teal-500"
-                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
-                }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                selectedTopic === t.id
+                  ? "bg-teal-500 text-white border-teal-500"
+                  : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+              }`}
             >
               <t.icon className="w-3 h-3" />
               {t.label}
@@ -266,7 +287,15 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
           </CardHeader>
           <CardContent className="mt-auto pt-0">
             <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateQuiz} disabled={isGenerating}>
-              {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" /> Generate Quiz
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -295,7 +324,15 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
           </CardHeader>
           <CardContent className="mt-auto pt-0">
             <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateScenario} disabled={isGeneratingScenario}>
-              {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
+              {isGeneratingScenario ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4 mr-2" /> Generate Scenario
+                </>
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -332,7 +369,9 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             return (
               <Card key={qIdx} className="overflow-hidden border-gray-200 shadow-sm">
                 <CardContent className="p-5">
-                  <p className="font-semibold text-gray-900 mb-4">{qIdx + 1}. {q.question}</p>
+                  <p className="font-semibold text-gray-900 mb-4">
+                    {qIdx + 1}. {q.question}
+                  </p>
                   <div className="space-y-2">
                     {q.options.map((opt, aIdx) => {
                       const isSelected = selectedIdx === aIdx;
@@ -367,7 +406,13 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
                   </div>
 
                   {showResults[qIdx] && q.explanation && (
-                    <div className={`mt-4 p-3 rounded-lg border text-sm italic ${isCorrectSelected ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>
+                    <div
+                      className={`mt-4 p-3 rounded-lg border text-sm italic ${
+                        isCorrectSelected
+                          ? "bg-green-50 border-green-200 text-green-800"
+                          : "bg-red-50 border-red-200 text-red-700"
+                      }`}
+                    >
                       {q.explanation}
                     </div>
                   )}
