@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
+import { ChevronRight, ChevronDown, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 // ...existing code...
@@ -18,7 +18,7 @@ const modules = [
     iconBg: "bg-blue-100 text-blue-600",
     category: "Discovery",
     tagline: "Signal Awareness — Question Quality",
-    capabilities: ["question_quality"],
+    capabilities: ["signal_awareness"],
     definition: "The ability to ask questions that are contextually grounded and move the conversation forward. Effective questions demonstrate that the rep is listening to what is happening right now, not reciting a script.",
     keyBehaviors: [
       { label: "Contextual Relevance", desc: "Ask questions that directly reflect what is happening in the current conversation — not generic discovery templates." },
@@ -32,7 +32,7 @@ const modules = [
       { score: "1", desc: "Question is scripted, off-topic, or ignores an obvious cue from the customer." },
     ],
     exercises: ["Practice identifying contextual cues before asking your next question", "Record a call and audit: did each question follow a signal?"],
-    relatedCapabilities: ["question_quality", "listening_responsiveness", "customer_engagement_cues"],
+    relatedCapabilities: ["signal_awareness", "signal_interpretation", "customer_engagement"],
     aiCoachPrompt: "Provide personalized advice for applying Signal Awareness (Question Quality) in pharma sales. Focus on how to craft contextual, signal-triggered questions that move conversations forward.",
   },
   {
@@ -42,7 +42,7 @@ const modules = [
     iconBg: "bg-teal-100 text-teal-600",
     category: "Stakeholder",
     tagline: "Customer Engagement — Engagement Cues",
-    capabilities: ["customer_engagement_cues", "listening_responsiveness"],
+    capabilities: ["customer_engagement", "signal_interpretation"],
     definition: "Understanding the full healthcare decision ecosystem — identifying who influences prescribing behavior, who holds authority, and how to calibrate your approach based on the HCP category and influence driver.",
     keyBehaviors: [
       { label: "HCP Category Identification", desc: "Distinguish between KOL/Thought Leaders, Prescribers/Treaters, Non-Prescribing Influencers, and Low-Engagement HCPs." },
@@ -56,7 +56,7 @@ const modules = [
       { score: "1", desc: "Rep ignores engagement cues or applies a one-size-fits-all approach to a clearly differentiated stakeholder." },
     ],
     exercises: ["Map the decision-making unit for a current territory account", "Identify the influence driver of your next 3 HCP calls before entering the office"],
-    relatedCapabilities: ["customer_engagement_cues", "listening_responsiveness", "adaptability"],
+    relatedCapabilities: ["customer_engagement", "signal_interpretation", "adaptive_response"],
     aiCoachPrompt: "Provide personalized advice for applying Stakeholder Mapping in pharma sales. Focus on identifying HCP types and influence drivers, and tailoring your engagement approach.",
   },
   {
@@ -66,7 +66,7 @@ const modules = [
     iconBg: "bg-cyan-100 text-cyan-600",
     category: "Clinical",
     tagline: "Value Connection — Value Framing",
-    capabilities: ["making_it_matter"],
+    capabilities: ["value_connection"],
     definition: "The ability to present clinical data in a way that is directly relevant to what the customer cares about and translates into a clear patient or practice outcome — not just reciting study results.",
     keyBehaviors: [
       { label: "Customer Relevance Alignment", desc: "Connect the clinical data to the specific priorities the HCP has already expressed — not generic efficacy messages." },
@@ -80,7 +80,7 @@ const modules = [
       { score: "1", desc: "Data is delivered without connection to any customer priority; feels like a product monologue." },
     ],
     exercises: ["Reframe a clinical data point into an outcome statement for three different HCP profiles", "Practice the 'So what for your patients?' bridge after every efficacy claim"],
-    relatedCapabilities: ["making_it_matter", "question_quality", "listening_responsiveness"],
+    relatedCapabilities: ["value_connection", "signal_awareness", "signal_interpretation"],
     aiCoachPrompt: "Provide personalized advice for applying Clinical Evidence (Value Framing) in pharma sales. Focus on connecting clinical data to customer priorities and translating evidence into patient outcomes.",
   },
   {
@@ -90,7 +90,7 @@ const modules = [
     iconBg: "bg-orange-100 text-orange-600",
     category: "Objection",
     tagline: "Objection Navigation — Objection Handling",
-    capabilities: ["objection_handling"],
+    capabilities: ["objection_navigation"],
     definition: "Responding to resistance or concerns in a way that keeps the conversation productive. Effective objection handling is non-defensive, demonstrates that the concern was heard, and engages the content of the objection constructively.",
     keyBehaviors: [
       { label: "Non-Defensive Response", desc: "When resistance appears, remain open and composed — do not become defensive or dismissive. Acknowledge before responding." },
@@ -104,7 +104,7 @@ const modules = [
       { score: "1", desc: "Rep skips over the concern, becomes defensive, or pivots immediately without acknowledgment." },
     ],
     exercises: ["Role-play with a colleague who raises three different objection types — practice the acknowledge-engage-redirect sequence", "Audit your last 5 objection moments: did you acknowledge before advancing?"],
-    relatedCapabilities: ["objection_handling", "listening_responsiveness", "adaptability"],
+    relatedCapabilities: ["objection_navigation", "signal_interpretation", "adaptive_response"],
     aiCoachPrompt: "Provide personalized advice for applying Objection Handling in pharma sales. Focus on non-defensive responses, acknowledging concerns, and redirecting conversations productively.",
   },
   {
@@ -114,7 +114,7 @@ const modules = [
     iconBg: "bg-green-100 text-green-600",
     category: "Closing",
     tagline: "Commitment Generation — Commitment Gaining",
-    capabilities: ["commitment_gaining"],
+    capabilities: ["commitment_generation"],
     definition: "Guiding the conversation toward a clear, voluntary next step owned by the customer. Effective closing is not about pressure — it is about ensuring Next-Step Clarity and Customer Ownership emerge naturally from the conversation.",
     keyBehaviors: [
       { label: "Next-Step Clarity", desc: "The next action should be specific and actionable — not vague ('I'll think about it') but concrete ('I'll try it with my next eligible patient')." },
@@ -128,7 +128,7 @@ const modules = [
       { score: "1", desc: "No next step is established, or close is attempted before value/readiness is present." },
     ],
     exercises: ["Practice summarizing the conversation into a 'natural next step' at the end of each role-play", "Identify the readiness signal in a past transcript — where was the window, and did you take it?"],
-    relatedCapabilities: ["commitment_gaining", "conversation_control", "listening_responsiveness"],
+    relatedCapabilities: ["commitment_generation", "conversation_management", "signal_interpretation"],
     aiCoachPrompt: "Provide personalized advice for applying Closing Techniques (Commitment Generation) in pharma sales. Focus on creating specific next steps, recognizing readiness signals, and ensuring customer ownership.",
   },
   {

@@ -5,7 +5,7 @@
 
 import {
   MessageCircle, Users, FileText, ShieldAlert, CheckCircle2,
-  Brain, TrendingUp, Zap,
+  Brain, BookOpen, Lightbulb, Target, TrendingUp, Zap,
   Eye, Ear, Heart, Compass, RefreshCw, Star
 } from "lucide-react";
 
@@ -17,7 +17,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Craft signal-triggered questions",
     icon: MessageCircle,
     iconBg: "bg-blue-100 text-blue-600",
-    capability: "question_quality",
+    capability: "signal_awareness",
     capability_label: "Signal Awareness",
     level: "Foundation",
     duration: "35 min",
@@ -39,7 +39,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Question is relevant but not clearly tied to what just happened." },
       { score: 1, desc: "Question is scripted, off-topic, or ignores an obvious cue." }
     ],
-    related: ["listening_responsiveness", "customer_engagement_cues"]
+    related: ["signal_interpretation", "customer_engagement"]
   },
   {
     id: "contextual_awareness",
@@ -47,7 +47,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Read the room before you speak",
     icon: Eye,
     iconBg: "bg-sky-100 text-sky-600",
-    capability: "question_quality",
+    capability: "signal_awareness",
     capability_label: "Signal Awareness",
     level: "Advanced",
     duration: "25 min",
@@ -68,7 +68,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep acknowledges context but doesn't explicitly calibrate approach to it." },
       { score: 1, desc: "Rep ignores available context and opens with a scripted approach regardless." }
     ],
-    related: ["question_quality", "listening_responsiveness"]
+    related: ["signal_awareness", "signal_interpretation"]
   },
 
   // ── SIGNAL INTERPRETATION ─────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Hear what's behind the words",
     icon: Ear,
     iconBg: "bg-indigo-100 text-indigo-600",
-    capability: "listening_responsiveness",
+    capability: "signal_interpretation",
     capability_label: "Signal Interpretation",
     level: "Foundation",
     duration: "40 min",
@@ -100,7 +100,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep listens but responds generically rather than to the specific signal." },
       { score: 1, desc: "Rep talks over or ignores HCP signals — responds from script not from conversation." }
     ],
-    related: ["question_quality", "adaptability"]
+    related: ["signal_awareness", "adaptive_response"]
   },
   {
     id: "stakeholder_mapping",
@@ -108,7 +108,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Identify HCP type and influence driver",
     icon: Users,
     iconBg: "bg-teal-100 text-teal-600",
-    capability: "listening_responsiveness",
+    capability: "signal_interpretation",
     capability_label: "Signal Interpretation",
     level: "Intermediate",
     duration: "45 min",
@@ -129,7 +129,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep engages professionally but applies one-size-fits-all approach." },
       { score: 1, desc: "Rep ignores stakeholder signals or misidentifies type and applies wrong approach." }
     ],
-    related: ["listening_responsiveness", "customer_engagement_cues", "adaptability"]
+    related: ["signal_interpretation", "customer_engagement", "adaptive_response"]
   },
 
   // ── VALUE CONNECTION ──────────────────────────────────────────────────────────
@@ -139,7 +139,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Make data meaningful to this HCP",
     icon: FileText,
     iconBg: "bg-cyan-100 text-cyan-600",
-    capability: "making_it_matter",
+    capability: "value_connection",
     capability_label: "Value Connection",
     level: "Foundation",
     duration: "40 min",
@@ -161,7 +161,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Data is accurate and relevant but not personalized to this customer's expressed needs." },
       { score: 1, desc: "Data is delivered without connection to any customer priority — feels like a monologue." }
     ],
-    related: ["making_it_matter", "question_quality", "listening_responsiveness"]
+    related: ["value_connection", "signal_awareness", "signal_interpretation"]
   },
   {
     id: "outcome_translation",
@@ -169,7 +169,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Bridge data to patient impact",
     icon: Heart,
     iconBg: "bg-rose-100 text-rose-600",
-    capability: "making_it_matter",
+    capability: "value_connection",
     capability_label: "Value Connection",
     level: "Advanced",
     duration: "30 min",
@@ -190,7 +190,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Outcome is mentioned but stays in clinical-stat language without patient-level translation." },
       { score: 1, desc: "Outcome is a data dump with no patient or practice relevance framing." }
     ],
-    related: ["making_it_matter", "commitment_gaining"]
+    related: ["value_connection", "commitment_generation"]
   },
 
   // ── CUSTOMER ENGAGEMENT ───────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Read and respond to engagement drops",
     icon: TrendingUp,
     iconBg: "bg-amber-100 text-amber-600",
-    capability: "customer_engagement_cues",
+    capability: "customer_engagement",
     capability_label: "Customer Engagement",
     level: "Foundation",
     duration: "30 min",
@@ -221,7 +221,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep notices engagement change but response is delayed or generic." },
       { score: 1, desc: "Rep continues same approach regardless of engagement level — misses clear signals." }
     ],
-    related: ["customer_engagement_cues", "adaptability", "listening_responsiveness"]
+    related: ["customer_engagement", "adaptive_response", "signal_interpretation"]
   },
   {
     id: "participation_amplification",
@@ -229,7 +229,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Turn HCP input into momentum",
     icon: Star,
     iconBg: "bg-yellow-100 text-yellow-600",
-    capability: "customer_engagement_cues",
+    capability: "customer_engagement",
     capability_label: "Customer Engagement",
     level: "Intermediate",
     duration: "25 min",
@@ -250,7 +250,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep acknowledges HCP input but transitions quickly to own agenda." },
       { score: 1, desc: "Rep ignores HCP contribution and redirects to their agenda immediately." }
     ],
-    related: ["customer_engagement_cues", "listening_responsiveness", "commitment_gaining"]
+    related: ["customer_engagement", "signal_interpretation", "commitment_generation"]
   },
 
   // ── OBJECTION NAVIGATION ──────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Acknowledge, engage, redirect",
     icon: ShieldAlert,
     iconBg: "bg-orange-100 text-orange-600",
-    capability: "objection_handling",
+    capability: "objection_navigation",
     capability_label: "Objection Navigation",
     level: "Foundation",
     duration: "50 min",
@@ -282,7 +282,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep acknowledges but response is generic or doesn't fully address the content." },
       { score: 1, desc: "Rep skips concern, becomes defensive, or pivots immediately without acknowledgment." }
     ],
-    related: ["objection_handling", "listening_responsiveness", "adaptability"]
+    related: ["objection_navigation", "signal_interpretation", "adaptive_response"]
   },
   {
     id: "resistance_types",
@@ -290,7 +290,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Identify what kind of no you're hearing",
     icon: Compass,
     iconBg: "bg-red-100 text-red-600",
-    capability: "objection_handling",
+    capability: "objection_navigation",
     capability_label: "Objection Navigation",
     level: "Advanced",
     duration: "30 min",
@@ -311,7 +311,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep uses a single response approach for all resistance types." },
       { score: 1, desc: "Rep misdiagnoses resistance type and applies counterproductive strategy." }
     ],
-    related: ["objection_handling", "listening_responsiveness", "adaptability"]
+    related: ["objection_navigation", "signal_interpretation", "adaptive_response"]
   },
 
   // ── CONVERSATION MANAGEMENT ───────────────────────────────────────────────────
@@ -321,7 +321,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Control pacing and direction",
     icon: Compass,
     iconBg: "bg-violet-100 text-violet-600",
-    capability: "conversation_control",
+    capability: "conversation_management",
     capability_label: "Conversation Management",
     level: "Foundation",
     duration: "35 min",
@@ -343,7 +343,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Conversation moves forward but structure is loose with occasional multi-asks or pacing mismatches." },
       { score: 1, desc: "Conversation is disorganized, multi-asks everywhere, pacing not matched to HCP state." }
     ],
-    related: ["conversation_control", "adaptability", "question_quality"]
+    related: ["conversation_management", "adaptive_response", "signal_awareness"]
   },
   {
     id: "time_pressure",
@@ -351,7 +351,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Deliver maximum value in minimum time",
     icon: Zap,
     iconBg: "bg-yellow-100 text-yellow-700",
-    capability: "conversation_control",
+    capability: "conversation_management",
     capability_label: "Conversation Management",
     level: "Advanced",
     duration: "20 min",
@@ -372,17 +372,17 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep recognizes time pressure but still delivers multiple messages or asks." },
       { score: 1, desc: "Rep ignores time pressure signals and continues with full-length interaction." }
     ],
-    related: ["conversation_control", "adaptability", "commitment_gaining"]
+    related: ["conversation_management", "adaptive_response", "commitment_generation"]
   },
 
   // ── ADAPTIVE RESPONSE ─────────────────────────────────────────────────────────
   {
-    id: "adaptability",
+    id: "adaptive_response",
     title: "Real-Time Adaptation",
     subtitle: "Shift approach when the situation shifts",
     icon: RefreshCw,
     iconBg: "bg-emerald-100 text-emerald-600",
-    capability: "adaptability",
+    capability: "adaptive_response",
     capability_label: "Adaptive Response",
     level: "Foundation",
     duration: "45 min",
@@ -404,7 +404,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep adapts sometimes but inconsistently — misses key transition moments." },
       { score: 1, desc: "Rep applies fixed approach regardless of HCP state changes — no observable adaptation." }
     ],
-    related: ["adaptability", "listening_responsiveness", "conversation_control"]
+    related: ["adaptive_response", "signal_interpretation", "conversation_management"]
   },
   {
     id: "style_matching",
@@ -412,7 +412,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Mirror HCP communication preferences",
     icon: Users,
     iconBg: "bg-purple-100 text-purple-600",
-    capability: "adaptability",
+    capability: "adaptive_response",
     capability_label: "Adaptive Response",
     level: "Intermediate",
     duration: "30 min",
@@ -433,7 +433,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Rep uses a consistent style that doesn't cause friction but isn't explicitly matched to HCP." },
       { score: 1, desc: "Rep's style clashes visibly with HCP's preferences — too technical, too casual, too fast, etc." }
     ],
-    related: ["adaptability", "customer_engagement_cues", "listening_responsiveness"]
+    related: ["adaptive_response", "customer_engagement", "signal_interpretation"]
   },
 
   // ── COMMITMENT GENERATION ─────────────────────────────────────────────────────
@@ -443,7 +443,7 @@ export const MODULE_LIBRARY = [
     subtitle: "Create clear, voluntary next steps",
     icon: CheckCircle2,
     iconBg: "bg-green-100 text-green-600",
-    capability: "commitment_gaining",
+    capability: "commitment_generation",
     capability_label: "Commitment Generation",
     level: "Foundation",
     duration: "40 min",
@@ -465,7 +465,7 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Next step is mentioned but lacks specificity or customer confirmation." },
       { score: 1, desc: "No next step established, or close attempted before readiness was present." }
     ],
-    related: ["commitment_gaining", "conversation_control", "listening_responsiveness"]
+    related: ["commitment_generation", "conversation_management", "signal_interpretation"]
   },
 
   // ── BEHAVIORAL MASTERY ────────────────────────────────────────────────────────
@@ -497,19 +497,19 @@ export const MODULE_LIBRARY = [
       { score: 3, desc: "Competent across most capabilities but gaps in one or two, especially under pressure." },
       { score: 1, desc: "Fixed script regardless of customer signals — no observable adaptation across the conversation." }
     ],
-    related: ["question_quality", "listening_responsiveness", "making_it_matter", "customer_engagement_cues", "objection_handling", "conversation_control", "adaptability", "commitment_gaining"] // All 8 capabilities from SOT
+    related: ["signal_awareness", "signal_interpretation", "value_connection", "customer_engagement", "objection_navigation", "conversation_management", "adaptive_response", "commitment_generation"] // All 8 capabilities from SOT
   }
 ];
 
 export const CAPABILITY_META = {
-  question_quality: { label: "Signal Awareness", color: "#14b8a6", urgencyThreshold: 3.5 },
-  listening_responsiveness: { label: "Signal Interpretation", color: "#0284c7", urgencyThreshold: 3.5 },
-  making_it_matter: { label: "Value Connection", color: "#8b5cf6", urgencyThreshold: 3.5 },
-  customer_engagement_cues: { label: "Customer Engagement", color: "#f59e0b", urgencyThreshold: 3.5 },
-  objection_handling: { label: "Objection Navigation", color: "#f97316", urgencyThreshold: 3.2 },
-  conversation_control: { label: "Conversation Management", color: "#1A334D", urgencyThreshold: 3.5 },
-  adaptability: { label: "Adaptive Response", color: "#06b6d4", urgencyThreshold: 3.5 },
-  commitment_gaining: { label: "Commitment Generation", color: "#10b981", urgencyThreshold: 3.2 },
+  signal_awareness: { label: "Signal Awareness", color: "#14b8a6", urgencyThreshold: 3.5 },
+  signal_interpretation: { label: "Signal Interpretation", color: "#0284c7", urgencyThreshold: 3.5 },
+  value_connection: { label: "Value Connection", color: "#8b5cf6", urgencyThreshold: 3.5 },
+  customer_engagement: { label: "Customer Engagement", color: "#f59e0b", urgencyThreshold: 3.5 },
+  objection_navigation: { label: "Objection Navigation", color: "#f97316", urgencyThreshold: 3.2 },
+  conversation_management: { label: "Conversation Management", color: "#1A334D", urgencyThreshold: 3.5 },
+  adaptive_response: { label: "Adaptive Response", color: "#06b6d4", urgencyThreshold: 3.5 },
+  commitment_generation: { label: "Commitment Generation", color: "#10b981", urgencyThreshold: 3.2 },
 };
 
 export function getModulesForCapability(capabilityId) {

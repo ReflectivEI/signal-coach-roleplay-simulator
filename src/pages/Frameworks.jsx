@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ChevronRight, FileText, Settings, Info, MessageSquare, Lightbulb, Heart,
-  Users, ShieldAlert, GitFork, Shuffle, Target, Send, Loader2, Search, Ear, Brain, RefreshCw, BarChart2, Play,
+  Users, ShieldAlert, GitFork, Shuffle, Target, Send, Loader2, Search, Ear,
+  BarChart3, Brain, RefreshCw, BarChart2, Play,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { createPageUrl } from "@/utils";
@@ -13,19 +15,19 @@ import { Link } from "react-router-dom";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 const ICON_MAP = {
-  question_quality: Search,
-  listening_responsiveness: Ear,
-  making_it_matter: Heart,
-  customer_engagement_cues: Users,
-  objection_handling: ShieldAlert,
-  conversation_control: GitFork,
-  adaptability: Shuffle,
-  commitment_gaining: Target,
+  signal_awareness: Search,
+  signal_interpretation: Ear,
+  value_connection: Heart,
+  customer_engagement: Users,
+  objection_navigation: ShieldAlert,
+  conversation_management: GitFork,
+  adaptive_response: Shuffle,
+  commitment_generation: Target,
 };
 
 // UI-specific framework content (principles and techniques per capability)
 const FRAMEWORK_CONTENT = {
-  question_quality: {
+  signal_awareness: {
     principles: [
       "Ask open-ended questions that encourage detailed responses",
       "Focus questions on customer priorities, not product features",
@@ -38,7 +40,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Need-Payoff Questions", desc: "Help customers articulate the value of solving their problems", example: '"If we could address this, what would that mean for your practice?"' },
     ],
   },
-  listening_responsiveness: {
+  signal_interpretation: {
     principles: [
       "Listen fully before formulating responses",
       "Acknowledge and validate customer perspectives",
@@ -51,7 +53,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Relevant Response", desc: "Address customer points directly before introducing new topics", example: '"You mentioned efficacy data - let me share our Phase 3 results that address exactly that"' },
     ],
   },
-  customer_engagement_cues: {
+  customer_engagement: {
     principles: [
       "Monitor verbal and non-verbal engagement cues",
       "Recognize when customers are engaged vs. disengaged",
@@ -64,7 +66,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Participation Invitation", desc: "Actively invite customer input and questions", example: '"I\'d love to hear your thoughts on how this fits with your current protocols"' },
     ],
   },
-  making_it_matter: {
+  value_connection: {
     principles: [
       "Frame value in customer terms, not product features",
       "Connect solutions to stated customer priorities",
@@ -77,7 +79,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Contextualized Evidence", desc: "Present data and evidence relevant to customer's specific context", example: '"For practices like yours treating elderly patients, our safety profile is particularly strong"' },
     ],
   },
-  objection_handling: {
+  objection_navigation: {
     principles: [
       "Welcome objections as opportunities to understand concerns",
       "Acknowledge objections before addressing them",
@@ -90,7 +92,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Comparative Context", desc: "Position objections in context of alternatives", example: '"While our upfront cost is higher, compared to current therapy, patients see better outcomes with fewer side effects"' },
     ],
   },
-  conversation_control: {
+  conversation_management: {
     principles: [
       "Balance structure with flexibility",
       "Guide conversations toward productive outcomes",
@@ -103,7 +105,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Time Management", desc: "Respect customer time while covering key topics", example: '"I know we have 20 minutes - let me focus on the two areas you mentioned as priorities"' },
     ],
   },
-  adaptability: {
+  adaptive_response: {
     principles: [
       "Read and respond to customer signals in real-time",
       "Adjust approach when current tactics aren't working",
@@ -116,7 +118,7 @@ const FRAMEWORK_CONTENT = {
       { name: "Course Correction", desc: "Recognize when to change direction", example: '"I can see this isn\'t resonating - let me try a different approach. What specific outcomes matter most to you?"' },
     ],
   },
-  commitment_gaining: {
+  commitment_generation: {
     principles: [
       "Ask for specific commitments, not vague next steps",
       "Earn the right to ask through value delivery",
