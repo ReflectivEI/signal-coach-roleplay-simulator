@@ -311,7 +311,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // 1. Score alignment against the locked state + temperature the rep SAW
     // Score BEFORE any temperature escalation from disagreement
     const prevHcpState = turns.length >= 2 ? turns[turns.length - 2].hcpStateBefore : null;
-    const alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
+    const repLower = String(repMessage || "").toLowerCase();
+    const priorRepTurnsCount = turns.filter((t) => !!t.repMessage).length;
+    const greetingSignals = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hows it going|how was your weekend|nice to meet you|good to see you|thanks for your time)\b/;
+    const businessSignals = /\b(prep|hiv|sti|cab|cabotegravir|injectable|screening|resistance|adherence|study|trial|data|results|efficacy|durability|monitoring|protocol|materials?|brochure|resource|patients?)\b/;
+    const isPleasantryOnly = greetingSignals.test(repLower) && !businessSignals.test(repLower);
+    const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
+
+    let alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
+    if (inPleasantryGracePeriod) {
+      const normalizedMetrics = Object.fromEntries(
+        Object.entries(alignment?.metrics || {}).map(([cap, val]) => [
+          cap,
+          { ...val, score: 3, reason: "Pleasantry grace period (opening social exchange)." },
+        ])
+      );
+
+      alignment = {
+        ...alignment,
+        score: 3,
+        positives: [],
+        misalignments: [],
+        rubricAlignmentFlags: [],
+        metrics: normalizedMetrics,
+      };
+    }
 
     // 2. Detect rep interruption/leave intent and override HCP state if needed
     let overrideExit = false;
@@ -403,25 +427,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const scenarioMonitoringFocus = /\bmonitoring|follow-up|durability|protocol|renal|labs?\b/.test(scenarioLower);
 
     const buildFirstTurnScenarioFallback = () => {
+      const warmGreeting = inPleasantryGracePeriod
+        ? "I'm doing well, thanks for asking."
+        : "Thanks for checking in.";
+
       if (scenarioPrepFocus && scenarioPressured) {
-        return "Thanks for checking in. I am between patients and prior authorizations right now, so I need to stay focused. I only have a couple minutes, so what brings you in today?";
+        return `${warmGreeting} I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?`;
       }
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return "Thanks for checking in. I want to make sure we are selecting the right patients and covering resistance screening correctly. I only have a couple minutes, so what brings you in today?";
+        return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
       }
 
       if (scenarioMonitoringFocus) {
-        return "Thanks for checking in. I am trying to tighten our follow-up workflow and keep monitoring practical for the team. I only have a couple minutes, so what brings you in today?";
+        return `${warmGreeting} I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?`;
       }
 
       if (scenarioPressured) {
-        return "Thanks for checking in. I am between patients and paperwork right now, so I need to stay focused. I only have a couple minutes, so what brings you in today?";
+        return `${warmGreeting} I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?`;
       }
 
       return scenarioPrepFocus
-        ? "Thanks for checking in. I can give you a few focused minutes before my next patient. What brings you in today regarding PrEP access for my patients?"
-        : "Thanks for checking in. I can give you a few focused minutes before my next patient. What brings you in today?";
+        ? `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today regarding PrEP access for my patients?`
+        : `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today?`;
     };
 
     const buildFollowUpScenarioFallback = () => {
@@ -921,15 +949,15 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
                         <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
-                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{descriptionText}</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
                       <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
                       {openingScene ? (
-                        <p className="text-xs text-amber-900 leading-relaxed italic line-clamp-3">{openingScene}</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{openingScene}</p>
                       ) : (
                         <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
                       )}
