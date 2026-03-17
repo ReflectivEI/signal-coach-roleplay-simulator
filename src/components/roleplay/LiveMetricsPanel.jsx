@@ -44,17 +44,20 @@ export default function LiveMetricsPanel({ turns, scenario }) {
   const overallScore = latestTurn.alignment.score;
   const turnNum = scoredTurns.length;
 
-  
-return (
+  // Compute running averages per metric
+  const metricAverages = {};
+  METRIC_DEFINITIONS.forEach(def => {
+    const scores = scoredTurns.map(t => t.alignment?.metrics?.[def.id]?.score).filter(Boolean);
+    metricAverages[def.id] = scores.length > 0
+      ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+      : null;
+  });
+
+  return (
     <div className="p-4 space-y-4">
       {/* Turn + Overall header */}
       <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-xs font-bold text-gray-800">Live Behavioral Metrics</span>
-          {latestTurn.alignment.metricsVersion && (
-            <span className="text-[10px] text-gray-500">{latestTurn.alignment.metricsVersion}</span>
-          )}
-        </div>
+        <span className="text-xs font-bold text-gray-800">Live Behavioral Metrics</span>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">Turn {turnNum}</span>
           <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
@@ -74,10 +77,16 @@ return (
           const score = metricData?.score ?? 3;
           const hasMisalignment = metricData?.misalignments?.length > 0;
           const hasPositive = !hasMisalignment && metricData?.positives?.length > 0;
+          const avg = metricAverages[def.id];
           return (
             <div key={def.id} className="flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-gray-700 leading-tight">{def.label}</span>
+                {scoredTurns.length > 1 && avg && (
+                  <span className={`text-xs font-bold ${avg >= 4 ? 'text-green-600' : avg <= 2 ? 'text-red-500' : 'text-gray-500'}`}>
+                    avg {avg}
+                  </span>
+                )}
               </div>
               <ScoreBar score={score} />
               {hasMisalignment && (

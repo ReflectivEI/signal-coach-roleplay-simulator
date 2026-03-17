@@ -4,14 +4,14 @@ import { MessageSquare, Lightbulb, Heart, Users, ShieldAlert, GitFork, Target, S
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 const iconMap = {
-  question_quality: { icon: MessageSquare, iconBg: "bg-blue-50 text-blue-500" },
-  listening_responsiveness: { icon: Lightbulb, iconBg: "bg-yellow-50 text-yellow-600" },
-  making_it_matter: { icon: Heart, iconBg: "bg-pink-50 text-pink-500" },
-  customer_engagement_cues: { icon: Users, iconBg: "bg-teal-50 text-teal-500" },
-  objection_handling: { icon: ShieldAlert, iconBg: "bg-orange-50 text-orange-500" },
-  conversation_control: { icon: GitFork, iconBg: "bg-purple-50 text-purple-500" },
-  adaptability: { icon: Shuffle, iconBg: "bg-cyan-50 text-cyan-500" },
-  commitment_gaining: { icon: Target, iconBg: "bg-green-50 text-green-500" },
+  signal_awareness: { icon: MessageSquare, iconBg: "bg-blue-50 text-blue-500" },
+  signal_interpretation: { icon: Lightbulb, iconBg: "bg-yellow-50 text-yellow-600" },
+  value_connection: { icon: Heart, iconBg: "bg-pink-50 text-pink-500" },
+  customer_engagement: { icon: Users, iconBg: "bg-teal-50 text-teal-500" },
+  objection_navigation: { icon: ShieldAlert, iconBg: "bg-orange-50 text-orange-500" },
+  conversation_management: { icon: GitFork, iconBg: "bg-purple-50 text-purple-500" },
+  adaptive_response: { icon: Shuffle, iconBg: "bg-cyan-50 text-cyan-500" },
+  commitment_generation: { icon: Target, iconBg: "bg-green-50 text-green-500" },
 };
 
 const metrics = SIGNAL_CAPABILITIES.map(cap => ({

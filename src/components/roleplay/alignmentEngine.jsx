@@ -25,12 +25,10 @@
  *   - No intent inference, no emotion scoring, no outcome bias
  *   - 3 = effective / acceptable (NOT average)
  *   - Single behavior maps to ONE primary capability (no double-counting)
- *   - metricsVersion: 'SI-v2-locked-2026'
+ *   - metricsVersion: 'SI-v2-locked-2026-02-11'
  */
 
 import { SIGNAL_CAPABILITIES } from './signalIntelligenceSOT';
-import { CANONICAL_METRICS_VERSION, validateMetricResults } from '@/lib/signal-intelligence-schema';
-import { detectMetricDrift, logScoringExecution, validateMetricIntegrity } from '@/lib/scoringDiagnostics';
 
 // ─── METRIC DEFINITIONS (canonical, from SOT) ──────────────────────────────────
 export const METRIC_DEFINITIONS = SIGNAL_CAPABILITIES.map(c => ({
@@ -148,15 +146,12 @@ function detectPatterns(msg) {
 }
 
 // ─── SCORING HELPERS ───────────────────────────────────────────────────────────
-function roundHalfUp(value, decimals = 1) {
-  const factor = Math.pow(10, decimals);
-  return Math.round((value + Number.EPSILON) * factor) / factor;
-}
+function roundHalfUp(n) { return Math.floor(n + 0.5); }
 function avg(...scores) {
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
-  return roundHalfUp(mean, 1);
+  return Math.floor(mean * 10 + 0.5) / 10;
 }
-function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v, 1))); }
+function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v))); }
 
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
 function scoreSignalAwareness(hcpState, temperature, p) {
@@ -721,9 +716,6 @@ function computeAlignmentRubric(hcpState, p) {
  * @returns alignment object
  */
 export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
-  const startTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-    ? performance.now()
-    : Date.now();
   const p = detectPatterns(repMessage);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
@@ -758,14 +750,14 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   };
 
   const metricResults = {
-    question_quality:         scoreSignalAwareness(hcpState, temperature, p),
-    listening_responsiveness:    scoreSignalInterpretation(hcpState, temperature, p),
-    making_it_matter:         scoreValueConnection(hcpState, temperature, p),
-    customer_engagement_cues_cues:      scoreCustomerEngagement(hcpState, temperature, p),
-    objection_handling:     scoreObjectionNavigation(hcpState, temperature, p),
-    conversation_control:  scoreConversationManagement(hcpState, temperature, p),
-    adaptability:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
-    commitment_gaining:    scoreCommitmentGeneration(hcpState, temperature, p),
+    signal_awareness:         scoreSignalAwareness(hcpState, temperature, p),
+    signal_interpretation:    scoreSignalInterpretation(hcpState, temperature, p),
+    value_connection:         scoreValueConnection(hcpState, temperature, p),
+    customer_engagement:      scoreCustomerEngagement(hcpState, temperature, p),
+    objection_navigation:     scoreObjectionNavigation(hcpState, temperature, p),
+    conversation_management:  scoreConversationManagement(hcpState, temperature, p),
+    adaptive_response:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
+    commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
   };
 
   const globalMisalignments = [];
@@ -791,7 +783,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, roundHalfUp(rawAvg + universalPenalty, 1)));
+  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
@@ -801,38 +793,8 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   });
   allMisalignments.push(...rubricMisalignments);
 
-  const metricsList = Object.entries(metricResults).map(([id, metric]) => ({
-    id,
-    score: metric.score,
-    components: metric.subScores || {},
-    metricsVersion: CANONICAL_METRICS_VERSION,
-  }));
-  validateMetricResults(metricsList);
-
-  if (import.meta.env.DEV) {
-    validateMetricIntegrity(metricsList);
-    detectMetricDrift(metricsList);
-    const endTs = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-    const durationMs = endTs - startTs;
-    const metadata = _unused && typeof _unused === 'object' ? _unused : {};
-    logScoringExecution({
-      scenarioId: metadata.scenarioId,
-      turnIndex: metadata.turnIndex,
-      metricsVersion: CANONICAL_METRICS_VERSION,
-      metricResults: metricsList,
-      durationMs,
-    });
-  }
-
-  Object.values(metricResults).forEach((metric) => {
-    metric.metricsVersion = CANONICAL_METRICS_VERSION;
-  });
-
   return {
     score: overallScore,
-    metricsVersion: CANONICAL_METRICS_VERSION,
     metrics: metricResults,
     ruleLabel: STATE_LABELS[hcpState] || 'Unknown State',
     ruleDescription: STATE_DESCRIPTIONS[hcpState] || '',
