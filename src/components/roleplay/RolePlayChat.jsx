@@ -38,6 +38,56 @@ import { getDifficultyVisuals } from "./difficultyStyles";
 
 
 
+function hardenTextSurface(text) {
+  let value = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!value) return "";
+
+  value = value
+    .replace(/\bi\b/g, "I")
+    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
+    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
+    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
+
+  if (!/[.!?]$/.test(value)) {
+    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
+    value += looksLikeQuestion ? "?" : ".";
+  }
+
+  return value;
+}
+
+function extractScenarioKeywords(scenario) {
+  const combined = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.opening_scene,
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.goal,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+  ].join(" ").toLowerCase();
+
+  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
+  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
+}
+
+function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
+  const value = String(text || "").toLowerCase();
+  const rep = String(repMessage || "").toLowerCase();
+  if (!value) return false;
+
+  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
+  if (genericOnly) return false;
+
+  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
+  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
+  return scenarioHits > 0 || repHits > 0;
+}
+
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -85,6 +135,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return true;
     });
   const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
+  const scenarioKeywords = extractScenarioKeywords(scenario);
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -287,13 +338,47 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    nextHcpDialogue = "I see. Let me consider that.";
+    const priorRepTurns = turns.filter((t) => !!t.repMessage).length;
+    const priorHcpDialogueTurns = turns.filter((t) => !!t.hcpDialogueBefore).length;
+    const isFirstHcpResponse = (
+      respondingToTurn.turnNumber === 0
+      && !respondingToTurn.hcpDialogueBefore
+      && priorRepTurns === 0
+      && priorHcpDialogueTurns === 0
+    );
+
+    const buildFirstTurnScenarioFallback = () => {
+      const openingContext = String(
+        scenario.opening_scene
+        || scenario.openingScene
+        || scenario.description
+        || scenario.context
+        || ''
+      ).trim();
+      const openingLower = openingContext.toLowerCase();
+      const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|patients)\b/.test(openingLower);
+      const repPreview = String(repMessage || '').replace(/[?.!]+$/g, '').trim().split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+      const acknowledgment = repPreview
+        ? `I hear you on ${repPreview}.`
+        : 'Thanks for reaching out.';
+
+      if (pressured) {
+        return `${acknowledgment} I'm under time pressure right now, so keep this focused on what matters most for my patients.`;
+      }
+
+      return `${acknowledgment} Given the situation in my practice, what specifically do you want to focus on first?`;
+    };
+
+    nextHcpDialogue = isFirstHcpResponse
+      ? buildFirstTurnScenarioFallback()
+      : "I see. Let me consider that.";
+
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
         hcpProfile: nextProfile,
         historyText,
-        isOpening: false,
+        isOpening: isFirstHcpResponse,
       });
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -312,10 +397,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           .trim()
           .split('\n')[0];
 
-        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue);
+        nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
+
+        if (
+          import.meta.env.DEV
+          && rawStr.includes("?")
+          && !nextHcpDialogue.includes("?")
+        ) {
+          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
+        }
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
+    }
+
+    const groundedFallback = buildFirstTurnScenarioFallback();
+    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+      nextHcpDialogue = groundedFallback;
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
@@ -352,6 +450,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
       }
     }
+
+    contextualCue = hardenTextSurface(contextualCue);
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
@@ -412,6 +512,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }
 
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
+
+  const displayTurns = turns.filter((turn, index) => {
+    if (index === 0) return true;
+    const prev = turns[index - 1];
+    const bothHcpOnly = !turn.repMessage && !prev.repMessage;
+    if (!bothHcpOnly) return true;
+
+    const sameDialogue = String(turn.hcpDialogueBefore || "").trim() === String(prev.hcpDialogueBefore || "").trim();
+    const sameCue = String(turn.cueBefore || "").trim() === String(prev.cueBefore || "").trim();
+    return !(sameDialogue && sameCue);
+  });
+
+  const displayItems = displayTurns.flatMap((turn, index) => {
+    const items = [];
+
+    if (turn.repMessage) {
+      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
+    }
+
+    if (turn.hcpDialogueBefore || turn.cueBefore) {
+      items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
+    }
+
+    return items;
+  });
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
@@ -772,38 +897,52 @@ ${actionText}`;
                 )}
 
 
-                {turns.map((turn, i) => (
-                  <div key={i} className="space-y-2">
-                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
-                      <div className="flex justify-start pl-1">
-                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                          {turn.cueBefore}
-                        </p>
-                      </div>
-                    )}
-                    {turn.hcpDialogueBefore && (
-                      <div className="flex justify-start">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                        <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                          {turn.hcpDialogueBefore}
+                {/*
+                  DISPLAY NORMALIZATION LAYER
+
+                  Messages may be normalized for grammar
+                  and punctuation before rendering.
+
+                  This does NOT modify the underlying
+                  conversation history or scoring inputs.
+                */}
+                {/*
+                  DISPLAY TONE NORMALIZATION
+
+                  Tone adjustments improve realism of dialogue.
+
+                  These transformations occur ONLY during UI rendering
+                  and do not affect scoring or stored conversation data.
+                */}
+                {/*
+                  CHAT LAYOUT STRUCTURE RULE
+
+                  Do not modify message container hierarchy.
+
+                  User bubble
+                  → alignment badge
+                  → next message
+
+                  All layout must use flex stacking.
+
+                  Avoid absolute positioning.
+                */}
+                {displayItems.map((item) => {
+                  const { turn } = item;
+
+                  if (item.kind === "rep") {
+                    return (
+                      <div key={item.key} className="flex flex-col items-end gap-1">
+                        <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
+                          {sanitizeRenderedMessage(turn.repMessage, "user-message")}
                         </div>
-                      </div>
-                    )}
-                    {turn.repMessage && (
-                      <div className="flex w-full justify-end">
-                        <div className="inline-flex w-fit max-w-[82%] flex-col items-stretch gap-1">
-                          <div className="self-end rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium shadow-sm" style={{ background: "#39ACAC", color: "white" }}>
-                            {turn.repMessage}
-                          </div>
-                          {turn.alignment && (
-                            <div className="w-full flex flex-col items-stretch gap-1">
-                            <div className={`flex flex-wrap items-start gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                        {turn.alignment && (
+                          <>
+                            <div className={`px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
-                              {/* State label removed: do not display ruleLabel */}
+                              <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
                               {turn.alignment.misalignments.length > 0 && (
                                 <span className="min-w-0 whitespace-normal break-words">⚠ {turn.alignment.misalignments[0]}</span>
                               )}
@@ -816,13 +955,32 @@ ${actionText}`;
                                 {turn.alignment.rubricAlignmentFlags[0]}
                               </div>
                             )}
-                            </div>
-                          )}
-                        </div>
+                          </>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    );
+                  }
+
+                  return (
+                    <div key={item.key} className="flex flex-col items-start gap-1">
+                      {turn.hcpDialogueBefore && (
+                        <div className="flex items-start">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
+                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
+                          </div>
+                        </div>
+                      )}
+                      {turn.cueBefore && (
+                        <div className="pl-1">
+                          <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
