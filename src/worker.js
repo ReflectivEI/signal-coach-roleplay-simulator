@@ -1,32 +1,3 @@
-/*
-API ROUTE CONTRACT
-
-Current routes implemented in this worker:
-
-LLM Invocation
-POST /api/llm/invoke
-
-Roleplay Session Engine
-GET /api/roleplay/sessions
-POST /api/roleplay/sessions
-
-Additional supporting routes also exist for:
-auth
-logging
-learning paths
-assignments
-scenarios
-health
-public app settings
-snippets
-
-IMPORTANT
-
-Frontend components must call these routes exactly as defined.
-Do not assume /api/chat or /api/roleplay unless routes are
-explicitly added.
-*/
-
 // ============================================================================
 // Cloudflare Worker - ReflectivAI Backend
 // ============================================================================
