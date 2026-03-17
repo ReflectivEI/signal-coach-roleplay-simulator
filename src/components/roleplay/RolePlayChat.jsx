@@ -107,9 +107,218 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
 
   const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
   const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
-  return scenarioHits > 0 || repHits > 0;
+  const hasClinicalSignal = /\b(patient|patients|study|data|workflow|screening|access|prior auth|treatment|clinic|practice|protocol|follow-up|efficacy|safety|adherence)\b/.test(value);
+  const asksClarifyingQuestion = value.includes("?") && value.split(/\s+/).length >= 8;
+  return scenarioHits > 0 || repHits > 0 || hasClinicalSignal || asksClarifyingQuestion;
 }
 
+
+const GUIDANCE_PRIORITY_ORDER = [
+  "signal_awareness",
+  "signal_interpretation",
+  "value_connection",
+  "customer_engagement",
+  "objection_navigation",
+  "conversation_management",
+  "adaptive_response",
+  "commitment_generation",
+];
+
+const METRIC_GUIDANCE_LIBRARY = {
+  signal_awareness: [
+    "⚠ Anchor your next response to the exact operational signal the HCP named.",
+    "⚠ Tie your point to this HCP's stated workflow pressure before adding new data.",
+    "⚠ Reflect the specific challenge you heard so the HCP sees you are tracking their reality.",
+    "⚠ Lead with the context cue the HCP gave, then connect your recommendation.",
+    "⚠ Translate your opening line to the HCP's immediate clinic condition, not a generic priority.",
+    "⚠ Use the HCP's own wording about constraints to frame your next statement.",
+    "⚠ Show awareness first: identify the signal, then advance the conversation.",
+  ],
+  signal_interpretation: [
+    "⚠ Confirm what the HCP meant before proposing the next step.",
+    "⚠ Your next turn should test your interpretation with a brief clarifying question.",
+    "⚠ Distinguish symptom from root concern before offering a recommendation.",
+    "⚠ Interpret the HCP's signal into a concrete implication for care delivery.",
+    "⚠ Reframe the concern in one sentence to verify shared understanding.",
+    "⚠ Show how you interpreted the cue, then ask the HCP to validate it.",
+    "⚠ Convert the HCP's statement into a check-back question before you advance.",
+  ],
+  value_connection: [
+    "⚠ Information was presented; next turn should explain why it matters for this HCP's decisions.",
+    "⚠ Connect the data to patient or workflow impact in this specific practice.",
+    "⚠ Link your evidence to a measurable outcome the HCP already cares about.",
+    "⚠ Move from feature language to practice-level consequence language.",
+    "⚠ Tie your recommendation to the HCP's stated treatment objective.",
+    "⚠ Clarify the value tradeoff relative to the burden the HCP described.",
+    "⚠ Ground your value statement in this clinic's operating reality.",
+  ],
+  customer_engagement: [
+    "⚠ Ask a focused follow-up that invites the HCP to expand their current concern.",
+    "⚠ Increase participation by prompting the HCP to rank their top constraint.",
+    "⚠ Keep momentum by turning your point into a targeted question.",
+    "⚠ Pull the HCP in with a brief either-or question tied to workflow options.",
+    "⚠ Encourage dialogue by asking for one concrete example from their practice.",
+    "⚠ Advance engagement with a question that requires a practical response.",
+    "⚠ Shift from monologue to collaboration by requesting the HCP's preference.",
+  ],
+  objection_navigation: [
+    "⚠ Acknowledge the objection explicitly before redirecting toward options.",
+    "⚠ Stay non-defensive and address the concern in the HCP's terms.",
+    "⚠ Break the objection into one solvable piece and confirm agreement.",
+    "⚠ Validate the concern, then offer a practical mitigation step.",
+    "⚠ Respond to the resistance with clarification before persuasion.",
+    "⚠ Keep objection handling constructive by testing one feasible alternative.",
+    "⚠ Resolve the specific barrier first, then broaden to next steps.",
+  ],
+  conversation_management: [
+    "⚠ Provide a clearer directional bridge so the conversation advances intentionally.",
+    "⚠ Signal the next discussion step before introducing new content.",
+    "⚠ Tighten your structure: acknowledge, align, then guide to action.",
+    "⚠ Use a concise transition that shows where the conversation is headed.",
+    "⚠ Keep the exchange focused on one decision point at a time.",
+    "⚠ Add a purposeful steering question to avoid drifting into broad statements.",
+    "⚠ Frame a clear path from current barrier to immediate next move.",
+  ],
+  adaptive_response: [
+    "⚠ Adjust your approach to match the HCP's current tone and pressure level.",
+    "⚠ Your next turn should flex to the cue instead of repeating a fixed script.",
+    "⚠ Adapt depth and pace to the HCP's time signal before adding detail.",
+    "⚠ Shift from broad messaging to situation-matched guidance.",
+    "⚠ Respond to the latest cue with a tailored action option.",
+    "⚠ Preserve continuity by explicitly building on the HCP's prior statement.",
+    "⚠ Show adaptability by offering the smallest viable next step first.",
+  ],
+  commitment_generation: [
+    "⚠ Close this exchange with a specific, owned next step.",
+    "⚠ Convert discussion into commitment by proposing one concrete action.",
+    "⚠ Ask for agreement on who will do what and by when.",
+    "⚠ Strengthen closure by defining a practical follow-up checkpoint.",
+    "⚠ Turn alignment into action with a clear implementation ask.",
+    "⚠ Confirm commitment level with a simple next-step question.",
+    "⚠ Establish ownership before ending the turn.",
+  ],
+};
+
+const FALLBACK_GUIDANCE_LIBRARY = {
+  misalignment_relevance: [
+    "⚠ Data shared without tying it to this HCP's stated workflow burden.",
+    "⚠ Missed opportunity to connect the message to this practice context.",
+    "⚠ Relevance gap: link your point to the challenge the HCP just named.",
+    "⚠ The response stayed informational instead of practice-specific.",
+  ],
+  misalignment_probe: [
+    "⚠ Missed chance to probe the operational constraint the HCP just raised.",
+    "⚠ Ask one clarifying question before offering another recommendation.",
+    "⚠ The next turn should explore the barrier source, not just restate data.",
+    "⚠ Probe the bottleneck directly to improve response precision.",
+  ],
+  misalignment_adaptation: [
+    "⚠ Response did not adapt to the HCP's latest cue.",
+    "⚠ Mirror the HCP's signal first, then tailor your next suggestion.",
+    "⚠ Adaptation gap: adjust to the pressure level expressed in this turn.",
+    "⚠ Use the HCP's immediate concern to shape your next message.",
+  ],
+  misalignment_closure: [
+    "⚠ Good topic progression; now secure a concrete next step.",
+    "⚠ Move from discussion to commitment with a specific action ask.",
+    "⚠ Clarify ownership to prevent the conversation from stalling.",
+    "⚠ Close with a defined follow-up rather than another broad statement.",
+  ],
+  positive_progress: [
+    "✓ Direction is solid — next turn can deepen specificity around implementation.",
+    "✓ Good alignment with the HCP signal — now lock in an actionable step.",
+    "✓ Strong turn foundation — follow with a targeted practical question.",
+    "✓ Productive response — convert this momentum into a clear next move.",
+  ],
+};
+
+function deterministicIndex(seedText, total) {
+  if (!total) return 0;
+  const seed = String(seedText || "");
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = ((hash * 31) + seed.charCodeAt(i)) >>> 0;
+  }
+  return hash % total;
+}
+
+function mapIssueCategory(alignment) {
+  const firstFlag = String(alignment?.rubricAlignmentFlags?.[0] || "").toLowerCase();
+  const firstMisalignment = String(alignment?.misalignments?.[0] || "").toLowerCase();
+  const combined = `${firstFlag} ${firstMisalignment}`;
+
+  if (/(matter|relevance|context|why it matters|value)/.test(combined)) return "misalignment_relevance";
+  if (/(probe|question|clarify|explore|understand)/.test(combined)) return "misalignment_probe";
+  if (/(adapt|signal|cue|tone|responsive|responsiveness)/.test(combined)) return "misalignment_adaptation";
+  if (/(next step|commit|closure|owner|follow-up|follow up)/.test(combined)) return "misalignment_closure";
+  if (alignment?.positives?.length) return "positive_progress";
+  return "misalignment_relevance";
+}
+
+function getLowestMetricId(metrics = {}) {
+  const entries = Object.entries(metrics || {})
+    .filter(([, val]) => Number.isFinite(Number(val?.score)))
+    .sort((a, b) => {
+      const scoreDiff = Number(a[1].score) - Number(b[1].score);
+      if (scoreDiff !== 0) return scoreDiff;
+      return GUIDANCE_PRIORITY_ORDER.indexOf(a[0]) - GUIDANCE_PRIORITY_ORDER.indexOf(b[0]);
+    });
+
+  return entries[0]?.[0] || null;
+}
+
+function buildGuidanceCandidate(turn) {
+  const alignment = turn?.alignment;
+  if (!alignment) return null;
+
+  const lowestMetricId = getLowestMetricId(alignment.metrics || {});
+  const metricGuidanceSet = lowestMetricId ? METRIC_GUIDANCE_LIBRARY[lowestMetricId] : null;
+  if (metricGuidanceSet?.length) {
+    const metricSignal = alignment.metrics?.[lowestMetricId]?.reason || alignment.misalignments?.[0] || alignment.rubricAlignmentFlags?.[0] || "metric";
+    const index = deterministicIndex(`${turn.turnNumber}:${lowestMetricId}:${metricSignal}`, metricGuidanceSet.length);
+    return metricGuidanceSet[index];
+  }
+
+  const category = mapIssueCategory(alignment);
+  const fallbackSet = FALLBACK_GUIDANCE_LIBRARY[category] || FALLBACK_GUIDANCE_LIBRARY.misalignment_relevance;
+  const issueSignal = alignment.rubricAlignmentFlags?.[0] || alignment.misalignments?.[0] || alignment.positives?.[0] || "fallback";
+  const index = deterministicIndex(`${turn.turnNumber}:${category}:${issueSignal}`, fallbackSet.length);
+  return fallbackSet[index];
+}
+
+function buildRepGuidance(turn, allTurns = []) {
+  const alignment = turn?.alignment;
+  if (!alignment) return null;
+
+  const recentGuidanceWindow = allTurns
+    .filter((t) => t.turnNumber < turn.turnNumber && t.repMessage)
+    .slice(-15)
+    .map((t) => String(buildGuidanceCandidate(t)).trim())
+    .filter(Boolean);
+
+  const lowestMetricId = getLowestMetricId(alignment.metrics || {});
+  const metricGuidanceSet = lowestMetricId ? METRIC_GUIDANCE_LIBRARY[lowestMetricId] : null;
+
+  const pickNonRepeatingGuidance = (guidanceSet, seedText) => {
+    if (!guidanceSet?.length) return null;
+    const baseIndex = deterministicIndex(seedText, guidanceSet.length);
+    for (let offset = 0; offset < guidanceSet.length; offset += 1) {
+      const candidate = guidanceSet[(baseIndex + offset) % guidanceSet.length];
+      if (!recentGuidanceWindow.includes(candidate)) return candidate;
+    }
+    return guidanceSet[baseIndex];
+  };
+
+  if (metricGuidanceSet?.length) {
+    const metricSignal = alignment.metrics?.[lowestMetricId]?.reason || alignment.misalignments?.[0] || alignment.rubricAlignmentFlags?.[0] || "metric";
+    return pickNonRepeatingGuidance(metricGuidanceSet, `${turn.turnNumber}:${lowestMetricId}:${metricSignal}`);
+  }
+
+  const category = mapIssueCategory(alignment);
+  const fallbackSet = FALLBACK_GUIDANCE_LIBRARY[category] || FALLBACK_GUIDANCE_LIBRARY.misalignment_relevance;
+  const issueSignal = alignment.rubricAlignmentFlags?.[0] || alignment.misalignments?.[0] || alignment.positives?.[0] || "fallback";
+  return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
+}
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -561,9 +770,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
 
     let usedDeterministicFallback = false;
-    nextHcpDialogue = isFirstHcpResponse
-      ? buildFirstTurnScenarioFallback()
-      : buildFollowUpScenarioFallback();
+    nextHcpDialogue = "";
 
     try {
       const systemPrompt = buildHCPDialoguePrompt({
@@ -596,7 +803,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
         }
 
-        nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
+        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
 
         if (
           import.meta.env.DEV
@@ -630,7 +837,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : buildNonRepeatingScenarioFallback(previousHcpDialogue);
-    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage) && String(nextHcpDialogue || "").split(/\s+/).length < 6) {
       usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
@@ -664,6 +871,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
+
+      const recentCues = prevTurns
+        .map((t) => String(t.cueBefore || "").trim().toLowerCase())
+        .filter(Boolean)
+        .slice(-2);
+      const normalizedCue = String(contextualCue || "").trim().toLowerCase();
+      if (normalizedCue && recentCues.length === 2 && recentCues.every((cue) => cue === normalizedCue)) {
+        contextualCue = nextProfile.lockedCue;
+      }
     }
 
     contextualCue = hardenTextSurface(contextualCue);
@@ -1029,12 +1245,12 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
                         <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
                         <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
+                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
                       <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
                       {openingScene ? (
                         <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{openingScene}</p>
@@ -1066,17 +1282,14 @@ ${actionText}`;
                 )}
               </div>
             </div>
-            <div className="mt-2 pt-2 border-t border-slate-200/70">
-              {renderTabPills()}
-            </div>
           </div>
         )}
 
-        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 py-2.5 border-b flex-shrink-0 bg-white">
+        <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
+          <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
             {renderTabPills()}
           </div>
-        )}
+        </div>
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -1138,17 +1351,11 @@ ${actionText}`;
                         </div>
                         {turn.alignment && (
                           <>
-                            <div className={`w-full px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                            <div className={`w-full px-2 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
-                              {turn.alignment.misalignments.length > 0 && (
-                                <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">⚠ {turn.alignment.misalignments[0]}</div>
-                              )}
-                              {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
-                                <div className="mt-0.5 max-w-[420px] break-words whitespace-normal text-green-600">✓ {turn.alignment.positives[0]}</div>
-                              )}
+                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{buildRepGuidance(turn, turns)}</div>
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
                               <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
@@ -1173,7 +1380,7 @@ ${actionText}`;
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[85%] md:max-w-[85%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-snug bg-slate-100 text-slate-800 whitespace-normal break-words">
+                          <div className="w-fit max-w-[92%] lg:max-w-[95%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
