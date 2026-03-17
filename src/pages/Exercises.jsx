@@ -14,9 +14,30 @@ import {
   Wand2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { normalizeAIResponse } from "@/lib/normalizeAIResponse";
 import ReactMarkdown from "react-markdown";
 import { formatScenarioText } from "@/lib/utils";
+
+/* =========================
+   SAFE PARSER (INLINE)
+========================= */
+function safeParseJSON(raw) {
+  try {
+    let text = String(raw || "")
+      .replace(/^```json\n?|\n?```$/g, "")
+      .trim();
+
+    return JSON.parse(text);
+  } catch {
+    try {
+      const first = raw.indexOf("[");
+      const last = raw.lastIndexOf("]");
+      if (first >= 0 && last > first) {
+        return JSON.parse(raw.slice(first, last + 1));
+      }
+    } catch {}
+    return null;
+  }
+}
 
 /* =========================
    TOPICS
@@ -43,9 +64,6 @@ export default function ExercisesPage() {
     return found ? found.label : "Signal Intelligence and Life Sciences Sales";
   }, [selectedTopic]);
 
-  /* =========================
-     RESET
-  ========================= */
   const resetAll = () => {
     setExercises([]);
     setScenario(null);
@@ -53,12 +71,9 @@ export default function ExercisesPage() {
     setError(null);
   };
 
-  /* =========================
-     FALLBACK
-  ========================= */
   const fallbackPool = [
     {
-      question: "A customer says 'Your product is too expensive.' What's the BEST first response?",
+      question: "A customer says 'Your product is too expensive.' What's the BEST response?",
       options: [
         "Competitors cost more.",
         "Can you help me understand what you're comparing us to?",
@@ -67,24 +82,9 @@ export default function ExercisesPage() {
       ],
       correctAnswer: 1,
       explanation: "Understanding context first prevents defensiveness."
-    },
-    {
-      question: "Customer goes silent after pricing. What do you do?",
-      options: ["Offer discount", "Talk more", "Wait", "Escalate"],
-      correctAnswer: 2,
-      explanation: "Silence = processing."
-    },
-    {
-      question: "'I need to think about it' usually means?",
-      options: ["Done", "Hidden concern", "Time", "Email"],
-      correctAnswer: 1,
-      explanation: "Signals unspoken objection."
     }
   ];
 
-  /* =========================
-     GENERATE QUIZ
-  ========================= */
   const generateExercises = async () => {
     setIsGenerating(true);
     setError(null);
@@ -97,9 +97,7 @@ export default function ExercisesPage() {
     try {
       const response = await fetch("/api/chat/send", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: `Return ONLY JSON.
 
@@ -117,32 +115,23 @@ Format:
       });
 
       const raw = await response.text();
-      const normalized = normalizeAIResponse(raw);
-
-      let parsed = normalized.json;
-
-      if (!Array.isArray(parsed)) {
-        parsed = normalizeAIResponse(normalized.text).json;
-      }
+      const parsed = safeParseJSON(raw);
 
       if (Array.isArray(parsed) && parsed.length > 0) {
         setExercises(parsed.slice(0, 5));
       } else {
-        throw new Error("Invalid AI response");
+        throw new Error("Bad AI response");
       }
     } catch (err) {
       console.warn("Fallback triggered:", err);
-      setExercises(fallbackPool.sort(() => 0.5 - Math.random()).slice(0, 3));
-      setError("AI response unstable. Showing fallback questions.");
+      setExercises(fallbackPool);
+      setError("AI unstable. Showing fallback.");
     } finally {
       clearTimeout(timeout);
       setIsGenerating(false);
     }
   };
 
-  /* =========================
-     GENERATE SCENARIO
-  ========================= */
   const generateScenario = async () => {
     setIsGeneratingScenario(true);
     setScenario(null);
@@ -150,17 +139,14 @@ Format:
     try {
       const response = await fetch("/api/chat/send", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `Generate a pharma sales scenario about "${selectedTopicLabel}" including signals, objection, and best response`
+          message: `Generate a pharma sales scenario about "${selectedTopicLabel}".`
         })
       });
 
       const raw = await response.text();
-      const normalized = normalizeAIResponse(raw);
-      setScenario(normalized.text);
+      setScenario(raw);
     } catch {
       setScenario("Unable to generate scenario.");
     } finally {
@@ -168,9 +154,6 @@ Format:
     }
   };
 
-  /* =========================
-     SELECT ANSWER
-  ========================= */
   const selectAnswer = (qIdx, optIdx) => {
     if (selectedAnswers[qIdx] !== undefined) return;
     setSelectedAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
@@ -179,23 +162,18 @@ Format:
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
 
-      {/* HEADER */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <Dumbbell className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold">Practice Exercises</h1>
         </div>
 
-        <button
-          onClick={resetAll}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
-        >
+        <button onClick={resetAll} className="flex items-center gap-1 text-sm">
           <RefreshCw className="h-4 w-4" />
           Reset
         </button>
       </div>
 
-      {/* TOPICS */}
       <div className="flex gap-2 flex-wrap">
         {TOPICS.map((t) => (
           <Button
@@ -209,7 +187,6 @@ Format:
         ))}
       </div>
 
-      {/* ACTIONS */}
       <div className="grid grid-cols-2 gap-4">
         <Button onClick={generateExercises} disabled={isGenerating}>
           {isGenerating ? "Generating..." : "Generate Quiz"}
@@ -220,7 +197,6 @@ Format:
         </Button>
       </div>
 
-      {/* ERROR */}
       {error && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
@@ -228,21 +204,17 @@ Format:
         </Alert>
       )}
 
-      {/* SCENARIO */}
       {scenario && (
         <Card>
           <CardHeader>
-            <CardTitle>Practice Scenario</CardTitle>
+            <CardTitle>Scenario</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReactMarkdown>
-              {formatScenarioText(scenario)}
-            </ReactMarkdown>
+            <ReactMarkdown>{formatScenarioText(scenario)}</ReactMarkdown>
           </CardContent>
         </Card>
       )}
 
-      {/* QUIZ */}
       {exercises.map((ex, idx) => {
         const selected = selectedAnswers[idx];
         const correct = selected === ex.correctAnswer;
@@ -253,21 +225,17 @@ Format:
               <CardTitle>{idx + 1}. {ex.question}</CardTitle>
             </CardHeader>
 
-            <CardContent className="space-y-3">
+            <CardContent>
               <RadioGroup
                 value={selected?.toString()}
                 onValueChange={(v) => selectAnswer(idx, parseInt(v))}
               >
                 {ex.options.map((opt, i) => {
-                  const isSelected = selected === i;
-                  const isCorrect = ex.correctAnswer === i;
-
-                  let cls = "p-3 border rounded-lg flex gap-2";
+                  let cls = "p-3 border rounded-lg";
 
                   if (selected !== undefined) {
-                    if (isCorrect) cls += " border-green-500 bg-green-50";
-                    else if (isSelected) cls += " border-red-400 bg-red-50";
-                    else cls += " opacity-50";
+                    if (i === ex.correctAnswer) cls += " bg-green-50";
+                    else if (i === selected) cls += " bg-red-50";
                   }
 
                   return (
