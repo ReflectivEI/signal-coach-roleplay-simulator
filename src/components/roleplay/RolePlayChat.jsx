@@ -287,13 +287,47 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    nextHcpDialogue = "I see. Let me consider that.";
+    const priorRepTurns = turns.filter((t) => !!t.repMessage).length;
+    const priorHcpDialogueTurns = turns.filter((t) => !!t.hcpDialogueBefore).length;
+    const isFirstHcpResponse = (
+      respondingToTurn.turnNumber === 0
+      && !respondingToTurn.hcpDialogueBefore
+      && priorRepTurns === 0
+      && priorHcpDialogueTurns === 0
+    );
+
+    const buildFirstTurnScenarioFallback = () => {
+      const openingContext = String(
+        scenario.opening_scene
+        || scenario.openingScene
+        || scenario.description
+        || scenario.context
+        || ''
+      ).trim();
+      const openingLower = openingContext.toLowerCase();
+      const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|patients)\b/.test(openingLower);
+      const repPreview = String(repMessage || '').replace(/[?.!]+$/g, '').trim().split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+      const acknowledgment = repPreview
+        ? `I hear you on ${repPreview}.`
+        : 'Thanks for reaching out.';
+
+      if (pressured) {
+        return `${acknowledgment} I'm under time pressure right now, so keep this focused on what matters most for my patients.`;
+      }
+
+      return `${acknowledgment} Given the situation in my practice, what specifically do you want to focus on first?`;
+    };
+
+    nextHcpDialogue = isFirstHcpResponse
+      ? buildFirstTurnScenarioFallback()
+      : "I see. Let me consider that.";
+
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
         hcpProfile: nextProfile,
         historyText,
-        isOpening: false,
+        isOpening: isFirstHcpResponse,
       });
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
