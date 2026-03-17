@@ -169,7 +169,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }, [scenario]);
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
-  const sendMessage = async () => {
+  const sendMessage = async (rawInput = input) => {
     if (sendInFlightRef.current) return;
 
     // TURN ORDER RULE
@@ -206,8 +206,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         exitStateActive = true;
       }
     }
-    if (repExitIntent.test(input.trim()) || followUpTimeConfirmed) {
-      exitOrSchedulingState = repExitIntent.test(input.trim()) || followUpTimeConfirmed;
+    if (repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed) {
+      exitOrSchedulingState = repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed;
     }
     // If scheduling is confirmed, do not generate further HCP turns
     if (exitStateActive && schedulingConfirmed) {
@@ -217,7 +217,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
     if (exitOrSchedulingState) {
       // Only end session if rep explicitly signals exit intent
-      if (repExitIntent.test(input.trim())) {
+      if (repExitIntent.test(String(rawInput).trim())) {
         let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
         let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
         setTurns([...turns, {
@@ -227,7 +227,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           severityBefore: 0,
           cueBefore: contextualCue,
           hcpDialogueBefore: nextHcpDialogue,
-          repMessage: sanitizeUserMessage(input),
+          repMessage: sanitizeUserMessage(rawInput),
           alignment: null,
           hcpStateAfter: null,
         }]);
@@ -235,11 +235,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return; // Ensure no further turn creation occurs
       }
     }
-    if (!sanitizeUserMessage(input) || isLoading) return;
+    if (!sanitizeUserMessage(rawInput) || isLoading) return;
 
     sendInFlightRef.current = true;
     try {
-      const repMessage = sanitizeUserMessage(input);
+      const repMessage = sanitizeUserMessage(rawInput);
       setInput("");
       setIsLoading(true);
 
@@ -250,6 +250,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // The turn the rep is responding to = last turn in the array (which has a hcpDialogueBefore but no repMessage yet)
     const respondingToTurn = turns[turns.length - 1];
+    if (!respondingToTurn || respondingToTurn.repMessage) {
+      setIsLoading(false);
+      return;
+    }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
@@ -452,7 +456,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     });
 
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
-    setTurns([...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn]);
+    setTurns((prevTurnsState) => {
+      const currentRespondingTurn = prevTurnsState[prevTurnsState.length - 1];
+      if (!currentRespondingTurn) return prevTurnsState;
+      if (currentRespondingTurn.turnNumber !== respondingToTurn.turnNumber) return prevTurnsState;
+      if (currentRespondingTurn.repMessage) return prevTurnsState;
+
+      const replaced = [...prevTurnsState.slice(0, prevTurnsState.length - 1), lockedRespondingTurn];
+      const hasNextTurnAlready = prevTurnsState.some(
+        (t) => t.turnNumber === nextTurn.turnNumber && !t.repMessage && t.hcpDialogueBefore
+      );
+      return hasNextTurnAlready ? replaced : [...replaced, nextTurn];
+    });
 
       setIsLoading(false);
       speak(nextHcpDialogue);
@@ -834,7 +849,7 @@ ${actionText}`;
                       <div className="flex flex-col items-start gap-1">
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
@@ -923,8 +938,7 @@ ${actionText}`;
                     if (isLoading || isEnding) return;
                     const message = sanitizeUserMessage(input);
                     if (!message) return;
-                    setInput(""); // clear input immediately
-                    sendMessage();
+                    sendMessage(input);
                   }}
                   className="flex gap-2 items-center"
                 >
