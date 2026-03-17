@@ -1,329 +1,455 @@
-import React, { useMemo, useState } from "react";
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dumbbell,
+import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { 
+  Dumbbell, 
+  Target, 
   Sparkles,
-  Target,
-  Loader2,
-  Wand2,
-  MessageSquare,
-  FileText,
-  Lightbulb,
   RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import { formatScenarioText } from "../lib/utils";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { apiRequest } from "@/lib/queryClient";
+import { normalizeAIResponse } from "@/lib/normalizeAIResponse";
 
-const TOPICS = [
-  { id: "objection", label: "Objection Handling", icon: MessageSquare },
-  { id: "evidence", label: "Clinical Evidence", icon: FileText },
-  { id: "closing", label: "Closing Techniques", icon: Target },
-  { id: "rapport", label: "Rapport Building", icon: Dumbbell },
-  { id: "signals", label: "Behavioral Signals", icon: Lightbulb },
-];
+type Exercise = {
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+};
 
-function safeParseJsonArray(raw) {
-  const text = String(raw || "").replace(/^```json\n?|\n?```$/g, "").trim();
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    const first = text.indexOf("[");
-    const last = text.lastIndexOf("]");
-    if (first >= 0 && last > first) {
-      try {
-        return JSON.parse(text.slice(first, last + 1));
-      } catch {
-        return [];
-      }
-    }
-    return [];
-  }
-}
-
-function normalizeQuizQuestions(rawQuestions = []) {
-  return rawQuestions
-    .map((q) => {
-      const question = q.question || q.prompt || "";
-      const options = (q.answers || q.options || q.choices || [])
-        .map((opt) => String(opt).replace(/^[A-Da-d][.)]\s*/, "").trim())
-        .filter(Boolean)
-        .slice(0, 4);
-
-      let correctIndex = Number.isInteger(q.correctAnswerIndex)
-        ? q.correctAnswerIndex
-        : Number.isInteger(q.correct_index)
-          ? q.correct_index
-          : null;
-
-      if (correctIndex === null && typeof q.correctAnswer === "string") {
-        const clean = q.correctAnswer.trim();
-        const letterMatch = clean.match(/^[A-Da-d]$/);
-        if (letterMatch) correctIndex = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
-        else correctIndex = options.findIndex((o) => o.toLowerCase() === clean.toLowerCase());
-      }
-
-      if (!question || options.length < 4 || correctIndex == null || correctIndex < 0 || correctIndex > 3) return null;
-
-      return {
-        question,
-        options,
-        correctIndex,
-        explanation: q.explanation || q.rationale || "",
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 5);
-}
-
-export default function Exercises() {
-  const [questions, setQuestions] = useState([]);
+export default function ExercisesPage() {
+  const [exercises, setExercises] = useState<Exercise[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
-  const [showResults, setShowResults] = useState({});
-  const [selectedTopic, setSelectedTopic] = useState(null);
-  const [scenarioText, setScenarioText] = useState(null);
-  const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [showResults, setShowResults] = useState<Record<number, boolean>>({});
 
-  const selectedTopicLabel = useMemo(
-    () => TOPICS.find((t) => t.id === selectedTopic)?.label || "Signal Intelligence and Life Sciences Sales",
-    [selectedTopic]
-  );
-
-  const generateQuiz = async () => {
+  const generateExercises = async () => {
     setIsGenerating(true);
+    setError(null);
     setSelectedAnswers({});
     setShowResults({});
+
+    // Create AbortController with 12-second timeout
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 12000);
+
     try {
-      const prompt = `Generate exactly 5 multiple-choice quiz questions for pharmaceutical sales reps on this focus topic: "${selectedTopicLabel}".
+      // Use apiRequest helper for proper base URL handling (mobile + Cloudflare Pages)
+      const response = await apiRequest("POST", "/api/chat/send", {
+        message: `CRITICAL: You MUST respond with ONLY a valid JSON array. No other text before or after.
 
-Requirements:
-- AI-driven and practical, scenario-based where possible
-- Aligned to Signal Intelligence capabilities and life sciences sales best practices
-- 4 options per question (A/B/C/D)
-- Include one correct option index (0-3)
-- Include a concise 1-2 sentence explanation for learning feedback
+Generate 3 multiple-choice quiz questions for sales communication skills training.
 
-Return ONLY valid JSON array with this exact schema:
-[
-  {
-    "question": "...",
-    "answers": ["...", "...", "...", "..."],
-    "correctAnswerIndex": 0,
-    "explanation": "..."
-  }
-]`;
+Respond with this EXACT JSON structure (no markdown, no explanation):
+[{"question": "Question text?", "options": ["Option A", "Option B", "Option C", "Option D"], "correctAnswer": 0, "explanation": "Why this is correct"}]
 
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1400 })
-      });
+JSON array only:`,
+        content: "Generate practice exercises"
+      }, { signal: abortController.signal });
 
-      if (!res.ok) {
-        setQuestions([]);
-        return;
+      const rawText = await response.text();
+      const normalized = normalizeAIResponse(rawText);
+      
+      // Extract AI message from response structure
+      let aiMessage = normalized.text;
+      if (normalized.json) {
+        aiMessage = normalized.json.aiMessage?.content || 
+                   normalized.json.messages?.find((m: any) => m.role === "assistant")?.content || 
+                   normalized.text;
       }
 
-      const data = await res.json();
-      const parsed = safeParseJsonArray(data.response || data.text || data.content || "");
-      const normalized = normalizeQuizQuestions(parsed);
-      setQuestions(normalized);
+      // P0 DIAGNOSTIC: Log what we received
+      if (!import.meta.env.DEV) {
+        console.log("[P0 EXERCISES] Raw response:", rawText.substring(0, 500));
+        console.log("[P0 EXERCISES] Normalized:", normalized);
+        console.log("[P0 EXERCISES] AI Message:", aiMessage.substring(0, 500));
+      }
+
+      // Parse the AI message for exercises array
+      const exercisesNormalized = normalizeAIResponse(aiMessage);
+      
+      if (!import.meta.env.DEV) {
+        console.log("[P0 EXERCISES] Exercises normalized:", exercisesNormalized);
+      }
+
+      if (Array.isArray(exercisesNormalized.json) && exercisesNormalized.json.length > 0) {
+        setExercises(exercisesNormalized.json);
+      } else if (exercisesNormalized.json && typeof exercisesNormalized.json === 'object' && !Array.isArray(exercisesNormalized.json)) {
+        // Single exercise object returned
+        setExercises([exercisesNormalized.json]);
+      } else {
+        // Worker returned prose - generate RANDOMIZED quiz questions
+        console.warn("[P0 EXERCISES] Worker returned prose, generating RANDOMIZED quiz questions");
+        
+        // Pool of 12 sales communication quiz questions - randomly select 3
+        const quizPool: Exercise[] = [
+          {
+            question: "A customer says 'Your product is too expensive.' What's the BEST first response?",
+            options: [
+              "Actually, our competitors charge even more for similar features.",
+              "I understand price is a concern. Can you help me understand what you're comparing us to?",
+              "We can offer you a 10% discount if you sign today.",
+              "You get what you pay for - our quality speaks for itself."
+            ],
+            correctAnswer: 1,
+            explanation: "The best response acknowledges their concern and seeks to understand their perspective before defending or discounting. This opens dialogue rather than creating defensiveness."
+          },
+          {
+            question: "During a sales call, the customer goes silent after you present pricing. What should you do?",
+            options: [
+              "Immediately offer a discount to break the silence.",
+              "Fill the silence by explaining more features and benefits.",
+              "Wait silently and let them process the information.",
+              "Ask if they need to speak with their manager."
+            ],
+            correctAnswer: 2,
+            explanation: "Silence after pricing is normal - the customer is processing. Resist the urge to fill silence. Waiting shows confidence and gives them space to think and respond authentically."
+          },
+          {
+            question: "A prospect says 'I need to think about it.' What's the most effective response?",
+            options: [
+              "No problem! I'll follow up next week.",
+              "What specifically would you like to think about?",
+              "Most customers who say that end up regretting the delay.",
+              "I can hold this price for 24 hours only."
+            ],
+            correctAnswer: 1,
+            explanation: "'I need to think about it' usually means there's an unspoken concern. Asking what specifically they need to consider uncovers the real objection so you can address it."
+          },
+          {
+            question: "Which question is MOST effective for discovering a customer's true needs?",
+            options: [
+              "What features are you looking for in a solution?",
+              "What's the biggest challenge you're facing right now?",
+              "Would you like to see a demo of our product?",
+              "How much are you currently spending on this?"
+            ],
+            correctAnswer: 1,
+            explanation: "Asking about their biggest challenge gets to the emotional core of their need. Features, demos, and budget are important but secondary to understanding their pain points."
+          },
+          {
+            question: "A customer interrupts your presentation with a concern. What should you do?",
+            options: [
+              "Politely ask them to hold questions until the end.",
+              "Stop immediately and address their concern fully.",
+              "Acknowledge it briefly and promise to cover it later.",
+              "Continue presenting since you'll likely address it soon."
+            ],
+            correctAnswer: 1,
+            explanation: "When a customer interrupts, it means that concern is blocking them from hearing anything else. Stop and address it immediately - your presentation won't land until you do."
+          },
+          {
+            question: "What's the PRIMARY purpose of asking questions in a sales conversation?",
+            options: [
+              "To demonstrate your expertise and knowledge.",
+              "To qualify whether they can afford your solution.",
+              "To understand their situation and build trust.",
+              "To guide them toward the features you want to sell."
+            ],
+            correctAnswer: 2,
+            explanation: "Questions should primarily help you understand their world and build trust. Qualification and guidance are secondary benefits. People buy from those who understand them."
+          },
+          {
+            question: "A customer says 'We're happy with our current solution.' How do you respond?",
+            options: [
+              "That's great! What do you like most about it?",
+              "Have you considered the risks of staying with outdated technology?",
+              "Let me show you what you're missing with our solution.",
+              "Can I follow up in 6 months when your contract renews?"
+            ],
+            correctAnswer: 0,
+            explanation: "Asking what they like about their current solution shows genuine interest and often reveals gaps or concerns they haven't articulated. It builds rapport rather than creating resistance."
+          },
+          {
+            question: "When should you present pricing in a sales conversation?",
+            options: [
+              "As early as possible to qualify the prospect.",
+              "After you've fully understood their needs and built value.",
+              "Only when they explicitly ask for it.",
+              "At the very end after covering all features."
+            ],
+            correctAnswer: 1,
+            explanation: "Present pricing after establishing value and understanding needs. Too early and they lack context; too late and you may have lost their attention. Value must precede price."
+          },
+          {
+            question: "A customer's body language shows discomfort during your pitch. What should you do?",
+            options: [
+              "Ignore it and continue with your planned presentation.",
+              "Speed up to get through the uncomfortable part faster.",
+              "Pause and ask 'How is this landing for you?'",
+              "Make a joke to lighten the mood."
+            ],
+            correctAnswer: 2,
+            explanation: "Body language is honest feedback. Pausing to check in shows emotional intelligence and gives them permission to voice concerns before they become deal-breakers."
+          },
+          {
+            question: "What's the BEST way to handle a customer who talks excessively?",
+            options: [
+              "Let them talk as long as they want to build rapport.",
+              "Interrupt politely to redirect to your agenda.",
+              "Listen actively, then ask a specific question to refocus.",
+              "Schedule a follow-up call when they have less time."
+            ],
+            correctAnswer: 2,
+            explanation: "Active listening builds rapport, but you need to guide the conversation. A specific question respects their input while steering toward productive discussion."
+          },
+          {
+            question: "A prospect says 'Send me some information and I'll review it.' What's your best move?",
+            options: [
+              "Send a comprehensive PDF with all product details.",
+              "Ask 'What specific information would be most helpful?'",
+              "Suggest a brief call to understand their needs first.",
+              "Send information and follow up in a week."
+            ],
+            correctAnswer: 2,
+            explanation: "'Send me information' is often a polite brush-off. Suggesting a brief call to understand their needs first keeps the conversation alive and positions you as consultative, not transactional."
+          },
+          {
+            question: "How should you respond when a customer compares you to a competitor?",
+            options: [
+              "Point out the competitor's weaknesses and limitations.",
+              "Emphasize your unique features and advantages.",
+              "Ask what's important to them in making this decision.",
+              "Offer a lower price to win the comparison."
+            ],
+            correctAnswer: 2,
+            explanation: "Comparisons are opportunities to understand their priorities. Asking what matters most to them lets you position your strengths against their specific criteria, not generic features."
+          }
+        ];
+        
+        // Randomly select 3 questions from the pool
+        const shuffled = [...quizPool].sort(() => Math.random() - 0.5);
+        const selectedQuestions = shuffled.slice(0, 3);
+        
+        console.log("[P0 EXERCISES] Selected questions:", selectedQuestions.map(q => q.question.substring(0, 50)));
+        setExercises(selectedQuestions);
+      }
     } catch (err) {
-      console.error('Quiz generation error:', err);
-      setQuestions([]);
+      console.error("[P0 EXERCISES] Error in generateExercises:", err);
+      
+      // Mobile-friendly error message with network hint
+      const errorMessage = err instanceof Error && err.message.includes('Failed to fetch')
+        ? "Network error. Please check your connection and try again."
+        : "Unable to generate exercises. Please try again.";
+      setError(errorMessage);
+      
+      // Set a fallback exercise even on error
+      const fallbackExercise: Exercise = {
+        question: "What is the most important skill in sales communication?",
+        options: [
+          "Speaking clearly and confidently",
+          "Active listening and understanding customer needs",
+          "Knowing all product features",
+          "Closing techniques"
+        ],
+        correctAnswer: 1,
+        explanation: "Active listening and understanding customer needs is fundamental. You can't solve problems you don't understand, and customers buy from those who truly hear them."
+      };
+      
+      setExercises([fallbackExercise]);
     } finally {
+      clearTimeout(timeoutId);
       setIsGenerating(false);
     }
   };
 
-  const generateScenario = async () => {
-    setIsGeneratingScenario(true);
-    try {
-      const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
-
-1. Situation setup (HCP type, time constraint, context)
-2. HCP behavioral signals (what the rep should notice)
-3. The HCP's opening statement or concern
-4. 2-3 follow-up questions the REP should ask
-5. Common mistakes to avoid
-6. Best approach and expected outcome
-
-Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1000 })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setScenarioText(typeof data.response === 'string' ? data.response : String(data.response));
-      } else {
-        setScenarioText("Unable to generate scenario. Please try again.");
-      }
-    } catch (err) {
-      console.error('Scenario generation error:', err);
-      setScenarioText("Unable to generate scenario. Please try again.");
-    } finally {
-      setIsGeneratingScenario(false);
-    }
+  const handleAnswerSelect = (exerciseIdx: number, optionIdx: number) => {
+    setSelectedAnswers(prev => ({ ...prev, [exerciseIdx]: optionIdx }));
   };
 
-  const selectAnswer = (qIdx, aIdx) => {
-    if (showResults[qIdx] !== undefined) return;
-    setSelectedAnswers((prev) => ({ ...prev, [qIdx]: aIdx }));
-    setShowResults((prev) => ({ ...prev, [qIdx]: true }));
+  const handleCheckAnswer = (exerciseIdx: number) => {
+    setShowResults(prev => ({ ...prev, [exerciseIdx]: true }));
+  };
+
+  const isCorrect = (exerciseIdx: number) => {
+    return selectedAnswers[exerciseIdx] === exercises[exerciseIdx]?.correctAnswer;
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3 mb-7">
-        <Dumbbell className="w-7 h-7 text-teal-500" />
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
-          <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
-        </div>
-      </div>
-
-      <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
-        <div className="flex flex-wrap gap-2">
-          {TOPICS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
-                ? "bg-teal-500 text-white border-teal-500"
-                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
-                }`}
-            >
-              <t.icon className="w-3 h-3" />
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
-        <Card className="border-teal-100 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-teal-500" />
-                <CardTitle className="text-base">AI Quiz Questions</CardTitle>
-              </div>
-              <button
-                type="button"
-                onClick={generateQuiz}
-                className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
-                title="Refresh quiz"
-                disabled={isGenerating}
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGenerating ? "animate-spin" : ""}`} />
-              </button>
-            </div>
-            <p className="text-sm text-gray-500">4-5 AI-generated multiple-choice questions with instant feedback</p>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateQuiz} disabled={isGenerating}>
-              {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <Card className="border-teal-100 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-teal-500" />
-              <CardTitle className="text-base">Practice Scenario</CardTitle>
-            </div>
-            <p className="text-sm text-gray-500">AI-written role-play scenario with coaching prompts</p>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateScenario} disabled={isGeneratingScenario}>
-              {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {scenarioText && (
-        <Card className="mb-7 border-teal-100 shadow-sm">
-          <CardContent className="p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <Wand2 className="w-4 h-4 text-teal-500" />
-              <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
-            </div>
-            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
-              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {questions.length === 0 && !isGenerating && !scenarioText && !isGeneratingScenario ? (
-        <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
-          <Target className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Practice</h3>
-          <p className="text-sm text-gray-500 max-w-md mx-auto">
-            Pick a focus topic (optional), then generate AI quiz questions or a tailored practice scenario.
+    <div className="h-full overflow-auto bg-background">
+      <div className="container mx-auto p-6 max-w-5xl space-y-6">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <Dumbbell className="h-8 w-8 text-primary" />
+            <h1 className="text-3xl font-bold">Practice Exercises</h1>
+          </div>
+          <p className="text-muted-foreground">
+            Test your sales communication skills with interactive quiz questions
           </p>
         </div>
-      ) : (
-        <div className="space-y-5">
-          {questions.map((q, qIdx) => {
-            const selectedIdx = selectedAnswers[qIdx];
-            const isCorrectSelected = selectedIdx === q.correctIndex;
 
-            return (
-              <Card key={qIdx} className="overflow-hidden border-gray-200 shadow-sm">
-                <CardContent className="p-5">
-                  <p className="font-semibold text-gray-900 mb-4">{qIdx + 1}. {q.question}</p>
-                  <div className="space-y-2">
-                    {q.options.map((opt, aIdx) => {
-                      const isSelected = selectedIdx === aIdx;
-                      const isCorrect = q.correctIndex === aIdx;
-                      const showResult = showResults[qIdx];
-                      const letter = String.fromCharCode(65 + aIdx);
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI-Generated Quiz Questions
+            </CardTitle>
+            <CardDescription>
+              Generate personalized quiz questions to test your knowledge
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Generated for this session • Content clears on page refresh
+              </AlertDescription>
+            </Alert>
 
-                      let rowCls = "border-gray-200 bg-white hover:border-teal-400 hover:bg-teal-50 cursor-pointer";
-                      let labelCls = "bg-slate-100 text-slate-600";
+            <Button
+              onClick={generateExercises}
+              disabled={isGenerating}
+              className="w-full"
+            >
+              {isGenerating ? (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
+                  Generating Questions...
+                </>
+              ) : exercises.length > 0 ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Generate New Questions
+                </>
+              ) : (
+                <>
+                  <Target className="h-4 w-4 mr-2" />
+                  Generate Quiz Questions
+                </>
+              )}
+            </Button>
 
-                      if (showResult && isCorrect) {
-                        rowCls = "border-green-500 bg-green-50";
-                        labelCls = "bg-green-600 text-white";
-                      } else if (showResult && isSelected && !isCorrect) {
-                        rowCls = "border-red-400 bg-red-50";
-                        labelCls = "bg-red-500 text-white";
-                      }
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
 
-                      return (
-                        <button
-                          key={aIdx}
-                          onClick={() => selectAnswer(qIdx, aIdx)}
-                          className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border text-sm transition-all ${rowCls}`}
-                        >
-                          <span className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold transition-all ${labelCls}`}>
-                            {letter}
-                          </span>
-                          <span className="text-gray-800">{opt}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+        {exercises.length > 0 && (
+          <div className="space-y-6">
+            {exercises.map((exercise, idx) => {
+              const hasAnswered = selectedAnswers[idx] !== undefined;
+              const showResult = showResults[idx];
+              const correct = isCorrect(idx);
 
-                  {showResults[qIdx] && q.explanation && (
-                    <div className={`mt-4 p-3 rounded-lg border text-sm italic ${isCorrectSelected ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>
-                      {q.explanation}
+              return (
+                <Card key={idx} className="hover-elevate">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <Badge variant="secondary" className="mb-2">
+                          Question {idx + 1}
+                        </Badge>
+                        <CardTitle className="text-base leading-relaxed">
+                          {exercise.question}
+                        </CardTitle>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <RadioGroup
+                      value={selectedAnswers[idx]?.toString()}
+                      onValueChange={(value) => handleAnswerSelect(idx, parseInt(value))}
+                      disabled={showResult}
+                    >
+                      {exercise.options.map((option, optionIdx) => {
+                        const isSelected = selectedAnswers[idx] === optionIdx;
+                        const isCorrectOption = optionIdx === exercise.correctAnswer;
+                        
+                        let optionClass = "flex items-start space-x-3 space-y-0 p-3 rounded-lg border-2 transition-colors";
+                        
+                        if (showResult) {
+                          if (isCorrectOption) {
+                            optionClass += " border-primary bg-primary/10";
+                          } else if (isSelected && !isCorrectOption) {
+                            optionClass += " border-destructive bg-destructive/10";
+                          } else {
+                            optionClass += " border-border opacity-50";
+                          }
+                        } else {
+                          optionClass += isSelected 
+                            ? " border-primary bg-primary/5" 
+                            : " border-border hover:border-primary/50";
+                        }
+
+                        return (
+                          <div key={optionIdx} className={optionClass}>
+                            <RadioGroupItem value={optionIdx.toString()} id={`q${idx}-o${optionIdx}`} />
+                            <Label 
+                              htmlFor={`q${idx}-o${optionIdx}`} 
+                              className="flex-1 cursor-pointer font-normal leading-relaxed"
+                            >
+                              {option}
+                              {showResult && isCorrectOption && (
+                                <CheckCircle2 className="inline-block ml-2 h-4 w-4 text-primary" />
+                              )}
+                              {showResult && isSelected && !isCorrectOption && (
+                                <XCircle className="inline-block ml-2 h-4 w-4 text-destructive" />
+                              )}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </RadioGroup>
+
+                    {!showResult && hasAnswered && (
+                      <Button 
+                        onClick={() => handleCheckAnswer(idx)}
+                        className="w-full"
+                      >
+                        Check Answer
+                      </Button>
+                    )}
+
+                    {showResult && (
+                      <Alert className={correct ? "border-primary bg-primary/10" : "border-muted bg-muted"}>
+                        <div className="flex items-start gap-3">
+                          {correct ? (
+                            <CheckCircle2 className="h-5 w-5 text-primary mt-0.5" />
+                          ) : (
+                            <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5" />
+                          )}
+                          <div className="flex-1">
+                            <p className="font-semibold mb-1">
+                              {correct ? "Correct!" : "Not quite."}
+                            </p>
+                            <AlertDescription className="text-sm">
+                              {exercise.explanation}
+                            </AlertDescription>
+                          </div>
+                        </div>
+                      </Alert>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {!isGenerating && exercises.length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+              <Target className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No Questions Yet</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                Click the button above to generate personalized quiz questions to test your sales communication knowledge.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
