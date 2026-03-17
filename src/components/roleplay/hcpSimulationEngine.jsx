@@ -1537,16 +1537,20 @@ export function buildHCPDialoguePrompt({
     disengaged: 'withdrawing and signaling the conversation is ending',
   }
 
+  const historyLines = String(historyText || '').split('\n')
+  const repLine = [...historyLines]
+    .reverse()
+    .find((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
+  const lastRepMessage = repLine
+    ? repLine.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim()
+    : ''
+
   let contextHint = ''
-  if (historyText) {
-    const userLines = historyText.split('\n').filter((l) => l.startsWith('Rep:'))
-    const lastUser = userLines.length > 0 ? userLines[userLines.length - 1] : ''
-    if (lastUser) {
-      contextHint =
-        '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' +
-        sanitize(lastUser.replace('Rep:', '').trim()) +
-        '"\n- Respond directly to that input, adapting your focus and tone to your locked state.'
-    }
+  if (lastRepMessage) {
+    contextHint =
+      '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' +
+      sanitize(lastRepMessage) +
+      '"\n- Respond directly to that input, adapting your focus and tone to your locked state.'
   }
 
   let prompt = ''
@@ -1562,12 +1566,13 @@ export function buildHCPDialoguePrompt({
   prompt += '- Across turns, vary the type of concern you raise (clinical, operational, applicability, skepticism/limits of data, or practical constraints) rather than repeating the same reasoning pattern.\n'
 
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
+  prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(scenario.description || scenario.context || '')
+  prompt += '\nOPENING SCENE: ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
 
   if (isOpening) {
-    prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '')
     prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
     prompt += '\nREALISM RULE: Doctors may be busy, but can still be human, cordial, neutral, or direct depending on context.'
   }
