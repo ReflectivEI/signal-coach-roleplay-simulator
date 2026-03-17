@@ -24,25 +24,25 @@ const REPS = [
 
 // Icon mapping for capabilities
 const ICON_MAP = {
-  signal_awareness: Search,
-  signal_interpretation: Ear,
-  value_connection: Heart,
-  customer_engagement: Users,
-  objection_navigation: Shield,
-  conversation_management: GitFork,
-  adaptive_response: Shuffle,
-  commitment_generation: Target,
+  question_quality: Search,
+  listening_responsiveness: Ear,
+  making_it_matter: Heart,
+  customer_engagement_cues: Users,
+  objection_handling: Shield,
+  conversation_control: GitFork,
+  adaptability: Shuffle,
+  commitment_gaining: Target,
 };
 
 const COLOR_MAP = {
-  signal_awareness: "#14b8a6",
-  signal_interpretation: "#0284c7",
-  value_connection: "#8b5cf6",
-  customer_engagement: "#f59e0b",
-  objection_navigation: "#f97316",
-  conversation_management: "#1A334D",
-  adaptive_response: "#06b6d4",
-  commitment_generation: "#10b981",
+  question_quality: "#14b8a6",
+  listening_responsiveness: "#0284c7",
+  making_it_matter: "#8b5cf6",
+  customer_engagement_cues: "#f59e0b",
+  objection_handling: "#f97316",
+  conversation_control: "#1A334D",
+  adaptability: "#06b6d4",
+  commitment_gaining: "#10b981",
 };
 
 // Transform SOT data into manager view format with correct metric names from SOT
@@ -56,16 +56,16 @@ const SIGNAL_CAPABILITIES = SOT_CAPABILITIES.map(cap => ({
 }));
 
 const TRAINING_MODULES = [
-  { id: 1, capability: "signal_awareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
-  { id: 2, capability: "signal_awareness", title: "Question Mastery Exercises", type: "Interactive", duration: "30 min", level: "Beginner" },
-  { id: 3, capability: "signal_interpretation", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min", level: "Advanced" },
-  { id: 4, capability: "value_connection", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
-  { id: 5, capability: "customer_engagement", title: "HCP Engagement Signals", type: "Video", duration: "25 min", level: "Beginner" },
-  { id: 6, capability: "objection_navigation", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
-  { id: 7, capability: "conversation_management", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
-  { id: 8, capability: "adaptive_response", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
-  { id: 9, capability: "commitment_generation", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min", level: "Intermediate" },
-  { id: 10, capability: "signal_interpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
+  { id: 1, capability: "question_quality", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
+  { id: 2, capability: "question_quality", title: "Question Mastery Exercises", type: "Interactive", duration: "30 min", level: "Beginner" },
+  { id: 3, capability: "listening_responsiveness", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min", level: "Advanced" },
+  { id: 4, capability: "making_it_matter", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
+  { id: 5, capability: "customer_engagement_cues", title: "HCP Engagement Signals", type: "Video", duration: "25 min", level: "Beginner" },
+  { id: 6, capability: "objection_handling", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
+  { id: 7, capability: "conversation_control", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
+  { id: 8, capability: "adaptability", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
+  { id: 9, capability: "commitment_gaining", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min", level: "Intermediate" },
+  { id: 10, capability: "listening_responsiveness", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
 ];
 
 const territoryRadarData = [
