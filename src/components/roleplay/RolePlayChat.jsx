@@ -34,6 +34,7 @@ import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
+import { normalizeTone } from "@/lib/conversationToneNormalization";
 
 function escapeHTML(text) {
   return String(text)
@@ -49,7 +50,8 @@ function sanitizeUserMessage(text) {
 function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
   const normalizedText = normalizeMessage(originalText);
-  const renderedText = escapeHTML(normalizedText);
+  const toneNormalizedText = normalizeTone(normalizedText);
+  const renderedText = escapeHTML(toneNormalizedText);
 
   if (
     import.meta.env.DEV
@@ -774,6 +776,14 @@ ${actionText}`;
 
                   This does NOT modify the underlying
                   conversation history or scoring inputs.
+                */}
+                {/*
+                  DISPLAY TONE NORMALIZATION
+
+                  Tone adjustments improve realism of dialogue.
+
+                  These transformations occur ONLY during UI rendering
+                  and do not affect scoring or stored conversation data.
                 */}
                 {/*
                   CHAT LAYOUT STRUCTURE RULE
