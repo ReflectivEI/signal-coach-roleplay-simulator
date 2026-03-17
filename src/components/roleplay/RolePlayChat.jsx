@@ -15,9 +15,6 @@ import {
   TEMPERATURES,
   updateTurnState,
 } from "./hcpSimulationEngine";
-import {
-  generateContextualCue,
-} from "./hcpStateEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
 // Compact SOT block injected into end-session LLM feedback prompt
@@ -138,6 +135,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const activeRequestIdRef = useRef(0);
   const lastSubmittedTurnKeyRef = useRef("");
   const loggedTurnKeysRef = useRef(new Set());
+  const processedTurnKeysRef = useRef(new Set());
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -315,6 +313,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
+    const generationKey = `${respondingToTurn.turnNumber}::${repMessage.toLowerCase()}`;
+    if (processedTurnKeysRef.current.has(generationKey)) {
+      setIsLoading(false);
+      return;
+    }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
@@ -400,6 +403,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      generationKey,
     };
 
     // 4. Build locked HCP profile for the NEXT turn — SINGLE SOURCE OF TRUTH
@@ -502,6 +506,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
+    const buildNonRepeatingScenarioFallback = (previousDialogue = "") => {
+      const base = buildFollowUpScenarioFallback();
+      const prevNorm = String(previousDialogue || "").trim().toLowerCase();
+      const baseNorm = String(base || "").trim().toLowerCase();
+      if (!prevNorm || prevNorm !== baseNorm) return base;
+
+      const repLower = String(repMessage || "").toLowerCase();
+      const repTopicTokens = repLower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today"]).has(w))
+        .slice(0, 4);
+      const repTopic = repTopicTokens.join(" ") || "that point";
+
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return `On ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
+      }
+
+      if (scenarioPrepFocus) {
+        return `On ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
+      }
+
+      if (scenarioMonitoringFocus) {
+        return `On ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
+      }
+
+      return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
+    };
+
     const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
       const value = String(dialogue || "").toLowerCase();
       if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
@@ -530,7 +563,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let usedDeterministicFallback = false;
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
-      : "I see. Let me consider that.";
+      : buildFollowUpScenarioFallback();
 
     try {
       const systemPrompt = buildHCPDialoguePrompt({
@@ -539,15 +572,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         historyText,
         isOpening: isFirstHcpResponse,
       });
-      const res = await fetch('/api/roleplay', {
+      const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'roleplay',
-          action: 'continue',
-          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
-          history: flattenTurns(prevTurns),
-          userInput: systemPrompt,
+          prompt: systemPrompt,
+          max_tokens: 220,
+          temperature: 0,
+          roleplay: true,
         })
       });
       if (res.ok) {
@@ -587,12 +619,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : buildFollowUpScenarioFallback();
     }
 
+    const previousHcpDialogue = String(
+      respondingToTurn?.hcpDialogueBefore
+      || [...prevTurns]
+        .reverse()
+        .find((t) => t.hcpDialogueBefore)?.hcpDialogueBefore
+      || ""
+    );
+
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
-      : buildFollowUpScenarioFallback();
+      : buildNonRepeatingScenarioFallback(previousHcpDialogue);
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
       usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
+    }
+
+    if (!isFirstHcpResponse) {
+      const nextNorm = String(nextHcpDialogue || "").trim().toLowerCase();
+      const prevNorm = String(previousHcpDialogue || "").trim().toLowerCase();
+      if (nextNorm && prevNorm && nextNorm === prevNorm) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+      }
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
@@ -613,18 +662,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
-      contextualCue = generateContextualCue(
-        sid,
-        nextTurnNumber,
-        nextHcpState,
-        nextHcpDialogue,
-        repMessage,
-        prevTurns
-      );
-      // Fallback: keep deterministic cue behavior without external cue bank dependency
-      if (!contextualCue || usedDeterministicFallback) {
-        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
-      }
+      // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
+      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
     }
 
     contextualCue = hardenTextSurface(contextualCue);
@@ -654,6 +693,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      generationKey,
     };
 
     if (requestId !== activeRequestIdRef.current) {
@@ -669,11 +709,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       const replaced = [...prevTurnsState.slice(0, prevTurnsState.length - 1), lockedRespondingTurn];
       const hasNextTurnAlready = prevTurnsState.some(
-        (t) => t.turnNumber === nextTurn.turnNumber && !t.repMessage && t.hcpDialogueBefore
+        (t) => (
+          t.turnNumber === nextTurn.turnNumber
+          && !t.repMessage
+          && t.hcpDialogueBefore
+        ) || (t.generationKey && t.generationKey === generationKey)
       );
       if (hasNextTurnAlready) {
         return replaced;
       }
+      processedTurnKeysRef.current.add(generationKey);
 
       const turnAuditKey = `${nextTurn.turnNumber}::${repMessage}`;
       if (!loggedTurnKeysRef.current.has(turnAuditKey)) {
@@ -810,15 +855,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : '';
 
       const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
-      const res = await fetch('/api/roleplay', {
+      const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: 'roleplay',
-          action: 'end',
-          scenarioId: String(scenario.id || scenario.scenarioId || scenario.title || 'default'),
-          history: turns,
-          userInput: structuredPrompt,
+          prompt: structuredPrompt,
+          max_tokens: 900,
+          temperature: 0.2,
         })
       });
 
