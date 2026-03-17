@@ -85,6 +85,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
+  const sendInFlightRef = useRef(false);
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -169,6 +170,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
   const sendMessage = async () => {
+    if (sendInFlightRef.current) return;
+
+    // TURN ORDER RULE
+    // Rep and HCP messages must alternate.
+    // Rep → HCP → Rep → HCP
+    // Multiple rep messages in a row are not allowed.
+    const lastTurn = turns[turns.length - 1];
+    const lastRenderedSpeakerIsRep = Boolean(lastTurn?.repMessage);
+    if (lastRenderedSpeakerIsRep) {
+      return;
+    }
+
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
@@ -221,9 +234,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
     if (!sanitizeUserMessage(input) || isLoading) return;
-    const repMessage = sanitizeUserMessage(input);
-    setInput("");
-    setIsLoading(true);
+
+    sendInFlightRef.current = true;
+    try {
+      const repMessage = sanitizeUserMessage(input);
+      setInput("");
+      setIsLoading(true);
 
     // Stop mic if it's still listening when message is sent
     if (isListening) {
@@ -436,11 +452,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
     setTurns([...turns.slice(0, turns.length - 1), lockedRespondingTurn, nextTurn]);
 
-    setIsLoading(false);
-    speak(nextHcpDialogue);
+      setIsLoading(false);
+      speak(nextHcpDialogue);
 
-    // Auto-focus input after HCP responds
-    setTimeout(() => inputRef.current?.focus(), 100);
+      // Auto-focus input after HCP responds
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } finally {
+      sendInFlightRef.current = false;
+    }
   };
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -755,7 +774,7 @@ ${actionText}`;
           {/* CHAT TAB */}
           {activeTab === "chat" && (
             <>
-              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 flex flex-col gap-4">
 
                 {turns.length === 0 && isLoading && (
                   <div className="flex justify-center py-8">
@@ -799,7 +818,7 @@ ${actionText}`;
                   Avoid absolute positioning.
                 */}
                 {turns.map((turn, i) => (
-                  <div key={i} className="flex flex-col gap-2">
+                  <div key={i} className="flex flex-col gap-4">
                     {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
                     {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
                       <div className="flex flex-col items-start gap-1 pl-1">
