@@ -48,7 +48,8 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
   const normalizedText = normalizeMessage(originalText);
   const toneNormalizedText = normalizeTone(normalizedText);
-  const renderedText = escapeHTML(toneNormalizedText);
+  const hardenedText = hardenTextSurface(toneNormalizedText);
+  const renderedText = escapeHTML(hardenedText);
 
   if (
     import.meta.env.DEV
@@ -318,6 +319,17 @@ function buildRepGuidance(turn, allTurns = []) {
   const fallbackSet = FALLBACK_GUIDANCE_LIBRARY[category] || FALLBACK_GUIDANCE_LIBRARY.misalignment_relevance;
   const issueSignal = alignment.rubricAlignmentFlags?.[0] || alignment.misalignments?.[0] || alignment.positives?.[0] || "fallback";
   return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
+}
+
+function buildOpeningTurnGuidance(turn, scenario) {
+  if (!turn || turn.turnNumber !== 0) return null;
+
+  const openingScene = String(scenario?.opening_scene || scenario?.openingScene || "").trim();
+  const objective = String(scenario?.objective || scenario?.goal || "").trim();
+  const openingSnippet = openingScene ? openingScene.split(/\s+/).slice(0, 12).join(" ") : "the opening scene";
+  const objectiveSnippet = objective ? objective.split(/\s+/).slice(0, 12).join(" ") : "the session objective";
+
+  return `⚠ Opening-turn alignment: Anchor your next response to "${openingSnippet}" and connect it to "${objectiveSnippet}" before adding product detail.`;
 }
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -1215,10 +1227,10 @@ ${actionText}`;
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-3 md:px-5 py-3 border-b flex-shrink-0 bg-white">
+        <div className="flex items-start justify-between gap-3 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-[20px] md:text-[24px] leading-snug">{scenario.title}</h2>
+              <h2 className="font-bold text-slate-900 text-[18px] md:text-[22px] leading-snug">{scenario.title}</h2>
               <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${difficultyStyle}`}>{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
@@ -1263,6 +1275,11 @@ ${actionText}`;
               )}
 
               <div className="lg:col-span-4 rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3">
+                <div className="mb-2.5 flex justify-center">
+                  <div className="rounded-xl border border-slate-200 bg-white/90 min-h-[42px] flex items-center justify-center w-full">
+                    {renderTabPills()}
+                  </div>
+                </div>
                 <div className="flex items-start gap-3">
                   <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0">
@@ -1285,11 +1302,13 @@ ${actionText}`;
           </div>
         )}
 
-        <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
-          <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
-            {renderTabPills()}
+        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+          <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
+            <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
+              {renderTabPills()}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -1342,12 +1361,16 @@ ${actionText}`;
                 */}
                 {displayItems.map((item) => {
                   const { turn } = item;
+                  const openingTurnGuidance = buildOpeningTurnGuidance(turn, scenario);
 
                   if (item.kind === "rep") {
                     return (
-                      <div key={item.key} className="ml-auto w-fit max-w-[80%] flex flex-col items-stretch gap-1">
-                        <div className="w-full rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
-                          {sanitizeRenderedMessage(turn.repMessage, "user-message")}
+                      <div key={item.key} className="ml-auto w-full max-w-[96%] flex flex-col items-stretch gap-1">
+                        <div className="flex items-start justify-end gap-2 w-full">
+                          <div className="w-8 h-8 rounded-full bg-teal-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1">REP</div>
+                          <div className="rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium max-w-[94%]" style={{ background: "#39ACAC", color: "white" }}>
+                            {sanitizeRenderedMessage(turn.repMessage, "user-message")}
+                          </div>
                         </div>
                         {turn.alignment && (
                           <>
@@ -1355,7 +1378,7 @@ ${actionText}`;
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{buildRepGuidance(turn, turns)}</div>
+                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{openingTurnGuidance || buildRepGuidance(turn, turns)}</div>
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
                               <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
@@ -1380,7 +1403,7 @@ ${actionText}`;
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[92%] lg:max-w-[95%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="max-w-[96%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
