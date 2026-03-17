@@ -15,9 +15,6 @@ import {
   TEMPERATURES,
   updateTurnState,
 } from "./hcpSimulationEngine";
-import {
-  generateContextualCue,
-} from "./hcpStateEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
 // Compact SOT block injected into end-session LLM feedback prompt
@@ -467,6 +464,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const repLower = String(repMessage || "").toLowerCase();
       const mentionsStudy = /\b(study|trial|data|results|evidence|jama|publication|published|findings|methodology|duration)\b/.test(repLower);
       const mentionsMaterials = /\b(material|materials|brochure|handout|leave-behind|leave behind|resource|resources|printout|one-pager|flyer)\b/.test(repLower);
+      const openingSceneSnippet = String(scenario.opening_scene || scenario.openingScene || "")
+        .split(/[.!?]/)
+        .map((segment) => segment.trim())
+        .filter(Boolean)[0] || "";
 
       if (mentionsStudy) {
         return "I'd like to know more about the study's methodology. What was the duration of the study?";
@@ -494,12 +495,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (scenarioPrepFocus) {
         return repTopic
           ? `You mentioned ${repTopic}. Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`
-          : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
+          : openingSceneSnippet
+            ? `Given what is happening in clinic right now — ${openingSceneSnippet.toLowerCase()} — what is the most practical recommendation you can provide to improve access to PrEP today?`
+            : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
       }
 
       return repTopic
         ? `You mentioned ${repTopic}. Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`
-        : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
+        : openingSceneSnippet
+          ? `Given the current clinic pressure — ${openingSceneSnippet.toLowerCase()} — what is the most practical recommendation you can provide for my workflow today?`
+          : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
@@ -527,16 +532,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "The HCP listens attentively, maintaining steady eye contact while waiting for a practical answer.";
     };
 
-    let usedDeterministicFallback = false;
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
-      : "I see. Let me consider that.";
+      : buildFollowUpScenarioFallback();
 
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
         hcpProfile: nextProfile,
         historyText,
+        repMessage,
         isOpening: isFirstHcpResponse,
       });
       const res = await fetch('/api/roleplay', {
@@ -574,14 +579,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
         }
       } else {
-        usedDeterministicFallback = true;
         nextHcpDialogue = isFirstHcpResponse
           ? buildFirstTurnScenarioFallback()
           : buildFollowUpScenarioFallback();
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
-      usedDeterministicFallback = true;
       nextHcpDialogue = isFirstHcpResponse
         ? buildFirstTurnScenarioFallback()
         : buildFollowUpScenarioFallback();
@@ -591,7 +594,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ? buildFirstTurnScenarioFallback()
       : buildFollowUpScenarioFallback();
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
-      usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
 
@@ -613,18 +615,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
-      contextualCue = generateContextualCue(
-        sid,
-        nextTurnNumber,
-        nextHcpState,
-        nextHcpDialogue,
-        repMessage,
-        prevTurns
-      );
-      // Fallback: keep deterministic cue behavior without external cue bank dependency
-      if (!contextualCue || usedDeterministicFallback) {
-        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
-      }
+      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
     }
 
     contextualCue = hardenTextSurface(contextualCue);
