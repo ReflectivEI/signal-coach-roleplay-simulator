@@ -138,8 +138,6 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0;
 }
 
-// CI guardrail: keep exactly one declaration of each helper below.
-// Duplicate redeclarations here will break Vite/esbuild production builds.
 function hardenTextSurface(text) {
   let value = String(text || "")
     .replace(/\s+/g, " ")
@@ -189,7 +187,6 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
   return scenarioHits > 0 || repHits > 0;
 }
-
 
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -1087,14 +1084,14 @@ ${actionText}`;
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
                           <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                            {renderSafeMessage(turn.hcpDialogueBefore, "hcp-message")}
+                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
                       )}
                       {turn.cueBefore && (
                         <div className="pl-1">
                           <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {renderSafeMessage(turn.cueBefore, "behavioral-cue")}
+                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
                           </p>
                         </div>
                       )}
