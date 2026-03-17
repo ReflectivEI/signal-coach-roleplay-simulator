@@ -1510,6 +1510,7 @@ export function buildHCPDialoguePrompt({
   scenario,
   hcpProfile,
   historyText = null,
+  repMessage = '',
   isOpening = false,
 }) {
   const {
@@ -1564,11 +1565,15 @@ export function buildHCPDialoguePrompt({
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
 
-  if (isOpening) {
-    prompt += '\nSCENARIO DETAILS: ' + sanitize(scenario.description || '')
-    prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
-    prompt += '\nREALISM RULE: Doctors may be busy, but can still be human, cordial, neutral, or direct depending on context.'
-  }
+  const scenarioDescription = sanitize(scenario.description || scenario.context || '')
+  const openingScene = sanitize(scenario.opening_scene || scenario.openingScene || '')
+  const latestRepMessage = sanitize(repMessage || '')
+
+  prompt += '\nSCENARIO DETAILS: ' + scenarioDescription
+  prompt += '\nOPENING SCENE: ' + openingScene
+  prompt += '\nLATEST REP MESSAGE: ' + latestRepMessage
+  prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
+  prompt += '\nREALISM RULE: Doctors may be busy, but can still be human, cordial, neutral, or direct depending on context.'
 
   if (personality) {
     prompt += '\n\nPERSONALITY TRAIT: ' + sanitize(personality.name || personality)
@@ -1653,6 +1658,7 @@ export function buildTurnSimulationBundle({
     scenario,
     hcpProfile: profile,
     historyText,
+    repMessage,
     isOpening,
   })
 
