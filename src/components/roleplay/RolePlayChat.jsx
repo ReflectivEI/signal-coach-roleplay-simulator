@@ -1130,7 +1130,7 @@ ${actionText}`;
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-snug bg-slate-100 text-slate-800 whitespace-normal break-words">
+                          <div className="w-fit max-w-[85%] md:max-w-[85%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-snug bg-slate-100 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>

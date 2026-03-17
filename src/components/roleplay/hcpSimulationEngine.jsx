@@ -1558,6 +1558,8 @@ export function buildHCPDialoguePrompt({
   prompt += '- Never switch roles.\n'
   prompt += '- Never narrate stage directions.\n'
   prompt += '- Output only spoken dialogue.\n'
+  prompt += '- Prefer natural, conversational wording over formulaic phrasing.\n'
+  prompt += '- Vary sentence openings naturally across turns while preserving the same core concern.\n'
 
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
@@ -1600,6 +1602,8 @@ export function buildHCPDialoguePrompt({
   prompt += '- No stage directions, action lines, or parentheticals.\n'
   prompt += '- Your words must be congruent with the physical context.\n'
   prompt += '- Stay in character completely.\n'
+  prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
+  prompt += '- Keep responses specific and practice-worthy, including at least one concrete operational or clinical concern when relevant.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'
@@ -1614,7 +1618,7 @@ export function buildHCPDialoguePrompt({
   if (historyText) {
     prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText)
     prompt +=
-      '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue.'
+      '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue. Keep wording natural and avoid templated repetition.'
   } else {
     prompt +=
       '\n\nThe sales rep has just entered. This is your opening line. React naturally to the rep’s arrival and your current state. Do not ask the rep a question in the opening unless it is completely natural and brief.'
