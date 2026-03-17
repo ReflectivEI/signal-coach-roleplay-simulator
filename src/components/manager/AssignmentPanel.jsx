@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ClipboardList, Plus, CheckCircle2, Clock, AlertTriangle,
@@ -7,16 +8,16 @@ import {
 } from "lucide-react";
 
 const TRAINING_MODULES = [
-  { id: 1, capability: "question_quality", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min" },
-  { id: 2, capability: "question_quality", title: "Question Mastery Exercises", type: "Interactive", duration: "30 min" },
-  { id: 3, capability: "listening_responsiveness", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min" },
-  { id: 4, capability: "making_it_matter", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min" },
-  { id: 5, capability: "customer_engagement_cues", title: "HCP Engagement Signals", type: "Video", duration: "25 min" },
-  { id: 6, capability: "objection_handling", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min" },
-  { id: 7, capability: "conversation_control", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min" },
-  { id: 8, capability: "adaptability", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min" },
-  { id: 9, capability: "commitment_gaining", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min" },
-  { id: 10, capability: "listening_responsiveness", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min" },
+  { id: 1, capability: "signal_awareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min" },
+  { id: 2, capability: "signal_awareness", title: "Question Mastery Exercises", type: "Interactive", duration: "30 min" },
+  { id: 3, capability: "signal_interpretation", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min" },
+  { id: 4, capability: "value_connection", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min" },
+  { id: 5, capability: "customer_engagement", title: "HCP Engagement Signals", type: "Video", duration: "25 min" },
+  { id: 6, capability: "objection_navigation", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min" },
+  { id: 7, capability: "conversation_management", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min" },
+  { id: 8, capability: "adaptive_response", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min" },
+  { id: 9, capability: "commitment_generation", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min" },
+  { id: 10, capability: "signal_interpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min" },
 ];
 
 const STATUS_CONFIG = {
