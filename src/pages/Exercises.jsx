@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,28 +30,19 @@ const TOPICS = [
   { id: "signals", label: "Behavioral Signals" },
 ];
 
-type Exercise = {
-  question: string;
-  options: string[];
-  correctAnswer: number;
-  explanation: string;
-};
-
 export default function ExercisesPage() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [scenario, setScenario] = useState<string | null>(null);
+  const [exercises, setExercises] = useState([]);
+  const [scenario, setScenario] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [error, setError] = useState(null);
+  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [selectedTopic, setSelectedTopic] = useState(null);
 
-  const selectedTopicLabel = useMemo(
-    () =>
-      TOPICS.find((t) => t.id === selectedTopic)?.label ||
-      "Signal Intelligence and Life Sciences Sales",
-    [selectedTopic]
-  );
+  const selectedTopicLabel = useMemo(() => {
+    const found = TOPICS.find((t) => t.id === selectedTopic);
+    return found ? found.label : "Signal Intelligence and Life Sciences Sales";
+  }, [selectedTopic]);
 
   /* =========================
      RESET
@@ -65,9 +55,9 @@ export default function ExercisesPage() {
   };
 
   /* =========================
-     FALLBACK POOL
+     FALLBACK
   ========================= */
-  const fallbackPool: Exercise[] = [
+  const fallbackPool = [
     {
       question: "A customer says 'Your product is too expensive.' What's the BEST first response?",
       options: [
@@ -77,29 +67,19 @@ export default function ExercisesPage() {
         "Quality speaks for itself."
       ],
       correctAnswer: 1,
-      explanation: "Understanding context first prevents defensiveness and uncovers real objections."
+      explanation: "Understanding context first prevents defensiveness."
     },
     {
       question: "Customer goes silent after pricing. What do you do?",
-      options: [
-        "Offer discount",
-        "Talk more",
-        "Wait",
-        "Escalate"
-      ],
+      options: ["Offer discount", "Talk more", "Wait", "Escalate"],
       correctAnswer: 2,
-      explanation: "Silence = processing. Don't interrupt it."
+      explanation: "Silence = processing."
     },
     {
-      question: "'I need to think about it' means?",
-      options: [
-        "They are done",
-        "They have a hidden concern",
-        "They need time",
-        "They want email"
-      ],
+      question: "'I need to think about it' usually means?",
+      options: ["Done", "Hidden concern", "Time", "Email"],
       correctAnswer: 1,
-      explanation: "Usually signals an unspoken objection."
+      explanation: "Signals unspoken objection."
     }
   ];
 
@@ -168,11 +148,7 @@ Format:
 
     try {
       const response = await apiRequest("POST", "/api/chat/send", {
-        message: `Generate a pharma sales scenario about "${selectedTopicLabel}" including:
-- HCP context
-- signals
-- objection
-- best response`
+        message: `Generate a pharma sales scenario about "${selectedTopicLabel}" including signals, objection, and best response`
       });
 
       const raw = await response.text();
@@ -186,16 +162,13 @@ Format:
   };
 
   /* =========================
-     SELECT ANSWER (INSTANT FEEDBACK)
+     SELECT ANSWER
   ========================= */
-  const selectAnswer = (qIdx: number, optIdx: number) => {
+  const selectAnswer = (qIdx, optIdx) => {
     if (selectedAnswers[qIdx] !== undefined) return;
     setSelectedAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
   };
 
-  /* =========================
-     UI
-  ========================= */
   return (
     <div className="container mx-auto p-6 max-w-5xl space-y-6">
 
@@ -295,11 +268,9 @@ Format:
               </RadioGroup>
 
               {selected !== undefined && (
-                <Alert className={correct ? "border-green-500" : ""}>
+                <Alert>
                   {correct ? <CheckCircle2 /> : <XCircle />}
-                  <AlertDescription>
-                    {ex.explanation}
-                  </AlertDescription>
+                  <AlertDescription>{ex.explanation}</AlertDescription>
                 </Alert>
               )}
             </CardContent>
