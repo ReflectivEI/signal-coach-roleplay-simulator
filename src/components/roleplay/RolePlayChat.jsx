@@ -450,14 +450,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const rawStr = typeof raw === 'string' ? raw : String(raw);
         nextHcpDialogue = rawStr.trim().split('\n')[0];
 
-        if (
-          import.meta.env.DEV
-          && rawStr.includes("?")
-          && !nextHcpDialogue.includes("?")
-        ) {
-          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
-        }
-
         nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
 
         if (
