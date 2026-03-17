@@ -107,7 +107,9 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
 
   const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
   const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
-  return scenarioHits > 0 || repHits > 0;
+  const hasClinicalSignal = /\b(patient|patients|study|data|workflow|screening|access|prior auth|treatment|clinic|practice|protocol|follow-up|efficacy|safety|adherence)\b/.test(value);
+  const asksClarifyingQuestion = value.includes("?") && value.split(/\s+/).length >= 8;
+  return scenarioHits > 0 || repHits > 0 || hasClinicalSignal || asksClarifyingQuestion;
 }
 
 
@@ -561,9 +563,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
 
     let usedDeterministicFallback = false;
-    nextHcpDialogue = isFirstHcpResponse
-      ? buildFirstTurnScenarioFallback()
-      : buildFollowUpScenarioFallback();
+    nextHcpDialogue = "";
 
     try {
       const systemPrompt = buildHCPDialoguePrompt({
@@ -596,7 +596,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
         }
 
-        nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
+        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
 
         if (
           import.meta.env.DEV
@@ -630,7 +630,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : buildNonRepeatingScenarioFallback(previousHcpDialogue);
-    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage) && String(nextHcpDialogue || "").split(/\s+/).length < 6) {
       usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
@@ -664,6 +664,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
+
+      const recentCues = prevTurns
+        .map((t) => String(t.cueBefore || "").trim().toLowerCase())
+        .filter(Boolean)
+        .slice(-2);
+      const normalizedCue = String(contextualCue || "").trim().toLowerCase();
+      if (normalizedCue && recentCues.length === 2 && recentCues.every((cue) => cue === normalizedCue)) {
+        contextualCue = nextProfile.lockedCue;
+      }
     }
 
     contextualCue = hardenTextSurface(contextualCue);
