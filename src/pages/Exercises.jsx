@@ -205,9 +205,9 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
-        <Card className="border-teal-100 shadow-sm">
-          <CardHeader>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7 items-stretch">
+        <Card className="border-teal-200 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+          <CardHeader className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-teal-500" />
@@ -223,25 +223,28 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
                 <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGenerating ? "animate-spin" : ""}`} />
               </button>
             </div>
-            <p className="text-sm text-gray-500">4-5 AI-generated multiple-choice questions with instant feedback</p>
+            <p className="text-sm text-gray-500">AI-generated multiple choice questions with instant feedback</p>
           </CardHeader>
-          <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateQuiz} disabled={isGenerating}>
+          <CardContent className="mt-auto pt-0">
+            <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateQuiz} disabled={isGenerating}>
               {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
             </Button>
           </CardContent>
         </Card>
 
-        <Card className="border-teal-100 shadow-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-teal-500" />
-              <CardTitle className="text-base">Practice Scenario</CardTitle>
+        <Card className="border-teal-200 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+          <CardHeader className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 text-teal-500" />
+                <CardTitle className="text-base">Practice Scenario</CardTitle>
+              </div>
+              <span className="rounded-full border border-[#1A334D] px-2 py-0.5 text-[11px] font-semibold text-[#1A334D]">AI</span>
             </div>
-            <p className="text-sm text-gray-500">AI-written role-play scenario with coaching prompts</p>
+            <p className="text-sm text-gray-500">AI-generated role-play scenario with coaching prompts</p>
           </CardHeader>
-          <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateScenario} disabled={isGeneratingScenario}>
+          <CardContent className="mt-auto pt-0">
+            <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateScenario} disabled={isGeneratingScenario}>
               {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
             </Button>
           </CardContent>

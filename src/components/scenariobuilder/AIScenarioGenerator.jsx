@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { saveAs } from "file-saver";
 import { formatScenarioText } from "../../lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,14 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [preview, setPreview] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const exportPreviewWord = () => {
+    if (!preview) return;
+    const blob = new Blob([
+      `Generated Scenario\n\nTitle: ${preview.title || "Untitled"}\n\n${preview.description || preview.content || ""}`
+    ], { type: "application/msword" });
+    saveAs(blob, `generated-scenario-${(preview.title || "untitled").replace(/\s+/g, "-").toLowerCase()}.doc`);
+  };
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -235,9 +244,14 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
         <div className="mt-5 bg-white rounded-xl border border-teal-200 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-teal-600 uppercase tracking-wide">Generated Preview</span>
-            <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-xs h-7" onClick={handleAccept}>
-              Use This Scenario →
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="text-xs h-7 border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]" onClick={exportPreviewWord}>
+                Export to Word
+              </Button>
+              <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-xs h-7" onClick={handleAccept}>
+                Save Scenario
+              </Button>
+            </div>
           </div>
           <h3 className="font-bold text-gray-900">{preview.title}</h3>
           <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{formatScenarioText(preview.description)}</p>
