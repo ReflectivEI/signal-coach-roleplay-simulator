@@ -86,6 +86,13 @@ export default function Exercises() {
   const [scenarioText, setScenarioText] = useState(null);
   const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
 
+  const resetGeneratedContent = () => {
+    setQuestions([]);
+    setScenarioText(null);
+    setSelectedAnswers({});
+    setShowResults({});
+  };
+
   const selectedTopicLabel = useMemo(
     () => TOPICS.find((t) => t.id === selectedTopic)?.label || "Signal Intelligence and Life Sciences Sales",
     [selectedTopic]
@@ -158,7 +165,9 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       });
       if (res.ok) {
         const data = await res.json();
-        setScenarioText(typeof data.response === 'string' ? data.response : String(data.response));
+        const raw = data.response || data.text || data.content || '';
+        const scenario = String(raw).replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+        setScenarioText(scenario || "Unable to generate scenario. Please try again.");
       } else {
         setScenarioText("Unable to generate scenario. Please try again.");
       }
@@ -178,12 +187,23 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3 mb-7">
-        <Dumbbell className="w-7 h-7 text-teal-500" />
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
-          <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
+      <div className="flex items-center justify-between gap-3 mb-7">
+        <div className="flex items-center gap-3">
+          <Dumbbell className="w-7 h-7 text-teal-500" />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
+            <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={resetGeneratedContent}
+          className="rounded-full border border-[#1A334D] bg-white p-2 text-[#1A334D] hover:-translate-y-0.5 hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all"
+          title="Reset generated quiz and scenario"
+          disabled={isGenerating || isGeneratingScenario}
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
@@ -239,7 +259,18 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
                 <Wand2 className="w-5 h-5 text-teal-500" />
                 <CardTitle className="text-base">Practice Scenario</CardTitle>
               </div>
-              <span className="rounded-full border border-[#1A334D] px-2 py-0.5 text-[11px] font-semibold text-[#1A334D]">AI</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={generateScenario}
+                  className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                  title="Refresh scenario"
+                  disabled={isGeneratingScenario}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGeneratingScenario ? "animate-spin" : ""}`} />
+                </button>
+                <span className="rounded-full border border-[#1A334D] px-2 py-0.5 text-[11px] font-semibold text-[#1A334D]">AI</span>
+              </div>
             </div>
             <p className="text-sm text-gray-500">AI-generated role-play scenario with coaching prompts</p>
           </CardHeader>

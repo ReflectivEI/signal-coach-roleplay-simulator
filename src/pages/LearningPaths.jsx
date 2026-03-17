@@ -554,7 +554,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
             </div>
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-teal-100 p-5 shadow-sm hover:shadow-md transition-all">
+          <div className="lg:col-span-4 bg-white rounded-2xl border-2 border-[#1A334D]/15 p-5 shadow-sm hover:shadow-md transition-all">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#1A334D] mb-2">Client Customization Workspace</p>
             <p className="text-xs text-gray-600 leading-relaxed mb-3">
               Add your client framework and barrier context to generate actionable prep recommendations.
@@ -564,19 +564,19 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                 value={workspaceInputs.framework}
                 onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, framework: e.target.value }))}
                 placeholder="Client framework (e.g., ABC Value Sequence)"
-                className="h-8 text-xs"
+                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
               />
               <Input
                 value={workspaceInputs.template}
                 onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, template: e.target.value }))}
                 placeholder="Messaging template (e.g., objection handling)"
-                className="h-8 text-xs"
+                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
               />
               <Input
                 value={workspaceInputs.barrier}
                 onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, barrier: e.target.value }))}
                 placeholder="Primary barrier (e.g., PA, staffing, access)"
-                className="h-8 text-xs"
+                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
               />
               <Button
                 type="button"
