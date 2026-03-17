@@ -17,6 +17,7 @@ import {
 } from "./hcpSimulationEngine";
 import {
   generateContextualCue,
+  CUE_BANK,
 } from "./hcpStateEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -410,9 +411,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
       // Fallback: if cue is missing, use default cue for state
       if (!contextualCue) {
-        // Import CUE_BANK and use default for state
-        const cueBank = require('./hcpStateEngine').CUE_BANK;
-        const cues = cueBank[nextHcpState] || cueBank['neutral'];
+        const cues = CUE_BANK[nextHcpState] || CUE_BANK['neutral'];
         contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
       }
     }
@@ -490,6 +489,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }
 
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
+
+  const displayTurns = turns.filter((turn, index) => {
+    if (index === 0) return true;
+    const prev = turns[index - 1];
+    const bothHcpOnly = !turn.repMessage && !prev.repMessage;
+    if (!bothHcpOnly) return true;
+
+    const sameDialogue = String(turn.hcpDialogueBefore || "").trim() === String(prev.hcpDialogueBefore || "").trim();
+    const sameCue = String(turn.cueBefore || "").trim() === String(prev.cueBefore || "").trim();
+    return !(sameDialogue && sameCue);
+  });
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
@@ -834,10 +844,10 @@ ${actionText}`;
 
                   Avoid absolute positioning.
                 */}
-                {turns.map((turn, i) => (
+                {displayTurns.map((turn, i) => (
                   <div key={i} className="flex flex-col gap-4">
                     {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                    {turn.cueBefore && turn.repMessage == null && i > 0 && displayTurns[i - 1]?.repMessage != null && (
                       <div className="flex flex-col items-start gap-1 pl-1">
                         <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
                           {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
