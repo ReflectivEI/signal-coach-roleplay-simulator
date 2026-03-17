@@ -138,7 +138,8 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0;
 }
 
-// Deduplicate function declarations (keep only originals)
+// CI guardrail: keep exactly one declaration of each helper below.
+// Duplicate redeclarations here will break Vite/esbuild production builds.
 function hardenTextSurface(text) {
   let value = String(text || "")
     .replace(/\s+/g, " ")
