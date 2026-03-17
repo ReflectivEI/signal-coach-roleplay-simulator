@@ -178,7 +178,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Multiple rep messages in a row are not allowed.
     const lastTurn = turns[turns.length - 1];
     const lastRenderedSpeakerIsRep = Boolean(lastTurn?.repMessage);
-    if (lastRenderedSpeakerIsRep) {
+    const awaitingHcpResponse = lastTurn && !lastTurn.repMessage && Boolean(lastTurn.hcpDialogueBefore);
+    const canSendOnOpeningTurn = lastTurn && lastTurn.turnNumber === 0 && !lastTurn.repMessage && !lastTurn.hcpDialogueBefore;
+    if (lastRenderedSpeakerIsRep || (!awaitingHcpResponse && !canSendOnOpeningTurn)) {
       return;
     }
 
@@ -938,12 +940,9 @@ ${actionText}`;
                       }}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) {
+                          // Single submit path: let <form onSubmit> handle send to avoid duplicate turn creation.
                           e.preventDefault();
-                          if (isLoading || isEnding) return;
-                          const message = sanitizeUserMessage(input);
-                          if (!message) return;
-                          setInput("");
-                          sendMessage();
+                          e.currentTarget.form?.requestSubmit();
                         }
                       }}
                         placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
