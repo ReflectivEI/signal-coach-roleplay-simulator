@@ -135,6 +135,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
   const sendInFlightRef = useRef(false);
+  const activeRequestIdRef = useRef(0);
+  const lastSubmittedTurnKeyRef = useRef("");
+  const loggedTurnKeysRef = useRef(new Set());
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -234,6 +237,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return;
     }
 
+    const normalizedRawInput = String(rawInput || "").trim().toLowerCase();
+    const candidateTurnKey = `${lastTurn?.turnNumber ?? -1}::${normalizedRawInput}`;
+    if (candidateTurnKey && candidateTurnKey === lastSubmittedTurnKeyRef.current) {
+      return;
+    }
+
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
@@ -288,6 +297,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (!sanitizeUserMessage(rawInput) || isLoading) return;
 
     sendInFlightRef.current = true;
+    const requestId = ++activeRequestIdRef.current;
+    lastSubmittedTurnKeyRef.current = candidateTurnKey;
     try {
       const repMessage = sanitizeUserMessage(rawInput);
       setInput("");
@@ -473,8 +484,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "What is the most practical monitoring plan we can apply consistently without overloading the clinic team?";
       }
 
-      return scenarioPrepFocus
-        ? "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?"
+      const repTopicTokens = repLower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today", "patient", "patients"]).has(w))
+        .slice(0, 5);
+      const repTopic = repTopicTokens.join(" ");
+
+      if (scenarioPrepFocus) {
+        return repTopic
+          ? `You mentioned ${repTopic}. Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`
+          : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
+      }
+
+      return repTopic
+        ? `You mentioned ${repTopic}. Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`
         : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
@@ -632,16 +656,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
     };
 
-    // Audit log turn creation
-    logAuditEvent('turn_created', {
-      turnNumber: nextTurnNumber,
-      hcpState: nextHcpState,
-      cue: contextualCue,
-      dialogue: nextHcpDialogue,
-      repMessage,
-      alignment,
-      feedback: coachingResult,
-    });
+    if (requestId !== activeRequestIdRef.current) {
+      return;
+    }
 
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
     setTurns((prevTurnsState) => {
@@ -654,11 +671,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const hasNextTurnAlready = prevTurnsState.some(
         (t) => t.turnNumber === nextTurn.turnNumber && !t.repMessage && t.hcpDialogueBefore
       );
-      return hasNextTurnAlready ? replaced : [...replaced, nextTurn];
+      if (hasNextTurnAlready) {
+        return replaced;
+      }
+
+      const turnAuditKey = `${nextTurn.turnNumber}::${repMessage}`;
+      if (!loggedTurnKeysRef.current.has(turnAuditKey)) {
+        loggedTurnKeysRef.current.add(turnAuditKey);
+        logAuditEvent('turn_created', {
+          turnNumber: nextTurnNumber,
+          hcpState: nextHcpState,
+          cue: contextualCue,
+          dialogue: nextHcpDialogue,
+          repMessage,
+          alignment,
+          feedback: coachingResult,
+        });
+      }
+
+      return [...replaced, nextTurn];
     });
 
       setIsLoading(false);
-      speak(nextHcpDialogue);
+      if (requestId === activeRequestIdRef.current) {
+        speak(nextHcpDialogue);
+      }
 
       // Auto-focus input after HCP responds
       setTimeout(() => inputRef.current?.focus(), 100);
