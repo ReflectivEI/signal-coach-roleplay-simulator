@@ -394,68 +394,60 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && priorHcpDialogueTurns === 0
     );
 
+    const scenarioContext = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.trim();
+    const scenarioLower = scenarioContext.toLowerCase();
+    const scenarioPressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow|staffing|patients)\b/.test(scenarioLower);
+    const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
+
     const buildFirstTurnScenarioFallback = () => {
-      const openingContext = String(
-        scenario.opening_scene
-        || scenario.openingScene
-        || ''
-      ).trim();
-      const descriptionContext = String(
-        scenario.description
-        || scenario.context
-        || ''
-      ).trim();
-      const context = `${openingContext} ${descriptionContext}`.trim();
-      const lower = context.toLowerCase();
-      const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow|staffing|patients)\b/.test(lower);
-      const prepFocus = /\bprep|hiv|sti\b/.test(lower);
+      if (scenarioPressured && scenarioPrepFocus) {
+        return "Thanks for checking in. I am between patients and prior authorizations right now, so I need to stay focused. I only have a couple minutes, so what brings you in today?";
+      }
 
-      const repWords = String(repMessage || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter(Boolean);
-      const greetingWords = new Set(["hi", "hello", "hey", "good", "morning", "afternoon", "evening", "doctor", "dr", "how", "are", "you", "today", "weekend", "doing"]);
-      const contentWords = repWords.filter((w) => !greetingWords.has(w));
-      const repPreview = contentWords.slice(0, 7).join(" ");
+      if (scenarioPressured) {
+        return "Thanks for checking in. I am between patients and paperwork right now, so I need to stay focused. I only have a couple minutes, so what brings you in today?";
+      }
 
-      const warmAcknowledge = repPreview
-        ? `Thanks for opening with ${repPreview}.`
-        : "Thanks for checking in.";
-
-      const businessBridge = pressured
-        ? "I am between patients and prior authorizations right now, so I need to stay focused."
-        : "I can give you a few focused minutes before my next patient.";
-
-      const focusQuestion = prepFocus
-        ? "What is your most practical recommendation to improve patient access to PrEP today?"
-        : "What is your most practical recommendation for my patients today?";
-
-      return hardenTextSurface(`${warmAcknowledge} ${businessBridge} ${focusQuestion}`);
+      return scenarioPrepFocus
+        ? "Thanks for checking in. I can give you a few focused minutes before my next patient. What brings you in today regarding PrEP access for my patients?"
+        : "Thanks for checking in. I can give you a few focused minutes before my next patient. What brings you in today?";
     };
 
     const buildFollowUpScenarioFallback = () => {
-      const context = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.toLowerCase();
-      const prepFocus = /\bprep|hiv|sti\b/.test(context);
+      const repLower = String(repMessage || "").toLowerCase();
+      const mentionsStudy = /\b(study|trial|data|results|evidence|jama|publication|published|findings|methodology|duration)\b/.test(repLower);
+      const mentionsMaterials = /\b(material|materials|brochure|handout|leave-behind|leave behind|resource|resources|printout|one-pager|flyer)\b/.test(repLower);
 
-      const repWords = String(repMessage || "")
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter(Boolean);
-      const repPreview = repWords.slice(0, 8).join(" ");
+      if (mentionsStudy) {
+        return "I'd like to know more about the study's methodology. What was the duration of the study?";
+      }
 
-      const acknowledgment = repPreview
-        ? `I hear you on ${repPreview}.`
-        : "I hear you.";
+      if (mentionsMaterials && scenarioPrepFocus) {
+        return "Are the materials you'll be leaving going to help my patients understand how to gain access to PrEP without jumping through so many hoops?";
+      }
 
-      const focusedQuestion = prepFocus
-        ? "Can you connect that directly to improving patient access to PrEP in my current workflow?"
-        : "Can you connect that directly to what I should change in my current workflow?";
-
-      return hardenTextSurface(`${acknowledgment} ${focusedQuestion}`);
+      return scenarioPrepFocus
+        ? "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?"
+        : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
+    const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
+      const value = String(dialogue || "").toLowerCase();
+      if (isFirstTurn && scenarioPressured) {
+        return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
+      }
+      if (/methodology|duration|study/.test(value)) {
+        return "The HCP leans forward, scanning the details with focused interest while keeping an eye on the clock.";
+      }
+      if (/materials|jumping through so many hoops|access to prep|access/.test(value)) {
+        return "The HCP sets paperwork aside briefly, concern visible as they focus on practical patient access barriers.";
+      }
+      return scenarioPressured
+        ? "The HCP keeps one hand on pending paperwork, attentive but clearly pressed for time."
+        : "The HCP listens attentively, maintaining steady eye contact while waiting for a practical answer.";
+    };
+
+    let usedDeterministicFallback = false;
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : "I see. Let me consider that.";
@@ -502,18 +494,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
         }
       } else {
+        usedDeterministicFallback = true;
         nextHcpDialogue = isFirstHcpResponse
           ? buildFirstTurnScenarioFallback()
           : buildFollowUpScenarioFallback();
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
+      usedDeterministicFallback = true;
+      nextHcpDialogue = isFirstHcpResponse
+        ? buildFirstTurnScenarioFallback()
+        : buildFollowUpScenarioFallback();
     }
 
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : buildFollowUpScenarioFallback();
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+      usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
 
@@ -544,8 +542,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         prevTurns
       );
       // Fallback: keep deterministic cue behavior without external cue bank dependency
-      if (!contextualCue) {
-        contextualCue = 'The HCP pauses, maintaining eye contact while waiting for a focused response.';
+      if (!contextualCue || usedDeterministicFallback) {
+        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
       }
     }
 
