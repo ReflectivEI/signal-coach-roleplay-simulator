@@ -17,53 +17,53 @@ import AIActionableInsights from "./AIActionableInsights";
 
 // Mapping from capability key → coaching module + scenarios to recommend
 const LEARNING_PATH_MAP = {
-  question_quality: {
+  signal_awareness: {
     coachingModule: "Question Mastery",
     moduleDesc: "Learn to ask purposeful, context-aware questions",
     scenarios: ["HIV Prevention Gap in High-Risk Population", "Oncology KOL Introduction"],
-    frameworkLink: "question_quality",
+    frameworkLink: "signal_awareness",
     tip: "Practice building questions directly from what the HCP just said. Avoid pre-scripted openers.",
   },
-  listening_responsiveness: {
+  signal_interpretation: {
     coachingModule: "Stakeholder Mapping",
     moduleDesc: "Understand signals from different HCP types",
     scenarios: ["Treatment Optimization in Stable HIV Patients", "Rural HF Program with CKD Safety Concerns"],
-    frameworkLink: "listening_responsiveness",
+    frameworkLink: "signal_interpretation",
     tip: "After each HCP statement, pause and paraphrase before responding. This sharpens interpretation.",
   },
-  making_it_matter: {
+  value_connection: {
     coachingModule: "Clinical Evidence",
     moduleDesc: "Connect clinical data to HCP-specific priorities",
     scenarios: ["Heart Failure GDMT Optimization Challenge", "ADC Integration with IO Backbone"],
-    frameworkLink: "making_it_matter",
+    frameworkLink: "value_connection",
     tip: "Always reference something the HCP said before presenting value. 'Because you mentioned X...'",
   },
-  objection_handling: {
+  objection_navigation: {
     coachingModule: "Objection Handling",
     moduleDesc: "Navigate resistance with composure and evidence",
     scenarios: ["PrEP Access Barriers Despite Strong Adoption", "Cardiology Formulary Review"],
-    frameworkLink: "objection_handling",
+    frameworkLink: "objection_navigation",
     tip: "Acknowledge first, explore second, respond third. Never jump straight to a rebuttal.",
   },
-  commitment_gaining: {
+  commitment_generation: {
     coachingModule: "Closing Techniques",
     moduleDesc: "Secure specific, voluntary next steps",
     scenarios: ["Post-COVID Clinic Antiviral Adherence", "Primary Care Vaccine Capture Improvement"],
-    frameworkLink: "commitment_gaining",
+    frameworkLink: "commitment_generation",
     tip: "Ask for a specific action with a date, not a vague 'let's keep in touch'.",
   },
-  conversation_control: {
+  conversation_management: {
     coachingModule: "Coaching Modules",
     moduleDesc: "Guide conversations with structure and intent",
     scenarios: ["Outpatient Antiviral Optimization", "Post-MI and HF Transitions Optimization"],
-    frameworkLink: "conversation_control",
+    frameworkLink: "conversation_management",
     tip: "Set a brief agenda at the start of every call and summarize before closing.",
   },
-  adaptability: {
+  adaptive_response: {
     coachingModule: "Behavioral Mastery",
     moduleDesc: "Flex your approach in real-time",
     scenarios: ["Pathway-Driven Care with Staffing Constraints", "Adult Flu Program Optimization"],
-    frameworkLink: "adaptability",
+    frameworkLink: "adaptive_response",
     tip: "If the same approach isn't working, change it deliberately — not randomly.",
   },
 };
@@ -120,51 +120,51 @@ function LearningPath({ weakCapability }) {
 }
 
 const CAPABILITY_LABELS = {
-  question_quality:        "Signal Awareness",
-  listening_responsiveness:   "Signal Interpretation",
-  making_it_matter:        "Value Connection",
-  customer_engagement_cues:     "Customer Engagement",
-  objection_handling:    "Objection Navigation",
-  commitment_gaining:   "Commitment Generation",
-  conversation_control: "Conv. Management",
-  adaptability:       "Adaptive Response",
+  signal_awareness:        "Signal Awareness",
+  signal_interpretation:   "Signal Interpretation",
+  value_connection:        "Value Connection",
+  customer_engagement:     "Customer Engagement",
+  objection_navigation:    "Objection Navigation",
+  commitment_generation:   "Commitment Generation",
+  conversation_management: "Conv. Management",
+  adaptive_response:       "Adaptive Response",
 };
 
 const CAPABILITY_COLORS = {
-  question_quality:        "#14b8a6",
-  listening_responsiveness:   "#0284c7",
-  making_it_matter:        "#8b5cf6",
-  customer_engagement_cues:     "#f59e0b",
-  objection_handling:    "#f97316",
-  commitment_gaining:   "#10b981",
-  conversation_control: "#1A334D",
-  adaptability:       "#06b6d4",
+  signal_awareness:        "#14b8a6",
+  signal_interpretation:   "#0284c7",
+  value_connection:        "#8b5cf6",
+  customer_engagement:     "#f59e0b",
+  objection_navigation:    "#f97316",
+  commitment_generation:   "#10b981",
+  conversation_management: "#1A334D",
+  adaptive_response:       "#06b6d4",
 };
 
 // Industry / benchmark scores for context (1-5 scale)
 const BENCHMARK_SCORES = {
-  question_quality:        3.5,
-  listening_responsiveness:   3.4,
-  making_it_matter:        3.2,
-  customer_engagement_cues:     3.1,
-  objection_handling:    3.0,
-  commitment_gaining:   3.3,
-  conversation_control: 3.1,
-  adaptability:       3.2,
+  signal_awareness:        3.5,
+  signal_interpretation:   3.4,
+  value_connection:        3.2,
+  customer_engagement:     3.1,
+  objection_navigation:    3.0,
+  commitment_generation:   3.3,
+  conversation_management: 3.1,
+  adaptive_response:       3.2,
 };
 
 function extractScores(feedback) {
   if (!feedback) return null;
   const scores = {};
   const patterns = [
-    [/signal awareness[^\d]*(\d)/i,        "question_quality"],
-    [/signal interpretation[^\d]*(\d)/i,   "listening_responsiveness"],
-    [/value connection[^\d]*(\d)/i,        "making_it_matter"],
-    [/customer engagement[^\d]*(\d)/i,     "customer_engagement_cues"],
-    [/objection navigation[^\d]*(\d)/i,    "objection_handling"],
-    [/commitment generation[^\d]*(\d)/i,   "commitment_gaining"],
-    [/conversation management[^\d]*(\d)/i, "conversation_control"],
-    [/adaptive response[^\d]*(\d)/i,       "adaptability"],
+    [/signal awareness[^\d]*(\d)/i,        "signal_awareness"],
+    [/signal interpretation[^\d]*(\d)/i,   "signal_interpretation"],
+    [/value connection[^\d]*(\d)/i,        "value_connection"],
+    [/customer engagement[^\d]*(\d)/i,     "customer_engagement"],
+    [/objection navigation[^\d]*(\d)/i,    "objection_navigation"],
+    [/commitment generation[^\d]*(\d)/i,   "commitment_generation"],
+    [/conversation management[^\d]*(\d)/i, "conversation_management"],
+    [/adaptive response[^\d]*(\d)/i,       "adaptive_response"],
   ];
   patterns.forEach(([regex, key]) => {
     const m = feedback.match(regex);
@@ -251,14 +251,14 @@ export default function SessionAnalytics() {
         session.id,
         session.scenario_title,
         session.created_date,
-        scores.question_quality ?? "",
-        scores.listening_responsiveness ?? "",
-        scores.making_it_matter ?? "",
-        scores.customer_engagement_cues ?? "",
-        scores.objection_handling ?? "",
-        scores.commitment_gaining ?? "",
-        scores.conversation_control ?? "",
-        scores.adaptability ?? "",
+        scores.signal_awareness ?? "",
+        scores.signal_interpretation ?? "",
+        scores.value_connection ?? "",
+        scores.customer_engagement ?? "",
+        scores.objection_navigation ?? "",
+        scores.commitment_generation ?? "",
+        scores.conversation_management ?? "",
+        scores.adaptive_response ?? "",
         strategies,
         misalignments
       ];
