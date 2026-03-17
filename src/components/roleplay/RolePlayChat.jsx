@@ -138,6 +138,58 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0;
 }
 
+// Deduplicate function declarations (keep only originals)
+function hardenTextSurface(text) {
+  let value = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!value) return "";
+
+  value = value
+    .replace(/\bi\b/g, "I")
+    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
+    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
+    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
+
+  if (!/[.!?]$/.test(value)) {
+    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
+    value += looksLikeQuestion ? "?" : ".";
+  }
+
+  return value;
+}
+
+function extractScenarioKeywords(scenario) {
+  const combined = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.opening_scene,
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.goal,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+  ].join(" ").toLowerCase();
+
+  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
+  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
+}
+
+function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
+  const value = String(text || "").toLowerCase();
+  const rep = String(repMessage || "").toLowerCase();
+  if (!value) return false;
+
+  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
+  if (genericOnly) return false;
+
+  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
+  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
+  return scenarioHits > 0 || repHits > 0;
+}
+
+
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
