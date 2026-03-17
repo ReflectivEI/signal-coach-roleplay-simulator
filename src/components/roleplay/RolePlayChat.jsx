@@ -396,12 +396,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const scenarioContext = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.trim();
     const scenarioLower = scenarioContext.toLowerCase();
-    const scenarioPressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow|staffing|patients)\b/.test(scenarioLower);
+    const scenarioPressured = /\b(busy|behind|limited time|short on time|time pressure|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow friction|backlog)\b/.test(scenarioLower);
     const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
+    const scenarioCabFocus = /\bcab|cabotegravir|injectable|long-acting\b/.test(scenarioLower);
+    const scenarioScreeningFocus = /\bscreening|resistance|adherence|candidacy|criteria\b/.test(scenarioLower);
+    const scenarioMonitoringFocus = /\bmonitoring|follow-up|durability|protocol|renal|labs?\b/.test(scenarioLower);
 
     const buildFirstTurnScenarioFallback = () => {
-      if (scenarioPressured && scenarioPrepFocus) {
+      if (scenarioPrepFocus && scenarioPressured) {
         return "Thanks for checking in. I am between patients and prior authorizations right now, so I need to stay focused. I only have a couple minutes, so what brings you in today?";
+      }
+
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return "Thanks for checking in. I want to make sure we are selecting the right patients and covering resistance screening correctly. I only have a couple minutes, so what brings you in today?";
+      }
+
+      if (scenarioMonitoringFocus) {
+        return "Thanks for checking in. I am trying to tighten our follow-up workflow and keep monitoring practical for the team. I only have a couple minutes, so what brings you in today?";
       }
 
       if (scenarioPressured) {
@@ -426,6 +437,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "Are the materials you'll be leaving going to help my patients understand how to gain access to PrEP without jumping through so many hoops?";
       }
 
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return "Before we move forward, what practical steps would you recommend so we can confirm candidacy and screening requirements for long-acting cabotegravir?";
+      }
+
+      if (scenarioMonitoringFocus) {
+        return "What is the most practical monitoring plan we can apply consistently without overloading the clinic team?";
+      }
+
       return scenarioPrepFocus
         ? "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?"
         : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
@@ -433,14 +452,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
       const value = String(dialogue || "").toLowerCase();
-      if (isFirstTurn && scenarioPressured) {
+      if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
         return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
+      }
+      if (isFirstTurn && scenarioCabFocus && scenarioScreeningFocus) {
+        return "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.";
+      }
+      if (isFirstTurn && scenarioMonitoringFocus) {
+        return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
       }
       if (/methodology|duration|study/.test(value)) {
         return "The HCP leans forward, scanning the details with focused interest while keeping an eye on the clock.";
       }
       if (/materials|jumping through so many hoops|access to prep|access/.test(value)) {
         return "The HCP sets paperwork aside briefly, concern visible as they focus on practical patient access barriers.";
+      }
+      if (/candidacy|screening|resistance|cabotegravir|long-acting/.test(value)) {
+        return "The HCP scans the screening checklist, then pauses, focused on whether this approach is safe and practical for the right patients.";
       }
       return scenarioPressured
         ? "The HCP keeps one hand on pending paperwork, attentive but clearly pressed for time."
