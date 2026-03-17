@@ -267,7 +267,7 @@ function getLowestMetricId(metrics = {}) {
   return entries[0]?.[0] || null;
 }
 
-function buildRepGuidance(turn) {
+function buildGuidanceCandidate(turn) {
   const alignment = turn?.alignment;
   if (!alignment) return null;
 
@@ -284,6 +284,40 @@ function buildRepGuidance(turn) {
   const issueSignal = alignment.rubricAlignmentFlags?.[0] || alignment.misalignments?.[0] || alignment.positives?.[0] || "fallback";
   const index = deterministicIndex(`${turn.turnNumber}:${category}:${issueSignal}`, fallbackSet.length);
   return fallbackSet[index];
+}
+
+function buildRepGuidance(turn, allTurns = []) {
+  const alignment = turn?.alignment;
+  if (!alignment) return null;
+
+  const recentGuidanceWindow = allTurns
+    .filter((t) => t.turnNumber < turn.turnNumber && t.repMessage)
+    .slice(-15)
+    .map((t) => String(buildGuidanceCandidate(t)).trim())
+    .filter(Boolean);
+
+  const lowestMetricId = getLowestMetricId(alignment.metrics || {});
+  const metricGuidanceSet = lowestMetricId ? METRIC_GUIDANCE_LIBRARY[lowestMetricId] : null;
+
+  const pickNonRepeatingGuidance = (guidanceSet, seedText) => {
+    if (!guidanceSet?.length) return null;
+    const baseIndex = deterministicIndex(seedText, guidanceSet.length);
+    for (let offset = 0; offset < guidanceSet.length; offset += 1) {
+      const candidate = guidanceSet[(baseIndex + offset) % guidanceSet.length];
+      if (!recentGuidanceWindow.includes(candidate)) return candidate;
+    }
+    return guidanceSet[baseIndex];
+  };
+
+  if (metricGuidanceSet?.length) {
+    const metricSignal = alignment.metrics?.[lowestMetricId]?.reason || alignment.misalignments?.[0] || alignment.rubricAlignmentFlags?.[0] || "metric";
+    return pickNonRepeatingGuidance(metricGuidanceSet, `${turn.turnNumber}:${lowestMetricId}:${metricSignal}`);
+  }
+
+  const category = mapIssueCategory(alignment);
+  const fallbackSet = FALLBACK_GUIDANCE_LIBRARY[category] || FALLBACK_GUIDANCE_LIBRARY.misalignment_relevance;
+  const issueSignal = alignment.rubricAlignmentFlags?.[0] || alignment.misalignments?.[0] || alignment.positives?.[0] || "fallback";
+  return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
 }
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
@@ -1211,12 +1245,12 @@ ${actionText}`;
                   <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {descriptionText && (
-                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
+                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
                         <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
                         <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[112px]">
+                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
                       <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
                       {openingScene ? (
                         <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{openingScene}</p>
@@ -1251,8 +1285,8 @@ ${actionText}`;
           </div>
         )}
 
-        <div className="px-3 md:px-4 py-2 border-b bg-white flex-shrink-0">
-          <div className="rounded-xl border border-slate-200 bg-slate-50/60">
+        <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
+          <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
             {renderTabPills()}
           </div>
         </div>
@@ -1317,12 +1351,11 @@ ${actionText}`;
                         </div>
                         {turn.alignment && (
                           <>
-                            <div className={`w-full px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                            <div className={`w-full px-2 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <span className="font-semibold">Coaching cue</span>
-                              <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">{buildRepGuidance(turn)}</div>
+                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{buildRepGuidance(turn, turns)}</div>
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
                               <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
@@ -1347,7 +1380,7 @@ ${actionText}`;
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[85%] md:max-w-[85%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="w-fit max-w-[92%] lg:max-w-[95%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
