@@ -876,10 +876,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
         .filter(Boolean)
-        .slice(-2);
+        .slice(-15);
       const normalizedCue = String(contextualCue || "").trim().toLowerCase();
-      if (normalizedCue && recentCues.length === 2 && recentCues.every((cue) => cue === normalizedCue)) {
-        contextualCue = nextProfile.lockedCue;
+      const previousCue = recentCues[recentCues.length - 1];
+
+      // Hard safeguard: prevent duplicate cue reuse inside recent 10-15 exchange window.
+      if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
+        const deterministicFallbackPool = [
+          nextProfile.lockedCue,
+          "The HCP remains focused on practical implementation details, waiting for a concrete and relevant response.",
+          "The HCP keeps a measured, professional posture while signaling the need for workflow-specific clarity.",
+          "The HCP listens with controlled urgency, looking for a recommendation that fits real clinic constraints.",
+          "The HCP maintains steady attention, expecting your next point to directly address the operational barrier raised.",
+        ]
+          .map((cue) => String(cue || "").trim())
+          .filter(Boolean);
+
+        const startIndex = deterministicIndex(`${generationKey}:${nextTurnNumber}:${nextHcpState}:cue-fallback`, deterministicFallbackPool.length);
+        let replacement = deterministicFallbackPool[startIndex] || nextProfile.lockedCue;
+
+        for (let i = 0; i < deterministicFallbackPool.length; i += 1) {
+          const candidate = deterministicFallbackPool[(startIndex + i) % deterministicFallbackPool.length];
+          const normalizedCandidate = String(candidate || "").trim().toLowerCase();
+          if (normalizedCandidate && !recentCues.includes(normalizedCandidate)) {
+            replacement = candidate;
+            break;
+          }
+        }
+
+        contextualCue = replacement;
       }
     }
 

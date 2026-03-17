@@ -155,27 +155,16 @@ export default function ProfileSettings() {
 
       {tab === "preferences" && (
         <div className="space-y-6">
-          {/* Appearance */}
+          {/* Appearance (color mode is locked to Light) */}
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <div className="flex items-center gap-2 mb-1">
               <Palette className="w-4 h-4 text-gray-500" />
               <h3 className="text-base font-semibold text-gray-900">Appearance</h3>
             </div>
             <p className="text-sm text-gray-500 mb-5">Customize how the platform looks</p>
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">Color Mode</label>
-              <Select value={prefs.theme} onValueChange={v => setPrefs({ ...prefs, theme: v })}>
-                <SelectTrigger className="w-64">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="system">Auto</SelectItem>
-                  <SelectItem value="light">Light</SelectItem>
-                  <SelectItem value="dark">Dark</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-400 mt-1.5">Choose your preferred color mode</p>
-            </div>
+            <p className="text-sm text-gray-700 border border-teal-200 bg-teal-50 rounded-lg px-3 py-2 inline-block">
+              Color mode is currently fixed to <span className="font-semibold">Light</span>.
+            </p>
           </div>
 
           {/* Notifications */}

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { saveAs } from "file-saver";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 // ...existing code...
@@ -6,6 +7,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Sparkles } from "lucide-react";
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
+
+const exportScenarioWord = (scenario) => {
+  const blob = new Blob([
+    `Scenario Title: ${scenario.title || "Untitled"}\n\nDescription:\n${scenario.description || ""}\n\nSpecialty: ${scenario.specialty || ""}\nDisease State: ${scenario.disease_state || ""}\nHCP Category: ${scenario.hcp_category || ""}\nInfluence Driver: ${scenario.influence_driver || ""}\nDifficulty: ${scenario.difficulty || ""}\n\nDetails:\n${scenario.details || ""}`
+  ], { type: "application/msword" });
+  saveAs(blob, `scenario-${(scenario.title || "untitled").replace(/\s+/g, "-").toLowerCase()}.doc`);
+};
 
 const diseaseStates = ["HIV", "PrEP (HIV Prevention)", "Oncology", "Cardiology", "Neurology", "Vaccines / Immunization"];
 const specialties = ["Family Medicine", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Neurology"];
@@ -252,6 +260,9 @@ export default function ScenarioBuilder() {
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={cancelEdit}>Cancel</Button>
+              <Button variant="outline" onClick={() => exportScenarioWord(form)} disabled={!form.title.trim()}>
+                Export to Word
+              </Button>
               <Button
                 className="bg-teal-500 hover:bg-teal-600"
                 onClick={handleSave}
