@@ -1392,6 +1392,7 @@ ${actionText}`;
                 */}
                 {displayItems.map((item) => {
                   const { turn } = item;
+                  const openingTurnGuidance = buildOpeningTurnGuidance(turn, scenario);
 
                   if (item.kind === "rep") {
                     return (
