@@ -140,7 +140,7 @@ export function getToneDirectives(state) {
  */
 
 // Extended cue bank with more specific, contextualized body language
-export const CUE_BANK = {
+const CUE_BANK = {
   'neutral': [
     'The HCP pauses mid-note, then looks up and meets your eyes, inviting further discussion.',
     'The HCP sets down their pen, leans in, and listens intently as you speak.',

@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
-import { summarizeSessionMetrics } from "@/lib/eqMetricsAggregator";
 
 const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
   id: c.id,
@@ -26,17 +25,6 @@ const OVERALL_SECTION_CANONICAL = {
   strengths: "What the rep did well across capabilities",
   gap: "Biggest cross-capability gap to improve next",
   adjustment: "One concrete adjustment for the next role-play",
-};
-
-const METRIC_LABEL_MAP = {
-  question_quality: "Question Quality",
-  listening_responsiveness: "Listening & Responsiveness",
-  making_it_matter: "Making It Matter",
-  customer_engagement_cues: "Customer Engagement Cues",
-  objection_handling: "Objection Handling",
-  conversation_control: "Conversation Control",
-  adaptability: "Adaptability",
-  commitment_gaining: "Commitment Gaining",
 };
 
 function normalizeOverallFeedback(rawFeedback = "") {
@@ -185,38 +173,36 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     .join("\n");
 
   const scoredTurns = turns.filter((t) => t.alignment?.metrics);
-  const latestTurn = scoredTurns.length > 0 ? scoredTurns[scoredTurns.length - 1] : null;
-  const metrics = latestTurn?.alignment?.metrics || {};
-  const getCapabilityScore = (capId) => {
-    const score = metrics?.[capId]?.score;
-    return typeof score === 'number' ? score : null;
+  const getCapabilityAverage = (capId) => {
+    const scores = scoredTurns
+      .map((t) => t.alignment?.metrics?.[capId]?.score)
+      .filter((score) => typeof score === "number");
+    if (scores.length === 0) return null;
+    return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
   };
 
-  const overallScore = typeof latestTurn?.alignment?.score === 'number' ? latestTurn.alignment.score : null;
-  const metricResults = Object.entries(metrics).map(([id, metric]) => ({
-    id,
-    score: metric?.score,
-    components: metric?.subScores || {},
-    metricsVersion: metric?.metricsVersion || latestTurn?.alignment?.metricsVersion,
-  }));
-  const eqSummary = metricResults.length === 8 ? summarizeSessionMetrics(metricResults) : null;
-  const strongestLabel = eqSummary?.strongestMetric ? (METRIC_LABEL_MAP[eqSummary.strongestMetric] || eqSummary.strongestMetric) : "N/A";
-  const weakestLabel = eqSummary?.weakestMetric ? (METRIC_LABEL_MAP[eqSummary.weakestMetric] || eqSummary.weakestMetric) : "N/A";
-  const strengthLabels = (eqSummary?.strengths || []).map((id) => METRIC_LABEL_MAP[id] || id);
-  const gapLabels = (eqSummary?.gaps || []).map((id) => METRIC_LABEL_MAP[id] || id);
+  const overallScore = (() => {
+    const capIds = CAPABILITIES.map(c => c.id);
+    const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
+    if (scores.length === 0) return null;
+    return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
+  })();
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
     setExpanded((prev) => ({ ...prev, [cap.id]: true }));
     try {
       const clipTrans = transcript.substring(0, 2000);
-      const metricSignals = metrics?.[cap.id];
-      const prompt = `As a sales coach, analyze this capability using only observable behavior from the transcript and deterministic findings (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\nKey strengths detected: ${(metricSignals?.positives || []).slice(0, 3).join(' | ') || 'None detected'}\nKey gaps detected: ${(metricSignals?.misalignments || []).slice(0, 3).join(' | ') || 'None detected'}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale grounded in behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output numeric scores.`;
+      const deterministicScore = getCapabilityAverage(cap.id);
+      const scoreLine = deterministicScore !== null
+        ? `Deterministic Score (locked, do not change): ${deterministicScore}/5`
+        : `Deterministic Score: not available yet`;
+      const prompt = `As a sales coach, analyze this capability using the fixed deterministic score below (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\n${scoreLine}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale that explains this fixed score using observable behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed score above.`;
 
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ prompt, max_tokens: 500 })
       });
 
       if (!res.ok) throw new Error('Failed to get feedback');
@@ -237,18 +223,21 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     setOverallExpanded(true);
     try {
       const clipTrans = transcript.substring(0, 3000);
-      const capabilitySummary = CAPABILITIES
+      const scoreLine = overallScore !== null
+        ? `Overall deterministic score (locked, do not change): ${overallScore}/5`
+        : "Overall deterministic score: not available yet";
+      const capabilityScoreLines = CAPABILITIES
         .map((cap) => {
-          const metric = metrics?.[cap.id] || {};
-          return `${cap.label}: strengths= ${(metric.positives || []).slice(0, 2).join(' | ') || 'none'} ; gaps= ${(metric.misalignments || []).slice(0, 2).join(' | ') || 'none'}`;
+          const score = getCapabilityAverage(cap.id);
+          return `${cap.label}: ${score !== null ? `${score}/5` : "N/A"}`;
         })
         .join("\n");
-      const prompt = `As a sales coach, provide an overall session analysis using deterministic observations below (do NOT rescore).\n\nCapability findings:\n${capabilitySummary}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale grounded in behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output numeric scores.`;
+      const prompt = `As a sales coach, provide an overall session analysis using the fixed deterministic scoring summary below (do NOT rescore).\n${scoreLine}\n\nCapability score breakdown:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall score using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed deterministic scores above.`;
 
-      const res = await fetch('/api/chat', {
+      const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] })
+        body: JSON.stringify({ prompt, max_tokens: 650 })
       });
 
       if (!res.ok) throw new Error('Failed to get overall feedback');
@@ -282,7 +271,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
-          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze. {latestTurn?.alignment?.metricsVersion ? `(${latestTurn.alignment.metricsVersion})` : ""}</p>
+          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
           <div className="flex items-center justify-center gap-1">
             {!overallFeedback && !overallLoading && (
               <Button
@@ -316,23 +305,6 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           </div>
         )}
       </div>
-      {eqSummary && (
-        <div className="mb-3 rounded-xl border border-slate-300 bg-white px-3 py-2.5 shadow-sm">
-          <p className="text-xs font-bold text-slate-800 mb-1">Session EQ Summary</p>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-700">
-            <span className="font-semibold">Overall Average</span>
-            <span>{eqSummary.overallAverage ?? "N/A"}</span>
-            <span className="font-semibold">Strongest Metric</span>
-            <span>{strongestLabel}</span>
-            <span className="font-semibold">Weakest Metric</span>
-            <span>{weakestLabel}</span>
-            <span className="font-semibold">Strengths</span>
-            <span>{strengthLabels.length > 0 ? strengthLabels.join(", ") : "No standout strengths yet"}</span>
-            <span className="font-semibold">Gaps</span>
-            <span>{gapLabels.length > 0 ? gapLabels.join(", ") : "No immediate gaps detected"}</span>
-          </div>
-        </div>
-      )}
       {focusCaps.length > 0 && (
         <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
           ⭐ <span className="font-semibold">Scenario focus:</span> {focusCaps.map((id) => CAPABILITIES.find((c) => c.id === id)?.label).filter(Boolean).join(", ")}
@@ -354,8 +326,8 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
-                {getCapabilityScore(cap.id) !== null && (
-                  <span className="text-xs font-semibold text-gray-500">Score {getCapabilityScore(cap.id)}/5</span>
+                {getCapabilityAverage(cap.id) !== null && (
+                  <span className="text-xs font-semibold text-gray-500">Score {getCapabilityAverage(cap.id)}/5</span>
                 )}
                 {hasFeedback && (
                   <span className="text-xs text-gray-600">{cap.question}</span>
