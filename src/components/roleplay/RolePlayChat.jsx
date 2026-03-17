@@ -34,6 +34,17 @@ import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
 
+function escapeHTML(text) {
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function sanitizeRenderedMessage(text) {
+  return escapeHTML(String(text || "").trim());
+}
+
 
 
 
