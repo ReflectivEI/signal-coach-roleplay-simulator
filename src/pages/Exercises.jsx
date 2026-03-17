@@ -77,6 +77,17 @@ function normalizeQuizQuestions(rawQuestions = []) {
     .slice(0, 5);
 }
 
+function normalizeLLMText(data = {}) {
+  const raw = data?.response ?? data?.text ?? data?.content ?? "";
+  if (typeof raw === "string") return raw.replace(/^```[\w]*\n?|\n?```$/g, "").trim();
+  if (raw && typeof raw === "object") {
+    if (typeof raw.scenario === "string") return raw.scenario.trim();
+    if (typeof raw.content === "string") return raw.content.trim();
+    return JSON.stringify(raw, null, 2).trim();
+  }
+  return String(raw || "").trim();
+}
+
 export default function Exercises() {
   const [questions, setQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -165,8 +176,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       });
       if (res.ok) {
         const data = await res.json();
-        const raw = data.response || data.text || data.content || '';
-        const scenario = String(raw).replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+        const scenario = normalizeLLMText(data);
         setScenarioText(scenario || "Unable to generate scenario. Please try again.");
       } else {
         setScenarioText("Unable to generate scenario. Please try again.");
