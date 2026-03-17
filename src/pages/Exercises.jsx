@@ -1,262 +1,329 @@
-import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dumbbell,
-  Target,
   Sparkles,
+  Target,
+  Loader2,
+  Wand2,
+  MessageSquare,
+  FileText,
+  Lightbulb,
   RefreshCw,
-  AlertCircle,
-  CheckCircle2,
-  XCircle,
-  Wand2
 } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import ReactMarkdown from "react-markdown";
-import { formatScenarioText } from "@/lib/utils";
+import { formatScenarioText } from "../lib/utils";
 
-/* =========================
-   SAFE PARSER (INLINE)
-========================= */
-function safeParseJSON(raw) {
+const TOPICS = [
+  { id: "objection", label: "Objection Handling", icon: MessageSquare },
+  { id: "evidence", label: "Clinical Evidence", icon: FileText },
+  { id: "closing", label: "Closing Techniques", icon: Target },
+  { id: "rapport", label: "Rapport Building", icon: Dumbbell },
+  { id: "signals", label: "Behavioral Signals", icon: Lightbulb },
+];
+
+function safeParseJsonArray(raw) {
+  const text = String(raw || "").replace(/^```json\n?|\n?```$/g, "").trim();
   try {
-    let text = String(raw || "")
-      .replace(/^```json\n?|\n?```$/g, "")
-      .trim();
-
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    try {
-      const first = raw.indexOf("[");
-      const last = raw.lastIndexOf("]");
-      if (first >= 0 && last > first) {
-        return JSON.parse(raw.slice(first, last + 1));
+    const first = text.indexOf("[");
+    const last = text.lastIndexOf("]");
+    if (first >= 0 && last > first) {
+      try {
+        return JSON.parse(text.slice(first, last + 1));
+      } catch {
+        return [];
       }
-    } catch {}
-    return null;
+    }
+    return [];
   }
 }
 
-/* =========================
-   TOPICS
-========================= */
-const TOPICS = [
-  { id: "objection", label: "Objection Handling" },
-  { id: "evidence", label: "Clinical Evidence" },
-  { id: "closing", label: "Closing Techniques" },
-  { id: "rapport", label: "Rapport Building" },
-  { id: "signals", label: "Behavioral Signals" },
-];
+function normalizeQuizQuestions(rawQuestions = []) {
+  return rawQuestions
+    .map((q) => {
+      const question = q.question || q.prompt || "";
+      const options = (q.answers || q.options || q.choices || [])
+        .map((opt) => String(opt).replace(/^[A-Da-d][.)]\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 4);
 
-export default function ExercisesPage() {
-  const [exercises, setExercises] = useState([]);
-  const [scenario, setScenario] = useState(null);
+      let correctIndex = Number.isInteger(q.correctAnswerIndex)
+        ? q.correctAnswerIndex
+        : Number.isInteger(q.correct_index)
+          ? q.correct_index
+          : null;
+
+      if (correctIndex === null && typeof q.correctAnswer === "string") {
+        const clean = q.correctAnswer.trim();
+        const letterMatch = clean.match(/^[A-Da-d]$/);
+        if (letterMatch) correctIndex = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
+        else correctIndex = options.findIndex((o) => o.toLowerCase() === clean.toLowerCase());
+      }
+
+      if (!question || options.length < 4 || correctIndex == null || correctIndex < 0 || correctIndex > 3) return null;
+
+      return {
+        question,
+        options,
+        correctIndex,
+        explanation: q.explanation || q.rationale || "",
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+export default function Exercises() {
+  const [questions, setQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
-  const [error, setError] = useState(null);
   const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [showResults, setShowResults] = useState({});
   const [selectedTopic, setSelectedTopic] = useState(null);
+  const [scenarioText, setScenarioText] = useState(null);
+  const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
 
-  const selectedTopicLabel = useMemo(() => {
-    const found = TOPICS.find((t) => t.id === selectedTopic);
-    return found ? found.label : "Signal Intelligence and Life Sciences Sales";
-  }, [selectedTopic]);
+  const selectedTopicLabel = useMemo(
+    () => TOPICS.find((t) => t.id === selectedTopic)?.label || "Signal Intelligence and Life Sciences Sales",
+    [selectedTopic]
+  );
 
-  const resetAll = () => {
-    setExercises([]);
-    setScenario(null);
-    setSelectedAnswers({});
-    setError(null);
-  };
-
-  const fallbackPool = [
-    {
-      question: "A customer says 'Your product is too expensive.' What's the BEST response?",
-      options: [
-        "Competitors cost more.",
-        "Can you help me understand what you're comparing us to?",
-        "We can discount.",
-        "Quality speaks for itself."
-      ],
-      correctAnswer: 1,
-      explanation: "Understanding context first prevents defensiveness."
-    }
-  ];
-
-  const generateExercises = async () => {
+  const generateQuiz = async () => {
     setIsGenerating(true);
-    setError(null);
     setSelectedAnswers({});
-    setExercises([]);
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-
+    setShowResults({});
     try {
-      const response = await fetch("/api/chat/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Return ONLY JSON.
+      const prompt = `Generate exactly 5 multiple-choice quiz questions for pharmaceutical sales reps on this focus topic: "${selectedTopicLabel}".
 
-Generate 5 multiple choice questions about "${selectedTopicLabel}".
+Requirements:
+- AI-driven and practical, scenario-based where possible
+- Aligned to Signal Intelligence capabilities and life sciences sales best practices
+- 4 options per question (A/B/C/D)
+- Include one correct option index (0-3)
+- Include a concise 1-2 sentence explanation for learning feedback
 
-Format:
-[{
- "question":"...",
- "options":["A","B","C","D"],
- "correctAnswer":0,
- "explanation":"..."
-}]`
-        }),
-        signal: controller.signal
+Return ONLY valid JSON array with this exact schema:
+[
+  {
+    "question": "...",
+    "answers": ["...", "...", "...", "..."],
+    "correctAnswerIndex": 0,
+    "explanation": "..."
+  }
+]`;
+
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, max_tokens: 1400 })
       });
 
-      const raw = await response.text();
-      const parsed = safeParseJSON(raw);
-
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setExercises(parsed.slice(0, 5));
-      } else {
-        throw new Error("Bad AI response");
+      if (!res.ok) {
+        setQuestions([]);
+        return;
       }
+
+      const data = await res.json();
+      const parsed = safeParseJsonArray(data.response || data.text || data.content || "");
+      const normalized = normalizeQuizQuestions(parsed);
+      setQuestions(normalized);
     } catch (err) {
-      console.warn("Fallback triggered:", err);
-      setExercises(fallbackPool);
-      setError("AI unstable. Showing fallback.");
+      console.error('Quiz generation error:', err);
+      setQuestions([]);
     } finally {
-      clearTimeout(timeout);
       setIsGenerating(false);
     }
   };
 
   const generateScenario = async () => {
     setIsGeneratingScenario(true);
-    setScenario(null);
-
     try {
-      const response = await fetch("/api/chat/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Generate a pharma sales scenario about "${selectedTopicLabel}".`
-        })
-      });
+      const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
 
-      const raw = await response.text();
-      setScenario(raw);
-    } catch {
-      setScenario("Unable to generate scenario.");
+1. Situation setup (HCP type, time constraint, context)
+2. HCP behavioral signals (what the rep should notice)
+3. The HCP's opening statement or concern
+4. 2-3 follow-up questions the REP should ask
+5. Common mistakes to avoid
+6. Best approach and expected outcome
+
+Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
+      const res = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, max_tokens: 1000 })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScenarioText(typeof data.response === 'string' ? data.response : String(data.response));
+      } else {
+        setScenarioText("Unable to generate scenario. Please try again.");
+      }
+    } catch (err) {
+      console.error('Scenario generation error:', err);
+      setScenarioText("Unable to generate scenario. Please try again.");
     } finally {
       setIsGeneratingScenario(false);
     }
   };
 
-  const selectAnswer = (qIdx, optIdx) => {
-    if (selectedAnswers[qIdx] !== undefined) return;
-    setSelectedAnswers((prev) => ({ ...prev, [qIdx]: optIdx }));
+  const selectAnswer = (qIdx, aIdx) => {
+    if (showResults[qIdx] !== undefined) return;
+    setSelectedAnswers((prev) => ({ ...prev, [qIdx]: aIdx }));
+    setShowResults((prev) => ({ ...prev, [qIdx]: true }));
   };
 
   return (
-    <div className="container mx-auto p-6 max-w-5xl space-y-6">
-
-      <div className="flex justify-between items-center">
-        <div className="flex items-center gap-3">
-          <Dumbbell className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Practice Exercises</h1>
+    <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-7">
+        <Dumbbell className="w-7 h-7 text-teal-500" />
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
+          <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
         </div>
-
-        <button onClick={resetAll} className="flex items-center gap-1 text-sm">
-          <RefreshCw className="h-4 w-4" />
-          Reset
-        </button>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        {TOPICS.map((t) => (
-          <Button
-            key={t.id}
-            variant={selectedTopic === t.id ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-          >
-            {t.label}
-          </Button>
-        ))}
+      <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
+        <div className="flex flex-wrap gap-2">
+          {TOPICS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
+                ? "bg-teal-500 text-white border-teal-500"
+                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                }`}
+            >
+              <t.icon className="w-3 h-3" />
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Button onClick={generateExercises} disabled={isGenerating}>
-          {isGenerating ? "Generating..." : "Generate Quiz"}
-        </Button>
-
-        <Button onClick={generateScenario} disabled={isGeneratingScenario}>
-          {isGeneratingScenario ? "Generating..." : "Generate Scenario"}
-        </Button>
-      </div>
-
-      {error && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {scenario && (
-        <Card>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
+        <Card className="border-teal-100 shadow-sm">
           <CardHeader>
-            <CardTitle>Scenario</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-teal-500" />
+                <CardTitle className="text-base">AI Quiz Questions</CardTitle>
+              </div>
+              <button
+                type="button"
+                onClick={generateQuiz}
+                className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                title="Refresh quiz"
+                disabled={isGenerating}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGenerating ? "animate-spin" : ""}`} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500">4-5 AI-generated multiple-choice questions with instant feedback</p>
           </CardHeader>
           <CardContent>
-            <ReactMarkdown>{formatScenarioText(scenario)}</ReactMarkdown>
+            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateQuiz} disabled={isGenerating}>
+              {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-teal-100 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-teal-500" />
+              <CardTitle className="text-base">Practice Scenario</CardTitle>
+            </div>
+            <p className="text-sm text-gray-500">AI-written role-play scenario with coaching prompts</p>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateScenario} disabled={isGeneratingScenario}>
+              {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {scenarioText && (
+        <Card className="mb-7 border-teal-100 shadow-sm">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-teal-500" />
+              <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
+              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {exercises.map((ex, idx) => {
-        const selected = selectedAnswers[idx];
-        const correct = selected === ex.correctAnswer;
+      {questions.length === 0 && !isGenerating && !scenarioText && !isGeneratingScenario ? (
+        <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
+          <Target className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Practice</h3>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            Pick a focus topic (optional), then generate AI quiz questions or a tailored practice scenario.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {questions.map((q, qIdx) => {
+            const selectedIdx = selectedAnswers[qIdx];
+            const isCorrectSelected = selectedIdx === q.correctIndex;
 
-        return (
-          <Card key={idx}>
-            <CardHeader>
-              <CardTitle>{idx + 1}. {ex.question}</CardTitle>
-            </CardHeader>
+            return (
+              <Card key={qIdx} className="overflow-hidden border-gray-200 shadow-sm">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-gray-900 mb-4">{qIdx + 1}. {q.question}</p>
+                  <div className="space-y-2">
+                    {q.options.map((opt, aIdx) => {
+                      const isSelected = selectedIdx === aIdx;
+                      const isCorrect = q.correctIndex === aIdx;
+                      const showResult = showResults[qIdx];
+                      const letter = String.fromCharCode(65 + aIdx);
 
-            <CardContent>
-              <RadioGroup
-                value={selected?.toString()}
-                onValueChange={(v) => selectAnswer(idx, parseInt(v))}
-              >
-                {ex.options.map((opt, i) => {
-                  let cls = "p-3 border rounded-lg";
+                      let rowCls = "border-gray-200 bg-white hover:border-teal-400 hover:bg-teal-50 cursor-pointer";
+                      let labelCls = "bg-slate-100 text-slate-600";
 
-                  if (selected !== undefined) {
-                    if (i === ex.correctAnswer) cls += " bg-green-50";
-                    else if (i === selected) cls += " bg-red-50";
-                  }
+                      if (showResult && isCorrect) {
+                        rowCls = "border-green-500 bg-green-50";
+                        labelCls = "bg-green-600 text-white";
+                      } else if (showResult && isSelected && !isCorrect) {
+                        rowCls = "border-red-400 bg-red-50";
+                        labelCls = "bg-red-500 text-white";
+                      }
 
-                  return (
-                    <div key={i} className={cls}>
-                      <RadioGroupItem value={i.toString()} />
-                      <Label>{opt}</Label>
+                      return (
+                        <button
+                          key={aIdx}
+                          onClick={() => selectAnswer(qIdx, aIdx)}
+                          className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border text-sm transition-all ${rowCls}`}
+                        >
+                          <span className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold transition-all ${labelCls}`}>
+                            {letter}
+                          </span>
+                          <span className="text-gray-800">{opt}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {showResults[qIdx] && q.explanation && (
+                    <div className={`mt-4 p-3 rounded-lg border text-sm italic ${isCorrectSelected ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>
+                      {q.explanation}
                     </div>
-                  );
-                })}
-              </RadioGroup>
-
-              {selected !== undefined && (
-                <Alert>
-                  {correct ? <CheckCircle2 /> : <XCircle />}
-                  <AlertDescription>{ex.explanation}</AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
