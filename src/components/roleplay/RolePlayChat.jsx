@@ -65,6 +65,56 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   return renderedText;
 }
 
+function hardenTextSurface(text) {
+  let value = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!value) return "";
+
+  value = value
+    .replace(/\bi\b/g, "I")
+    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
+    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
+    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
+
+  if (!/[.!?]$/.test(value)) {
+    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
+    value += looksLikeQuestion ? "?" : ".";
+  }
+
+  return value;
+}
+
+function extractScenarioKeywords(scenario) {
+  const combined = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.opening_scene,
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.goal,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+  ].join(" ").toLowerCase();
+
+  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
+  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
+}
+
+function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
+  const value = String(text || "").toLowerCase();
+  const rep = String(repMessage || "").toLowerCase();
+  if (!value) return false;
+
+  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
+  if (genericOnly) return false;
+
+  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
+  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
+  return scenarioHits > 0 || repHits > 0;
+}
+
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -113,6 +163,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return true;
     });
   const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
+  const scenarioKeywords = extractScenarioKeywords(scenario);
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -336,13 +387,47 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    nextHcpDialogue = "I see. Let me consider that.";
+    const priorRepTurns = turns.filter((t) => !!t.repMessage).length;
+    const priorHcpDialogueTurns = turns.filter((t) => !!t.hcpDialogueBefore).length;
+    const isFirstHcpResponse = (
+      respondingToTurn.turnNumber === 0
+      && !respondingToTurn.hcpDialogueBefore
+      && priorRepTurns === 0
+      && priorHcpDialogueTurns === 0
+    );
+
+    const buildFirstTurnScenarioFallback = () => {
+      const openingContext = String(
+        scenario.opening_scene
+        || scenario.openingScene
+        || scenario.description
+        || scenario.context
+        || ''
+      ).trim();
+      const openingLower = openingContext.toLowerCase();
+      const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|patients)\b/.test(openingLower);
+      const repPreview = String(repMessage || '').replace(/[?.!]+$/g, '').trim().split(/\s+/).filter(Boolean).slice(0, 8).join(' ');
+      const acknowledgment = repPreview
+        ? `I hear you on ${repPreview}.`
+        : 'Thanks for reaching out.';
+
+      if (pressured) {
+        return `${acknowledgment} I'm under time pressure right now, so keep this focused on what matters most for my patients.`;
+      }
+
+      return `${acknowledgment} Given the situation in my practice, what specifically do you want to focus on first?`;
+    };
+
+    nextHcpDialogue = isFirstHcpResponse
+      ? buildFirstTurnScenarioFallback()
+      : "I see. Let me consider that.";
+
     try {
       const systemPrompt = buildHCPDialoguePrompt({
         scenario,
         hcpProfile: nextProfile,
         historyText,
-        isOpening: false,
+        isOpening: isFirstHcpResponse,
       });
       const res = await fetch('/api/roleplay', {
         method: 'POST',
@@ -369,7 +454,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
         }
 
-        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue);
+        nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
 
         if (
           import.meta.env.DEV
@@ -381,6 +466,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
+    }
+
+    const groundedFallback = buildFirstTurnScenarioFallback();
+    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
+      nextHcpDialogue = groundedFallback;
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
@@ -415,6 +505,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         contextualCue = cues && cues.length > 0 ? cues[nextTurnNumber % cues.length] : 'The HCP listens quietly, waiting for your response.';
       }
     }
+
+    contextualCue = hardenTextSurface(contextualCue);
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
@@ -501,9 +593,32 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     return !(sameDialogue && sameCue);
   });
 
+  const displayItems = displayTurns.flatMap((turn, index) => {
+    const items = [];
+
+    if (turn.repMessage) {
+      items.push({ kind: 'rep', key: `rep-${turn.turnNumber}-${index}`, turn });
+    }
+
+    if (turn.hcpDialogueBefore || turn.cueBefore) {
+      items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
+    }
+
+    return items;
+  });
+
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = false;
+
+  const renderSafeMessage = (text, source = "unknown") => {
+    try {
+      return sanitizeRenderedMessage(text, source);
+    } catch (err) {
+      console.error("ROLEPLAY_RENDER_SANITIZE_FALLBACK", { source, err });
+      return escapeHTML(String(text || ""));
+    }
+  };
 
   const exportFeedbackPDF = () => {
     if (!feedback) return;
@@ -844,32 +959,14 @@ ${actionText}`;
 
                   Avoid absolute positioning.
                 */}
-                {displayTurns.map((turn, i) => (
-                  <div key={i} className="flex flex-col gap-4">
-                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                    {turn.cueBefore && turn.repMessage == null && i > 0 && displayTurns[i - 1]?.repMessage != null && (
-                      <div className="flex flex-col items-start gap-1 pl-1">
-                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                          {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
-                        </p>
-                      </div>
-                    )}
+                {displayItems.map((item) => {
+                  const { turn } = item;
 
-                    {turn.hcpDialogueBefore && (
-                      <div className="flex flex-col items-start gap-1">
-                        <div className="flex items-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {turn.repMessage && (
-                      <div className="flex flex-col items-end gap-1">
+                  if (item.kind === "rep") {
+                    return (
+                      <div key={item.key} className="flex flex-col items-end gap-1">
                         <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
-                          {sanitizeRenderedMessage(turn.repMessage, "user-message")}
+                          {renderSafeMessage(turn.repMessage, "user-message")}
                         </div>
                         {turn.alignment && (
                           <>
@@ -878,7 +975,6 @@ ${actionText}`;
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}</span>
-                              {/* State label removed: do not display ruleLabel */}
                               {turn.alignment.misalignments.length > 0 && (
                                 <div className="mt-0.5 max-w-[420px] break-words whitespace-normal">⚠ {turn.alignment.misalignments[0]}</div>
                               )}
@@ -894,29 +990,29 @@ ${actionText}`;
                           </>
                         )}
                       </div>
-                    )}
+                    );
+                  }
 
-                    {turn.hcpDialogueBefore && (
-                      <div className="flex flex-col items-start gap-1">
+                  return (
+                    <div key={item.key} className="flex flex-col items-start gap-1">
+                      {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
+                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                            {renderSafeMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
-                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
-                      <div className="flex flex-col items-start gap-1 pl-1">
-                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                          {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                      {turn.cueBefore && (
+                        <div className="pl-1">
+                          <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                            {renderSafeMessage(turn.cueBefore, "behavioral-cue")}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
