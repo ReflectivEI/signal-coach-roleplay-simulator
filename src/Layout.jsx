@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
   BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight,
-  ChevronDown, Bell, User, Moon, PenSquare, TrendingUp, UserCircle, Users, Route
+  ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send
 } from "lucide-react";
 
 const navSections = [
@@ -62,51 +62,73 @@ const navSections = [
   },
 ];
 
-
 export default function Layout({ children, currentPageName }) {
   const [openSections, setOpenSections] = useState(
     navSections.reduce((acc, s) => ({ ...acc, [s.label]: s.defaultOpen }), {})
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [colorMode, setColorMode] = useState(() => localStorage.getItem("app-color-mode") || "light");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState([
+    { role: "assistant", content: "Hi — I can answer platform questions and help you navigate ReflectivAI." },
+  ]);
+  const [assistantInput, setAssistantInput] = useState("");
+  const [assistantLoading, setAssistantLoading] = useState(false);
   const userMenuRef = useRef(null);
+  const notifMenuRef = useRef(null);
+  const assistantRef = useRef(null);
   const { user: authUser, logout } = useAuth();
 
   useEffect(() => {
-    const handler = (e) => { if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.documentElement.classList.remove("dark");
+    localStorage.setItem("app-color-mode", "light");
+    window.dispatchEvent(new CustomEvent("app-color-mode-changed", { detail: "light" }));
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("app-color-mode", colorMode);
-    if (colorMode === "dark") document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
-    window.dispatchEvent(new CustomEvent("app-color-mode-changed", { detail: colorMode }));
-  }, [colorMode]);
-
-  useEffect(() => {
-    const syncMode = (e) => {
-      const next = (e?.detail || localStorage.getItem("app-color-mode") || "light");
-      setColorMode(next);
+    const handler = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
+      if (notifMenuRef.current && !notifMenuRef.current.contains(e.target)) setNotificationsOpen(false);
+      if (assistantRef.current && !assistantRef.current.contains(e.target) && !e.target.closest("[data-chat-trigger='true']")) setAssistantOpen(false);
     };
-    window.addEventListener("storage", syncMode);
-    window.addEventListener("app-color-mode-changed", syncMode);
-    return () => {
-      window.removeEventListener("storage", syncMode);
-      window.removeEventListener("app-color-mode-changed", syncMode);
-    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   const toggleSection = (label) => {
     setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
   };
 
+  const sendAssistantMessage = async () => {
+    const text = assistantInput.trim();
+    if (!text || assistantLoading) return;
 
+    const userMsg = { role: "user", content: text };
+    const newMessages = [...assistantMessages, userMsg];
+    setAssistantMessages(newMessages);
+    setAssistantInput("");
+    setAssistantLoading(true);
+
+    try {
+      const prompt = `You are ReflectivAI Platform Assistant. Answer platform navigation and usage questions in concise, actionable steps.\n\nConversation:\n${newMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}`;
+      const res = await fetch("/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, max_tokens: 300 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const responseText = String(data?.response || data?.text || data?.content || "I couldn’t generate an answer right now. Please try again.");
+      setAssistantMessages((prev) => [...prev, { role: "assistant", content: responseText }]);
+    } catch {
+      setAssistantMessages((prev) => [...prev, { role: "assistant", content: "Service is temporarily unavailable. Please try again." }]);
+    } finally {
+      setAssistantLoading(false);
+    }
+  };
 
   return (
-    <div className={`flex h-screen overflow-hidden ${colorMode === "dark" ? "dark" : ""}`} style={{ background: colorMode === "dark" ? "#111827" : "#f0f4f8" }}>
+    <div className="flex h-screen overflow-hidden" style={{ background: "#f0f4f8" }}>
       <style>{`
         :root {
           --brand-navy:   #1A334D;
@@ -116,13 +138,11 @@ export default function Layout({ children, currentPageName }) {
           --brand-light-gray: #f0f4f8;
         }
 
-        /* Scrollbar styling */
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #39ACAC44; border-radius: 4px; }
       `}</style>
 
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/40 z-20 md:hidden"
@@ -130,99 +150,62 @@ export default function Layout({ children, currentPageName }) {
         />
       )}
 
-      {/* Sidebar — navy background matching marketing site */}
       <aside
         className={`fixed md:static inset-y-0 left-0 z-30 w-72 flex flex-col transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden"
           }`}
         style={{ background: "#1A334D", borderRight: "1px solid #22405f" }}
       >
-        {/* Brand */}
         <div className="p-4 flex items-center gap-3 border-b" style={{ borderColor: "#22405f" }}>
           <div className="flex-shrink-0">
-            {/* ReflectivAI Logo Icon - navy globe with leaf */}
             <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="20" cy="20" r="20" fill="#1A334D" />
-              {/* globe arc bottom */}
               <path d="M6 28 Q20 38 34 28" stroke="white" strokeWidth="1.8" fill="none" strokeLinecap="round" />
-              {/* outer ring */}
               <circle cx="20" cy="18" r="11" stroke="white" strokeWidth="1.8" fill="none" />
-              {/* inner leaf/teardrop */}
               <path d="M20 10 C24 14 24 22 20 26 C16 22 16 14 20 10Z" fill="white" />
             </svg>
           </div>
-          <div>
-            <div className="flex items-baseline gap-0">
-              <span className="text-sm font-bold text-white tracking-wide">Reflectiv</span>
-              <span className="text-sm font-bold tracking-wide" style={{ color: "#39ACAC" }}>AI</span>
-            </div>
-            <span className="text-xs" style={{ color: "#39ACAC" }}>Sales Enablement</span>
+          <div className="min-w-0">
+            <h1 className="font-bold text-lg leading-tight tracking-tight">
+              <span style={{ color: "#ffffff" }}>Reflectiv</span>
+              <span style={{ color: "#39ACAC" }}>AI</span>
+            </h1>
+            <p className="text-[11px] text-white/65 -mt-0.5">Sales Enablement</p>
           </div>
         </div>
 
-        {/* User */}
-        <div className="px-4 py-3 border-b relative" style={{ borderColor: "#22405f" }} ref={userMenuRef}>
-          <div
-            className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-white/10 transition-colors"
-            onClick={() => setUserMenuOpen(v => !v)}
-          >
-            <div className="w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-bold flex-shrink-0" style={{ background: "#39ACAC" }}>
-              {authUser?.name ? authUser.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase() : "?"}
+        <div className="px-3 py-3 border-b" style={{ borderColor: "#22405f" }}>
+          <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-white/10 border border-white/10" ref={userMenuRef}>
+            <div className="w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">
+              {authUser?.name?.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "DU"}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-white truncate flex items-center gap-1.5">
-                {authUser?.name || authUser?.email || "Loading…"}
-                {authUser?.role === "admin" && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#39ACAC22", color: "#39ACAC", border: "1px solid #39ACAC55" }}>ADMIN</span>
-                )}
-              </div>
-              <div className="text-xs truncate" style={{ color: "#39ACAC" }}>{authUser?.email || ""}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold text-white truncate">{authUser?.name || "Demo User"}</div>
+              <div className="text-[11px] text-white/60 truncate">{authUser?.email || "demo@example.com"}</div>
             </div>
-            <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} style={{ color: "#39ACAC" }} />
-          </div>
+            <button onClick={() => setUserMenuOpen((v) => !v)} className="text-white/70 hover:text-white">
+              <ChevronDown className={`w-4 h-4 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
+            </button>
 
-          <AnimatePresence>
-            {userMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0, y: -8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
-                className="absolute left-4 right-4 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden"
-              >
-                <div className="px-4 py-2.5 border-b border-gray-100">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">My Account</p>
-                </div>
-                <Link
-                  to={createPageUrl("ProfileSettings")}
-                  onClick={() => setUserMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            <AnimatePresence>
+              {userMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  className="absolute mt-32 right-4 z-40 w-48 rounded-lg border border-slate-200 bg-white shadow-lg p-1"
                 >
-                  <UserCircle className="w-4 h-4 text-gray-400" />
-                  Profile & Settings
-                </Link>
-                {authUser?.role === "admin" && (
-                  <Link
-                    to={createPageUrl("ManagerView")}
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors border-t border-gray-100"
-                  >
-                    <Users className="w-4 h-4 text-gray-400" />
-                    Admin / Manager View
+                  <Link to={createPageUrl("ProfileSettings")} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                    <UserCircle className="w-4 h-4" /> Profile Settings
                   </Link>
-                )}
-                <button
-                  onClick={() => logout(true)}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-gray-100"
-                >
-                  <Settings className="w-4 h-4" />
-                  Sign Out
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <button onClick={() => logout?.()} className="w-full text-left flex items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                    Logout
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           {navSections.map((section) => (
             <div key={section.label} className="mb-1">
@@ -256,7 +239,7 @@ export default function Layout({ children, currentPageName }) {
                             ? "text-white font-semibold"
                             : "text-white/60 hover:text-white hover:bg-white/10"
                             }`}
-                          style={isActive ? { background: "#39ACAC" } : {}}
+                          style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
                           onClick={() => {
                             if (window.innerWidth < 768) setSidebarOpen(false);
                           }}
@@ -282,14 +265,12 @@ export default function Layout({ children, currentPageName }) {
 
       </aside>
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Top bar */}
-        <header className="h-14 border-b flex items-center justify-between px-4 flex-shrink-0" style={{ background: colorMode === "dark" ? "#111827" : "#ffffff", borderBottom: colorMode === "dark" ? "1px solid #334155" : "1px solid #e2e8f0" }}>
+        <header className="h-14 border-b flex items-center justify-between px-4 flex-shrink-0" style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-md transition-colors" style={{ background: "transparent", color: colorMode === "dark" ? "#cbd5e1" : "#6b7280" }}
+              className="p-1.5 rounded-md transition-colors" style={{ background: "transparent", color: "#6b7280" }}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -303,29 +284,73 @@ export default function Layout({ children, currentPageName }) {
                 <path d="M20 10 C24 14 24 22 20 26 C16 22 16 14 20 10Z" fill="white" />
               </svg>
               <div className="flex items-baseline gap-0">
-                <span className="font-bold text-sm tracking-wide" style={{ color: colorMode === "dark" ? "#e2e8f0" : "#1A334D" }}>Reflectiv</span>
+                <span className="font-bold text-sm tracking-wide" style={{ color: "#1A334D" }}>Reflectiv</span>
                 <span className="font-bold text-sm tracking-wide" style={{ color: "#39ACAC" }}>AI</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }}>
-              <Bell className="w-4 h-4" />
-            </button>
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }}>
+            <div className="relative" ref={notifMenuRef}>
+              <button onClick={() => setNotificationsOpen((v) => !v)} className="p-2 rounded-md transition-colors hover:bg-slate-100" style={{ color: "#64748b" }}>
+                <Bell className="w-4 h-4" />
+              </button>
+              {notificationsOpen && (
+                <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-40">
+                  <p className="text-xs font-semibold text-slate-500 uppercase px-2 py-1">Notifications</p>
+                  <Link to={createPageUrl("RolePlaySimulator")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Role Play feedback is ready to review.</Link>
+                  <Link to={createPageUrl("PreCallPlanning")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Pre-Call Planning tips were updated.</Link>
+                  <Link to={createPageUrl("HelpCenter")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Visit Help Center for platform guidance.</Link>
+                </div>
+              )}
+            </div>
+            <Link to={createPageUrl("ProfileSettings")} className="p-2 rounded-md transition-colors hover:bg-slate-100" style={{ color: "#64748b" }} title="Profile Settings">
               <User className="w-4 h-4" />
-            </button>
-            <button className="p-2 rounded-md transition-colors" style={{ color: colorMode === "dark" ? "#94a3b8" : "#9ca3af", background: colorMode === "dark" ? "transparent" : "transparent" }} onClick={() => setColorMode((m) => (m === "dark" ? "light" : "dark"))}>
-              <Moon className="w-4 h-4" />
-            </button>
+            </Link>
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-y-auto" style={{ background: colorMode === "dark" ? "#111827" : "#f0f4f8" }}>
+        <main className="flex-1 overflow-y-auto" style={{ background: "#f0f4f8" }}>
           {children}
         </main>
       </div>
+
+      <button
+        data-chat-trigger="true"
+        onClick={() => setAssistantOpen((v) => !v)}
+        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
+        aria-label="Open platform assistant"
+      >
+        <MessageCircle className="w-6 h-6 mx-auto" />
+      </button>
+
+      {assistantOpen && (
+        <div ref={assistantRef} className="fixed bottom-24 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-[#1A334D] text-white">
+            <p className="text-sm font-semibold">Platform Assistant</p>
+            <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>
+          </div>
+          <div className="max-h-72 overflow-y-auto p-3 space-y-2 bg-slate-50">
+            {assistantMessages.map((m, idx) => (
+              <div key={idx} className={`rounded-xl px-3 py-2 text-xs leading-relaxed border ${m.role === "user" ? "bg-teal-500 text-white border-teal-500 ml-8" : "bg-white text-slate-700 border-slate-200 mr-8"}`}>
+                {m.content}
+              </div>
+            ))}
+            {assistantLoading && <p className="text-xs text-slate-500">Thinking…</p>}
+          </div>
+          <div className="p-2 border-t border-slate-200 bg-white flex items-center gap-2">
+            <input
+              value={assistantInput}
+              onChange={(e) => setAssistantInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendAssistantMessage()}
+              placeholder="Ask a platform question..."
+              className="flex-1 h-9 rounded-full border border-slate-300 px-3 text-xs outline-none focus:border-teal-400"
+            />
+            <button onClick={sendAssistantMessage} className="h-9 w-9 rounded-full border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100" disabled={assistantLoading}>
+              <Send className="w-4 h-4 mx-auto" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

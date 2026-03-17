@@ -451,7 +451,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6">
-          <div className="max-w-3xl mx-auto mb-5">
+          <div className="max-w-3xl mx-auto mb-0">
             <TodaysTipCard className="shadow-sm border-yellow-300 bg-yellow-50" />
           </div>
           {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
