@@ -216,7 +216,7 @@ export default function HelpCenter() {
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-gray-200 p-3 hover:border-teal-300 hover:bg-teal-50 transition-colors"
+              className="rounded-xl border border-[#1A334D] p-3 hover:border-teal-400 hover:bg-teal-50 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
             >
               <p className="text-sm font-semibold text-[#1A334D]">{link.title}</p>
               <p className="text-xs text-gray-600 mt-1">{link.description}</p>

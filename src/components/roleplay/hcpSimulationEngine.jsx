@@ -729,6 +729,22 @@ function setRecentCueMemory(memory = {}, state, severity, cueIndex, max = 4) {
   }
 }
 
+function getRecentGlobalCueMemory(memory = {}, max = 15) {
+  const key = '__recent_global_cues__'
+  const recent = Array.isArray(memory[key]) ? memory[key] : []
+  return recent.slice(-max)
+}
+
+function setRecentGlobalCueMemory(memory = {}, cueSignature, max = 15) {
+  const key = '__recent_global_cues__'
+  const prev = getRecentGlobalCueMemory(memory, max)
+  const next = [...prev, cueSignature].slice(-max)
+  return {
+    ...memory,
+    [key]: next,
+  }
+}
+
 /******************************************************************************************
 CUE BANK
 Expanded cinematic cue bank
@@ -1186,15 +1202,30 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options
   const bank = CUE_BANK[hcpState] || CUE_BANK.neutral
   const safeSeverity = Math.max(0, Math.min(2, severity))
   const tier = bank[safeSeverity] || bank[0]
+  const nonRepeatWindow = Math.max(10, Math.min(15, options.nonRepeatWindow || 15))
+  const nonRepeatWarmupTurns = Math.max(10, Math.min(15, options.nonRepeatWarmupTurns || 15))
 
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}:${safeSeverity}`)
   const recentMemory = getRecentCueMemory(options.memory, hcpState, safeSeverity)
+  const recentGlobalCues = getRecentGlobalCueMemory(options.memory, nonRepeatWindow)
+  const mostRecentCueSignature = recentGlobalCues[recentGlobalCues.length - 1]
 
   const weightedCandidates = tier.map((cue, index) => {
     let weight = 1
+    const cueSignature = cue
 
     if (recentMemory.includes(index)) {
       weight = 0.2
+    }
+
+    // Hard safeguard: never allow immediate back-to-back cue duplication.
+    if (cueSignature === mostRecentCueSignature) {
+      weight = 0
+    }
+
+    // Hard safeguard: block any recent cue during first 10-15 exchanges.
+    if (turnNumber <= nonRepeatWarmupTurns && recentGlobalCues.includes(cueSignature)) {
+      weight = 0
     }
 
     if (options.preferShort && cue.length < 110) {
@@ -1212,14 +1243,35 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options
     return {
       index,
       cue,
+      cueSignature,
       weight: Math.max(0.05, weight),
     }
   })
 
-  const totalWeight = weightedCandidates.reduce((sum, item) => sum + item.weight, 0)
+  const eligibleCandidates = weightedCandidates.filter((item) => item.weight > 0)
+  const totalWeight = eligibleCandidates.reduce((sum, item) => sum + item.weight, 0)
+
+  if (totalWeight <= 0) {
+    const fallbackIndex = seed % tier.length
+    const fallbackCue = tier[fallbackIndex]
+
+    if (fallbackCue === mostRecentCueSignature && tier.length > 1) {
+      const secondIndex = (fallbackIndex + 1) % tier.length
+      return {
+        cue: tier[secondIndex],
+        cueIndex: secondIndex,
+      }
+    }
+
+    return {
+      cue: fallbackCue,
+      cueIndex: fallbackIndex,
+    }
+  }
+
   let cursor = seed % totalWeight
 
-  for (const item of weightedCandidates) {
+  for (const item of eligibleCandidates) {
     if (cursor < item.weight) {
       return {
         cue: item.cue,
@@ -1229,9 +1281,10 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options
     cursor -= item.weight
   }
 
+  const fallbackIndex = seed % tier.length
   return {
-    cue: tier[seed % tier.length],
-    cueIndex: seed % tier.length,
+    cue: tier[fallbackIndex],
+    cueIndex: fallbackIndex,
   }
 }
 
@@ -1400,13 +1453,21 @@ export function buildHCPProfile({
     preferShort,
     preferStrongVisuals,
     avoidDoorCues,
+    nonRepeatWindow: 15,
+    nonRepeatWarmupTurns: 15,
   })
 
-  const nextMemory = setRecentCueMemory(
+  const stateMemory = setRecentCueMemory(
     memory,
     structuralState,
     severity,
     cueSelection.cueIndex
+  )
+
+  const nextMemory = setRecentGlobalCueMemory(
+    stateMemory,
+    cueSelection.cue,
+    15
   )
 
   const toneDirectives = getToneDirectives(structuralState, temperature)

@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   Bot,
   Play,
   Dumbbell,
   GraduationCap,
-  Download,
   Route,
   Sparkles,
   Workflow,
@@ -20,28 +19,11 @@ import AIDailyInsights from "@/components/dashboard/AIDailyInsights";
 
 const DASHBOARD_THEME = {
   light: { pageBg: "#f0f4f8", cardBorder: "border-gray-200", accent: "text-teal-700", text: "text-gray-900", subtext: "text-gray-600" },
-  dark: { pageBg: "#0f172a", cardBorder: "border-slate-700", accent: "text-cyan-300", text: "text-slate-100", subtext: "text-slate-300" },
 };
 
 export default function Dashboard() {
-  const [colorMode, setColorMode] = useState(() => localStorage.getItem("app-color-mode") || "light");
   const notice = "Pipeline forecasting summary updated 2 min ago.";
-  const theme = DASHBOARD_THEME[colorMode] || DASHBOARD_THEME.light;
-
-  useEffect(() => {
-    localStorage.setItem("app-color-mode", colorMode);
-    window.dispatchEvent(new CustomEvent("app-color-mode-changed", { detail: colorMode }));
-  }, [colorMode]);
-
-  useEffect(() => {
-    const sync = (e) => setColorMode(e?.detail || localStorage.getItem("app-color-mode") || "light");
-    window.addEventListener("storage", sync);
-    window.addEventListener("app-color-mode-changed", sync);
-    return () => {
-      window.removeEventListener("storage", sync);
-      window.removeEventListener("app-color-mode-changed", sync);
-    };
-  }, []);
+  const theme = DASHBOARD_THEME.light;
 
   const quickActions = useMemo(() => ([
     { icon: BarChart2, title: "Analytics Dashboard", description: "View demo KPIs, export reports, and compliance status", page: "demo-analytics", iconBg: "bg-teal-50" },
@@ -51,20 +33,6 @@ export default function Dashboard() {
     { icon: GraduationCap, title: "Coaching Modules", description: "Structured learning paths for pharma sales mastery", page: "CoachingModules", iconBg: "bg-cyan-50" },
     { icon: Route, title: "My Learning Paths", description: "AI-personalized paths based on your roleplay performance", page: "LearningPaths", iconBg: "bg-teal-50" },
   ]), []);
-
-  const exportPDF = async () => {
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("ReflectivAI Dashboard Snapshot", 14, 20);
-    doc.setFontSize(11);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 28);
-    doc.text("Forecasting, Scoring, and Analytics", 14, 42);
-    doc.text("- AI highlights engagement trends and historical win patterns.", 14, 50);
-    doc.text("- Managers can separate healthy deals from wishful forecasting.", 14, 57);
-    doc.text("- Enablement can tie learning impact to pipeline health.", 14, 64);
-    doc.save("reflectiv-dashboard-report.pdf");
-  };
 
   const openEmail = () => {
     const subject = encodeURIComponent("ReflectivAI Dashboard Digest");
@@ -87,15 +55,7 @@ export default function Dashboard() {
           <p className={`${theme.subtext} mt-1`}>Master signal intelligence and sales excellence in Life Sciences</p>
           <p className={`text-xs mt-1 ${theme.accent}`}>{notice}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="flex items-center gap-2 text-sm" onClick={exportPDF}>
-            <Download className="w-4 h-4" />
-            Export to PDF
-          </Button>
-          <Button variant="outline" className="text-sm" onClick={() => setColorMode((m) => (m === "dark" ? "light" : "dark"))}>
-            Color Mode
-          </Button>
-        </div>
+        {/* Color mode + PDF export intentionally hidden; light mode remains default. */}
       </div>
 
       <AIDailyInsights />

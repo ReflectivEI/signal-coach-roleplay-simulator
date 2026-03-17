@@ -876,10 +876,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
         .filter(Boolean)
-        .slice(-2);
+        .slice(-15);
       const normalizedCue = String(contextualCue || "").trim().toLowerCase();
-      if (normalizedCue && recentCues.length === 2 && recentCues.every((cue) => cue === normalizedCue)) {
-        contextualCue = nextProfile.lockedCue;
+      const previousCue = recentCues[recentCues.length - 1];
+
+      // Hard safeguard: prevent duplicate cue reuse inside recent 10-15 exchange window.
+      if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
+        const deterministicFallbackPool = [
+          nextProfile.lockedCue,
+          "The HCP remains focused on practical implementation details, waiting for a concrete and relevant response.",
+          "The HCP keeps a measured, professional posture while signaling the need for workflow-specific clarity.",
+          "The HCP listens with controlled urgency, looking for a recommendation that fits real clinic constraints.",
+          "The HCP maintains steady attention, expecting your next point to directly address the operational barrier raised.",
+        ]
+          .map((cue) => String(cue || "").trim())
+          .filter(Boolean);
+
+        const startIndex = deterministicIndex(`${generationKey}:${nextTurnNumber}:${nextHcpState}:cue-fallback`, deterministicFallbackPool.length);
+        let replacement = deterministicFallbackPool[startIndex] || nextProfile.lockedCue;
+
+        for (let i = 0; i < deterministicFallbackPool.length; i += 1) {
+          const candidate = deterministicFallbackPool[(startIndex + i) % deterministicFallbackPool.length];
+          const normalizedCandidate = String(candidate || "").trim().toLowerCase();
+          if (normalizedCandidate && !recentCues.includes(normalizedCandidate)) {
+            replacement = candidate;
+            break;
+          }
+        }
+
+        contextualCue = replacement;
       }
     }
 
@@ -1256,14 +1281,16 @@ ${actionText}`;
                         <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal line-clamp-2">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
-                      <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
-                      {openingScene ? (
-                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal line-clamp-2">{openingScene}</p>
-                      ) : (
-                        <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
-                      )}
-                    </div>
+                    {challengeItems.length > 0 && (
+                      <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                        <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Key Challenges</p>
+                        <ul className="list-disc pl-4 text-xs text-amber-900 space-y-0.5 mt-0.5">
+                          {challengeItems.slice(0, 3).map((challenge, idx) => (
+                            <li key={idx}>{challenge}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1276,14 +1303,17 @@ ${actionText}`;
                     <p className="text-sm text-slate-800 leading-relaxed mt-0.5"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
                   </div>
                 </div>
-                {challengeItems.length > 0 && (
+                <div className="mt-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 shadow-sm min-h-[72px]">
+                  <p className="text-xs font-bold text-[#1A334D]">Opening Scene</p>
+                  {openingScene ? (
+                    <p className="text-xs text-slate-700 leading-relaxed mt-0.5 whitespace-normal">{openingScene}</p>
+                  ) : (
+                    <p className="text-xs text-red-600 leading-relaxed italic mt-0.5">No opening scene provided for this scenario.</p>
+                  )}
+                </div>
+                {challengeItems.length === 0 && !openingScene && (
                   <div className="mt-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 shadow-sm">
-                    <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
-                    <ul className="list-disc pl-4 text-xs text-slate-700 space-y-0.5 mt-0.5">
-                      {challengeItems.slice(0, 3).map((challenge, idx) => (
-                        <li key={idx}>{challenge}</li>
-                      ))}
-                    </ul>
+                    <p className="text-xs text-slate-500">No scenario support details available.</p>
                   </div>
                 )}
               </div>
