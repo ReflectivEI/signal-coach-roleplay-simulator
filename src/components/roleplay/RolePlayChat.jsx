@@ -321,17 +321,6 @@ function buildRepGuidance(turn, allTurns = []) {
   return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
 }
 
-function buildOpeningTurnGuidance(turn, scenario) {
-  if (!turn || turn.turnNumber !== 0) return null;
-
-  const openingScene = String(scenario?.opening_scene || scenario?.openingScene || "").trim();
-  const objective = String(scenario?.objective || scenario?.goal || "").trim();
-  const openingSnippet = openingScene ? openingScene.split(/\s+/).slice(0, 12).join(" ") : "the opening scene";
-  const objectiveSnippet = objective ? objective.split(/\s+/).slice(0, 12).join(" ") : "the session objective";
-
-  return `⚠ Opening-turn alignment: Anchor your next response to "${openingSnippet}" and connect it to "${objectiveSnippet}" before adding product detail.`;
-}
-
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
@@ -1191,7 +1180,7 @@ ${actionText}`;
   const flatMessages = flattenTurns(turns);
 
   const renderTabPills = () => (
-    <div className="flex gap-1 px-3 md:px-4 py-2.5 flex-shrink-0 bg-white overflow-x-auto">
+    <div className="flex gap-1.5 flex-shrink-0 bg-transparent overflow-x-auto">
       {([
         { id: "chat", label: "Live Chat", icon: MessageSquare },
         { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
@@ -1234,7 +1223,12 @@ ${actionText}`;
               <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${difficultyStyle}`}>{scenario.difficulty}</span>
               {/* State label removed as requested */}
             </div>
-            <p className="text-xs text-slate-700 mt-0.5">{scenario.hcp_category} · {scenario.specialty}</p>
+            <div className="mt-0.5 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-slate-700">{scenario.hcp_category} · {scenario.specialty}</p>
+              <div className="ml-auto rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
+                {renderTabPills()}
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 ml-1 flex-shrink-0">
@@ -1250,22 +1244,22 @@ ${actionText}`;
 
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-start">
+          <div className="px-3 md:px-4 pt-1.5 pb-1.5 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 items-start">
               {(descriptionText || openingScene) && (
-                <div className="lg:col-span-8 rounded-2xl border border-slate-300 bg-white p-2.5 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-2">Session Brief</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="lg:col-span-8 rounded-xl border border-slate-300 bg-white p-2 shadow-sm">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-1.5">Session Brief</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                     {descriptionText && (
-                      <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
-                        <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Scenario Description</p>
-                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{descriptionText}</p>
+                      <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                        <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Scenario Description</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal line-clamp-2">{descriptionText}</p>
                       </div>
                     )}
-                    <div className="rounded-xl border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2.5 shadow-sm min-w-0 min-h-[74px]">
-                      <p className="font-bold uppercase text-[#1A334D] text-[11px] tracking-wide mb-1">Opening Scene</p>
+                    <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
+                      <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Opening Scene</p>
                       {openingScene ? (
-                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal">{openingScene}</p>
+                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal line-clamp-2">{openingScene}</p>
                       ) : (
                         <p className="text-xs text-red-600 leading-relaxed italic">No opening scene provided for this scenario.</p>
                       )}
@@ -1274,23 +1268,18 @@ ${actionText}`;
                 </div>
               )}
 
-              <div className="lg:col-span-4 rounded-2xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-md px-4 py-3">
-                <div className="mb-2.5 flex justify-center">
-                  <div className="rounded-xl border border-slate-200 bg-white/90 min-h-[42px] flex items-center justify-center w-full">
-                    {renderTabPills()}
-                  </div>
-                </div>
+              <div className="lg:col-span-4 rounded-xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-sm px-3 py-2">
                 <div className="flex items-start gap-3">
                   <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
-                    <p className="text-sm text-slate-800 leading-relaxed mt-1"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
+                    <p className="text-sm text-slate-800 leading-relaxed mt-0.5"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
                   </div>
                 </div>
                 {challengeItems.length > 0 && (
-                  <div className="mt-2 rounded-xl border border-teal-200 bg-white px-3 py-2 shadow-sm">
+                  <div className="mt-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 shadow-sm">
                     <p className="text-xs font-bold text-[#1A334D]">Key Challenges</p>
-                    <ul className="list-disc pl-4 text-xs text-slate-700 space-y-1 mt-1">
+                    <ul className="list-disc pl-4 text-xs text-slate-700 space-y-0.5 mt-0.5">
                       {challengeItems.slice(0, 3).map((challenge, idx) => (
                         <li key={idx}>{challenge}</li>
                       ))}
@@ -1303,8 +1292,8 @@ ${actionText}`;
         )}
 
         {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 py-1.5 border-b bg-white flex-shrink-0">
-            <div className="rounded-xl border border-slate-200 bg-white min-h-[46px] flex items-center">
+          <div className="px-3 md:px-4 py-1 border-b bg-white flex-shrink-0">
+            <div className="rounded-xl border border-slate-200 bg-white min-h-[40px] flex items-center px-2 py-1 justify-end">
               {renderTabPills()}
             </div>
           </div>
@@ -1361,7 +1350,6 @@ ${actionText}`;
                 */}
                 {displayItems.map((item) => {
                   const { turn } = item;
-                  const openingTurnGuidance = buildOpeningTurnGuidance(turn, scenario);
 
                   if (item.kind === "rep") {
                     return (
@@ -1372,16 +1360,16 @@ ${actionText}`;
                             {sanitizeRenderedMessage(turn.repMessage, "user-message")}
                           </div>
                         </div>
-                        {turn.alignment && (
+                        {turn.alignment && turns.filter((t) => t.repMessage && t.turnNumber <= turn.turnNumber).length > 1 && (
                           <>
-                            <div className={`w-full px-2 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                            <div className={`ml-auto w-full max-w-[88%] px-2 py-1 rounded-lg text-xs border text-right ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
-                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{openingTurnGuidance || buildRepGuidance(turn, turns)}</div>
+                              <div className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{buildRepGuidance(turn, turns)}</div>
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
-                              <div className="w-full break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
+                              <div className="ml-auto w-full max-w-[88%] break-words whitespace-normal px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic text-right">
                                 {turn.alignment.rubricAlignmentFlags[0]}
                               </div>
                             )}
@@ -1403,7 +1391,7 @@ ${actionText}`;
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="max-w-[96%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>

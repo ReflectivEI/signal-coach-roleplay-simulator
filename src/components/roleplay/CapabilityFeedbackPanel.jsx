@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
 
 const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
@@ -27,126 +26,128 @@ const OVERALL_SECTION_CANONICAL = {
   adjustment: "One concrete adjustment for the next role-play",
 };
 
-function normalizeOverallFeedback(rawFeedback = "") {
+const cleanFeedbackLine = (line = "") => String(line)
+  .replace(/\*\*/g, "")
+  .replace(/^[-*•]+\s*/, "")
+  .replace(/^\d+[.)-]?\s*/, "")
+  .replace(/^section\s*\d+\s*:\s*/i, "")
+  .replace(/^[#]+\s*/, "")
+  .replace(/^"|"$/g, "")
+  .replace(/\s+/g, " ")
+  .trim();
+
+function parseFeedbackSections(rawFeedback = "", sectionDefs = [], fallbackKey) {
+  const dividerPattern = sectionDefs
+    .flatMap((def) => def.matchers)
+    .map((matcher) => matcher.source)
+    .join("|");
+
   const preparedText = String(rawFeedback)
     .replace(/\r/g, "")
-    .replace(/(SECTION\s*\d+\s*:)/gi, "\n$1")
-    .replace(/\s+(\d+[.)]\s*(?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play)\s*:)/gi, "\n$1")
-    .replace(/\s+((?:Brief rationale|What the rep did well across capabilities|Biggest cross-capability gap to improve next|One concrete adjustment for the next role-play|Strengths|Improvements|Action Items)\s*:)/gi, "\n$1")
+    .replace(/\*\*/g, "")
+    .replace(new RegExp(`\\s+((?:${dividerPattern})\\s*[:\-])`, "gi"), "\n$1")
     .trim();
 
   const rawLines = preparedText
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map(cleanFeedbackLine)
+    .filter(Boolean)
+    .filter((line) => line !== ".." && line !== "." && line !== ":");
 
-  if (rawLines.length === 0) return "";
-
-  const sections = {
-    brief_rationale: [],
-    strengths: [],
-    gap: [],
-    adjustment: [],
-  };
-
-  let currentSection = "";
-
-  const cleanLine = (line) => line
-    .replace(/^[-*]\s*/, "")
-    .replace(/^\d+[.)-]?\s*/, "")
-    .replace(/^section\s*\d+\s*:\s*/i, "")
-    .replace(/^[#]+\s*/, "")
-    .trim();
-
-  const detectSection = (line) => {
-    const clean = cleanLine(line);
-
-    if (/^brief\s+rationale/i.test(clean)) return "brief_rationale";
-    if (/^strengths?\b/i.test(clean)) return "strengths";
-    if (/^what\s+the\s+rep\s+did\s+well/i.test(clean)) return "strengths";
-    if (/^improvements?\b/i.test(clean)) return "gap";
-    if (/^biggest\s+cross[-\s]capability\s+gap/i.test(clean)) return "gap";
-    if (/^one\s+concrete\s+adjustment/i.test(clean)) return "adjustment";
-    if (/^action\s*items?\b/i.test(clean)) return "adjustment";
-    return "";
-  };
+  const sections = Object.fromEntries(sectionDefs.map((def) => [def.key, []]));
+  let currentKey = "";
 
   rawLines.forEach((line) => {
-    const section = detectSection(line);
-    if (section) {
-      currentSection = section;
-      const body = cleanLine(line)
-        .replace(/^brief\s+rationale\s*:?\s*/i, "")
-        .replace(/^strengths?\s*:?\s*/i, "")
-        .replace(/^what\s+the\s+rep\s+did\s+well(?:\s+across\s+capabilities)?\s*:?\s*/i, "")
-        .replace(/^improvements?\s*:?\s*/i, "")
-        .replace(/^biggest\s+cross[-\s]capability\s+gap\s+to\s+improve\s+next\s*:?\s*/i, "")
-        .replace(/^one\s+concrete\s+adjustment\s+for\s+the\s+next\s+role[-\s]play\s*:?\s*/i, "")
-        .replace(/^action\s*items?\s*:?\s*/i, "")
-        .trim();
-      if (body) sections[currentSection].push(body);
+    const matched = sectionDefs.find((def) => def.matchers.some((matcher) => matcher.test(line)));
+
+    if (matched) {
+      currentKey = matched.key;
+      const body = cleanFeedbackLine(line.replace(matched.strip, ""));
+      if (body) sections[currentKey].push(body);
       return;
     }
 
-    if (!currentSection) return;
-    sections[currentSection].push(line.replace(/^[-*]\s*/, "").trim());
+    if (currentKey) sections[currentKey].push(line);
   });
 
-  const structured = [
-    ["brief_rationale", OVERALL_SECTION_CANONICAL.brief_rationale],
-    ["strengths", OVERALL_SECTION_CANONICAL.strengths],
-    ["gap", OVERALL_SECTION_CANONICAL.gap],
-    ["adjustment", OVERALL_SECTION_CANONICAL.adjustment],
-  ]
-    .filter(([key]) => sections[key].length > 0)
-    .map(([key, label]) => `### ${label}\n${sections[key].join("\n\n")}`)
-    .join("\n\n");
+  const hasStructuredContent = sectionDefs.some((def) => sections[def.key].length > 0);
+  if (!hasStructuredContent) {
+    const fallbackLines = rawLines.join(" ").trim();
+    if (fallbackLines) sections[fallbackKey].push(fallbackLines);
+  }
 
-  if (structured) return structured;
-
-  return `### ${OVERALL_SECTION_CANONICAL.brief_rationale}\n${rawLines.join("\n\n")}`;
+  return sectionDefs
+    .map((def) => ({
+      key: def.key,
+      label: def.label,
+      text: cleanFeedbackLine(sections[def.key].join(" ")),
+    }))
+    .filter((section) => section.text);
 }
 
-function normalizeCapabilityFeedback(rawFeedback = "") {
-  const rawLines = String(rawFeedback)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+const OVERALL_SECTION_DEFS = [
+  {
+    key: "brief_rationale",
+    label: OVERALL_SECTION_CANONICAL.brief_rationale,
+    matchers: [/^brief\s+rationale\b/i],
+    strip: /^brief\s+rationale\s*[:\-]?\s*/i,
+  },
+  {
+    key: "strengths",
+    label: OVERALL_SECTION_CANONICAL.strengths,
+    matchers: [/^what\s+the\s+rep\s+did\s+well\b/i, /^strengths?\b/i],
+    strip: /^(?:what\s+the\s+rep\s+did\s+well(?:\s+across\s+capabilities)?|strengths?)\s*[:\-]?\s*/i,
+  },
+  {
+    key: "gap",
+    label: OVERALL_SECTION_CANONICAL.gap,
+    matchers: [/^biggest\s+cross[-\s]capability\s+gap\b/i, /^improvements?\b/i],
+    strip: /^(?:biggest\s+cross[-\s]capability\s+gap\s+to\s+improve\s+next|improvements?)\s*[:\-]?\s*/i,
+  },
+  {
+    key: "adjustment",
+    label: OVERALL_SECTION_CANONICAL.adjustment,
+    matchers: [/^one\s+concrete\s+adjustment\b/i, /^action\s*items?\b/i],
+    strip: /^(?:one\s+concrete\s+adjustment\s+for\s+the\s+next\s+role[-\s]play|action\s*items?)\s*[:\-]?\s*/i,
+  },
+];
 
-  const dedupedLines = rawLines.filter((line, idx, arr) => arr.indexOf(line) === idx);
+const CAPABILITY_SECTION_DEFS = [
+  {
+    key: "brief_rationale",
+    label: FEEDBACK_SECTION_CANONICAL.brief_rationale,
+    matchers: [/^brief\s+rationale\b/i],
+    strip: /^brief\s+rationale\s*[:\-]?\s*/i,
+  },
+  {
+    key: "specific_evidence",
+    label: FEEDBACK_SECTION_CANONICAL.specific_evidence,
+    matchers: [/^specific\s+evidence(?:\s+from\s+the\s+transcript)?\b/i],
+    strip: /^specific\s+evidence(?:\s+from\s+the\s+transcript)?\s*[:\-]?\s*/i,
+  },
+  {
+    key: "concrete_adjustment",
+    label: FEEDBACK_SECTION_CANONICAL.concrete_adjustment,
+    matchers: [/^(?:one\s+)?concrete\s+behavior\s+to\s+adjust\b/i],
+    strip: /^(?:one\s+)?concrete\s+behavior\s+to\s+adjust\s*[:\-]?\s*/i,
+  },
+  {
+    key: "coaching_cue",
+    label: FEEDBACK_SECTION_CANONICAL.coaching_cue,
+    matchers: [/^coaching\s+cue(?:\s+for\s+next\s+call)?\b/i],
+    strip: /^coaching\s+cue(?:\s+for\s+next\s+call)?\s*[:\-]?\s*/i,
+  },
+];
 
-  const normalized = dedupedLines.map((line) => {
-    const clean = line.replace(/^[-*]\s*/, "").trim();
-
-    if (/^(?:\d+[.)-]?\s*)?(brief\s+rationale)\s*[:\-]?/i.test(clean)) {
-      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(brief\s+rationale)\s*[:\-]?\s*/i, "").trim();
-      return body
-        ? `**${FEEDBACK_SECTION_CANONICAL.brief_rationale}:** ${body}`
-        : `**${FEEDBACK_SECTION_CANONICAL.brief_rationale}:**`;
-    }
-    if (/^(?:\d+[.)-]?\s*)?(specific\s+evidence(?:\s+from\s+the\s+transcript)?)\s*[:\-]?/i.test(clean)) {
-      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(specific\s+evidence(?:\s+from\s+the\s+transcript)?)\s*[:\-]?\s*/i, "").trim();
-      return body
-        ? `**${FEEDBACK_SECTION_CANONICAL.specific_evidence}:** ${body}`
-        : `**${FEEDBACK_SECTION_CANONICAL.specific_evidence}:**`;
-    }
-    if (/^(?:\d+[.)-]?\s*)?(?:one\s+)?concrete\s+behavior\s+to\s+adjust\s*[:\-]?/i.test(clean)) {
-      const body = clean.replace(/^(?:\d+[.)-]?\s*)?(?:one\s+)?concrete\s+behavior\s+to\s+adjust\s*[:\-]?\s*/i, "").trim();
-      return body
-        ? `**${FEEDBACK_SECTION_CANONICAL.concrete_adjustment}:** ${body}`
-        : `**${FEEDBACK_SECTION_CANONICAL.concrete_adjustment}:**`;
-    }
-    if (/^(?:\d+[.)-]?\s*)?coaching\s+cue(?:\s+for\s+next\s+call)?\s*[:\-]?/i.test(clean)) {
-      const body = clean.replace(/^(?:\d+[.)-]?\s*)?coaching\s+cue(?:\s+for\s+next\s+call)?\s*[:\-]?\s*/i, "").trim();
-      return body
-        ? `**${FEEDBACK_SECTION_CANONICAL.coaching_cue}:** ${body}`
-        : `**${FEEDBACK_SECTION_CANONICAL.coaching_cue}:**`;
-    }
-    return clean;
-  });
-
-  return normalized.join("\n\n");
-}
+const StructuredFeedbackBody = ({ sections }) => (
+  <div className="space-y-1.5">
+    {sections.map((section) => (
+      <p key={section.key} className="text-[13px] leading-[1.45] text-slate-800">
+        <span className="font-semibold text-slate-900">{section.label}:</span> {section.text}
+      </p>
+    ))}
+  </div>
+);
 
 const colorMap = {
   teal: { btn: "bg-teal-50 hover:bg-teal-100 text-teal-700 border-teal-200", badge: "bg-teal-100 text-teal-700", result: "border-teal-200 bg-teal-50" },
@@ -164,7 +165,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
   const [capFeedback, setCapFeedback] = useState({});
   const [loading, setLoading] = useState({});
   const [expanded, setExpanded] = useState({});
-  const [overallFeedback, setOverallFeedback] = useState("");
+  const [overallFeedback, setOverallFeedback] = useState([]);
   const [overallLoading, setOverallLoading] = useState(false);
   const [overallExpanded, setOverallExpanded] = useState(false);
 
@@ -208,11 +209,14 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       if (!res.ok) throw new Error('Failed to get feedback');
       const data = await res.json();
       const feedbackText = data.response || data.text || data.content || '';
-      const normalizedFeedback = normalizeCapabilityFeedback(feedbackText);
+      const normalizedFeedback = parseFeedbackSections(feedbackText, CAPABILITY_SECTION_DEFS, "brief_rationale");
       setCapFeedback((prev) => ({ ...prev, [cap.id]: normalizedFeedback }));
     } catch (err) {
       console.error('Capability feedback error:', err);
-      setCapFeedback((prev) => ({ ...prev, [cap.id]: 'Unable to generate feedback. Please try again.' }));
+      setCapFeedback((prev) => ({
+        ...prev,
+        [cap.id]: [{ key: "brief_rationale", label: FEEDBACK_SECTION_CANONICAL.brief_rationale, text: "Unable to generate feedback. Please try again." }],
+      }));
     } finally {
       setLoading((prev) => ({ ...prev, [cap.id]: false }));
     }
@@ -243,11 +247,15 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       if (!res.ok) throw new Error('Failed to get overall feedback');
       const data = await res.json();
       const feedbackText = data.response || data.text || data.content || '';
-      const normalizedFeedback = normalizeOverallFeedback(feedbackText);
-      setOverallFeedback(normalizedFeedback || feedbackText || 'Unable to generate overall analysis. Please try again.');
+      const normalizedFeedback = parseFeedbackSections(feedbackText, OVERALL_SECTION_DEFS, "brief_rationale");
+      setOverallFeedback(
+        normalizedFeedback.length > 0
+          ? normalizedFeedback
+          : [{ key: "brief_rationale", label: OVERALL_SECTION_CANONICAL.brief_rationale, text: "Unable to generate overall analysis. Please try again." }]
+      );
     } catch (err) {
       console.error('Overall feedback error:', err);
-      setOverallFeedback('Unable to generate overall analysis. Please try again.');
+      setOverallFeedback([{ key: "brief_rationale", label: OVERALL_SECTION_CANONICAL.brief_rationale, text: "Unable to generate overall analysis. Please try again." }]);
     } finally {
       setOverallLoading(false);
     }
@@ -271,9 +279,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
-          <p className="text-xs text-gray-700">Capability Feedback Analysis by Behavioral Metric — click any metric below to analyze.</p>
+          <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric — click any metric below to analyze.</p>
           <div className="flex items-center justify-center gap-1">
-            {!overallFeedback && !overallLoading && (
+            {overallFeedback.length === 0 && !overallLoading && (
               <Button
                 size="sm"
                 variant="outline"
@@ -284,24 +292,16 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               </Button>
             )}
             {overallLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" />}
-            {overallFeedback && !overallLoading && (
+            {overallFeedback.length > 0 && !overallLoading && (
               <button onClick={() => setOverallExpanded((prev) => !prev)} className="text-gray-500 hover:text-gray-700">
                 {overallExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             )}
           </div>
         </div>
-        {overallFeedback && overallExpanded && (
+        {overallFeedback.length > 0 && overallExpanded && (
           <div className="mt-2 border-t border-slate-200 pt-2.5 rounded-lg bg-white/80 px-3 py-3">
-            <ReactMarkdown
-              components={{
-                h3: (props) => <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1 mt-3 first:mt-0" {...props} />,
-                p: (props) => <p className="mb-1.5 leading-[1.55] text-[13px] text-slate-800" {...props} />,
-                ul: (props) => <ul className="list-disc pl-5 mb-1.5 text-[13px] text-slate-800 space-y-1" {...props} />,
-                li: (props) => <li className="leading-[1.5]" {...props} />,
-                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-              }}
-            >{overallFeedback}</ReactMarkdown>
+            <StructuredFeedbackBody sections={overallFeedback} />
           </div>
         )}
       </div>
@@ -317,7 +317,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       }).map((cap) => {
         const colors = colorMap[cap.color];
         const isLoading = loading[cap.id];
-        const hasFeedback = !!capFeedback[cap.id];
+        const hasFeedback = Array.isArray(capFeedback[cap.id]) && capFeedback[cap.id].length > 0;
         const isExpanded = expanded[cap.id];
 
         return (
@@ -353,13 +353,8 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
               </div>
             </div>
             {hasFeedback && isExpanded && (
-              <div className="px-3 pb-3 prose prose-sm max-w-none border-t border-gray-100 pt-2.5 bg-white/70">
-                <ReactMarkdown
-                  components={{
-                    p: (props) => <p className="mb-1 leading-[1.45] text-[14px] text-slate-800" {...props} />,
-                    strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-                  }}
-                >{capFeedback[cap.id]}</ReactMarkdown>
+              <div className="px-3 pb-3 border-t border-gray-100 pt-2.5 bg-white/70">
+                <StructuredFeedbackBody sections={capFeedback[cap.id]} />
               </div>
             )}
           </div>
