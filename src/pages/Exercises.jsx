@@ -1,7 +1,17 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dumbbell, Sparkles, Target, Info, Loader2, Wand2, MessageSquare, FileText, Lightbulb, RefreshCw } from "lucide-react";
+import {
+  Dumbbell,
+  Sparkles,
+  Target,
+  Loader2,
+  Wand2,
+  MessageSquare,
+  FileText,
+  Lightbulb,
+  RefreshCw,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { formatScenarioText } from "../lib/utils";
 
@@ -13,6 +23,60 @@ const TOPICS = [
   { id: "signals", label: "Behavioral Signals", icon: Lightbulb },
 ];
 
+function safeParseJsonArray(raw) {
+  const text = String(raw || "").replace(/^```json\n?|\n?```$/g, "").trim();
+  try {
+    const parsed = JSON.parse(text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    const first = text.indexOf("[");
+    const last = text.lastIndexOf("]");
+    if (first >= 0 && last > first) {
+      try {
+        return JSON.parse(text.slice(first, last + 1));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
+}
+
+function normalizeQuizQuestions(rawQuestions = []) {
+  return rawQuestions
+    .map((q) => {
+      const question = q.question || q.prompt || "";
+      const options = (q.answers || q.options || q.choices || [])
+        .map((opt) => String(opt).replace(/^[A-Da-d][.)]\s*/, "").trim())
+        .filter(Boolean)
+        .slice(0, 4);
+
+      let correctIndex = Number.isInteger(q.correctAnswerIndex)
+        ? q.correctAnswerIndex
+        : Number.isInteger(q.correct_index)
+          ? q.correct_index
+          : null;
+
+      if (correctIndex === null && typeof q.correctAnswer === "string") {
+        const clean = q.correctAnswer.trim();
+        const letterMatch = clean.match(/^[A-Da-d]$/);
+        if (letterMatch) correctIndex = letterMatch[0].toUpperCase().charCodeAt(0) - 65;
+        else correctIndex = options.findIndex((o) => o.toLowerCase() === clean.toLowerCase());
+      }
+
+      if (!question || options.length < 4 || correctIndex == null || correctIndex < 0 || correctIndex > 3) return null;
+
+      return {
+        question,
+        options,
+        correctIndex,
+        explanation: q.explanation || q.rationale || "",
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 export default function Exercises() {
   const [questions, setQuestions] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -22,65 +86,30 @@ export default function Exercises() {
   const [scenarioText, setScenarioText] = useState(null);
   const [isGeneratingScenario, setIsGeneratingScenario] = useState(false);
 
-  /* =========================
-     RESET (GLOBAL)
-  ========================= */
-  const resetAll = () => { // ✅ NEW
-    setQuestions([]);
-    setSelectedAnswers({});
-    setShowResults({});
-    setScenarioText(null);
-  };
+  const selectedTopicLabel = useMemo(
+    () => TOPICS.find((t) => t.id === selectedTopic)?.label || "Signal Intelligence and Life Sciences Sales",
+    [selectedTopic]
+  );
 
-  const resetQuiz = () => { // ✅ NEW
-    setQuestions([]);
-    setSelectedAnswers({});
-    setShowResults({});
-  };
-
-  /* =========================
-     SAFE PARSE + NORMALIZE
-  ========================= */
-  const parseQuiz = (raw) => { // ✅ NEW
-    try {
-      let str = typeof raw === "string" ? raw : String(raw);
-      str = str.replace(/^```json\n?|\n?```$/g, "").trim();
-      const parsed = JSON.parse(str);
-
-      return (parsed || []).map(q => ({
-        question: q.question,
-        options: q.answers || q.options || [],
-        correct_index:
-          typeof q.correctAnswerIndex === "number"
-            ? q.correctAnswerIndex
-            : q.correct_index,
-        explanation: q.explanation || ""
-      })).filter(q => q.options.length === 4);
-    } catch {
-      return [];
-    }
-  };
-
-  /* =========================
-     GENERATE QUIZ
-  ========================= */
   const generateQuiz = async () => {
-    if (!selectedTopic) {
-      resetQuiz();
-      return;
-    }
-
     setIsGenerating(true);
-    resetQuiz(); // ✅ ensures clean state
-
+    setSelectedAnswers({});
+    setShowResults({});
     try {
-      const prompt = `Generate 5 multiple-choice quiz questions about "${selectedTopic}" for pharmaceutical sales professionals.
+      const prompt = `Generate exactly 5 multiple-choice quiz questions for pharmaceutical sales reps on this focus topic: "${selectedTopicLabel}".
 
-Return ONLY JSON:
+Requirements:
+- AI-driven and practical, scenario-based where possible
+- Aligned to Signal Intelligence capabilities and life sciences sales best practices
+- 4 options per question (A/B/C/D)
+- Include one correct option index (0-3)
+- Include a concise 1-2 sentence explanation for learning feedback
+
+Return ONLY valid JSON array with this exact schema:
 [
   {
     "question": "...",
-    "answers": ["A","B","C","D"],
+    "answers": ["...", "...", "...", "..."],
     "correctAnswerIndex": 0,
     "explanation": "..."
   }
@@ -89,98 +118,85 @@ Return ONLY JSON:
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1000 })
+        body: JSON.stringify({ prompt, max_tokens: 1400 })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setQuestions(parseQuiz(data.response)); // ✅ normalized
-      } else {
+      if (!res.ok) {
         setQuestions([]);
+        return;
       }
-    } catch {
+
+      const data = await res.json();
+      const parsed = safeParseJsonArray(data.response || data.text || data.content || "");
+      const normalized = normalizeQuizQuestions(parsed);
+      setQuestions(normalized);
+    } catch (err) {
+      console.error('Quiz generation error:', err);
       setQuestions([]);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  /* =========================
-     GENERATE SCENARIO
-  ========================= */
   const generateScenario = async () => {
-    if (!selectedTopic) {
-      setScenarioText(null);
-      return;
-    }
-
     setIsGeneratingScenario(true);
-
     try {
+      const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
+
+1. Situation setup (HCP type, time constraint, context)
+2. HCP behavioral signals (what the rep should notice)
+3. The HCP's opening statement or concern
+4. 2-3 follow-up questions the REP should ask
+5. Common mistakes to avoid
+6. Best approach and expected outcome
+
+Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: `Generate a realistic pharma sales scenario about "${selectedTopic}" with behavioral signals, objections, and best response strategy.`,
-          max_tokens: 1000
-        })
+        body: JSON.stringify({ prompt, max_tokens: 1000 })
       });
-
       if (res.ok) {
         const data = await res.json();
-        setScenarioText(String(data.response));
+        setScenarioText(typeof data.response === 'string' ? data.response : String(data.response));
       } else {
-        setScenarioText("Unable to generate scenario.");
+        setScenarioText("Unable to generate scenario. Please try again.");
       }
-    } catch {
-      setScenarioText("Unable to generate scenario.");
+    } catch (err) {
+      console.error('Scenario generation error:', err);
+      setScenarioText("Unable to generate scenario. Please try again.");
     } finally {
       setIsGeneratingScenario(false);
     }
   };
 
-  /* =========================
-     SELECT ANSWER
-  ========================= */
   const selectAnswer = (qIdx, aIdx) => {
-    if (showResults[qIdx]) return;
-    setSelectedAnswers(prev => ({ ...prev, [qIdx]: aIdx }));
-    setShowResults(prev => ({ ...prev, [qIdx]: true }));
+    if (showResults[qIdx] !== undefined) return;
+    setSelectedAnswers((prev) => ({ ...prev, [qIdx]: aIdx }));
+    setShowResults((prev) => ({ ...prev, [qIdx]: true }));
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto">
-
-      {/* HEADER */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
-          <Dumbbell className="w-7 h-7 text-teal-500" />
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Practice Exercises</h1>
-            <p className="text-sm text-gray-500">Test your sales communication skills</p>
-          </div>
+    <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-7">
+        <Dumbbell className="w-7 h-7 text-teal-500" />
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
+          <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
         </div>
-
-        {/* RESET BUTTON */}
-        <button onClick={resetAll} className="text-sm text-gray-500 hover:text-teal-600 flex items-center gap-1"> {/* ✅ NEW */}
-          <RefreshCw className="w-4 h-4" />
-          Reset
-        </button>
       </div>
 
-      {/* TOPICS */}
-      <div className="mb-8">
-        <p className="text-sm font-medium text-gray-700 mb-3">Focus Topic (optional)</p>
+      <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
         <div className="flex flex-wrap gap-2">
           {TOPICS.map((t) => (
             <button
               key={t.id}
               onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-                selectedTopic === t.id
-                  ? "bg-teal-500 text-white border-teal-500"
-                  : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
+                ? "bg-teal-500 text-white border-teal-500"
+                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                }`}
             >
               <t.icon className="w-3 h-3" />
               {t.label}
@@ -189,92 +205,125 @@ Return ONLY JSON:
         </div>
       </div>
 
-      {/* GENERATE */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-
-        <Card className="border-teal-100">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7">
+        <Card className="border-teal-100 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-teal-500" />
-              AI Quiz Questions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateQuiz}>
-              {isGenerating ? <Loader2 className="animate-spin" /> : "Generate Quiz"}
-            </Button>
-
-            {/* REFRESH QUIZ */}
-            {questions.length > 0 && ( // ✅ NEW
-              <button onClick={generateQuiz} className="mt-3 text-xs text-teal-600">
-                Refresh Quiz
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-teal-500" />
+                <CardTitle className="text-base">AI Quiz Questions</CardTitle>
+              </div>
+              <button
+                type="button"
+                onClick={generateQuiz}
+                className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                title="Refresh quiz"
+                disabled={isGenerating}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGenerating ? "animate-spin" : ""}`} />
               </button>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-teal-100">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-teal-500" />
-              Practice Scenario
-            </CardTitle>
+            </div>
+            <p className="text-sm text-gray-500">4-5 AI-generated multiple-choice questions with instant feedback</p>
           </CardHeader>
           <CardContent>
-            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateScenario}>
-              {isGeneratingScenario ? <Loader2 className="animate-spin" /> : "Generate Scenario"}
+            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateQuiz} disabled={isGenerating}>
+              {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
             </Button>
           </CardContent>
         </Card>
 
+        <Card className="border-teal-100 shadow-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5 text-teal-500" />
+              <CardTitle className="text-base">Practice Scenario</CardTitle>
+            </div>
+            <p className="text-sm text-gray-500">AI-written role-play scenario with coaching prompts</p>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full bg-teal-500 hover:bg-teal-600" onClick={generateScenario} disabled={isGeneratingScenario}>
+              {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* SCENARIO */}
       {scenarioText && (
-        <Card className="mb-8 border-teal-100">
-          <CardContent className="p-6">
-            <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
+        <Card className="mb-7 border-teal-100 shadow-sm">
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-teal-500" />
+              <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
+            </div>
+            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
+              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* QUESTIONS */}
-      <div className="space-y-5">
-        {questions.map((q, qIdx) => (
-          <Card key={qIdx}>
-            <CardContent className="p-5">
-              <p className="font-medium mb-4">{qIdx + 1}. {q.question}</p>
+      {questions.length === 0 && !isGenerating && !scenarioText && !isGeneratingScenario ? (
+        <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
+          <Target className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Practice</h3>
+          <p className="text-sm text-gray-500 max-w-md mx-auto">
+            Pick a focus topic (optional), then generate AI quiz questions or a tailored practice scenario.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {questions.map((q, qIdx) => {
+            const selectedIdx = selectedAnswers[qIdx];
+            const isCorrectSelected = selectedIdx === q.correctIndex;
 
-              <div className="space-y-2">
-                {q.options.map((opt, aIdx) => {
-                  const isSelected = selectedAnswers[qIdx] === aIdx;
-                  const isCorrect = q.correct_index === aIdx;
-                  const show = showResults[qIdx];
+            return (
+              <Card key={qIdx} className="overflow-hidden border-gray-200 shadow-sm">
+                <CardContent className="p-5">
+                  <p className="font-semibold text-gray-900 mb-4">{qIdx + 1}. {q.question}</p>
+                  <div className="space-y-2">
+                    {q.options.map((opt, aIdx) => {
+                      const isSelected = selectedIdx === aIdx;
+                      const isCorrect = q.correctIndex === aIdx;
+                      const showResult = showResults[qIdx];
+                      const letter = String.fromCharCode(65 + aIdx);
 
-                  let cls = "border p-3 rounded-lg text-sm";
+                      let rowCls = "border-gray-200 bg-white hover:border-teal-400 hover:bg-teal-50 cursor-pointer";
+                      let labelCls = "bg-slate-100 text-slate-600";
 
-                  if (show && isCorrect) cls += " bg-green-50 border-green-400";
-                  else if (show && isSelected) cls += " bg-red-50 border-red-400";
-                  else cls += " bg-white hover:bg-teal-50";
+                      if (showResult && isCorrect) {
+                        rowCls = "border-green-500 bg-green-50";
+                        labelCls = "bg-green-600 text-white";
+                      } else if (showResult && isSelected && !isCorrect) {
+                        rowCls = "border-red-400 bg-red-50";
+                        labelCls = "bg-red-500 text-white";
+                      }
 
-                  return (
-                    <button key={aIdx} onClick={() => selectAnswer(qIdx, aIdx)} className={cls}>
-                      {opt}
-                    </button>
-                  );
-                })}
-              </div>
+                      return (
+                        <button
+                          key={aIdx}
+                          onClick={() => selectAnswer(qIdx, aIdx)}
+                          className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border text-sm transition-all ${rowCls}`}
+                        >
+                          <span className={`flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center text-xs font-bold transition-all ${labelCls}`}>
+                            {letter}
+                          </span>
+                          <span className="text-gray-800">{opt}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {showResults[qIdx] && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm">
-                  <strong>Explanation:</strong> {q.explanation}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
+                  {showResults[qIdx] && q.explanation && (
+                    <div className={`mt-4 p-3 rounded-lg border text-sm italic ${isCorrectSelected ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-700"}`}>
+                      {q.explanation}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
