@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+is that version better than this one: import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dumbbell, Sparkles, Target, Info, Loader2, Wand2, MessageSquare, FileText, Lightbulb } from "lucide-react";
