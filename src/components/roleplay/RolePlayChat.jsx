@@ -73,7 +73,6 @@ function hardenTextSurface(text) {
 
   value = value
     .replace(/\bi\b/g, "I")
-    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
     .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());
 
@@ -411,15 +410,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const pressured = /\b(busy|behind|time|minute|minutes|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow|staffing|patients)\b/.test(lower);
       const prepFocus = /\bprep|hiv|sti\b/.test(lower);
 
-      const sceneLead = pressured
-        ? "I have limited time right now and a heavy prior-authorization workload."
-        : "I appreciate the context, and I want to keep this discussion practical for my clinic.";
+      const repWords = String(repMessage || "")
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean);
+      const greetingWords = new Set(["hi", "hello", "hey", "good", "morning", "afternoon", "evening", "doctor", "dr", "how", "are", "you", "today", "weekend", "doing"]);
+      const contentWords = repWords.filter((w) => !greetingWords.has(w));
+      const repPreview = contentWords.slice(0, 7).join(" ");
+
+      const warmAcknowledge = repPreview
+        ? `Thanks for opening with ${repPreview}.`
+        : "Thanks for checking in.";
+
+      const businessBridge = pressured
+        ? "I am between patients and prior authorizations right now, so I need to stay focused."
+        : "I can give you a few focused minutes before my next patient.";
 
       const focusQuestion = prepFocus
-        ? "Given this opening scenario, what is your primary recommendation to improve patient access to PrEP today?"
-        : "Given this opening scenario, what is your primary recommendation for my patients today?";
+        ? "What is your most practical recommendation to improve patient access to PrEP today?"
+        : "What is your most practical recommendation for my patients today?";
 
-      return hardenTextSurface(`${sceneLead} ${focusQuestion}`);
+      return hardenTextSurface(`${warmAcknowledge} ${businessBridge} ${focusQuestion}`);
     };
 
     nextHcpDialogue = isFirstHcpResponse
@@ -449,6 +461,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const raw = (data.response || data.text || data.content || '');
         const rawStr = typeof raw === 'string' ? raw : String(raw);
         nextHcpDialogue = rawStr.trim().split('\n')[0];
+
+        if (
+          import.meta.env.DEV
+          && rawStr.includes("?")
+          && !nextHcpDialogue.includes("?")
+        ) {
+          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
+        }
 
         nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
 
@@ -981,19 +1001,19 @@ ${actionText}`;
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
+                      {turn.cueBefore && (
+                        <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
+                          <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                          </p>
+                        </div>
+                      )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                          <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-snug bg-slate-100 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
-                        </div>
-                      )}
-                      {turn.cueBefore && (
-                        <div className="pl-1">
-                          <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
-                          </p>
                         </div>
                       )}
                     </div>
