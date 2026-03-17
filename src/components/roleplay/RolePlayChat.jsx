@@ -88,6 +88,56 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0;
 }
 
+function hardenTextSurface(text) {
+  let value = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!value) return "";
+
+  value = value
+    .replace(/\bi\b/g, "I")
+    .replace(/,\s*(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/gi, ". $1")
+    .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
+    .replace(/^([a-z])/, (_, char) => char.toUpperCase());
+
+  if (!/[.!?]$/.test(value)) {
+    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
+    value += looksLikeQuestion ? "?" : ".";
+  }
+
+  return value;
+}
+
+function extractScenarioKeywords(scenario) {
+  const combined = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.opening_scene,
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.goal,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+  ].join(" ").toLowerCase();
+
+  const stopWords = new Set(["that", "this", "with", "from", "into", "have", "your", "about", "there", "their", "they", "them", "what", "when", "where", "which"]);
+  return [...new Set(combined.match(/[a-z][a-z-]{3,}/g) || [])].filter((word) => !stopWords.has(word));
+}
+
+function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
+  const value = String(text || "").toLowerCase();
+  const rep = String(repMessage || "").toLowerCase();
+  if (!value) return false;
+
+  const genericOnly = /^(i see\.?|thanks\.?|okay\.?|got it\.?|understood\.?|let me consider that\.?)+$/i.test(value.trim());
+  if (genericOnly) return false;
+
+  const scenarioHits = scenarioKeywords.filter((k) => value.includes(k)).length;
+  const repHits = (rep.match(/[a-z][a-z-]{3,}/g) || []).filter((k) => value.includes(k)).length;
+  return scenarioHits > 0 || repHits > 0;
+}
+
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
@@ -397,6 +447,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           .trim()
           .split('\n')[0];
 
+        if (
+          import.meta.env.DEV
+          && rawStr.includes("?")
+          && !nextHcpDialogue.includes("?")
+        ) {
+          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
+        }
+
         nextHcpDialogue = hardenTextSurface(normalizeHcpDialoguePunctuation(nextHcpDialogue));
 
         if (
@@ -541,6 +599,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = false;
+
+  const renderSafeMessage = (text, source = "unknown") => {
+    try {
+      return sanitizeRenderedMessage(text, source);
+    } catch (err) {
+      console.error("ROLEPLAY_RENDER_SANITIZE_FALLBACK", { source, err });
+      return escapeHTML(String(text || ""));
+    }
+  };
 
   const exportFeedbackPDF = () => {
     if (!feedback) return;
@@ -934,7 +1001,7 @@ ${actionText}`;
                     return (
                       <div key={item.key} className="flex flex-col items-end gap-1">
                         <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
-                          {sanitizeRenderedMessage(turn.repMessage, "user-message")}
+                          {renderSafeMessage(turn.repMessage, "user-message")}
                         </div>
                         {turn.alignment && (
                           <>
@@ -967,14 +1034,14 @@ ${actionText}`;
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
                           <div className="w-fit max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
+                            {renderSafeMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
                       )}
                       {turn.cueBefore && (
                         <div className="pl-1">
                           <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                            {renderSafeMessage(turn.cueBefore, "behavioral-cue")}
                           </p>
                         </div>
                       )}
