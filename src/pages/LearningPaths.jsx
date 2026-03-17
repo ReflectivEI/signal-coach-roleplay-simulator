@@ -471,7 +471,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 md:px-10 py-8">
+      <div className="bg-gradient-to-r from-white to-[#fefce8] border-b border-teal-100 px-6 md:px-10 py-8 shadow-sm">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
@@ -480,7 +480,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
               <p className="text-sm text-gray-500 mt-1.5 max-w-xl">Personalized capability-based paths built from your roleplay performance. Track progress across all 8 Signal Intelligence™ capabilities.</p>
             </div>
             <div className="flex items-center gap-3">
-              <div className="bg-teal-50 border border-teal-100 rounded-xl px-5 py-3 text-center">
+              <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-3 text-center shadow-sm">
                 <div className="text-2xl font-bold text-teal-600">{overallProgress}%</div>
                 <div className="text-xs text-gray-500">Overall Progress</div>
               </div>
@@ -513,7 +513,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
 
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6 items-start">
-          <div className="lg:col-span-8 bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="lg:col-span-8 bg-white rounded-2xl border border-teal-100 p-5 shadow-sm hover:shadow-md transition-all">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Starter Lesson Tracks</p>
               <span className="text-xs text-slate-500">Focused, field-ready practice</span>
@@ -539,7 +539,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                   actionPage: "RolePlaySimulator",
                 },
               ].map((track) => (
-                <div key={track.title} className="rounded-xl border border-gray-200 p-3">
+                <div key={track.title} className="rounded-xl border border-teal-100 p-3 hover:shadow-sm transition-all">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-gray-900">{track.title}</p>
                     <Link to={createPageUrl(track.actionPage)} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all whitespace-nowrap">
@@ -554,7 +554,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
             </div>
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-200 p-5">
+          <div className="lg:col-span-4 bg-white rounded-2xl border border-teal-100 p-5 shadow-sm hover:shadow-md transition-all">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#1A334D] mb-2">Client Customization Workspace</p>
             <p className="text-xs text-gray-600 leading-relaxed mb-3">
               Add your client framework and barrier context to generate actionable prep recommendations.

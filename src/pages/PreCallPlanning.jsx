@@ -291,6 +291,13 @@ export default function PreCallPlanning() {
               </p>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+                <Button
+                  variant="outline"
+                  className="border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]"
+                  onClick={() => exportWord({ ...form, hcp_name: form.hcp_name || "new-plan" })}
+                >
+                  Export to Word
+                </Button>
                 <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => createPlan(form)} disabled={!form.hcp_name || aiGenerating !== null}>
                   Create Plan
                 </Button>
