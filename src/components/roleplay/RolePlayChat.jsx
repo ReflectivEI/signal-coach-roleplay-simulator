@@ -195,7 +195,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
     if (!input.trim() || isLoading) return;
-    const repMessage = input.trim();
+    const repMessage = normalizeRepQuestionPunctuation(input);
     setInput("");
     setIsLoading(true);
 
@@ -791,29 +791,29 @@ ${actionText}`;
                       </div>
                     )}
                     {turn.repMessage && (
-                      <div className="space-y-1">
-                        <div className="flex justify-end">
-                          <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
+                      <div className="space-y-1 flex flex-col items-end">
+                        <div className="flex justify-end w-full">
+                          <div className="w-full max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
                             {turn.repMessage}
                           </div>
                         </div>
                         {turn.alignment && (
-                          <div className="flex justify-end flex-col items-end gap-1">
-                            <div className={`flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                          <div className="w-full max-w-[80%] flex flex-col items-stretch gap-1">
+                            <div className={`flex flex-wrap items-start gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
                               }`}>
                               <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
                               {/* State label removed: do not display ruleLabel */}
                               {turn.alignment.misalignments.length > 0 && (
-                                <span className="truncate max-w-[260px]">⚠ {turn.alignment.misalignments[0]}</span>
+                                <span className="min-w-0 whitespace-normal break-words">⚠ {turn.alignment.misalignments[0]}</span>
                               )}
                               {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
-                                <span className="text-green-600 truncate max-w-[260px]">✓ {turn.alignment.positives[0]}</span>
+                                <span className="text-green-600 min-w-0 whitespace-normal break-words">✓ {turn.alignment.positives[0]}</span>
                               )}
                             </div>
                             {turn.alignment.rubricAlignmentFlags?.length > 0 && (
-                              <div className="max-w-[90%] px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic">
+                              <div className="w-full px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic whitespace-normal break-words">
                                 {turn.alignment.rubricAlignmentFlags[0]}
                               </div>
                             )}
@@ -852,7 +852,7 @@ ${actionText}`;
                   onSubmit={e => {
                     e.preventDefault();
                     if (isLoading || isEnding) return;
-                    const message = input.trim();
+                    const message = normalizeRepQuestionPunctuation(input);
                     if (!message) return;
                     setInput(""); // clear input immediately
                     sendMessage();
@@ -1010,4 +1010,18 @@ function logAuditEvent(eventType, details) {
   // });
   // For demo, log to console
   console.log(`[AUDIT] ${eventType}`, details);
+}
+function normalizeRepQuestionPunctuation(rawText) {
+  const text = String(rawText || '').trim();
+  if (!text) return '';
+
+  const withoutTrailingPunctuation = text.replace(/[?!.,;:]+$/g, '').trim();
+  const containsQuestionSignal = /\?|\b(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/i.test(text);
+
+  if (containsQuestionSignal) {
+    const noInternalQuestionMarks = withoutTrailingPunctuation.replace(/\?/g, '').trim();
+    return `${noInternalQuestionMarks}?`;
+  }
+
+  return /[.!]$/.test(text) ? text : `${withoutTrailingPunctuation}.`;
 }
