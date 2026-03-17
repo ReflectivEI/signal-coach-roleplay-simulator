@@ -14,7 +14,6 @@ import {
   Wand2
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { apiRequest } from "@/lib/queryClient";
 import { normalizeAIResponse } from "@/lib/normalizeAIResponse";
 import ReactMarkdown from "react-markdown";
 import { formatScenarioText } from "@/lib/utils";
@@ -96,10 +95,12 @@ export default function ExercisesPage() {
     const timeout = setTimeout(() => controller.abort(), 12000);
 
     try {
-      const response = await apiRequest(
-        "POST",
-        "/api/chat/send",
-        {
+      const response = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
           message: `Return ONLY JSON.
 
 Generate 5 multiple choice questions about "${selectedTopicLabel}".
@@ -111,9 +112,9 @@ Format:
  "correctAnswer":0,
  "explanation":"..."
 }]`
-        },
-        { signal: controller.signal }
-      );
+        }),
+        signal: controller.signal
+      });
 
       const raw = await response.text();
       const normalized = normalizeAIResponse(raw);
@@ -147,8 +148,14 @@ Format:
     setScenario(null);
 
     try {
-      const response = await apiRequest("POST", "/api/chat/send", {
-        message: `Generate a pharma sales scenario about "${selectedTopicLabel}" including signals, objection, and best response`
+      const response = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: `Generate a pharma sales scenario about "${selectedTopicLabel}" including signals, objection, and best response`
+        })
       });
 
       const raw = await response.text();
@@ -179,7 +186,10 @@ Format:
           <h1 className="text-3xl font-bold">Practice Exercises</h1>
         </div>
 
-        <button onClick={resetAll} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary">
+        <button
+          onClick={resetAll}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary"
+        >
           <RefreshCw className="h-4 w-4" />
           Reset
         </button>
@@ -225,7 +235,9 @@ Format:
             <CardTitle>Practice Scenario</CardTitle>
           </CardHeader>
           <CardContent>
-            <ReactMarkdown>{formatScenarioText(scenario)}</ReactMarkdown>
+            <ReactMarkdown>
+              {formatScenarioText(scenario)}
+            </ReactMarkdown>
           </CardContent>
         </Card>
       )}
