@@ -8,7 +8,7 @@
 
 export const SIGNAL_CAPABILITIES = [
   {
-    id: "question_quality",
+    id: "signal_awareness",
     label: "Signal Awareness",
     measurement: "Question Quality",
     canonicalQuestion: "Did the rep notice what mattered?",
@@ -49,7 +49,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Question Quality is high when questions fit the moment and move the conversation forward.",
   },
   {
-    id: "listening_responsiveness",
+    id: "signal_interpretation",
     label: "Signal Interpretation",
     measurement: "Listening & Responsiveness",
     canonicalQuestion: "Did the rep understand and respond correctly?",
@@ -92,7 +92,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Listening & Responsiveness is strong when the rep understands the customer correctly and responds in a way that clearly reflects that understanding.",
   },
   {
-    id: "making_it_matter",
+    id: "value_connection",
     label: "Value Connection",
     measurement: "Value Framing",
     canonicalQuestion: "Did the rep make it meaningful to the customer?",
@@ -135,7 +135,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Value Framing is strong when relevance is clear and impact is unmistakable.",
   },
   {
-    id: "customer_engagement_cues_cues",
+    id: "customer_engagement",
     label: "Customer Engagement Monitoring",
     measurement: "Customer Engagement Cues",
     canonicalQuestion: "Did the rep notice changes in momentum and participation?",
@@ -201,7 +201,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Customer Engagement Monitoring is strong when the rep notices and responds to every shift in participation and momentum.",
   },
   {
-    id: "objection_handling",
+    id: "objection_navigation",
     label: "Objection Navigation",
     measurement: "Objection Handling",
     canonicalQuestion: "Did the rep respond constructively to resistance?",
@@ -255,7 +255,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Objection Navigation is strong when resistance is met with composure, engaged with curiosity, and left clearer than it began.",
   },
   {
-    id: "conversation_control",
+    id: "conversation_management",
     label: "Conversation Management",
     measurement: "Conversation Control & Structure",
     canonicalQuestion: "Did the rep guide the conversation with clarity and purpose?",
@@ -309,7 +309,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Conversation Management is strong when direction is clear, structure is adaptive, and purpose is maintained throughout the interaction.",
   },
   {
-    id: "adaptability",
+    id: "adaptive_response",
     label: "Adaptive Response",
     measurement: "Adaptability",
     canonicalQuestion: "Did the rep adjust appropriately in real time?",
@@ -363,7 +363,7 @@ export const SIGNAL_CAPABILITIES = [
     canonical: "Adaptive Response is strong when adjustments are timely, appropriate, and maintain coherence in the interaction.",
   },
   {
-    id: "commitment_gaining",
+    id: "commitment_generation",
     label: "Commitment Generation",
     measurement: "Commitment Gaining",
     canonicalQuestion: "Did the customer voluntarily commit to next actions?",
