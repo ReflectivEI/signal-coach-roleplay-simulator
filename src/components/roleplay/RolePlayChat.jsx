@@ -1233,7 +1233,7 @@ ${actionText}`;
                           e.currentTarget.form?.requestSubmit();
                         }
                       }}
-                        placeholder={isListening ? "Listening…" : "Your response as the sales rep..."}
+                        placeholder={isListening ? "Listening…" : "Your response as the sales rep (REP)..."}
                     disabled={isLoading || isEnding}
                     className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
                     />
@@ -1261,7 +1261,7 @@ ${actionText}`;
                   <p className="text-xs text-red-500 mt-1 italic">🎙 "{interim}"</p>
                 )}
                 <p className="text-xs text-slate-400 mt-1 italic">
-                  Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, or personality.
+                  Signal–Response Alignment evaluates observable behavioral adaptation to HCP signals — not empathy, intent, or personality.
                 </p>
               </div>
             </>

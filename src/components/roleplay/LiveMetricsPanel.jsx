@@ -34,7 +34,7 @@ export default function LiveMetricsPanel({ turns, scenario }) {
           <CheckCircle className="w-6 h-6" style={{ color: "#39ACAC" }} />
         </div>
         <p className="text-xs font-semibold text-gray-600">Waiting for first exchange</p>
-        <p className="text-xs text-gray-400 mt-1 leading-relaxed">Scores will appear here after you send your first message</p>
+        <p className="text-xs text-gray-400 mt-1 leading-relaxed">REP scores will appear here after you send your first message</p>
       </div>
     );
   }
