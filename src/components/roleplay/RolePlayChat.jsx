@@ -15,9 +15,6 @@ import {
   TEMPERATURES,
   updateTurnState,
 } from "./hcpSimulationEngine";
-import {
-  generateContextualCue,
-} from "./hcpStateEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
 // Compact SOT block injected into end-session LLM feedback prompt
@@ -138,6 +135,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const activeRequestIdRef = useRef(0);
   const lastSubmittedTurnKeyRef = useRef("");
   const loggedTurnKeysRef = useRef(new Set());
+  const processedTurnKeysRef = useRef(new Set());
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -315,6 +313,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
+    const generationKey = `${respondingToTurn.turnNumber}::${repMessage.toLowerCase()}`;
+    if (processedTurnKeysRef.current.has(generationKey)) {
+      setIsLoading(false);
+      return;
+    }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;
@@ -400,6 +403,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      generationKey,
     };
 
     // 4. Build locked HCP profile for the NEXT turn — SINGLE SOURCE OF TRUTH
@@ -502,6 +506,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
+    const buildNonRepeatingScenarioFallback = (previousDialogue = "") => {
+      const base = buildFollowUpScenarioFallback();
+      const prevNorm = String(previousDialogue || "").trim().toLowerCase();
+      const baseNorm = String(base || "").trim().toLowerCase();
+      if (!prevNorm || prevNorm !== baseNorm) return base;
+
+      const repLower = String(repMessage || "").toLowerCase();
+      const repTopicTokens = repLower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today"]).has(w))
+        .slice(0, 4);
+      const repTopic = repTopicTokens.join(" ") || "that point";
+
+      if (scenarioCabFocus && scenarioScreeningFocus) {
+        return `On ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
+      }
+
+      if (scenarioPrepFocus) {
+        return `On ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
+      }
+
+      if (scenarioMonitoringFocus) {
+        return `On ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
+      }
+
+      return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
+    };
+
     const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
       const value = String(dialogue || "").toLowerCase();
       if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
@@ -530,7 +563,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let usedDeterministicFallback = false;
     nextHcpDialogue = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
-      : "I see. Let me consider that.";
+      : buildFollowUpScenarioFallback();
 
     try {
       const systemPrompt = buildHCPDialoguePrompt({
@@ -587,12 +620,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : buildFollowUpScenarioFallback();
     }
 
+    const previousHcpDialogue = String(
+      respondingToTurn?.hcpDialogueBefore
+      || [...prevTurns]
+        .reverse()
+        .find((t) => t.hcpDialogueBefore)?.hcpDialogueBefore
+      || ""
+    );
+
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
-      : buildFollowUpScenarioFallback();
+      : buildNonRepeatingScenarioFallback(previousHcpDialogue);
     if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)) {
       usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
+    }
+
+    if (!isFirstHcpResponse) {
+      const nextNorm = String(nextHcpDialogue || "").trim().toLowerCase();
+      const prevNorm = String(previousHcpDialogue || "").trim().toLowerCase();
+      if (nextNorm && prevNorm && nextNorm === prevNorm) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+      }
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
@@ -613,18 +663,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
-      contextualCue = generateContextualCue(
-        sid,
-        nextTurnNumber,
-        nextHcpState,
-        nextHcpDialogue,
-        repMessage,
-        prevTurns
-      );
-      // Fallback: keep deterministic cue behavior without external cue bank dependency
-      if (!contextualCue || usedDeterministicFallback) {
-        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
-      }
+      // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
+      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
     }
 
     contextualCue = hardenTextSurface(contextualCue);
@@ -654,6 +694,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      generationKey,
     };
 
     if (requestId !== activeRequestIdRef.current) {
@@ -669,11 +710,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       const replaced = [...prevTurnsState.slice(0, prevTurnsState.length - 1), lockedRespondingTurn];
       const hasNextTurnAlready = prevTurnsState.some(
-        (t) => t.turnNumber === nextTurn.turnNumber && !t.repMessage && t.hcpDialogueBefore
+        (t) => (
+          t.turnNumber === nextTurn.turnNumber
+          && !t.repMessage
+          && t.hcpDialogueBefore
+        ) || (t.generationKey && t.generationKey === generationKey)
       );
       if (hasNextTurnAlready) {
         return replaced;
       }
+      processedTurnKeysRef.current.add(generationKey);
 
       const turnAuditKey = `${nextTurn.turnNumber}::${repMessage}`;
       if (!loggedTurnKeysRef.current.has(turnAuditKey)) {
