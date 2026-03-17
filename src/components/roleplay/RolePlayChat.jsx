@@ -885,6 +885,26 @@ ${actionText}`;
                         )}
                       </div>
                     )}
+
+                    {turn.hcpDialogueBefore && (
+                      <div className="flex flex-col items-start gap-1">
+                        <div className="flex items-start">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
+                          <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                            {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
+                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                      <div className="flex flex-col items-start gap-1 pl-1">
+                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                          {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
 
