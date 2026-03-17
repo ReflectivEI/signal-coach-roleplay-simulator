@@ -791,14 +791,14 @@ ${actionText}`;
                       </div>
                     )}
                     {turn.repMessage && (
-                      <div className="space-y-1 flex flex-col items-end">
-                        <div className="flex justify-end w-full">
-                          <div className="w-full max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
+                      <div className="inline-flex max-w-[80%] w-fit ml-auto space-y-1 flex-col items-stretch">
+                        <div className="flex justify-end">
+                          <div className="rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium" style={{ background: "#39ACAC", color: "white" }}>
                             {turn.repMessage}
                           </div>
                         </div>
                         {turn.alignment && (
-                          <div className="w-full max-w-[80%] flex flex-col items-stretch gap-1">
+                          <div className="w-full flex flex-col items-stretch gap-1">
                             <div className={`flex flex-wrap items-start gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
                               turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
                                 'bg-slate-50 text-slate-600 border-slate-200'
