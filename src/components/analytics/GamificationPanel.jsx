@@ -8,9 +8,9 @@ const BADGES = [
   { id: "ten_sessions",     Icon: Trophy,   label: "Dedicated",          desc: "10 sessions completed",                    threshold: 10,  type: "sessions",    color: "text-amber-600",  bg: "bg-amber-50",  border: "border-amber-200" },
   { id: "high_score",       Icon: Star,     label: "Star Performer",     desc: "Scored 4.0+ overall average",              threshold: 4.0, type: "score",       color: "text-yellow-600", bg: "bg-yellow-50", border: "border-yellow-200" },
   { id: "above_benchmark",  Icon: BarChart3,label: "Above Benchmark",    desc: "Beat the industry benchmark",              threshold: 3.3, type: "score",       color: "text-blue-600",   bg: "bg-blue-50",   border: "border-blue-200" },
-  { id: "objection_master", Icon: Shield,   label: "Objection Master",   desc: "Objection Navigation score ≥ 4",           threshold: 4.0, type: "capability",  color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200", cap: "objection_handling" },
-  { id: "signal_expert",    Icon: Radio,    label: "Signal Expert",      desc: "Signal Awareness score ≥ 4",               threshold: 4.0, type: "capability",  color: "text-teal-600",   bg: "bg-teal-50",   border: "border-teal-200",  cap: "question_quality" },
-  { id: "closer",           Icon: Handshake,label: "The Closer",         desc: "Commitment Generation score ≥ 4",          threshold: 4.0, type: "capability",  color: "text-green-600",  bg: "bg-green-50",  border: "border-green-200", cap: "commitment_gaining" },
+  { id: "objection_master", Icon: Shield,   label: "Objection Master",   desc: "Objection Navigation score ≥ 4",           threshold: 4.0, type: "capability",  color: "text-purple-600", bg: "bg-purple-50", border: "border-purple-200", cap: "objection_navigation" },
+  { id: "signal_expert",    Icon: Radio,    label: "Signal Expert",      desc: "Signal Awareness score ≥ 4",               threshold: 4.0, type: "capability",  color: "text-teal-600",   bg: "bg-teal-50",   border: "border-teal-200",  cap: "signal_awareness" },
+  { id: "closer",           Icon: Handshake,label: "The Closer",         desc: "Commitment Generation score ≥ 4",          threshold: 4.0, type: "capability",  color: "text-green-600",  bg: "bg-green-50",  border: "border-green-200", cap: "commitment_generation" },
 ];
 
 function checkBadgeEarned(badge, { totalSessions, overallAvg, capabilityScores }) {
