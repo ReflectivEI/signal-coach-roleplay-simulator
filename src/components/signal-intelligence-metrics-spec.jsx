@@ -1,13 +1,39 @@
 /**
- * Signal Intelligence Behavioral Metrics Specification (SI-v2-locked-2026)
+ * Signal Intelligence Behavioral Metrics Specification (SI-v2-locked-2026-02-11)
  * 
  * Canonical metric definitions. All metrics scale 1.0–5.0, 1 decimal precision.
  * 3.0 = effective baseline. No ML, no intent inference, observable behavior only.
  */
 
-export const METRICS_VERSION = 'SI-v2-locked-2026';
+export const METRICS_VERSION = 'SI-v2-locked-2026-02-11';
 
-export const METRICS_SPEC = [
+export type BehavioralMetricId =
+  | 'question_quality'
+  | 'listening_responsiveness'
+  | 'making_it_matter'
+  | 'customer_engagement_cues'
+  | 'objection_handling'
+  | 'conversation_control'
+  | 'adaptability'
+  | 'commitment_gaining';
+
+export interface ComponentSpec {
+  name: string;
+  description: string;
+  weight: number | null;
+}
+
+export interface MetricSpec {
+  id: BehavioralMetricId;
+  metric: string;
+  capability: string;
+  optional: boolean;
+  components: ComponentSpec[];
+  optional_components?: ComponentSpec[];
+  score_formula: string;
+}
+
+export const METRICS_SPEC: MetricSpec[] = [
   {
     id: 'question_quality',
     metric: 'Question Quality',
@@ -45,7 +71,7 @@ export const METRICS_SPEC = [
     score_formula: 'average_of_components_plus_optional_if_activated',
   },
   {
-    id: 'customer_engagement_cues_cues',
+    id: 'customer_engagement_cues',
     metric: 'Customer Engagement Cues',
     capability: 'Customer Engagement Monitoring',
     optional: false,
