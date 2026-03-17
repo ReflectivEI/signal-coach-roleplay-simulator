@@ -33,6 +33,7 @@ import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
+import { normalizeMessage } from "@/lib/messageNormalization";
 
 function escapeHTML(text) {
   return String(text)
@@ -47,7 +48,8 @@ function sanitizeUserMessage(text) {
 
 function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
-  const renderedText = escapeHTML(originalText);
+  const normalizedText = normalizeMessage(originalText);
+  const renderedText = escapeHTML(normalizedText);
 
   if (
     import.meta.env.DEV
@@ -764,6 +766,15 @@ ${actionText}`;
                 )}
 
 
+                {/*
+                  DISPLAY NORMALIZATION LAYER
+
+                  Messages may be normalized for grammar
+                  and punctuation before rendering.
+
+                  This does NOT modify the underlying
+                  conversation history or scoring inputs.
+                */}
                 {/*
                   CHAT LAYOUT STRUCTURE RULE
 
