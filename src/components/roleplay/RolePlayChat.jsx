@@ -411,32 +411,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     return msgs;
   }
 
-  function buildDisplayItems(turnList) {
-    return turnList.flatMap((turn, idx) => {
-      const items = [];
-
-      if (turn.repMessage) {
-        items.push({
-          id: `rep-${turn.turnNumber ?? idx}-${idx}`,
-          type: 'rep',
-          repMessage: turn.repMessage,
-          alignment: turn.alignment || null,
-        });
-      }
-
-      if (turn.hcpDialogueBefore) {
-        items.push({
-          id: `hcp-${turn.turnNumber ?? idx}-${idx}`,
-          type: 'hcp',
-          hcpDialogue: turn.hcpDialogueBefore,
-          cue: turn.cueBefore || null,
-        });
-      }
-
-      return items;
-    });
-  }
-
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
@@ -798,54 +772,53 @@ ${actionText}`;
                 )}
 
 
-                {buildDisplayItems(turns).map((item) => (
-                  <div key={item.id} className="space-y-1">
-                    {item.type === 'rep' && (
-                      <div className="flex w-full justify-end">
-                        <div className="inline-flex w-fit max-w-[82%] flex-col items-end gap-1">
-                          <div className="self-end rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium shadow-sm" style={{ background: "#39ACAC", color: "white" }}>
-                            {item.repMessage}
-                          </div>
-                          {item.alignment && (
-                            <div className="w-full flex flex-col items-stretch gap-1">
-                              <div className={`flex flex-wrap items-start gap-2 px-2.5 py-1 rounded-lg text-xs border ${item.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
-                                item.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
-                                  'bg-slate-50 text-slate-600 border-slate-200'
-                                }`}>
-                                <span className="font-semibold">Signal Alignment {item.alignment.score}/5</span>
-                                {item.alignment.misalignments.length > 0 && (
-                                  <span className="min-w-0 whitespace-normal break-words">⚠ {item.alignment.misalignments[0]}</span>
-                                )}
-                                {item.alignment.misalignments.length === 0 && item.alignment.positives.length > 0 && (
-                                  <span className="text-green-600 min-w-0 whitespace-normal break-words">✓ {item.alignment.positives[0]}</span>
-                                )}
-                              </div>
-                              {item.alignment.rubricAlignmentFlags?.length > 0 && (
-                                <div className="w-full px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic whitespace-normal break-words">
-                                  {item.alignment.rubricAlignmentFlags[0]}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                {turns.map((turn, i) => (
+                  <div key={i} className="space-y-2">
+                    {/* Only show HCP cue for HCP turns (repMessage is null), and not for consecutive HCP turns */}
+                    {turn.cueBefore && turn.repMessage == null && i > 0 && turns[i - 1]?.repMessage != null && (
+                      <div className="flex justify-start pl-1">
+                        <p className={`max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border`} style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
+                          {turn.cueBefore}
+                        </p>
+                      </div>
+                    )}
+                    {turn.hcpDialogueBefore && (
+                      <div className="flex justify-start">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
+                        <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
+                          {turn.hcpDialogueBefore}
                         </div>
                       </div>
                     )}
-
-                    {item.type === 'hcp' && (
-                      <div className="flex flex-col items-start gap-1">
-                        <div className="flex justify-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
-                          <div className="max-w-[90%] md:max-w-[80%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-100 text-slate-800">
-                            {item.hcpDialogue}
+                    {turn.repMessage && (
+                      <div className="flex w-full justify-end">
+                        <div className="inline-flex w-fit max-w-[82%] flex-col items-stretch gap-1">
+                          <div className="self-end rounded-2xl px-4 py-2.5 text-sm leading-relaxed font-medium shadow-sm" style={{ background: "#39ACAC", color: "white" }}>
+                            {turn.repMessage}
                           </div>
+                          {turn.alignment && (
+                            <div className="w-full flex flex-col items-stretch gap-1">
+                            <div className={`flex flex-wrap items-start gap-2 px-2.5 py-1 rounded-lg text-xs border ${turn.alignment.score >= 4 ? 'bg-teal-50 text-teal-700 border-teal-200' :
+                              turn.alignment.score <= 2 ? 'bg-red-50 text-red-700 border-red-200' :
+                                'bg-slate-50 text-slate-600 border-slate-200'
+                              }`}>
+                              <span className="font-semibold">Signal Alignment {turn.alignment.score}/5</span>
+                              {/* State label removed: do not display ruleLabel */}
+                              {turn.alignment.misalignments.length > 0 && (
+                                <span className="min-w-0 whitespace-normal break-words">⚠ {turn.alignment.misalignments[0]}</span>
+                              )}
+                              {turn.alignment.misalignments.length === 0 && turn.alignment.positives.length > 0 && (
+                                <span className="text-green-600 min-w-0 whitespace-normal break-words">✓ {turn.alignment.positives[0]}</span>
+                              )}
+                            </div>
+                            {turn.alignment.rubricAlignmentFlags?.length > 0 && (
+                              <div className="w-full px-2.5 py-1 rounded-lg text-xs bg-amber-50 border border-amber-200 text-amber-700 italic whitespace-normal break-words">
+                                {turn.alignment.rubricAlignmentFlags[0]}
+                              </div>
+                            )}
+                            </div>
+                          )}
                         </div>
-                        {item.cue && (
-                          <div className="flex justify-start pl-1">
-                            <p className="max-w-[85%] text-xs italic leading-relaxed px-3 py-1.5 rounded-lg border" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                              {item.cue}
-                            </p>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
