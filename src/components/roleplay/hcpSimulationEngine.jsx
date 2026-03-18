@@ -152,6 +152,38 @@ export const TEMP_INDEX = Object.fromEntries(
   TEMPERATURES.map((t, i) => [t, i])
 )
 
+const LOW_VALUE_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'your',
+  'have',
+  'from',
+  'what',
+  'about',
+  'today',
+  'patient',
+  'patients',
+  'just',
+  'really',
+  'maybe',
+  'okay',
+  'ok',
+  'well',
+  'then',
+  'like',
+  'right',
+  'there',
+])
+
+export const TERMINAL_DISENGAGEMENT_LINES = [
+  'I have patients waiting, and this is not worth more time. Take care.',
+  "I need to get back to patients, and this isn't productive. Take care.",
+]
+
 /******************************************************************************************
 HASH UTILITY
 No Math.random(). Deterministic selection only.
@@ -163,6 +195,63 @@ function hashInt(str) {
     h = ((h * 33) ^ str.charCodeAt(i)) >>> 0
   }
   return h
+}
+
+export function extractMeaningfulRepTokens(message = '') {
+  return String(message)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !LOW_VALUE_STOP_WORDS.has(word))
+}
+
+export function detectLowValueRepResponse(message = '') {
+  const normalized = String(message).trim().toLowerCase()
+  const meaningfulTokens = extractMeaningfulRepTokens(normalized)
+
+  return (
+    normalized.length < 8 ||
+    /\b(idk|nothing|never|whatever|not sure|fine|sure|nope|nah)\b/.test(
+      normalized
+    ) ||
+    meaningfulTokens.length < 2
+  )
+}
+
+export function countRecentLowValueRepTurns(history = [], candidateMessage = '') {
+  const recentRepMessages = [
+    ...history.map((turn) => turn?.repMessage).filter(Boolean),
+    candidateMessage,
+  ]
+    .slice(-3)
+
+  return recentRepMessages.filter((message) => detectLowValueRepResponse(message))
+    .length
+}
+
+export function getDeterministicTerminalClose(seedKey = '') {
+  const safeSeed = String(seedKey || 'terminal-close')
+  return (
+    TERMINAL_DISENGAGEMENT_LINES[
+      hashInt(safeSeed) % TERMINAL_DISENGAGEMENT_LINES.length
+    ] || TERMINAL_DISENGAGEMENT_LINES[0]
+  )
+}
+
+export function shouldForceTerminalDisengagement({
+  nextHcpState,
+  poorTurns = 0,
+  priorRepTurns = 0,
+}) {
+  return nextHcpState === 'disengaged' && poorTurns >= 2 && priorRepTurns >= 2
+}
+
+export function shouldReplaceWithTerminalDisengagement(dialogue = '') {
+  const normalized = String(dialogue || '').trim()
+  if (!normalized) return true
+
+  const sentenceCount = (normalized.match(/[.!?]+/g) || []).length
+  return normalized.includes('?') || sentenceCount > 1 || normalized.split(/\s+/).length > 16
 }
 
 /******************************************************************************************
@@ -1697,10 +1786,12 @@ export function buildHCPDialoguePrompt({
   prompt += '- If the rep is rude or unprofessional, become curt, controlled, and less cooperative.\n'
   prompt += '- When the rep is weak, you should become less helpful rather than coaching them toward a better answer.\n'
   prompt += '- If you are irritated or disengaged, do not rescue the conversation with polished explanations.\n'
+  prompt += '- If you are disengaged, end the interaction directly instead of extending it.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'
   prompt += '- Never ask multiple questions in a single turn.\n'
+  prompt += '- If you are disengaged, ask no questions at all.\n'
 
   prompt += '\nPUNCTUATION RULE:\n'
   prompt += '- Every question must end with a question mark.\n'

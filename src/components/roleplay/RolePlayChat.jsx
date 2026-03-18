@@ -15,6 +15,11 @@ import {
   detectHcpDisagreement, escalateForDisagreement,
   TEMPERATURES,
   updateTurnState,
+  detectLowValueRepResponse,
+  countRecentLowValueRepTurns,
+  getDeterministicTerminalClose,
+  shouldForceTerminalDisengagement,
+  shouldReplaceWithTerminalDisengagement,
 } from "./hcpSimulationEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -129,34 +134,6 @@ function escalateHcpState(currentState, steps = 1) {
   if (currentIndex === -1) return currentState;
   return HCP_STATE_LADDER[Math.min(currentIndex + steps, HCP_STATE_LADDER.length - 1)];
 }
-
-function extractMeaningfulRepTokens(message) {
-  return String(message || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter(
-      (word) =>
-        word
-        && !new Set([
-          "the", "and", "for", "with", "that", "this", "your", "have", "from",
-          "what", "about", "today", "patient", "patients", "just", "really",
-          "maybe", "okay", "ok", "well", "then", "like", "right", "there",
-        ]).has(word)
-    );
-}
-
-function detectLowValueRepResponse(message) {
-  const normalized = String(message || "").trim().toLowerCase();
-  const meaningfulTokens = extractMeaningfulRepTokens(normalized);
-
-  return (
-    normalized.length < 8
-    || /\b(idk|nothing|never|whatever|not sure)\b/.test(normalized)
-    || meaningfulTokens.length < 2
-  );
-}
-
 
 const GUIDANCE_PRIORITY_ORDER = [
   "signal_awareness",
@@ -613,11 +590,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const lowValueResponse = detectLowValueRepResponse(repMessage);
-    const recentRepMessages = [
-      ...turns.filter((t) => t.repMessage).map((t) => t.repMessage),
+    const priorRepTurns = turns.filter((t) => !!t.repMessage).length;
+    const poorTurns = countRecentLowValueRepTurns(
+      turns.filter((t) => t.repMessage).map((t) => ({ repMessage: t.repMessage })),
       repMessage,
-    ].slice(-3);
-    const poorTurns = recentRepMessages.filter((message) => detectLowValueRepResponse(message)).length;
+    );
 
     // 3. Transition structural state and base temperature (deterministic)
     let nextHcpState = transitionState(prevState, repMessage, prevTemp);
@@ -632,9 +609,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpState = "disengaged";
     }
 
+    const nextTurnNumber = turns.length;
+    const forceTerminalDisengagement = shouldForceTerminalDisengagement({
+      nextHcpState,
+      poorTurns,
+      priorRepTurns,
+    });
+    const terminalCloseFallback = getDeterministicTerminalClose(
+      `${generationKey}:${nextTurnNumber}:${poorTurns}:${repMessage}`,
+    );
+
     // 4. Override HCP state for schedule_exit/closure if rep signals leave/interruption
     if (overrideExit) {
-      nextHcpState = 'disengaging';
+      nextHcpState = 'disengaged';
       nextTemp = 'neutral';
       nextSev = 0;
     }
@@ -677,7 +664,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // 4. Build locked HCP profile for the NEXT turn — SINGLE SOURCE OF TRUTH
     // This guarantees cue and dialogue ALWAYS match the same state
-    const nextTurnNumber = turns.length;
     const nextProfile = buildHCPProfile({
       sessionId: sid,
       turnNumber: nextTurnNumber,
@@ -693,7 +679,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .join("\n");
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
-    const priorRepTurns = turns.filter((t) => !!t.repMessage).length;
     const priorHcpDialogueTurns = turns.filter((t) => !!t.hcpDialogueBefore).length;
     const isFirstHcpResponse = (
       respondingToTurn.turnNumber === 0
@@ -748,7 +733,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       if (nextHcpState === "disengaged") {
-        return "I need to move on—this isn't productive.";
+        return terminalCloseFallback;
       }
 
       if (nextHcpState === "time-pressured") {
@@ -829,6 +814,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (isFirstTurn && scenarioMonitoringFocus) {
         return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
       }
+      if (nextHcpState === "disengaged") {
+        return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
+      }
       if (/methodology|duration|study/.test(value)) {
         return "The HCP leans forward, scanning the details with focused interest while keeping an eye on the clock.";
       }
@@ -847,50 +835,55 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     nextHcpDialogue = "";
 
     try {
-      const systemPrompt = buildHCPDialoguePrompt({
-        scenario,
-        hcpProfile: nextProfile,
-        historyText,
-        isOpening: isFirstHcpResponse,
-      });
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: systemPrompt,
-          max_tokens: 220,
-          temperature: 0,
-          roleplay: true,
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const raw = (data.response || data.text || data.content || '');
-        const rawStr = typeof raw === 'string' ? raw : String(raw);
-        nextHcpDialogue = rawStr.trim().split('\n')[0];
-
-        if (
-          import.meta.env.DEV
-          && rawStr.includes("?")
-          && !nextHcpDialogue.includes("?")
-        ) {
-          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
-        }
-
-        nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
-
-        if (
-          import.meta.env.DEV
-          && rawStr.includes("?")
-          && !nextHcpDialogue.includes("?")
-        ) {
-          console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
-        }
-      } else {
+      if (forceTerminalDisengagement) {
         usedDeterministicFallback = true;
-        nextHcpDialogue = isFirstHcpResponse
-          ? buildFirstTurnScenarioFallback()
-          : buildFollowUpScenarioFallback();
+        nextHcpDialogue = terminalCloseFallback;
+      } else {
+        const systemPrompt = buildHCPDialoguePrompt({
+          scenario,
+          hcpProfile: nextProfile,
+          historyText,
+          isOpening: isFirstHcpResponse,
+        });
+        const res = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: systemPrompt,
+            max_tokens: 220,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const raw = (data.response || data.text || data.content || '');
+          const rawStr = typeof raw === 'string' ? raw : String(raw);
+          nextHcpDialogue = rawStr.trim().split('\n')[0];
+
+          if (
+            import.meta.env.DEV
+            && rawStr.includes("?")
+            && !nextHcpDialogue.includes("?")
+          ) {
+            console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
+          }
+
+          nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
+
+          if (
+            import.meta.env.DEV
+            && rawStr.includes("?")
+            && !nextHcpDialogue.includes("?")
+          ) {
+            console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
+          }
+        } else {
+          usedDeterministicFallback = true;
+          nextHcpDialogue = isFirstHcpResponse
+            ? buildFirstTurnScenarioFallback()
+            : buildFollowUpScenarioFallback();
+        }
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
@@ -928,6 +921,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         usedDeterministicFallback = true;
         nextHcpDialogue = buildNonRepeatingScenarioFallback(previousHcpDialogue);
       }
+    }
+
+    if (
+      nextHcpState === "disengaged"
+      && shouldReplaceWithTerminalDisengagement(nextHcpDialogue)
+    ) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = terminalCloseFallback;
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
