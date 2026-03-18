@@ -21,6 +21,7 @@ import { Sparkles, TrendingUp, Loader2, ChevronDown, ChevronUp } from "lucide-re
  * } | string | null} InsightState
  */
 
+const ButtonField = /** @type {any} */ (Button);
 
 /** @param {{ messages?: InsightMessage[], skillLevel?: string, scenarioDescriptor?: string }} props */
 export default function InsightsSidebar({ messages = [], skillLevel = "", scenarioDescriptor = "" }) {

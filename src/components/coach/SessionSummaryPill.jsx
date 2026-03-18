@@ -15,6 +15,8 @@ import jsPDF from "jspdf";
  * } | null} SessionSummaryData
  */
 
+const ButtonField = /** @type {any} */ (Button);
+const CardField = /** @type {any} */ (Card);
 
 /** @param {{ sessionData: SessionSummaryData }} props */
 export default function SessionSummaryPill({ sessionData }) {
