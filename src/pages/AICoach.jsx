@@ -448,11 +448,10 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             </div>
             {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
               <div className="max-w-[56rem] mx-auto rounded-[30px] border border-slate-200 bg-white/95 px-10 py-7 text-center shadow-[0_22px_55px_rgba(15,23,42,0.08)]">
-                <div className="mx-auto -mb-1 flex items-center justify-center gap-3 text-slate-900">
+                <div className="mx-auto mb-5 flex items-center justify-center gap-3 text-slate-900">
                   <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
                   <MessageSquare className="w-10 h-10 text-[#1A334D]" />
                 </div>
-                <h2 className="text-[42px] leading-tight font-bold text-slate-900 mb-5">Start a Conversation</h2>
                 <p className="mb-6 max-w-4xl mx-auto text-[15px] leading-6 text-slate-600 whitespace-nowrap">
                   Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
                 </p>
