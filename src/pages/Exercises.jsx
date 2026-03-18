@@ -34,8 +34,8 @@ export default function Exercises() {
 Format the response as a JSON array with this structure:
 [
   {
-    "question": "Question text",
-    "answers": ["Option A", "Option B", "Option C", "Option D"],
+    "question": "...",
+    "answers": ["...", "...", "...", "..."],
     "correctAnswerIndex": 0,
     "explanation": "Why this is correct"
   }
@@ -164,11 +164,25 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
           </CardContent>
         </Card>
 
-        <Card className="border-teal-100">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-teal-500" />
-              <CardTitle className="text-base">Practice Scenario</CardTitle>
+        <Card className="border-teal-200 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+          <CardHeader className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 text-teal-500" />
+                <CardTitle className="text-base">Practice Scenario</CardTitle>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={generateScenario}
+                  className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                  title="Refresh scenario"
+                  disabled={isGeneratingScenario}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-teal-600 ${isGeneratingScenario ? "animate-spin" : ""}`} />
+                </button>
+                <span className="rounded-full border border-[#1A334D] px-2 py-0.5 text-[11px] font-semibold text-[#1A334D]">AI</span>
+              </div>
             </div>
             <p className="text-sm text-gray-500">AI-written role-play scenario with response options</p>
           </CardHeader>
@@ -190,7 +204,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
       {/* Scenario Output */}
       {scenarioText && (
-        <Card className="mb-8 border-teal-100">
+        <Card className="mb-7 border-teal-100 shadow-sm">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Wand2 className="w-4 h-4 text-teal-500" />
@@ -205,7 +219,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
       {/* Questions */}
       {questions.length === 0 && !isGenerating && !scenarioText && !isGeneratingScenario ? (
-        <div className="text-center py-20 bg-gray-50 rounded-xl">
+        <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
           <Target className="w-16 h-16 text-gray-200 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Practice</h3>
           <p className="text-sm text-gray-500 max-w-md mx-auto">
