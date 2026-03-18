@@ -24,7 +24,7 @@ The Vite development server runs at <http://localhost:5173>.
 
 GitHub Actions now separates validation from deployment:
 
-- `.github/workflows/validate.yml` builds and verifies deployable output on pushes to `main` and on pull requests
+- `.github/workflows/validate.yml` builds and verifies deployable output on pushes to `main` and on pull requests, while reporting lint/typecheck findings as advisory job summary output
 - `.github/workflows/deploy-pages.yml` builds and deploys the verified `dist/client` output to Cloudflare Pages
 
 This keeps deployment aligned with the Vite output directory and avoids deploying the wrong folder.
