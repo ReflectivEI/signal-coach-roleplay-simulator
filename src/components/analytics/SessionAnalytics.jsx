@@ -8,10 +8,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, BookOpen, Play, GraduationCap, ArrowRight } from "lucide-react";
+import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, BookOpen, Play, GraduationCap, ArrowRight, BrainCircuit, Building2, Users, FileBarChart, ShieldCheck } from "lucide-react";
 import { subDays, isAfter, parseISO, format } from "date-fns";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getConfidenceLabel, getCoverageBand } from "@/lib/enablementHub";
 import StateTransitionFlow from "./StateTransitionFlow";
 import GamificationPanel from "./GamificationPanel";
 import AIActionableInsights from "./AIActionableInsights";
@@ -253,7 +254,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function SessionAnalytics() {
   const [dateRange, setDateRange] = useState("30");
   const [scenarioFilter, setScenarioFilter] = useState("all");
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("hub");
   // Download analytics as CSV
   function handleDownload() {
     const header = ["Session ID", "Scenario Title", "Date", "Signal Awareness", "Signal Interpretation", "Value Connection", "Customer Engagement", "Objection Navigation", "Commitment Generation", "Conversation Management", "Adaptive Response", "Successful Strategies", "Misalignments"];
@@ -429,23 +430,84 @@ export default function SessionAnalytics() {
   );
 
   const totalSessions = filtered.length;
+  const confidenceLabel = getConfidenceLabel(totalSessions || ENTERPRISE_SAMPLE_CONFIG.sessions);
+  const sampleCoverage = Math.round((totalSessions / ENTERPRISE_SAMPLE_CONFIG.sessions) * 100);
   const topCapability = avgScores.reduce((best, c) => c.score > (best?.score || 0) ? c : best, null);
   const weakCapability = avgScores.filter(c => c.score > 0).reduce((worst, c) => c.score < (worst?.score || 99) ? c : worst, null);
   const overallAvg = avgScores.filter(c => c.score > 0).length
     ? Math.round(avgScores.filter(c => c.score > 0).reduce((s, c) => s + c.score, 0) / avgScores.filter(c => c.score > 0).length * 10) / 10
     : 0;
   const vsAvgBenchmark = overallAvg > 0 ? Number((overallAvg - 3.3).toFixed(1)) : null;
+  const readinessScore = Math.max(0, Math.min(100, Math.round(((overallAvg / 5) * 55) + (Math.min(totalSessions, 12) / 12 * 25) + ((successfulStrategies.length / 6) * 20))));
+  const coverageState = getCoverageBand(sampleCoverage);
+  const focusScenario = scoresByScenario[0];
+  const riskSummary = weakCapability ? `Primary risk remains ${weakCapability.capability}, where repeated performance trails benchmark expectations.` : 'No material performance risk detected yet.';
+  const enablementRecommendations = [
+    weakCapability ? `Prioritize ${weakCapability.capability} remediation with scenario practice, manager coaching, and module reinforcement.` : 'Sustain current coaching cadence and keep reinforcing top behaviors.',
+    focusScenario ? `Use ${focusScenario.title} as the anchor scenario because it currently produces the strongest observed score lift.` : 'Expand scenario usage to build more reliable content-effectiveness signals.',
+    misalignmentCounts[0] ? `Address the recurring misalignment "${misalignmentCounts[0].label}" in next-week coaching review.` : 'Collect more session evidence before issuing a program-level correction.',
+  ];
 
   return (
     <div className="space-y-6" role="main" aria-label="Session Analytics Panel">
-      {/* Download Analytics Button */}
-      <div className="flex justify-end mb-2">
-        <button
-          className="bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold px-4 py-2 rounded shadow-sm transition-all"
-          onClick={handleDownload}
-        >
-          Download Analytics
-        </button>
+      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
+              <span>AI Enablement Intelligence Hub</span>
+              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] tracking-[0.18em] text-white/85">{confidenceLabel}</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold md:text-3xl">Performance Analytics is now the central enterprise insight hub.</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-200">
+                Interpret capability performance, identify content effectiveness, surface enablement gaps, and route the right action to managers, learning paths, and leadership reporting.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: 'Observed sessions', value: totalSessions, sub: `${sampleCoverage}% of enterprise sample`, icon: Activity },
+                { label: 'Reference benchmark', value: `${ENTERPRISE_SAMPLE_CONFIG.sessions}+`, sub: ENTERPRISE_SAMPLE_CONFIG.timeWindow, icon: Building2 },
+                { label: 'Content signals', value: `${scenarioTitles.length}/${ENTERPRISE_SAMPLE_CONFIG.scenarios}`, sub: 'active scenarios represented', icon: FileBarChart },
+                { label: 'Readiness score', value: `${readinessScore}%`, sub: 'confidence-weighted enablement health', icon: ShieldCheck },
+              ].map(({ label, value, sub, icon: Icon }) => (
+                <div key={label} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+                  <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wide text-slate-300">
+                    <Icon className="h-4 w-4 text-teal-300" /> {label}
+                  </div>
+                  <div className="text-2xl font-bold text-white">{value}</div>
+                  <div className="mt-1 text-xs text-slate-300">{sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke</p>
+                <h3 className="mt-1 text-lg font-bold text-white">Activation routes</h3>
+              </div>
+              <button
+                className="rounded-full bg-teal-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-teal-400"
+                onClick={handleDownload}
+              >
+                Download analytics
+              </button>
+            </div>
+            <div className="space-y-3">
+              {ENABLEMENT_HUB_SPOKES.map((spoke) => (
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/20 p-3 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                    <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                  </div>
+                  <ArrowRight className="mt-1 h-4 w-4 flex-shrink-0 text-teal-300" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
@@ -510,12 +572,102 @@ export default function SessionAnalytics() {
           {/* Tabs */}
           <TabsField value={activeTab} onValueChange={setActiveTab}>
             <TabsListField className="bg-transparent flex-wrap gap-2 h-auto p-0">
+              <TabsTriggerField value="hub" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Enablement Hub</TabsTriggerField>
               <TabsTriggerField value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTriggerField>
               <TabsTriggerField value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTriggerField>
               <TabsTriggerField value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTriggerField>
               <TabsTriggerField value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTriggerField>
             </TabsListField>
           </TabsField>
+
+
+          {activeTab === "hub" && (
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <BrainCircuit className="h-4 w-4 text-teal-500" /> Content effectiveness
+                    </div>
+                    <p className="text-2xl font-bold text-slate-900">{focusScenario ? `${focusScenario.avg}/5` : '—'}</p>
+                    <p className="mt-1 text-sm font-medium text-slate-700">{focusScenario ? focusScenario.title : 'No scenario leader yet'}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">Highest observed scenario performance from the current filtered population.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <Users className="h-4 w-4 text-blue-500" /> Behavior trend risk
+                    </div>
+                    <p className="text-lg font-bold text-slate-900">{weakCapability ? weakCapability.capability : 'Stable'}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">{riskSummary}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <FileBarChart className="h-4 w-4 text-violet-500" /> Coverage state
+                    </div>
+                    <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${coverageState.tone}`}>{coverageState.label}</div>
+                    <p className="mt-3 text-sm font-semibold text-slate-900">{sampleCoverage}% of reference sample represented</p>
+                    <p className="mt-1 text-xs text-slate-500">Large-sample framing keeps guidance grounded and confidence-weighted.</p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Executive narrative</p>
+                      <h3 className="text-lg font-bold text-slate-900">What the hub is telling you right now</h3>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Best-practice interpretation layer</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {enablementRecommendations.map((item, index) => (
+                      <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommendation {index + 1}</p>
+                        <p className="mt-2 text-sm leading-relaxed text-slate-700">{item}</p>
+                      </div>
+                    ))}
+                    <div className="rounded-2xl border border-dashed border-teal-200 bg-teal-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Hub operating model</p>
+                      <p className="mt-2 text-sm leading-relaxed text-teal-900">
+                        Insight originates here, intervention happens in Manager View, remediation is tracked in Learning Paths, and leadership readouts move to Data and Reports.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Spoke activation</p>
+                  <h3 className="mt-1 text-lg font-bold text-slate-900">Next-best destination</h3>
+                  <div className="mt-4 space-y-3">
+                    {[
+                      { title: 'Manager intervention', detail: 'Escalate the weakest capability and inactive cohorts for coaching.', page: 'ManagerView' },
+                      { title: 'Remediation sequence', detail: 'Translate the risk into modules, exercises, and simulator practice.', page: 'LearningPaths' },
+                      { title: 'Leadership summary', detail: 'Package the story into executive-ready summaries and exports.', page: 'DataReports' },
+                    ].map((item) => (
+                      <Link key={item.title} to={createPageUrl(item.page)} className="block rounded-2xl border border-slate-200 p-4 transition-all hover:border-teal-300 hover:bg-teal-50/40">
+                        <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.detail}</p>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Observed strengths</p>
+                  <h3 className="mt-1 text-lg font-bold text-slate-900">Patterns worth scaling</h3>
+                  <div className="mt-4 space-y-3">
+                    {successfulStrategies.slice(0, 4).map((strategy, index) => (
+                      <div key={index} className="rounded-xl border border-teal-100 bg-teal-50/60 p-3">
+                        <p className="text-sm font-medium text-slate-800">{strategy.label}</p>
+                        <p className="mt-1 text-xs text-slate-500">Observed in {strategy.count} session{strategy.count > 1 ? 's' : ''}.</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {activeTab === "overview" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

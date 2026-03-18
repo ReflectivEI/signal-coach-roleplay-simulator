@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 // ...existing code...
 import { AlertTriangle, Send, Loader2, Clock, Database, BarChart3, TrendingUp, FileText, Calendar } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG } from "@/lib/enablementHub";
 
 const SAMPLE_QUERIES = [
   "Show me the top 10 prescribers by total prescriptions in the last quarter",
@@ -50,8 +53,73 @@ export default function DataReports() {
     }
   };
 
+  const executiveSummary = [
+    `Observed enablement system scaled against a ${ENTERPRISE_SAMPLE_CONFIG.timeWindow} reference model of ${ENTERPRISE_SAMPLE_CONFIG.sessions}+ sessions.`,
+    'Leadership should monitor adoption, score lift, and module impact as a single operating system rather than disconnected dashboards.',
+    'Use this spoke for export-ready narratives, monthly business reviews, and executive-level snapshots.',
+  ];
+
   return (
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
+      <div className="mb-6 rounded-[28px] border border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200">Leadership / export hub</p>
+            <h2 className="mt-2 text-2xl font-bold">Data and Reports is the executive narrative spoke.</h2>
+            <div className="mt-4 space-y-3 text-sm leading-relaxed text-slate-300">
+              {executiveSummary.map((item) => <p key={item}>{item}</p>)}
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: 'Enterprise reference', value: `${ENTERPRISE_SAMPLE_CONFIG.sessions}+`, sub: 'sessions modeled' },
+                { label: 'Manager groups', value: ENTERPRISE_SAMPLE_CONFIG.managers, sub: 'leadership cohorts' },
+                { label: 'Scenario catalog', value: ENTERPRISE_SAMPLE_CONFIG.scenarios, sub: 'observable content footprint' },
+                { label: 'Reporting purpose', value: 'MBR', sub: 'monthly business reviews' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{item.label}</p>
+                  <p className="mt-2 text-xl font-bold text-white">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
+            <div className="mt-4 space-y-3">
+              {ENABLEMENT_HUB_SPOKES.filter(spoke => spoke.id !== 'reports').map((spoke) => (
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                  <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Executive readout</p>
+          <h3 className="mt-1 text-lg font-bold text-slate-900">What leadership should ask every month</h3>
+          <div className="mt-4 space-y-3 text-sm text-slate-600">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">Where is training adoption strongest, and is it translating into measurable score lift?</div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">Which capabilities remain under benchmark despite content exposure and manager intervention?</div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">What should leadership fund, reinforce, retire, or standardize next quarter?</div>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Export package</p>
+          <h3 className="mt-1 text-lg font-bold text-slate-900">Leadership-ready outputs</h3>
+          <div className="mt-4 space-y-3 text-sm text-slate-600">
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Monthly business review summary with confidence-weighted commentary.</div>
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">Capability trend export for leadership staff meetings and field excellence reviews.</div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">Program risk log for inactive cohorts, underperforming content, and training gaps.</div>
+          </div>
+        </div>
+      </div>
+
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-1">
           <Database className="w-5 h-5 text-teal-500" />
