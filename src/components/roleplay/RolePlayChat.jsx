@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, MessageSquare, Highlighter, Zap, Bot, ListChecks } from "lucide-react";
+import { Send, X, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -1270,32 +1270,19 @@ ${actionText}`;
 
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 pt-1.5 pb-1 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
-            <div className="rounded-2xl border border-slate-200 bg-white/95 shadow-sm overflow-hidden">
-              <div className="flex flex-col gap-2 px-3 py-2 border-b border-slate-200 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600">Session Brief</p>
-                  <span className="hidden md:inline-block h-4 w-px bg-slate-200" />
-                  <div className="flex items-center gap-2 min-w-0">
-                    <ListChecks className="w-4 h-4 text-teal-700 flex-shrink-0" />
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-500">Aligned briefing layout for faster scenario scanning.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 p-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="px-3 md:px-4 pt-1 pb-0.5 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
                 {descriptionText && (
-                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 via-yellow-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(245,158,11,0.12)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Scenario Description</p>
-                    <p className="text-sm leading-6 text-slate-700 whitespace-normal">{descriptionText}</p>
+                    <p className="text-sm leading-6 text-amber-950 whitespace-normal">{descriptionText}</p>
                   </div>
                 )}
 
                 {challengeItems.length > 0 && (
-                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-50 via-lime-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(16,185,129,0.12)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Key Challenges</p>
-                    <ul className="list-disc pl-4 text-sm leading-6 text-slate-700 space-y-0.5">
+                    <ul className="list-disc pl-4 text-sm leading-6 text-emerald-950 space-y-0.5">
                       {challengeItems.slice(0, 3).map((challenge, idx) => (
                         <li key={idx}>{challenge}</li>
                       ))}
@@ -1304,32 +1291,31 @@ ${actionText}`;
                 )}
 
                 {objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-sky-300 bg-gradient-to-br from-sky-50 via-blue-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(59,130,246,0.12)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Objective</p>
-                    <p className="text-sm leading-6 text-slate-700 whitespace-normal">{objectiveText}</p>
+                    <p className="text-sm leading-6 text-sky-950 whitespace-normal">{objectiveText}</p>
                   </div>
                 )}
 
                 {openingScene && (
-                  <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-rose-300 bg-gradient-to-br from-rose-50 via-red-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(244,63,94,0.12)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
-                    <p className="text-sm leading-6 text-slate-700 whitespace-normal">{openingScene}</p>
+                    <p className="text-sm leading-6 text-rose-950 whitespace-normal line-clamp-3">{openingScene}</p>
                   </div>
                 )}
 
                 {!openingScene && objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-dashed border-rose-300 bg-gradient-to-br from-rose-50 via-red-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(244,63,94,0.08)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
                     <p className="text-sm leading-6 text-slate-400 italic">No opening scene provided for this scenario.</p>
                   </div>
                 )}
 
                 {challengeItems.length === 0 && !openingScene && !objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-3 shadow-sm">
+                  <div className="min-w-0 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2.5 shadow-sm">
                     <p className="text-sm text-slate-500">No scenario support details available.</p>
                   </div>
                 )}
-              </div>
             </div>
           </div>
         )}
