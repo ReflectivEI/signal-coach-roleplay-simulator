@@ -33,7 +33,36 @@ jobs:
         run: npm ci
 
       - name: Build application
-        run: npm run ci:build
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "Node $(node --version)"
+          echo "npm $(npm --version)"
+          npm run ci:build 2>&1 | tee build.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validate-build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Publish build summary
+        if: always()
+        run: |
+          {
+            echo "## Build and verify output"
+            echo
+            echo "- Node: $(node --version)"
+            echo "- npm: $(npm --version)"
+            if [ "${{ job.status }}" = "success" ]; then
+              echo "- Result: ✅ Passed"
+            else
+              echo "- Result: ❌ Failed"
+              echo "- Artifact: \\`validate-build-log\\` (uploaded on failure when available)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   static-analysis:
     runs-on: ubuntu-latest
