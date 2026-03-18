@@ -34,20 +34,7 @@ jobs:
         run: npm ci
 
       - name: Build application
-        shell: bash
-        run: |
-          set -o pipefail
-          echo "Node $(node --version)"
-          echo "npm $(npm --version)"
-          npm run ci:build 2>&1 | tee build.log
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-build-log
-          path: build.log
-          if-no-files-found: ignore
+        run: npm run ci:build
 
   deploy:
     runs-on: ubuntu-latest
@@ -88,20 +75,7 @@ jobs:
 
       - name: Build application
         if: steps.cf_token.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -o pipefail
-          echo "Node $(node --version)"
-          echo "npm $(npm --version)"
-          npm run ci:build 2>&1 | tee deploy-build.log
-
-      - name: Upload deploy build log on failure
-        if: failure() && steps.cf_token.outputs.available == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-preflight-build-log
-          path: deploy-build.log
-          if-no-files-found: ignore
+        run: npm run ci:build
 
       - name: Deploy to Cloudflare Pages
         id: deploy_pages
