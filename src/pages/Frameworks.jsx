@@ -1,13 +1,12 @@
+// @ts-nocheck
 import React, { useState } from "react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ChevronRight, FileText, Settings, Info, MessageSquare, Lightbulb, Heart,
-  Users, ShieldAlert, GitFork, Shuffle, Target, Send, Loader2, Search, Ear,
-  BarChart3, Brain, RefreshCw, BarChart2, Play,
+  Users, ShieldAlert, GitFork, Shuffle, Target, Send, Loader2, Search, Ear, Brain, RefreshCw, BarChart2, Play,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { createPageUrl } from "@/utils";
