@@ -9,6 +9,33 @@ import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Spark
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
+/**
+ * @typedef {{
+ *   id?: string,
+ *   title: string,
+ *   description: string,
+ *   specialty: string,
+ *   disease_state: string,
+ *   hcp_category: string,
+ *   influence_driver: string,
+ *   difficulty: string,
+ *   details: string,
+ *   focus_capabilities: string[],
+ *   created_date?: string,
+ * }} ScenarioForm
+ */
+
+const ButtonField = /** @type {any} */ (Button);
+const InputField = /** @type {any} */ (Input);
+const SelectField = /** @type {any} */ (Select);
+const SelectTriggerField = /** @type {any} */ (SelectTrigger);
+const SelectValueField = /** @type {any} */ (SelectValue);
+const SelectContentField = /** @type {any} */ (SelectContent);
+const SelectItemField = /** @type {any} */ (SelectItem);
+const CapabilityTaggerField = /** @type {any} */ (CapabilityTagger);
+const AIScenarioGeneratorField = /** @type {any} */ (AIScenarioGenerator);
+
+/** @param {ScenarioForm} scenario */
 const exportScenarioWord = (scenario) => {
   const blob = new Blob([
     `Scenario Title: ${scenario.title || "Untitled"}\n\nDescription:\n${scenario.description || ""}\n\nSpecialty: ${scenario.specialty || ""}\nDisease State: ${scenario.disease_state || ""}\nHCP Category: ${scenario.hcp_category || ""}\nInfluence Driver: ${scenario.influence_driver || ""}\nDifficulty: ${scenario.difficulty || ""}\n\nDetails:\n${scenario.details || ""}`
@@ -28,6 +55,7 @@ const difficultyColors = {
   advanced: "bg-red-100 text-red-700",
 };
 
+/** @type {ScenarioForm} */
 const emptyForm = {
   title: "",
   description: "",
@@ -48,7 +76,7 @@ const cleanScenarioText = (value = "") => String(value)
 
 export default function ScenarioBuilder() {
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(/** @type {ScenarioForm} */ ({ ...emptyForm }));
   const [expandedId, setExpandedId] = useState(null);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [scenarios, setScenarios] = useState([]);
@@ -106,28 +134,28 @@ export default function ScenarioBuilder() {
         </div>
         {editingId === null && (
           <div className="flex gap-2">
-            <Button
+            <ButtonField
               variant="outline"
               className="border-teal-300 text-teal-600 hover:bg-teal-50"
               onClick={() => { setShowAIGenerator(!showAIGenerator); setEditingId(null); }}
             >
               <Sparkles className="w-4 h-4 mr-1" />
               AI Generate
-            </Button>
-            <Button
+            </ButtonField>
+            <ButtonField
               className="bg-teal-500 hover:bg-teal-600"
               onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}
             >
               <Plus className="w-4 h-4 mr-1" />
               New Scenario
-            </Button>
+            </ButtonField>
           </div>
         )}
       </div>
 
       {/* AI Generator */}
       {showAIGenerator && editingId === null && (
-        <AIScenarioGenerator
+        <AIScenarioGeneratorField
           onCancel={() => setShowAIGenerator(false)}
           onGenerated={(generated) => {
             setShowAIGenerator(false);
@@ -143,10 +171,10 @@ export default function ScenarioBuilder() {
             <p className="text-sm font-bold text-[#1A334D]">Need a custom scenario for your next simulation?</p>
             <p className="text-xs text-gray-600">Use + New Scenario for manual control, or AI Generate for a fast first draft you can refine.</p>
           </div>
-          <Button className="bg-[#1A334D] hover:bg-[#152a3f]" onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}>
+          <ButtonField className="bg-[#1A334D] hover:bg-[#152a3f]" onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}>
             <Plus className="w-4 h-4 mr-1" />
             + New Scenario
-          </Button>
+          </ButtonField>
         </div>
       )}
 
@@ -164,7 +192,7 @@ export default function ScenarioBuilder() {
             {/* Title */}
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Title *</label>
-              <Input
+              <InputField
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
                 placeholder="e.g. Skeptical Oncologist — Clinical Evidence Challenge"
@@ -186,21 +214,21 @@ export default function ScenarioBuilder() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">Specialty</label>
-                <Select value={form.specialty} onValueChange={(v) => setForm({ ...form, specialty: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select specialty" /></SelectTrigger>
-                  <SelectContent>
-                    {specialties.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectField value={form.specialty} onValueChange={(v) => setForm({ ...form, specialty: v })}>
+                  <SelectTriggerField><SelectValueField placeholder="Select specialty" /></SelectTriggerField>
+                  <SelectContentField>
+                    {specialties.map((s) => <SelectItemField key={s} value={s}>{s}</SelectItemField>)}
+                  </SelectContentField>
+                </SelectField>
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">Disease State</label>
-                <Select value={form.disease_state} onValueChange={(v) => setForm({ ...form, disease_state: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select disease state" /></SelectTrigger>
-                  <SelectContent>
-                    {diseaseStates.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectField value={form.disease_state} onValueChange={(v) => setForm({ ...form, disease_state: v })}>
+                  <SelectTriggerField><SelectValueField placeholder="Select disease state" /></SelectTriggerField>
+                  <SelectContentField>
+                    {diseaseStates.map((d) => <SelectItemField key={d} value={d}>{d}</SelectItemField>)}
+                  </SelectContentField>
+                </SelectField>
               </div>
             </div>
 
@@ -208,30 +236,30 @@ export default function ScenarioBuilder() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">HCP Category</label>
-                <Select value={form.hcp_category} onValueChange={(v) => setForm({ ...form, hcp_category: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select HCP type" /></SelectTrigger>
-                  <SelectContent>
-                    {hcpCategories.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectField value={form.hcp_category} onValueChange={(v) => setForm({ ...form, hcp_category: v })}>
+                  <SelectTriggerField><SelectValueField placeholder="Select HCP type" /></SelectTriggerField>
+                  <SelectContentField>
+                    {hcpCategories.map((h) => <SelectItemField key={h} value={h}>{h}</SelectItemField>)}
+                  </SelectContentField>
+                </SelectField>
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">Influence Driver</label>
-                <Select value={form.influence_driver} onValueChange={(v) => setForm({ ...form, influence_driver: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select driver" /></SelectTrigger>
-                  <SelectContent>
-                    {influenceDrivers.map((i) => <SelectItem key={i} value={i}>{i}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectField value={form.influence_driver} onValueChange={(v) => setForm({ ...form, influence_driver: v })}>
+                  <SelectTriggerField><SelectValueField placeholder="Select driver" /></SelectTriggerField>
+                  <SelectContentField>
+                    {influenceDrivers.map((i) => <SelectItemField key={i} value={i}>{i}</SelectItemField>)}
+                  </SelectContentField>
+                </SelectField>
               </div>
               <div>
                 <label className="text-xs font-semibold text-gray-600 mb-1 block">Difficulty</label>
-                <Select value={form.difficulty} onValueChange={(v) => setForm({ ...form, difficulty: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select difficulty" /></SelectTrigger>
-                  <SelectContent>
-                    {difficulties.map((d) => <SelectItem key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SelectField value={form.difficulty} onValueChange={(v) => setForm({ ...form, difficulty: v })}>
+                  <SelectTriggerField><SelectValueField placeholder="Select difficulty" /></SelectTriggerField>
+                  <SelectContentField>
+                    {difficulties.map((d) => <SelectItemField key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</SelectItemField>)}
+                  </SelectContentField>
+                </SelectField>
               </div>
             </div>
 
@@ -252,7 +280,7 @@ export default function ScenarioBuilder() {
                 <Tag className="w-3.5 h-3.5" /> Signal Intelligence Focus Capabilities
               </label>
                 <p className="text-xs text-gray-400 mb-2">All 8 Signal Intelligence capabilities will be practiced and evaluated in every scenario.</p>
-              <CapabilityTagger
+              <CapabilityTaggerField
                 selected={form.focus_capabilities}
                 onChange={(caps) => setForm({ ...form, focus_capabilities: caps })}
               />
@@ -260,18 +288,18 @@ export default function ScenarioBuilder() {
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={cancelEdit}>Cancel</Button>
-              <Button variant="outline" onClick={() => exportScenarioWord(form)} disabled={!form.title.trim()}>
+              <ButtonField variant="outline" onClick={cancelEdit}>Cancel</ButtonField>
+              <ButtonField variant="outline" onClick={() => exportScenarioWord(form)} disabled={!form.title.trim()}>
                 Export to Word
-              </Button>
-              <Button
+              </ButtonField>
+              <ButtonField
                 className="bg-teal-500 hover:bg-teal-600"
                 onClick={handleSave}
                 disabled={!form.title.trim()}
               >
                 <Save className="w-4 h-4 mr-1" />
                 Save Scenario
-              </Button>
+              </ButtonField>
             </div>
           </div>
         </div>
