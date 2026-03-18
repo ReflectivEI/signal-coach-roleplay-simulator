@@ -4,6 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Highlighter } from "lucide-react";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
 
+/**
+ * @typedef {{ role: string, content: string, hidden?: boolean }} TranscriptMessage
+ * @typedef {{ index?: number, capability?: string, type?: string, note?: string }} TranscriptAnnotation
+ */
+
 // Color coding per capability - dynamically built from SOT
 const CAP_COLORS = Object.fromEntries(
   SIGNAL_CAPABILITIES.map(c => [
@@ -18,6 +23,7 @@ const CAP_COLORS = Object.fromEntries(
   ])
 );
 
+/** @param {{ messages: TranscriptMessage[], scenario?: any }} props */
 export default function AnnotatedTranscript({ messages, scenario }) {
   const [annotations, setAnnotations] = useState(null); // { [messageIndex]: { capability, type, note } }
   const [isAnalyzing, setIsAnalyzing] = useState(false);

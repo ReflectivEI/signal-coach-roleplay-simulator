@@ -25,15 +25,6 @@ import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerato
  * }} ScenarioForm
  */
 
-const ButtonField = /** @type {any} */ (Button);
-const InputField = /** @type {any} */ (Input);
-const SelectField = /** @type {any} */ (Select);
-const SelectTriggerField = /** @type {any} */ (SelectTrigger);
-const SelectValueField = /** @type {any} */ (SelectValue);
-const SelectContentField = /** @type {any} */ (SelectContent);
-const SelectItemField = /** @type {any} */ (SelectItem);
-const CapabilityTaggerField = /** @type {any} */ (CapabilityTagger);
-const AIScenarioGeneratorField = /** @type {any} */ (AIScenarioGenerator);
 
 /** @param {ScenarioForm} scenario */
 const exportScenarioWord = (scenario) => {
