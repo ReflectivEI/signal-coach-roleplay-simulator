@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { saveAs } from "file-saver";
 import { formatScenarioText } from "../../lib/utils";
-import { Button as ButtonField } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
@@ -228,7 +228,7 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
           )}
         </div>
 
-        <ButtonField
+        <Button
           className="w-full bg-teal-500 hover:bg-teal-600"
           onClick={handleGenerate}
           disabled={isGenerating || !canGenerate}
@@ -237,7 +237,7 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
             ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating scenario...</>
             : <><Sparkles className="w-4 h-4 mr-2" />Generate Scenario</>
           }
-        </ButtonField>
+        </Button>
       </div>
 
       {/* Preview */}
@@ -246,12 +246,12 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-teal-600 uppercase tracking-wide">Generated Preview</span>
             <div className="flex items-center gap-2">
-              <ButtonField size="sm" variant="outline" className="text-xs h-7 border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]" onClick={exportPreviewWord}>
+              <Button size="sm" variant="outline" className="text-xs h-7 border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]" onClick={exportPreviewWord}>
                 Export to Word
-              </ButtonField>
-              <ButtonField size="sm" className="bg-teal-500 hover:bg-teal-600 text-xs h-7" onClick={handleAccept}>
+              </Button>
+              <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-xs h-7" onClick={handleAccept}>
                 Save Scenario
-              </ButtonField>
+              </Button>
             </div>
           </div>
           <h3 className="font-bold text-gray-900">{preview.title}</h3>
