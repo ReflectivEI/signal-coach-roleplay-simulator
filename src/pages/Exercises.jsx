@@ -149,7 +149,7 @@ Return ONLY valid JSON array with this exact schema:
       const normalized = normalizeQuizQuestions(parsed);
       setQuestions(normalized);
     } catch (err) {
-      console.error('Quiz generation error:', err);
+      console.error("Quiz generation error:", err);
       setQuestions([]);
     } finally {
       setIsGenerating(false);
@@ -158,6 +158,8 @@ Return ONLY valid JSON array with this exact schema:
 
   const generateScenario = async () => {
     setIsGeneratingScenario(true);
+    setScenarioText(null);
+
     try {
       const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
 
@@ -169,10 +171,11 @@ Return ONLY valid JSON array with this exact schema:
 6. Best approach and expected outcome
 
 Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 1000 })
+
+      const response = await fetch("/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, max_tokens: 1000 }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -182,7 +185,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
         setScenarioText("Unable to generate scenario. Please try again.");
       }
     } catch (err) {
-      console.error('Scenario generation error:', err);
+      console.error("Scenario generation error:", err);
       setScenarioText("Unable to generate scenario. Please try again.");
     } finally {
       setIsGeneratingScenario(false);
@@ -194,6 +197,8 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
     setSelectedAnswers((prev) => ({ ...prev, [qIdx]: aIdx }));
     setShowResults((prev) => ({ ...prev, [qIdx]: true }));
   };
+
+  const hasGeneratedContent = questions.length > 0 || scenarioText || selectedTopic;
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
@@ -219,20 +224,24 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
         <div className="flex flex-wrap gap-2">
-          {TOPICS.map((t) => (
+          {TOPICS.map((topic) => (
             <button
-              key={t.id}
-              onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
+              key={topic.id}
+              type="button"
+              onClick={() => setSelectedTopic((current) => (current === topic.id ? null : topic.id))}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === topic.id
                 ? "bg-teal-500 text-white border-teal-500"
                 : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
                 }`}
             >
-              <t.icon className="w-3 h-3" />
-              {t.label}
+              <topic.icon className="w-3 h-3" />
+              {topic.label}
             </button>
           ))}
         </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Quiz questions are tailored to the 8 behavioral metrics, Signal Intelligence™, and meaningful HCP interactions.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7 items-stretch">
@@ -259,6 +268,9 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateQuiz} disabled={isGenerating}>
               {isGenerating ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Sparkles className="w-4 h-4 mr-2" /> Generate Quiz</>}
             </Button>
+            <p className="text-xs text-gray-500">
+              Best for practicing applied judgment across behavioral metrics and framework-based field conversations.
+            </p>
           </CardContent>
         </Card>
 
@@ -288,6 +300,9 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <Button className="w-full bg-teal-500 hover:bg-teal-600 border border-teal-500" onClick={generateScenario} disabled={isGeneratingScenario}>
               {isGeneratingScenario ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Generating...</> : <><Wand2 className="w-4 h-4 mr-2" /> Generate Scenario</>}
             </Button>
+            <p className="text-xs text-gray-500">
+              Best for applying observation, questioning, and next-step planning in a live-style scenario.
+            </p>
           </CardContent>
         </Card>
       </div>
