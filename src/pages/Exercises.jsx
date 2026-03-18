@@ -231,18 +231,18 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       </div>
 
       <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
-        <div className="flex flex-wrap gap-2">
+        <p className="mb-3 text-base font-semibold text-[#1A334D]">Focus Topic (optional)</p>
+        <div className="flex flex-wrap gap-3">
           {TOPICS.map((t) => (
             <button
               key={t.id}
               onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${selectedTopic === t.id
-                ? "bg-teal-500 text-white border-teal-500"
-                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+              className={`flex items-center gap-2 rounded-full border px-5 py-2.5 text-base font-semibold transition-all ${selectedTopic === t.id
+                ? "border-[#39ACAC] bg-[#39ACAC] text-white shadow-sm"
+                : "border-[#1A334D] bg-white text-[#1A334D] hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#0f8f8f]"
                 }`}
             >
-              <t.icon className="w-3 h-3" />
+              <t.icon className="h-4 w-4" />
               {t.label}
             </button>
           ))}
