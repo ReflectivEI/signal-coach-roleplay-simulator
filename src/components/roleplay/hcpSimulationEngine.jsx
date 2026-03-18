@@ -1328,13 +1328,13 @@ export function getToneDirectives(state, temperature) {
     irritated: {
       maxSentences: 1,
       instruction:
-        'One sentence only. Be sharp, curt, visibly impatient, and controlled.',
+        'One sentence only. Be sharp, minimal, controlled, and offer no extra explanation.',
     },
 
     disengaged: {
       maxSentences: 1,
       instruction:
-        'Signal that you are leaving. Reference a patient, a meeting, or movement toward the next task. One sentence only.',
+        'One sentence only. Sound like you are closing the interaction, not continuing it. No engagement and no follow-up questions.',
     },
   }
 
@@ -1606,6 +1606,19 @@ export function buildHCPDialoguePrompt({
   const lastRepMessage = repLine
     ? repLine.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim()
     : ''
+  const lastRepLower = lastRepMessage.toLowerCase()
+  const repWasLowValue =
+    lastRepLower.length < 8 ||
+    /\b(idk|nothing|never|whatever|not sure)\b/.test(lastRepLower)
+  const repWasRude =
+    /\bf\*+\b|f\*ck|fuck|shit|ass\b|\bstupid\b|\bidiot\b|\bincompetent\b|\byou don.t know\b|\bare you the doctor or am i\b|\bcome on\b/.test(
+      lastRepLower
+    )
+  const repWasVagueOrDismissive =
+    repWasLowValue ||
+    /\bmaybe\b|\bi guess\b|\bprobably\b|\bwe can talk later\b|\bnot now\b|\bdoesn.t matter\b|\bwhatever\b/.test(
+      lastRepLower
+    )
 
   let contextHint = ''
   if (lastRepMessage) {
@@ -1613,6 +1626,9 @@ export function buildHCPDialoguePrompt({
       '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' +
       sanitize(lastRepMessage) +
       '"\n- Respond directly to that input, adapting your focus and tone to your locked state.'
+      + (repWasLowValue ? '\n- The rep response was low-value or minimally useful.' : '')
+      + (repWasVagueOrDismissive ? '\n- The rep response was vague, dismissive, or unhelpful.' : '')
+      + (repWasRude ? '\n- The rep response was rude or unprofessional.' : '')
   }
 
   let prompt = ''
@@ -1671,6 +1687,16 @@ export function buildHCPDialoguePrompt({
   prompt += '- Stay in character completely.\n'
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
   prompt += '- Keep responses specific and practice-worthy, including at least one concrete operational or clinical concern when relevant.\n'
+  prompt += '- Do not sound like a consultant, educator, or training script.\n'
+  prompt += '- Do not over-explain.\n'
+  prompt += '- Speak like a real clinician under time pressure.\n'
+  prompt += '- Vary your reasoning across turns: clinical, operational, practical, skeptical, or constraint-based.\n'
+
+  prompt += '\nREALISM RULES:\n'
+  prompt += '- If the rep provides vague, dismissive, or unhelpful responses, reduce effort, shorten your reply, and stop offering structured guidance.\n'
+  prompt += '- If the rep is rude or unprofessional, become curt, controlled, and less cooperative.\n'
+  prompt += '- When the rep is weak, you should become less helpful rather than coaching them toward a better answer.\n'
+  prompt += '- If you are irritated or disengaged, do not rescue the conversation with polished explanations.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'

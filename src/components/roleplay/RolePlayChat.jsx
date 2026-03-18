@@ -114,6 +114,49 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0 || hasClinicalSignal || asksClarifyingQuestion;
 }
 
+const HCP_STATE_LADDER = [
+  "neutral",
+  "engaged",
+  "time-pressured",
+  "resistant",
+  "boundary-setting",
+  "irritated",
+  "disengaged",
+];
+
+function escalateHcpState(currentState, steps = 1) {
+  const currentIndex = HCP_STATE_LADDER.indexOf(currentState);
+  if (currentIndex === -1) return currentState;
+  return HCP_STATE_LADDER[Math.min(currentIndex + steps, HCP_STATE_LADDER.length - 1)];
+}
+
+function extractMeaningfulRepTokens(message) {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(
+      (word) =>
+        word
+        && !new Set([
+          "the", "and", "for", "with", "that", "this", "your", "have", "from",
+          "what", "about", "today", "patient", "patients", "just", "really",
+          "maybe", "okay", "ok", "well", "then", "like", "right", "there",
+        ]).has(word)
+    );
+}
+
+function detectLowValueRepResponse(message) {
+  const normalized = String(message || "").trim().toLowerCase();
+  const meaningfulTokens = extractMeaningfulRepTokens(normalized);
+
+  return (
+    normalized.length < 8
+    || /\b(idk|nothing|never|whatever|not sure)\b/.test(normalized)
+    || meaningfulTokens.length < 2
+  );
+}
+
 
 const GUIDANCE_PRIORITY_ORDER = [
   "signal_awareness",
@@ -569,10 +612,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       overrideExit = true;
     }
 
+    const lowValueResponse = detectLowValueRepResponse(repMessage);
+    const recentRepMessages = [
+      ...turns.filter((t) => t.repMessage).map((t) => t.repMessage),
+      repMessage,
+    ].slice(-3);
+    const poorTurns = recentRepMessages.filter((message) => detectLowValueRepResponse(message)).length;
+
     // 3. Transition structural state and base temperature (deterministic)
     let nextHcpState = transitionState(prevState, repMessage, prevTemp);
     let nextTemp = transitionTemperature(prevTemp, repMessage);
     let nextSev = transitionSeverity(prevSev, alignment, prevState, nextHcpState);
+
+    if (lowValueResponse) {
+      nextHcpState = escalateHcpState(nextHcpState, 1);
+    }
+
+    if (poorTurns >= 2) {
+      nextHcpState = "disengaged";
+    }
 
     // 4. Override HCP state for schedule_exit/closure if rep signals leave/interruption
     if (overrideExit) {
@@ -683,6 +741,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const mentionsStudy = /\b(study|trial|data|results|evidence|jama|publication|published|findings|methodology|duration)\b/.test(repLower);
       const mentionsMaterials = /\b(material|materials|brochure|handout|leave-behind|leave behind|resource|resources|printout|one-pager|flyer)\b/.test(repLower);
 
+      if (nextHcpState === "irritated") {
+        return lowValueResponse
+          ? "I'm not getting a clear answer here."
+          : "I'm not getting a practical answer here.";
+      }
+
+      if (nextHcpState === "disengaged") {
+        return "I need to move on—this isn't productive.";
+      }
+
+      if (nextHcpState === "time-pressured") {
+        return "Just give me one practical step.";
+      }
+
       if (mentionsStudy) {
         return "I'd like to know more about the study's methodology. What was the duration of the study?";
       }
@@ -767,8 +839,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "The HCP scans the screening checklist, then pauses, focused on whether this approach is safe and practical for the right patients.";
       }
       return scenarioPressured
-        ? "The HCP keeps one hand on pending paperwork, attentive but clearly pressed for time."
-        : "The HCP listens attentively, maintaining steady eye contact while waiting for a practical answer.";
+        ? "The HCP glances at the clock, patience thinning as paperwork waits beside them."
+        : "The HCP pauses, clearly expecting something more useful.";
     };
 
     let usedDeterministicFallback = false;
@@ -839,7 +911,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const groundedFallback = isFirstHcpResponse
       ? buildFirstTurnScenarioFallback()
       : buildNonRepeatingScenarioFallback(previousHcpDialogue);
-    if (!isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage) && String(nextHcpDialogue || "").split(/\s+/).length < 6) {
+    const allowGroundedFallbackOverride = ["neutral", "engaged"].includes(nextHcpState);
+    if (
+      allowGroundedFallbackOverride
+      && !isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)
+      && String(nextHcpDialogue || "").split(/\s+/).length < 6
+    ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = groundedFallback;
     }
@@ -885,10 +962,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
         const deterministicFallbackPool = [
           nextProfile.lockedCue,
-          "The HCP remains focused on practical implementation details, waiting for a concrete and relevant response.",
-          "The HCP keeps a measured, professional posture while signaling the need for workflow-specific clarity.",
-          "The HCP listens with controlled urgency, looking for a recommendation that fits real clinic constraints.",
-          "The HCP maintains steady attention, expecting your next point to directly address the operational barrier raised.",
+          "The HCP pauses, clearly expecting something more useful.",
+          "The HCP glances at the clock, patience thinning.",
+          "The HCP shifts posture slightly, less engaged.",
+          "The HCP waits with clipped attention for one practical answer.",
         ]
           .map((cue) => String(cue || "").trim())
           .filter(Boolean);
