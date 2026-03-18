@@ -9,6 +9,16 @@ import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Spark
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
+const ButtonField = Button;
+const InputField = Input;
+const SelectField = Select;
+const SelectContentField = SelectContent;
+const SelectItemField = SelectItem;
+const SelectTriggerField = SelectTrigger;
+const SelectValueField = SelectValue;
+const CapabilityTaggerField = CapabilityTagger;
+const AIScenarioGeneratorField = AIScenarioGenerator;
+
 /**
  * @typedef {{
  *   id?: string,

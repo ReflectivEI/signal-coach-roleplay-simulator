@@ -16,6 +16,18 @@ import StateTransitionFlow from "./StateTransitionFlow";
 import GamificationPanel from "./GamificationPanel";
 import AIActionableInsights from "./AIActionableInsights";
 
+const BadgeField = Badge;
+const SelectField = Select;
+const SelectContentField = SelectContent;
+const SelectItemField = SelectItem;
+const SelectTriggerField = SelectTrigger;
+const SelectValueField = SelectValue;
+const TabsField = Tabs;
+const TabsListField = TabsList;
+const TabsTriggerField = TabsTrigger;
+const StateTransitionFlowField = StateTransitionFlow;
+const GamificationPanelField = GamificationPanel;
+const AIActionableInsightsField = AIActionableInsights;
 
 // Mapping from capability key → coaching module + scenarios to recommend
 const LEARNING_PATH_MAP = {
