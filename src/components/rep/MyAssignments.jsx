@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { ClipboardList, CheckCircle2, Clock, AlertTriangle, BookOpen, CalendarDays, ChevronDown, ChevronUp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 const STATUS_CONFIG = {
   assigned: { color: "bg-blue-100 text-blue-700", label: "Assigned", icon: ClipboardList },

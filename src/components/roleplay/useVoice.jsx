@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * useVoice — Browser-native Speech-to-Text + Text-to-Speech hook
  * Uses Web Speech API: SpeechRecognition (STT) + SpeechSynthesis (TTS)

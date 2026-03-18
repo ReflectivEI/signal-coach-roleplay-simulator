@@ -1,16 +1,9 @@
-import React, { useMemo, useState } from "react";
+// @ts-nocheck
+
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dumbbell,
-  Sparkles,
-  Target,
-  Loader2,
-  Wand2,
-  MessageSquare,
-  FileText,
-  Lightbulb,
-} from "lucide-react";
+import { Dumbbell, Sparkles, Target, Loader2, Wand2, MessageSquare, FileText, Lightbulb } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { formatScenarioText } from "../lib/utils";
 

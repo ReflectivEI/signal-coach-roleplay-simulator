@@ -12,7 +12,6 @@ import {
   MessageSquareShare,
 } from "lucide-react";
 import { BarChart2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import QuickActionCard from "@/components/dashboard/QuickActionCard";
 import SignalCapabilities from "@/components/dashboard/SignalCapabilities";
 import AIDailyInsights from "@/components/dashboard/AIDailyInsights";
