@@ -2,10 +2,16 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { appParams } from '@/lib/app-params';
 
-const AuthContext = createContext();
+/**
+ * @typedef {{ name: string, email: string, role: string } | null} AuthUser
+ */
 
+/** @type {React.Context<any>} */
+const AuthContext = createContext(undefined);
+
+/** @param {{ children: React.ReactNode }} props */
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(/** @type {AuthUser} */ (null));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
@@ -52,7 +58,9 @@ export const AuthProvider = ({ children }) => {
       appPublicSettings,
       logout,
       navigateToLogin,
-      checkAppState
+      checkAppState,
+      checkUserAuth,
+      appParams,
     }}>
       {children}
     </AuthContext.Provider>
