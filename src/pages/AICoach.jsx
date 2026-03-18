@@ -452,7 +452,8 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                   <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
                   <MessageSquare className="w-10 h-10 text-[#1A334D]" />
                 </div>
-                <p className="text-[17px] leading-[1.5] text-slate-600 max-w-3xl mx-auto mb-5">
+                <h2 className="text-[42px] leading-tight font-bold text-slate-900 mb-5">Start a Conversation</h2>
+                <p className="mb-6 max-w-4xl mx-auto text-[15px] leading-6 text-slate-600 whitespace-nowrap">
                   Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
                 </p>
                 <div className="w-full max-w-3xl mx-auto grid grid-cols-1 gap-3">

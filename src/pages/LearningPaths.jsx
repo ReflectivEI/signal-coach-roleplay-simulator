@@ -197,7 +197,6 @@ export default function LearningPaths() {
   const [paths, setPaths] = useState([]);
   const [selectedCap, setSelectedCap] = useState(null);
   const [generatingAI, setGeneratingAI] = useState(false);
-  const [analyzingAll, setAnalyzingAll] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [loadingPaths, setLoadingPaths] = useState(true);
   const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
@@ -256,36 +255,6 @@ export default function LearningPaths() {
       setPaths([]);
     } finally {
       setLoadingPaths(false);
-    }
-  };
-
-  const analyzePerformanceAndBuildPaths = async () => {
-    setAnalyzingAll(true);
-    try {
-      // Call AI Advise endpoint for all capabilities
-      const updatedPaths = await Promise.all(paths.map(async (path) => {
-        const cap = CAPABILITY_META[path.capability];
-        if (!cap) return path;
-        const score = path?.avg_score || "no score yet";
-        const sessionCount = path?.session_count || 0;
-        const prompt = `You are a sales coaching expert. Generate a personalized learning recommendation for a pharmaceutical sales representative who needs to improve their \"${cap.label}\" capability.\n\nCurrent Performance: ${score}/5 (based on ${sessionCount} roleplay sessions)\n\nProvide a clear, actionable recommendation using this markdown structure:\n\n### Key Learning Objectives\n[2-3 specific, measurable objectives]\n\n### Recommended Practice Scenarios\n[3-4 specific scenarios to practice]\n\n### Skill-Building Exercises\n[3-4 concrete exercises]\n\n### Performance Metrics to Track\n[3-4 specific metrics]\n\nKeep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
-        const res = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, max_tokens: 800 })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          return { ...path, ai_recommendation: data.response || "" };
-        } else {
-          return path;
-        }
-      }));
-      setPaths(updatedPaths);
-    } catch (err) {
-      console.error('Analyze performance error:', err);
-    } finally {
-      setAnalyzingAll(false);
     }
   };
 
@@ -493,20 +462,6 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
               <h1 className="text-3xl font-bold" style={{ color: "#1A334D" }}>My Learning Paths</h1>
               <p className="text-sm text-gray-500 mt-1.5 max-w-xl">Personalized capability-based paths built from your roleplay performance. Track progress across all 8 Signal Intelligence™ capabilities.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-teal-600">{overallProgress}%</div>
-                <div className="text-xs text-gray-500">Overall Progress</div>
-              </div>
-              <button
-                onClick={analyzePerformanceAndBuildPaths}
-                disabled={analyzingAll}
-                className="inline-flex items-center gap-2 rounded-full border font-semibold transition-all duration-200 text-sm px-5 py-2.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
-              >
-                {analyzingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {analyzingAll ? "Analyzing…" : "Analyze My Performance"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -537,7 +492,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
               <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                 {[
                   { label: 'Priority lanes', value: remediationQueue.length, sub: 'active remediation tracks' },
-                  { label: 'Overall progress', value: `${overallProgress}%`, sub: 'cross-capability completion' },
+                  { label: 'Module completion', value: `${overallProgress}%`, sub: 'completed module footprint' },
                   { label: 'Reference content', value: `${MODULE_LIBRARY.length} modules`, sub: `${ENTERPRISE_SAMPLE_CONFIG.modules}+ enterprise standard` },
                   { label: 'Confidence', value: confidenceLabel, sub: 'derived from observed practice volume' },
                 ].map((item) => (

@@ -211,38 +211,60 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between gap-3 mb-7">
-        <div className="flex items-center gap-3">
-          <Dumbbell className="w-7 h-7 text-teal-500" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Practice Exercises</h1>
-            <p className="text-sm text-gray-500">Interactive, AI-generated quiz drills and role-play scenarios</p>
+      <div className="mb-7 rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#13263f] to-[#154955] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 shadow-inner">
+                <Dumbbell className="w-6 h-6 text-teal-200" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200">Practice lab</p>
+                <h1 className="mt-1 text-3xl font-bold text-white">Practice Exercises</h1>
+              </div>
+            </div>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
+              Build repetition with focused AI-generated quiz drills and role-play scenarios, now styled to match the enterprise-grade hub experience.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {["Field-ready drills", "Signal Intelligence aligned", "Scenario-based practice"].map((item) => (
+                <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-3 self-start">
+            <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-center">
+              <div className="text-xl font-bold text-white">{TOPICS.length}</div>
+              <div className="text-xs text-slate-300">focus lanes</div>
+            </div>
+            <button
+              type="button"
+              onClick={resetGeneratedContent}
+              className="rounded-full border border-teal-200 bg-white/10 p-2.5 text-teal-100 hover:-translate-y-0.5 hover:border-white hover:bg-white/15 transition-all"
+              title="Reset generated quiz and scenario"
+              disabled={isGenerating || isGeneratingScenario}
+            >
+              <RefreshIcon className="w-4 h-4" />
+            </button>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={resetGeneratedContent}
-          className="rounded-full border border-[#1A334D] bg-white p-2 text-[#1A334D] hover:-translate-y-0.5 hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all"
-          title="Reset generated quiz and scenario"
-          disabled={isGenerating || isGeneratingScenario}
-        >
-          <RefreshIcon className="w-4 h-4" />
-        </button>
       </div>
 
       <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
-        <p className="mb-3 text-base font-semibold text-[#1A334D]">Focus Topic (optional)</p>
-        <div className="flex flex-wrap gap-3">
+        <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
+        <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TOPICS.map((t) => (
             <button
               key={t.id}
               onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex items-center gap-2 rounded-full border px-5 py-2.5 text-base font-semibold transition-all ${selectedTopic === t.id
-                ? "border-[#39ACAC] bg-[#39ACAC] text-white shadow-sm"
-                : "border-[#1A334D] bg-white text-[#1A334D] hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#0f8f8f]"
+              className={`flex min-w-0 shrink-0 basis-[19%] items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold border transition-all whitespace-nowrap ${selectedTopic === t.id
+                ? "bg-teal-500 text-white border-teal-500"
+                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
                 }`}
             >
-              <t.icon className="h-4 w-4" />
+              <t.icon className="w-3 h-3 flex-shrink-0" />
               {t.label}
             </button>
           ))}

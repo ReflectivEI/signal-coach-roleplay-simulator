@@ -26,7 +26,7 @@ const navSections = [
     ],
   },
   {
-    label: "Insights & Measurement",
+    label: "Intelligence Hub",
     icon: BarChart3,
     defaultOpen: false,
     items: [
@@ -36,7 +36,7 @@ const navSections = [
     ],
   },
   {
-    label: "Enablement",
+    label: "Enablement Library",
     icon: Globe,
     defaultOpen: false,
     items: [
@@ -45,7 +45,7 @@ const navSections = [
     ],
   },
   {
-    label: "Manager",
+    label: "Manager Intervention",
     icon: Users,
     defaultOpen: false,
     items: [
@@ -317,34 +317,17 @@ export default function Layout({ children, currentPageName }) {
       <button
         data-chat-trigger="true"
         onClick={() => setAssistantOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 h-16 w-16 rounded-full border-[3px] border-teal-400 bg-[#1A3F63] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)] hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.34)] transition-all"
+        className="fixed bottom-9 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
         aria-label="Open platform assistant"
       >
         <MessageCircle className="w-6 h-6 mx-auto" />
       </button>
 
       {assistantOpen && (
-        <div ref={assistantRef} className="fixed bottom-24 right-5 z-50 w-[420px] max-w-[94vw] rounded-[24px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.2)] overflow-hidden">
-          <div className="flex items-start justify-between gap-4 px-5 py-5 bg-[#234D86] text-white">
-            <div className="flex items-center gap-4 min-w-0">
-              <img
-                src="/IMG_0817.jpeg"
-                alt="Alora avatar"
-                className="h-14 w-14 rounded-full border-2 border-white/80 object-cover shadow-md flex-shrink-0"
-              />
-              <div className="min-w-0">
-                <p className="text-[18px] font-semibold leading-tight">Alora</p>
-                <p className="text-sm text-white/85 leading-tight">ReflectivAI Assistant</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setAssistantOpen(false)}
-              className="rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-              aria-label="Close assistant"
-            >
-              <span className="block text-2xl leading-none">×</span>
-            </button>
+        <div ref={assistantRef} className="fixed bottom-28 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
+          <div className="px-4 py-3 bg-[#1A334D] text-white">
+            <p className="text-sm font-semibold">Platform Assistant</p>
+            <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>
           </div>
           <div className="h-[540px] max-h-[68vh] overflow-y-auto px-5 py-6 space-y-4 bg-white">
             {assistantMessages.map((m, idx) => (
