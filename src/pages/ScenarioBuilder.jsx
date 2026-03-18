@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState } from "react";
 import { saveAs } from "file-saver";
-import { Button } from "@/components/ui/button";
+import { Button as ButtonField } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 // ...existing code...
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -106,21 +106,21 @@ export default function ScenarioBuilder() {
         </div>
         {editingId === null && (
           <div className="flex gap-2">
-            <Button
+            <ButtonField
               variant="outline"
               className="border-teal-300 text-teal-600 hover:bg-teal-50"
               onClick={() => { setShowAIGenerator(!showAIGenerator); setEditingId(null); }}
             >
               <Sparkles className="w-4 h-4 mr-1" />
               AI Generate
-            </Button>
-            <Button
+            </ButtonField>
+            <ButtonField
               className="bg-teal-500 hover:bg-teal-600"
               onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}
             >
               <Plus className="w-4 h-4 mr-1" />
               New Scenario
-            </Button>
+            </ButtonField>
           </div>
         )}
       </div>
@@ -143,10 +143,10 @@ export default function ScenarioBuilder() {
             <p className="text-sm font-bold text-[#1A334D]">Need a custom scenario for your next simulation?</p>
             <p className="text-xs text-gray-600">Use + New Scenario for manual control, or AI Generate for a fast first draft you can refine.</p>
           </div>
-          <Button className="bg-[#1A334D] hover:bg-[#152a3f]" onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}>
+          <ButtonField className="bg-[#1A334D] hover:bg-[#152a3f]" onClick={() => { setEditingId("new"); setForm(emptyForm); setShowAIGenerator(false); }}>
             <Plus className="w-4 h-4 mr-1" />
             + New Scenario
-          </Button>
+          </ButtonField>
         </div>
       )}
 
@@ -260,18 +260,18 @@ export default function ScenarioBuilder() {
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={cancelEdit}>Cancel</Button>
-              <Button variant="outline" onClick={() => exportScenarioWord(form)} disabled={!form.title.trim()}>
+              <ButtonField variant="outline" onClick={cancelEdit}>Cancel</ButtonField>
+              <ButtonField variant="outline" onClick={() => exportScenarioWord(form)} disabled={!form.title.trim()}>
                 Export to Word
-              </Button>
-              <Button
+              </ButtonField>
+              <ButtonField
                 className="bg-teal-500 hover:bg-teal-600"
                 onClick={handleSave}
                 disabled={!form.title.trim()}
               >
                 <Save className="w-4 h-4 mr-1" />
                 Save Scenario
-              </Button>
+              </ButtonField>
             </div>
           </div>
         </div>
