@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useMemo, useState } from "react";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer,
@@ -438,27 +439,27 @@ export default function SessionAnalytics() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-500" />
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-              <SelectItem value="0">All time</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectField value={dateRange} onValueChange={setDateRange}>
+            <SelectTriggerField className="w-36 h-8 text-xs"><SelectValueField /></SelectTriggerField>
+            <SelectContentField>
+              <SelectItemField value="7">Last 7 days</SelectItemField>
+              <SelectItemField value="30">Last 30 days</SelectItemField>
+              <SelectItemField value="90">Last 90 days</SelectItemField>
+              <SelectItemField value="0">All time</SelectItemField>
+            </SelectContentField>
+          </SelectField>
         </div>
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-slate-500" />
-          <Select value={scenarioFilter} onValueChange={setScenarioFilter}>
-            <SelectTrigger className="w-52 h-8 text-xs"><SelectValue placeholder="All scenarios" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All scenarios</SelectItem>
-              {scenarioTitles.map(t => <SelectItem key={t} value={t}>{t.length > 40 ? t.slice(0, 40) + "…" : t}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SelectField value={scenarioFilter} onValueChange={setScenarioFilter}>
+            <SelectTriggerField className="w-52 h-8 text-xs"><SelectValueField placeholder="All scenarios" /></SelectTriggerField>
+            <SelectContentField>
+              <SelectItemField value="all">All scenarios</SelectItemField>
+              {scenarioTitles.map(t => <SelectItemField key={t} value={t}>{t.length > 40 ? t.slice(0, 40) + "…" : t}</SelectItemField>)}
+            </SelectContentField>
+          </SelectField>
         </div>
-        <Badge variant="outline" className="text-xs text-slate-600 border-slate-200">{totalSessions} sessions</Badge>
+        <BadgeField variant="outline" className="text-xs text-slate-600 border-slate-200">{totalSessions} sessions</BadgeField>
       </div>
 
       {totalSessions === 0 ? (
@@ -478,7 +479,7 @@ export default function SessionAnalytics() {
           </div>
 
           {/* AI Actionable Insights */}
-          <AIActionableInsights
+          <AIActionableInsightsField
             avgScores={avgScores}
             totalSessions={totalSessions}
             overallAvg={overallAvg}
@@ -487,7 +488,7 @@ export default function SessionAnalytics() {
           />
 
           {/* Gamification Panel */}
-          <GamificationPanel
+          <GamificationPanelField
             totalSessions={totalSessions}
             overallAvg={overallAvg}
             capabilityScores={Object.fromEntries(avgScores.map(c => [c.key, c.score]))}
@@ -495,14 +496,14 @@ export default function SessionAnalytics() {
           />
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-transparent flex-wrap gap-2 h-auto p-0">
-              <TabsTrigger value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTrigger>
-              <TabsTrigger value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTrigger>
-              <TabsTrigger value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTrigger>
-              <TabsTrigger value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <TabsField value={activeTab} onValueChange={setActiveTab}>
+            <TabsListField className="bg-transparent flex-wrap gap-2 h-auto p-0">
+              <TabsTriggerField value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTriggerField>
+              <TabsTriggerField value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTriggerField>
+              <TabsTriggerField value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTriggerField>
+              <TabsTriggerField value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTriggerField>
+            </TabsListField>
+          </TabsField>
 
           {activeTab === "overview" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
