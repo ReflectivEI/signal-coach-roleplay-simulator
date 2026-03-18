@@ -10,6 +10,10 @@ permissions:
   contents: read
   deployments: write
 
+concurrency:
+  group: deploy-pages-production
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,17 +34,17 @@ jobs:
         run: npm ci
 
       - name: Build application
-        run: npm run build
+        run: npm run ci:build
 
   deploy:
     runs-on: ubuntu-latest
     name: Deploy to Cloudflare Pages
     needs: build
-    continue-on-error: true
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
       CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
+      CLOUDFLARE_PAGES_OUTPUT_DIR: dist/client
     steps:
       - name: Check deploy secret availability
         id: cf_token
@@ -71,21 +75,19 @@ jobs:
 
       - name: Build application
         if: steps.cf_token.outputs.available == 'true'
-        run: npm run build
+        run: npm run ci:build
 
       - name: Deploy to Cloudflare Pages
         id: deploy_pages
         if: steps.cf_token.outputs.available == 'true'
         uses: cloudflare/wrangler-action@v3
-        continue-on-error: true
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }}
+          command: pages deploy ${{ env.CLOUDFLARE_PAGES_OUTPUT_DIR }} --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }}
 
       - name: Create GitHub Deployment
         if: steps.cf_token.outputs.available == 'true' && steps.deploy_pages.outcome == 'success'
-        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |

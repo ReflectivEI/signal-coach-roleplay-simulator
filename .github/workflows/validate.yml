@@ -1,0 +1,102 @@
+name: Validate Application
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Build and verify output
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run ci:build
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    name: Static analysis (advisory)
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint (advisory)
+        id: lint
+        run: |
+          set +e
+          npm run lint > lint.log 2>&1
+          status=$?
+          cat lint.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Advisory lint check reported issues. See job summary for details."
+          fi
+          exit 0
+
+      - name: Run typecheck (advisory)
+        id: typecheck
+        run: |
+          set +e
+          npm run typecheck > typecheck.log 2>&1
+          status=$?
+          cat typecheck.log
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Advisory typecheck reported issues. See job summary for details."
+          fi
+          exit 0
+
+      - name: Publish advisory summary
+        if: always()
+        run: |
+          {
+            echo "## Static analysis (advisory)"
+            echo
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            if [ "${{ steps.lint.outputs.status }}" = "0" ]; then
+              echo "| Lint | ✅ Passed |"
+            else
+              echo "| Lint | ⚠️ Issues found (non-blocking) |"
+            fi
+            if [ "${{ steps.typecheck.outputs.status }}" = "0" ]; then
+              echo "| Typecheck | ✅ Passed |"
+            else
+              echo "| Typecheck | ⚠️ Issues found (non-blocking) |"
+            fi
+            echo
+            echo "This job is intentionally non-blocking while the existing lint and typecheck backlog is being reduced."
+          } >> "$GITHUB_STEP_SUMMARY"
