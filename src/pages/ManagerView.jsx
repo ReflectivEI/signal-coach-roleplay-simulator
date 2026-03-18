@@ -12,6 +12,9 @@ import {
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
 import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
+import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getAdoptionBand } from "@/lib/enablementHub";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 
 // ── Mock territory data ──────────────────────────────────────────────────────
 const REPS = [
@@ -243,6 +246,11 @@ export default function ManagerView() {
   const filteredModules = selectedCapabilityFilter === "all"
     ? TRAINING_MODULES
     : TRAINING_MODULES.filter(m => m.capability === selectedCapabilityFilter);
+  const adoptionRate = Math.round((REPS.filter(r => r.sessionsLast30 >= 8).length / REPS.length) * 100);
+  const moduleCompletionRate = Math.round(REPS.reduce((sum, rep) => sum + (rep.modulesCompleted / rep.modulesAssigned), 0) / REPS.length * 100);
+  const interventionQueue = REPS.filter(r => r.status !== "active" || r.sessionsLast30 < 4 || r.avgScore < 3.3);
+  const coachingPriority = interventionQueue.slice().sort((a, b) => a.avgScore - b.avgScore || a.sessionsLast30 - b.sessionsLast30);
+  const adoptionBand = getAdoptionBand(adoptionRate);
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto bg-slate-50/60 rounded-2xl">
@@ -255,6 +263,81 @@ export default function ManagerView() {
           <h1 className="text-2xl font-bold text-gray-900">Manager View</h1>
         </div>
         <p className="text-sm text-gray-500">Territory performance, rep activity, and training alignment across your team.</p>
+      </div>
+
+      <div className="mb-8 rounded-[28px] border border-slate-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-600">Team intervention hub</p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">Manager View is now the intervention spoke for enterprise enablement.</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              This layer translates platform intelligence into manager actions: who needs support, what should be assigned, and where training adoption is drifting from performance outcomes.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: 'Adoption health', value: `${adoptionRate}%`, sub: adoptionBand },
+                { label: 'Module completion', value: `${moduleCompletionRate}%`, sub: 'teamwide training completion' },
+                { label: 'Intervention queue', value: interventionQueue.length, sub: 'reps requiring action' },
+                { label: 'Reference panel', value: `${ENTERPRISE_SAMPLE_CONFIG.reps} reps`, sub: ENTERPRISE_SAMPLE_CONFIG.timeWindow },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-500">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-slate-950 p-5 text-white">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
+            <div className="mt-4 space-y-3">
+              {ENABLEMENT_HUB_SPOKES.filter(spoke => spoke.id !== 'manager').map((spoke) => (
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-white/5 p-4 transition-all hover:border-teal-300/60 hover:bg-white/10">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                  <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Priority queue</p>
+              <h3 className="mt-1 text-lg font-bold text-slate-900">Who managers should coach next</h3>
+            </div>
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{interventionQueue.length} active interventions</span>
+          </div>
+          <div className="mt-4 space-y-3">
+            {coachingPriority.slice(0, 4).map((rep, index) => (
+              <div key={rep.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">{index + 1}. {rep.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">{rep.territory} · {rep.weakCapability} · {rep.sessionsLast30} sessions in 30d</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-slate-900">{rep.avgScore > 0 ? `${rep.avgScore}/5` : '—'}</p>
+                  <p className="text-xs text-slate-500">{rep.status}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Manager operating standard</p>
+          <h3 className="mt-1 text-lg font-bold text-slate-900">Intervention guidance</h3>
+          <div className="mt-4 space-y-3 text-sm text-slate-600">
+            <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Escalate low-adoption, low-score reps into mandatory remediation sequences within Learning Paths.</div>
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">Use scenario-level weakness to assign a targeted module before asking for additional simulator volume.</div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">Package monthly territory summaries into Data and Reports for leadership visibility.</div>
+          </div>
+        </div>
       </div>
 
       {/* KPI Row */}

@@ -14,6 +14,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { ENABLEMENT_HUB_SPOKES } from "@/lib/enablementHub";
 
 export default function PreCallPlanning() {
   const [showForm, setShowForm] = useState(false);
@@ -175,6 +178,51 @@ export default function PreCallPlanning() {
   };
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      <div className="mb-6 rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#13263f] to-[#154955] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 shadow-inner">
+                <ClipboardList className="w-6 h-6 text-teal-200" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200">Call strategy hub</p>
+                <h1 className="mt-1 text-3xl font-bold text-white">Pre-Call Planning</h1>
+              </div>
+            </div>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
+              Structure call objectives, pressure-test likely objections, and package a field-ready discussion plan before the HCP conversation starts.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "Plan status", value: plans.length > 0 ? `${plans.length}` : "0", sub: "saved plans" },
+                { label: "AI assist", value: "3", sub: "draftable sections" },
+                { label: "Prep mode", value: "Live", sub: "field-ready workflow" },
+                { label: "Best use", value: "HCP", sub: "pre-meeting prep" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{item.label}</p>
+                  <p className="mt-2 text-xl font-bold text-white">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
+            <div className="mt-4 space-y-3">
+              {ENABLEMENT_HUB_SPOKES.filter(spoke => ["performance", "learning", "reports"].includes(spoke.id)).map((spoke) => (
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                  <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-start justify-between mb-6 gap-2">
         <div className="flex items-center gap-3">
           <ClipboardList className="w-7 h-7 text-gray-600" />
