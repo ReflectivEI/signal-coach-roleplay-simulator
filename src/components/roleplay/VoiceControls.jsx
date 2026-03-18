@@ -4,7 +4,6 @@
  */
 import React, { useState } from "react";
 import { Mic, MicOff, Volume2, VolumeX, Settings2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export default function VoiceControls({
   isListening,

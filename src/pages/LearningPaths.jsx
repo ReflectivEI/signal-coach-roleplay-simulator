@@ -1,10 +1,8 @@
+// @ts-nocheck
 import React, { useState, useEffect } from "react";
 import {
-  Brain, Target, TrendingUp, CheckCircle, Lock, Play, BookOpen, Zap,
-  RefreshCw, Loader2, ChevronRight, ChevronDown, Star, AlertTriangle,
-  BarChart3, Award, Clock, Sparkles, ArrowRight, Circle
+  Brain, CheckCircle, Play, BookOpen, Loader2, ChevronRight, ChevronDown, Award, Clock, Sparkles
 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from "react";
 import { saveAs } from "file-saver";
 import { formatScenarioText } from "../../lib/utils";

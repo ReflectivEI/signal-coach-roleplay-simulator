@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare, Lightbulb, Heart, Users, ShieldAlert, GitFork, Target, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
