@@ -26,7 +26,7 @@ const navSections = [
     ],
   },
   {
-    label: "Insights & Measurement",
+    label: "Intelligence Hub",
     icon: BarChart3,
     defaultOpen: false,
     items: [
@@ -36,7 +36,7 @@ const navSections = [
     ],
   },
   {
-    label: "Enablement",
+    label: "Enablement Library",
     icon: Globe,
     defaultOpen: false,
     items: [
@@ -45,7 +45,7 @@ const navSections = [
     ],
   },
   {
-    label: "Manager",
+    label: "Manager Intervention",
     icon: Users,
     defaultOpen: false,
     items: [
@@ -317,14 +317,14 @@ export default function Layout({ children, currentPageName }) {
       <button
         data-chat-trigger="true"
         onClick={() => setAssistantOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
+        className="fixed bottom-9 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
         aria-label="Open platform assistant"
       >
         <MessageCircle className="w-6 h-6 mx-auto" />
       </button>
 
       {assistantOpen && (
-        <div ref={assistantRef} className="fixed bottom-24 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
+        <div ref={assistantRef} className="fixed bottom-28 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
           <div className="px-4 py-3 bg-[#1A334D] text-white">
             <p className="text-sm font-semibold">Platform Assistant</p>
             <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>

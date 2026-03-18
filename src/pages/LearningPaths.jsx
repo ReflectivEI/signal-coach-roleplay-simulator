@@ -9,6 +9,7 @@ import ReactMarkdown from "react-markdown";
 import { MODULE_LIBRARY, CAPABILITY_META, getUrgency } from "@/components/learningpath/ModuleLibrary";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getConfidenceLabel } from "@/lib/enablementHub";
 
 const URGENCY_CONFIG = {
   critical: { label: "Critical", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500" },
@@ -196,7 +197,6 @@ export default function LearningPaths() {
   const [paths, setPaths] = useState([]);
   const [selectedCap, setSelectedCap] = useState(null);
   const [generatingAI, setGeneratingAI] = useState(false);
-  const [analyzingAll, setAnalyzingAll] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [loadingPaths, setLoadingPaths] = useState(true);
   const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
@@ -255,36 +255,6 @@ export default function LearningPaths() {
       setPaths([]);
     } finally {
       setLoadingPaths(false);
-    }
-  };
-
-  const analyzePerformanceAndBuildPaths = async () => {
-    setAnalyzingAll(true);
-    try {
-      // Call AI Advise endpoint for all capabilities
-      const updatedPaths = await Promise.all(paths.map(async (path) => {
-        const cap = CAPABILITY_META[path.capability];
-        if (!cap) return path;
-        const score = path?.avg_score || "no score yet";
-        const sessionCount = path?.session_count || 0;
-        const prompt = `You are a sales coaching expert. Generate a personalized learning recommendation for a pharmaceutical sales representative who needs to improve their \"${cap.label}\" capability.\n\nCurrent Performance: ${score}/5 (based on ${sessionCount} roleplay sessions)\n\nProvide a clear, actionable recommendation using this markdown structure:\n\n### Key Learning Objectives\n[2-3 specific, measurable objectives]\n\n### Recommended Practice Scenarios\n[3-4 specific scenarios to practice]\n\n### Skill-Building Exercises\n[3-4 concrete exercises]\n\n### Performance Metrics to Track\n[3-4 specific metrics]\n\nKeep it practical, specific to pharmaceutical sales, and aligned with Signal Intelligence™ behavioral frameworks.`;
-        const res = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt, max_tokens: 800 })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          return { ...path, ai_recommendation: data.response || "" };
-        } else {
-          return path;
-        }
-      }));
-      setPaths(updatedPaths);
-    } catch (err) {
-      console.error('Analyze performance error:', err);
-    } finally {
-      setAnalyzingAll(false);
     }
   };
 
@@ -438,6 +408,21 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     const totalCompleted = new Set(paths.flatMap(p => p.completed_modules || [])).size;
     return totalModules > 0 ? Math.round((totalCompleted / totalModules) * 100) : 0;
   })();
+  const remediationQueue = sortedCapabilities.slice(0, 3).map(([capabilityId]) => {
+    const path = paths.find(p => p.capability === capabilityId);
+    const meta = CAPABILITY_META[capabilityId];
+    return {
+      capabilityId,
+      label: meta?.label || capabilityId,
+      score: path?.avg_score || 0,
+      sessions: path?.session_count || 0,
+      completed: (path?.completed_modules || []).length,
+    };
+  });
+  const readinessNarrative = remediationQueue[0]?.label
+    ? `${remediationQueue[0].label} is the highest-priority remediation lane based on current score, practice volume, and module completion.`
+    : 'Start collecting simulator evidence to activate personalized remediation.';
+  const confidenceLabel = getConfidenceLabel(paths.reduce((sum, path) => sum + (path?.session_count || 0), 0) || ENTERPRISE_SAMPLE_CONFIG.sessions);
 
   const generateWorkspaceTips = () => {
     const framework = workspaceInputs.framework.toLowerCase();
@@ -477,20 +462,6 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
               <h1 className="text-3xl font-bold" style={{ color: "#1A334D" }}>My Learning Paths</h1>
               <p className="text-sm text-gray-500 mt-1.5 max-w-xl">Personalized capability-based paths built from your roleplay performance. Track progress across all 8 Signal Intelligence™ capabilities.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="bg-teal-50 border border-teal-200 rounded-xl px-5 py-3 text-center shadow-sm">
-                <div className="text-2xl font-bold text-teal-600">{overallProgress}%</div>
-                <div className="text-xs text-gray-500">Overall Progress</div>
-              </div>
-              <button
-                onClick={analyzePerformanceAndBuildPaths}
-                disabled={analyzingAll}
-                className="inline-flex items-center gap-2 rounded-full border font-semibold transition-all duration-200 text-sm px-5 py-2.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
-              >
-                {analyzingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {analyzingAll ? "Analyzing…" : "Analyze My Performance"}
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -509,6 +480,74 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
           </div>
         )}
 
+
+        <div className="mb-6 rounded-[28px] border border-teal-100 bg-gradient-to-r from-white to-teal-50 p-6 shadow-sm">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-600">Remediation hub</p>
+              <h2 className="mt-2 text-2xl font-bold text-slate-900">Learning Paths is the enterprise remediation spoke.</h2>
+              <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                Convert platform intelligence into structured practice plans, high-confidence module sequences, and next-best actions for each Signal Intelligence capability.
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+                {[
+                  { label: 'Priority lanes', value: remediationQueue.length, sub: 'active remediation tracks' },
+                  { label: 'Module completion', value: `${overallProgress}%`, sub: 'completed module footprint' },
+                  { label: 'Reference content', value: `${MODULE_LIBRARY.length} modules`, sub: `${ENTERPRISE_SAMPLE_CONFIG.modules}+ enterprise standard` },
+                  { label: 'Confidence', value: confidenceLabel, sub: 'derived from observed practice volume' },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
+                    <p className="mt-2 text-xl font-bold text-slate-900">{item.value}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.sub}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-slate-950 p-5 text-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
+              <div className="mt-4 space-y-3">
+                {ENABLEMENT_HUB_SPOKES.filter(spoke => spoke.id !== 'learning').map((spoke) => (
+                  <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-white/5 p-4 transition-all hover:border-teal-300/60 hover:bg-white/10">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                    <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Priority remediation queue</p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">Next-best capability interventions</h3>
+            <div className="mt-4 space-y-3">
+              {remediationQueue.map((item, index) => (
+                <button key={item.capabilityId} onClick={() => setSelectedCap(item.capabilityId)} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-all hover:border-teal-300 hover:bg-teal-50/40">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">{index + 1}. {item.label}</p>
+                    <p className="mt-1 text-xs text-slate-500">{item.sessions || 0} sessions observed · {item.completed} modules completed</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-slate-900">{item.score ? `${item.score}/5` : '—'}</p>
+                    <p className="text-xs text-slate-500">current average</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Remediation guidance</p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">How this spoke should operate</h3>
+            <div className="mt-4 space-y-3 text-sm text-slate-600">
+              <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Sequence content from lowest score to highest urgency, not by static curriculum order.</div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">Pair every module recommendation with one simulator action and one measurable behavior objective.</div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{readinessNarrative}</div>
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-6 items-start">
           <div className="lg:col-span-8 bg-white rounded-2xl border border-teal-100 p-5 shadow-sm hover:shadow-md transition-all">

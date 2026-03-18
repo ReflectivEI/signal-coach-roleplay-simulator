@@ -10,6 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Search, Sparkles, Send, Copy, Wand2, Loader2, Zap, BookOpen, MessageCircle, ChevronDown, ChevronUp, Users, Heart, Plus, Trophy } from "lucide-react";
 import NavPill from "@/components/ui/NavPill";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { ENABLEMENT_HUB_SPOKES } from "@/lib/enablementHub";
 
 const communicationTemplates = [
   { title: "Feel-Felt-Found", capability: "objection_navigation", content: "I understand how you feel. Other physicians have felt the same way. What they've found is that [benefit/outcome]." },
@@ -304,6 +307,51 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
+      <div className="mb-6 rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#13263f] to-[#154955] p-6 text-white shadow-xl">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 shadow-inner">
+                <BookOpen className="w-6 h-6 text-teal-200" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200">Enablement library</p>
+                <h1 className="mt-1 text-3xl font-bold text-white">Knowledge Base</h1>
+              </div>
+            </div>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
+              Centralize field knowledge, reusable communication templates, peer best practices, and AI-assisted answers in one premium enablement surface.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              {[
+                { label: "Curated articles", value: articles.length, sub: "reference guides" },
+                { label: "Templates", value: communicationTemplates.length, sub: "reusable talk tracks" },
+                { label: "Capabilities", value: SIGNAL_CAPABILITIES.length, sub: "Signal Intelligence anchors" },
+                { label: "Peer sharing", value: snippets.length, sub: "team-contributed snippets" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{item.label}</p>
+                  <p className="mt-2 text-xl font-bold text-white">{item.value}</p>
+                  <p className="mt-1 text-xs text-slate-400">{item.sub}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
+            <div className="mt-4 space-y-3">
+              {ENABLEMENT_HUB_SPOKES.filter(spoke => ["performance", "learning", "reports"].includes(spoke.id)).map((spoke) => (
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
+                  <p className="text-sm font-semibold text-white">{spoke.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
         <p className="text-sm text-gray-600 mt-1">Industry guides, communication templates, and peer-shared best practices</p>
