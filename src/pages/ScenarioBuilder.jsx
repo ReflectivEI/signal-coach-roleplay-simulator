@@ -8,6 +8,24 @@ import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Spark
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
+/**
+ * @typedef {{
+ *   id?: string,
+ *   title: string,
+ *   description: string,
+ *   specialty: string,
+ *   disease_state: string,
+ *   hcp_category: string,
+ *   influence_driver: string,
+ *   difficulty: string,
+ *   details: string,
+ *   focus_capabilities: string[],
+ *   created_date?: string,
+ * }} ScenarioForm
+ */
+
+
+/** @param {ScenarioForm} scenario */
 const exportScenarioWord = (scenario) => {
   const blob = new Blob([
     `Scenario Title: ${scenario.title || "Untitled"}\n\nDescription:\n${scenario.description || ""}\n\nSpecialty: ${scenario.specialty || ""}\nDisease State: ${scenario.disease_state || ""}\nHCP Category: ${scenario.hcp_category || ""}\nInfluence Driver: ${scenario.influence_driver || ""}\nDifficulty: ${scenario.difficulty || ""}\n\nDetails:\n${scenario.details || ""}`
@@ -27,6 +45,7 @@ const difficultyColors = {
   advanced: "bg-red-100 text-red-700",
 };
 
+/** @type {ScenarioForm} */
 const emptyForm = {
   title: "",
   description: "",
@@ -47,7 +66,7 @@ const cleanScenarioText = (value = "") => String(value)
 
 export default function ScenarioBuilder() {
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(/** @type {ScenarioForm} */ ({ ...emptyForm }));
   const [expandedId, setExpandedId] = useState(null);
   const [showAIGenerator, setShowAIGenerator] = useState(false);
   const [scenarios, setScenarios] = useState([]);
