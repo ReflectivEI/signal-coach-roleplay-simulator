@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Send, X, MessageSquare, Highlighter, Zap, Bot, ListChecks } from "lucide-react";
+import { Send, X, MessageSquare, Highlighter, Zap, Bot } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
@@ -1270,54 +1270,52 @@ ${actionText}`;
 
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 pt-1.5 pb-1.5 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5 items-start">
-              {(descriptionText || openingScene) && (
-                <div className="lg:col-span-8 rounded-xl border border-slate-300 bg-white p-2 shadow-sm">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-600 mb-1.5">Session Brief</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
-                    {descriptionText && (
-                      <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
-                        <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Scenario Description</p>
-                        <p className="text-xs text-amber-900 leading-relaxed italic whitespace-normal line-clamp-2">{descriptionText}</p>
-                      </div>
-                    )}
-                    {challengeItems.length > 0 && (
-                      <div className="rounded-lg border border-amber-400 bg-gradient-to-br from-amber-100 to-orange-50 px-3 py-2 shadow-sm min-w-0">
-                        <p className="font-bold uppercase text-[#1A334D] text-[10px] tracking-wide mb-0.5">Key Challenges</p>
-                        <ul className="list-disc pl-4 text-xs text-amber-900 space-y-0.5 mt-0.5">
-                          {challengeItems.slice(0, 3).map((challenge, idx) => (
-                            <li key={idx}>{challenge}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <div className="lg:col-span-4 rounded-xl border-2 border-teal-400 bg-gradient-to-br from-teal-100 via-cyan-50 to-white shadow-sm px-3 py-2">
-                <div className="flex items-start gap-3">
-                  <ListChecks className="w-5 h-5 text-teal-700 mt-0.5 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-teal-800">Scenario Support</p>
-                    <p className="text-sm text-slate-800 leading-relaxed mt-0.5"><span className="font-bold text-[#1A334D]">Objective:</span> {objectiveText}</p>
-                  </div>
-                </div>
-                <div className="mt-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 shadow-sm min-h-[72px]">
-                  <p className="text-xs font-bold text-[#1A334D]">Opening Scene</p>
-                  {openingScene ? (
-                    <p className="text-xs text-slate-700 leading-relaxed mt-0.5 whitespace-normal">{openingScene}</p>
-                  ) : (
-                    <p className="text-xs text-red-600 leading-relaxed italic mt-0.5">No opening scene provided for this scenario.</p>
-                  )}
-                </div>
-                {challengeItems.length === 0 && !openingScene && (
-                  <div className="mt-1.5 rounded-lg border border-teal-200 bg-white px-3 py-1.5 shadow-sm">
-                    <p className="text-xs text-slate-500">No scenario support details available.</p>
+          <div className="px-3 md:px-4 pt-1 pb-0.5 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+                {descriptionText && (
+                  <div className="min-w-0 rounded-xl border border-amber-300 bg-[radial-gradient(circle_at_top_right,rgba(252,211,77,0.38),transparent_42%),linear-gradient(135deg,rgba(255,251,235,1)_0%,rgba(254,243,199,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Scenario Description</p>
+                    <p className="text-sm leading-6 text-amber-950 whitespace-normal">{descriptionText}</p>
                   </div>
                 )}
-              </div>
+
+                {challengeItems.length > 0 && (
+                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-[radial-gradient(circle_at_top_right,rgba(110,231,183,0.36),transparent_42%),linear-gradient(135deg,rgba(236,253,245,1)_0%,rgba(220,252,231,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(16,185,129,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Key Challenges</p>
+                    <ul className="list-disc pl-4 text-sm leading-6 text-emerald-950 space-y-0.5">
+                      {challengeItems.slice(0, 3).map((challenge, idx) => (
+                        <li key={idx}>{challenge}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {objectiveText && (
+                  <div className="min-w-0 rounded-xl border border-sky-300 bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.36),transparent_42%),linear-gradient(135deg,rgba(239,246,255,1)_0%,rgba(219,234,254,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(59,130,246,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Objective</p>
+                    <p className="text-sm leading-6 text-sky-950 whitespace-normal">{objectiveText}</p>
+                  </div>
+                )}
+
+                {openingScene && (
+                  <div className="min-w-0 rounded-xl border border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(253,164,175,0.34),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,226,226,0.88)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(244,63,94,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
+                    <p className="text-sm leading-6 text-rose-950 whitespace-normal line-clamp-3">{openingScene}</p>
+                  </div>
+                )}
+
+                {!openingScene && objectiveText && (
+                  <div className="min-w-0 rounded-xl border border-dashed border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(253,164,175,0.28),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,226,226,0.82)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_12px_24px_rgba(244,63,94,0.1),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
+                    <p className="text-sm leading-6 text-slate-400 italic">No opening scene provided for this scenario.</p>
+                  </div>
+                )}
+
+                {challengeItems.length === 0 && !openingScene && !objectiveText && (
+                  <div className="min-w-0 rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-3 py-2.5 shadow-sm">
+                    <p className="text-sm text-slate-500">No scenario support details available.</p>
+                  </div>
+                )}
             </div>
           </div>
         )}
