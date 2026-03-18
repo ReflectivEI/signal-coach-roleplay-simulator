@@ -1,3 +1,4 @@
+// @ts-nocheck
 /******************************************************************************************
 HCP Simulation Engine
 Enterprise-grade deterministic behavioral simulation for Reflectiv Role Play

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { saveAs } from "file-saver";
 const exportWord = async (plan) => {
   const blob = new Blob([

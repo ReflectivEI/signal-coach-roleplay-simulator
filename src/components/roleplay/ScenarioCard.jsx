@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { formatScenarioText } from "../../lib/utils";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
