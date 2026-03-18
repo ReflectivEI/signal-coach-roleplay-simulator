@@ -376,9 +376,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         {/* Header */}
         <div className="px-6 py-4 border-b border-slate-200 bg-white/95 backdrop-blur-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-teal-500 to-cyan-500 text-white flex items-center justify-center font-semibold shadow-[0_12px_24px_rgba(20,184,166,0.22)]">
-              R
-            </div>
+            <div className="w-11 h-11 flex-shrink-0" aria-hidden="true" />
             <div>
               <h1 className="text-[28px] leading-none font-bold text-slate-900">AI Coach</h1>
               <p className="mt-1 text-sm text-slate-600">Your personal pharma sales coaching assistant</p>
@@ -445,24 +443,25 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-5 py-4 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(241,245,249,0.7)_100%)]">
           <div className="max-w-4xl mx-auto space-y-4">
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-[56rem] mx-auto">
               <TodaysTipCard className="shadow-[0_18px_40px_rgba(245,158,11,0.08)] border-yellow-300 bg-[linear-gradient(135deg,rgba(255,251,235,1)_0%,rgba(254,243,199,0.9)_100%)]" />
             </div>
             {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
-              <div className="max-w-3xl mx-auto rounded-[28px] border border-slate-200 bg-white/95 px-8 py-8 text-center shadow-[0_22px_55px_rgba(15,23,42,0.08)]">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-50 shadow-inner">
-                  <MessageSquare className="w-9 h-9 text-slate-300" />
+              <div className="max-w-[56rem] mx-auto rounded-[30px] border border-slate-200 bg-white/95 px-10 py-7 text-center shadow-[0_22px_55px_rgba(15,23,42,0.08)]">
+                <div className="mx-auto -mb-1 flex items-center justify-center gap-3 text-slate-900">
+                  <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
+                  <MessageSquare className="w-10 h-10 text-[#1A334D]" />
                 </div>
                 <h2 className="text-[42px] leading-tight font-bold text-slate-900 mb-5">Start a Conversation</h2>
                 <p className="mb-6 max-w-4xl mx-auto text-[15px] leading-6 text-slate-600 whitespace-nowrap">
                   Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
                 </p>
-                <div className="w-full max-w-2xl mx-auto grid grid-cols-1 gap-3">
+                <div className="w-full max-w-3xl mx-auto grid grid-cols-1 gap-3">
                   {suggestedQuestions.map((q) => (
                     <button
                       key={q}
                       onClick={() => sendMessage(q)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3.5 text-left text-sm text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-teal-300 hover:bg-white hover:shadow-md whitespace-nowrap overflow-hidden text-ellipsis"
+                      className="w-full rounded-2xl border border-[#1A334D] bg-white px-5 py-3 text-center text-[15px] leading-[1.35] font-medium text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#0f8f8f] hover:shadow-md"
                       title={q}
                     >
                       {q}
