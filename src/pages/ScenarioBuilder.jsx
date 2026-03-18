@@ -9,6 +9,16 @@ import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Spark
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
+const ButtonField = /** @type {any} */ (Button);
+const InputField = /** @type {any} */ (Input);
+const SelectField = /** @type {any} */ (Select);
+const SelectContentField = /** @type {any} */ (SelectContent);
+const SelectItemField = /** @type {any} */ (SelectItem);
+const SelectTriggerField = /** @type {any} */ (SelectTrigger);
+const SelectValueField = /** @type {any} */ (SelectValue);
+const CapabilityTaggerField = /** @type {any} */ (CapabilityTagger);
+const AIScenarioGeneratorField = /** @type {any} */ (AIScenarioGenerator);
+
 /**
  * @typedef {{
  *   id?: string,
@@ -39,12 +49,6 @@ const specialties = ["Family Medicine", "Internal Medicine", "Infectious Disease
 const hcpCategories = ["KOL / Thought Leader", "Prescriber / Treater", "Non-Prescribing Influencer", "Low Engagement"];
 const influenceDrivers = ["Evidence-Based", "Patient-Centered", "Risk-Averse", "Guideline-Anchored"];
 const difficulties = ["beginner", "intermediate", "advanced"];
-
-const difficultyColors = {
-  beginner: "bg-green-100 text-green-700",
-  intermediate: "bg-yellow-100 text-yellow-700",
-  advanced: "bg-red-100 text-red-700",
-};
 
 /** @type {ScenarioForm} */
 const emptyForm = {
@@ -86,7 +90,7 @@ export default function ScenarioBuilder() {
   const deleteScenario = (id) => setScenarios((prev) => prev.filter((s) => s.id !== id));
 
   const duplicateScenario = (scenario) => {
-    const { id, created_date, ...rest } = scenario;
+    const { id: _id, created_date: _createdDate, ...rest } = scenario;
     setScenarios((prev) => [{ ...rest, id: Date.now().toString(), title: `${rest.title} (Copy)`, created_date: new Date().toISOString() }, ...prev]);
   };
 
