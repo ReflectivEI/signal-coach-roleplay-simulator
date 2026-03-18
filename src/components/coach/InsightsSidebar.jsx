@@ -3,10 +3,29 @@ import { Button } from "@/components/ui/button";
 // ...existing code...
 import { Sparkles, TrendingUp, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
+/**
+ * @typedef {{ hidden?: boolean, role?: string, content?: string }} InsightMessage
+ * @typedef {{ name?: string, description?: string }} InsightPattern
+ * @typedef {{ strength?: string, example?: string }} InsightStrength
+ * @typedef {{ area?: string, suggestion?: string }} InsightImprovement
+ * @typedef {{ module?: string, reason?: string }} InsightModule
+ * @typedef {{ topic?: string, reason?: string }} InsightExercise
+ * @typedef {{
+ *   proactive_tip?: string,
+ *   patterns?: InsightPattern[],
+ *   strengths?: InsightStrength[],
+ *   improvement_areas?: InsightImprovement[],
+ *   recommended_modules?: InsightModule[],
+ *   recommended_exercises?: InsightExercise[],
+ * } | string | null} InsightState
+ */
+
+
+/** @param {{ messages?: InsightMessage[], skillLevel?: string, scenarioDescriptor?: string }} props */
 export default function InsightsSidebar({ messages = [], skillLevel = "", scenarioDescriptor = "" }) {
     // Pattern analysis and insights logic is already present and correct.
     // No changes needed unless you want to further clarify UI or add a button for analyzePatterns.
-  const [insights, setInsights] = useState(null);
+  const [insights, setInsights] = useState(/** @type {InsightState} */ (null));
   const [isLoading, setIsLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
 

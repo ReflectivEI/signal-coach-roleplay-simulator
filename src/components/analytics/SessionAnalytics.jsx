@@ -15,6 +15,7 @@ import StateTransitionFlow from "./StateTransitionFlow";
 import GamificationPanel from "./GamificationPanel";
 import AIActionableInsights from "./AIActionableInsights";
 
+
 // Mapping from capability key → coaching module + scenarios to recommend
 const LEARNING_PATH_MAP = {
   signal_awareness: {
@@ -348,7 +349,7 @@ export default function SessionAnalytics() {
         entry[cap] = w.counts[cap] ? Math.round((w.totals[cap] / w.counts[cap]) * 10) / 10 : null;
       });
       return entry;
-    }).sort((a, b) => new Date(a.week) - new Date(b.week));
+    }).sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime());
   }, [filtered]);
 
   // Misalignment frequency
@@ -420,7 +421,7 @@ export default function SessionAnalytics() {
   const overallAvg = avgScores.filter(c => c.score > 0).length
     ? Math.round(avgScores.filter(c => c.score > 0).reduce((s, c) => s + c.score, 0) / avgScores.filter(c => c.score > 0).length * 10) / 10
     : 0;
-  const vsAvgBenchmark = overallAvg > 0 ? (overallAvg - 3.3).toFixed(1) : null;
+  const vsAvgBenchmark = overallAvg > 0 ? Number((overallAvg - 3.3).toFixed(1)) : null;
 
   return (
     <div className="space-y-6" role="main" aria-label="Session Analytics Panel">
@@ -527,7 +528,7 @@ export default function SessionAnalytics() {
                   <BarChart data={avgScores} layout="vertical" margin={{ left: 8, right: 24 }}>
                     <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 10 }} tickLine={false} />
                     <YAxis type="category" dataKey="capability" tick={{ fontSize: 10, fill: "#475569" }} width={140} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                     <ReferenceLine x={3.3} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: "Benchmark", position: "top", fontSize: 9, fill: "#94a3b8" }} />
                     <Bar dataKey="score" radius={[0, 4, 4, 0]} name="Your Score">
                       {avgScores.map((entry, i) => <Cell key={i} fill={entry.score >= (entry.benchmark || 3.3) ? "#14b8a6" : "#f97316"} />)}
@@ -545,7 +546,7 @@ export default function SessionAnalytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#475569" }} />
                       <YAxis tick={{ fontSize: 10, fill: "#475569" }} allowDecimals={false} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                       <Line type="monotone" dataKey="count" name="Sessions" stroke="#14b8a6" strokeWidth={2.5} dot={{ fill: "#14b8a6", r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -567,7 +568,7 @@ export default function SessionAnalytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#475569" }} />
                       <YAxis domain={[1, 5]} tick={{ fontSize: 10, fill: "#475569" }} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       {Object.entries(CAPABILITY_LABELS).map(([key, label]) => (
                         <Line key={key} type="monotone" dataKey={key} name={label} stroke={CAPABILITY_COLORS[key]} strokeWidth={2} dot={{ r: 3 }} connectNulls />

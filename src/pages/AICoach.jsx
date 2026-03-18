@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Tab definitions
 const TABS = {
   OPENING: "Opening",

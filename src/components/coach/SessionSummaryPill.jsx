@@ -5,6 +5,17 @@ import { FileText, Download, X } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
+/**
+ * @typedef {{
+ *   title?: string,
+ *   score?: number | string,
+ *   duration?: string,
+ *   summary?: string,
+ * } | null} SessionSummaryData
+ */
+
+
+/** @param {{ sessionData: SessionSummaryData }} props */
 export default function SessionSummaryPill({ sessionData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -13,6 +24,9 @@ export default function SessionSummaryPill({ sessionData }) {
     setIsExporting(true);
     try {
       const element = document.getElementById("session-summary-content");
+      if (!element) {
+        throw new Error("Session summary content not found");
+      }
       const canvas = await html2canvas(element, { scale: 2, backgroundColor: "#ffffff" });
       const pdf = new jsPDF("p", "mm", "a4");
       const imgData = canvas.toDataURL("image/png");
