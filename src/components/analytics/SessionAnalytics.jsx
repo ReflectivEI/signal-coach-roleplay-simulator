@@ -16,6 +16,7 @@ import StateTransitionFlow from "./StateTransitionFlow";
 import GamificationPanel from "./GamificationPanel";
 import AIActionableInsights from "./AIActionableInsights";
 
+
 // Mapping from capability key → coaching module + scenarios to recommend
 const LEARNING_PATH_MAP = {
   signal_awareness: {
@@ -349,7 +350,7 @@ export default function SessionAnalytics() {
         entry[cap] = w.counts[cap] ? Math.round((w.totals[cap] / w.counts[cap]) * 10) / 10 : null;
       });
       return entry;
-    }).sort((a, b) => new Date(a.week) - new Date(b.week));
+    }).sort((a, b) => new Date(a.week).getTime() - new Date(b.week).getTime());
   }, [filtered]);
 
   // Misalignment frequency
@@ -421,7 +422,7 @@ export default function SessionAnalytics() {
   const overallAvg = avgScores.filter(c => c.score > 0).length
     ? Math.round(avgScores.filter(c => c.score > 0).reduce((s, c) => s + c.score, 0) / avgScores.filter(c => c.score > 0).length * 10) / 10
     : 0;
-  const vsAvgBenchmark = overallAvg > 0 ? (overallAvg - 3.3).toFixed(1) : null;
+  const vsAvgBenchmark = overallAvg > 0 ? Number((overallAvg - 3.3).toFixed(1)) : null;
 
   return (
     <div className="space-y-6" role="main" aria-label="Session Analytics Panel">
@@ -438,27 +439,27 @@ export default function SessionAnalytics() {
       <div className="flex flex-wrap gap-3 items-center">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-500" />
-          <Select value={dateRange} onValueChange={setDateRange}>
-            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-              <SelectItem value="0">All time</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectField value={dateRange} onValueChange={setDateRange}>
+            <SelectTriggerField className="w-36 h-8 text-xs"><SelectValueField /></SelectTriggerField>
+            <SelectContentField>
+              <SelectItemField value="7">Last 7 days</SelectItemField>
+              <SelectItemField value="30">Last 30 days</SelectItemField>
+              <SelectItemField value="90">Last 90 days</SelectItemField>
+              <SelectItemField value="0">All time</SelectItemField>
+            </SelectContentField>
+          </SelectField>
         </div>
         <div className="flex items-center gap-2">
           <Target className="w-4 h-4 text-slate-500" />
-          <Select value={scenarioFilter} onValueChange={setScenarioFilter}>
-            <SelectTrigger className="w-52 h-8 text-xs"><SelectValue placeholder="All scenarios" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All scenarios</SelectItem>
-              {scenarioTitles.map(t => <SelectItem key={t} value={t}>{t.length > 40 ? t.slice(0, 40) + "…" : t}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <SelectField value={scenarioFilter} onValueChange={setScenarioFilter}>
+            <SelectTriggerField className="w-52 h-8 text-xs"><SelectValueField placeholder="All scenarios" /></SelectTriggerField>
+            <SelectContentField>
+              <SelectItemField value="all">All scenarios</SelectItemField>
+              {scenarioTitles.map(t => <SelectItemField key={t} value={t}>{t.length > 40 ? t.slice(0, 40) + "…" : t}</SelectItemField>)}
+            </SelectContentField>
+          </SelectField>
         </div>
-        <Badge variant="outline" className="text-xs text-slate-600 border-slate-200">{totalSessions} sessions</Badge>
+        <BadgeField variant="outline" className="text-xs text-slate-600 border-slate-200">{totalSessions} sessions</BadgeField>
       </div>
 
       {totalSessions === 0 ? (
@@ -478,7 +479,7 @@ export default function SessionAnalytics() {
           </div>
 
           {/* AI Actionable Insights */}
-          <AIActionableInsights
+          <AIActionableInsightsField
             avgScores={avgScores}
             totalSessions={totalSessions}
             overallAvg={overallAvg}
@@ -487,7 +488,7 @@ export default function SessionAnalytics() {
           />
 
           {/* Gamification Panel */}
-          <GamificationPanel
+          <GamificationPanelField
             totalSessions={totalSessions}
             overallAvg={overallAvg}
             capabilityScores={Object.fromEntries(avgScores.map(c => [c.key, c.score]))}
@@ -495,14 +496,14 @@ export default function SessionAnalytics() {
           />
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-transparent flex-wrap gap-2 h-auto p-0">
-              <TabsTrigger value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTrigger>
-              <TabsTrigger value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTrigger>
-              <TabsTrigger value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTrigger>
-              <TabsTrigger value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <TabsField value={activeTab} onValueChange={setActiveTab}>
+            <TabsListField className="bg-transparent flex-wrap gap-2 h-auto p-0">
+              <TabsTriggerField value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTriggerField>
+              <TabsTriggerField value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTriggerField>
+              <TabsTriggerField value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTriggerField>
+              <TabsTriggerField value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTriggerField>
+            </TabsListField>
+          </TabsField>
 
           {activeTab === "overview" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -528,7 +529,7 @@ export default function SessionAnalytics() {
                   <BarChart data={avgScores} layout="vertical" margin={{ left: 8, right: 24 }}>
                     <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 10 }} tickLine={false} />
                     <YAxis type="category" dataKey="capability" tick={{ fontSize: 10, fill: "#475569" }} width={140} />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                     <ReferenceLine x={3.3} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: "Benchmark", position: "top", fontSize: 9, fill: "#94a3b8" }} />
                     <Bar dataKey="score" radius={[0, 4, 4, 0]} name="Your Score">
                       {avgScores.map((entry, i) => <Cell key={i} fill={entry.score >= (entry.benchmark || 3.3) ? "#14b8a6" : "#f97316"} />)}
@@ -546,7 +547,7 @@ export default function SessionAnalytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#475569" }} />
                       <YAxis tick={{ fontSize: 10, fill: "#475569" }} allowDecimals={false} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                       <Line type="monotone" dataKey="count" name="Sessions" stroke="#14b8a6" strokeWidth={2.5} dot={{ fill: "#14b8a6", r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>
@@ -568,7 +569,7 @@ export default function SessionAnalytics() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#475569" }} />
                       <YAxis domain={[1, 5]} tick={{ fontSize: 10, fill: "#475569" }} />
-                      <Tooltip content={<CustomTooltip />} />
+                      <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                       <Legend wrapperStyle={{ fontSize: 10 }} />
                       {Object.entries(CAPABILITY_LABELS).map(([key, label]) => (
                         <Line key={key} type="monotone" dataKey={key} name={label} stroke={CAPABILITY_COLORS[key]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
