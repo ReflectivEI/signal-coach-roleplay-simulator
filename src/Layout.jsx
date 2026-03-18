@@ -71,7 +71,7 @@ export default function Layout({ children, currentPageName }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantMessages, setAssistantMessages] = useState([
-    { role: "assistant", content: "Hi — I can answer platform questions and help you navigate ReflectivAI." },
+    { role: "assistant", content: "Hi! I'm Alora. I can help you learn about ReflectivAI and how Signal Intelligence works. What would you like to know?" },
   ]);
   const [assistantInput, setAssistantInput] = useState("");
   const [assistantLoading, setAssistantLoading] = useState(false);
@@ -111,7 +111,7 @@ export default function Layout({ children, currentPageName }) {
     setAssistantLoading(true);
 
     try {
-      const prompt = `You are ReflectivAI Platform Assistant. Answer platform navigation and usage questions in concise, actionable steps.\n\nConversation:\n${newMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}`;
+      const prompt = `You are Alora, the ReflectivAI Assistant. Answer platform navigation and usage questions in concise, polished, enterprise-grade guidance.\n\nConversation:\n${newMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}`;
       const res = await fetch("/api/llm/invoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -317,37 +317,71 @@ export default function Layout({ children, currentPageName }) {
       <button
         data-chat-trigger="true"
         onClick={() => setAssistantOpen((v) => !v)}
-        className="fixed bottom-5 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
+        className="fixed bottom-5 right-5 z-50 h-16 w-16 rounded-full border-[3px] border-teal-400 bg-[#1A3F63] text-white shadow-[0_18px_40px_rgba(15,23,42,0.28)] hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.34)] transition-all"
         aria-label="Open platform assistant"
       >
         <MessageCircle className="w-6 h-6 mx-auto" />
       </button>
 
       {assistantOpen && (
-        <div ref={assistantRef} className="fixed bottom-24 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
-          <div className="px-4 py-3 bg-[#1A334D] text-white">
-            <p className="text-sm font-semibold">Platform Assistant</p>
-            <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>
+        <div ref={assistantRef} className="fixed bottom-24 right-5 z-50 w-[420px] max-w-[94vw] rounded-[24px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.2)] overflow-hidden">
+          <div className="flex items-start justify-between gap-4 px-5 py-5 bg-[#234D86] text-white">
+            <div className="flex items-center gap-4 min-w-0">
+              <img
+                src="/IMG_0817.jpeg"
+                alt="Alora avatar"
+                className="h-14 w-14 rounded-full border-2 border-white/80 object-cover shadow-md flex-shrink-0"
+              />
+              <div className="min-w-0">
+                <p className="text-[18px] font-semibold leading-tight">Alora</p>
+                <p className="text-sm text-white/85 leading-tight">ReflectivAI Assistant</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              className="rounded-full p-1.5 text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+              aria-label="Close assistant"
+            >
+              <span className="block text-2xl leading-none">×</span>
+            </button>
           </div>
-          <div className="max-h-72 overflow-y-auto p-3 space-y-2 bg-slate-50">
+          <div className="h-[540px] max-h-[68vh] overflow-y-auto px-5 py-6 space-y-4 bg-white">
             {assistantMessages.map((m, idx) => (
-              <div key={idx} className={`rounded-xl px-3 py-2 text-xs leading-relaxed border ${m.role === "user" ? "bg-teal-500 text-white border-teal-500 ml-8" : "bg-white text-slate-700 border-slate-200 mr-8"}`}>
-                {m.content}
+              <div key={idx} className={`flex items-start gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                {m.role === "assistant" && (
+                  <img
+                    src="/IMG_0817.jpeg"
+                    alt="Alora avatar"
+                    className="mt-1 h-10 w-10 rounded-full border border-slate-200 object-cover shadow-sm"
+                  />
+                )}
+                <div className={`max-w-[82%] rounded-[18px] border px-4 py-3 text-[15px] leading-8 shadow-sm ${m.role === "user" ? "bg-[#1A3F63] text-white border-[#1A3F63]" : "bg-slate-50 text-slate-700 border-slate-100"}`}>
+                  <p className="leading-[1.55]">{m.content}</p>
+                  {m.role === "assistant" && <p className="mt-2 text-xs leading-none text-slate-500">{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>}
+                </div>
               </div>
             ))}
-            {assistantLoading && <p className="text-xs text-slate-500">Thinking…</p>}
+            {assistantLoading && <p className="text-sm text-slate-500">Thinking…</p>}
           </div>
-          <div className="p-2 border-t border-slate-200 bg-white flex items-center gap-2">
+          <div className="relative border-t border-slate-200 bg-white px-4 py-4">
             <input
               value={assistantInput}
               onChange={(e) => setAssistantInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendAssistantMessage()}
-              placeholder="Ask a platform question..."
-              className="flex-1 h-9 rounded-full border border-slate-300 px-3 text-xs outline-none focus:border-teal-400"
+              placeholder="Ask me anything about ReflectivAI..."
+              className="h-14 w-full rounded-2xl border-2 border-[#234D86] px-4 pr-16 text-[15px] text-slate-700 outline-none transition-colors placeholder:text-slate-500 focus:border-teal-500"
             />
-            <button onClick={sendAssistantMessage} className="h-9 w-9 rounded-full border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100" disabled={assistantLoading}>
-              <Send className="w-4 h-4 mx-auto" />
-            </button>
+            <div className="pointer-events-none relative -mt-14 flex justify-end pr-2">
+              <button
+                onClick={sendAssistantMessage}
+                className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#8EA7CC] text-white shadow-sm transition-colors hover:bg-[#6E8FBC] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={assistantLoading}
+                aria-label="Send assistant message"
+              >
+                <Send className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
       )}
