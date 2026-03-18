@@ -1273,14 +1273,14 @@ ${actionText}`;
           <div className="px-3 md:px-4 pt-1 pb-0.5 border-b bg-gradient-to-b from-slate-100 via-slate-50 to-white">
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
                 {descriptionText && (
-                  <div className="min-w-0 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 via-yellow-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(245,158,11,0.12)]">
+                  <div className="min-w-0 rounded-xl border border-amber-300 bg-[radial-gradient(circle_at_top_right,rgba(252,211,77,0.38),transparent_42%),linear-gradient(135deg,rgba(255,251,235,1)_0%,rgba(254,243,199,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(245,158,11,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Scenario Description</p>
                     <p className="text-sm leading-6 text-amber-950 whitespace-normal">{descriptionText}</p>
                   </div>
                 )}
 
                 {challengeItems.length > 0 && (
-                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-50 via-lime-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(16,185,129,0.12)]">
+                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-[radial-gradient(circle_at_top_right,rgba(110,231,183,0.36),transparent_42%),linear-gradient(135deg,rgba(236,253,245,1)_0%,rgba(220,252,231,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(16,185,129,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Key Challenges</p>
                     <ul className="list-disc pl-4 text-sm leading-6 text-emerald-950 space-y-0.5">
                       {challengeItems.slice(0, 3).map((challenge, idx) => (
@@ -1291,21 +1291,21 @@ ${actionText}`;
                 )}
 
                 {objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-sky-300 bg-gradient-to-br from-sky-50 via-blue-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(59,130,246,0.12)]">
+                  <div className="min-w-0 rounded-xl border border-sky-300 bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.36),transparent_42%),linear-gradient(135deg,rgba(239,246,255,1)_0%,rgba(219,234,254,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(59,130,246,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Objective</p>
                     <p className="text-sm leading-6 text-sky-950 whitespace-normal">{objectiveText}</p>
                   </div>
                 )}
 
                 {openingScene && (
-                  <div className="min-w-0 rounded-xl border border-rose-300 bg-gradient-to-br from-rose-50 via-red-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(244,63,94,0.12)]">
+                  <div className="min-w-0 rounded-xl border border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(253,164,175,0.34),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,226,226,0.88)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(244,63,94,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
                     <p className="text-sm leading-6 text-rose-950 whitespace-normal line-clamp-3">{openingScene}</p>
                   </div>
                 )}
 
                 {!openingScene && objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-dashed border-rose-300 bg-gradient-to-br from-rose-50 via-red-50 to-white px-3 py-2.5 shadow-[0_10px_22px_rgba(244,63,94,0.08)]">
+                  <div className="min-w-0 rounded-xl border border-dashed border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(253,164,175,0.28),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,226,226,0.82)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_12px_24px_rgba(244,63,94,0.1),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
                     <p className="text-sm leading-6 text-slate-400 italic">No opening scene provided for this scenario.</p>
                   </div>
