@@ -1279,28 +1279,28 @@ ${actionText}`;
                   </div>
                 )}
 
+                {objectiveText && (
+                  <div className="min-w-0 rounded-xl border border-blue-300 bg-[radial-gradient(circle_at_top_right,rgba(96,165,250,0.42),transparent_40%),linear-gradient(135deg,rgba(239,246,255,1)_0%,rgba(191,219,254,0.96)_54%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_16px_30px_rgba(37,99,235,0.18),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Objective</p>
+                    <p className="text-sm leading-6 text-blue-950 whitespace-normal">{objectiveText}</p>
+                  </div>
+                )}
+
+                {openingScene && (
+                  <div className="min-w-0 rounded-xl border border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(251,113,133,0.36),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,205,211,0.9)_54%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_16px_30px_rgba(225,29,72,0.18),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
+                    <p className="text-sm leading-6 text-rose-950 whitespace-normal line-clamp-3">{openingScene}</p>
+                  </div>
+                )}
+
                 {challengeItems.length > 0 && (
-                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-[radial-gradient(circle_at_top_right,rgba(110,231,183,0.36),transparent_42%),linear-gradient(135deg,rgba(236,253,245,1)_0%,rgba(220,252,231,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(16,185,129,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
+                  <div className="min-w-0 rounded-xl border border-emerald-300 bg-[radial-gradient(circle_at_top_right,rgba(52,211,153,0.34),transparent_40%),linear-gradient(135deg,rgba(236,253,245,1)_0%,rgba(187,247,208,0.96)_54%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_16px_30px_rgba(5,150,105,0.18),inset_0_1px_0_rgba(255,255,255,0.9)]">
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Key Challenges</p>
                     <ul className="list-disc pl-4 text-sm leading-6 text-emerald-950 space-y-0.5">
                       {challengeItems.slice(0, 3).map((challenge, idx) => (
                         <li key={idx}>{challenge}</li>
                       ))}
                     </ul>
-                  </div>
-                )}
-
-                {objectiveText && (
-                  <div className="min-w-0 rounded-xl border border-sky-300 bg-[radial-gradient(circle_at_top_right,rgba(125,211,252,0.36),transparent_42%),linear-gradient(135deg,rgba(239,246,255,1)_0%,rgba(219,234,254,0.9)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(59,130,246,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
-                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Objective</p>
-                    <p className="text-sm leading-6 text-sky-950 whitespace-normal">{objectiveText}</p>
-                  </div>
-                )}
-
-                {openingScene && (
-                  <div className="min-w-0 rounded-xl border border-rose-300 bg-[radial-gradient(circle_at_top_right,rgba(253,164,175,0.34),transparent_42%),linear-gradient(135deg,rgba(255,241,242,1)_0%,rgba(254,226,226,0.88)_52%,rgba(255,255,255,0.98)_100%)] px-3 py-2.5 shadow-[0_14px_28px_rgba(244,63,94,0.16),inset_0_1px_0_rgba(255,255,255,0.9)]">
-                    <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-700">Opening Scene</p>
-                    <p className="text-sm leading-6 text-rose-950 whitespace-normal line-clamp-3">{openingScene}</p>
                   </div>
                 )}
 
