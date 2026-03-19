@@ -276,14 +276,23 @@ function SimulationContextCard({
   previewLabel = "Play Scene",
   fallbackPreview = "Preview the HCP's first beat before you continue the live simulation.",
   expandable = true,
+  collapsedSummary,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typedPreview, setTypedPreview] = useState("");
   const previewTimerRef = useRef(null);
   const showToggle = expandable && Boolean(expandedContent);
+  const collapsedText = collapsedSummary || summary;
 
   useEffect(() => {
+    if (!expanded) {
+      setPreviewing(false);
+      setTypedPreview("");
+      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
+      return undefined;
+    }
+
     if (!previewing || !previewText) {
       setTypedPreview("");
       if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
@@ -302,15 +311,15 @@ function SimulationContextCard({
     return () => {
       if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
     };
-  }, [previewText, previewing]);
+  }, [expanded, previewText, previewing]);
 
   return (
-    <div className={`scenario-card scenario-context-card self-start min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
-      <div className="flex flex-col gap-4">
+    <div className={`scenario-card scenario-context-card self-start min-w-0 min-h-[220px] rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
+      <div className="flex min-h-[188px] flex-col gap-4">
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">{title}</p>
-            {previewText ? (
+            {previewText && expanded ? (
               <button
                 type="button"
                 onClick={() => setPreviewing(value => !value)}
@@ -320,14 +329,20 @@ function SimulationContextCard({
               </button>
             ) : null}
           </div>
-          <p className="text-sm leading-7 text-slate-100">{summary}</p>
+          <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "line-clamp-1 leading-7"}`}>{expanded ? summary : collapsedText}</p>
         </div>
 
-        {previewText ? (
+        {previewText && expanded ? (
           <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 px-3 py-2.5">
             <p className={`text-sm leading-6 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
               {previewing ? typedPreview || " " : fallbackPreview}
             </p>
+          </div>
+        ) : null}
+
+        {showToggle && expanded ? (
+          <div className="scenario-extra-content is-visible text-slate-200">
+            {expandedContent}
           </div>
         ) : null}
 
@@ -340,12 +355,6 @@ function SimulationContextCard({
           >
             {expanded ? "Collapse Details" : "Expand Details"}
           </button>
-        ) : null}
-
-        {showToggle && expanded ? (
-          <div className="scenario-extra-content is-visible text-slate-200">
-            {expandedContent}
-          </div>
         ) : null}
       </div>
     </div>
@@ -1452,6 +1461,7 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Scenario Description"
                   summary={ensureSentencePunctuation(descriptionText)}
+                  collapsedSummary={ensureSentencePunctuation(descriptionText)}
                   expandable={false}
                 />
               )}
@@ -1459,7 +1469,8 @@ ${actionText}`;
               {objectiveText && (
                 <SimulationContextCard
                   title="Objective"
-                  summary={splitDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText)}
+                  summary={ensureSentencePunctuation(objectiveText)}
+                  collapsedSummary={splitDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText)}
                   expandedContent={
                     <div className="space-y-2">
                       {splitDisplayLines(objectiveText, 4).map((item, idx) => (
@@ -1476,7 +1487,8 @@ ${actionText}`;
               {openingScene && (
                 <SimulationContextCard
                   title="Opening Scene"
-                  summary={splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  summary={ensureSentencePunctuation(openingScene)}
+                  collapsedSummary={scenario.stakeholder || splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
                   previewText={ensureSentencePunctuation(openingScene)}
                   previewLabel="Play Scene"
                   fallbackPreview="Preview the HCP's first beat before you continue the live simulation."
@@ -1487,7 +1499,8 @@ ${actionText}`;
               {challengeItems.length > 0 && (
                 <SimulationContextCard
                   title="Key Challenges"
-                  summary={ensureSentencePunctuation(challengeItems[0])}
+                  summary={challengeItems.map(challenge => ensureSentencePunctuation(challenge)).join(" ")}
+                  collapsedSummary={ensureSentencePunctuation(challengeItems[0])}
                   expandedContent={
                     <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
                       {challengeItems.slice(0, 4).map((challenge, idx) => (
@@ -1502,6 +1515,7 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Opening Scene"
                   summary="No opening scene provided for this scenario."
+                  collapsedSummary="No opening scene provided for this scenario."
                   expandable={false}
                 />
               )}
@@ -1510,6 +1524,7 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Scenario Support"
                   summary="No scenario support details available."
+                  collapsedSummary="No scenario support details available."
                   expandable={false}
                 />
               )}
