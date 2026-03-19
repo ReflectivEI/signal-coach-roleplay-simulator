@@ -379,16 +379,36 @@ export default function Frameworks() {
   const [selectedFw, setSelectedFw] = useState(null);
 
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Selling and Coaching Frameworks</h1>
-        <p className="text-sm text-gray-600 mt-2 max-w-3xl leading-relaxed">
-          ReflectivAI is powered by Signal Intelligence — the ability to notice, interpret, and respond appropriately to observable signals during professional interactions.
-        </p>
-        <p className="text-sm text-gray-500 mt-1.5 max-w-3xl leading-relaxed">
-          Our AI highlights meaningful behavioral signals. Sales professionals apply judgment using demonstrated behavioral capabilities, communication models, and coaching tools that work in real conversations.
-        </p>
-      </div>
+    <div className="min-h-screen bg-slate-100/80">
+      <div className="p-6 md:p-8 max-w-6xl mx-auto">
+        <div className="mb-8 overflow-hidden rounded-[32px] border border-[#1A334D]/10 bg-[linear-gradient(135deg,#0f172a_0%,#1A334D_55%,#2c8d89_100%)] p-6 text-white shadow-[0_26px_70px_rgba(15,23,42,0.24)] md:p-7">
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr] lg:items-start">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-teal-200">Commercial Excellence Library</p>
+              <h1 className="mt-3 text-3xl font-bold md:text-[40px] md:leading-[1.05]">Selling and Coaching Frameworks</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200 md:text-base">
+                ReflectivAI is powered by Signal Intelligence — the ability to notice, interpret, and respond appropriately to observable signals during professional interactions.
+              </p>
+              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-300">
+                Our AI highlights meaningful behavioral signals. Sales professionals apply judgment using demonstrated behavioral capabilities, communication models, and coaching tools that work in real conversations.
+              </p>
+            </div>
+            <div className="rounded-[28px] border border-white/10 bg-white/8 p-5 backdrop-blur-sm">
+              <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-teal-100">Framework Stack</p>
+              <div className="mt-4 space-y-3">
+                {[
+                  "Signal Intelligence provides the observable behavior model.",
+                  "Behavioral models add communication lenses without replacing the score.",
+                  "Coaching tools turn the framework into repeatable field execution.",
+                ].map((item) => (
+                  <div key={item} className="rounded-2xl border border-white/10 bg-slate-950/20 px-4 py-3 text-sm leading-6 text-slate-100">
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
 
       {/* Pillars */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
@@ -406,8 +426,9 @@ export default function Frameworks() {
       </div>
 
       {/* Tabs */}
+        <div className="rounded-[28px] border border-[#1A334D]/10 bg-white p-5 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6 bg-gray-100">
+        <TabsList className="mb-6 h-auto flex-wrap gap-2 bg-gray-100 p-2">
           <TabsTrigger value="Behavioral Models" className="flex items-center gap-1.5 text-xs">
             <FileText className="w-3.5 h-3.5" /> Behavioral Models
           </TabsTrigger>
@@ -494,9 +515,11 @@ export default function Frameworks() {
           <CoachingToolsTab />
         </TabsContent>
       </Tabs>
+        </div>
 
       {/* Framework Detail Modal */}
       {selectedFw && <FrameworkDetailModal fw={selectedFw} onClose={() => setSelectedFw(null)} />}
+      </div>
     </div>
   );
 }
