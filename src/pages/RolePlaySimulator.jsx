@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import RolePlayChat from "@/components/roleplay/RolePlayChat";
+import ScenarioCard from "@/components/roleplay/ScenarioCard";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
@@ -472,14 +472,20 @@ export default function RolePlaySimulator() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#39ACAC" }}>Signal Intelligence™ Practice</p>
               <h1 className="text-3xl font-bold" style={{ color: "#1A334D" }}>Role-Play Simulator</h1>
-              <p className="text-sm text-gray-500 mt-1.5 max-w-xl">Practice realistic HCP conversations across disease states and stakeholder types. Each scenario provides targeted Signal Intelligence feedback.</p>
+              <p className="text-sm text-gray-500 mt-1.5 max-w-xl"><span className="block">Practice realistic HCP conversations across disease states and stakeholder types.</span><span className="block">Each scenario provides targeted Signal Intelligence feedback.</span></p>
             </div>
-            <div className="flex items-center gap-3 text-sm">
-              <div className="flex flex-col items-center bg-teal-50 border border-teal-100 rounded-xl px-5 py-3">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <button
+                className="inline-flex h-[58px] items-center rounded-full bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-5 shadow-sm"
+                onClick={() => setShowScenarioGenerator(true)}
+              >
+                + New Scenario
+              </button>
+              <div className="flex flex-col items-center justify-center bg-teal-50 border border-teal-100 rounded-xl px-5 py-3 min-w-[144px] min-h-[96px]">
                 <span className="text-2xl font-bold text-teal-600">{ALL_SCENARIOS.length}</span>
                 <span className="text-xs text-gray-500">Scenarios</span>
               </div>
-              <div className="flex flex-col items-center bg-navy-50 border border-gray-200 rounded-xl px-5 py-3">
+              <div className="flex flex-col items-center justify-center bg-navy-50 border border-gray-200 rounded-xl px-5 py-3 min-w-[144px] min-h-[96px]">
                 <span className="text-2xl font-bold" style={{ color: "#1A334D" }}>{CATEGORIES.length - 1}</span>
                 <span className="text-xs text-gray-500">Disease Areas</span>
               </div>
@@ -562,7 +568,7 @@ export default function RolePlaySimulator() {
         </div>
 
         {/* Category Pills */}
-        <div className="flex flex-wrap gap-2 mb-8">
+        <div className="flex flex-wrap gap-2 mb-6">
           {CATEGORIES.map(cat => (
             <button
               key={cat}
@@ -570,7 +576,7 @@ export default function RolePlaySimulator() {
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 activeCategory === cat
                   ? "text-white shadow-sm"
-                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-teal-700"
+                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:bg-teal-50 hover:text-teal-700"
               }`}
               style={activeCategory === cat ? { background: "#39ACAC", borderColor: "#1A334D" } : {}}
             >
@@ -582,28 +588,17 @@ export default function RolePlaySimulator() {
           ))}
         </div>
 
-        {/* Results count and AI Generate button */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-gray-500">
-            <span className="font-semibold text-gray-800">{filteredScenarios.length}</span> scenario{filteredScenarios.length !== 1 ? "s" : ""} found
-          </p>
-          <div className="flex gap-2">
+        {/* Filter actions */}
+        {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
+          <div className="mb-3 flex items-center gap-2">
             <button
-              className="bg-teal-500 hover:bg-teal-600 text-white text-xs font-semibold px-3 py-1 rounded-lg shadow-sm"
-              onClick={() => setShowScenarioGenerator(true)}
+              onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); }}
+              className="text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1"
             >
-              + New Scenario
+              <X className="w-3 h-3" /> Clear all filters
             </button>
-            {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
-              <button
-                onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); }}
-                className="text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1"
-              >
-                <X className="w-3 h-3" /> Clear all filters
-              </button>
-            )}
           </div>
-        </div>
+        )}
         {/* AI Scenario Generator Modal */}
         {showScenarioGenerator && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
@@ -655,8 +650,6 @@ function EnterpriseScenarioCard({ scenario }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typingText, setTypingText] = useState("");
-  const [isExiting, setIsExiting] = useState(false);
-  const [playing, setPlaying] = useState(false);
   const previewTimerRef = useRef(null);
   const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
   const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
@@ -689,17 +682,9 @@ function EnterpriseScenarioCard({ scenario }) {
     };
   }, [openingScene, previewing]);
 
-  const handleStartScenario = () => {
-    setIsExiting(true);
-    window.setTimeout(() => {
-      setPlaying(true);
-      setIsExiting(false);
-    }, 280);
-  };
-
   return (
     <>
-      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
+      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"}`}>
         <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
@@ -762,29 +747,22 @@ function EnterpriseScenarioCard({ scenario }) {
           )}
         </div>
 
-        <div className="px-5 pb-5 space-y-2">
+        <div className="px-5 pb-5 flex items-center gap-3">
           <button
             type="button"
             onClick={() => setExpanded(value => !value)}
             aria-pressed={expanded}
-            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-[#1A334D] bg-[#1A334D] text-white hover:border-[#39ACAC] hover:bg-[#16304A]"}`}
+            className={`inline-flex self-center items-center justify-center rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-teal-300 bg-teal-50 text-teal-700"}`}
           >
             {expanded ? "Collapse Details" : "Expand for Details"}
           </button>
-          {expanded && (
-            <button
-              type="button"
-              onClick={handleStartScenario}
-              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
-              style={{ background: "#1A334D" }}
-            >
-              Start Scenario
-            </button>
-          )}
+          <ScenarioCard
+            scenario={scenario}
+            renderAs="button-only"
+            buttonClassName="inline-flex w-auto self-center items-center justify-center rounded-full px-6 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
+          />
         </div>
       </div>
-
-      {playing && <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />}
     </>
   );
 }
