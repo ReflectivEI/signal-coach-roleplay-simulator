@@ -91,49 +91,41 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
 
   const handleAccept = () => {
     if (!preview) return;
-    // Validator: Ensure opening greeting contains warmth/empathy and business pivot
-    const opening = preview.description.match(/(Initial Greeting from the HCP:|Opening Scene:|Scene:)[^\n]*\n?/i);
-    if (opening) {
-      const openingText = opening[0].toLowerCase();
-      const hasWarmth = /welcome|glad|happy|thank|appreciate|good to see|hope|warm|empathy|understand|listening|open|friendly|support/i.test(openingText);
-      const hasPivot = /business|clinical|value|operational|let's discuss|talk about|focus on|agenda|objective|transition|pivot|professional/i.test(openingText);
-      if (!hasWarmth || !hasPivot) {
-        alert("Scenario opening must begin with warmth/empathy and then pivot to business. Please regenerate or edit.");
-        return;
-      }
-    }
     const challenge = params.challenge === "__custom__" ? params.custom_challenge : params.challenge;
 
     const stateArcText = preview.state_arc?.length > 0
-      ? `State Arc:\n${preview.state_arc.map(e =>
+      ? `State Arc:
+${preview.state_arc.map(e =>
         `• Turns ${e.turn_range} [${e.state}]: ${e.trigger} (${e.trigger_type}) — ${e.coaching_note}`
       ).join("\n")}`
       : "";
 
     const objectionText = preview.layered_objections?.length > 0
-      ? `Layered Objections:\n${preview.layered_objections.map((o, i) =>
+      ? `Layered Objections:
+${preview.layered_objections.map((o, i) =>
         `${i + 1}. "${o.objection}"\n   Underlying: ${o.underlying_concern}\n   Layer 3 (excellent): ${o.layer_3_response}`
       ).join("\n\n")}`
       : "";
 
-      onGenerated({
-        title: preview.title,
-        description: formatScenarioText(preview.description.replace(/\*/g, "")),
-        specialty: params.specialty,
-        disease_state: params.disease_state,
-        hcp_category: params.hcp_category,
-        difficulty: params.difficulty,
-        focus_capabilities: params.focus_capabilities,
-        details: [
-          preview.hcp_persona ? `HCP Persona: ${preview.hcp_persona}` : "",
-          preview.initial_state ? `Initial State: ${preview.initial_state} — ${preview.initial_state_rationale || ""}` : "",
-          stateArcText,
-          objectionText,
-          preview.dialogue_cues?.length > 0 ? `Opening Cues:\n${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
-          preview.details || "",
-          challenge ? `Core Challenge: ${challenge}` : "",
-        ].filter(Boolean).join("\n\n"),
-      });
+    onGenerated({
+      title: preview.title,
+      description: formatScenarioText(preview.description.replace(/\*/g, "")),
+      specialty: params.specialty,
+      disease_state: params.disease_state,
+      hcp_category: params.hcp_category,
+      difficulty: params.difficulty,
+      focus_capabilities: params.focus_capabilities,
+      details: [
+        preview.hcp_persona ? `HCP Persona: ${preview.hcp_persona}` : "",
+        preview.initial_state ? `Initial State: ${preview.initial_state} — ${preview.initial_state_rationale || ""}` : "",
+        stateArcText,
+        objectionText,
+        preview.dialogue_cues?.length > 0 ? `Opening Cues:
+${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
+        preview.details || "",
+        challenge ? `Core Challenge: ${challenge}` : "",
+      ].filter(Boolean).join("\n\n"),
+    });
   };
 
   const canGenerate = params.hcp_category || params.specialty || params.challenge;
