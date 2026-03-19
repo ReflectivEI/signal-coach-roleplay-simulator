@@ -756,16 +756,20 @@ function EnterpriseScenarioCard({ scenario }) {
           >
             {expanded ? "Collapse Details" : "Expand for Details"}
           </button>
-          {expanded && (
-            <button
-              type="button"
-              onClick={handleStartScenario}
-              className="inline-flex self-center items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
-              style={{ background: "#1A334D" }}
-            >
-              Start Scenario
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              setIsExiting(true);
+              window.setTimeout(() => {
+                setPlaying(true);
+                setIsExiting(false);
+              }, 280);
+            }}
+            className="inline-flex self-center items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
+            style={{ background: "#1A334D" }}
+          >
+            Start Scenario
+          </button>
         </div>
       </div>
     </>
