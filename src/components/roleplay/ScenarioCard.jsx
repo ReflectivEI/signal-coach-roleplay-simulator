@@ -33,7 +33,7 @@ function getOpeningScene(scenario) {
   return scenario.opening_scene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
 }
 
-export default function ScenarioCard({ scenario, renderAs }) {
+export default function ScenarioCard({ scenario, renderAs, onStart }) {
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const dc = getDifficultyVisuals(scenario.difficulty).style;
@@ -43,19 +43,17 @@ export default function ScenarioCard({ scenario, renderAs }) {
     ? formatScenarioText(scenario.description)
     : "";
 
-  // When used as "button-only" inside EnterpriseScenarioCard
+  // When used as "button-only", keep this branch purely presentational so
+  // fullscreen chat mounting stays owned by the parent layout.
   if (renderAs === "button-only") {
     return (
-      <>
-        <button
-          onClick={() => setPlaying(true)}
-          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
-          style={{ background: "#1A334D" }}
-        >
-          Start Scenario →
-        </button>
-        {playing && <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />}
-      </>
+      <button
+        onClick={onStart}
+        className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
+        style={{ background: "#1A334D" }}
+      >
+        Start Scenario →
+      </button>
     );
   }
 
