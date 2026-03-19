@@ -1,9 +1,9 @@
 // @ts-nocheck
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import ScenarioCard from "@/components/roleplay/ScenarioCard";
+import RolePlayChat from "@/components/roleplay/RolePlayChat";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
@@ -493,7 +493,7 @@ export default function RolePlaySimulator() {
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Select value={diseaseStateFilter} onValueChange={setDiseaseStateFilter}>
-              <SelectTrigger className="text-sm h-10 border-teal-300 focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC] focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Disease State" />
               </SelectTrigger>
               <SelectContent>
@@ -501,7 +501,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
-              <SelectTrigger className="text-sm h-10" style={specialtyFilter !== "All Specialties" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={specialtyFilter !== "All Specialties" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Specialty" />
               </SelectTrigger>
               <SelectContent>
@@ -509,7 +509,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={hcpCategoryFilter} onValueChange={setHcpCategoryFilter}>
-              <SelectTrigger className="text-sm h-10" style={hcpCategoryFilter !== "All HCP Types" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={hcpCategoryFilter !== "All HCP Types" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="HCP Category" />
               </SelectTrigger>
               <SelectContent>
@@ -517,7 +517,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={influenceDriverFilter} onValueChange={setInfluenceDriverFilter}>
-              <SelectTrigger className="text-sm h-10" style={influenceDriverFilter !== "All Influence Drivers" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={influenceDriverFilter !== "All Influence Drivers" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Influence Driver" />
               </SelectTrigger>
               <SelectContent>
@@ -569,10 +569,10 @@ export default function RolePlaySimulator() {
               onClick={() => setActiveCategory(cat)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 activeCategory === cat
-                  ? "border-transparent text-white shadow-sm"
-                  : "bg-white border-gray-200 text-gray-600 hover:border-teal-200 hover:text-teal-700"
+                  ? "text-white shadow-sm"
+                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-teal-700"
               }`}
-              style={activeCategory === cat ? { background: "#39ACAC" } : {}}
+              style={activeCategory === cat ? { background: "#39ACAC", borderColor: "#1A334D" } : {}}
             >
               {cat}
               <span className={`text-xs rounded-full px-1.5 py-0.5 font-bold ${activeCategory === cat ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
@@ -653,72 +653,138 @@ export default function RolePlaySimulator() {
 
 function EnterpriseScenarioCard({ scenario }) {
   const [expanded, setExpanded] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [typingText, setTypingText] = useState("");
+  const [isExiting, setIsExiting] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const previewTimerRef = useRef(null);
   const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
   const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
+  const openingScene = scenario.openingScene || "Preview the opening moment to hear how the HCP enters the conversation.";
+  const challengePreview = scenario.challenges?.slice(0, 3) || [];
+  const objectiveLines = String(scenario.objective || "")
+    .split(/;|•|\.|,/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  useEffect(() => {
+    if (!previewing) {
+      setTypingText("");
+      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
+      return undefined;
+    }
+
+    let index = 0;
+    previewTimerRef.current = window.setInterval(() => {
+      index += 1;
+      setTypingText(openingScene.slice(0, index));
+      if (index >= openingScene.length && previewTimerRef.current) {
+        window.clearInterval(previewTimerRef.current);
+      }
+    }, 18);
+
+    return () => {
+      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
+    };
+  }, [openingScene, previewing]);
+
+  const handleStartScenario = () => {
+    setIsExiting(true);
+    window.setTimeout(() => {
+      setPlaying(true);
+      setIsExiting(false);
+    }, 280);
+  };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 hover:border-teal-200 hover:shadow-xl hover:shadow-teal-50/50 transition-all duration-200 flex flex-col overflow-hidden group">
-      {/* Card Header Strip */}
-      <div className="px-5 pt-5 pb-4 flex-1 space-y-3">
-        {/* Title + Difficulty */}
-        <div className="flex items-start gap-2">
-          <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
-          <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex-shrink-0 ${diff.color}`}>{diff.label}</span>
-        </div>
-        <p className="text-xs text-gray-600 leading-relaxed">{scenario.description}</p>
-
-        {/* Expanded Details */}
-        {expanded && (
-          <div className="space-y-3 pt-1 border-t border-gray-100">
-            {/* Stakeholder */}
-            <div className="bg-gray-50 rounded-lg px-3 py-2">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">HCP</p>
-              <p className="text-xs text-gray-800 font-medium">{scenario.stakeholder}</p>
-            </div>
-            {/* Opening scene */}
-            {scenario.openingScene && (
-              <p className="text-xs text-gray-500 italic leading-relaxed">"{scenario.openingScene}"</p>
-            )}
-            {/* Objective */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Objective</p>
-              <p className="text-xs text-gray-700 leading-relaxed">{scenario.objective}</p>
-            </div>
-            {/* Challenges */}
-            {scenario.challenges?.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Key Challenges</p>
-                <div className="flex flex-wrap gap-1">
-                  {scenario.challenges.map((c, i) => (
-                    <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-0.5">{c}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Signal Capabilities */}
-            {scenario.focus_capabilities?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {scenario.focus_capabilities.map(cap => (
-                  <span key={cap} className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#e6f7f7", color: "#1A334D", border: "1px solid #b2e4e4" }}>
-                    {cap.replace(/_/g, " ")}
-                  </span>
-                ))}
-              </div>
-            )}
+    <>
+      <div className={`scenario-card bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
+        <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
+          <div className="flex items-start gap-2">
+            <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
+            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex-shrink-0 ${diff.color}`}>{diff.label}</span>
           </div>
-        )}
+
+          {expanded && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full border border-[#1A334D] px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
+                <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>
+              </div>
+
+              <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{scenario.description}</p>
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening scene</p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewing(value => !value)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-200 hover:border-teal-300 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                  >
+                    {previewing ? "Reset Preview" : "Play Scene"}
+                  </button>
+                </div>
+                <p className={`text-xs leading-relaxed text-slate-600 ${previewing ? "typing-preview" : ""}`}>
+                  {previewing ? typingText || " " : "Preview the HCP's first beat before you enter the live simulation."}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">HCP</p>
+                  <p className="text-xs text-gray-800 font-medium">{scenario.stakeholder}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Objective</p>
+                  <div className="space-y-1.5">
+                    {objectiveLines.map((line, index) => (
+                      <div key={index} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
+                        <span className="mt-[2px] h-1.5 w-1.5 rounded-full bg-teal-500 flex-shrink-0" />
+                        <span>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {challengePreview.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tactical focus</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {challengePreview.map((c, i) => (
+                        <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-1">{c}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="px-5 pb-5 space-y-2">
+          <button
+            type="button"
+            onClick={() => setExpanded(value => !value)}
+            aria-pressed={expanded}
+            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-[#1A334D] bg-[#1A334D] text-white hover:border-[#39ACAC] hover:bg-[#16304A]"}`}
+          >
+            {expanded ? "Collapse Details" : "Expand for Details"}
+          </button>
+          {expanded && (
+            <button
+              type="button"
+              onClick={handleStartScenario}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
+              style={{ background: "#1A334D" }}
+            >
+              Start Scenario
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* CTA Footer */}
-      <div className="px-5 pb-5 space-y-2">
-        <button
-          onClick={() => setExpanded(v => !v)}
-          className="w-full py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50 transition-all duration-150"
-        >
-          {expanded ? "Collapse Details" : "Expand for Details"}
-        </button>
-        <ScenarioCard scenario={scenario} renderAs="button-only" />
-      </div>
-    </div>
+      {playing && <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />}
+    </>
   );
 }
