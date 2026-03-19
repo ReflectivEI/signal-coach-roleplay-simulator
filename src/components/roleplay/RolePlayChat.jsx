@@ -358,6 +358,23 @@ function buildChallengeCoachingTip({ stakeholder, challengeHeadline, objectiveHe
   return toDisplaySentence(`Prepare to acknowledge ${challengeText} early, then steer ${stakeholderText} back to ${objectiveText} with a specific follow-up question`);
 }
 
+function abbreviateSpecialty(text) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  if (/internal medicine/i.test(value)) return "IM";
+  return value;
+}
+
+function buildBriefingHeadline(title, objectiveText) {
+  const conciseTitle = String(title || "").replace(/\bin\s+/i, ": ").trim();
+  const conciseObjective = getDistinctDisplayLines(objectiveText, 1)[0]
+    || "Identify and address the gap between STI testing and PrEP initiation.";
+  return {
+    title: conciseTitle,
+    subtitle: toDisplaySentence(conciseObjective),
+  };
+}
+
 function SimulationContextCard({
   title,
   summary,
@@ -369,6 +386,7 @@ function SimulationContextCard({
   collapsedSummary,
   expandedSummary,
   icon: Icon,
+  inlineTip,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -407,10 +425,21 @@ function SimulationContextCard({
   }, [expanded, previewText, previewing]);
 
   return (
-    <div className={`scenario-card scenario-context-card min-w-0 rounded-[26px] border border-white/10 bg-slate-950/18 p-3.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur-sm transition-all duration-200 ${expanded ? "scenario-card-expanded border-teal-300/60" : "min-h-[196px]"}`}>
-      <div className="flex h-full flex-col gap-3">
-        <div className="space-y-2.5">
-          <div className="flex items-start gap-3">
+    <div className={`scenario-card scenario-context-card min-w-0 rounded-[24px] border border-white/10 bg-slate-950/18 p-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur-sm transition-all duration-200 ${expanded ? "scenario-card-expanded border-teal-300/60" : "min-h-[132px]"}`}>
+      <div className="flex h-full flex-col gap-2.5">
+        <div className="space-y-2">
+          <div
+            className={`flex items-center gap-3 ${showToggle ? "cursor-pointer" : ""}`}
+            onClick={showToggle ? () => setExpanded(value => !value) : undefined}
+            role={showToggle ? "button" : undefined}
+            tabIndex={showToggle ? 0 : undefined}
+            onKeyDown={showToggle ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setExpanded(value => !value);
+              }
+            } : undefined}
+          >
             <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
               {Icon ? <Icon className="h-4.5 w-4.5 text-teal-300" /> : null}
             </div>
@@ -418,13 +447,14 @@ function SimulationContextCard({
               <p className="text-base font-bold uppercase tracking-[0.14em] text-teal-200">{title}</p>
             </div>
           </div>
-          <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "leading-7"}`}>{expanded ? expandedText : collapsedText}</p>
+          <p className="text-sm leading-6 text-slate-100">{expanded ? expandedText : collapsedText}</p>
+          {inlineTip ? <p className="text-xs italic leading-5 text-slate-300">💡 {inlineTip}</p> : null}
         </div>
 
         {previewText && expanded ? (
-          <div className="space-y-3">
-            <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3 md:flex-row md:items-center md:justify-between">
-              <p className="text-sm leading-6 text-slate-200">{fallbackPreview}</p>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2.5 md:flex-row md:items-center md:justify-between">
+              <p className="text-sm leading-5 text-slate-200">{fallbackPreview}</p>
               <button
                 type="button"
                 onClick={() => setPreviewing(value => !value)}
@@ -433,8 +463,8 @@ function SimulationContextCard({
                 {previewing ? "Reset Preview" : previewLabel}
               </button>
             </div>
-            <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-3 py-3">
-              <p className={`text-sm leading-6 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-3 py-2.5">
+              <p className={`text-sm leading-5 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
                 {previewing ? typedPreview || " " : "Press Play Scene to reveal the HCP’s opening beat."}
               </p>
             </div>
@@ -447,16 +477,128 @@ function SimulationContextCard({
           </div>
         ) : null}
 
-        {showToggle ? (
-          <button
-            type="button"
-            onClick={() => setExpanded(value => !value)}
-            aria-pressed={expanded}
-            className={`mt-auto rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-teal-400/70 bg-teal-400/10 text-teal-100 hover:border-teal-300 hover:bg-teal-400/15"}`}
-          >
-            {expanded ? "Collapse Details" : "Expand Details"}
-          </button>
-        ) : null}
+        {showToggle ? <p className="mt-auto text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">{expanded ? "Tap header to collapse" : "Tap header to expand"}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function RolePlayBriefingPanel({
+  scenario,
+  difficultyVisual,
+  briefingTitle,
+  descriptionText,
+  hcpProfileSummary,
+  objectiveText,
+  objectiveCoachingTip,
+  objectiveDetailLines,
+  openingScene,
+  openingSceneHeadline,
+  showOpeningSceneFallback,
+  challengeItems,
+  challengeCoachingTip,
+  challengeDetailLines,
+  showScenarioSupportFallback,
+  briefingSubtitle,
+}) {
+  return (
+    <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
+      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3 text-white shadow-xl">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(300px,1.12fr)_minmax(0,2.88fr)] xl:items-start">
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
+              <span>Role Play Intelligence Hub</span>
+              <span className="rounded-full border px-3 py-1 text-xs font-semibold capitalize" style={difficultyVisual.style}>
+                {scenario.difficulty}
+              </span>
+            </div>
+            <h3 className="text-[18px] font-bold leading-snug text-white md:text-[22px]">{briefingTitle}</h3>
+            <p className="max-w-[420px] text-sm leading-5 text-slate-200">{briefingSubtitle}</p>
+
+            {descriptionText && (
+              <SimulationContextCard
+                icon={CircleUserRound}
+                title="HCP Profile"
+                summary={hcpProfileSummary}
+                collapsedSummary={hcpProfileSummary}
+                expandable={false}
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 items-start gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+            {objectiveText && (
+              <SimulationContextCard
+                icon={Target}
+                title="Rep Objectives"
+                summary={objectiveCoachingTip}
+                collapsedSummary={objectiveCoachingTip}
+                inlineTip="Acknowledge clinical workload first."
+                expandedContent={objectiveDetailLines.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {objectiveDetailLines.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 text-sm leading-5">
+                        <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
+                        <span>{toDisplayBullet(item)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              />
+            )}
+
+            {openingScene && (
+              <SimulationContextCard
+                icon={Clapperboard}
+                title="Opening Scene"
+                summary={ensureSentencePunctuation(openingScene)}
+                collapsedSummary={openingSceneHeadline}
+                expandedSummary={openingSceneHeadline}
+                previewText={ensureSentencePunctuation(openingScene)}
+                previewLabel="Play Scene"
+                fallbackPreview="Preview the HCP’s opening beat before starting."
+                expandedContent={<div className="sr-only">Opening scene preview is available via Play Scene.</div>}
+              />
+            )}
+
+            {showOpeningSceneFallback && (
+              <SimulationContextCard
+                icon={Clapperboard}
+                title="Opening Scene"
+                summary="No opening scene provided for this scenario."
+                collapsedSummary="No opening scene provided for this scenario."
+                expandable={false}
+              />
+            )}
+
+            {challengeItems.length > 0 && (
+              <SimulationContextCard
+                icon={TriangleAlert}
+                title="Key Challenges"
+                summary={challengeCoachingTip}
+                collapsedSummary={challengeCoachingTip}
+                inlineTip="Use a follow-up to pivot back to the gap."
+                expandedContent={challengeDetailLines.length > 0 ? (
+                  <ul className="list-disc pl-4 text-sm leading-5 text-slate-100 space-y-1 marker:text-teal-300">
+                    {challengeDetailLines.map((challenge, idx) => (
+                      <li key={idx}>{toDisplayBullet(challenge)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              />
+            )}
+
+            {showScenarioSupportFallback && (
+              <SimulationContextCard
+                icon={Bot}
+                title="Scenario Support"
+                summary="No scenario support details available."
+                collapsedSummary="No scenario support details available."
+                expandable={false}
+              />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -722,38 +864,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (openingSceneSignature && lower.includes(openingSceneSignature)) return false;
       return true;
     });
-  const objectiveBaseItems = getDistinctDisplayLines(objectiveText, 6).map((item) => toDisplayBullet(item));
-  const normalizedChallengeItems = normalizeChallengeSet(challengeItems, 3);
-  const objectiveItems = ensureMinimumItems(objectiveBaseItems, [
-    normalizedChallengeItems[0] ? `Address ${normalizedChallengeItems[0].replace(/[.!?]$/, "").toLowerCase()}` : "",
-    "Confirm a practical next step before the conversation closes.",
-    openingScene ? `Respond directly to the opening cue in the scene: ${getDistinctDisplayLines(openingScene, 1)[0] || openingScene}` : "",
+  const briefingHeadline = buildBriefingHeadline(scenario.title, objectiveText);
+  const objectiveBaseItems = ensureMinimumItems(getDistinctDisplayLines(objectiveText, 6).map((item) => toDisplayBullet(item)), [
+    "Open with a concise value statement.",
+    "Link PrEP gaps to patient safety.",
+    "Address low candidate volume bias.",
   ], 3);
-  const objectiveHeadline = objectiveItems[0] || toDisplaySentence(objectiveText);
+  const normalizedChallengeItems = normalizeChallengeSet(challengeItems, 3);
+  const objectiveItems = objectiveBaseItems;
   const objectiveDetailLines = objectiveItems.slice(0, 3);
-  const challengeHeadline = normalizedChallengeItems[0] || "";
   const challengeDetailLines = ensureMinimumItems(normalizedChallengeItems, [
-    "Limited time for detailed discussion.",
-    "The HCP may hesitate to change the current workflow.",
-    "A clear follow-up plan may be difficult to secure in the moment.",
+    "Skepticism: Few patients are candidates.",
+    "Clinical: Renal safety and monitoring load.",
+    "Administrative: Prior auth and time constraints.",
   ], 3);
   const hcpProfileSummary = toDisplaySentence(
     scenario.specialty
-      ? `${scenario.specialty}${scenario.hcp_category ? ` (${scenario.hcp_category})` : ""} — ${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
+      ? `${scenario.stakeholder || "HCP"} (${abbreviateSpecialty(scenario.specialty)}) — ${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
       : `${scenario.hcp_category ? `(${scenario.hcp_category}) — ` : ""}${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
   );
-  const openingSceneHeadline = toDisplaySentence(scenario.stakeholder || getDistinctDisplayLines(openingScene, 1)[0] || openingScene || "No opening scene provided.");
-  const objectiveCoachingTip = buildObjectiveCoachingTip({
-    stakeholder: scenario.stakeholder || scenario.hcp_name || scenario.hcp_category,
-    objectiveHeadline,
-    challengeHeadline,
-    openingScene,
-  });
-  const challengeCoachingTip = buildChallengeCoachingTip({
-    stakeholder: scenario.stakeholder || scenario.hcp_name || scenario.hcp_category,
-    challengeHeadline,
-    objectiveHeadline,
-  });
+  const openingSceneHeadline = toDisplaySentence(`Setting: ${scenario.company || scenario.site_of_care || "Urban Clinic"}`);
+  const objectiveCoachingTip = objectiveItems.join(" ");
+  const challengeCoachingTip = challengeDetailLines.map((item) => item.replace(/[.!?]$/, "")).join(" • ");
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
   const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
@@ -1704,9 +1836,10 @@ ${actionText}`;
 
         {/* Scenario context summary */}
         {showScenarioContext && (
-          <ScenarioBriefingPanel
+          <RolePlayBriefingPanel
             scenario={scenario}
             difficultyVisual={difficultyVisual}
+            briefingTitle={briefingHeadline.title}
             descriptionText={descriptionText}
             hcpProfileSummary={hcpProfileSummary}
             objectiveText={objectiveText}
@@ -1719,6 +1852,7 @@ ${actionText}`;
             challengeCoachingTip={challengeCoachingTip}
             challengeDetailLines={challengeDetailLines}
             showScenarioSupportFallback={showScenarioSupportFallback}
+            briefingSubtitle={briefingHeadline.subtitle}
           />
         )}
 
