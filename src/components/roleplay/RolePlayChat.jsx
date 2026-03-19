@@ -890,6 +890,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : `${scenario.hcp_category ? `(${scenario.hcp_category}) — ` : ""}${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
   );
   const openingSceneHeadline = toDisplaySentence(`Setting: ${scenario.company || scenario.site_of_care || "Urban Clinic"}`);
+  const objectiveCoachingTip = "";
+  const challengeCoachingTip = "";
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
   const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
