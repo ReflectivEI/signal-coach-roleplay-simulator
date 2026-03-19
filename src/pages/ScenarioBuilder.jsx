@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 // ...existing code...
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Sparkles } from "lucide-react";
+import { Plus, Pencil, Trash2, Copy, Save, X, ChevronDown, ChevronUp, Tag, Sparkles, LayoutTemplate, ShieldCheck, Wand2 } from "lucide-react";
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import AIScenarioGenerator from "@/components/scenariobuilder/AIScenarioGenerator";
 
@@ -120,18 +120,37 @@ export default function ScenarioBuilder() {
   };
 
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto">
+    <div className="min-h-screen bg-slate-100/80">
+    <div className="p-6 md:p-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Scenario Builder</h1>
-          <p className="text-gray-500 text-sm mt-1">Create and manage role-play scenarios</p>
+      <div className="mb-8 overflow-hidden rounded-[32px] border border-[#1A334D]/10 bg-[linear-gradient(135deg,#0f172a_0%,#1A334D_52%,#1f766e_100%)] p-6 text-white shadow-[0_26px_70px_rgba(15,23,42,0.24)] md:p-7">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-teal-200">Scenario Design Studio</p>
+          <h1 className="mt-3 text-3xl font-bold md:text-[40px] md:leading-[1.05]">Scenario Builder</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200 md:text-base">Create and manage role-play scenarios with cleaner enterprise-grade containers while preserving existing simulator logic and scenario behavior.</p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              { icon: LayoutTemplate, label: "Structured briefs", value: `${scenarios.length} scenarios saved` },
+              { icon: Wand2, label: "Drafting modes", value: "Manual + AI generated" },
+              { icon: ShieldCheck, label: "Stability guard", value: "UI-only enhancement pass" },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/8 px-4 py-4 backdrop-blur-sm">
+                  <Icon className="h-5 w-5 text-teal-200" />
+                  <p className="mt-3 text-[11px] font-extrabold uppercase tracking-[0.18em] text-teal-100">{item.label}</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{item.value}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
         {editingId === null && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 self-start">
             <ButtonField
               variant="outline"
-              className="border-teal-300 text-teal-600 hover:bg-teal-50"
+              className="border-white/20 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={() => { setShowAIGenerator(!showAIGenerator); setEditingId(null); }}
             >
               <Sparkles className="w-4 h-4 mr-1" />
@@ -147,21 +166,25 @@ export default function ScenarioBuilder() {
           </div>
         )}
       </div>
+      </div>
 
       {/* AI Generator */}
       {showAIGenerator && editingId === null && (
-        <AIScenarioGeneratorField
-          onCancel={() => setShowAIGenerator(false)}
-          onGenerated={(generated) => {
-            setShowAIGenerator(false);
-            setEditingId("new");
-            setForm({ ...emptyForm, ...generated });
-          }}
-        />
+        <div className="mb-6 rounded-[28px] border border-teal-200/80 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <AIScenarioGeneratorField
+            onCancel={() => setShowAIGenerator(false)}
+            onGenerated={(generated) => {
+              setShowAIGenerator(false);
+              setEditingId("new");
+              setForm({ ...emptyForm, ...generated });
+            }}
+          />
+        </div>
       )}
 
       {editingId === null && (
-        <div className="mb-6 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="mb-6 rounded-[28px] border border-[#1A334D]/10 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+        <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-4 md:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-[#1A334D]">Need a custom scenario for your next simulation?</p>
             <p className="text-xs text-gray-600">Use + New Scenario for manual control, or AI Generate for a fast first draft you can refine.</p>
@@ -171,11 +194,12 @@ export default function ScenarioBuilder() {
             + New Scenario
           </ButtonField>
         </div>
+        </div>
       )}
 
       {/* Edit / New Form */}
       {editingId !== null && (
-        <div className="bg-white border border-teal-200 rounded-2xl p-6 mb-6 shadow-sm">
+        <div className="bg-white border border-[#1A334D]/10 rounded-[28px] p-6 mb-6 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-bold text-gray-900">{editingId === "new" ? "New Scenario" : "Edit Scenario"}</h2>
             <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600">
@@ -302,20 +326,20 @@ export default function ScenarioBuilder() {
 
       {/* Scenario List */}
       {isLoading ? (
-        <div className="space-y-3">
+        <div className="space-y-4 rounded-[28px] border border-[#1A334D]/10 bg-white p-4 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
           {Array(4).fill(0).map((_, i) => (
             <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />
           ))}
         </div>
       ) : scenarios.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="rounded-[28px] border border-dashed border-slate-300 bg-white py-16 text-center text-gray-400 shadow-[0_20px_55px_rgba(15,23,42,0.06)]">
           <p className="text-lg font-medium">No scenarios yet</p>
           <p className="text-sm mt-1">Click "New Scenario" to create your first one</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 rounded-[28px] border border-[#1A334D]/10 bg-white p-4 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
           {scenarios.map((s) => (
-            <div key={s.id} className={`bg-white border rounded-xl overflow-hidden transition-all ${editingId === s.id ? "border-teal-300" : "border-gray-200 hover:border-gray-300"}`}>
+            <div key={s.id} className={`border rounded-[24px] overflow-hidden transition-all bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] ${editingId === s.id ? "border-teal-300" : "border-gray-200 hover:border-gray-300"}`}>
               <div className="flex items-center gap-3 px-5 py-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -373,6 +397,7 @@ export default function ScenarioBuilder() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

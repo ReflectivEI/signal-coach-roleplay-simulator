@@ -90,8 +90,8 @@ function FaqItem({ item, idx: _idx }) {
 
 function InfoSection({ title, children }) {
   return (
-    <div className="mb-8">
-      <h2 className="text-base font-bold text-gray-900 mb-4 pb-2 border-b border-gray-100">{title}</h2>
+    <div className="mb-8 rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+      <h2 className="text-base font-bold text-gray-900 mb-4 pb-3 border-b border-gray-100">{title}</h2>
       {children}
     </div>
   );
@@ -147,7 +147,7 @@ Respond helpfully and conversationally. If they ask about Signal Intelligence, e
   };
 
   return (
-    <div className="flex flex-col h-[480px] bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="flex flex-col h-[480px] bg-white rounded-[24px] border border-slate-200 overflow-hidden shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
       <div className="px-4 py-3 border-b border-gray-100" style={{ background: "#1A334D" }}>
         <p className="text-sm font-semibold text-white">AI Coach — Help Center</p>
         <p className="text-xs" style={{ color: "#39ACAC" }}>Ask anything about the platform or Signal Intelligence™</p>
@@ -200,14 +200,28 @@ export default function HelpCenter() {
   const [activeSection, setActiveSection] = useState("platform");
 
   return (
+    <div className="min-h-screen bg-slate-100/80">
     <div className="p-6 md:p-8 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Help Center</h1>
-        <p className="text-sm text-gray-500 mt-1">Documentation, guidance, and AI-powered coaching support</p>
+      <div className="mb-8 overflow-hidden rounded-[32px] border border-[#1A334D]/10 bg-[linear-gradient(135deg,#0f172a_0%,#1A334D_55%,#2c8d89_100%)] p-6 text-white shadow-[0_26px_70px_rgba(15,23,42,0.24)] md:p-7">
+        <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-teal-200">Support + Enablement Hub</p>
+            <h1 className="mt-3 text-3xl font-bold md:text-[40px] md:leading-[1.05]">Help Center</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-200 md:text-base">Documentation, practical guidance, and AI-powered coaching support in one enterprise-grade reference workspace.</p>
+          </div>
+          <div className="rounded-[28px] border border-white/10 bg-white/8 p-5 backdrop-blur-sm">
+            <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-teal-100">What you can do here</p>
+            <div className="mt-4 space-y-3 text-sm leading-6 text-slate-100">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-4 py-3">Review platform guidance and scoring methodology.</div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-4 py-3">Navigate FAQs and operational best practices.</div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-4 py-3">Ask the built-in AI Coach for just-in-time support.</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-6 rounded-[28px] border border-[#1A334D]/10 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Featured Resources</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {RESOURCE_LINKS.map((link) => (
@@ -227,8 +241,8 @@ export default function HelpCenter() {
 
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Left Nav */}
-        <aside className="lg:w-52 flex-shrink-0">
-          <nav className="space-y-1 sticky top-6">
+        <aside className="lg:w-60 flex-shrink-0">
+          <nav className="space-y-1 sticky top-6 rounded-[24px] border border-[#1A334D]/10 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             {SECTIONS.map(s => (
               <motion.button
                 key={s.id}
@@ -369,6 +383,7 @@ export default function HelpCenter() {
           </AnimatePresence>
         </div>
       </div>
+    </div>
     </div>
   );
 }

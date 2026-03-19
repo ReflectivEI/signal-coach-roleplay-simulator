@@ -466,30 +466,34 @@ export default function RolePlaySimulator() {
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
       {/* Page Header */}
-      <div className="bg-white border-b border-gray-200 px-6 md:px-10 py-8">
+      <div className="px-6 md:px-10 py-8">
         <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#39ACAC" }}>Signal Intelligence™ Practice</p>
-              <h1 className="text-3xl font-bold" style={{ color: "#1A334D" }}>Role-Play Simulator</h1>
-              <p className="text-sm text-gray-500 mt-1.5 max-w-xl"><span className="block">Practice realistic HCP conversations across disease states and stakeholder types.</span><span className="block">Each scenario provides targeted Signal Intelligence feedback.</span></p>
+          <div className="overflow-hidden rounded-[32px] border border-[#1A334D]/10 bg-[linear-gradient(135deg,#0f172a_0%,#1A334D_54%,#2c8d89_100%)] px-6 py-7 text-white shadow-[0_26px_70px_rgba(15,23,42,0.24)] md:px-7">
+            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-extrabold uppercase tracking-[0.28em] mb-2 text-teal-200">Signal Intelligence™ Practice</p>
+              <h1 className="text-3xl font-bold md:text-[42px] md:leading-[1.04]">Role-Play Simulator</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-200 md:text-base">
+                Practice realistic HCP conversations across disease states and stakeholder types. Each scenario delivers targeted Signal Intelligence feedback in a cleaner enterprise-grade workspace.
+              </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm">
+            <div className="flex flex-wrap items-stretch gap-3 text-sm">
               <button
                 className="inline-flex h-[58px] items-center rounded-full bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-5 shadow-sm"
                 onClick={() => setShowScenarioGenerator(true)}
               >
                 + New Scenario
               </button>
-              <div className="flex flex-col items-center justify-center bg-teal-50 border border-teal-100 rounded-xl px-5 py-3 min-w-[144px] min-h-[96px]">
-                <span className="text-2xl font-bold text-teal-600">{ALL_SCENARIOS.length}</span>
-                <span className="text-xs text-gray-500">Scenarios</span>
+              <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
+                <span className="text-3xl font-bold text-white">{ALL_SCENARIOS.length}</span>
+                <span className="mt-1 text-xs uppercase tracking-[0.16em] text-teal-100">Scenarios</span>
               </div>
-              <div className="flex flex-col items-center justify-center bg-navy-50 border border-gray-200 rounded-xl px-5 py-3 min-w-[144px] min-h-[96px]">
-                <span className="text-2xl font-bold" style={{ color: "#1A334D" }}>{CATEGORIES.length - 1}</span>
-                <span className="text-xs text-gray-500">Disease Areas</span>
+              <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
+                <span className="text-3xl font-bold text-white">{CATEGORIES.length - 1}</span>
+                <span className="mt-1 text-xs uppercase tracking-[0.16em] text-teal-100">Disease Areas</span>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
