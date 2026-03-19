@@ -747,7 +747,7 @@ function EnterpriseScenarioCard({ scenario }) {
           )}
         </div>
 
-        <div className="px-5 pb-5 flex flex-wrap items-center gap-3">
+        <div className="px-5 pb-5 flex items-center gap-3">
           <button
             type="button"
             onClick={() => setExpanded(value => !value)}

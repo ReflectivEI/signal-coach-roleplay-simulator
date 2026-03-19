@@ -60,7 +60,7 @@ export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassN
       <>
         <button
           onClick={handleButtonOnlyStart}
-          className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md ${buttonClassName}`.trim()}
+          className={`inline-flex items-center justify-center py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md ${buttonClassName}`.trim()}
           style={{ background: "#1A334D" }}
         >
           Start Scenario →

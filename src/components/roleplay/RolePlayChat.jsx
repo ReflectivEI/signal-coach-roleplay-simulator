@@ -546,11 +546,16 @@ function RolePlayBriefingPanel({
 }) {
   return (
     <div className="px-3 md:px-4 pt-3 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
-      <div className="mb-3 flex flex-wrap items-center gap-3 px-1">
-        <h3 className="text-2xl font-bold text-[#1A334D]">{briefingTitle}</h3>
-        <span className="rounded-full border px-3 py-1 text-xs font-semibold capitalize" style={difficultyVisual.style}>
-          {scenario.difficulty}
-        </span>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-2xl font-bold text-[#1A334D]">{briefingTitle}</h3>
+          <span className="rounded-full border px-3 py-1 text-xs font-semibold capitalize" style={difficultyVisual.style}>
+            {scenario.difficulty}
+          </span>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
+          {renderTabPills()}
+        </div>
       </div>
 
       <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3 text-white shadow-xl">
@@ -1851,12 +1856,7 @@ ${actionText}`;
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
-          <div className="flex-1 min-w-0" />
-          <div className="ml-auto rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
-            {renderTabPills()}
-          </div>
-
+        <div className="flex items-center justify-end gap-2 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
           <div className="flex items-center gap-2 ml-1 flex-shrink-0">
             <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100">
               <X className="w-4 h-4" />
