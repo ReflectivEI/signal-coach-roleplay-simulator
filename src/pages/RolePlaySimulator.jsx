@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import RolePlayChat from "@/components/roleplay/RolePlayChat";
+import ScenarioCard from "@/components/roleplay/ScenarioCard";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
@@ -650,8 +650,6 @@ function EnterpriseScenarioCard({ scenario }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typingText, setTypingText] = useState("");
-  const [isExiting, setIsExiting] = useState(false);
-  const [playing, setPlaying] = useState(false);
   const previewTimerRef = useRef(null);
   const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
   const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
@@ -684,17 +682,9 @@ function EnterpriseScenarioCard({ scenario }) {
     };
   }, [openingScene, previewing]);
 
-  const handleStartScenario = () => {
-    setIsExiting(true);
-    window.setTimeout(() => {
-      setPlaying(true);
-      setIsExiting(false);
-    }, 280);
-  };
-
   return (
     <>
-      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
+      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} `}>
         <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
@@ -778,8 +768,6 @@ function EnterpriseScenarioCard({ scenario }) {
           )}
         </div>
       </div>
-
-      {playing && <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />}
     </>
   );
 }
