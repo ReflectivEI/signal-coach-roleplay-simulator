@@ -652,7 +652,7 @@ export default function RolePlaySimulator() {
 }
 
 function EnterpriseScenarioCard({ scenario }) {
-  const [expanded, setExpanded] = useState(false);
+  const [detailsCollapsed, setDetailsCollapsed] = useState(false);
   const [hoverExpanded, setHoverExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typingText, setTypingText] = useState("");
@@ -669,7 +669,8 @@ function EnterpriseScenarioCard({ scenario }) {
     .map(line => line.trim())
     .filter(Boolean)
     .slice(0, 3);
-  const isInteractiveExpanded = expanded || hoverExpanded;
+  const isInteractiveExpanded = !detailsCollapsed && hoverExpanded;
+  const showDetails = !detailsCollapsed;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -707,11 +708,19 @@ function EnterpriseScenarioCard({ scenario }) {
   };
 
   const handleMouseEnter = () => {
-    if (autoHoverEnabled.current) setHoverExpanded(true);
+    if (autoHoverEnabled.current && !detailsCollapsed) setHoverExpanded(true);
   };
 
   const handleMouseLeave = () => {
     if (autoHoverEnabled.current) setHoverExpanded(false);
+  };
+
+  const handleToggleDetails = () => {
+    setDetailsCollapsed(value => {
+      const next = !value;
+      if (next) setHoverExpanded(false);
+      return next;
+    });
   };
 
   return (
@@ -721,34 +730,36 @@ function EnterpriseScenarioCard({ scenario }) {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="px-5 pt-5 pb-4 flex-1 space-y-3">
+        <div className={`px-5 pt-5 ${showDetails ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex-shrink-0 ${diff.color}`}>{diff.label}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
-            <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>
-          </div>
-          <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{scenario.description}</p>
+          {showDetails && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
+                <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{scenario.description}</p>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening scene</p>
-              <button
-                type="button"
-                onClick={() => setPreviewing(value => !value)}
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-200 hover:border-teal-300 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-              >
-                {previewing ? "Reset Preview" : "Play Scene"}
-              </button>
-            </div>
-            <p className={`text-xs leading-relaxed text-slate-600 ${previewing ? "typing-preview" : ""}`}>
-              {previewing ? typingText || " " : "Preview the HCP's first beat before you enter the live simulation."}
-            </p>
-          </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening scene</p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewing(value => !value)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-200 hover:border-teal-300 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+                  >
+                    {previewing ? "Reset Preview" : "Play Scene"}
+                  </button>
+                </div>
+                <p className={`text-xs leading-relaxed text-slate-600 ${previewing ? "typing-preview" : ""}`}>
+                  {previewing ? typingText || " " : "Preview the HCP's first beat before you enter the live simulation."}
+                </p>
+              </div>
 
-          <div className={`scenario-extra-content space-y-3 ${isInteractiveExpanded ? "is-visible" : ""}`}>
+              <div className={`scenario-extra-content space-y-3 ${isInteractiveExpanded ? "is-visible" : ""}`}>
             <div className="bg-gray-50 rounded-lg px-3 py-2">
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">HCP</p>
               <p className="text-xs text-gray-800 font-medium">{scenario.stakeholder}</p>
@@ -764,36 +775,40 @@ function EnterpriseScenarioCard({ scenario }) {
                 ))}
               </div>
             </div>
-            {challengePreview.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tactical focus</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {challengePreview.map((c, i) => (
-                    <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-1">{c}</span>
-                  ))}
-                </div>
+                {challengePreview.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tactical focus</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {challengePreview.map((c, i) => (
+                        <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-1">{c}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         <div className="px-5 pb-5 space-y-2">
           <button
             type="button"
-            onClick={() => setExpanded(v => !v)}
-            aria-pressed={isInteractiveExpanded}
-            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${isInteractiveExpanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-gray-200 text-gray-700 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50"}`}
+            onClick={handleToggleDetails}
+            aria-pressed={!detailsCollapsed}
+            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${showDetails ? "border-teal-300 bg-teal-50 text-teal-700" : "border-gray-200 text-gray-700 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50"}`}
           >
-            {isInteractiveExpanded ? "Collapse Details" : "Expand for Details"}
+            {showDetails ? "Collapse Details" : "Expand for Details"}
           </button>
-          <button
-            type="button"
-            onClick={handleStartScenario}
-            className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
-            style={{ background: "#1A334D" }}
-          >
-            Start Scenario
-          </button>
+          {showDetails && (
+            <button
+              type="button"
+              onClick={handleStartScenario}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
+              style={{ background: "#1A334D" }}
+            >
+              Start Scenario
+            </button>
+          )}
         </div>
       </div>
 
