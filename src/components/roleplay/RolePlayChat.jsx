@@ -13,6 +13,7 @@ import {
   Target,
   Clapperboard,
   TriangleAlert,
+  CornerRightUp,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
@@ -365,13 +366,11 @@ function abbreviateSpecialty(text) {
   return value;
 }
 
-function buildBriefingHeadline(title, objectiveText) {
+function buildBriefingHeadline(title) {
   const conciseTitle = String(title || "").replace(/\bin\s+/i, ": ").trim();
-  const conciseObjective = getDistinctDisplayLines(objectiveText, 1)[0]
-    || "Identify and address the gap between STI testing and PrEP initiation.";
   return {
     title: conciseTitle,
-    subtitle: toDisplaySentence(conciseObjective),
+    subtitle: "",
   };
 }
 
@@ -447,7 +446,7 @@ function SimulationContextCard({
               <p className="text-base font-bold uppercase tracking-[0.14em] text-teal-200">{title}</p>
             </div>
           </div>
-          <p className="text-sm leading-6 text-slate-100">{expanded ? expandedText : collapsedText}</p>
+          {expanded ? expandedText : collapsedText ? <p className="text-sm leading-6 text-slate-100">{expanded ? expandedText : collapsedText}</p> : null}
           {inlineTip ? <p className="text-xs italic leading-5 text-slate-300">💡 {inlineTip}</p> : null}
         </div>
 
@@ -477,7 +476,12 @@ function SimulationContextCard({
           </div>
         ) : null}
 
-        {showToggle ? <p className="mt-auto text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-200/80">{expanded ? "Tap header to collapse" : "Tap header to expand"}</p> : null}
+        {showToggle ? (
+          <div className="mt-auto inline-flex items-center gap-1.5 self-start rounded-full border border-teal-300/25 bg-teal-300/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-100 shadow-[0_0_0_1px_rgba(45,212,191,0.08)]">
+            <CornerRightUp className={`h-3.5 w-3.5 transition-transform duration-200 ${expanded ? "rotate-90" : ""}`} />
+            <span>{expanded ? "Tap header to collapse" : "Tap header to expand"}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -505,7 +509,7 @@ function RolePlayBriefingPanel({
     <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
       <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3 text-white shadow-xl">
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(300px,1.12fr)_minmax(0,2.88fr)] xl:items-start">
-          <div className="space-y-2.5">
+          <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
               <span>Role Play Intelligence Hub</span>
               <span className="rounded-full border px-3 py-1 text-xs font-semibold capitalize" style={difficultyVisual.style}>
@@ -513,7 +517,7 @@ function RolePlayBriefingPanel({
               </span>
             </div>
             <h3 className="text-[18px] font-bold leading-snug text-white md:text-[22px]">{briefingTitle}</h3>
-            <p className="max-w-[420px] text-sm leading-5 text-slate-200">{briefingSubtitle}</p>
+            {briefingSubtitle ? <p className="max-w-[420px] text-sm leading-5 text-slate-200">{briefingSubtitle}</p> : null}
 
             {descriptionText && (
               <SimulationContextCard
@@ -531,9 +535,9 @@ function RolePlayBriefingPanel({
               <SimulationContextCard
                 icon={Target}
                 title="Rep Objectives"
-                summary={objectiveCoachingTip}
-                collapsedSummary={objectiveCoachingTip}
-                inlineTip="Acknowledge clinical workload first."
+                summary=""
+                collapsedSummary=""
+                inlineTip="TIP: Acknowledge clinical workload first."
                 expandedContent={objectiveDetailLines.length > 0 ? (
                   <div className="space-y-1.5">
                     {objectiveDetailLines.map((item, idx) => (
@@ -575,9 +579,9 @@ function RolePlayBriefingPanel({
               <SimulationContextCard
                 icon={TriangleAlert}
                 title="Key Challenges"
-                summary={challengeCoachingTip}
-                collapsedSummary={challengeCoachingTip}
-                inlineTip="Use a follow-up to pivot back to the gap."
+                summary=""
+                collapsedSummary=""
+                inlineTip="TIP: Use a follow-up to pivot back to the gap."
                 expandedContent={challengeDetailLines.length > 0 ? (
                   <ul className="list-disc pl-4 text-sm leading-5 text-slate-100 space-y-1 marker:text-teal-300">
                     {challengeDetailLines.map((challenge, idx) => (
@@ -864,7 +868,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (openingSceneSignature && lower.includes(openingSceneSignature)) return false;
       return true;
     });
-  const briefingHeadline = buildBriefingHeadline(scenario.title, objectiveText);
+  const briefingHeadline = buildBriefingHeadline(scenario.title);
   const objectiveBaseItems = ensureMinimumItems(getDistinctDisplayLines(objectiveText, 6).map((item) => toDisplayBullet(item)), [
     "Open with a concise value statement.",
     "Link PrEP gaps to patient safety.",
@@ -884,8 +888,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : `${scenario.hcp_category ? `(${scenario.hcp_category}) — ` : ""}${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
   );
   const openingSceneHeadline = toDisplaySentence(`Setting: ${scenario.company || scenario.site_of_care || "Urban Clinic"}`);
-  const objectiveCoachingTip = objectiveItems.join(" ");
-  const challengeCoachingTip = challengeDetailLines.map((item) => item.replace(/[.!?]$/, "")).join(" • ");
+  const objectiveCoachingTip = "";
+  const challengeCoachingTip = "";
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
   const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
