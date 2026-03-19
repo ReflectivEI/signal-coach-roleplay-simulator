@@ -305,8 +305,8 @@ function SimulationContextCard({
   }, [previewText, previewing]);
 
   return (
-    <div className={`scenario-card scenario-context-card min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
-      <div className="flex h-full flex-col gap-4">
+    <div className={`scenario-card scenario-context-card self-start min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
+      <div className="flex flex-col gap-4">
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">{title}</p>
@@ -1447,7 +1447,7 @@ ${actionText}`;
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 pt-2 pb-1 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 items-start gap-2 md:grid-cols-2 lg:grid-cols-4">
               {descriptionText && (
                 <SimulationContextCard
                   title="Scenario Description"

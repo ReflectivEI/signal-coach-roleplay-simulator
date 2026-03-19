@@ -627,14 +627,14 @@ export default function RolePlaySimulator() {
 
         {/* Scenario Grid */}
         {customScenario ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3 gap-5">
             <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />
             {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
         ) : filteredScenarios.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
@@ -699,7 +699,7 @@ function EnterpriseScenarioCard({ scenario }) {
 
   return (
     <>
-      <div className={`scenario-card bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
+      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
         <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
