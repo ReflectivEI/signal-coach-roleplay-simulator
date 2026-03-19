@@ -576,7 +576,7 @@ export default function RolePlaySimulator() {
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 activeCategory === cat
                   ? "text-white shadow-sm"
-                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-teal-700"
+                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:bg-teal-50 hover:text-teal-700"
               }`}
               style={activeCategory === cat ? { background: "#39ACAC", borderColor: "#1A334D" } : {}}
             >
@@ -684,7 +684,7 @@ function EnterpriseScenarioCard({ scenario }) {
 
   return (
     <>
-      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} `}>
+      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"}`}>
         <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
@@ -747,29 +747,20 @@ function EnterpriseScenarioCard({ scenario }) {
           )}
         </div>
 
-        <div className="px-5 pb-5 space-y-2">
+        <div className="px-5 pb-5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={() => setExpanded(value => !value)}
             aria-pressed={expanded}
-            className={`inline-flex self-center items-center justify-center rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-teal-300 bg-teal-50 text-teal-700 hover:border-teal-400 hover:bg-teal-100"}`}
+            className={`inline-flex self-center items-center justify-center rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-teal-300 bg-teal-50 text-teal-700"}`}
           >
             {expanded ? "Collapse Details" : "Expand for Details"}
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsExiting(true);
-              window.setTimeout(() => {
-                setPlaying(true);
-                setIsExiting(false);
-              }, 280);
-            }}
-            className="inline-flex self-center items-center justify-center rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-all duration-200 hover:opacity-90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
-            style={{ background: "#1A334D" }}
-          >
-            Start Scenario
-          </button>
+          <ScenarioCard
+            scenario={scenario}
+            renderAs="button-only"
+            buttonClassName="inline-flex w-auto self-center items-center justify-center rounded-full px-6 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
+          />
         </div>
       </div>
     </>

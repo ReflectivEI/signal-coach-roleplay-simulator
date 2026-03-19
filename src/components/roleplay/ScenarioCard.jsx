@@ -34,7 +34,7 @@ function getOpeningScene(scenario) {
   return scenario.opening_scene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
 }
 
-export default function ScenarioCard({ scenario, renderAs, onStart }) {
+export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassName = "" }) {
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const dc = getDifficultyVisuals(scenario.difficulty).style;
@@ -60,7 +60,7 @@ export default function ScenarioCard({ scenario, renderAs, onStart }) {
       <>
         <button
           onClick={handleButtonOnlyStart}
-          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
+          className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md ${buttonClassName}`.trim()}
           style={{ background: "#1A334D" }}
         >
           Start Scenario →
