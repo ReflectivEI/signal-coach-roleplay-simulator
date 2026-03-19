@@ -652,7 +652,7 @@ export default function RolePlaySimulator() {
 }
 
 function EnterpriseScenarioCard({ scenario }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typingText, setTypingText] = useState("");
   const [isExiting, setIsExiting] = useState(false);
