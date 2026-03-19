@@ -369,7 +369,6 @@ function SimulationContextCard({
   collapsedSummary,
   expandedSummary,
   icon: Icon,
-  panelEyebrow,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -408,16 +407,15 @@ function SimulationContextCard({
   }, [expanded, previewText, previewing]);
 
   return (
-    <div className={`scenario-card scenario-context-card min-w-0 rounded-[26px] border border-white/10 bg-slate-950/18 p-4 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur-sm transition-all duration-200 ${expanded ? "scenario-card-expanded border-teal-300/60" : "min-h-[232px]"}`}>
-      <div className="flex h-full flex-col gap-4">
-        <div className="space-y-3">
+    <div className={`scenario-card scenario-context-card min-w-0 rounded-[26px] border border-white/10 bg-slate-950/18 p-3.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_36px_rgba(15,23,42,0.18)] backdrop-blur-sm transition-all duration-200 ${expanded ? "scenario-card-expanded border-teal-300/60" : "min-h-[196px]"}`}>
+      <div className="flex h-full flex-col gap-3">
+        <div className="space-y-2.5">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
               {Icon ? <Icon className="h-4.5 w-4.5 text-teal-300" /> : null}
             </div>
             <div className="min-w-0">
-              {panelEyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-200/90">{panelEyebrow}</p> : null}
-              <p className="mt-1 text-base font-bold uppercase tracking-[0.14em] text-teal-200">{title}</p>
+              <p className="text-base font-bold uppercase tracking-[0.14em] text-teal-200">{title}</p>
             </div>
           </div>
           <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "leading-7"}`}>{expanded ? expandedText : collapsedText}</p>
@@ -617,7 +615,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     "The HCP may hesitate to change the current workflow.",
     "A clear follow-up plan may be difficult to secure in the moment.",
   ], 3);
-  const hcpProfileSummary = toDisplaySentence(descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP.");
+  const hcpProfileSummary = toDisplaySentence(
+    scenario.specialty
+      ? `${scenario.specialty} — ${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
+      : (descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP.")
+  );
   const openingSceneHeadline = toDisplaySentence(scenario.stakeholder || getDistinctDisplayLines(openingScene, 1)[0] || openingScene || "No opening scene provided.");
   const objectiveCoachingTip = buildObjectiveCoachingTip({
     stakeholder: scenario.stakeholder || scenario.hcp_name || scenario.hcp_category,
@@ -630,7 +632,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     challengeHeadline,
     objectiveHeadline,
   });
-  const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
+  const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const scenarioKeywords = extractScenarioKeywords(scenario);
 
   useEffect(() => {
@@ -1558,19 +1560,10 @@ ${actionText}`;
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-bold text-slate-900 text-[18px] md:text-[22px] leading-snug">{scenario.title}</h2>
-              <span className={`text-xs px-2.5 py-0.5 rounded-full border font-semibold capitalize ${difficultyStyle}`}>{scenario.difficulty}</span>
-              {/* State label removed as requested */}
-            </div>
-            <div className="mt-0.5 flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-xs text-slate-700">{scenario.hcp_category} · {scenario.specialty}</p>
-              <div className="ml-auto rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
-                {renderTabPills()}
-              </div>
-            </div>
+        <div className="flex items-center justify-between gap-3 px-3 md:px-5 py-2 border-b flex-shrink-0 bg-white">
+          <div className="flex-1 min-w-0" />
+          <div className="ml-auto rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
+            {renderTabPills()}
           </div>
 
           <div className="flex items-center gap-2 ml-1 flex-shrink-0">
@@ -1587,15 +1580,26 @@ ${actionText}`;
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
-            <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-4 text-white shadow-xl">
-              <div className="mb-4 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+            <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3.5 text-white shadow-xl">
+              <div className="mb-3 flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-3xl">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
                     <span>Role Play Intelligence Hub</span>
                     <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] tracking-[0.18em] text-white/85">Scenario Briefing</span>
+                    <span
+                      className="rounded-full border px-3 py-1 text-xs font-semibold capitalize"
+                      style={difficultyVisual.style}
+                    >
+                      {scenario.difficulty}
+                    </span>
                   </div>
-                  <h3 className="mt-2 text-xl font-bold md:text-2xl">High-context briefing built for focused role play execution.</h3>
-                  <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-200">
+                  <h3 className="mt-2 text-[18px] font-bold leading-snug text-white md:text-[22px]">{scenario.title}</h3>
+                  {scenario.hcp_category ? (
+                    <p className="mt-1 text-xs font-medium text-slate-300">
+                      ({scenario.hcp_category})
+                    </p>
+                  ) : null}
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
                     Review the HCP profile, align to the rep objectives, preview the opening scene, and anticipate the three most relevant challenge themes before you continue the live simulation.
                   </p>
                 </div>
@@ -1604,7 +1608,6 @@ ${actionText}`;
               {descriptionText && (
                 <SimulationContextCard
                   icon={CircleUserRound}
-                  panelEyebrow="Insight Hub"
                   title="HCP Profile"
                   summary={hcpProfileSummary}
                   collapsedSummary={hcpProfileSummary}
@@ -1615,7 +1618,6 @@ ${actionText}`;
               {objectiveText && (
                 <SimulationContextCard
                   icon={Target}
-                  panelEyebrow="Remediation Hub"
                   title="Rep Objectives"
                   summary={objectiveCoachingTip}
                   collapsedSummary={objectiveCoachingTip}
@@ -1635,7 +1637,6 @@ ${actionText}`;
               {openingScene && (
                 <SimulationContextCard
                   icon={Clapperboard}
-                  panelEyebrow="Scene Preview"
                   title="Opening Scene"
                   summary={ensureSentencePunctuation(openingScene)}
                   collapsedSummary={openingSceneHeadline}
@@ -1650,7 +1651,6 @@ ${actionText}`;
               {challengeItems.length > 0 && (
                 <SimulationContextCard
                   icon={TriangleAlert}
-                  panelEyebrow="Leadership / Export Hub"
                   title="Key Challenges"
                   summary={challengeCoachingTip}
                   collapsedSummary={challengeCoachingTip}
@@ -1667,7 +1667,6 @@ ${actionText}`;
               {!openingScene && objectiveText && (
                 <SimulationContextCard
                   icon={Clapperboard}
-                  panelEyebrow="Scene Preview"
                   title="Opening Scene"
                   summary="No opening scene provided for this scenario."
                   collapsedSummary="No opening scene provided for this scenario."
@@ -1678,7 +1677,6 @@ ${actionText}`;
               {challengeItems.length === 0 && !openingScene && !objectiveText && (
                 <SimulationContextCard
                   icon={Bot}
-                  panelEyebrow="Support"
                   title="Scenario Support"
                   summary="No scenario support details available."
                   collapsedSummary="No scenario support details available."
