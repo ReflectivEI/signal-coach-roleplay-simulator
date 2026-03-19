@@ -462,6 +462,128 @@ function SimulationContextCard({
   );
 }
 
+function ScenarioBriefingPanel({
+  scenario,
+  difficultyVisual,
+  descriptionText,
+  hcpProfileSummary,
+  objectiveText,
+  objectiveCoachingTip,
+  objectiveDetailLines,
+  openingScene,
+  openingSceneHeadline,
+  showOpeningSceneFallback,
+  challengeItems,
+  challengeCoachingTip,
+  challengeDetailLines,
+  showScenarioSupportFallback,
+}) {
+  return (
+    <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
+      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3.5 text-white shadow-xl">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(300px,1.12fr)_minmax(0,2.88fr)] xl:items-start">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
+              <span>Role Play Intelligence Hub</span>
+              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] tracking-[0.18em] text-white/85">Scenario Briefing</span>
+              <span className="rounded-full border px-3 py-1 text-xs font-semibold capitalize" style={difficultyVisual.style}>
+                {scenario.difficulty}
+              </span>
+            </div>
+            <h3 className="mt-2 text-[18px] font-bold leading-snug text-white md:text-[22px]">{scenario.title}</h3>
+            <div className="max-w-[520px] text-sm leading-6 text-slate-200">
+              <span className="block">Review the HCP profile, align to the rep objectives,</span>
+              <span className="block">preview the opening scene, and anticipate the three most</span>
+              <span className="block">relevant challenge themes before you continue the live simulation.</span>
+            </div>
+
+            {descriptionText && (
+              <SimulationContextCard
+                icon={CircleUserRound}
+                title="HCP Profile"
+                summary={hcpProfileSummary}
+                collapsedSummary={hcpProfileSummary}
+                expandable={false}
+              />
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {objectiveText && (
+              <SimulationContextCard
+                icon={Target}
+                title="Rep Objectives"
+                summary={objectiveCoachingTip}
+                collapsedSummary={objectiveCoachingTip}
+                expandedContent={objectiveDetailLines.length > 0 ? (
+                  <div className="space-y-2">
+                    {objectiveDetailLines.map((item, idx) => (
+                      <div key={idx} className="flex gap-2 text-sm leading-6">
+                        <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
+                        <span>{toDisplayBullet(item)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              />
+            )}
+
+            {openingScene && (
+              <SimulationContextCard
+                icon={Clapperboard}
+                title="Opening Scene"
+                summary={ensureSentencePunctuation(openingScene)}
+                collapsedSummary={openingSceneHeadline}
+                expandedSummary={openingSceneHeadline}
+                previewText={ensureSentencePunctuation(openingScene)}
+                previewLabel="Play Scene"
+                fallbackPreview="Preview the HCP’s first beat before you continue the live simulation."
+                expandedContent={<div className="sr-only">Opening scene preview is available via Play Scene.</div>}
+              />
+            )}
+
+            {showOpeningSceneFallback && (
+              <SimulationContextCard
+                icon={Clapperboard}
+                title="Opening Scene"
+                summary="No opening scene provided for this scenario."
+                collapsedSummary="No opening scene provided for this scenario."
+                expandable={false}
+              />
+            )}
+
+            {challengeItems.length > 0 && (
+              <SimulationContextCard
+                icon={TriangleAlert}
+                title="Key Challenges"
+                summary={challengeCoachingTip}
+                collapsedSummary={challengeCoachingTip}
+                expandedContent={challengeDetailLines.length > 0 ? (
+                  <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
+                    {challengeDetailLines.map((challenge, idx) => (
+                      <li key={idx}>{toDisplayBullet(challenge)}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              />
+            )}
+
+            {showScenarioSupportFallback && (
+              <SimulationContextCard
+                icon={Bot}
+                title="Scenario Support"
+                summary="No scenario support details available."
+                collapsedSummary="No scenario support details available."
+                expandable={false}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function deterministicIndex(seedText, total) {
   if (!total) return 0;
   const seed = String(seedText || "");
@@ -617,8 +739,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   ], 3);
   const hcpProfileSummary = toDisplaySentence(
     scenario.specialty
-      ? `${scenario.specialty} — ${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
-      : (descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP.")
+      ? `${scenario.specialty}${scenario.hcp_category ? ` (${scenario.hcp_category})` : ""} — ${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
+      : `${scenario.hcp_category ? `(${scenario.hcp_category}) — ` : ""}${descriptionText || scenario.context || scenario.stakeholder || "Profile details are not available for this HCP."}`
   );
   const openingSceneHeadline = toDisplaySentence(scenario.stakeholder || getDistinctDisplayLines(openingScene, 1)[0] || openingScene || "No opening scene provided.");
   const objectiveCoachingTip = buildObjectiveCoachingTip({
@@ -633,6 +755,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     objectiveHeadline,
   });
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
+  const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
+  const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
+  const showScenarioSupportFallback = challengeItems.length === 0 && !openingScene && !objectiveText;
   const scenarioKeywords = extractScenarioKeywords(scenario);
 
   useEffect(() => {
@@ -1578,117 +1703,26 @@ ${actionText}`;
 
 
         {/* Scenario context summary */}
-        {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
-          <div className="px-3 md:px-4 pt-2 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
-            <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-3.5 text-white shadow-xl">
-              <div className="mb-3 flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
-                <div className="max-w-3xl">
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
-                    <span>Role Play Intelligence Hub</span>
-                    <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] tracking-[0.18em] text-white/85">Scenario Briefing</span>
-                    <span
-                      className="rounded-full border px-3 py-1 text-xs font-semibold capitalize"
-                      style={difficultyVisual.style}
-                    >
-                      {scenario.difficulty}
-                    </span>
-                  </div>
-                  <h3 className="mt-2 text-[18px] font-bold leading-snug text-white md:text-[22px]">{scenario.title}</h3>
-                  {scenario.hcp_category ? (
-                    <p className="mt-1 text-xs font-medium text-slate-300">
-                      ({scenario.hcp_category})
-                    </p>
-                  ) : null}
-                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
-                    Review the HCP profile, align to the rep objectives, preview the opening scene, and anticipate the three most relevant challenge themes before you continue the live simulation.
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {descriptionText && (
-                <SimulationContextCard
-                  icon={CircleUserRound}
-                  title="HCP Profile"
-                  summary={hcpProfileSummary}
-                  collapsedSummary={hcpProfileSummary}
-                  expandable={false}
-                />
-              )}
-
-              {objectiveText && (
-                <SimulationContextCard
-                  icon={Target}
-                  title="Rep Objectives"
-                  summary={objectiveCoachingTip}
-                  collapsedSummary={objectiveCoachingTip}
-                  expandedContent={objectiveDetailLines.length > 0 ? (
-                    <div className="space-y-2">
-                      {objectiveDetailLines.map((item, idx) => (
-                        <div key={idx} className="flex gap-2 text-sm leading-6">
-                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
-                          <span>{toDisplayBullet(item)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                />
-              )}
-
-              {openingScene && (
-                <SimulationContextCard
-                  icon={Clapperboard}
-                  title="Opening Scene"
-                  summary={ensureSentencePunctuation(openingScene)}
-                  collapsedSummary={openingSceneHeadline}
-                  expandedSummary={openingSceneHeadline}
-                  previewText={ensureSentencePunctuation(openingScene)}
-                  previewLabel="Play Scene"
-                  fallbackPreview="Preview the HCP’s first beat before you continue the live simulation."
-                  expandedContent={<div className="sr-only">Opening scene preview is available via Play Scene.</div>}
-                />
-              )}
-
-              {challengeItems.length > 0 && (
-                <SimulationContextCard
-                  icon={TriangleAlert}
-                  title="Key Challenges"
-                  summary={challengeCoachingTip}
-                  collapsedSummary={challengeCoachingTip}
-                  expandedContent={challengeDetailLines.length > 0 ? (
-                    <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
-                      {challengeDetailLines.map((challenge, idx) => (
-                        <li key={idx}>{toDisplayBullet(challenge)}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                />
-              )}
-
-              {!openingScene && objectiveText && (
-                <SimulationContextCard
-                  icon={Clapperboard}
-                  title="Opening Scene"
-                  summary="No opening scene provided for this scenario."
-                  collapsedSummary="No opening scene provided for this scenario."
-                  expandable={false}
-                />
-              )}
-
-              {challengeItems.length === 0 && !openingScene && !objectiveText && (
-                <SimulationContextCard
-                  icon={Bot}
-                  title="Scenario Support"
-                  summary="No scenario support details available."
-                  collapsedSummary="No scenario support details available."
-                  expandable={false}
-                />
-              )}
-            </div>
-            </div>
-          </div>
+        {showScenarioContext && (
+          <ScenarioBriefingPanel
+            scenario={scenario}
+            difficultyVisual={difficultyVisual}
+            descriptionText={descriptionText}
+            hcpProfileSummary={hcpProfileSummary}
+            objectiveText={objectiveText}
+            objectiveCoachingTip={objectiveCoachingTip}
+            objectiveDetailLines={objectiveDetailLines}
+            openingScene={openingScene}
+            openingSceneHeadline={openingSceneHeadline}
+            showOpeningSceneFallback={showOpeningSceneFallback}
+            challengeItems={challengeItems}
+            challengeCoachingTip={challengeCoachingTip}
+            challengeDetailLines={challengeDetailLines}
+            showScenarioSupportFallback={showScenarioSupportFallback}
+          />
         )}
 
-        {!(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
+        {!showScenarioContext && (
           <div className="px-3 md:px-4 py-1 border-b bg-white flex-shrink-0">
             <div className="rounded-xl border border-slate-200 bg-white min-h-[40px] flex items-center px-2 py-1 justify-end">
               {renderTabPills()}
