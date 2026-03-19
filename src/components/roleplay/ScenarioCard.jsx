@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { formatScenarioText } from "../../lib/utils";
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import RolePlayChat from "./RolePlayChat";
 import { getDifficultyVisuals } from "./difficultyStyles";
@@ -43,17 +44,31 @@ export default function ScenarioCard({ scenario, renderAs, onStart }) {
     ? formatScenarioText(scenario.description)
     : "";
 
-  // When used as "button-only", keep this branch purely presentational so
-  // fullscreen chat mounting stays owned by the parent layout.
+  // When used as "button-only", prefer parent-owned start behavior when supplied.
+  // Otherwise, mount the fullscreen chat via a portal so transformed card ancestors
+  // cannot trap the overlay inside the grid.
   if (renderAs === "button-only") {
+    const handleButtonOnlyStart = () => {
+      if (typeof onStart === "function") {
+        onStart();
+        return;
+      }
+      setPlaying(true);
+    };
+
     return (
-      <button
-        onClick={onStart}
-        className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
-        style={{ background: "#1A334D" }}
-      >
-        Start Scenario →
-      </button>
+      <>
+        <button
+          onClick={handleButtonOnlyStart}
+          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
+          style={{ background: "#1A334D" }}
+        >
+          Start Scenario →
+        </button>
+        {!onStart && playing && typeof document !== "undefined"
+          ? createPortal(<RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />, document.body)
+          : null}
+      </>
     );
   }
 
