@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { formatScenarioText } from "../../lib/utils";
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import RolePlayChat from "./RolePlayChat";
 import { getDifficultyVisuals } from "./difficultyStyles";
@@ -33,7 +34,7 @@ function getOpeningScene(scenario) {
   return scenario.opening_scene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
 }
 
-export default function ScenarioCard({ scenario, renderAs }) {
+export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassName = "" }) {
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const dc = getDifficultyVisuals(scenario.difficulty).style;
@@ -43,18 +44,30 @@ export default function ScenarioCard({ scenario, renderAs }) {
     ? formatScenarioText(scenario.description)
     : "";
 
-  // When used as "button-only" inside EnterpriseScenarioCard
+  // When used as "button-only", prefer parent-owned start behavior when supplied.
+  // Otherwise, mount the fullscreen chat via a portal so transformed card ancestors
+  // cannot trap the overlay inside the grid.
   if (renderAs === "button-only") {
+    const handleButtonOnlyStart = () => {
+      if (typeof onStart === "function") {
+        onStart();
+        return;
+      }
+      setPlaying(true);
+    };
+
     return (
       <>
         <button
-          onClick={() => setPlaying(true)}
-          className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md"
+          onClick={handleButtonOnlyStart}
+          className={`inline-flex items-center justify-center py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md ${buttonClassName}`.trim()}
           style={{ background: "#1A334D" }}
         >
           Start Scenario →
         </button>
-        {playing && <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />}
+        {!onStart && playing && typeof document !== "undefined"
+          ? createPortal(<RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />, document.body)
+          : null}
       </>
     );
   }
