@@ -268,6 +268,20 @@ function splitDisplayLines(text, limit = 4) {
     .slice(0, limit);
 }
 
+function getDistinctDisplayLines(text, limit = 4) {
+  const seen = new Set();
+  return splitDisplayLines(text, limit).filter((item) => {
+    const key = item.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getDetailLines(text, limit = 4) {
+  return getDistinctDisplayLines(text, limit).slice(1);
+}
+
 function SimulationContextCard({
   title,
   summary,
@@ -285,7 +299,7 @@ function SimulationContextCard({
   const previewTimerRef = useRef(null);
   const showToggle = expandable && Boolean(expandedContent);
   const collapsedText = collapsedSummary || summary;
-  const expandedText = expandedSummary || summary;
+  const expandedText = expandedSummary || collapsedText;
 
   useEffect(() => {
     if (!expanded) {
@@ -334,6 +348,17 @@ function SimulationContextCard({
           <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "line-clamp-1 leading-7"}`}>{expanded ? expandedText : collapsedText}</p>
         </div>
 
+        {showToggle ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(value => !value)}
+            aria-pressed={expanded}
+            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
+          >
+            {expanded ? "Collapse Details" : "Expand Details"}
+          </button>
+        ) : null}
+
         {previewText && expanded ? (
           <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 px-3 py-2.5">
             <p className={`text-sm leading-6 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
@@ -346,17 +371,6 @@ function SimulationContextCard({
           <div className="scenario-extra-content is-visible text-slate-200">
             {expandedContent}
           </div>
-        ) : null}
-
-        {showToggle ? (
-          <button
-            type="button"
-            onClick={() => setExpanded(value => !value)}
-            aria-pressed={expanded}
-            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
-          >
-            {expanded ? "Collapse Details" : "Expand Details"}
-          </button>
         ) : null}
       </div>
     </div>
@@ -501,6 +515,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (openingSceneSignature && lower.includes(openingSceneSignature)) return false;
       return true;
     });
+  const objectiveHeadline = getDistinctDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText);
+  const objectiveDetailLines = getDetailLines(objectiveText, 4);
+  const normalizedChallengeItems = challengeItems
+    .map((challenge) => ensureSentencePunctuation(challenge))
+    .filter((challenge, idx, arr) => arr.findIndex((item) => item.toLowerCase() === challenge.toLowerCase()) === idx);
+  const challengeHeadline = normalizedChallengeItems[0] || "";
+  const challengeDetailLines = normalizedChallengeItems.slice(1, 4);
   const difficultyStyle = getDifficultyVisuals(scenario.difficulty).className;
   const scenarioKeywords = extractScenarioKeywords(scenario);
 
@@ -1472,17 +1493,17 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Objective"
                   summary={ensureSentencePunctuation(objectiveText)}
-                  collapsedSummary={splitDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText)}
-                  expandedContent={
+                  collapsedSummary={objectiveHeadline}
+                  expandedContent={objectiveDetailLines.length > 0 ? (
                     <div className="space-y-2">
-                      {splitDisplayLines(objectiveText, 4).map((item, idx) => (
+                      {objectiveDetailLines.map((item, idx) => (
                         <div key={idx} className="flex gap-2 text-sm leading-6">
                           <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
                           <span>{item}</span>
                         </div>
                       ))}
                     </div>
-                  }
+                  ) : null}
                 />
               )}
 
@@ -1490,27 +1511,27 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Opening Scene"
                   summary={ensureSentencePunctuation(openingScene)}
-                  collapsedSummary={scenario.stakeholder || splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
-                  expandedSummary={scenario.stakeholder || splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  collapsedSummary={scenario.stakeholder || getDistinctDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  expandedSummary={scenario.stakeholder || getDistinctDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
                   previewText={ensureSentencePunctuation(openingScene)}
                   previewLabel="Play Scene"
                   fallbackPreview="Preview the HCP's first beat before you continue the live simulation."
-                  expandedContent={<p className="text-sm leading-6 text-slate-200">{ensureSentencePunctuation(openingScene)}</p>}
+                  expandedContent={<div className="sr-only">Opening scene preview is available via Play Scene.</div>}
                 />
               )}
 
               {challengeItems.length > 0 && (
                 <SimulationContextCard
                   title="Key Challenges"
-                  summary={challengeItems.map(challenge => ensureSentencePunctuation(challenge)).join(" ")}
-                  collapsedSummary={ensureSentencePunctuation(challengeItems[0])}
-                  expandedContent={
+                  summary={normalizedChallengeItems.join(" ")}
+                  collapsedSummary={challengeHeadline}
+                  expandedContent={challengeDetailLines.length > 0 ? (
                     <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
-                      {challengeItems.slice(0, 4).map((challenge, idx) => (
+                      {challengeDetailLines.map((challenge, idx) => (
                         <li key={idx}>{ensureSentencePunctuation(challenge)}</li>
                       ))}
                     </ul>
-                  }
+                  ) : null}
                 />
               )}
 
