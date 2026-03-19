@@ -86,3 +86,51 @@
     @apply bg-background text-foreground;
   }
 }
+@layer components {
+  .scenario-card {
+    transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease, opacity 250ms ease;
+    transform: translateZ(0) scale(1);
+    will-change: transform, opacity;
+  }
+
+  .scenario-card:hover,
+  .scenario-card:focus-within {
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  .scenario-card-expanded {
+    transform: scale(1.01);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+  }
+
+  .scenario-card-exit {
+    opacity: 0;
+    transform: translateY(16px) scale(0.99);
+    pointer-events: none;
+  }
+
+  .scenario-extra-content {
+    opacity: 0;
+    transform: translateY(8px);
+    transition: transform 200ms ease, opacity 200ms ease, max-height 220ms ease;
+    max-height: 0;
+    overflow: hidden;
+  }
+
+  .scenario-extra-content.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 480px;
+  }
+
+  .typing-preview {
+    border-right: 2px solid rgba(20, 184, 166, 0.9);
+    padding-right: 2px;
+    animation: scenario-caret-blink 1s step-end infinite;
+  }
+
+  @keyframes scenario-caret-blink {
+    0%, 49% { border-right-color: rgba(20, 184, 166, 0.9); }
+    50%, 100% { border-right-color: transparent; }
+  }
+}
