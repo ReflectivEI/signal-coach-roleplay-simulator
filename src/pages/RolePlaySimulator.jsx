@@ -493,7 +493,7 @@ export default function RolePlaySimulator() {
         <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Select value={diseaseStateFilter} onValueChange={setDiseaseStateFilter}>
-              <SelectTrigger className="text-sm h-10 border-teal-300 focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC] focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Disease State" />
               </SelectTrigger>
               <SelectContent>
@@ -501,7 +501,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={specialtyFilter} onValueChange={setSpecialtyFilter}>
-              <SelectTrigger className="text-sm h-10" style={specialtyFilter !== "All Specialties" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={specialtyFilter !== "All Specialties" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Specialty" />
               </SelectTrigger>
               <SelectContent>
@@ -509,7 +509,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={hcpCategoryFilter} onValueChange={setHcpCategoryFilter}>
-              <SelectTrigger className="text-sm h-10" style={hcpCategoryFilter !== "All HCP Types" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={hcpCategoryFilter !== "All HCP Types" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="HCP Category" />
               </SelectTrigger>
               <SelectContent>
@@ -517,7 +517,7 @@ export default function RolePlaySimulator() {
               </SelectContent>
             </Select>
             <Select value={influenceDriverFilter} onValueChange={setInfluenceDriverFilter}>
-              <SelectTrigger className="text-sm h-10" style={influenceDriverFilter !== "All Influence Drivers" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 500 } : {}}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={influenceDriverFilter !== "All Influence Drivers" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Influence Driver" />
               </SelectTrigger>
               <SelectContent>
@@ -569,10 +569,10 @@ export default function RolePlaySimulator() {
               onClick={() => setActiveCategory(cat)}
               className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
                 activeCategory === cat
-                  ? "border-transparent text-white shadow-sm"
-                  : "bg-white border-gray-200 text-gray-600 hover:border-teal-200 hover:text-teal-700"
+                  ? "text-white shadow-sm"
+                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-teal-700"
               }`}
-              style={activeCategory === cat ? { background: "#39ACAC" } : {}}
+              style={activeCategory === cat ? { background: "#39ACAC", borderColor: "#1A334D" } : {}}
             >
               {cat}
               <span className={`text-xs rounded-full px-1.5 py-0.5 font-bold ${activeCategory === cat ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"}`}>
@@ -699,7 +699,7 @@ function EnterpriseScenarioCard({ scenario }) {
 
   return (
     <>
-      <div className={`scenario-card bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-teal-300 shadow-xl shadow-teal-100/70" : "border-gray-200 shadow-sm"} ${isExiting ? "scenario-card-exit" : ""}`}>
+      <div className={`scenario-card bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"} ${isExiting ? "scenario-card-exit" : ""}`}>
         <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">
             <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
@@ -709,7 +709,7 @@ function EnterpriseScenarioCard({ scenario }) {
           {expanded && (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
+                <span className={`inline-flex items-center rounded-full border border-[#1A334D] px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
                 <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>
               </div>
 
@@ -767,7 +767,7 @@ function EnterpriseScenarioCard({ scenario }) {
             type="button"
             onClick={() => setExpanded(value => !value)}
             aria-pressed={expanded}
-            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-gray-200 text-gray-700 hover:border-teal-300 hover:text-teal-700 hover:bg-teal-50"}`}
+            className={`w-full py-2 rounded-xl border text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-[#1A334D] bg-[#1A334D] text-white hover:border-[#39ACAC] hover:bg-[#16304A]"}`}
           >
             {expanded ? "Collapse Details" : "Expand for Details"}
           </button>
