@@ -254,6 +254,104 @@ const FALLBACK_GUIDANCE_LIBRARY = {
   ],
 };
 
+function ensureSentencePunctuation(text) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function splitDisplayLines(text, limit = 4) {
+  return String(text || "")
+    .split(/;|•|\.|,/)
+    .map(item => ensureSentencePunctuation(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function SimulationContextCard({
+  title,
+  summary,
+  expandedContent,
+  previewText,
+  previewLabel = "Play Scene",
+  fallbackPreview = "Preview the HCP's first beat before you continue the live simulation.",
+  expandable = true,
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [typedPreview, setTypedPreview] = useState("");
+  const previewTimerRef = useRef(null);
+  const showToggle = expandable && Boolean(expandedContent);
+
+  useEffect(() => {
+    if (!previewing || !previewText) {
+      setTypedPreview("");
+      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
+      return undefined;
+    }
+
+    let index = 0;
+    previewTimerRef.current = window.setInterval(() => {
+      index += 1;
+      setTypedPreview(previewText.slice(0, index));
+      if (index >= previewText.length && previewTimerRef.current) {
+        window.clearInterval(previewTimerRef.current);
+      }
+    }, 18);
+
+    return () => {
+      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
+    };
+  }, [previewText, previewing]);
+
+  return (
+    <div className={`scenario-card scenario-context-card self-start min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
+      <div className="flex flex-col gap-4">
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">{title}</p>
+            {previewText ? (
+              <button
+                type="button"
+                onClick={() => setPreviewing(value => !value)}
+                className="rounded-full border border-slate-600/80 bg-slate-900/70 px-3 py-1 text-[11px] font-semibold text-slate-200 transition-all duration-200 hover:border-teal-300 hover:text-teal-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+              >
+                {previewing ? "Reset Preview" : previewLabel}
+              </button>
+            ) : null}
+          </div>
+          <p className="text-sm leading-7 text-slate-100">{summary}</p>
+        </div>
+
+        {previewText ? (
+          <div className="rounded-2xl border border-slate-700/80 bg-slate-900/40 px-3 py-2.5">
+            <p className={`text-sm leading-6 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
+              {previewing ? typedPreview || " " : fallbackPreview}
+            </p>
+          </div>
+        ) : null}
+
+        {showToggle ? (
+          <button
+            type="button"
+            onClick={() => setExpanded(value => !value)}
+            aria-pressed={expanded}
+            className={`mt-auto rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
+          >
+            {expanded ? "Collapse Details" : "Expand Details"}
+          </button>
+        ) : null}
+
+        {showToggle && expanded ? (
+          <div className="scenario-extra-content is-visible text-slate-200">
+            {expandedContent}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function deterministicIndex(seedText, total) {
   if (!total) return 0;
   const seed = String(seedText || "");
@@ -1349,51 +1447,72 @@ ${actionText}`;
         {/* Scenario context summary */}
         {(descriptionText || openingScene || objectiveText || challengeItems.length > 0) && (
           <div className="px-3 md:px-4 pt-2 pb-1 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
-                {descriptionText && (
-                  <div className="min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-3 shadow-[0_22px_45px_rgba(15,23,42,0.28)]">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">Scenario Description</p>
-                    <p className="text-sm leading-6 text-slate-100 whitespace-normal">{descriptionText}</p>
-                  </div>
-                )}
+            <div className="grid grid-cols-1 items-start gap-2 md:grid-cols-2 lg:grid-cols-4">
+              {descriptionText && (
+                <SimulationContextCard
+                  title="Scenario Description"
+                  summary={ensureSentencePunctuation(descriptionText)}
+                  expandable={false}
+                />
+              )}
 
-                {objectiveText && (
-                  <div className="min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-3 shadow-[0_22px_45px_rgba(15,23,42,0.28)]">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">Objective</p>
-                    <p className="text-sm leading-6 text-slate-100 whitespace-normal">{objectiveText}</p>
-                  </div>
-                )}
+              {objectiveText && (
+                <SimulationContextCard
+                  title="Objective"
+                  summary={splitDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText)}
+                  expandedContent={
+                    <div className="space-y-2">
+                      {splitDisplayLines(objectiveText, 4).map((item, idx) => (
+                        <div key={idx} className="flex gap-2 text-sm leading-6">
+                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  }
+                />
+              )}
 
-                {openingScene && (
-                  <div className="min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-3 shadow-[0_22px_45px_rgba(15,23,42,0.28)]">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">Opening Scene</p>
-                    <p className="text-sm leading-6 text-slate-100 whitespace-normal line-clamp-3">{openingScene}</p>
-                  </div>
-                )}
+              {openingScene && (
+                <SimulationContextCard
+                  title="Opening Scene"
+                  summary={splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  previewText={ensureSentencePunctuation(openingScene)}
+                  previewLabel="Play Scene"
+                  fallbackPreview="Preview the HCP's first beat before you continue the live simulation."
+                  expandedContent={<p className="text-sm leading-6 text-slate-200">{ensureSentencePunctuation(openingScene)}</p>}
+                />
+              )}
 
-                {challengeItems.length > 0 && (
-                  <div className="min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-3 shadow-[0_22px_45px_rgba(15,23,42,0.28)]">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">Key Challenges</p>
-                    <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-0.5 marker:text-teal-300">
-                      {challengeItems.slice(0, 3).map((challenge, idx) => (
-                        <li key={idx}>{challenge}</li>
+              {challengeItems.length > 0 && (
+                <SimulationContextCard
+                  title="Key Challenges"
+                  summary={ensureSentencePunctuation(challengeItems[0])}
+                  expandedContent={
+                    <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
+                      {challengeItems.slice(0, 4).map((challenge, idx) => (
+                        <li key={idx}>{ensureSentencePunctuation(challenge)}</li>
                       ))}
                     </ul>
-                  </div>
-                )}
+                  }
+                />
+              )}
 
-                {!openingScene && objectiveText && (
-                  <div className="min-w-0 rounded-[24px] border border-dashed border-slate-600 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(17,24,39,0.96)_100%)] px-4 py-3 shadow-[0_18px_36px_rgba(15,23,42,0.2)]">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">Opening Scene</p>
-                    <p className="text-sm leading-6 text-slate-400 italic">No opening scene provided for this scenario.</p>
-                  </div>
-                )}
+              {!openingScene && objectiveText && (
+                <SimulationContextCard
+                  title="Opening Scene"
+                  summary="No opening scene provided for this scenario."
+                  expandable={false}
+                />
+              )}
 
-                {challengeItems.length === 0 && !openingScene && !objectiveText && (
-                  <div className="min-w-0 rounded-[24px] border border-dashed border-slate-600 bg-[linear-gradient(180deg,rgba(15,23,42,0.96)_0%,rgba(17,24,39,0.96)_100%)] px-4 py-3 shadow-[0_18px_36px_rgba(15,23,42,0.2)]">
-                    <p className="text-sm text-slate-400">No scenario support details available.</p>
-                  </div>
-                )}
+              {challengeItems.length === 0 && !openingScene && !objectiveText && (
+                <SimulationContextCard
+                  title="Scenario Support"
+                  summary="No scenario support details available."
+                  expandable={false}
+                />
+              )}
             </div>
           </div>
         )}
