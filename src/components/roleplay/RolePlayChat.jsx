@@ -543,6 +543,7 @@ function RolePlayBriefingPanel({
   challengeDetailLines,
   showOpeningSceneFallback,
   showScenarioSupportFallback,
+  tabPills,
 }) {
   return (
     <div className="px-3 md:px-4 pt-3 pb-2 border-b bg-[linear-gradient(180deg,#f3f7fb_0%,#eef4f8_100%)]">
@@ -554,7 +555,7 @@ function RolePlayBriefingPanel({
           </span>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white/90 px-2 py-1">
-          {renderTabPills()}
+          {tabPills}
         </div>
       </div>
 
@@ -1882,6 +1883,7 @@ ${actionText}`;
             challengeItems={challengeItems}
             challengeDetailLines={challengeDetailLines}
             showScenarioSupportFallback={showScenarioSupportFallback}
+            tabPills={renderTabPills()}
           />
         )}
 
