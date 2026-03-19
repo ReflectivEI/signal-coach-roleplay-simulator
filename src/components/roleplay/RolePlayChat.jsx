@@ -254,29 +254,34 @@ const FALLBACK_GUIDANCE_LIBRARY = {
   ],
 };
 
+function ensureSentencePunctuation(text) {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function splitDisplayLines(text, limit = 4) {
+  return String(text || "")
+    .split(/;|•|\.|,/)
+    .map(item => ensureSentencePunctuation(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 function SimulationContextCard({
   title,
   summary,
   expandedContent,
   previewText,
   previewLabel = "Play Scene",
-  fallbackPreview = "Preview the first beat before continuing the live simulation.",
-  fullHeight = false,
+  fallbackPreview = "Preview the HCP's first beat before you continue the live simulation.",
+  expandable = true,
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [hoverExpanded, setHoverExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typedPreview, setTypedPreview] = useState("");
   const previewTimerRef = useRef(null);
-  const autoHoverEnabled = useRef(false);
-  const hasExpandedContent = Boolean(expandedContent);
-  const showDetails = hasExpandedContent && (expanded || hoverExpanded);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      autoHoverEnabled.current = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    }
-  }, []);
+  const showToggle = expandable && Boolean(expandedContent);
 
   useEffect(() => {
     if (!previewing || !previewText) {
@@ -300,14 +305,10 @@ function SimulationContextCard({
   }, [previewText, previewing]);
 
   return (
-    <div
-      className={`scenario-card scenario-context-card min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-3 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${showDetails ? "scenario-card-expanded border-teal-400/70" : ""} ${fullHeight ? "h-full" : ""}`}
-      onMouseEnter={() => autoHoverEnabled.current && hasExpandedContent && setHoverExpanded(true)}
-      onMouseLeave={() => autoHoverEnabled.current && setHoverExpanded(false)}
-    >
-      <div className="flex h-full flex-col gap-3">
+    <div className={`scenario-card scenario-context-card min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
+      <div className="flex h-full flex-col gap-4">
         <div>
-          <div className="mb-1.5 flex items-center justify-between gap-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">{title}</p>
             {previewText ? (
               <button
@@ -319,7 +320,7 @@ function SimulationContextCard({
               </button>
             ) : null}
           </div>
-          <p className="text-sm leading-6 text-slate-100 whitespace-normal line-clamp-2">{summary}</p>
+          <p className="text-sm leading-7 text-slate-100">{summary}</p>
         </div>
 
         {previewText ? (
@@ -330,21 +331,21 @@ function SimulationContextCard({
           </div>
         ) : null}
 
-        {hasExpandedContent ? (
-          <div className={`scenario-extra-content text-slate-200 ${showDetails ? "is-visible" : ""}`}>
-            {expandedContent}
-          </div>
-        ) : null}
-
-        {hasExpandedContent ? (
+        {showToggle ? (
           <button
             type="button"
             onClick={() => setExpanded(value => !value)}
-            aria-pressed={showDetails}
-            className={`mt-auto rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${showDetails ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
+            aria-pressed={expanded}
+            className={`mt-auto rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
           >
-            {showDetails ? "Collapse Details" : "Expand Details"}
+            {expanded ? "Collapse Details" : "Expand Details"}
           </button>
+        ) : null}
+
+        {showToggle && expanded ? (
+          <div className="scenario-extra-content is-visible text-slate-200">
+            {expandedContent}
+          </div>
         ) : null}
       </div>
     </div>
@@ -1450,59 +1451,50 @@ ${actionText}`;
               {descriptionText && (
                 <SimulationContextCard
                   title="Scenario Description"
-                  summary={descriptionText}
-                  expandedContent={<p className="text-sm leading-6 text-slate-200">{descriptionText}</p>}
-                  fullHeight
+                  summary={ensureSentencePunctuation(descriptionText)}
+                  expandable={false}
                 />
               )}
 
               {objectiveText && (
                 <SimulationContextCard
                   title="Objective"
-                  summary={objectiveText}
+                  summary={splitDisplayLines(objectiveText, 1)[0] || ensureSentencePunctuation(objectiveText)}
                   expandedContent={
                     <div className="space-y-2">
-                      {objectiveText
-                        .split(/;|•|\.|,/)
-                        .map(item => item.trim())
-                        .filter(Boolean)
-                        .slice(0, 4)
-                        .map((item, idx) => (
-                          <div key={idx} className="flex gap-2 text-sm leading-6">
-                            <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
-                            <span>{item}</span>
-                          </div>
-                        ))}
+                      {splitDisplayLines(objectiveText, 4).map((item, idx) => (
+                        <div key={idx} className="flex gap-2 text-sm leading-6">
+                          <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-300" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
                     </div>
                   }
-                  fullHeight
                 />
               )}
 
               {openingScene && (
                 <SimulationContextCard
                   title="Opening Scene"
-                  summary={openingScene}
-                  previewText={openingScene}
+                  summary={splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  previewText={ensureSentencePunctuation(openingScene)}
                   previewLabel="Play Scene"
                   fallbackPreview="Preview the HCP's first beat before you continue the live simulation."
-                  expandedContent={<p className="text-sm leading-6 text-slate-200">{openingScene}</p>}
-                  fullHeight
+                  expandedContent={<p className="text-sm leading-6 text-slate-200">{ensureSentencePunctuation(openingScene)}</p>}
                 />
               )}
 
               {challengeItems.length > 0 && (
                 <SimulationContextCard
                   title="Key Challenges"
-                  summary={challengeItems[0]}
+                  summary={ensureSentencePunctuation(challengeItems[0])}
                   expandedContent={
                     <ul className="list-disc pl-4 text-sm leading-6 text-slate-100 space-y-1 marker:text-teal-300">
                       {challengeItems.slice(0, 4).map((challenge, idx) => (
-                        <li key={idx}>{challenge}</li>
+                        <li key={idx}>{ensureSentencePunctuation(challenge)}</li>
                       ))}
                     </ul>
                   }
-                  fullHeight
                 />
               )}
 
@@ -1510,8 +1502,7 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Opening Scene"
                   summary="No opening scene provided for this scenario."
-                  expandedContent={<p className="text-sm leading-6 text-slate-400 italic">No opening scene provided for this scenario.</p>}
-                  fullHeight
+                  expandable={false}
                 />
               )}
 
@@ -1519,8 +1510,7 @@ ${actionText}`;
                 <SimulationContextCard
                   title="Scenario Support"
                   summary="No scenario support details available."
-                  expandedContent={<p className="text-sm text-slate-400">No scenario support details available.</p>}
-                  fullHeight
+                  expandable={false}
                 />
               )}
             </div>

@@ -653,13 +653,11 @@ export default function RolePlaySimulator() {
 
 function EnterpriseScenarioCard({ scenario }) {
   const [detailsCollapsed, setDetailsCollapsed] = useState(false);
-  const [hoverExpanded, setHoverExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [typingText, setTypingText] = useState("");
   const [isExiting, setIsExiting] = useState(false);
   const [playing, setPlaying] = useState(false);
   const previewTimerRef = useRef(null);
-  const autoHoverEnabled = useRef(false);
   const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
   const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
   const openingScene = scenario.openingScene || "Preview the opening moment to hear how the HCP enters the conversation.";
@@ -669,14 +667,8 @@ function EnterpriseScenarioCard({ scenario }) {
     .map(line => line.trim())
     .filter(Boolean)
     .slice(0, 3);
-  const isInteractiveExpanded = !detailsCollapsed && hoverExpanded;
+  const isInteractiveExpanded = !detailsCollapsed;
   const showDetails = !detailsCollapsed;
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      autoHoverEnabled.current = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-    }
-  }, []);
 
   useEffect(() => {
     if (!previewing) {
@@ -707,18 +699,9 @@ function EnterpriseScenarioCard({ scenario }) {
     }, 280);
   };
 
-  const handleMouseEnter = () => {
-    if (autoHoverEnabled.current && !detailsCollapsed) setHoverExpanded(true);
-  };
-
-  const handleMouseLeave = () => {
-    if (autoHoverEnabled.current) setHoverExpanded(false);
-  };
-
   const handleToggleDetails = () => {
     setDetailsCollapsed(value => {
       const next = !value;
-      if (next) setHoverExpanded(false);
       return next;
     });
   };
@@ -727,8 +710,6 @@ function EnterpriseScenarioCard({ scenario }) {
     <>
       <div
         className={`scenario-card bg-white rounded-2xl border flex flex-col overflow-hidden group ${isInteractiveExpanded ? "scenario-card-expanded border-teal-300 shadow-xl shadow-teal-100/70" : "border-gray-200 shadow-sm"} ${isExiting ? "scenario-card-exit" : ""}`}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
       >
         <div className={`px-5 pt-5 ${showDetails ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
           <div className="flex items-start gap-2">

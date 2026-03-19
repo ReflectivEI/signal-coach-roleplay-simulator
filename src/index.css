@@ -94,14 +94,13 @@
   }
 
   .scenario-card:hover,
-  .scenario-card:focus-within,
-  .scenario-card-expanded {
-    transform: scale(1.02);
+  .scenario-card:focus-within {
     box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
   }
 
   .scenario-card-expanded {
-    transform: scale(1.03);
+    transform: scale(1.01);
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
   }
 
   .scenario-card-exit {
@@ -121,7 +120,7 @@
   .scenario-extra-content.is-visible {
     opacity: 1;
     transform: translateY(0);
-    max-height: 320px;
+    max-height: 480px;
   }
 
   .typing-preview {
