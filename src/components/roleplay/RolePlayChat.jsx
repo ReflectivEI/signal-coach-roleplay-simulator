@@ -277,6 +277,7 @@ function SimulationContextCard({
   fallbackPreview = "Preview the HCP's first beat before you continue the live simulation.",
   expandable = true,
   collapsedSummary,
+  expandedSummary,
 }) {
   const [expanded, setExpanded] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -284,6 +285,7 @@ function SimulationContextCard({
   const previewTimerRef = useRef(null);
   const showToggle = expandable && Boolean(expandedContent);
   const collapsedText = collapsedSummary || summary;
+  const expandedText = expandedSummary || summary;
 
   useEffect(() => {
     if (!expanded) {
@@ -314,8 +316,8 @@ function SimulationContextCard({
   }, [expanded, previewText, previewing]);
 
   return (
-    <div className={`scenario-card scenario-context-card self-start min-w-0 min-h-[220px] rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : ""}`}>
-      <div className="flex min-h-[188px] flex-col gap-4">
+    <div className={`scenario-card scenario-context-card self-start min-w-0 rounded-[24px] border border-slate-700/70 bg-[linear-gradient(180deg,rgba(15,23,42,0.98)_0%,rgba(17,24,39,0.98)_100%)] px-4 py-4 shadow-[0_22px_45px_rgba(15,23,42,0.28)] ${expanded ? "scenario-card-expanded border-teal-400/70" : "h-[156px]"}`}>
+      <div className="flex flex-col gap-3">
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-teal-200">{title}</p>
@@ -329,7 +331,7 @@ function SimulationContextCard({
               </button>
             ) : null}
           </div>
-          <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "line-clamp-1 leading-7"}`}>{expanded ? summary : collapsedText}</p>
+          <p className={`text-sm text-slate-100 ${expanded ? "leading-7" : "line-clamp-1 leading-7"}`}>{expanded ? expandedText : collapsedText}</p>
         </div>
 
         {previewText && expanded ? (
@@ -351,7 +353,7 @@ function SimulationContextCard({
             type="button"
             onClick={() => setExpanded(value => !value)}
             aria-pressed={expanded}
-            className={`mt-auto rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
+            className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 ${expanded ? "border-teal-400/70 bg-teal-400/10 text-teal-100" : "border-slate-600/80 bg-slate-900/60 text-slate-200 hover:border-teal-300 hover:text-teal-100"}`}
           >
             {expanded ? "Collapse Details" : "Expand Details"}
           </button>
@@ -1489,6 +1491,7 @@ ${actionText}`;
                   title="Opening Scene"
                   summary={ensureSentencePunctuation(openingScene)}
                   collapsedSummary={scenario.stakeholder || splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
+                  expandedSummary={scenario.stakeholder || splitDisplayLines(openingScene, 1)[0] || ensureSentencePunctuation(openingScene)}
                   previewText={ensureSentencePunctuation(openingScene)}
                   previewLabel="Play Scene"
                   fallbackPreview="Preview the HCP's first beat before you continue the live simulation."
