@@ -712,7 +712,7 @@ function EnterpriseScenarioCard({ scenario }) {
                   </button>
                 </div>
                 <p className={`text-xs leading-relaxed text-slate-600 ${previewing ? "typing-preview" : ""}`}>
-                  {previewing ? typingText || " " : "Preview the HCP's first beat before you enter the live simulation."}
+                  {previewing ? typingText || " " : " "}
                 </p>
               </div>
 

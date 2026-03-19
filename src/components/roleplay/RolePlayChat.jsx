@@ -514,7 +514,7 @@ function SimulationContextCard({
             </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/20 px-3 py-2.5">
               <p className={`text-sm leading-5 text-slate-200 ${previewing ? "typing-preview" : ""}`}>
-                {previewing ? typedPreview || " " : "Press Play Scene to reveal the HCP’s opening beat."}
+                {previewing ? typedPreview || " " : " "}
               </p>
             </div>
           </div>
