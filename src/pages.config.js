@@ -51,6 +51,7 @@ import AICoach from './pages/AICoach';
 import AuditSummary from './pages/AuditSummary';
 import BehavioralMetrics from './pages/BehavioralMetrics';
 import CoachingModules from './pages/CoachingModules';
+import CustomizationIntegration from './pages/CustomizationIntegration';
 import Dashboard from './pages/Dashboard';
 import DataReports from './pages/DataReports';
 import Download from './pages/Download';
@@ -74,6 +75,7 @@ export const PAGES = {
     "AuditSummary": AuditSummary,
     "BehavioralMetrics": BehavioralMetrics,
     "CoachingModules": CoachingModules,
+    "CustomizationIntegration": CustomizationIntegration,
     "Dashboard": Dashboard,
     "DataReports": DataReports,
     "Download": Download,
