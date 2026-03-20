@@ -88,6 +88,7 @@ export default function KnowledgeBase() {
   const [sharing, setSharing] = useState(false);
   const [upvoted, setUpvoted] = useState({});
   const [templateAiOpen, setTemplateAiOpen] = useState({});
+  const [sharedAlert, setSharedAlert] = useState(false);
 
   const filteredArticles = articles.filter((a) => {
     const catMatch = activeCategory === "All" || a.category === activeCategory;
@@ -352,31 +353,15 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
         </div>
       </div>
 
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Knowledge Base</h1>
-        <p className="text-sm text-gray-600 mt-1">Industry guides, communication templates, and peer-shared best practices</p>
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-        {[
-          { label: "Curated Articles", value: articles.length, tone: "bg-teal-50 border-teal-200 text-teal-800" },
-          { label: "Communication Templates", value: communicationTemplates.length, tone: "bg-slate-50 border-slate-200 text-slate-800" },
-          { label: "Signal Intelligence Capabilities", value: SIGNAL_CAPABILITIES.length, tone: "bg-amber-50 border-amber-200 text-amber-800" },
-        ].map((item) => (
-          <div key={item.label} className={`ui-surface-card rounded-xl px-4 py-3 ${item.tone}`}>
-            <p className="text-xs uppercase tracking-wide font-semibold opacity-80">{item.label}</p>
-            <p className="text-2xl font-bold mt-1">{item.value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* AI Q&A */}
-      <Card className="ui-surface-card mb-8 border-teal-100">
+      <Card className="ui-surface-card mb-6 border-teal-100">
         <CardContent className="p-6 space-y-4">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="w-4 h-4 text-teal-500" />
-            <span className="font-semibold text-sm">AI-Powered Q&A</span>
-            <span className="text-xs text-gray-500 ml-1">— synthesizes across all articles</span>
+            <span className="text-sm font-semibold text-slate-900">AI-Powered Q&A</span>
+            <span className="text-xs text-slate-500">— synthesizes across all articles</span>
+            {sharedAlert && <span className="ui-pill px-2.5 py-1 text-[11px]">Snippet shared</span>}
           </div>
           <div className="flex gap-2">
             <Input value={aiQuery} onChange={(e) => setAiQuery(e.target.value)} placeholder="Ask about FDA approval, compliance, payer dynamics, HCP engagement..." onKeyDown={(e) => e.key === "Enter" && askAI()} className="text-sm" />
@@ -401,7 +386,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
       </Card>
 
       {/* Main Tabs — NavPill style */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="mb-6 flex flex-wrap gap-2">
         {[
           { id: "articles", icon: BookOpen, label: "Articles" },
           { id: "templates", icon: Wand2, label: "Templates" },

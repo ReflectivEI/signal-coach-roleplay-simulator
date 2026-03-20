@@ -15,7 +15,7 @@ const modules = [
     id: "question_mastery",
     title: "Question Mastery",
     icon: MessageCircle,
-    iconBg: "bg-blue-100 text-blue-600",
+    iconBg: "bg-slate-100 text-slate-700",
     category: "Discovery",
     tagline: "Signal Awareness — Question Quality",
     capabilities: ["signal_awareness"],
@@ -61,7 +61,7 @@ const modules = [
     id: "clinical_evidence",
     title: "Clinical Evidence",
     icon: FileText,
-    iconBg: "bg-cyan-100 text-cyan-600",
+    iconBg: "bg-teal-50 text-teal-700",
     category: "Clinical",
     tagline: "Value Connection — Value Framing",
     capabilities: ["value_connection"],
@@ -84,7 +84,7 @@ const modules = [
     id: "objection_handling",
     title: "Objection Handling",
     icon: ShieldAlert,
-    iconBg: "bg-orange-100 text-orange-600",
+    iconBg: "bg-amber-50 text-amber-700",
     category: "Objection",
     tagline: "Objection Navigation — Objection Handling",
     capabilities: ["objection_navigation"],
@@ -256,9 +256,9 @@ export default function CoachingModules() {
       </div>
 
       <div className="mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">Coaching Modules</h2>
-        <p className="mt-1 text-sm text-gray-500">Signal Intelligence™ learning paths — definitions, key behaviors, scoring anchors, and guided AI support.</p>
-        <div className="mt-3 inline-flex max-w-3xl items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-slate-700">
+        <h2 className="text-2xl font-bold leading-tight text-gray-900">Coaching Modules</h2>
+        <p className="mt-1 text-sm leading-relaxed text-gray-500">Signal Intelligence™ learning paths — definitions, key behaviors, scoring anchors, and guided AI support.</p>
+        <div className="mt-3 inline-flex max-w-3xl items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50/80 px-4 py-3 text-sm leading-relaxed text-slate-700">
           <Layers3 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
           <span>Coaching Modules group related Signal Intelligence capabilities into focused learning paths.</span>
         </div>
@@ -272,7 +272,7 @@ export default function CoachingModules() {
               <button
                 key={mod.id}
                 onClick={() => setActiveModule(mod.id)}
-                className={`ui-surface-card ui-surface-card-interactive w-full rounded-2xl border p-4 text-left ${isSelected ? "border-teal-300 bg-teal-50/90 shadow-md ring-1 ring-teal-100" : "border-teal-100/80 bg-white hover:bg-teal-50/70"}`}
+                className={`ui-surface-card ui-surface-card-interactive w-full rounded-2xl border p-4 text-left transition-all ${isSelected ? "border-teal-300 bg-teal-50/90 shadow-[0_18px_32px_rgba(15,118,110,0.12)] ring-1 ring-teal-100" : "border-teal-200 bg-white hover:border-teal-300 hover:bg-teal-50/80 hover:shadow-[0_16px_30px_rgba(15,118,110,0.10)] hover:-translate-y-0.5"}`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${mod.iconBg}`}>
@@ -281,8 +281,8 @@ export default function CoachingModules() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">{mod.title}</p>
-                        <p className="mt-0.5 text-xs text-gray-500">{mod.tagline}</p>
+                        <p className="text-sm font-semibold leading-snug text-gray-900">{mod.title}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{mod.tagline}</p>
                       </div>
                       <ChevronRight className={`mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${isSelected ? "rotate-90 text-teal-600" : ""}`} />
                     </div>
@@ -357,7 +357,7 @@ export default function CoachingModules() {
                 </section>
 
                 <section>
-                  <SectionHeader icon={BookOpen} iconClassName="text-blue-500" title="Scoring Anchors (Signal Intelligence™ 1–5)" />
+                  <SectionHeader icon={BookOpen} iconClassName="text-teal-600" title="Scoring Anchors (Signal Intelligence™ 1–5)" />
                   <div className="space-y-2.5">
                     {open.scoringAnchors.map((anchor, index) => {
                       const colors = {
@@ -436,7 +436,7 @@ export default function CoachingModules() {
                   <Link to={createPageUrl("RolePlaySimulator")} className="flex items-center gap-1.5 text-xs font-medium text-teal-600 hover:text-teal-700">
                     <ArrowRight className="h-3.5 w-3.5" /> Practice in Role Play
                   </Link>
-                  <Link to={createPageUrl("Exercises")} className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700">
+                  <Link to={createPageUrl("Exercises")} className="flex items-center gap-1.5 text-xs font-medium text-teal-600 hover:text-teal-700">
                     <ArrowRight className="h-3.5 w-3.5" /> Try an Exercise
                   </Link>
                 </section>
@@ -472,7 +472,7 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
   };
 
   return (
-    <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-5 space-y-4">
+    <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-slate-50 p-5 space-y-4">
       <textarea
         placeholder="E.g., 'I'm meeting with a skeptical cardiologist who prefers data-driven conversations...'"
         value={input}

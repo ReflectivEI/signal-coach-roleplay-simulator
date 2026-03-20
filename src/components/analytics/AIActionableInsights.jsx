@@ -4,12 +4,12 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
 const priorityColor = {
-  high: "bg-red-100 text-red-700 border-red-200",
-  medium: "bg-amber-100 text-amber-700 border-amber-200",
-  low: "bg-green-100 text-green-700 border-green-200",
+  high: "border-amber-300 bg-amber-50 text-amber-800",
+  medium: "border-teal-200 bg-teal-50 text-teal-700",
+  low: "border-slate-200 bg-slate-50 text-slate-700",
 };
 
-export default function AIActionableInsights({ avgScores = [], totalSessions = 0, overallAvg = 0, streak = 0, earnedBadges = [] }) {
+export default function AIActionableInsights({ avgScores = [], totalSessions = 0, overallAvg = 0 }) {
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +39,6 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
       if (!res.ok) throw new Error('Failed to generate insights');
       const data = await res.json();
       let insightText = data.response || data.text || data.content || 'Unable to generate insights at this time.';
-      // Strip markdown code blocks for clean display
       insightText = insightText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
       setInsights(insightText);
     } catch (err) {
@@ -51,37 +50,39 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
   };
 
   return (
-    <div className="rounded-lg border border-white/10 bg-gradient-to-b from-white/10 to-white/5 p-5 space-y-4 max-w-2xl">
-      <div className="flex items-center gap-2">
-        <Sparkles className="w-4 h-4 text-teal-400" />
-        <h3 className="text-sm font-bold text-white">AI Actionable Insights</h3>
+    <div className="ui-surface-card space-y-4 border border-slate-200 p-5 max-w-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-teal-600" />
+          <h3 className="text-sm font-bold text-slate-900">AI Actionable Insights</h3>
+        </div>
+        <button
+          onClick={generate}
+          disabled={loading}
+          className="ui-pill px-3 py-1.5 text-xs"
+        >
+          {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          {insights ? 'Refresh insights' : 'Generate insights'}
+        </button>
       </div>
-      <button
-        onClick={generate}
-        disabled={loading}
-        className="flex items-center gap-1.5 text-xs text-teal-400 hover:text-teal-300 transition-colors border border-teal-500/30 rounded-full px-3 py-1 hover:bg-teal-500/10"
-      >
-        {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-        {insights ? "Refresh" : "Generate Insights"}
-      </button>
 
       {totalSessions === 0 && !insights && (
-        <p className="text-xs text-slate-400 leading-relaxed">
+        <p className="text-sm leading-relaxed text-slate-500">
           Complete role-play sessions to unlock personalized AI coaching recommendations based on your actual performance data.
         </p>
       )}
 
       {!insights && !loading && totalSessions > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-slate-400">Based on your {totalSessions} sessions, click above for targeted coaching.</p>
+        <div className="space-y-2.5">
+          <p className="text-sm text-slate-500">Based on your {totalSessions} sessions, generate targeted coaching recommendations.</p>
           {weakCapabilities.length > 0 && (
-            <div className="space-y-1.5">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Likely Focus Areas:</p>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Likely focus areas</p>
               <div className="flex flex-wrap gap-2">
                 {weakCapabilities.map(c => (
-                  <div key={c.key} className="inline-flex items-center gap-2 text-sm border border-[#1A334D] bg-[#e6f7f7] text-[#1A334D] rounded-full px-3 py-1 hover:-translate-y-0.5 hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-white transition-all">
+                  <div key={c.key} className="ui-pill px-3 py-1.5">
                     <span>{c.capability}</span>
-                    <span className="text-orange-500 font-bold">{c.score}/5</span>
+                    <span className="font-bold text-amber-700">{c.score}/5</span>
                   </div>
                 ))}
               </div>
@@ -93,10 +94,10 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
       {loading && (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="rounded-lg border border-white/10 p-4 space-y-2">
-              <div className="h-3 bg-white/10 rounded animate-pulse w-2/3" />
-              <div className="h-2 bg-white/10 rounded animate-pulse w-full" />
-              <div className="h-2 bg-white/10 rounded animate-pulse w-4/5" />
+            <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+              <div className="h-3 w-2/3 animate-pulse rounded bg-slate-200" />
+              <div className="h-2 w-full animate-pulse rounded bg-slate-200" />
+              <div className="h-2 w-4/5 animate-pulse rounded bg-slate-200" />
             </div>
           ))}
         </div>
@@ -104,64 +105,63 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
 
       {insights && (
         <div className="space-y-3">
-          {/* Overall note */}
-          {insights.overall_coaching_note && (
-            <div className="rounded-lg p-3" style={{ background: "#39ACAC18", border: "1px solid #39ACAC44" }}>
-              <p className="text-xs text-teal-200 leading-relaxed">{insights.overall_coaching_note}</p>
+          {typeof insights === 'object' && insights.overall_coaching_note && (
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+              <p className="text-sm leading-relaxed text-teal-900">{insights.overall_coaching_note}</p>
             </div>
           )}
 
-          {/* Individual insights */}
-          {(insights.insights || []).map((insight, i) => (
-            <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2.5">
+          {Array.isArray(insights?.insights) ? insights.insights.map((insight, i) => (
+            <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-white leading-tight">{insight.title}</p>
+                <p className="text-sm font-bold leading-tight text-slate-900">{insight.title}</p>
                 {insight.priority && (
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium flex-shrink-0 ${priorityColor[insight.priority] || priorityColor.medium}`}>
+                  <span className={`ui-pill px-2.5 py-1 text-[11px] ${priorityColor[insight.priority] || priorityColor.medium}`}>
                     {insight.priority}
                   </span>
                 )}
               </div>
               {insight.capability && (
-                <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#39ACAC22", color: "#39ACAC", border: "1px solid #39ACAC44" }}>
-                  {insight.capability}
-                </span>
+                <span className="ui-pill px-2.5 py-1 text-[11px]">{insight.capability}</span>
               )}
-
               <div className="space-y-2 pt-1">
                 {insight.behavior_change && (
                   <div>
-                    <p className="text-xs font-semibold text-white/50 uppercase tracking-wide mb-0.5">Behavior Change</p>
-                    <p className="text-xs text-white/80 leading-relaxed">{insight.behavior_change}</p>
+                    <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Behavior change</p>
+                    <p className="text-sm leading-relaxed text-slate-600">{insight.behavior_change}</p>
                   </div>
                 )}
                 {insight.practice && (
-                  <div className="flex items-start gap-2 bg-white/5 rounded-lg p-2.5">
-                    <Play className="w-3.5 h-3.5 text-teal-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50/70 p-3">
+                    <Play className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-teal-600" />
                     <div>
-                      <p className="text-xs font-semibold text-teal-300">Practice Next</p>
-                      <p className="text-xs text-white/70 leading-relaxed">{insight.practice}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Practice next</p>
+                      <p className="text-xs leading-relaxed text-slate-600">{insight.practice}</p>
                     </div>
                     <Link to={createPageUrl("RolePlaySimulator")} className="ml-auto flex-shrink-0">
-                      <ArrowRight className="w-3.5 h-3.5 text-teal-500 hover:text-teal-300 transition-colors" />
+                      <ArrowRight className="h-3.5 w-3.5 text-teal-600 transition-colors hover:text-teal-700" />
                     </Link>
                   </div>
                 )}
                 {insight.module && (
-                  <div className="flex items-start gap-2 bg-white/5 rounded-lg p-2.5">
-                    <BookOpen className="w-3.5 h-3.5 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                    <BookOpen className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-slate-600" />
                     <div>
-                      <p className="text-xs font-semibold text-blue-300">Coaching Module</p>
-                      <p className="text-xs text-white/70">{insight.module}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Coaching module</p>
+                      <p className="text-xs leading-relaxed text-slate-600">{insight.module}</p>
                     </div>
                     <Link to={createPageUrl("CoachingModules")} className="ml-auto flex-shrink-0">
-                      <ArrowRight className="w-3.5 h-3.5 text-blue-500 hover:text-blue-300 transition-colors" />
+                      <ArrowRight className="h-3.5 w-3.5 text-slate-600 transition-colors hover:text-teal-700" />
                     </Link>
                   </div>
                 )}
               </div>
             </div>
-          ))}
+          )) : (
+            <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+              <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-line">{String(insights)}</p>
+            </div>
+          )}
         </div>
       )}
     </div>

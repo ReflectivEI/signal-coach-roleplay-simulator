@@ -5,14 +5,14 @@ import { MessageSquare, Lightbulb, Heart, Users, ShieldAlert, GitFork, Target, S
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
 const iconMap = {
-  signal_awareness: { icon: MessageSquare, iconBg: "bg-blue-50 text-blue-500" },
-  signal_interpretation: { icon: Lightbulb, iconBg: "bg-yellow-50 text-yellow-600" },
-  value_connection: { icon: Heart, iconBg: "bg-pink-50 text-pink-500" },
-  customer_engagement: { icon: Users, iconBg: "bg-teal-50 text-teal-500" },
-  objection_navigation: { icon: ShieldAlert, iconBg: "bg-orange-50 text-orange-500" },
-  conversation_management: { icon: GitFork, iconBg: "bg-purple-50 text-purple-500" },
-  adaptive_response: { icon: Shuffle, iconBg: "bg-cyan-50 text-cyan-500" },
-  commitment_generation: { icon: Target, iconBg: "bg-green-50 text-green-500" },
+  signal_awareness: { icon: MessageSquare, iconBg: "bg-slate-100 text-slate-700" },
+  signal_interpretation: { icon: Lightbulb, iconBg: "bg-amber-50 text-amber-700" },
+  value_connection: { icon: Heart, iconBg: "bg-teal-50 text-teal-700" },
+  customer_engagement: { icon: Users, iconBg: "bg-teal-50 text-teal-700" },
+  objection_navigation: { icon: ShieldAlert, iconBg: "bg-amber-50 text-amber-700" },
+  conversation_management: { icon: GitFork, iconBg: "bg-slate-100 text-slate-700" },
+  adaptive_response: { icon: Shuffle, iconBg: "bg-teal-50 text-teal-700" },
+  commitment_generation: { icon: Target, iconBg: "bg-teal-50 text-teal-700" },
 };
 
 const metrics = SIGNAL_CAPABILITIES.map(cap => ({
@@ -22,7 +22,7 @@ const metrics = SIGNAL_CAPABILITIES.map(cap => ({
   canonicalQuestion: cap.canonicalQuestion,
   description: cap.definition,
   icon: iconMap[cap.id]?.icon || Target,
-  iconBg: iconMap[cap.id]?.iconBg || "bg-gray-50 text-gray-500",
+  iconBg: iconMap[cap.id]?.iconBg || "bg-slate-100 text-slate-700",
   submetrics: cap.coreMetrics.map(m => ({ name: m.name, question: m.question })),
   optional: cap.optionalMetrics.map(m => ({ name: m.name, question: m.question })),
   coaching: cap.coaching,
@@ -34,124 +34,126 @@ export default function BehavioralMetrics() {
   const selectedMetric = metrics.find((m) => m.id === selected);
 
   return (
-    <div className="p-6 md:p-8 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-50 to-teal-50/30 rounded-2xl p-8 mb-8 border border-gray-100">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Signal Intelligence Capabilities</h1>
-        <p className="text-gray-500 mb-4">Behavioral Measurement Definitions & Source of Truth</p>
-        <p className="text-sm text-gray-600 leading-relaxed max-w-3xl">
-          8 canonical capabilities. Each is defined by a <strong>diagnostic question</strong>, measured by <strong>observable behavioral metrics</strong> scored 1–5 (where 3 = effective / acceptable). No metric infers intent, emotion, or outcome.
-        </p>
+    <div className="mx-auto max-w-6xl p-6 md:p-8">
+      <div className="enterprise-hero-light mb-6 p-7 md:p-8">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-700">Behavioral metrics reference</p>
+            <h1 className="mt-2 text-3xl font-bold leading-tight text-slate-900 md:text-4xl">Signal Intelligence Capabilities</h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600 md:text-[15px]">
+              Behavioral measurement definitions and source-of-truth criteria for the eight canonical Signal Intelligence capabilities.
+            </p>
+          </div>
+          <div className="w-full max-w-sm rounded-2xl border border-teal-100 bg-white/90 p-5 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Measurement guardrails</p>
+            <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              Each capability is anchored to a diagnostic question and observable metrics scored from 1–5, where 3 indicates effective and acceptable performance.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Metrics Grid */}
-        <div className="lg:w-1/2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {metrics.map((metric) => (
-            <Card
-              key={metric.title}
-              className={`cursor-pointer transition-all duration-300 hover:shadow-md ${
-                metric.highlight ? "border-teal-300 ring-1 ring-teal-100" : "hover:border-teal-200"
-              } ${selected === metric.id ? "border-teal-500 shadow-lg ring-2 ring-teal-100" : ""}`}
-              onClick={() => setSelected(selected === metric.id ? null : metric.id)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${metric.iconBg}`}>
-                    <metric.icon className="w-4 h-4" />
+      <div className="flex flex-col gap-5 lg:flex-row">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-[48%]">
+          {metrics.map((metric) => {
+            const isSelected = selected === metric.id;
+            return (
+              <Card
+                key={metric.title}
+                className={`ui-surface-card ui-surface-card-interactive min-h-[168px] cursor-pointer border ${isSelected ? "border-teal-300 bg-teal-50/80 shadow-[0_18px_36px_rgba(15,118,110,0.12)]" : "border-slate-200 bg-white"}`}
+                onClick={() => setSelected(isSelected ? null : metric.id)}
+              >
+                <CardContent className="flex h-full flex-col p-5">
+                  <div className="mb-3 flex items-start gap-3">
+                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${metric.iconBg}`}>
+                      <metric.icon className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">Measured by {metric.measurement}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-sm text-gray-900 leading-tight">{metric.title}</h3>
-                    <p className="text-xs text-gray-400 truncate">{metric.measurement}</p>
+                  <p className="flex-1 text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className={`ui-pill px-2.5 py-1 text-[11px] ${isSelected ? "ui-pill-active" : ""}`}>{isSelected ? "Expanded" : "View details"}</span>
+                    {isSelected ? (
+                      <ChevronUp className="h-4 w-4 text-teal-600" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-slate-400" />
+                    )}
                   </div>
-                </div>
-                <p className="text-xs text-gray-500 italic leading-relaxed">"{metric.canonicalQuestion}"</p>
-                {selected === metric.id ? (
-                  <ChevronUp className="w-3.5 h-3.5 text-teal-400 mt-2 ml-auto" />
-                ) : (
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-300 mt-2 ml-auto" />
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        {/* Detail Panel */}
-        <div className="lg:w-1/2">
+        <div className="flex-1">
           {!selectedMetric ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[300px] border-2 border-dashed border-gray-200 rounded-2xl text-center p-8">
-              <p className="text-sm text-gray-400">Select a capability to view its full definition, sub-metrics, scoring guidance, and coaching diagnostics.</p>
+            <div className="flex min-h-[320px] h-full items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 p-8 text-center">
+              <div className="max-w-sm">
+                <p className="text-base font-semibold text-slate-700">Select a capability to inspect its measurement framework.</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">Definitions, core metrics, optional expansions, and coaching diagnostics will appear here.</p>
+              </div>
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5 sticky top-4">
-              {/* Title */}
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedMetric.iconBg}`}>
-                  <selectedMetric.icon className="w-5 h-5" />
+            <div className="ui-surface-card sticky top-4 space-y-5 border border-slate-200 p-6">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${selectedMetric.iconBg}`}>
+                  <selectedMetric.icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <h2 className="font-bold text-gray-900">{selectedMetric.title}</h2>
-                  <p className="text-xs text-gray-500">Measured by: {selectedMetric.measurement}</p>
+                  <h2 className="text-xl font-bold leading-tight text-slate-900">{selectedMetric.title}</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-500">Measured by {selectedMetric.measurement}</p>
                 </div>
               </div>
 
-              {/* Definition */}
-              <div>
-                <p className="text-sm text-gray-700 leading-relaxed">{selectedMetric.description}</p>
-              </div>
+              <p className="text-sm leading-relaxed text-slate-700">{selectedMetric.description}</p>
 
-              {/* Core Sub-metrics */}
-              <div>
-                <div className="mb-2">
-                  <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Core Metrics (Required)</span>
+              <section>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Core metrics</span>
+                  <span className="ui-pill ui-pill-active px-2.5 py-1 text-[11px]">Required</span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {selectedMetric.submetrics.map((s, i) => (
-                    <div key={i} className="bg-white rounded-lg p-3 border border-gray-200">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs px-2 py-1 rounded-full bg-teal-500 text-white font-medium">Core</span>
-                      </div>
-                      <p className="text-xs font-semibold text-gray-800 mb-0.5">{s.name}</p>
-                      <p className="text-xs text-gray-500 italic">{s.question}</p>
+                    <div key={i} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-semibold leading-snug text-slate-800">{s.name}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-500">{s.question}</p>
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              {/* Optional metrics */}
               {selectedMetric.optional?.length > 0 && (
-                <div>
-                  <div className="mb-2">
-                    <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Optional Expansion</span>
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Optional expansion</span>
+                    <span className="ui-pill px-2.5 py-1 text-[11px]">Supplemental</span>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     {selectedMetric.optional.map((s, i) => (
-                      <div key={i} className="bg-white rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs px-2 py-1 rounded-full bg-teal-50 text-teal-700 font-medium border border-teal-200">Optional</span>
-                        </div>
-                        <p className="text-xs font-semibold text-gray-600 mb-0.5">{s.name}</p>
-                        <p className="text-xs text-gray-400 italic">{s.question}</p>
+                      <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <p className="text-sm font-semibold leading-snug text-slate-700">{s.name}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-slate-500">{s.question}</p>
                       </div>
                     ))}
                   </div>
-                </div>
+                </section>
               )}
 
-              {/* Coaching Diagnostics */}
-              <div>
-                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wide block mb-2">Coaching Diagnostics</span>
-                <div className="space-y-1">
-                  {selectedMetric.coaching.map((c, i) => (
-                    <p key={i} className="text-xs text-gray-500 leading-relaxed">• {c}</p>
+              <section>
+                <span className="mb-3 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Coaching diagnostics</span>
+                <ul className="ui-bullet-list text-sm leading-relaxed text-slate-600">
+                  {selectedMetric.coaching.map((item, i) => (
+                    <li key={i}>{item}</li>
                   ))}
-                </div>
-              </div>
+                </ul>
+              </section>
 
-              {/* Canonical statement */}
-              <div className="bg-teal-50 border border-teal-100 rounded-xl p-3">
-                <p className="text-xs font-semibold text-teal-700 mb-1">Canonical Definition</p>
-                <p className="text-xs text-gray-600 italic leading-relaxed">"{selectedMetric.canonical}"</p>
+              <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Canonical definition</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-700">“{selectedMetric.canonical}”</p>
               </div>
             </div>
           )}

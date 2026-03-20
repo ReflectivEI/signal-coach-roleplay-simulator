@@ -13,21 +13,21 @@ const HCP_STATES = [
 ];
 
 const STATE_META = {
-  'neutral':          { label: 'Neutral',          color: '#94a3b8', bg: '#f1f5f9', text: '#475569' },
-  'engaged':          { label: 'Engaged',           color: '#14b8a6', bg: '#f0fdfa', text: '#0f766e' },
-  'time-pressured':   { label: 'Time-Pressured',    color: '#f59e0b', bg: '#fffbeb', text: '#b45309' },
-  'resistant':        { label: 'Resistant',         color: '#f97316', bg: '#fff7ed', text: '#c2410c' },
-  'boundary-setting': { label: 'Boundary-Setting',  color: '#ef4444', bg: '#fef2f2', text: '#b91c1c' },
-  'irritated':        { label: 'Irritated',         color: '#dc2626', bg: '#fef2f2', text: '#991b1b' },
-  'disengaging':      { label: 'Disengaging',       color: '#6b7280', bg: '#f9fafb', text: '#374151' },
+  'neutral':          { label: 'Neutral',          color: '#94a3b8', bg: '#f8fafc', text: '#475569' },
+  'engaged':          { label: 'Engaged',          color: '#14b8a6', bg: '#f0fdfa', text: '#0f766e' },
+  'time-pressured':   { label: 'Time-Pressured',   color: '#f59e0b', bg: '#fffbeb', text: '#b45309' },
+  'resistant':        { label: 'Resistant',        color: '#f59e0b', bg: '#fff7ed', text: '#b45309' },
+  'boundary-setting': { label: 'Boundary-Setting', color: '#f97316', bg: '#fff7ed', text: '#c2410c' },
+  'irritated':        { label: 'Irritated',        color: '#f97316', bg: '#fff7ed', text: '#c2410c' },
+  'disengaging':      { label: 'Disengaging',      color: '#6b7280', bg: '#f8fafc', text: '#475569' },
 };
 
 // Alignment score color
 function alignmentColor(score) {
-  if (!score || score === 0) return '#d1d5db';
-  if (score >= 4) return '#22c55e';
+  if (!score || score === 0) return '#cbd5e1';
+  if (score >= 4) return '#0f766e';
   if (score >= 3) return '#f59e0b';
-  return '#ef4444';
+  return '#f97316';
 }
 
 function alignmentLabel(score) {
@@ -291,8 +291,8 @@ function TransitionTable({ transitions }) {
                 <td className="py-1.5 px-2 text-center">
                   {isSame ? <span className="text-gray-400">— Held</span>
                     : isEscalation
-                      ? <span className="text-orange-500 font-medium">↑ Escalation</span>
-                      : <span className="text-teal-600 font-medium">↓ De-escalation</span>}
+                      ? <span className="font-medium text-amber-700">↑ Escalation</span>
+                      : <span className="font-medium text-teal-700">↓ De-escalation</span>}
                 </td>
                 <td className="py-1.5 px-2 text-center">
                   {t.avgAlignment !== null
@@ -333,7 +333,7 @@ export default function StateTransitionFlow({ sessions }) {
   const worstEscalation = escalations.sort((a, b) => b.count - a.count)[0];
 
   return (
-    <div className="bg-white border border-teal-100 rounded-xl p-5 space-y-4 hover:shadow-lg hover:shadow-teal-100/30 transition-all">
+    <div className="ui-surface-card space-y-4 border border-slate-200 p-5 transition-all hover:border-teal-200">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -346,14 +346,14 @@ export default function StateTransitionFlow({ sessions }) {
           </p>
         </div>
         <div className="flex-shrink-0">
-          <div className="flex items-center gap-3 text-xs">
-            <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded inline-block bg-teal-400" />De-escalation</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-1.5 rounded inline-block bg-orange-400" />Escalation</span>
+          <div className="flex items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded bg-teal-500" />De-escalation</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-1.5 w-3 rounded bg-amber-500" />Escalation</span>
           </div>
-          <div className="flex items-center gap-3 text-xs mt-1.5">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block bg-green-400" />Strong align (≥4)</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block bg-yellow-400" />Adequate (3)</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full inline-block bg-red-400" />Weak (&lt;3)</span>
+          <div className="mt-1.5 flex items-center gap-3 text-xs text-slate-500">
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-teal-600" />Strong align (≥4)</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />Adequate (3)</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-amber-500" />Weak (&lt;3)</span>
           </div>
         </div>
       </div>
@@ -361,15 +361,15 @@ export default function StateTransitionFlow({ sessions }) {
       {/* Mini stats */}
       {totalTransitions > 0 && (
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-blue-50/50 border border-blue-200 rounded-lg p-3 text-center hover:shadow-md hover:shadow-blue-100/30 transition-all">
-            <div className="text-lg font-bold text-blue-700">{escalationRate}%</div>
-            <div className="text-xs text-blue-600">Escalation Rate</div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3 text-center">
+            <div className="text-lg font-bold text-amber-800">{escalationRate}%</div>
+            <div className="text-xs text-amber-700">Escalation Rate</div>
           </div>
-          <div className="bg-teal-50/50 border border-teal-200 rounded-lg p-3 text-center hover:shadow-md hover:shadow-teal-100/30 transition-all">
+          <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-3 text-center">
             <div className="text-lg font-bold text-teal-700">{deEscalationRate}%</div>
-            <div className="text-xs text-teal-600">De-escalation Rate</div>
+            <div className="text-xs text-teal-700">De-escalation Rate</div>
           </div>
-          <div className="bg-slate-50/50 border border-slate-200 rounded-lg p-3 text-center hover:shadow-md hover:shadow-slate-100/30 transition-all">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
             <div className="text-lg font-bold text-slate-700">{totalTransitions}</div>
             <div className="text-xs text-slate-600">Total Transitions</div>
           </div>
@@ -378,7 +378,7 @@ export default function StateTransitionFlow({ sessions }) {
 
       {/* Worst escalation path callout */}
       {worstEscalation && (
-        <div className="flex items-start gap-2 bg-blue-50/50 border border-blue-200 rounded-lg px-3 py-2.5 text-xs text-blue-800">
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900">
           <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
           <span>
             Most common escalation: <strong>{STATE_META[worstEscalation.from]?.label}</strong> → <strong>{STATE_META[worstEscalation.to]?.label}</strong> ({worstEscalation.count}× observed
