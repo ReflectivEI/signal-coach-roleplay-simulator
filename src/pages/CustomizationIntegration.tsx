@@ -133,6 +133,7 @@ const protectionPoints = [
   "It does not infer intent, emotion, or personality.",
   "The 8 behavioral metrics evaluate rep execution only.",
   "Client frameworks do not change scoring logic.",
+  "This does not change scoring.",
   "This preserves consistency across enterprise deployments.",
 ];
 
