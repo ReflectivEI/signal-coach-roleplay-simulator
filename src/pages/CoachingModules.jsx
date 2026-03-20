@@ -1,15 +1,14 @@
 // @ts-nocheck
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2 } from "lucide-react";
+import { ChevronRight, MessageCircle, Users, FileText, ShieldAlert, CheckCircle2, Brain, BookOpen, Lightbulb, Target, ArrowRight, Sparkles, Loader2, Wand2, GraduationCap, Layers3 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
-// ...existing code...
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 
-// Extract all capability IDs from SOT (Single Source of Truth)
-const ALL_CAPABILITY_IDS = SIGNAL_CAPABILITIES.map(c => c.id);
+const ALL_CAPABILITY_IDS = SIGNAL_CAPABILITIES.map((c) => c.id);
+const CAPABILITY_LABELS = Object.fromEntries(SIGNAL_CAPABILITIES.map((capability) => [capability.id, capability.label || capability.name || capability.id.replace(/_/g, " ")]));
 
 const modules = [
   {
@@ -34,7 +33,6 @@ const modules = [
     ],
     exercises: ["Practice identifying contextual cues before asking your next question", "Record a call and audit: did each question follow a signal?"],
     relatedCapabilities: ["signal_awareness", "signal_interpretation", "customer_engagement"],
-    aiCoachPrompt: "Provide personalized advice for applying Signal Awareness (Question Quality) in pharma sales. Focus on how to craft contextual, signal-triggered questions that move conversations forward.",
   },
   {
     id: "stakeholder_mapping",
@@ -58,7 +56,6 @@ const modules = [
     ],
     exercises: ["Map the decision-making unit for a current territory account", "Identify the influence driver of your next 3 HCP calls before entering the office"],
     relatedCapabilities: ["customer_engagement", "signal_interpretation", "adaptive_response"],
-    aiCoachPrompt: "Provide personalized advice for applying Stakeholder Mapping in pharma sales. Focus on identifying HCP types and influence drivers, and tailoring your engagement approach.",
   },
   {
     id: "clinical_evidence",
@@ -82,7 +79,6 @@ const modules = [
     ],
     exercises: ["Reframe a clinical data point into an outcome statement for three different HCP profiles", "Practice the 'So what for your patients?' bridge after every efficacy claim"],
     relatedCapabilities: ["value_connection", "signal_awareness", "signal_interpretation"],
-    aiCoachPrompt: "Provide personalized advice for applying Clinical Evidence (Value Framing) in pharma sales. Focus on connecting clinical data to customer priorities and translating evidence into patient outcomes.",
   },
   {
     id: "objection_handling",
@@ -106,7 +102,6 @@ const modules = [
     ],
     exercises: ["Role-play with a colleague who raises three different objection types — practice the acknowledge-engage-redirect sequence", "Audit your last 5 objection moments: did you acknowledge before advancing?"],
     relatedCapabilities: ["objection_navigation", "signal_interpretation", "adaptive_response"],
-    aiCoachPrompt: "Provide personalized advice for applying Objection Handling in pharma sales. Focus on non-defensive responses, acknowledging concerns, and redirecting conversations productively.",
   },
   {
     id: "closing_techniques",
@@ -130,7 +125,6 @@ const modules = [
     ],
     exercises: ["Practice summarizing the conversation into a 'natural next step' at the end of each role-play", "Identify the readiness signal in a past transcript — where was the window, and did you take it?"],
     relatedCapabilities: ["commitment_generation", "conversation_management", "signal_interpretation"],
-    aiCoachPrompt: "Provide personalized advice for applying Closing Techniques (Commitment Generation) in pharma sales. Focus on creating specific next steps, recognizing readiness signals, and ensuring customer ownership.",
   },
   {
     id: "behavioral_mastery",
@@ -154,25 +148,48 @@ const modules = [
     ],
     exercises: ["Complete a full role-play with annotation enabled — review every highlighted moment and ask 'what signal did I respond to?'", "Select one capability per week for deliberate practice focus"],
     relatedCapabilities: ALL_CAPABILITY_IDS,
-    aiCoachPrompt: "Provide personalized advice for achieving Behavioral Mastery across all Signal Intelligence Capabilities in pharma sales. Focus on integrating all capabilities into adaptive, responsive conversations.",
   },
 ];
 
+function capabilityLabel(capabilityId) {
+  return CAPABILITY_LABELS[capabilityId] || capabilityId.replace(/_/g, " ");
+}
+
+const markdownComponents = {
+  ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
+  ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+  p: ({ children }) => <p className="leading-relaxed text-gray-700">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+};
+
+function SectionHeader({ icon: Icon, iconClassName, title }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <Icon className={`h-4 w-4 ${iconClassName}`} />
+      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+    </div>
+  );
+}
+
 export default function CoachingModules() {
-  const [activeModule, setActiveModule] = useState(null);
+  const [activeModule, setActiveModule] = useState(modules[0]?.id ?? null);
   const [aiContent, setAiContent] = useState({});
   const [aiLoading, setAiLoading] = useState(null);
+  const [selectedAiType, setSelectedAiType] = useState({});
 
-  const open = modules.find((m) => m.id === activeModule);
+  const open = useMemo(() => modules.find((m) => m.id === activeModule), [activeModule]);
 
   const generateAIContent = async (moduleId, type) => {
     const key = `${moduleId}_${type}`;
+    setSelectedAiType((prev) => ({ ...prev, [moduleId]: type }));
+    if (aiContent[key]) return;
     setAiLoading(key);
-    const module = modules.find(m => m.id === moduleId);
+    const module = modules.find((m) => m.id === moduleId);
     const prompts = {
       tips: `You are a pharma sales coach. Provide 5 advanced, actionable tips for mastering "${module.title}" based on Signal Intelligence™. Focus on observable behaviors and real-world application.`,
       example: `Write a realistic example conversation between a sales rep and HCP, where the rep demonstrates excellent "${module.title}". Include dialogue and brief coaching notes on what made each exchange effective.`,
-      checklist: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions.`
+      checklist: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions.`,
     };
     try {
       const res = await fetch('/api/llm/invoke', {
@@ -182,216 +199,245 @@ export default function CoachingModules() {
       });
       const data = await res.json();
       let content = data.response || data.text || data.content || '';
-      // Strip markdown code blocks for clean display
       content = content.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
-      setAiContent(prev => ({ ...prev, [key]: content }));
+      setAiContent((prev) => ({ ...prev, [key]: content }));
     } catch {
-      setAiContent(prev => ({ ...prev, [key]: 'AI service unavailable.' }));
+      setAiContent((prev) => ({ ...prev, [key]: 'AI service unavailable.' }));
     }
     setAiLoading(null);
   };
 
+  const activeAiType = open ? selectedAiType[open.id] : null;
+  const activeAiKey = open && activeAiType ? `${open.id}_${activeAiType}` : null;
+  const activeAiCopy = activeAiKey ? aiContent[activeAiKey] : null;
+  const aiOptions = [
+    { type: "tips", label: "Advanced Tips" },
+    { type: "example", label: "Example Conversation" },
+    { type: "checklist", label: "Pre-Call Checklist" },
+  ];
+
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Coaching Modules</h1>
-        <p className="text-sm text-gray-500 mt-1">Signal Intelligence™ learning paths — definitions, key behaviors, and scoring anchors</p>
+    <div className="max-w-7xl mx-auto p-6 md:p-8">
+      <div className="enterprise-hero mb-6 overflow-hidden p-6 md:p-7">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10 shadow-inner">
+                <GraduationCap className="h-6 w-6 text-teal-200" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-200">Enterprise learning hub</p>
+                <h1 className="mt-1 text-3xl font-bold text-white">Coaching Modules</h1>
+              </div>
+            </div>
+            <p className="mt-4 max-w-2xl text-sm leading-relaxed text-slate-200">
+              Develop Signal Intelligence capabilities through structured learning paths.
+            </p>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-300">
+              Coaching Modules group related Signal Intelligence capabilities into focused learning paths.
+            </p>
+          </div>
+          <div className="enterprise-hero-panel w-full max-w-sm p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Module coverage</p>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-left">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-300">Learning paths</p>
+                <p className="mt-2 text-2xl font-bold text-white">{modules.length}</p>
+                <p className="mt-1 text-xs text-slate-300">focused modules</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs uppercase tracking-wide text-slate-300">Capabilities</p>
+                <p className="mt-2 text-2xl font-bold text-white">{SIGNAL_CAPABILITIES.length}</p>
+                <p className="mt-1 text-xs text-slate-300">behavioral metrics covered</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Module List */}
-        <div className="lg:col-span-1 space-y-2">
-          {modules.map((mod) => (
-            <button
-              key={mod.id}
-              onClick={() => setActiveModule(activeModule === mod.id ? null : mod.id)}
-              className={`w-full text-left rounded-xl border p-4 transition-all ${activeModule === mod.id
-                ? "border-teal-400 bg-teal-50 shadow-sm"
-                : "border-gray-200 bg-white hover:border-gray-300"
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${mod.iconBg}`}>
-                  <mod.icon className="w-4 h-4" />
+      <div className="mb-4">
+        <h2 className="text-2xl font-bold text-gray-900">Coaching Modules</h2>
+        <p className="mt-1 text-sm text-gray-500">Signal Intelligence™ learning paths — definitions, key behaviors, scoring anchors, and guided AI support.</p>
+        <div className="mt-3 inline-flex max-w-3xl items-start gap-2 rounded-2xl border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-slate-700">
+          <Layers3 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-700" />
+          <span>Coaching Modules group related Signal Intelligence capabilities into focused learning paths.</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+        <div className="space-y-2.5 lg:col-span-1">
+          {modules.map((mod) => {
+            const isSelected = activeModule === mod.id;
+            return (
+              <button
+                key={mod.id}
+                onClick={() => setActiveModule(mod.id)}
+                className={`ui-surface-card ui-surface-card-interactive w-full rounded-2xl border p-4 text-left ${isSelected ? "border-teal-300 bg-teal-50/90 shadow-md ring-1 ring-teal-100" : "border-teal-100/80 bg-white hover:bg-teal-50/70"}`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${mod.iconBg}`}>
+                    <mod.icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{mod.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">{mod.tagline}</p>
+                      </div>
+                      <ChevronRight className={`mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400 transition-transform ${isSelected ? "rotate-90 text-teal-600" : ""}`} />
+                    </div>
+                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Covers</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {mod.capabilities.slice(0, 2).map((capability) => (
+                        <span key={capability} className="ui-pill px-2.5 py-1 text-[11px]">
+                          {capabilityLabel(capability)}
+                        </span>
+                      ))}
+                      {mod.capabilities.length > 2 && (
+                        <span className="ui-pill px-2.5 py-1 text-[11px]">+{mod.capabilities.length - 2} more</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm text-gray-900">{mod.title}</p>
-                  <p className="text-xs text-gray-400 truncate">{mod.tagline}</p>
-                </div>
-                <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${activeModule === mod.id ? "rotate-90" : ""}`} />
-              </div>
-              {activeModule === mod.id && (
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {mod.capabilities.slice(0, 3).map((c) => (
-                    <span key={c} className="px-2 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200">
-                      {c.replace(/_/g, " ")}
-                    </span>
-                  ))}
-                  {mod.capabilities.length > 3 && <span className="text-xs text-gray-400">+{mod.capabilities.length - 3} more</span>}
-                </div>
-              )}
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Detail Panel */}
         <div className="lg:col-span-2">
           {!open ? (
-            <div className="h-full flex items-center justify-center text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl py-20">
+            <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-gray-200 py-20 text-center text-gray-400">
               <div>
-                <BookOpen className="w-8 h-8 mx-auto mb-3 opacity-40" />
+                <BookOpen className="mx-auto mb-3 h-8 w-8 opacity-40" />
                 <p className="font-medium text-gray-500">Select a module to view its content</p>
-                <p className="text-sm mt-1">Definitions, key behaviors, scoring anchors, and exercises</p>
+                <p className="mt-1 text-sm">Definitions, key behaviors, scoring anchors, and exercises</p>
               </div>
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              {/* Module Header */}
-              <div className={`px-6 py-5 border-b ${open.iconBg.replace("text-", "border-").replace("bg-", "bg-").replace("100", "50")} border-opacity-50`}>
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${open.iconBg}`}>
-                    <open.icon className="w-5 h-5" />
+            <div className="ui-surface-card overflow-hidden rounded-[26px] border border-teal-100">
+              <div className={`border-b px-6 py-5 ${open.iconBg.replace("text-", "border-").replace("bg-", "bg-").replace("100", "50")} border-opacity-50`}>
+                <div className="flex items-start gap-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${open.iconBg}`}>
+                    <open.icon className="h-5 w-5" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h2 className="font-bold text-gray-900">{open.title}</h2>
                     <p className="text-xs text-gray-500">{open.tagline}</p>
+                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Covers</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {open.capabilities.map((capability) => (
+                        <span key={capability} className="ui-pill px-3 py-1.5 text-xs">
+                          {capabilityLabel(capability)}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-3">
-                  {open.capabilities.map((c) => (
-                    <span key={c} className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200">
-                      {c.replace(/_/g, " ")}
-                    </span>
-                  ))}
                 </div>
               </div>
 
-              <div className="p-6 space-y-8 overflow-y-auto max-h-[70vh]">
-                {/* Definition */}
+              <div className="max-h-[70vh] space-y-6 overflow-y-auto p-6">
                 <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Lightbulb className="w-4 h-4 text-yellow-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">Definition</h3>
-                  </div>
-                  <p className="text-sm text-gray-600 leading-relaxed bg-teal-50 border border-teal-100 rounded-lg p-4">{open.definition}</p>
+                  <SectionHeader icon={Lightbulb} iconClassName="text-yellow-500" title="Definition" />
+                  <p className="rounded-xl border border-teal-100 bg-teal-50 p-4 text-sm leading-relaxed text-gray-600">{open.definition}</p>
                 </section>
 
-                {/* Key Behaviors */}
                 <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Target className="w-4 h-4 text-teal-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">Key Behaviors</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {open.keyBehaviors.map((b, i) => (
-                      <div key={i} className="flex gap-3 p-4 bg-teal-50 border border-teal-100 rounded-lg">
-                        <div className="w-1.5 h-1.5 rounded-full bg-teal-500 flex-shrink-0 mt-1" />
-                        <div>
-                          <span className="text-xs font-semibold text-gray-800">{b.label}: </span>
-                          <span className="text-xs text-gray-600 leading-relaxed">{b.desc}</span>
+                  <SectionHeader icon={Target} iconClassName="text-teal-500" title="Key Behaviors" />
+                  <div className="space-y-2.5">
+                    {open.keyBehaviors.map((behavior, index) => (
+                      <div key={index} className="flex gap-3 rounded-xl border border-teal-100 bg-teal-50 p-3.5">
+                        <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
+                        <div className="text-sm leading-relaxed text-gray-600">
+                          <span className="font-semibold text-gray-800">{behavior.label}: </span>
+                          <span>{behavior.desc}</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 </section>
 
-                {/* Scoring Anchors */}
                 <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <BookOpen className="w-4 h-4 text-blue-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">Scoring Anchors (Signal Intelligence™ 1–5)</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {open.scoringAnchors.map((a, i) => {
-                      const colors = { "5": "bg-green-50 border-green-200 text-green-800", "3": "bg-yellow-50 border-yellow-200 text-yellow-800", "1": "bg-red-50 border-red-200 text-red-800" };
+                  <SectionHeader icon={BookOpen} iconClassName="text-blue-500" title="Scoring Anchors (Signal Intelligence™ 1–5)" />
+                  <div className="space-y-2.5">
+                    {open.scoringAnchors.map((anchor, index) => {
+                      const colors = {
+                        "5": "bg-green-50 border-green-200 text-green-800",
+                        "3": "bg-yellow-50 border-yellow-200 text-yellow-800",
+                        "1": "bg-red-50 border-red-200 text-red-800",
+                      };
                       return (
-                        <div key={i} className={`flex gap-3 items-start p-4 rounded-lg border ${colors[a.score]}`}>
-                          <span className="font-bold text-sm flex-shrink-0 w-12">{a.score}/5</span>
-                          <span className="text-xs leading-relaxed">{a.desc}</span>
+                        <div key={index} className={`flex items-start gap-3 rounded-xl border p-3.5 ${colors[anchor.score]}`}>
+                          <span className="w-12 flex-shrink-0 text-sm font-bold">{anchor.score}/5</span>
+                          <span className="text-sm leading-relaxed">{anchor.desc}</span>
                         </div>
                       );
                     })}
                   </div>
                 </section>
 
-                {/* Exercises */}
                 <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <ArrowRight className="w-4 h-4 text-purple-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">Practice Exercises</h3>
-                  </div>
-                  <div className="space-y-3">
-                    {open.exercises.map((ex, i) => (
-                      <div key={i} className="flex gap-3 items-start p-3 bg-teal-50 border border-teal-100 rounded-lg">
-                        <span className="text-xs font-bold text-teal-700 flex-shrink-0 w-5">{i + 1}.</span>
-                        <p className="text-xs text-gray-600 leading-relaxed">{ex}</p>
+                  <SectionHeader icon={ArrowRight} iconClassName="text-purple-500" title="Practice Exercises" />
+                  <div className="space-y-2.5">
+                    {open.exercises.map((exercise, index) => (
+                      <div key={index} className="flex items-start gap-3 rounded-xl border border-teal-100 bg-teal-50 p-3.5">
+                        <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-teal-700 shadow-sm">{index + 1}</span>
+                        <p className="text-sm leading-relaxed text-gray-600">{exercise}</p>
                       </div>
                     ))}
                   </div>
                 </section>
 
-                {/* AI-Powered Content Generation */}
-                <section className="border-t border-gray-100 pt-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4 text-teal-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">AI-Generated Content</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[
-                      { type: "tips", label: "Advanced Tips" },
-                      { type: "example", label: "Example Conversation" },
-                      { type: "checklist", label: "Pre-Call Checklist" },
-                    ].map(({ type, label }) => {
+                <section className="border-t border-gray-100 pt-5">
+                  <SectionHeader icon={Sparkles} iconClassName="text-teal-500" title="AI-Generated Content" />
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {aiOptions.map(({ type, label }) => {
                       const key = `${open.id}_${type}`;
                       const isLoading = aiLoading === key;
-                      const hasContent = !!aiContent[key];
+                      const isActive = activeAiType === type;
+                      const hasContent = Boolean(aiContent[key]);
                       return (
                         <Button
                           key={type}
                           size="sm"
                           variant="outline"
-                          className={`text-xs border border-slate-300 ${hasContent ? "bg-teal-500 hover:bg-teal-600 text-white border-teal-500" : "bg-white text-slate-700 hover:bg-teal-50"}`}
+                          className={`ui-pill rounded-full px-3 py-2 text-xs shadow-none ${isActive ? "ui-pill-active" : ""} ${hasContent ? "border-teal-300" : ""}`}
                           onClick={() => generateAIContent(open.id, type)}
-                          disabled={isLoading || aiLoading !== null}
+                          disabled={isLoading || (aiLoading !== null && aiLoading !== key)}
                         >
-                          {isLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Wand2 className="w-3 h-3 mr-1" />}
+                          {isLoading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Wand2 className="mr-1 h-3 w-3" />}
                           {label}
                         </Button>
                       );
                     })}
                   </div>
-                  {["tips", "example", "checklist"].map((type) => {
-                    const key = `${open.id}_${type}`;
-                    if (!aiContent[key]) return null;
-                    const titles = { tips: "Advanced Tips", example: "Example Conversation", checklist: "Pre-Call Checklist" };
-                    return (
-                      <div key={type} className="mb-4 bg-teal-50 border border-teal-100 rounded-xl p-5 space-y-3">
-                        <p className="text-xs font-semibold text-teal-700 uppercase tracking-wide">{titles[type]}</p>
-                        <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-2">
-                          <ReactMarkdown>{aiContent[key]}</ReactMarkdown>
-                        </div>
+                  {activeAiCopy ? (
+                    <div className="space-y-3 rounded-xl border border-teal-100 bg-teal-50 p-5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                        {aiOptions.find((option) => option.type === activeAiType)?.label}
+                      </p>
+                      <div className="ui-markdown prose prose-sm max-w-none text-gray-700">
+                        <ReactMarkdown components={markdownComponents}>{activeAiCopy}</ReactMarkdown>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-teal-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                      Select an AI content pill to load module-specific tips, examples, or a checklist.
+                    </div>
+                  )}
                 </section>
 
-                {/* AI Coach Integration */}
-                <section className="border-t border-gray-100 pt-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Brain className="w-4 h-4 text-teal-500" />
-                    <h3 className="font-semibold text-sm text-gray-800">AI Coach</h3>
-                  </div>
-                  <p className="text-xs text-gray-600 mb-4 leading-relaxed">Describe your sales situation and get personalized advice based on {open.title}.</p>
-                  <CoachInputPanel moduleId={open.id} moduleName={open.title} moduleTagline={open.tagline} />
+                <section className="border-t border-gray-100 pt-5">
+                  <SectionHeader icon={Brain} iconClassName="text-teal-500" title="AI Coach" />
+                  <p className="mb-4 text-sm leading-relaxed text-gray-600">Describe your sales situation and get personalized advice based on {open.title}.</p>
+                  <CoachInputPanel moduleName={open.title} moduleTagline={open.tagline} />
                 </section>
 
-                {/* Links */}
-                <section className="flex gap-3 pt-4 border-t border-gray-100">
-                  <Link to={createPageUrl("RolePlaySimulator")} className="flex items-center gap-1.5 text-xs text-teal-600 hover:text-teal-700 font-medium">
-                    <ArrowRight className="w-3.5 h-3.5" /> Practice in Role Play
+                <section className="flex gap-3 border-t border-gray-100 pt-4">
+                  <Link to={createPageUrl("RolePlaySimulator")} className="flex items-center gap-1.5 text-xs font-medium text-teal-600 hover:text-teal-700">
+                    <ArrowRight className="h-3.5 w-3.5" /> Practice in Role Play
                   </Link>
-                  <Link to={createPageUrl("Exercises")} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium">
-                    <ArrowRight className="w-3.5 h-3.5" /> Try an Exercise
+                  <Link to={createPageUrl("Exercises")} className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700">
+                    <ArrowRight className="h-3.5 w-3.5" /> Try an Exercise
                   </Link>
                 </section>
               </div>
@@ -403,7 +449,7 @@ export default function CoachingModules() {
   );
 }
 
-function CoachInputPanel({ moduleId, moduleName, moduleTagline }) {
+function CoachInputPanel({ moduleName, moduleTagline }) {
   const [input, setInput] = React.useState("");
   const [response, setResponse] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
@@ -426,27 +472,25 @@ function CoachInputPanel({ moduleId, moduleName, moduleTagline }) {
   };
 
   return (
-    <div className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-lg border border-teal-200 p-5 space-y-4">
+    <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 p-5 space-y-4">
       <textarea
         placeholder="E.g., 'I'm meeting with a skeptical cardiologist who prefers data-driven conversations...'"
         value={input}
         onChange={(e) => setInput(e.target.value)}
-        className="w-full text-sm rounded-lg border border-teal-200 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-teal-400 resize-none leading-relaxed"
+        className="w-full resize-none rounded-lg border border-teal-200 bg-white p-4 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-teal-400"
         rows="3"
       />
       <Button
         onClick={handleGetAdvice}
         disabled={isLoading || !input.trim()}
-        className="w-full bg-teal-500 hover:bg-teal-600 text-white text-xs font-medium"
+        className="w-full bg-teal-500 text-xs font-medium text-white hover:bg-teal-600"
       >
-        {isLoading ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />}
+        {isLoading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Sparkles className="mr-1 h-3 w-3" />}
         {isLoading ? "Getting Advice..." : "Get AI Advice"}
       </Button>
       {response && (
-        <div className="bg-white rounded-lg p-5 border border-teal-100 text-xs text-gray-700 leading-relaxed space-y-3">
-          <div className="prose prose-sm max-w-none text-gray-700 space-y-2">
-            <ReactMarkdown>{response}</ReactMarkdown>
-          </div>
+        <div className="ui-markdown rounded-lg border border-teal-100 bg-white p-5 text-sm leading-relaxed text-gray-700">
+          <ReactMarkdown components={markdownComponents}>{response}</ReactMarkdown>
         </div>
       )}
     </div>

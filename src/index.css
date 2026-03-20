@@ -108,7 +108,7 @@
     border-radius: 24px;
     border: 1px solid rgba(148, 163, 184, 0.22);
     background: rgba(255, 255, 255, 0.96);
-    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
   }
 
   .ui-surface-card-interactive {
@@ -147,9 +147,10 @@
   }
 
   .ui-pill-active {
-    border-color: rgba(57, 172, 172, 0.95);
-    background: rgba(230, 247, 247, 0.98);
+    border-color: rgba(57, 172, 172, 0.98);
+    background: rgba(214, 244, 244, 0.98);
     color: #0f766e;
+    box-shadow: inset 0 0 0 1px rgba(57, 172, 172, 0.18);
   }
 
   .ui-pill-ghost {
@@ -163,6 +164,58 @@
     border-color: rgba(94, 234, 212, 0.72);
     background: rgba(255, 255, 255, 0.14);
     color: white;
+  }
+
+
+  .ui-bullet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.625rem;
+    padding-left: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .ui-bullet-list > li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    margin: 0;
+  }
+
+  .ui-bullet-list > li::before {
+    content: "•";
+    flex-shrink: 0;
+    color: #0f766e;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  .ui-bullet-list-ordered {
+    counter-reset: ui-bullet-list;
+  }
+
+  .ui-bullet-list-ordered > li::before {
+    counter-increment: ui-bullet-list;
+    content: counter(ui-bullet-list) ".";
+    min-width: 1.1rem;
+  }
+
+  .ui-markdown h2,
+  .ui-markdown h3 {
+    margin-top: 0;
+    margin-bottom: 0.75rem;
+  }
+
+  .ui-markdown p + h2,
+  .ui-markdown ul + h2,
+  .ui-markdown ol + h2 {
+    margin-top: 1.25rem;
+  }
+
+  .ui-markdown ul,
+  .ui-markdown ol {
+    margin: 0.75rem 0 0;
   }
 
   .ui-banner-note {

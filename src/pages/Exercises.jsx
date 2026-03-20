@@ -7,6 +7,13 @@ import { Dumbbell, Sparkles, Target, Loader2, Wand2, MessageSquare, FileText, Li
 import ReactMarkdown from "react-markdown";
 import { formatScenarioText } from "../lib/utils";
 
+const markdownComponents = {
+  h2: ({ children }) => <h2 className="text-base font-semibold text-slate-900">{children}</h2>,
+  p: ({ children }) => <p className="text-sm leading-relaxed text-gray-700">{children}</p>,
+  ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
+  ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
+  li: ({ children }) => <li>{children}</li>,
+};
 
 function RefreshIcon({ className = "" }) {
   return (
@@ -211,7 +218,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="enterprise-hero mb-7 p-6">
+      <div className="enterprise-hero mb-6 p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <div className="flex items-center gap-3">
@@ -252,7 +259,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
         </div>
       </div>
 
-      <div className="ui-surface-card mb-7 p-4">
+      <div className="ui-surface-card mb-6 p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
         <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TOPICS.map((t) => (
@@ -268,7 +275,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7 items-stretch">
+      <div className="mb-6 grid grid-cols-1 items-stretch gap-4 md:grid-cols-2">
         <Card className="ui-surface-card ui-surface-card-interactive h-full flex flex-col border-teal-100">
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -326,14 +333,14 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       </div>
 
       {scenarioText && (
-        <Card className="ui-surface-card mb-7 border-teal-100">
-          <CardContent className="p-6 space-y-4">
+        <Card className="ui-surface-card mb-6 border-teal-100">
+          <CardContent className="space-y-5 p-5 md:p-6">
             <div className="flex items-center gap-2">
               <Wand2 className="w-4 h-4 text-teal-500" />
               <h3 className="font-semibold text-gray-900">Practice Scenario</h3>
             </div>
-            <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3">
-              <ReactMarkdown>{formatScenarioText(scenarioText)}</ReactMarkdown>
+            <div className="ui-markdown prose prose-sm max-w-none text-gray-700">
+              <ReactMarkdown components={markdownComponents}>{formatScenarioText(scenarioText)}</ReactMarkdown>
             </div>
           </CardContent>
         </Card>
