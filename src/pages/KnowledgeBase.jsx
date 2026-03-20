@@ -307,7 +307,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="mb-6 rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#13263f] to-[#154955] p-6 text-white shadow-xl">
+      <div className="enterprise-hero mb-6 p-6">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl">
             <div className="flex items-center gap-3">
@@ -329,7 +329,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                 { label: "Capabilities", value: SIGNAL_CAPABILITIES.length, sub: "Signal Intelligence anchors" },
                 { label: "Peer sharing", value: snippets.length, sub: "team-contributed snippets" },
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div key={item.label} className="enterprise-hero-panel rounded-2xl p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">{item.label}</p>
                   <p className="mt-2 text-xl font-bold text-white">{item.value}</p>
                   <p className="mt-1 text-xs text-slate-400">{item.sub}</p>
@@ -337,11 +337,11 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
               ))}
             </div>
           </div>
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5">
+          <div className="enterprise-hero-panel w-full max-w-md p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
             <div className="mt-4 space-y-3">
               {ENABLEMENT_HUB_SPOKES.filter(spoke => ["performance", "learning", "reports"].includes(spoke.id)).map((spoke) => (
-                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
+                <Link key={spoke.id} to={createPageUrl(spoke.page)} className="enterprise-hero-panel block rounded-2xl bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
                   <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
                   <p className="text-sm font-semibold text-white">{spoke.title}</p>
                   <p className="mt-1 text-xs leading-relaxed text-slate-300">{spoke.summary}</p>
@@ -353,7 +353,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
       </div>
 
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Knowledge Base</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Knowledge Base</h1>
         <p className="text-sm text-gray-600 mt-1">Industry guides, communication templates, and peer-shared best practices</p>
       </div>
 
@@ -363,7 +363,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           { label: "Communication Templates", value: communicationTemplates.length, tone: "bg-slate-50 border-slate-200 text-slate-800" },
           { label: "Signal Intelligence Capabilities", value: SIGNAL_CAPABILITIES.length, tone: "bg-amber-50 border-amber-200 text-amber-800" },
         ].map((item) => (
-          <div key={item.label} className={`rounded-xl border px-4 py-3 ${item.tone}`}>
+          <div key={item.label} className={`ui-surface-card rounded-xl px-4 py-3 ${item.tone}`}>
             <p className="text-xs uppercase tracking-wide font-semibold opacity-80">{item.label}</p>
             <p className="text-2xl font-bold mt-1">{item.value}</p>
           </div>
@@ -371,7 +371,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
       </div>
 
       {/* AI Q&A */}
-      <Card className="mb-8 border-teal-100">
+      <Card className="ui-surface-card mb-8 border-teal-100">
         <CardContent className="p-6 space-y-4">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-teal-500" />
@@ -389,7 +389,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
               {aiSourceArticles.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 items-center">
                   <span className="text-xs text-gray-500">Sources:</span>
-                  {aiSourceArticles.map(t => <span key={t} className="text-xs px-2 py-0.5 rounded-full border border-teal-200 text-teal-700 bg-teal-50">{t}</span>)}
+                  {aiSourceArticles.map(t => <span key={t} className="ui-pill ui-pill-active px-2 py-1">{t}</span>)}
                 </div>
               )}
               <div className="p-5 bg-teal-50 border border-teal-100 rounded-lg">
@@ -410,10 +410,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-              ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
-              : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-              }`}
+            className={`ui-pill px-3 py-1 ${activeTab === id ? "ui-pill-active" : ""}` }
           >
             <Icon className="w-3.5 h-3.5" /> {label}
           </button>
@@ -429,12 +426,16 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           </div>
           <Tabs value={activeCategory} onValueChange={setActiveCategory} className="mb-6">
             <TabsList className="bg-transparent flex-wrap h-auto gap-2 p-0">
-              {categories.map((cat) => <TabsTrigger key={cat} value={cat} className="text-sm px-4 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D]">{cat}</TabsTrigger>)}
+              {categories.map((cat) => (
+                <TabsTrigger key={cat} value={cat} className={`ui-pill text-sm px-4 py-2 ${activeCategory === cat ? "ui-pill-active" : ""}`}>
+                  {cat}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
           <div className="space-y-4">
             {filteredArticles.map((article, idx) => (
-              <Card key={article.title} className="hover:shadow-md transition-shadow">
+              <Card key={article.title} className="ui-surface-card ui-surface-card-interactive">
                 <CardContent className="p-5 space-y-3">
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-2">{article.title}</h3>
@@ -469,7 +470,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                     <NavPill onClick={() => setExpandedSummaries(prev => ({ ...prev, [idx]: true }))}><ChevronDown className="w-3 h-3" /> Show summary</NavPill>
                   )}
                   <div className="flex gap-1.5 flex-wrap">
-                    {article.tags.map((tag) => <span key={tag} className="text-xs px-2 py-0.5 rounded-full border border-gray-200 text-gray-600 bg-gray-50">{tag}</span>)}
+                    {article.tags.map((tag) => <span key={tag} className="ui-pill px-2 py-1 text-xs">{tag}</span>)}
                   </div>
                   <div className="flex gap-2 flex-wrap items-center">
                     <div className="flex items-center gap-1 border rounded-md overflow-hidden">
@@ -499,11 +500,11 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           <p className="text-sm text-gray-600 mb-6">Proven conversation frameworks. Use AI to personalize or ask questions about how to apply them.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {communicationTemplates.map((tmpl, idx) => (
-              <Card key={tmpl.title} className="hover:border-teal-200 hover:shadow-md transition-all">
+              <Card key={tmpl.title} className="ui-surface-card ui-surface-card-interactive">
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="font-semibold text-sm text-gray-900">{tmpl.title}</h4>
-                    {tmpl.capability && <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#e6f7f7", color: "#1A334D", border: "1px solid #b2e4e4" }}>{CAPABILITY_LABELS[tmpl.capability]}</span>}
+                    {tmpl.capability && <span className="ui-pill ui-pill-active px-2 py-1 flex-shrink-0">{CAPABILITY_LABELS[tmpl.capability]}</span>}
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg">{tmpl.content}</p>
                   <div className="flex gap-2">
@@ -555,7 +556,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
           {/* Share Form */}
           {showShareForm && (
-            <Card className="border-teal-200">
+            <Card className="ui-surface-card border-teal-100">
               <CardContent className="p-5 space-y-3">
                 <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2"><Users className="w-4 h-4 text-teal-500" /> Share Anonymously</h3>
                 <Input value={shareForm.title} onChange={e => setShareForm(p => ({ ...p, title: e.target.value }))} placeholder="Title (e.g. 'Handling the formulary objection')" className="text-sm" />
@@ -586,7 +587,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
               <div className="flex items-center gap-2 mb-3">
                 <Trophy className="w-4 h-4 text-amber-500" />
                 <h3 className="text-sm font-bold text-gray-900">Manager Curated</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">{curatedSnippets.length} featured</span>
+                <span className="ui-pill px-2 py-1 bg-amber-100 text-amber-800 border-amber-200">{curatedSnippets.length} featured</span>
               </div>
               <div className="space-y-3">
                 {curatedSnippets.map(snippet => (
@@ -599,7 +600,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           {/* Category Filter */}
           <div className="flex flex-wrap gap-2">
             {SNIPPET_CATEGORIES.map(cat => (
-              <button key={cat.id} onClick={() => setSnippetCatFilter(cat.id)} className={`text-sm px-4 py-2 rounded-full border font-semibold transition-all hover:-translate-y-0.5 ${snippetCatFilter === cat.id ? "border-[#1A334D] text-white" : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"}`} style={snippetCatFilter === cat.id ? { background: "#39ACAC" } : {}}>
+              <button key={cat.id} onClick={() => setSnippetCatFilter(cat.id)} className={`ui-pill text-sm px-4 py-2 ${snippetCatFilter === cat.id ? "ui-pill-active" : ""}`}>
                 {cat.label}
               </button>
             ))}
@@ -607,7 +608,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
           {/* Snippet List */}
           {filteredSnippets.length === 0 ? (
-            <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+            <div className="ui-surface-card text-center py-12 border-dashed">
               <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm font-semibold text-gray-600">No snippets yet</p>
               <p className="text-xs text-gray-500 mt-1">Be the first to share a winning communication strategy</p>
@@ -660,15 +661,15 @@ function SnippetCard({ snippet, upvoted, onUpvote, curated }) {
   const [copied, setCopied] = useState(false);
   const copy = () => { navigator.clipboard.writeText(snippet.content); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   return (
-    <Card className={`transition-all hover:shadow-md ${curated ? "border-amber-200 bg-amber-50/30" : "border-gray-100"}`}>
+    <Card className={`ui-surface-card ui-surface-card-interactive ${curated ? "border-amber-200 bg-amber-50/30" : "border-slate-200"}`}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="font-semibold text-sm text-gray-900">{snippet.title}</h4>
-            {curated && <span className="text-xs bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-2 py-0.5 flex items-center gap-1 font-medium"><Trophy className="w-2.5 h-2.5" /> Curated</span>}
+            {curated && <span className="ui-pill px-2 py-1 flex items-center gap-1 bg-amber-100 text-amber-700 border-amber-200 font-medium"><Trophy className="w-2.5 h-2.5" /> Curated</span>}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            {snippet.capability && <span className="text-xs px-2 py-0.5 rounded-full hidden sm:block" style={{ background: "#e6f7f7", color: "#1A334D", border: "1px solid #b2e4e4" }}>{snippet.capability.replace(/_/g, " ")}</span>}
+            {snippet.capability && <span className="ui-pill ui-pill-active hidden px-2 py-1 sm:block">{snippet.capability.replace(/_/g, " ")}</span>}
           </div>
         </div>
         <p className="text-sm text-gray-700 leading-relaxed bg-white border border-gray-100 rounded-lg p-3">{snippet.content}</p>

@@ -79,21 +79,21 @@ Constraints:
   }, [refreshTip]);
 
   return (
-    <div className={`rounded-lg border p-3 ${className}`} style={{ background: "#fef9c3", borderColor: "#eab308" }}>
-      <div className="flex items-center gap-2 text-xs font-bold mb-1.5" style={{ color: "#1A334D" }}>
-        <span className="w-4 h-4 rounded-full border-2 border-yellow-500"></span>
+    <div className={`ui-banner-note p-3 ${className}`}>
+      <div className="mb-1.5 flex items-center gap-2 text-xs font-bold text-[#1A334D]">
+        <span className="h-4 w-4 rounded-full border-2 border-amber-400 bg-white/70"></span>
         <span className="flex-1">Today's Tip</span>
         <button
           onClick={refreshTip}
           disabled={tipLoading}
-          className="rounded p-0.5 hover:bg-yellow-200/80 transition-colors"
+          className="rounded p-0.5 transition-colors hover:bg-amber-200/70"
           title="Refresh tip"
           type="button"
         >
           <RefreshCw className={`w-3 h-3 ${tipLoading ? "animate-spin" : ""}`} style={{ color: "#1A334D" }} />
         </button>
       </div>
-      <p className="text-sm leading-relaxed" style={{ color: "#334155" }}>
+      <p className="text-sm leading-relaxed text-slate-700">
         {tipLoading ? "Generating tip…" : tip}
       </p>
     </div>

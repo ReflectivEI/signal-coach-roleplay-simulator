@@ -211,7 +211,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto">
-      <div className="mb-7 rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#13263f] to-[#154955] p-6 text-white shadow-xl">
+      <div className="enterprise-hero mb-7 p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <div className="flex items-center gap-3">
@@ -228,7 +228,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {["Field-ready drills", "Signal Intelligence aligned", "Scenario-based practice"].map((item) => (
-                <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200">
+                <span key={item} className="ui-pill ui-pill-ghost px-3 py-1 text-xs">
                   {item}
                 </span>
               ))}
@@ -242,7 +242,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             <button
               type="button"
               onClick={resetGeneratedContent}
-              className="rounded-full border border-teal-200 bg-white/10 p-2.5 text-teal-100 hover:-translate-y-0.5 hover:border-white hover:bg-white/15 transition-all"
+              className="ui-pill ui-pill-ghost p-2.5 text-teal-100"
               title="Reset generated quiz and scenario"
               disabled={isGenerating || isGeneratingScenario}
             >
@@ -252,17 +252,14 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
         </div>
       </div>
 
-      <div className="mb-7 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="ui-surface-card mb-7 p-4">
         <p className="text-sm font-semibold text-gray-700 mb-3">Focus Topic (optional)</p>
         <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TOPICS.map((t) => (
             <button
               key={t.id}
               onClick={() => setSelectedTopic(selectedTopic === t.id ? null : t.id)}
-              className={`flex min-w-0 shrink-0 basis-[19%] items-center justify-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-semibold border transition-all whitespace-nowrap ${selectedTopic === t.id
-                ? "bg-teal-500 text-white border-teal-500"
-                : "bg-white text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-teal-50"
-                }`}
+              className={`ui-pill flex min-w-0 shrink-0 basis-[19%] items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] whitespace-nowrap ${selectedTopic === t.id ? "ui-pill-active" : "text-slate-600"}`}
             >
               <t.icon className="w-3 h-3 flex-shrink-0" />
               {t.label}
@@ -272,7 +269,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-7 items-stretch">
-        <Card className="border-teal-200 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+        <Card className="ui-surface-card ui-surface-card-interactive h-full flex flex-col border-teal-100">
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -282,7 +279,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
               <button
                 type="button"
                 onClick={generateQuiz}
-                className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                className="ui-pill p-1.5"
                 title="Refresh quiz"
                 disabled={isGenerating}
               >
@@ -298,7 +295,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
           </CardContent>
         </Card>
 
-        <Card className="border-teal-200 shadow-sm hover:shadow-md transition-all h-full flex flex-col">
+        <Card className="ui-surface-card ui-surface-card-interactive h-full flex flex-col border-teal-100">
           <CardHeader className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -309,13 +306,13 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
                 <button
                   type="button"
                   onClick={generateScenario}
-                  className="rounded-md p-1.5 border border-gray-200 hover:border-teal-300 hover:bg-teal-50"
+                  className="ui-pill p-1.5"
                   title="Refresh scenario"
                   disabled={isGeneratingScenario}
                 >
                   <RefreshIcon className={`w-3.5 h-3.5 text-teal-600 ${isGeneratingScenario ? "animate-spin" : ""}`} />
                 </button>
-                <span className="rounded-full border border-[#1A334D] px-2 py-0.5 text-[11px] font-semibold text-[#1A334D]">AI</span>
+                <span className="ui-pill px-2 py-1 text-[11px]">AI</span>
               </div>
             </div>
             <p className="text-sm text-gray-500">AI-generated role-play scenario with coaching prompts</p>
@@ -329,7 +326,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       </div>
 
       {scenarioText && (
-        <Card className="mb-7 border-teal-100 shadow-sm">
+        <Card className="ui-surface-card mb-7 border-teal-100">
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center gap-2">
               <Wand2 className="w-4 h-4 text-teal-500" />
@@ -343,7 +340,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
       )}
 
       {questions.length === 0 && !isGenerating && !scenarioText && !isGeneratingScenario ? (
-        <div className="text-center py-20 bg-gray-50 rounded-xl border border-gray-200">
+        <div className="ui-surface-card text-center py-20">
           <Target className="w-16 h-16 text-gray-200 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Practice</h3>
           <p className="text-sm text-gray-500 max-w-md mx-auto">
@@ -357,7 +354,7 @@ Make it practical, specific, and grounded in real pharma sales situations. Inclu
             const isCorrectSelected = selectedIdx === q.correctIndex;
 
             return (
-              <Card key={qIdx} className="overflow-hidden border-gray-200 shadow-sm">
+              <Card key={qIdx} className="ui-surface-card overflow-hidden border-slate-200">
                 <CardContent className="p-5">
                   <p className="font-semibold text-gray-900 mb-4">{qIdx + 1}. {q.question}</p>
                   <div className="space-y-2">
