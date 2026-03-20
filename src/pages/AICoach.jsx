@@ -432,7 +432,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                   }
                 }}
                 disabled={isLoading || contentToolMode !== null}
-                className="px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-full hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 transition-all disabled:opacity-50"
+                className="ui-pill px-3 py-1.5 text-xs disabled:opacity-50"
               >
                 {tool.label}
               </button>
@@ -444,15 +444,15 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         <div className="flex-1 overflow-y-auto px-5 py-4 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(241,245,249,0.7)_100%)]">
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="max-w-[56rem] mx-auto">
-              <TodaysTipCard className="shadow-[0_18px_40px_rgba(245,158,11,0.08)] border-yellow-300 bg-[linear-gradient(135deg,rgba(255,251,235,1)_0%,rgba(254,243,199,0.9)_100%)]" />
+              <TodaysTipCard />
             </div>
             {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
-              <div className="max-w-[56rem] mx-auto rounded-[30px] border border-slate-200 bg-white/95 px-10 py-7 text-center shadow-[0_22px_55px_rgba(15,23,42,0.08)]">
-                <div className="mx-auto mb-5 flex items-center justify-center gap-3 text-slate-900">
+              <div className="enterprise-hero max-w-[56rem] mx-auto px-10 py-7 text-center">
+                <div className="mx-auto mb-5 flex items-center justify-center gap-3 text-white">
                   <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
-                  <MessageSquare className="w-10 h-10 text-[#1A334D]" />
+                  <MessageSquare className="w-10 h-10 text-teal-200" />
                 </div>
-                <p className="mb-6 max-w-4xl mx-auto text-[15px] leading-6 text-slate-600 whitespace-nowrap">
+                <p className="mb-6 mx-auto max-w-4xl text-[15px] leading-6 text-slate-200 whitespace-nowrap">
                   Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
                 </p>
                 <div className="w-full max-w-3xl mx-auto grid grid-cols-1 gap-3">
@@ -460,7 +460,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                     <button
                       key={q}
                       onClick={() => sendMessage(q)}
-                      className="w-full rounded-2xl border border-[#1A334D] bg-white px-5 py-3 text-center text-[15px] leading-[1.35] font-medium text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#0f8f8f] hover:shadow-md"
+                      className="ui-pill ui-pill-ghost w-full justify-center rounded-2xl px-5 py-3 text-center text-[15px] leading-[1.35] font-medium shadow-sm"
                       title={q}
                     >
                       {q}
@@ -472,7 +472,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
               <div className="max-w-3xl mx-auto space-y-5">
                 {/* Session context banner */}
                 {sessionContext && (
-                  <div className="rounded-2xl border border-teal-200 bg-white p-4 shadow-sm space-y-3">
+                  <div className="ui-surface-card space-y-3 p-4">
                     <div className="flex items-center gap-2 text-xs font-bold text-teal-700">
                       <Sparkles className="w-3.5 h-3.5" />
                       Coaching session loaded from: <span className="italic">{sessionContext.scenarioTitle}</span>
@@ -542,7 +542,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                         <div className="flex items-center gap-2 mt-1.5 px-1">
                           <button
                             onClick={() => copyToClipboard(msg.content, visIdx)}
-                            className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-2.5 py-0.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+                            className="ui-pill px-2.5 py-1 text-xs"
                           >
                             <Copy className="w-3 h-3" />
                             {copiedIdx === visIdx ? "Copied!" : "Copy"}

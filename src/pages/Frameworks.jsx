@@ -201,7 +201,7 @@ function FrameworkDetailModal({ fw, onClose }) {
 
         <div className="p-6 space-y-6">
           {/* AI Coach */}
-          <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 rounded-xl p-5">
+          <div className="ui-surface-card bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 p-5">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-semibold text-teal-800">✦ AI Coach</span>
             </div>
@@ -228,7 +228,7 @@ function FrameworkDetailModal({ fw, onClose }) {
 
           {/* Key Principles + Quick Tips */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="ui-surface-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Lightbulb className="w-4 h-4 text-teal-500" />
                 <span className="text-sm font-semibold text-gray-800">Key Principles</span>
@@ -242,7 +242,7 @@ function FrameworkDetailModal({ fw, onClose }) {
                 ))}
               </ol>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="ui-surface-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <MessageSquare className="w-4 h-4 text-teal-500" />
                 <span className="text-sm font-semibold text-gray-800">Quick Tips</span>
@@ -261,7 +261,7 @@ function FrameworkDetailModal({ fw, onClose }) {
           </div>
 
           {/* Techniques */}
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <div className="ui-surface-card p-5">
             <h3 className="text-sm font-bold text-gray-900 mb-1">Techniques & Examples</h3>
             <p className="text-xs text-gray-500 mb-4">Practical techniques with real-world pharma sales examples</p>
             <div className="space-y-4">
@@ -330,7 +330,7 @@ function CoachingToolsTab() {
         const isLoading = aiLoading[t.id];
         const content = aiContent[t.id];
         return (
-          <Card key={t.id}>
+          <Card key={t.id} className="ui-surface-card ui-surface-card-interactive">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#e6f7f7" }}>
@@ -353,7 +353,7 @@ function CoachingToolsTab() {
                 <button
                   onClick={() => generateAI(t)}
                   disabled={isLoading}
-                  className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
+                  className="ui-pill px-3 py-1 disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   {content ? "Refresh AI Insight" : "Get AI Insight"}
@@ -381,7 +381,7 @@ export default function Frameworks() {
   return (
     <div className="min-h-screen bg-slate-100/80">
       <div className="p-6 md:p-8 max-w-6xl mx-auto">
-        <div className="mb-8 overflow-hidden rounded-[32px] border border-[#1A334D]/10 bg-[linear-gradient(135deg,#0f172a_0%,#1A334D_55%,#2c8d89_100%)] p-6 text-white shadow-[0_26px_70px_rgba(15,23,42,0.24)] md:p-7">
+        <div className="enterprise-hero mb-8 overflow-hidden p-6 md:p-7">
           <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr] lg:items-start">
             <div>
               <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-teal-200">Commercial Excellence Library</p>
@@ -393,7 +393,7 @@ export default function Frameworks() {
                 Our AI highlights meaningful behavioral signals. Sales professionals apply judgment using demonstrated behavioral capabilities, communication models, and coaching tools that work in real conversations.
               </p>
             </div>
-            <div className="rounded-[28px] border border-white/10 bg-white/8 p-5 backdrop-blur-sm">
+            <div className="enterprise-hero-panel p-5">
               <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-teal-100">Framework Stack</p>
               <div className="mt-4 space-y-3">
                 {[
@@ -417,7 +417,7 @@ export default function Frameworks() {
           { num: 2, title: "Behavioral Models", desc: "Supporting insight layer — how to adapt communication" },
           { num: 3, title: "Coaching Tools", desc: "Action layer — how improvement happens" },
         ].map(p => (
-          <div key={p.num} className="bg-gradient-to-br from-teal-50 to-cyan-50 rounded-xl p-5 border border-teal-100">
+          <div key={p.num} className="ui-surface-card ui-surface-card-interactive bg-gradient-to-br from-teal-50 to-cyan-50 p-5 border-teal-100">
             <div className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm mb-3" style={{ background: "#39ACAC" }}>{p.num}</div>
             <h3 className="font-semibold text-gray-900 mb-1">{p.title}</h3>
             <p className="text-xs text-gray-500">{p.desc}</p>
@@ -426,16 +426,16 @@ export default function Frameworks() {
       </div>
 
       {/* Tabs */}
-        <div className="rounded-[28px] border border-[#1A334D]/10 bg-white p-5 shadow-[0_20px_55px_rgba(15,23,42,0.08)]">
+        <div className="ui-surface-card rounded-[28px] p-5">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6 h-auto flex-wrap gap-2 bg-gray-100 p-2">
-          <TabsTrigger value="Behavioral Models" className="flex items-center gap-1.5 text-xs">
+        <TabsList className="mb-6 h-auto flex-wrap gap-2 bg-transparent p-0">
+          <TabsTrigger value="Behavioral Models" className={`ui-pill flex items-center gap-1.5 text-xs ${activeTab === "Behavioral Models" ? "ui-pill-active" : ""}`}>
             <FileText className="w-3.5 h-3.5" /> Behavioral Models
           </TabsTrigger>
-          <TabsTrigger value="Signal Intelligence Frameworks" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="Signal Intelligence Frameworks" className={`ui-pill flex items-center gap-1.5 text-xs ${activeTab === "Signal Intelligence Frameworks" ? "ui-pill-active" : ""}`}>
             <Heart className="w-3.5 h-3.5" /> Signal Intelligence Frameworks
           </TabsTrigger>
-          <TabsTrigger value="Coaching Tools" className="flex items-center gap-1.5 text-xs">
+          <TabsTrigger value="Coaching Tools" className={`ui-pill flex items-center gap-1.5 text-xs ${activeTab === "Coaching Tools" ? "ui-pill-active" : ""}`}>
             <Settings className="w-3.5 h-3.5" /> Coaching Tools
           </TabsTrigger>
         </TabsList>
@@ -446,7 +446,7 @@ export default function Frameworks() {
             {signalFrameworks.map(fw => {
               const Icon = ICON_MAP[fw.id] || MessageSquare;
               return (
-                <div key={fw.id} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-teal-200 hover:shadow-md transition-all">
+                <div key={fw.id} className="ui-surface-card ui-surface-card-interactive p-6">
                   <div className="flex items-start gap-4 mb-4">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#39ACAC" }}>
                       <Icon className="w-5 h-5 text-white" />
@@ -469,8 +469,8 @@ export default function Frameworks() {
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                     <div className="flex gap-2">
-                      <span className="text-xs text-gray-500 bg-gray-100 rounded-full px-2.5 py-1">{fw.techniques.length} techniques</span>
-                      <span className="text-xs text-teal-600 bg-teal-50 rounded-full px-2.5 py-1 flex items-center gap-1">✦ AI Coach</span>
+                      <span className="ui-pill px-2.5 py-1">{fw.techniques.length} techniques</span>
+                      <span className="ui-pill ui-pill-active px-2.5 py-1 flex items-center gap-1">✦ AI Coach</span>
                     </div>
                     <button onClick={() => setSelectedFw(fw)} className="flex items-center gap-1 text-xs font-semibold text-gray-700 hover:text-teal-600 transition-colors">
                       Learn More <ChevronRight className="w-3.5 h-3.5" />
@@ -484,20 +484,20 @@ export default function Frameworks() {
 
         {/* Behavioral Models tab */}
         <TabsContent value="Behavioral Models">
-          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 mb-5">
+          <div className="ui-surface-card bg-blue-50 p-4 flex gap-3 mb-5 border-blue-100">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
             <div>
               <p className="font-semibold text-sm text-blue-900 mb-1">Important Distinction</p>
               <p className="text-xs text-gray-600">DISC is an optional behavioral communication lens that can support signal-intelligent interactions—but it is not a signal intelligence framework. It describes communication preferences, not demonstrated capabilities.</p>
             </div>
           </div>
-          <Card>
+          <Card className="ui-surface-card">
             <CardContent className="p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-1">{discModel.title}</h3>
               <p className="text-sm text-gray-500 mb-5 leading-relaxed">{discModel.description}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {discModel.styles.map(s => (
-                  <div key={s.letter} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <div key={s.letter} className="ui-surface-card bg-gray-50 p-4 border-slate-200">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: "#1A334D" }}>{s.letter}</span>
                       <p className="font-semibold text-gray-800 text-sm">{s.name}</p>
