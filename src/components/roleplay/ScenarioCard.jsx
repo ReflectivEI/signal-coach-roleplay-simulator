@@ -16,10 +16,13 @@ function getStakeholder(scenario) {
 }
 
 function getObjective(scenario) {
+  if (Array.isArray(scenario.objective)) return scenario.objective.join("; ");
   return scenario.objective || scenario.details || "Practice Signal Intelligence™ behaviors in a realistic clinical conversation with an emphasis on reading and responding to cues.";
 }
 
 function getChallenges(scenario) {
+  if (Array.isArray(scenario.challenges)) return scenario.challenges;
+  if (Array.isArray(scenario.tacticalFocus)) return scenario.tacticalFocus;
   return scenario.challenges || [
     "Navigating resistance or low engagement",
     "Connecting value to HCP priorities",
@@ -31,7 +34,7 @@ function getMoodLabel(scenario) {
 }
 
 function getOpeningScene(scenario) {
-  return scenario.opening_scene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
+  return scenario.opening_scene || scenario.openingScene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
 }
 
 export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassName = "" }) {
