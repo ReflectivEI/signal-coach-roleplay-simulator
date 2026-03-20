@@ -1,12 +1,13 @@
 // @ts-nocheck
-import React, { useState } from "react";
-import { saveAs } from "file-saver";
-import { formatScenarioText } from "../../lib/utils";
+import React, { useMemo, useState } from "react";
+import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
+import EnterpriseScenarioCard from "@/components/roleplay/EnterpriseScenarioCard";
+import { buildSimulatorScenarioFromNormalized, normalizeGeneratedScenario } from "@/lib/scenarioNormalization";
 
 const diseaseStates = ["HIV", "PrEP (HIV Prevention)", "Oncology", "Cardiology", "Neurology", "Vaccines / Immunization"];
 const specialties = ["Family Medicine", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Neurology"];
@@ -23,7 +24,47 @@ const challengeOptions = [
   "Managing an emotionally charged / frustrated HCP",
 ];
 
-export default function AIScenarioGenerator({ onGenerated, onCancel }) {
+function exportPreviewPdf(preview, normalized) {
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const left = 15;
+  let y = 18;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const contentWidth = pageWidth - left * 2;
+
+  const addSection = (label, lines = []) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(label, left, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    lines.forEach((line) => {
+      const wrapped = doc.splitTextToSize(`• ${line}`, contentWidth);
+      doc.text(wrapped, left, y);
+      y += wrapped.length * 5;
+    });
+    y += 3;
+  };
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text(preview.title || "Generated Scenario", left, y);
+  y += 8;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Difficulty: ${normalized.difficulty}`, left, y);
+  y += 8;
+
+  addSection("Opening Scene", [normalized.openingScene]);
+  addSection("HCP", [normalized.hcp]);
+  addSection("Objective", normalized.objective);
+  addSection("Tactical Focus", normalized.tacticalFocus);
+
+  const safeName = (preview.title || "generated-scenario").replace(/\s+/g, "-").toLowerCase();
+  doc.save(`generated-scenario-${safeName}.pdf`);
+}
+
+export default function AIScenarioGenerator({ onGenerated, onCancel, onAddToSimulator }) {
   const [params, setParams] = useState({
     hcp_category: "",
     specialty: "",
@@ -37,13 +78,17 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
   const [preview, setPreview] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const exportPreviewWord = () => {
-    if (!preview) return;
-    const blob = new Blob([
-      `Generated Scenario\n\nTitle: ${preview.title || "Untitled"}\n\n${preview.description || preview.content || ""}`
-    ], { type: "application/msword" });
-    saveAs(blob, `generated-scenario-${(preview.title || "untitled").replace(/\s+/g, "-").toLowerCase()}.doc`);
-  };
+  const normalizedPreview = useMemo(() => {
+    if (!preview) return null;
+    return normalizeGeneratedScenario({
+      ...preview,
+      specialty: params.specialty,
+      disease_state: params.disease_state,
+      hcp_category: params.hcp_category,
+      difficulty: params.difficulty,
+      focus_capabilities: params.focus_capabilities,
+    });
+  }, [params.difficulty, params.disease_state, params.focus_capabilities, params.hcp_category, params.specialty, preview]);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -59,16 +104,14 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
       - Rep Challenge: ${challenge}
       - Difficulty: ${params.difficulty}
 
-      Create a detailed scenario that includes:
-      1. HCP background and context
-      2. Office setting description
-      3. Patient population / case details
-      4. HCP's current state and concerns
-      5. Initial greeting from the HCP: The HCP should always begin with warmth and empathy toward the rep, then professionally pivot to business talk (clinical, operational, or value-focused).
-      6. 2-3 potential objections or resistance points
-      7. Success criteria for the roleplay
+      Create a detailed scenario that includes these exact section headers:
+      HCP Background and Context:
+      Initial Greeting from the HCP:
+      Potential Objections or Resistance Points:
+      Success Criteria:
 
-      Format as a detailed scenario brief that a sales rep can use for practice.`;
+      Initial Greeting from the HCP should start warm and empathetic, then pivot professionally to business talk.
+      Keep the content practical for pharmaceutical sales training.`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,9 +120,12 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
       if (res.ok) {
         const data = await res.json();
         let scenarioText = typeof data.response === 'string' ? data.response : String(data.response);
-        // Strip markdown code blocks
         scenarioText = scenarioText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
-        setPreview({ title: `${params.hcp_category || 'HCP'} - ${challenge}`, content: scenarioText, description: scenarioText });
+        setPreview({
+          title: `${params.hcp_category || 'HCP'} - ${challenge}`,
+          content: scenarioText,
+          description: scenarioText,
+        });
       }
     } catch (err) {
       console.error('Scenario generation error:', err);
@@ -89,43 +135,16 @@ export default function AIScenarioGenerator({ onGenerated, onCancel }) {
     }
   };
 
-  const handleAccept = () => {
-    if (!preview) return;
-    const challenge = params.challenge === "__custom__" ? params.custom_challenge : params.challenge;
+  const handleSaveScenario = () => {
+    if (!preview || !normalizedPreview) return;
+    const simulatorScenario = buildSimulatorScenarioFromNormalized(normalizedPreview);
+    onGenerated?.(simulatorScenario);
+  };
 
-    const stateArcText = preview.state_arc?.length > 0
-      ? `State Arc:
-${preview.state_arc.map(e =>
-        `• Turns ${e.turn_range} [${e.state}]: ${e.trigger} (${e.trigger_type}) — ${e.coaching_note}`
-      ).join("\n")}`
-      : "";
-
-    const objectionText = preview.layered_objections?.length > 0
-      ? `Layered Objections:
-${preview.layered_objections.map((o, i) =>
-        `${i + 1}. "${o.objection}"\n   Underlying: ${o.underlying_concern}\n   Layer 3 (excellent): ${o.layer_3_response}`
-      ).join("\n\n")}`
-      : "";
-
-    onGenerated({
-      title: preview.title,
-      description: formatScenarioText(preview.description.replace(/\*/g, "")),
-      specialty: params.specialty,
-      disease_state: params.disease_state,
-      hcp_category: params.hcp_category,
-      difficulty: params.difficulty,
-      focus_capabilities: params.focus_capabilities,
-      details: [
-        preview.hcp_persona ? `HCP Persona: ${preview.hcp_persona}` : "",
-        preview.initial_state ? `Initial State: ${preview.initial_state} — ${preview.initial_state_rationale || ""}` : "",
-        stateArcText,
-        objectionText,
-        preview.dialogue_cues?.length > 0 ? `Opening Cues:
-${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
-        preview.details || "",
-        challenge ? `Core Challenge: ${challenge}` : "",
-      ].filter(Boolean).join("\n\n"),
-    });
+  const handleAddToSimulator = () => {
+    if (!preview || !normalizedPreview) return;
+    const simulatorScenario = buildSimulatorScenarioFromNormalized(normalizedPreview);
+    onAddToSimulator?.(simulatorScenario);
   };
 
   const canGenerate = params.hcp_category || params.specialty || params.challenge;
@@ -143,10 +162,9 @@ ${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
         </button>
       </div>
 
-      <p className="text-xs text-gray-500 mb-5">Describe what you want to practice. The AI will generate a full scenario with HCP persona, behavioral cues, and coaching context.</p>
+      <p className="text-xs text-gray-500 mb-5">Describe what you want to practice. The AI Scenario Generator creates a structured scenario preview that is ready for simulator ingestion.</p>
 
       <div className="space-y-4">
-        {/* Core params */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">HCP Type</label>
@@ -181,7 +199,6 @@ ${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
           </div>
         </div>
 
-        {/* Challenge */}
         <div>
           <label className="text-xs font-semibold text-gray-600 mb-1 block">Specific Challenge</label>
           <Select value={params.challenge} onValueChange={(v) => setParams({ ...params, challenge: v })}>
@@ -201,7 +218,6 @@ ${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
           )}
         </div>
 
-        {/* Advanced: Focus Capabilities */}
         <div>
           <button
             className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 font-medium"
@@ -232,73 +248,37 @@ ${preview.dialogue_cues.map(c => `• ${c}`).join("\n")}` : "",
         </Button>
       </div>
 
-      {/* Preview */}
-      {preview && (
-        <div className="mt-5 bg-white rounded-xl border border-teal-200 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-teal-600 uppercase tracking-wide">Generated Preview</span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" className="text-xs h-7 border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]" onClick={exportPreviewWord}>
-                Export to Word
-              </Button>
-              <Button size="sm" className="bg-teal-500 hover:bg-teal-600 text-xs h-7" onClick={handleAccept}>
-                Save Scenario
-              </Button>
+      {preview && normalizedPreview && (
+        <div className="mt-5 rounded-xl border border-teal-200 bg-white p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <span className="text-xs font-semibold text-teal-600 uppercase tracking-wide">Generated Preview</span>
+              <p className="mt-1 text-xs text-slate-500">State: <span className="font-semibold text-emerald-700">Ready for Simulation</span></p>
             </div>
+            <Button size="sm" variant="outline" className="text-xs h-7 border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]" onClick={() => exportPreviewPdf(preview, normalizedPreview)}>
+              Export to PDF
+            </Button>
           </div>
-          <h3 className="font-bold text-gray-900">{preview.title}</h3>
-          <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{formatScenarioText(preview.description)}</p>
-          {preview.hcp_name && (
-            <div className="text-xs text-gray-500"><span className="font-medium text-gray-700">HCP:</span> {preview.hcp_name}</div>
-          )}
-          {preview.initial_state && (
-            <div className="text-xs">
-              <span className="font-medium text-gray-700">Initial State:</span>{" "}
-              <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">{preview.initial_state}</span>
-              {preview.initial_state_rationale && <span className="text-gray-500 ml-2">— {preview.initial_state_rationale}</span>}
-            </div>
-          )}
-          {preview.state_arc?.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-teal-400 inline-block" /> State Arc
-              </div>
-              {preview.state_arc.map((e, i) => (
-                <div key={i} className="flex gap-2 items-start text-xs pl-2">
-                  <span className="text-gray-400 font-mono flex-shrink-0">T{e.turn_range}</span>
-                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700 flex-shrink-0">{e.state}</span>
-                  <span className="text-gray-500 italic">{e.trigger}</span>
-                  {e.trigger_type === 'external_event' && <span className="text-blue-400 text-xs flex-shrink-0">[ext]</span>}
-                </div>
-              ))}
-            </div>
-          )}
-          {preview.layered_objections?.length > 0 && (
-            <div className="space-y-1.5">
-              <div className="text-xs font-semibold text-gray-700 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> Layered Objections
-              </div>
-              {preview.layered_objections.map((o, i) => (
-                <div key={i} className="pl-2 border-l-2 border-orange-200 space-y-0.5">
-                  <div className="text-xs font-medium text-gray-700">"{o.objection}"</div>
-                  <div className="text-xs text-gray-400 italic">Underlying: {o.underlying_concern}</div>
-                  <div className="text-xs text-teal-600">✓ {o.layer_3_response}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          {preview.dialogue_cues?.length > 0 && (
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-gray-700">Opening Cues:</div>
-              {preview.dialogue_cues.map((cue, i) => (
-                <div key={i} className="text-xs text-gray-600 italic pl-3 border-l-2 border-teal-200">{cue}</div>
-              ))}
-            </div>
-          )}
-          <div className="flex justify-between pt-1">
-            <button className="text-xs text-gray-400 hover:text-gray-600" onClick={handleGenerate}>
-              ↻ Regenerate
-            </button>
+
+          <EnterpriseScenarioCard
+            scenario={buildSimulatorScenarioFromNormalized(normalizedPreview)}
+            defaultExpanded
+            openingSceneLabel="Preview Scene"
+            footerSecondary={(
+              <button className="text-xs text-gray-400 hover:text-gray-600" onClick={handleGenerate}>
+                ↻ Regenerate
+              </button>
+            )}
+            footerAction={(
+              <Button className="rounded-full bg-teal-500 hover:bg-teal-600 px-6" onClick={handleAddToSimulator}>
+                Add to Simulator
+              </Button>
+            )}
+            allowStart={false}
+          />
+
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={handleSaveScenario}>Save Scenario</Button>
           </div>
         </div>
       )}

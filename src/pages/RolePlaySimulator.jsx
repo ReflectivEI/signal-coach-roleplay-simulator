@@ -1,9 +1,9 @@
 // @ts-nocheck
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import AIScenarioGenerator from "../components/scenariobuilder/AIScenarioGenerator";
+import React, { useEffect, useMemo, useState } from "react";
+import { createPageUrl } from "@/utils";
+import EnterpriseScenarioCard from "@/components/roleplay/EnterpriseScenarioCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import ScenarioCard from "@/components/roleplay/ScenarioCard";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 
 const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
@@ -407,32 +407,31 @@ const ALL_SCENARIOS = [
   },
 ];
 
-const DIFFICULTY_CONFIG = {
-  beginner:     { label: "Beginner",     color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  intermediate: { label: "Intermediate", color: "bg-amber-100  text-amber-700  border-amber-200"  },
-  advanced:     { label: "Advanced",     color: "bg-rose-100   text-rose-700   border-rose-200"    },
-};
-
-const CATEGORY_COLORS = {
-  "HIV / PrEP":   "bg-purple-50 text-purple-700 border-purple-200",
-  "Oncology":     "bg-rose-50 text-rose-700 border-rose-200",
-  "Cardiology":   "bg-red-50 text-red-700 border-red-200",
-  "Vaccines":     "bg-green-50 text-green-700 border-green-200",
-  "COVID-19":     "bg-sky-50 text-sky-700 border-sky-200",
-  "Neurology":    "bg-violet-50 text-violet-700 border-violet-200",
-  "Immunology":   "bg-teal-50 text-teal-700 border-teal-200",
-  "Rare Disease": "bg-orange-50 text-orange-700 border-orange-200",
-};
+const BUILDER_TO_SIMULATOR_KEY = "reflectivai:builderScenario";
 
 export default function RolePlaySimulator() {
-    // Modal state for AI scenario generation
-    const [showScenarioGenerator, setShowScenarioGenerator] = useState(false);
-    const [customScenario, setCustomScenario] = useState(null);
-    // Handler for AI scenario generation
-    const handleScenarioGenerated = (scenario) => {
-      setCustomScenario(scenario);
-      setShowScenarioGenerator(false);
-    };
+  const [customScenario, setCustomScenario] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.sessionStorage.getItem(BUILDER_TO_SIMULATOR_KEY);
+    if (!stored) return;
+
+    try {
+      const parsed = JSON.parse(stored);
+      if (parsed?.title) {
+        setCustomScenario(parsed);
+      }
+    } catch (error) {
+      console.error("Failed to load builder scenario:", error);
+    } finally {
+      window.sessionStorage.removeItem(BUILDER_TO_SIMULATOR_KEY);
+    }
+  }, []);
+
+  const handleNewScenarioRoute = () => {
+    window.location.assign(`${createPageUrl("ScenarioBuilder")}?mode=generator`);
+  };
   const [activeCategory, setActiveCategory] = useState("All");
   const [activeDifficulty, setActiveDifficulty] = useState("All Levels");
   const [search, setSearch] = useState("");
@@ -480,7 +479,7 @@ export default function RolePlaySimulator() {
             <div className="flex flex-wrap items-stretch gap-3 text-sm">
               <button
                 className="inline-flex h-[58px] items-center rounded-full bg-teal-500 hover:bg-teal-600 text-white text-sm font-semibold px-5 shadow-sm"
-                onClick={() => setShowScenarioGenerator(true)}
+                onClick={handleNewScenarioRoute}
               >
                 + New Scenario
               </button>
@@ -603,27 +602,6 @@ export default function RolePlaySimulator() {
             </button>
           </div>
         )}
-        {/* AI Scenario Generator Modal */}
-        {showScenarioGenerator && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
-            <div className="bg-white rounded-2xl shadow-xl p-6 max-w-lg w-full relative flex flex-col" style={{ maxHeight: '90vh' }}>
-              <button
-                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 z-10"
-                onClick={() => setShowScenarioGenerator(false)}
-                aria-label="Close scenario modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="overflow-y-auto" style={{ maxHeight: '75vh' }}>
-                <AIScenarioGenerator
-                  onGenerated={handleScenarioGenerated}
-                  onCancel={() => setShowScenarioGenerator(false)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Scenario Grid */}
         {customScenario ? (
           <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -647,126 +625,5 @@ export default function RolePlaySimulator() {
         )}
       </div>
     </div>
-  );
-}
-
-function EnterpriseScenarioCard({ scenario }) {
-  const [expanded, setExpanded] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
-  const [typingText, setTypingText] = useState("");
-  const previewTimerRef = useRef(null);
-  const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
-  const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
-  const openingScene = scenario.openingScene || "Preview the opening moment to hear how the HCP enters the conversation.";
-  const challengePreview = scenario.challenges?.slice(0, 3) || [];
-  const objectiveLines = String(scenario.objective || "")
-    .split(/;|•|\.|,/)
-    .map(line => line.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-
-  useEffect(() => {
-    if (!previewing) {
-      setTypingText("");
-      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
-      return undefined;
-    }
-
-    let index = 0;
-    previewTimerRef.current = window.setInterval(() => {
-      index += 1;
-      setTypingText(openingScene.slice(0, index));
-      if (index >= openingScene.length && previewTimerRef.current) {
-        window.clearInterval(previewTimerRef.current);
-      }
-    }, 18);
-
-    return () => {
-      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
-    };
-  }, [openingScene, previewing]);
-
-  return (
-    <>
-      <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"}`}>
-        <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
-          <div className="flex items-start gap-2">
-            <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
-            <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex-shrink-0 ${diff.color}`}>{diff.label}</span>
-          </div>
-
-          {expanded && (
-            <>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`inline-flex items-center rounded-full border border-[#1A334D] px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>
-                <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>
-              </div>
-
-              <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{scenario.description}</p>
-
-              <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening scene</p>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewing(value => !value)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-200 hover:border-teal-300 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-                  >
-                    {previewing ? "Reset Preview" : "Play Scene"}
-                  </button>
-                </div>
-                <p className={`text-xs leading-relaxed text-slate-600 ${previewing ? "typing-preview" : ""}`}>
-                  {previewing ? typingText || " " : " "}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="bg-gray-50 rounded-lg px-3 py-2">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">HCP</p>
-                  <p className="text-xs text-gray-800 font-medium">{scenario.stakeholder}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Objective</p>
-                  <div className="space-y-1.5">
-                    {objectiveLines.map((line, index) => (
-                      <div key={index} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
-                        <span className="mt-[2px] h-1.5 w-1.5 rounded-full bg-teal-500 flex-shrink-0" />
-                        <span>{line}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {challengePreview.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tactical focus</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {challengePreview.map((c, i) => (
-                        <span key={i} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-1">{c}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="px-5 pb-5 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setExpanded(value => !value)}
-            aria-pressed={expanded}
-            className={`inline-flex self-center items-center justify-center rounded-full border px-5 py-2 text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 ${expanded ? "border-teal-300 bg-teal-50 text-teal-700" : "border-teal-300 bg-teal-50 text-teal-700"}`}
-          >
-            {expanded ? "Collapse Details" : "Expand for Details"}
-          </button>
-          <ScenarioCard
-            scenario={scenario}
-            renderAs="button-only"
-            buttonClassName="inline-flex w-auto self-center items-center justify-center rounded-full px-6 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
-          />
-        </div>
-      </div>
-    </>
   );
 }

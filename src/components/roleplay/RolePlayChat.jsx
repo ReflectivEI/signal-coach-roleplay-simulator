@@ -396,9 +396,9 @@ function stripRedundantSpecialtyFromStakeholder(stakeholder, specialty) {
   return filteredSegments.length > 0 ? `${name} - ${filteredSegments.join(", ")}` : name;
 }
 
-function buildHcpProfileSummary({ stakeholder, specialty, descriptionText, context, hcpCategory }) {
-  const cleanedStakeholder = stripRedundantSpecialtyFromStakeholder(stakeholder, specialty);
-  const summaryText = descriptionText || context || stakeholder || "Profile details are not available for this HCP.";
+function buildHcpProfileSummary({ stakeholder, specialty, descriptionText, context, hcpCategory, hcp }) {
+  const cleanedStakeholder = stripRedundantSpecialtyFromStakeholder(stakeholder || hcp, specialty);
+  const summaryText = hcp || descriptionText || context || stakeholder || "Profile details are not available for this HCP.";
   return toDisplaySentence(
     specialty
       ? `${cleanedStakeholder || "HCP"} (${abbreviateSpecialty(specialty)}) — ${summaryText}`
@@ -889,8 +889,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     voiceSettings,
   });
 
-  const objectiveText = scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.";
-  const descriptionText = scenario.description || scenario.context || "";
+  const objectiveText = Array.isArray(scenario.objective)
+    ? scenario.objective.join("; ")
+    : (scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.");
+  const descriptionText = scenario.hcp || scenario.description || scenario.context || "";
   const challengeItems = (Array.isArray(scenario.challenges)
     ? scenario.challenges
     : String(scenario.challenges || "")
@@ -925,6 +927,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     descriptionText,
     context: scenario.context,
     hcpCategory: scenario.hcp_category,
+    hcp: scenario.hcp,
   });
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
