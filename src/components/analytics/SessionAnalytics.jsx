@@ -146,14 +146,14 @@ const CAPABILITY_LABELS = {
 };
 
 const CAPABILITY_COLORS = {
-  signal_awareness:        "#14b8a6",
-  signal_interpretation:   "#0284c7",
-  value_connection:        "#8b5cf6",
-  customer_engagement:     "#f59e0b",
-  objection_navigation:    "#f97316",
-  commitment_generation:   "#10b981",
-  conversation_management: "#1A334D",
-  adaptive_response:       "#06b6d4",
+  signal_awareness:        "#0f766e",
+  signal_interpretation:   "#14b8a6",
+  value_connection:        "#0f766e",
+  customer_engagement:     "#64748b",
+  objection_navigation:    "#f59e0b",
+  commitment_generation:   "#14b8a6",
+  conversation_management: "#475569",
+  adaptive_response:       "#2dd4bf",
 };
 
 // Industry / benchmark scores for context (1-5 scale)
@@ -222,19 +222,18 @@ function extractStrategies(feedback) {
 
 function StatCard({ icon: Icon, label, value, sub, color = "teal" }) {
   const styles = {
-    teal:  "bg-teal-50 border-teal-200 text-teal-700",
-    blue:  "bg-blue-50 border-blue-200 text-blue-700",
-    navy:  "bg-slate-50 border-slate-200 text-slate-700",
-    amber: "bg-amber-50 border-amber-200 text-amber-700",
+    teal:  "border-teal-200 bg-teal-50 text-teal-800",
+    neutral:  "border-slate-200 bg-slate-50 text-slate-800",
+    amber: "border-amber-200 bg-amber-50 text-amber-800",
   };
   return (
-    <div className={`rounded-xl p-4 border ${styles[color]} transition-all`} tabIndex={0} aria-label={label} role="region">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-4 h-4 opacity-70" aria-hidden="true" />
-        <span className="text-xs font-semibold uppercase tracking-wide opacity-60" id={`statcard-label-${label}`}>{label}</span>
+    <div className={`rounded-2xl border p-4 ${styles[color]} transition-all`} tabIndex={0} aria-label={label} role="region">
+      <div className="mb-1 flex items-center gap-2">
+        <Icon className="h-4 w-4 opacity-80" aria-hidden="true" />
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70" id={`statcard-label-${label}`}>{label}</span>
       </div>
       <div className="text-2xl font-bold" aria-labelledby={`statcard-label-${label}`}>{value}</div>
-      {sub && <div className="text-xs opacity-60 mt-0.5">{sub}</div>}
+      {sub && <div className="mt-1 text-xs leading-relaxed opacity-70">{sub}</div>}
     </div>
   );
 }
@@ -448,9 +447,12 @@ export default function SessionAnalytics() {
     misalignmentCounts[0] ? `Address the recurring misalignment "${misalignmentCounts[0].label}" in next-week coaching review.` : 'Collect more session evidence before issuing a program-level correction.',
   ];
 
+  const analyticsCard = "ui-surface-card border border-slate-200 p-5";
+  const analyticsTitle = "text-sm font-bold text-slate-900";
+
   return (
-    <div className="space-y-6" role="main" aria-label="Session Analytics Panel">
-      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-[#0f172a] via-[#10243b] to-[#123b45] p-6 text-white shadow-xl">
+    <div className="space-y-5" role="main" aria-label="Session Analytics Panel">
+      <div className="rounded-[28px] border border-slate-200 bg-gradient-to-r from-slate-900 via-slate-800 to-teal-900 p-6 text-white shadow-[0_22px_56px_rgba(15,23,42,0.18)]">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl space-y-4">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.24em] text-teal-200/90">
@@ -533,7 +535,7 @@ export default function SessionAnalytics() {
             </SelectContentField>
           </SelectField>
         </div>
-        <BadgeField variant="outline" className="text-xs text-slate-600 border-slate-200">{totalSessions} sessions</BadgeField>
+        <BadgeField variant="outline" className="text-xs">{totalSessions} sessions</BadgeField>
       </div>
 
       {totalSessions === 0 ? (
@@ -547,7 +549,7 @@ export default function SessionAnalytics() {
           {/* Stat Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Activity} label="Sessions" value={totalSessions} sub="completed" color="teal" />
-            <StatCard icon={BarChart3} label="Avg Score" value={overallAvg > 0 ? `${overallAvg}/5` : "—"} sub={vsAvgBenchmark ? `${vsAvgBenchmark > 0 ? "+" : ""}${vsAvgBenchmark} vs. benchmark` : "across all capabilities"} color="blue" />
+            <StatCard icon={BarChart3} label="Avg Score" value={overallAvg > 0 ? `${overallAvg}/5` : "—"} sub={vsAvgBenchmark ? `${vsAvgBenchmark > 0 ? "+" : ""}${vsAvgBenchmark} vs. benchmark` : "across all capabilities"} color="neutral" />
             <StatCard icon={TrendingUp} label="Top Capability" value={topCapability?.score > 0 ? topCapability.capability.split(" ")[0] : "—"} sub={topCapability?.score > 0 ? `${topCapability.score}/5` : ""} color="teal" />
             <StatCard icon={AlertTriangle} label="Needs Work" value={weakCapability?.score > 0 ? weakCapability.capability.split(" ")[0] : "—"} sub={weakCapability?.score > 0 ? `${weakCapability.score}/5` : ""} color="amber" />
           </div>
@@ -571,12 +573,25 @@ export default function SessionAnalytics() {
 
           {/* Tabs */}
           <TabsField value={activeTab} onValueChange={setActiveTab}>
-            <TabsListField className="bg-transparent flex-wrap gap-2 h-auto p-0">
-              <TabsTriggerField value="hub" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Enablement Hub</TabsTriggerField>
-              <TabsTriggerField value="overview" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Overview</TabsTriggerField>
-              <TabsTriggerField value="trends" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Capability Trends</TabsTriggerField>
-              <TabsTriggerField value="patterns" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">Patterns & Strategies</TabsTriggerField>
-              <TabsTriggerField value="scenarios" className="text-sm px-5 py-2 rounded-full border border-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white data-[state=active]:border-[#1A334D] transition-all">By Scenario</TabsTriggerField>
+            <TabsListField className="h-auto flex-wrap gap-2 bg-transparent p-0">
+              {["hub", "overview", "trends", "patterns", "scenarios"].map((tab) => {
+                const labels = {
+                  hub: "Enablement Hub",
+                  overview: "Overview",
+                  trends: "Capability Trends",
+                  patterns: "Patterns & Strategies",
+                  scenarios: "By Scenario",
+                };
+                return (
+                  <TabsTriggerField
+                    key={tab}
+                    value={tab}
+                    className="ui-pill px-4 py-2 text-sm data-[state=active]:border-teal-600 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
+                  >
+                    {labels[tab]}
+                  </TabsTriggerField>
+                );
+              })}
             </TabsListField>
           </TabsField>
 
@@ -585,7 +600,7 @@ export default function SessionAnalytics() {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.3fr_0.7fr]">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className={analyticsCard}>
                     <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                       <BrainCircuit className="h-4 w-4 text-teal-500" /> Content effectiveness
                     </div>
@@ -593,30 +608,30 @@ export default function SessionAnalytics() {
                     <p className="mt-1 text-sm font-medium text-slate-700">{focusScenario ? focusScenario.title : 'No scenario leader yet'}</p>
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">Highest observed scenario performance from the current filtered population.</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className={analyticsCard}>
                     <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <Users className="h-4 w-4 text-blue-500" /> Behavior trend risk
+                      <Users className="h-4 w-4 text-amber-500" /> Behavior trend risk
                     </div>
                     <p className="text-lg font-bold text-slate-900">{weakCapability ? weakCapability.capability : 'Stable'}</p>
                     <p className="mt-2 text-xs leading-relaxed text-slate-500">{riskSummary}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className={analyticsCard}>
                     <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <FileBarChart className="h-4 w-4 text-violet-500" /> Coverage state
+                      <FileBarChart className="h-4 w-4 text-slate-500" /> Coverage state
                     </div>
-                    <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${coverageState.tone}`}>{coverageState.label}</div>
+                    <div className={`ui-pill px-2.5 py-1 text-[11px] ${coverageState.tone}`}>{coverageState.label}</div>
                     <p className="mt-3 text-sm font-semibold text-slate-900">{sampleCoverage}% of reference sample represented</p>
                     <p className="mt-1 text-xs text-slate-500">Large-sample framing keeps guidance grounded and confidence-weighted.</p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={analyticsCard}>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Executive narrative</p>
                       <h3 className="text-lg font-bold text-slate-900">What the hub is telling you right now</h3>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Best-practice interpretation layer</span>
+                    <span className="ui-pill px-3 py-1 text-[11px]">Best-practice interpretation layer</span>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {enablementRecommendations.map((item, index) => (
@@ -625,7 +640,7 @@ export default function SessionAnalytics() {
                         <p className="mt-2 text-sm leading-relaxed text-slate-700">{item}</p>
                       </div>
                     ))}
-                    <div className="rounded-2xl border border-dashed border-teal-200 bg-teal-50 p-4">
+                    <div className="rounded-2xl border border-dashed border-teal-200 bg-teal-50/80 p-4">
                       <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Hub operating model</p>
                       <p className="mt-2 text-sm leading-relaxed text-teal-900">
                         Insight originates here, intervention happens in Manager View, remediation is tracked in Learning Paths, and leadership readouts move to Data and Reports.
@@ -636,7 +651,7 @@ export default function SessionAnalytics() {
               </div>
 
               <div className="space-y-6">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={analyticsCard}>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Spoke activation</p>
                   <h3 className="mt-1 text-lg font-bold text-slate-900">Next-best destination</h3>
                   <div className="mt-4 space-y-3">
@@ -645,7 +660,7 @@ export default function SessionAnalytics() {
                       { title: 'Remediation sequence', detail: 'Translate the risk into modules, exercises, and simulator practice.', page: 'LearningPaths' },
                       { title: 'Leadership summary', detail: 'Package the story into executive-ready summaries and exports.', page: 'DataReports' },
                     ].map((item) => (
-                      <Link key={item.title} to={createPageUrl(item.page)} className="block rounded-2xl border border-slate-200 p-4 transition-all hover:border-teal-300 hover:bg-teal-50/40">
+                      <Link key={item.title} to={createPageUrl(item.page)} className="ui-surface-card ui-surface-card-interactive block border border-slate-200 p-4">
                         <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                         <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.detail}</p>
                       </Link>
@@ -653,12 +668,12 @@ export default function SessionAnalytics() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={analyticsCard}>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Observed strengths</p>
                   <h3 className="mt-1 text-lg font-bold text-slate-900">Patterns worth scaling</h3>
                   <div className="mt-4 space-y-3">
                     {successfulStrategies.slice(0, 4).map((strategy, index) => (
-                      <div key={index} className="rounded-xl border border-teal-100 bg-teal-50/60 p-3">
+                      <div key={index} className="rounded-2xl border border-teal-100 bg-teal-50/70 p-3">
                         <p className="text-sm font-medium text-slate-800">{strategy.label}</p>
                         <p className="mt-1 text-xs text-slate-500">Observed in {strategy.count} session{strategy.count > 1 ? 's' : ''}.</p>
                       </div>
@@ -672,13 +687,13 @@ export default function SessionAnalytics() {
           {activeTab === "overview" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Radar */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">Signal Intelligence Overview</h3>
+              <div className={analyticsCard}>
+                <h3 className={`${analyticsTitle} mb-4`}>Signal Intelligence Overview</h3>
                 <ResponsiveContainer width="100%" height={260}>
                   <RadarChart data={avgScores}>
                     <PolarGrid stroke="#e2e8f0" />
                     <PolarAngleAxis dataKey="capability" tick={{ fontSize: 10, fill: "#475569" }} />
-                    <Radar name="Your Score" dataKey="score" stroke="#14b8a6" fill="#14b8a6" fillOpacity={0.15} strokeWidth={2} dot={{ fill: "#14b8a6", r: 3 }} />
+                    <Radar name="Your Score" dataKey="score" stroke="#0f766e" fill="#14b8a6" fillOpacity={0.12} strokeWidth={2} dot={{ fill: "#0f766e", r: 3 }} />
                     <Radar name="Benchmark" dataKey="benchmark" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.05} strokeWidth={1.5} strokeDasharray="4 4" />
                     <Legend iconType="line" wrapperStyle={{ fontSize: 10 }} />
                   </RadarChart>
@@ -686,8 +701,8 @@ export default function SessionAnalytics() {
               </div>
 
               {/* Capability vs Benchmark bars */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">You vs. Benchmark</h3>
+              <div className={analyticsCard}>
+                <h3 className={`${analyticsTitle} mb-1`}>You vs. Benchmark</h3>
                 <p className="text-xs text-slate-500 mb-4">Dashed line = industry benchmark</p>
                 <ResponsiveContainer width="100%" height={340}>
                   <BarChart data={avgScores} layout="vertical" margin={{ left: 8, right: 24 }}>
@@ -696,7 +711,7 @@ export default function SessionAnalytics() {
                     <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
                     <ReferenceLine x={3.3} stroke="#94a3b8" strokeDasharray="4 4" label={{ value: "Benchmark", position: "top", fontSize: 9, fill: "#94a3b8" }} />
                     <Bar dataKey="score" radius={[0, 4, 4, 0]} name="Your Score">
-                      {avgScores.map((entry, i) => <Cell key={i} fill={entry.score >= (entry.benchmark || 3.3) ? "#14b8a6" : "#f97316"} />)}
+                      {avgScores.map((entry, i) => <Cell key={i} fill={entry.score >= (entry.benchmark || 3.3) ? "#0f766e" : "#f59e0b"} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -704,15 +719,15 @@ export default function SessionAnalytics() {
 
               {/* Sessions over time */}
               {sessionsOverTime.length > 1 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-5 lg:col-span-2">
-                  <h3 className="text-sm font-bold text-slate-800 mb-4">Sessions Over Time</h3>
+                <div className={`${analyticsCard} lg:col-span-2`}>
+                  <h3 className={`${analyticsTitle} mb-4`}>Sessions Over Time</h3>
                   <ResponsiveContainer width="100%" height={160}>
                     <LineChart data={sessionsOverTime}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#475569" }} />
                       <YAxis tick={{ fontSize: 10, fill: "#475569" }} allowDecimals={false} />
                       <Tooltip content={React.createElement(/** @type {any} */ (CustomTooltip))} />
-                      <Line type="monotone" dataKey="count" name="Sessions" stroke="#14b8a6" strokeWidth={2.5} dot={{ fill: "#14b8a6", r: 4 }} />
+                      <Line type="monotone" dataKey="count" name="Sessions" stroke="#0f766e" strokeWidth={2.5} dot={{ fill: "#0f766e", r: 4 }} />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
@@ -722,8 +737,8 @@ export default function SessionAnalytics() {
 
           {activeTab === "trends" && (
             <div className="space-y-6">
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">Capability Score Trends Over Time</h3>
+              <div className={analyticsCard}>
+                <h3 className={`${analyticsTitle} mb-1`}>Capability Score Trends Over Time</h3>
                 <p className="text-xs text-slate-500 mb-4">Track how each Signal Intelligence capability evolves week over week</p>
                 {capabilityTrends.length < 2 ? (
                   <div className="text-center py-10 text-xs text-slate-400">Need at least 2 weeks of data to show trends</div>
@@ -746,13 +761,13 @@ export default function SessionAnalytics() {
               {/* Individual capability trend sparklines */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {avgScores.filter(c => c.score > 0).map(cap => (
-                  <div key={cap.key} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div key={cap.key} className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div>
                         <p className="text-xs font-bold text-gray-800">{cap.capability}</p>
                         <p className="text-xs text-gray-500">Avg: {cap.score}/5 · Benchmark: {cap.benchmark}/5</p>
                       </div>
-                      <span className={`text-sm font-bold px-2 py-0.5 rounded ${cap.score >= cap.benchmark ? "text-teal-600 bg-teal-50" : "text-orange-600 bg-orange-50"}`}>
+                      <span className={`ui-pill px-2.5 py-1 text-[11px] ${cap.score >= cap.benchmark ? "border-teal-200 bg-teal-50 text-teal-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
                         {cap.score >= cap.benchmark ? "↑" : "↓"} {cap.score}/5
                       </span>
                     </div>
@@ -768,10 +783,10 @@ export default function SessionAnalytics() {
           {activeTab === "patterns" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Common objection patterns */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className={analyticsCard}>
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-orange-500" />
-                  <h3 className="text-sm font-bold text-slate-800">Common Objection Patterns</h3>
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <h3 className={analyticsTitle}>Common Objection Patterns</h3>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">Most frequent misalignments detected across sessions</p>
                 {misalignmentCounts.length === 0 ? (
@@ -785,9 +800,9 @@ export default function SessionAnalytics() {
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <div className="w-20 bg-gray-100 rounded-full h-1.5">
-                            <div className="rounded-full h-1.5 bg-orange-400" style={{ width: `${(count / misalignmentCounts[0].count) * 100}%` }} />
+                            <div className="rounded-full h-1.5 bg-amber-400" style={{ width: `${(count / misalignmentCounts[0].count) * 100}%` }} />
                           </div>
-                          <span className="text-xs font-semibold text-orange-600 w-5 text-right">{count}×</span>
+                          <span className="text-xs font-semibold text-amber-700 w-5 text-right">{count}×</span>
                         </div>
                       </div>
                     ))}
@@ -796,10 +811,10 @@ export default function SessionAnalytics() {
               </div>
 
               {/* Successful strategies */}
-              <div className="bg-white border border-gray-200 rounded-xl p-5">
+              <div className={analyticsCard}>
                 <div className="flex items-center gap-2 mb-1">
                   <CheckCircle2 className="w-4 h-4 text-teal-500" />
-                  <h3 className="text-sm font-bold text-slate-800">Successful Communication Strategies</h3>
+                  <h3 className={analyticsTitle}>Successful Communication Strategies</h3>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">Strategies that consistently generated positive outcomes</p>
                 {successfulStrategies.length === 0 ? (
@@ -825,7 +840,7 @@ export default function SessionAnalytics() {
 
               {/* Personalized Learning Path */}
               <div className="lg:col-span-2 space-y-4">
-                <div className="bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 rounded-xl p-5">
+                <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-slate-50 p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-4 h-4 text-teal-600" />
                     <h3 className="text-sm font-bold text-teal-900">Personalized Learning Path</h3>
@@ -848,8 +863,8 @@ export default function SessionAnalytics() {
 
           {activeTab === "scenarios" && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white border border-gray-200 rounded-xl p-5 lg:col-span-2">
-                <h3 className="text-sm font-bold text-slate-800 mb-1">Average Score by Scenario</h3>
+              <div className={`${analyticsCard} lg:col-span-2`}>
+                <h3 className={`${analyticsTitle} mb-1`}>Average Score by Scenario</h3>
                 <p className="text-xs text-slate-500 mb-4">Compare your performance across different scenario types</p>
                 {scoresByScenario.length === 0 ? (
                   <div className="text-center py-8 text-xs text-slate-400 italic">Not enough data yet</div>
@@ -861,7 +876,7 @@ export default function SessionAnalytics() {
                       <Tooltip formatter={(v, n, p) => [`${v}/5 (${p.payload.sessions} sessions)`, "Avg Score"]} />
                       <ReferenceLine x={3.3} stroke="#94a3b8" strokeDasharray="4 4" />
                       <Bar dataKey="avg" radius={[0, 4, 4, 0]} name="Avg Score">
-                        {scoresByScenario.map((entry, i) => <Cell key={i} fill={entry.avg >= 3.3 ? "#14b8a6" : "#f97316"} />)}
+                        {scoresByScenario.map((entry, i) => <Cell key={i} fill={entry.avg >= 3.3 ? "#0f766e" : "#f59e0b"} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
