@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
-  BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight,
+  BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight, Link2,
   ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send
 } from "lucide-react";
 
@@ -41,6 +41,7 @@ const navSections = [
     defaultOpen: false,
     items: [
       { label: "Selling and Coaching Frameworks", page: "Frameworks", icon: Globe },
+      { label: "Customization & Integration", page: "CustomizationIntegration", icon: Link2 },
       { label: "Knowledge Base", page: "KnowledgeBase", icon: BookOpen },
     ],
   },
