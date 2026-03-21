@@ -420,7 +420,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           </Tabs>
           <div className="space-y-4">
             {filteredArticles.map((article, idx) => (
-              <Card key={article.title} className="ui-surface-card ui-surface-card-interactive">
+              <Card key={article.title} className="ui-surface-card ui-surface-card-interactive border-teal-200">
                 <CardContent className="p-5 space-y-3">
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-2">{article.title}</h3>
@@ -485,7 +485,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           <p className="text-sm text-gray-600 mb-6">Proven conversation frameworks. Use AI to personalize or ask questions about how to apply them.</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {communicationTemplates.map((tmpl, idx) => (
-              <Card key={tmpl.title} className="ui-surface-card ui-surface-card-interactive">
+              <Card key={tmpl.title} className="ui-surface-card ui-surface-card-interactive border-teal-200">
                 <CardContent className="p-5 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="font-semibold text-sm text-gray-900">{tmpl.title}</h4>
@@ -541,7 +541,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
           {/* Share Form */}
           {showShareForm && (
-            <Card className="ui-surface-card border-teal-100">
+            <Card className="ui-surface-card border-teal-200">
               <CardContent className="p-5 space-y-3">
                 <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2"><Users className="w-4 h-4 text-teal-500" /> Share Anonymously</h3>
                 <Input value={shareForm.title} onChange={e => setShareForm(p => ({ ...p, title: e.target.value }))} placeholder="Title (e.g. 'Handling the formulary objection')" className="text-sm" />
@@ -593,7 +593,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
           {/* Snippet List */}
           {filteredSnippets.length === 0 ? (
-            <div className="ui-surface-card text-center py-12 border-dashed">
+            <div className="ui-surface-card border-teal-200 text-center py-12 border-dashed">
               <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm font-semibold text-gray-600">No snippets yet</p>
               <p className="text-xs text-gray-500 mt-1">Be the first to share a winning communication strategy</p>
@@ -646,7 +646,7 @@ function SnippetCard({ snippet, upvoted, onUpvote, curated }) {
   const [copied, setCopied] = useState(false);
   const copy = () => { navigator.clipboard.writeText(snippet.content); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   return (
-    <Card className={`ui-surface-card ui-surface-card-interactive ${curated ? "border-amber-200 bg-amber-50/30" : "border-slate-200"}`}>
+    <Card className={`ui-surface-card ui-surface-card-interactive ${curated ? "border-amber-200 bg-amber-50/30" : "border-teal-200"}`}>
       <CardContent className="p-4 space-y-2">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">

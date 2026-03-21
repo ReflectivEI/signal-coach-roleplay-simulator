@@ -3,8 +3,6 @@ import React, { useState, useEffect } from "react";
 import {
   Brain, CheckCircle, Play, BookOpen, Loader2, ChevronRight, ChevronDown, Award, Clock, Sparkles
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
 import { MODULE_LIBRARY, CAPABILITY_META, getUrgency } from "@/components/learningpath/ModuleLibrary";
 import { Link } from "react-router-dom";
@@ -199,31 +197,7 @@ export default function LearningPaths() {
   const [generatingAI, setGeneratingAI] = useState(false);
   const [sessions, setSessions] = useState([]);
   const [loadingPaths, setLoadingPaths] = useState(true);
-  const [workspaceInputs, setWorkspaceInputs] = useState({ framework: "", template: "", barrier: "" });
-  const [workspaceTips, setWorkspaceTips] = useState([]);
-  const [workspaceStatus, setWorkspaceStatus] = useState("");
 
-  const copyWorkspaceTips = async () => {
-    if (workspaceTips.length === 0) return;
-    const text = workspaceTips.map((tip, i) => `${i + 1}. ${tip}`).join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setWorkspaceStatus("Recommendations copied.");
-    } catch {
-      setWorkspaceStatus("Unable to copy recommendations.");
-    }
-  };
-
-  const pushWorkspaceTipsToPlanning = () => {
-    if (workspaceTips.length === 0) return;
-    localStorage.setItem("precall-predictive-tips", JSON.stringify(workspaceTips));
-    window.location.href = createPageUrl("PreCallPlanning");
-  };
-
-  const openRolePlayFromWorkspace = () => {
-    localStorage.setItem("workspace-context", JSON.stringify(workspaceInputs));
-    window.location.href = createPageUrl("RolePlaySimulator");
-  };
 
   useEffect(() => {
     loadData();
@@ -424,32 +398,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     : 'Start collecting simulator evidence to activate personalized remediation.';
   const confidenceLabel = getConfidenceLabel(paths.reduce((sum, path) => sum + (path?.session_count || 0), 0) || ENTERPRISE_SAMPLE_CONFIG.sessions);
 
-  const generateWorkspaceTips = () => {
-    const framework = workspaceInputs.framework.toLowerCase();
-    const template = workspaceInputs.template.toLowerCase();
-    const barrier = workspaceInputs.barrier.toLowerCase();
-    const tips = [];
 
-    if (!framework && !template && !barrier) {
-      setWorkspaceStatus("Add at least one input to generate recommendations.");
-      setWorkspaceTips([]);
-      return;
-    }
-
-    tips.push(framework
-      ? `Lead with the ${workspaceInputs.framework} framework in your opener and anchor it to one measurable patient-impact outcome.`
-      : "Lead with a single framework-based opener tied to one measurable patient-impact outcome.");
-
-    if (template.includes("objection") || barrier.includes("objection") || barrier.includes("pa") || barrier.includes("access")) {
-      tips.push("Use your objection template early and pre-wire one payer/access response before discussing product detail.");
-    } else {
-      tips.push("Use your selected messaging template to guide a 90-second value narrative before advancing to next-step asks.");
-    }
-
-    tips.push("Close with a concrete owner + date next step and log it into your pre-call planning workflow.");
-    setWorkspaceTips(tips.slice(0, 3));
-    setWorkspaceStatus("Recommendations generated.");
-  };
 
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
@@ -591,54 +540,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
             </div>
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-2xl border-2 border-[#1A334D]/15 p-5 shadow-sm hover:shadow-md transition-all">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#1A334D] mb-2">Client Customization Workspace</p>
-            <p className="text-xs text-gray-600 leading-relaxed mb-3">
-              Add your client framework and barrier context to generate actionable prep recommendations.
-            </p>
-            <div className="space-y-2">
-              <Input
-                value={workspaceInputs.framework}
-                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, framework: e.target.value }))}
-                placeholder="Client framework (e.g., ABC Value Sequence)"
-                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
-              />
-              <Input
-                value={workspaceInputs.template}
-                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, template: e.target.value }))}
-                placeholder="Messaging template (e.g., objection handling)"
-                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
-              />
-              <Input
-                value={workspaceInputs.barrier}
-                onChange={(e) => setWorkspaceInputs((prev) => ({ ...prev, barrier: e.target.value }))}
-                placeholder="Primary barrier (e.g., PA, staffing, access)"
-                className="h-8 text-xs border-[#cfd8e3] hover:border-[#1A334D] hover:bg-[#f8fbff] focus:border-[#39ACAC] transition-all"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={generateWorkspaceTips}
-                className="w-full rounded-full h-8 text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-              >
-                Generate Top 3 Recommendations
-              </Button>
-              {workspaceStatus && <p className="text-[11px] text-slate-600">{workspaceStatus}</p>}
-            </div>
-            {workspaceTips.length > 0 && (
-              <div className="mt-3 rounded-xl border border-teal-200 bg-teal-50 p-3">
-                <p className="text-xs font-bold text-teal-700 mb-1">Recommended Actions</p>
-                <ul className="list-disc pl-4 text-xs text-gray-700 space-y-1">
-                  {workspaceTips.map((tip) => <li key={tip}>{tip}</li>)}
-                </ul>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button onClick={pushWorkspaceTipsToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Use in Pre-Call Planning</button>
-                  <button onClick={openRolePlayFromWorkspace} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Practice in Role Play</button>
-                  <button onClick={copyWorkspaceTips} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] transition-all">Copy Recommendations</button>
-                </div>
-              </div>
-            )}
-          </div>
+
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

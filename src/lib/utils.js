@@ -53,6 +53,12 @@ function normalizeScenarioLine(line = "") {
   return line.replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
 }
 
+function sentenceCase(value = "") {
+  const text = String(value).trim();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function inferClosingTechnique(bestApproach = "") {
   if (!bestApproach) return "Close by confirming a specific next step, owner, and timing before the interaction ends.";
   const sentences = String(bestApproach).split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -113,8 +119,16 @@ export function formatScenarioText(rawText = "") {
     const normalized = entries.map(normalizeScenarioLine).filter(Boolean);
     if (!normalized.length) return "";
 
-    if (["Behavioral Signals", "Follow-up Questions", "Common Mistakes"].includes(section)) {
-      return normalized.map((entry) => `- ${entry}`).join("\n");
+    if (["Behavioral Signals", "Common Mistakes"].includes(section)) {
+      return normalized.map((entry) => `- ${sentenceCase(entry)}`).join("\n");
+    }
+
+    if (section === "Follow-up Questions") {
+      return normalized
+        .map((entry) => entry.replace(/^(follow-up questions?|follow up questions?)\s*:*/i, "").trim())
+        .filter(Boolean)
+        .map((entry) => `- ${entry}`)
+        .join("\n");
     }
 
     return normalized.join(" ");

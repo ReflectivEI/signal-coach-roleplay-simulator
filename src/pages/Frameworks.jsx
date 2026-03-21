@@ -330,7 +330,7 @@ function CoachingToolsTab() {
         const isLoading = aiLoading[t.id];
         const content = aiContent[t.id];
         return (
-          <Card key={t.id} className="ui-surface-card ui-surface-card-interactive">
+          <Card key={t.id} className="ui-surface-card ui-surface-card-interactive border-teal-200">
             <CardContent className="p-6 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#e6f7f7" }}>
@@ -353,7 +353,7 @@ function CoachingToolsTab() {
                 <button
                   onClick={() => generateAI(t)}
                   disabled={isLoading}
-                  className="ui-pill px-3 py-1 disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-500 px-3 py-1 text-xs font-semibold text-[#1A334D] transition-colors hover:bg-teal-100 disabled:opacity-50"
                 >
                   {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                   {content ? "Refresh AI Insight" : "Get AI Insight"}
@@ -446,7 +446,7 @@ export default function Frameworks() {
             {signalFrameworks.map(fw => {
               const Icon = ICON_MAP[fw.id] || MessageSquare;
               return (
-                <div key={fw.id} className="ui-surface-card ui-surface-card-interactive p-6">
+                <div key={fw.id} className="ui-surface-card ui-surface-card-interactive border-teal-200 p-6">
                   <div className="flex items-start gap-4 mb-4">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#39ACAC" }}>
                       <Icon className="w-5 h-5 text-white" />
@@ -467,12 +467,8 @@ export default function Frameworks() {
                       ))}
                     </ul>
                   </div>
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                    <div className="flex gap-2">
-                      <span className="ui-pill px-2.5 py-1">{fw.techniques.length} techniques</span>
-                      <span className="ui-pill ui-pill-active px-2.5 py-1 flex items-center gap-1">✦ AI Coach</span>
-                    </div>
-                    <button onClick={() => setSelectedFw(fw)} className="flex items-center gap-1 text-xs font-semibold text-gray-700 hover:text-teal-600 transition-colors">
+                  <div className="flex items-center justify-end pt-3 border-t border-gray-100">
+                    <button onClick={() => setSelectedFw(fw)} className="inline-flex items-center gap-1.5 rounded-full border border-teal-500 bg-[#1f766f] px-3 py-1.5 text-xs font-semibold text-teal-50 transition-colors hover:bg-[#2a8d84]">
                       Learn More <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
@@ -497,7 +493,7 @@ export default function Frameworks() {
               <p className="text-sm text-gray-500 mb-5 leading-relaxed">{discModel.description}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {discModel.styles.map(s => (
-                  <div key={s.letter} className="ui-surface-card bg-gray-50 p-4 border-slate-200">
+                  <div key={s.letter} className="ui-surface-card border-teal-200 bg-gray-50 p-4">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: "#1A334D" }}>{s.letter}</span>
                       <p className="font-semibold text-gray-800 text-sm">{s.name}</p>

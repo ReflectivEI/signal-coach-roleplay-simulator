@@ -1,25 +1,76 @@
 // @ts-nocheck
-import { saveAs } from "file-saver";
-const exportWord = async (plan) => {
-  const blob = new Blob([
-    `Pre-Call Plan\n\nHCP Name: ${plan.hcp_name}\nSpecialty: ${plan.specialty}\nDisease State: ${plan.disease_state}\n\nObjectives: ${plan.objectives}\n\nKey Messages: ${plan.key_messages}\n\nAnticipated Objections: ${plan.anticipated_objections}\n\nNotes: ${plan.notes}`
-  ], { type: "application/msword" });
-  saveAs(blob, `pre-call-plan-${plan.hcp_name.replace(/\s+/g, "-").toLowerCase()}.doc`);
-};
 import React, { useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download, Sparkles } from "lucide-react";
-import { format } from "date-fns";
-import { Link } from "react-router-dom";
+import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download, Sparkles, CheckCircle2 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES } from "@/lib/enablementHub";
 
 const REQUIRED_AI_FIELDS = ["hcp_name", "specialty", "disease_state"];
+const LOCAL_STORAGE_KEY = "reflectivai-precall-plans";
+
+const PLAN_SECTION_CONFIG = [
+  {
+    key: "objectives",
+    label: "Call Objectives",
+    shortLabel: "Objectives",
+    placeholder: "Primary outcomes you want from this discussion.",
+    emptyState: [
+      "Clarify the HCP's current perspective and success criteria.",
+      "Advance the conversation toward one concrete next step.",
+    ],
+    aiPrompt: (context) => `You are a pharmaceutical sales planning assistant. Based on this context: ${context}\n\nReturn exactly 3 concise call objectives.\nFormatting rules:\n- Plain text only\n- One bullet per line beginning with \"- \"\n- Each bullet must begin with an action verb\n- No extra headers or commentary`,
+  },
+  {
+    key: "key_messages",
+    label: "Key Messages",
+    shortLabel: "Messages",
+    placeholder: "Value points, evidence themes, and talk tracks to land.",
+    emptyState: [
+      "Connect the conversation to one HCP-specific value point.",
+      "Anchor your message to a practical patient or workflow outcome.",
+    ],
+    aiPrompt: (context) => `You are a pharmaceutical sales planning assistant. Based on this context: ${context}\n\nReturn exactly 3 key messages tailored to the HCP.\nFormatting rules:\n- Plain text only\n- One bullet per line beginning with \"- \"\n- Each bullet must be no more than 22 words\n- Focus on value, relevance, and evidence\n- No extra headers or commentary`,
+  },
+  {
+    key: "anticipated_objections",
+    label: "Anticipated Objections",
+    shortLabel: "Objections",
+    placeholder: "Likely concerns and your planned responses.",
+    emptyState: [
+      "Concern: Access, staffing, or workflow burden may limit uptake.",
+      "Response: Prepare one concise evidence-based answer plus one practical support step.",
+    ],
+    aiPrompt: (context) => `You are a pharmaceutical sales planning assistant. Based on this context: ${context}\n\nReturn exactly 3 anticipated objections with response strategies.\nFormatting rules:\n- Plain text only\n- For each objection use two lines in this format:\nConcern: ...\nResponse: ...\n- Put a blank line between each objection block\n- No markdown symbols, bullets, or extra headers`,
+  },
+  {
+    key: "notes",
+    label: "Discussion Notes & Next-Step Cues",
+    shortLabel: "Notes",
+    placeholder: "Operational reminders, follow-up items, or context worth remembering.",
+    emptyState: [
+      "Document any payer, staffing, or patient-mix context that should shape your approach.",
+      "Capture the owner and timing for the best next step you want to secure.",
+    ],
+    aiPrompt: null,
+  },
+];
+
+const defaultForm = {
+  hcp_name: "",
+  specialty: "",
+  disease_state: "",
+  objectives: "",
+  key_messages: "",
+  anticipated_objections: "",
+  notes: "",
+};
 
 function renderTooltipButton({ children, disabled, message, ...props }) {
   if (!disabled) {
@@ -40,23 +91,411 @@ function renderTooltipButton({ children, disabled, message, ...props }) {
   );
 }
 
+function normalizeText(value = "") {
+  return String(value)
+    .replace(/\r\n/g, "\n")
+    .replace(/```[\w-]*\n?|\n?```/g, "")
+    .replace(/\t/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function splitNormalizedLines(value = "") {
+  return normalizeText(value)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function cleanListEntry(line = "") {
+  return line.replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
+}
+
+function normalizeBulletText(value = "") {
+  const lines = splitNormalizedLines(value).map(cleanListEntry).filter(Boolean);
+  if (!lines.length) return "";
+  return lines.map((line) => `- ${line}`).join("\n");
+}
+
+function normalizeObjectionText(value = "") {
+  const lines = splitNormalizedLines(value);
+  if (!lines.length) return "";
+
+  const blocks = [];
+  let current = { concern: "", response: "" };
+
+  const flush = () => {
+    if (current.concern || current.response) {
+      blocks.push({ ...current });
+      current = { concern: "", response: "" };
+    }
+  };
+
+  lines.forEach((rawLine) => {
+    const line = cleanListEntry(rawLine);
+    if (!line) return;
+
+    if (/^concern\s*:/i.test(line) || /^objection\s*:/i.test(line)) {
+      if (current.concern && current.response) flush();
+      current.concern = line.replace(/^(concern|objection)\s*:/i, "").trim();
+      return;
+    }
+
+    if (/^response\s*:/i.test(line) || /^approach\s*:/i.test(line) || /^strategy\s*:/i.test(line)) {
+      current.response = line.replace(/^(response|approach|strategy)\s*:/i, "").trim();
+      return;
+    }
+
+    const paired = line.match(/^(.*?)(?:\s*[—–-]\s*|:\s*)(.*)$/);
+    if (!current.concern && paired && paired[1] && paired[2]) {
+      current.concern = paired[1].trim();
+      current.response = paired[2].trim();
+      flush();
+      return;
+    }
+
+    if (!current.concern) {
+      current.concern = line;
+    } else if (!current.response) {
+      current.response = line;
+      flush();
+    } else {
+      flush();
+      current.concern = line;
+    }
+  });
+
+  flush();
+
+  if (!blocks.length) return "";
+
+  return blocks
+    .map((block) => [
+      `Concern: ${block.concern || "Potential concern to prepare for."}`,
+      `Response: ${block.response || "Prepare a concise, evidence-based response tied to workflow or patient impact."}`,
+    ].join("\n"))
+    .join("\n\n");
+}
+
+function normalizePlan(form) {
+  return {
+    ...form,
+    hcp_name: normalizeText(form.hcp_name),
+    specialty: normalizeText(form.specialty),
+    disease_state: normalizeText(form.disease_state),
+    objectives: normalizeBulletText(form.objectives),
+    key_messages: normalizeBulletText(form.key_messages),
+    anticipated_objections: normalizeObjectionText(form.anticipated_objections),
+    notes: normalizeBulletText(form.notes),
+  };
+}
+
+function parseBulletSection(value = "", fallback = []) {
+  const normalized = normalizeBulletText(value);
+  const items = splitNormalizedLines(normalized).map(cleanListEntry).filter(Boolean);
+  return items.length ? items : fallback;
+}
+
+function parseObjectionSection(value = "", fallback = []) {
+  const normalized = normalizeObjectionText(value);
+  const lines = splitNormalizedLines(normalized);
+  const blocks = [];
+  let current = { concern: "", response: "" };
+
+  lines.forEach((line) => {
+    if (/^concern\s*:/i.test(line)) {
+      if (current.concern || current.response) {
+        blocks.push({ ...current });
+        current = { concern: "", response: "" };
+      }
+      current.concern = line.replace(/^concern\s*:/i, "").trim();
+    } else if (/^response\s*:/i.test(line)) {
+      current.response = line.replace(/^response\s*:/i, "").trim();
+      blocks.push({ ...current });
+      current = { concern: "", response: "" };
+    }
+  });
+
+  if (current.concern || current.response) blocks.push(current);
+  return blocks.length ? blocks : fallback;
+}
+
+function getStructuredPlan(plan) {
+  return {
+    objectives: parseBulletSection(plan.objectives, PLAN_SECTION_CONFIG.find((section) => section.key === "objectives")?.emptyState || []),
+    key_messages: parseBulletSection(plan.key_messages, PLAN_SECTION_CONFIG.find((section) => section.key === "key_messages")?.emptyState || []),
+    anticipated_objections: parseObjectionSection(plan.anticipated_objections, [
+      {
+        concern: "Access, staffing, or competing priorities could slow adoption.",
+        response: "Prepare one evidence point plus one operational support step that lowers friction.",
+      },
+    ]),
+    notes: parseBulletSection(plan.notes, PLAN_SECTION_CONFIG.find((section) => section.key === "notes")?.emptyState || []),
+  };
+}
+
+async function createPdfDocument() {
+  const { jsPDF } = await import("jspdf");
+  return new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+}
+
+function drawPdfHeader(doc, title, subtitle) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, pageWidth, 30, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(255, 255, 255);
+  doc.text(title, 18, 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(187, 247, 246);
+  doc.text(subtitle, 18, 24);
+}
+
+function ensurePdfSpace(doc, y, neededHeight, margin = 18) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  if (y + neededHeight <= pageHeight - margin) return y;
+  doc.addPage();
+  return margin;
+}
+
+function drawPdfMetaCard(doc, plan, y) {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const cardX = 18;
+  const cardWidth = pageWidth - 36;
+
+  doc.setFillColor(247, 250, 252);
+  doc.setDrawColor(173, 230, 226);
+  doc.roundedRect(cardX, y, cardWidth, 25, 5, 5, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(26, 51, 77);
+  doc.setFontSize(14);
+  doc.text(plan.hcp_name || "Pre-Call Planning Template", cardX + 5, y + 8);
+
+  const metaItems = [
+    { label: "Specialty", value: plan.specialty || "Open field" },
+    { label: "Disease State", value: plan.disease_state || "Open field" },
+    { label: "Created", value: plan.created_date ? format(new Date(plan.created_date), "MMM d, yyyy") : format(new Date(), "MMM d, yyyy") },
+  ];
+
+  const columnWidth = (cardWidth - 12) / 3;
+  metaItems.forEach((item, index) => {
+    const x = cardX + 5 + (columnWidth * index);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(57, 172, 172);
+    doc.setFontSize(8);
+    doc.text(item.label.toUpperCase(), x, y + 15);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.setFontSize(9);
+    doc.text(item.value, x, y + 20);
+  });
+
+  return y + 32;
+}
+
+function drawPdfListSection(doc, label, items, y) {
+  y = ensurePdfSpace(doc, y, 26 + (items.length * 8));
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const x = 18;
+  const width = pageWidth - 36;
+  const estimatedHeight = Math.max(24, 14 + (items.length * 8));
+
+  doc.setDrawColor(191, 219, 254);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x, y, width, estimatedHeight, 4, 4, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(26, 51, 77);
+  doc.text(label, x + 5, y + 8);
+
+  let cursorY = y + 15;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9.5);
+  doc.setTextColor(71, 85, 105);
+
+  items.forEach((item) => {
+    const lines = doc.splitTextToSize(item, width - 14);
+    cursorY = ensurePdfSpace(doc, cursorY, (lines.length * 5) + 4);
+    doc.setFillColor(57, 172, 172);
+    doc.circle(x + 6, cursorY - 1, 0.8, "F");
+    doc.text(lines, x + 10, cursorY + 1);
+    cursorY += (lines.length * 5) + 3;
+  });
+
+  return Math.max(y + estimatedHeight + 6, cursorY + 2);
+}
+
+function drawPdfObjectionSection(doc, blocks, y) {
+  y = ensurePdfSpace(doc, y, 34 + (blocks.length * 20));
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const x = 18;
+  const width = pageWidth - 36;
+  const estimatedHeight = Math.max(30, 16 + (blocks.length * 20));
+
+  doc.setDrawColor(250, 204, 21);
+  doc.setFillColor(255, 252, 235);
+  doc.roundedRect(x, y, width, estimatedHeight, 4, 4, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(120, 53, 15);
+  doc.text("Anticipated Objections", x + 5, y + 8);
+
+  let cursorY = y + 14;
+  blocks.forEach((block, index) => {
+    const concernLines = doc.splitTextToSize(`Concern ${index + 1}: ${block.concern}`, width - 10);
+    const responseLines = doc.splitTextToSize(`Planned response: ${block.response}`, width - 14);
+    cursorY = ensurePdfSpace(doc, cursorY, (concernLines.length + responseLines.length) * 5 + 7);
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(146, 64, 14);
+    doc.text(concernLines, x + 5, cursorY);
+    cursorY += concernLines.length * 5;
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(120, 53, 15);
+    doc.text(responseLines, x + 8, cursorY + 1);
+    cursorY += (responseLines.length * 5) + 4;
+  });
+
+  return Math.max(y + estimatedHeight + 6, cursorY + 2);
+}
+
+async function exportPlanPdf(plan) {
+  const doc = await createPdfDocument();
+  const structured = getStructuredPlan(plan);
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  drawPdfHeader(doc, "Pre-Call Plan", "ReflectivAI · Signal Intelligence™ field-ready discussion brief");
+  let y = drawPdfMetaCard(doc, plan, 38);
+
+  y = drawPdfListSection(doc, "Call Objectives", structured.objectives, y);
+  y = drawPdfListSection(doc, "Key Messages", structured.key_messages, y);
+  y = drawPdfObjectionSection(doc, structured.anticipated_objections, y);
+  y = drawPdfListSection(doc, "Discussion Notes & Next-Step Cues", structured.notes, y);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Prepared for in-field planning and aligned with the saved plan view.", pageWidth / 2, 288, { align: "center" });
+
+  const safeName = (plan.hcp_name || "latest-plan").trim().replace(/\s+/g, "-").toLowerCase() || "latest-plan";
+  doc.save(`pre-call-plan-${safeName}.pdf`);
+}
+
+async function exportTemplatePdf() {
+  const doc = await createPdfDocument();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const x = 18;
+  const width = pageWidth - 36;
+
+  drawPdfHeader(doc, "Pre-Call Planning Template", "ReflectivAI · Blank field worksheet aligned to the in-app planning format");
+
+  doc.setFillColor(247, 250, 252);
+  doc.setDrawColor(173, 230, 226);
+  doc.roundedRect(x, 38, width, 38, 5, 5, "FD");
+  [
+    { label: "HCP Name", y: 48 },
+    { label: "Specialty", y: 59 },
+    { label: "Disease State", y: 70 },
+  ].forEach(({ label, y: lineY }) => {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(26, 51, 77);
+    doc.setFontSize(9);
+    doc.text(label, x + 5, lineY - 2);
+    doc.setDrawColor(148, 163, 184);
+    doc.line(x + 32, lineY - 2, x + width - 5, lineY - 2);
+  });
+
+  const sections = [
+    { label: "Call Objectives", hint: "Capture 2-3 outcomes you want from the conversation.", lines: 5 },
+    { label: "Key Messages", hint: "Write value messages, evidence anchors, and customer-relevant talking points.", lines: 6 },
+    { label: "Anticipated Objections & Planned Responses", hint: "Document likely concerns and how you will respond.", lines: 7 },
+    { label: "Discussion Notes & Next-Step Cues", hint: "Add reminders, context, follow-up items, and the commitment you want to secure.", lines: 7 },
+  ];
+
+  let y = 78;
+  sections.forEach((section) => {
+    const sectionHeight = 16 + (section.lines * 8);
+    y = ensurePdfSpace(doc, y, sectionHeight + 8);
+    doc.setDrawColor(191, 219, 254);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, width, sectionHeight, 4, 4, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(26, 51, 77);
+    doc.setFontSize(10);
+    doc.text(section.label, x + 5, y + 8);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(section.hint, x + 5, y + 13);
+
+    let lineY = y + 20;
+    for (let i = 0; i < section.lines; i += 1) {
+      doc.setDrawColor(203, 213, 225);
+      doc.line(x + 5, lineY, x + width - 5, lineY);
+      lineY += 8;
+    }
+
+    y += sectionHeight + 8;
+  });
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  doc.text("Use this template for handwritten or offline planning. It mirrors the saved/exported in-app plan structure.", pageWidth / 2, 288, { align: "center" });
+  doc.save("pre-call-plan-template.pdf");
+}
+
+function PlanSectionCard({ title, children, tone = "default" }) {
+  const tones = {
+    default: "border-slate-200 bg-white",
+    teal: "border-teal-200 bg-teal-50/50",
+    amber: "border-amber-200 bg-amber-50/70",
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
+
 export default function PreCallPlanning() {
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ hcp_name: "", specialty: "", disease_state: "", objectives: "", key_messages: "", anticipated_objections: "", notes: "" });
+  const [form, setForm] = useState(defaultForm);
   const [plans, setPlans] = useState([]);
   const [aiGenerating, setAiGenerating] = useState(null);
   const [predictiveInputs, setPredictiveInputs] = useState({ prescribing_habit: "", access_barrier: "" });
   const [predictiveTips, setPredictiveTips] = useState([]);
+  const [expandedPlan, setExpandedPlan] = useState(null);
   const isLoading = false;
 
   useEffect(() => {
     try {
-      const cached = JSON.parse(localStorage.getItem("precall-predictive-tips") || "[]");
-      if (Array.isArray(cached) && cached.length > 0) {
-        setPredictiveTips(cached.slice(0, 3));
+      const cachedTips = JSON.parse(localStorage.getItem("precall-predictive-tips") || "[]");
+      if (Array.isArray(cachedTips) && cachedTips.length > 0) {
+        setPredictiveTips(cachedTips.slice(0, 3));
+      }
+    } catch {}
+
+    try {
+      const cachedPlans = JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "[]");
+      if (Array.isArray(cachedPlans)) {
+        setPlans(cachedPlans);
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(plans));
+  }, [plans]);
 
   const hasAllAiFields = useMemo(
     () => REQUIRED_AI_FIELDS.every((field) => String(form[field] || "").trim()),
@@ -65,27 +504,42 @@ export default function PreCallPlanning() {
   const aiAssistDisabled = aiGenerating !== null || !hasAllAiFields;
 
   const aiAssist = async (field) => {
-    if (!hasAllAiFields) return;
+    const section = PLAN_SECTION_CONFIG.find((item) => item.key === field);
+    if (!hasAllAiFields || !section?.aiPrompt) return;
+
     setAiGenerating(field);
-    const context = `HCP: ${form.hcp_name || "unknown"}, Specialty: ${form.specialty || "unknown"}, Disease State: ${form.disease_state || "unknown"}, Current objectives: ${form.objectives || "none"}, Current key messages: ${form.key_messages || "none"}`;
-    const prompts = {
-      objectives: `You are a pharma sales coach. Based on this context: ${context}, draft 2-3 clear, specific call objectives using Signal Intelligence principles. Be concise, action-oriented. Plain text only, no markdown headers.`,
-      key_messages: `You are a pharma sales coach. Based on this context: ${context}, draft 3 key messages tailored to this HCP's likely priorities using Signal Intelligence principles. Plain text only, no markdown headers.`,
-      anticipated_objections: `You are a pharma sales coach. Based on this context: ${context}, list 3 likely objections this HCP might raise, with a brief response strategy for each. Plain text only, no markdown headers.`,
-    };
+    const context = [
+      `HCP: ${form.hcp_name || "unknown"}`,
+      `Specialty: ${form.specialty || "unknown"}`,
+      `Disease state: ${form.disease_state || "unknown"}`,
+      `Current objectives: ${form.objectives || "none"}`,
+      `Current key messages: ${form.key_messages || "none"}`,
+    ].join(", ");
+
     try {
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompts[field] })
+      const res = await fetch("/api/llm/invoke", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: section.aiPrompt(context) }),
       });
       const data = await res.json();
-      let responseText = data.response || data.text || data.content || '';
-      responseText = responseText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
-      setForm(prev => ({ ...prev, [field]: responseText }));
+      let responseText = data.response || data.text || data.content || "";
+      responseText = normalizeText(responseText);
+
+      const formattedValue = field === "anticipated_objections"
+        ? normalizeObjectionText(responseText)
+        : normalizeBulletText(responseText);
+
+      setForm((prev) => ({ ...prev, [field]: formattedValue }));
     } catch {
-      setForm(prev => ({ ...prev, [field]: 'AI service unavailable.' }));
+      setForm((prev) => ({
+        ...prev,
+        [field]: field === "anticipated_objections"
+          ? normalizeObjectionText("Concern: AI service unavailable.\nResponse: Draft this section manually.")
+          : normalizeBulletText("- AI service unavailable. Please complete this section manually."),
+      }));
     }
+
     setAiGenerating(null);
   };
 
@@ -95,107 +549,39 @@ export default function PreCallPlanning() {
     const tips = [];
 
     if (habit.includes("legacy") || habit.includes("older") || habit.includes("stable")) {
-      tips.push("Lead with switch criteria and real-world outcomes for stable patients eligible for optimization.");
+      tips.push("Lead with switch criteria and one outcome-based rationale for patients who may be appropriate for optimization.");
     } else {
-      tips.push("Open with patient-segment opportunities and one high-impact use case tied to this specialty.");
+      tips.push("Open with a patient-segment opportunity and one specialty-specific use case that feels immediately relevant.");
     }
 
     if (barrier.includes("prior") || barrier.includes("pa") || barrier.includes("access")) {
-      tips.push("Prepare a prior-auth workflow script and bring one payer-specific support resource to reduce friction.");
+      tips.push("Prepare a brief access workflow explanation and bring one payer-support resource that reduces implementation friction.");
     } else if (barrier.includes("time") || barrier.includes("staff")) {
-      tips.push("Use a 90-second value narrative and propose nurse/pharmacist-enabled follow-up to save clinic time.");
+      tips.push("Use a concise 90-second value narrative and offer a low-burden follow-up path for the broader care team.");
     } else {
-      tips.push("Map likely objections in advance and pre-wire one response linked to measurable patient impact.");
+      tips.push("Map the most likely objection in advance and connect your response to a measurable patient or workflow benefit.");
     }
 
-    tips.push("Close the call by confirming a concrete next step with owner and date (e.g., chart pull, patient list review, follow-up).");
-    setPredictiveTips(tips.slice(0, 3));
+    tips.push("Close by confirming a specific next step, the owner, and the expected timing before the conversation ends.");
+    const nextTips = tips.slice(0, 3);
+    setPredictiveTips(nextTips);
+    localStorage.setItem("precall-predictive-tips", JSON.stringify(nextTips));
   };
 
   const createPlan = (data) => {
-    setPlans((prev) => [{ ...data, id: Date.now().toString(), created_date: new Date().toISOString(), status: "draft" }, ...prev]);
+    const normalized = normalizePlan(data);
+    setPlans((prev) => [{
+      ...normalized,
+      id: Date.now().toString(),
+      created_date: new Date().toISOString(),
+      status: "draft",
+    }, ...prev]);
     setShowForm(false);
-    setForm({ hcp_name: "", specialty: "", disease_state: "", objectives: "", key_messages: "", anticipated_objections: "", notes: "" });
+    setExpandedPlan(null);
+    setForm(defaultForm);
   };
 
-  const deletePlan = (id) => setPlans((prev) => prev.filter((p) => p.id !== id));
-  const [expandedPlan, setExpandedPlan] = useState(null);
-
-  const exportPDF = async (plan) => {
-    const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const margin = 20;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const maxWidth = pageWidth - margin * 2;
-    let y = margin;
-
-    doc.setFillColor(26, 51, 77);
-    doc.rect(0, 0, pageWidth, 30, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text("Pre-Call Plan", margin, 19);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Generated: ${format(new Date(), "MMM d, yyyy")}`, pageWidth - margin, 19, { align: "right" });
-
-    y = 40;
-    doc.setTextColor(0, 0, 0);
-
-    doc.setFillColor(240, 244, 248);
-    doc.rect(margin - 2, y - 4, maxWidth + 4, 22, "F");
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(26, 51, 77);
-    doc.text(plan.hcp_name || "Pre-Call Planning Template", margin, y + 4);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 100, 100);
-    const details = [plan.specialty, plan.disease_state].filter(Boolean).join("  ·  ");
-    if (details) doc.text(details, margin, y + 11);
-    y += 28;
-
-    const addSection = (label, value) => {
-      if (!value) return;
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(57, 172, 172);
-      doc.text(label.toUpperCase(), margin, y);
-      y += 5;
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(50, 50, 50);
-      const lines = doc.splitTextToSize(value, maxWidth);
-      if (y + lines.length * 5 > 270) { doc.addPage(); y = margin; }
-      doc.text(lines, margin, y);
-      y += lines.length * 5 + 8;
-    };
-
-    addSection("Objectives", plan.objectives);
-    addSection("Key Messages", plan.key_messages);
-    addSection("Anticipated Objections", plan.anticipated_objections);
-    addSection("Notes", plan.notes);
-
-    doc.setFontSize(7);
-    doc.setTextColor(180, 180, 180);
-    doc.text("ReflectivAI · Signal Intelligence™ Pre-Call Planning", pageWidth / 2, 290, { align: "center" });
-
-    const safeName = (plan.hcp_name || "template").trim().replace(/\s+/g, "-").toLowerCase() || "template";
-    doc.save(`pre-call-plan-${safeName}.pdf`);
-  };
-
-  const exportTemplatePDF = async () => {
-    const templatePlan = {
-      hcp_name: "",
-      specialty: "",
-      disease_state: "",
-      objectives: "",
-      key_messages: "",
-      anticipated_objections: "",
-      notes: "",
-    };
-    await exportPDF(templatePlan);
-  };
+  const deletePlan = (id) => setPlans((prev) => prev.filter((plan) => plan.id !== id));
 
   return (
     <TooltipProvider>
@@ -233,7 +619,7 @@ export default function PreCallPlanning() {
             <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-5">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
               <div className="mt-4 space-y-3">
-                {ENABLEMENT_HUB_SPOKES.filter(spoke => ["performance", "learning", "reports"].includes(spoke.id)).map((spoke) => (
+                {ENABLEMENT_HUB_SPOKES.filter((spoke) => ["performance", "learning", "reports"].includes(spoke.id)).map((spoke) => (
                   <Link key={spoke.id} to={createPageUrl(spoke.page)} className="block rounded-2xl border border-white/10 bg-slate-950/20 p-4 transition-all hover:border-teal-300/60 hover:bg-slate-950/30">
                     <p className="text-xs font-semibold uppercase tracking-wide text-teal-200">{spoke.label}</p>
                     <p className="text-sm font-semibold text-white">{spoke.title}</p>
@@ -250,29 +636,18 @@ export default function PreCallPlanning() {
             <ClipboardList className="h-7 w-7 text-gray-600" />
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Pre-Call Planning</h1>
-              <p className="text-sm text-gray-600">Prepare for your HCP conversations</p>
+              <p className="text-sm text-gray-600">Prepare for your HCP conversations with one consistent save and export workflow.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button className="h-10 min-w-[140px] border border-teal-500 bg-teal-500 text-white shadow-sm hover:bg-teal-600" onClick={() => setShowForm(true)}>
-              <Plus className="mr-1 h-4 w-4" /> New Plan
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => plans.length > 0 && exportPDF(plans[0])}
-              disabled={plans.length === 0}
-              className="h-10 min-w-[172px] border-[#1A334D] bg-[#f8fbff] font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC]"
-              title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
-            >
-              <Download className="mr-1 h-4 w-4" /> Export to PDF
-            </Button>
-          </div>
+          <Button className="h-10 min-w-[140px] border border-teal-500 bg-teal-500 text-white shadow-sm hover:bg-teal-600" onClick={() => setShowForm(true)}>
+            <Plus className="mr-1 h-4 w-4" /> New Plan
+          </Button>
         </div>
 
         <div className="mb-6 flex gap-3 rounded-xl border border-blue-100 bg-blue-50 p-4">
           <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500" />
           <p className="text-sm text-gray-600">
-            <strong>Coaching assistance only.</strong> Pre-Call Plans help you think through your approach and prepare for HCP conversations. No evaluation or scoring.
+            <strong>Coaching assistance only.</strong> Pre-Call Plans help you think through your approach and prepare for HCP conversations. Saved plans and exported PDFs now share the same structured format.
           </p>
         </div>
 
@@ -283,7 +658,7 @@ export default function PreCallPlanning() {
                 <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-700" />
                 <div>
                   <p className="text-sm font-semibold text-[#1A334D]">AI Assistance unlocks once HCP Name, Specialty, and Disease State are entered.</p>
-                  <p className="mt-1 text-xs text-slate-600">Complete all three required context fields to enable AI-generated planning support.</p>
+                  <p className="mt-1 text-xs text-slate-600">AI responses follow structured parsing rules so the saved plan and exported PDF stay aligned and easy to read.</p>
                 </div>
               </div>
 
@@ -301,34 +676,31 @@ export default function PreCallPlanning() {
                 ))}
               </div>
 
-              {[
-                { key: "objectives", label: "Objectives", placeholder: "What do you want to achieve?" },
-                { key: "key_messages", label: "Key Messages", placeholder: "Key points to communicate" },
-                { key: "anticipated_objections", label: "Anticipated Objections", placeholder: "What resistance might you face?" },
-              ].map(({ key, label, placeholder }) => (
+              {PLAN_SECTION_CONFIG.map(({ key, label, placeholder, aiPrompt }) => (
                 <div key={key} className="space-y-2">
-                  <div className="mb-1 flex items-center justify-between">
-                    <Label>{label}</Label>
-                    {renderTooltipButton({
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <div>
+                      <Label>{label}</Label>
+                      <p className="text-[11px] text-slate-500">
+                        {key === "anticipated_objections"
+                          ? "Use Concern / Response pairs."
+                          : "Use one concise bullet per line for the cleanest saved and exported formatting."}
+                      </p>
+                    </div>
+                    {aiPrompt ? renderTooltipButton({
                       type: "button",
                       onClick: () => aiAssist(key),
                       disabled: aiAssistDisabled,
                       message: "Complete required fields to enable AI Assist",
                       className: "flex items-center gap-1.5 rounded-full border border-teal-300 bg-teal-100/70 px-2.5 py-1 text-xs font-semibold text-teal-800 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-teal-200 disabled:cursor-not-allowed disabled:opacity-50",
-                      children: aiGenerating === key ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</> : <><Wand2 className="h-3 w-3" /> AI Assist</>
-                    })}
+                      children: aiGenerating === key ? <><Loader2 className="h-3 w-3 animate-spin" /> Generating...</> : <><Wand2 className="h-3 w-3" /> AI Assist</>,
+                    }) : null}
                   </div>
                   <Textarea
                     value={form[key]}
                     onChange={(e) => setForm({ ...form, [key]: e.target.value })}
                     placeholder={placeholder}
                     className={aiGenerating === key ? "opacity-50" : ""}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        if (form.hcp_name && !aiGenerating) createPlan(form);
-                      }
-                    }}
                   />
                 </div>
               ))}
@@ -362,13 +734,6 @@ export default function PreCallPlanning() {
                 <p className="text-xs text-slate-500">AI Assist stays disabled until all required context fields are complete.</p>
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button variant="outline" className="h-10 min-w-[104px] border-slate-200 text-slate-700 hover:bg-slate-50" onClick={() => setShowForm(false)}>Cancel</Button>
-                  <Button
-                    variant="outline"
-                    className="h-10 min-w-[148px] border-[#1A334D] bg-[#f8fbff] font-semibold text-[#1A334D] hover:border-[#39ACAC] hover:text-[#39ACAC]"
-                    onClick={() => exportWord({ ...form, hcp_name: form.hcp_name || "new-plan" })}
-                  >
-                    Export to Word
-                  </Button>
                   <Button className="h-10 min-w-[136px] bg-teal-500 font-semibold hover:bg-teal-600" onClick={() => createPlan(form)} disabled={!form.hcp_name || aiGenerating !== null}>
                     Create Plan
                   </Button>
@@ -391,79 +756,125 @@ export default function PreCallPlanning() {
           </div>
         ) : (
           <div className="space-y-3">
-            {plans.map((plan) => (
-              <Card key={plan.id} className="transition-shadow hover:shadow-md">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{plan.hcp_name}</h3>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        {plan.specialty && <span className="ui-pill px-2 py-1 text-xs">{plan.specialty}</span>}
-                        {plan.disease_state && <span className="ui-pill px-2 py-1 text-xs">{plan.disease_state}</span>}
-                        <span className="ui-pill px-2 py-1 text-xs capitalize">{plan.status || "draft"}</span>
-                      </div>
-                      {plan.objectives && <p className="mt-2 line-clamp-2 text-sm text-gray-600">{plan.objectives}</p>}
-                    </div>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                      <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportPDF(plan)} title="Export to PDF">
-                        <Download className="h-4 w-4 text-teal-500 hover:text-teal-700" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => exportWord(plan)} title="Export to Word">
-                        <Download className="h-4 w-4 text-blue-500 hover:text-blue-700" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
-                        {expandedPlan === plan.id ? <ChevronUp className="h-4 w-4 text-gray-600" /> : <ChevronDown className="h-4 w-4 text-gray-600" />}
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deletePlan(plan.id)}>
-                        <Trash2 className="h-4 w-4 text-gray-600" />
-                      </Button>
-                    </div>
-                  </div>
-
-                  {expandedPlan === plan.id && (
-                    <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
-                      {[
-                        { label: "Objectives", value: plan.objectives },
-                        { label: "Key Messages", value: plan.key_messages },
-                        { label: "Anticipated Objections", value: plan.anticipated_objections },
-                        { label: "Notes", value: plan.notes },
-                      ].filter(f => f.value).map(({ label, value }) => (
-                        <div key={label}>
-                          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-600">{label}</p>
-                          <p className="whitespace-pre-line text-sm leading-relaxed text-gray-700">{value}</p>
+            {plans.map((plan) => {
+              const structured = getStructuredPlan(plan);
+              return (
+                <Card key={plan.id} className="border-teal-200/80 transition-shadow hover:shadow-md">
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold text-gray-900">{plan.hcp_name}</h3>
+                          <span className="ui-pill px-2 py-1 text-xs capitalize">{plan.status || "draft"}</span>
                         </div>
-                      ))}
-                      <div className="pt-1">
-                        <Button variant="outline" onClick={() => exportPDF(plan)} className="w-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-[#f8fbff] hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] sm:w-auto">
-                          <Download className="mr-1 h-3.5 w-3.5" /> Export to PDF
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {plan.specialty && <span className="ui-pill px-2 py-1 text-xs">{plan.specialty}</span>}
+                          {plan.disease_state && <span className="ui-pill px-2 py-1 text-xs">{plan.disease_state}</span>}
+                        </div>
+                        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Plan Snapshot</p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-3">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Objectives</p>
+                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.objectives[0]}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Key Message</p>
+                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.key_messages[0]}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Primary Objection</p>
+                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.anticipated_objections[0]?.concern}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-shrink-0 items-center gap-2">
+                        <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
+                          {expandedPlan === plan.id ? <ChevronUp className="h-4 w-4 text-gray-600" /> : <ChevronDown className="h-4 w-4 text-gray-600" />}
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deletePlan(plan.id)}>
+                          <Trash2 className="h-4 w-4 text-gray-600" />
                         </Button>
                       </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+
+                    {expandedPlan === plan.id && (
+                      <div className="mt-5 space-y-4 border-t border-gray-100 pt-4">
+                        <div className="grid gap-4 xl:grid-cols-2">
+                          <PlanSectionCard title="Call Objectives" tone="teal">
+                            <ul className="space-y-2 text-sm text-slate-700">
+                              {structured.objectives.map((item) => (
+                                <li key={item} className="flex items-start gap-2 leading-relaxed">
+                                  <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-600" />
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </PlanSectionCard>
+
+                          <PlanSectionCard title="Key Messages" tone="teal">
+                            <ul className="space-y-2 text-sm text-slate-700">
+                              {structured.key_messages.map((item) => (
+                                <li key={item} className="flex items-start gap-2 leading-relaxed">
+                                  <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-600" />
+                                  <span>{item}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </PlanSectionCard>
+                        </div>
+
+                        <PlanSectionCard title="Anticipated Objections" tone="amber">
+                          <div className="space-y-3">
+                            {structured.anticipated_objections.map((item, index) => (
+                              <div key={`${item.concern}-${index}`} className="rounded-2xl border border-amber-200 bg-white/70 p-4">
+                                <p className="text-sm font-semibold text-amber-900">Concern {index + 1}</p>
+                                <p className="mt-1 text-sm leading-relaxed text-slate-700">{item.concern}</p>
+                                <p className="mt-3 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Planned response</p>
+                                <p className="mt-1 text-sm leading-relaxed text-slate-700">{item.response}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </PlanSectionCard>
+
+                        <PlanSectionCard title="Discussion Notes & Next-Step Cues">
+                          <ul className="space-y-2 text-sm text-slate-700">
+                            {structured.notes.map((item) => (
+                              <li key={item} className="flex items-start gap-2 leading-relaxed">
+                                <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-slate-400" />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </PlanSectionCard>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
         <div className="mt-7 flex flex-col gap-3 rounded-xl border border-teal-200 bg-teal-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#1A334D]">Field-Ready Export</p>
-            <p className="text-xs text-slate-600">Export your most recent plan or a blank pre-call template for use in the field.</p>
+            <p className="text-xs text-slate-600">Use the consolidated export area below for either a blank planning worksheet or your latest saved plan.</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
-              onClick={exportTemplatePDF}
+              onClick={exportTemplatePdf}
             >
               <Download className="mr-1 h-3.5 w-3.5" /> Export to PDF (Template)
             </Button>
             <Button
               variant="outline"
               className="rounded-full text-xs font-semibold border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-50"
-              onClick={() => plans.length > 0 && exportPDF(plans[0])}
+              onClick={() => plans.length > 0 && exportPlanPdf(plans[0])}
               disabled={plans.length === 0}
               title={plans.length > 0 ? "Export most recent plan as PDF" : "Create a plan to enable PDF export"}
             >

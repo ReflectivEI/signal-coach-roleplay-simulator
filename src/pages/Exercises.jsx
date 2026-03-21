@@ -180,16 +180,24 @@ Return ONLY valid JSON array with this exact schema:
   const generateScenario = async () => {
     setIsGeneratingScenario(true);
     try {
-      const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}". The scenario should include:
+      const prompt = `Generate a realistic sales scenario for pharmaceutical representatives learning about "${selectedTopicLabel}".
 
-1. Situation setup (HCP type, time constraint, context)
-2. HCP behavioral signals (what the rep should notice)
-3. The HCP's opening statement or concern
-4. 2-3 follow-up questions the REP should ask
-5. Common mistakes to avoid
-6. Best approach and expected outcome
+Return plain text only using these exact section headers in this exact order:
+Scenario Overview:
+Situation:
+Behavioral Signals:
+Opening Statement:
+Follow-up Questions:
+Common Mistakes:
+Best Approach:
+Closing Technique:
 
-Make it practical, specific, and grounded in real pharma sales situations. Include real-world details like disease state, patient population, or clinical considerations where relevant.`;
+Formatting rules:
+- Do not add markdown, numbering, or duplicate section titles
+- "Follow-up Questions" is the only allowed follow-up heading
+- Under Behavioral Signals, Follow-up Questions, and Common Mistakes, give 2-3 concise bullet-style lines without repeating the header in the body
+- Keep Opening Statement and Best Approach as paragraph text, not bullets
+- Make it practical, specific, and grounded in real pharma sales situations with disease-state, patient, or workflow context where relevant.`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
