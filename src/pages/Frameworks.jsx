@@ -201,7 +201,7 @@ function FrameworkDetailModal({ fw, onClose }) {
 
         <div className="p-6 space-y-6">
           {/* AI Coach */}
-          <div className="ui-surface-card bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-100 p-5">
+          <div className="ui-surface-card ui-teal-section p-5">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-semibold text-teal-800">✦ AI Coach</span>
             </div>
@@ -417,7 +417,7 @@ export default function Frameworks() {
           { num: 2, title: "Behavioral Models", desc: "Supporting insight layer — how to adapt communication" },
           { num: 3, title: "Coaching Tools", desc: "Action layer — how improvement happens" },
         ].map(p => (
-          <div key={p.num} className="ui-surface-card ui-surface-card-interactive bg-gradient-to-br from-teal-50 to-cyan-50 p-5 border-teal-100">
+          <div key={p.num} className="ui-surface-card ui-surface-card-interactive ui-teal-section p-5">
             <div className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm mb-3" style={{ background: "#39ACAC" }}>{p.num}</div>
             <h3 className="font-semibold text-gray-900 mb-1">{p.title}</h3>
             <p className="text-xs text-gray-500">{p.desc}</p>

@@ -160,7 +160,7 @@ function SectionHeader({ eyebrow, title, description }: SectionHeaderProps) {
 
 function PageSection({ children, tint = "white" }: PageSectionProps) {
   const sectionTone = tint === "teal"
-    ? "bg-[linear-gradient(180deg,rgba(240,253,250,0.95),rgba(248,250,252,0.98))]"
+    ? "ui-teal-section"
     : "bg-white";
 
   return (
@@ -342,7 +342,7 @@ export default function CustomizationIntegration() {
           </p>
           <div className="mt-5 space-y-3">
             {protectionPoints.map((point) => (
-              <div key={point} className="flex items-start gap-3 rounded-2xl border border-teal-100 bg-white px-4 py-4 text-sm text-slate-700 shadow-sm">
+              <div key={point} className="ui-teal-surface rounded-2xl px-4 py-4 text-sm text-slate-700">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-600" />
                 <span>{point}</span>
               </div>
@@ -350,7 +350,7 @@ export default function CustomizationIntegration() {
           </div>
         </PageSection>
 
-        <section className="rounded-[32px] border border-slate-200/80 bg-[linear-gradient(90deg,#ffffff_0%,#f0fdfa_100%)] px-5 py-6 text-center shadow-[0_16px_40px_rgba(15,23,42,0.05)] md:px-7 md:py-7">
+        <section className="ui-teal-section px-5 py-6 text-center md:px-7 md:py-7">
           <div className="mx-auto max-w-4xl">
             <h2 className="text-2xl font-bold text-slate-900">Consistent measurement. Flexible enterprise alignment.</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">

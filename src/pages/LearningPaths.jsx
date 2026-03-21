@@ -481,7 +481,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
         )}
 
 
-        <div className="mb-6 rounded-[28px] border border-teal-100 bg-gradient-to-r from-white to-teal-50 p-6 shadow-sm">
+        <div className="ui-teal-section mb-6 p-6">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-3xl">
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-600">Remediation hub</p>
@@ -496,7 +496,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                   { label: 'Reference content', value: `${MODULE_LIBRARY.length} modules`, sub: `${ENTERPRISE_SAMPLE_CONFIG.modules}+ enterprise standard` },
                   { label: 'Confidence', value: confidenceLabel, sub: 'derived from observed practice volume' },
                 ].map((item) => (
-                  <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div key={item.label} className="ui-teal-surface rounded-2xl p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
                     <p className="mt-2 text-xl font-bold text-slate-900">{item.value}</p>
                     <p className="mt-1 text-xs text-slate-500">{item.sub}</p>

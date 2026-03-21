@@ -472,7 +472,7 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
   };
 
   return (
-    <div className="rounded-xl border border-teal-200 bg-gradient-to-br from-teal-50 to-slate-50 p-5 space-y-4">
+    <div className="ui-teal-section rounded-xl p-5 space-y-4">
       <textarea
         placeholder="E.g., 'I'm meeting with a skeptical cardiologist who prefers data-driven conversations...'"
         value={input}
