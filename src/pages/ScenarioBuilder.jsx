@@ -278,7 +278,7 @@ export default function ScenarioBuilder() {
 
         {editingId === null && (
           <div className="mb-6 rounded-[28px] border border-[#1A334D]/10 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
-            <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-cyan-50 p-4 md:p-5 flex flex-col gap-2">
+            <div className="ui-teal-section rounded-2xl p-4 md:p-5 flex flex-col gap-2">
               <p className="text-sm font-bold text-[#1A334D]">All scenario authoring starts here.</p>
               <p className="text-xs text-gray-600">Use AI Scenario Generator for a simulator-ready brief or + New Scenario for manual authoring. The Role Play Simulator only runs scenarios.</p>
             </div>

@@ -150,7 +150,7 @@ export default function AIScenarioGenerator({ onGenerated, onCancel, onAddToSimu
   const canGenerate = params.hcp_category || params.specialty || params.challenge;
 
   return (
-    <div className="bg-gradient-to-br from-teal-50 to-cyan-50 border border-teal-200 rounded-2xl p-6 mb-6 shadow-sm">
+    <div className="ui-teal-section rounded-2xl p-6 mb-6">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-teal-500" />

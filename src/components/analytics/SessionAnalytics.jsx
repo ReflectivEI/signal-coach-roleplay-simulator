@@ -840,7 +840,7 @@ export default function SessionAnalytics() {
 
               {/* Personalized Learning Path */}
               <div className="lg:col-span-2 space-y-4">
-                <div className="rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-slate-50 p-5">
+                <div className="ui-teal-section rounded-2xl p-5">
                   <div className="flex items-center gap-2 mb-3">
                     <Lightbulb className="w-4 h-4 text-teal-600" />
                     <h3 className="text-sm font-bold text-teal-900">Personalized Learning Path</h3>

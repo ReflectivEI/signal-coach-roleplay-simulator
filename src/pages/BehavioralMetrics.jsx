@@ -44,7 +44,7 @@ export default function BehavioralMetrics() {
               Behavioral measurement definitions and source-of-truth criteria for the eight canonical Signal Intelligence capabilities.
             </p>
           </div>
-          <div className="w-full max-w-sm rounded-2xl border border-teal-100 bg-white/90 p-5 shadow-sm">
+          <div className="ui-teal-surface w-full max-w-sm rounded-2xl p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Measurement guardrails</p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
               Each capability is anchored to a diagnostic question and observable metrics scored from 1–5, where 3 indicates effective and acceptable performance.
@@ -151,7 +151,7 @@ export default function BehavioralMetrics() {
                 </ul>
               </section>
 
-              <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-4">
+              <div className="ui-teal-surface rounded-2xl p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">Canonical definition</p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-700">“{selectedMetric.canonical}”</p>
               </div>
