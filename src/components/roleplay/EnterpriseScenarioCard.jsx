@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import ScenarioCard from "@/components/roleplay/ScenarioCard";
 
 const DIFFICULTY_CONFIG = {
@@ -41,8 +41,6 @@ export default function EnterpriseScenarioCard({
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [previewing, setPreviewing] = useState(false);
-  const [typingText, setTypingText] = useState("");
-  const previewTimerRef = useRef(null);
 
   const diff = DIFFICULTY_CONFIG[scenario.difficulty] || DIFFICULTY_CONFIG.intermediate;
   const catColor = CATEGORY_COLORS[scenario.category] || "bg-gray-50 text-gray-600 border-gray-200";
@@ -51,97 +49,76 @@ export default function EnterpriseScenarioCard({
   const tacticalFocusLines = toLines(scenario.challenges || scenario.tacticalFocus, ["Surface resistance early and connect back to value."]);
   const hcpSummary = String(scenario.hcp || scenario.stakeholder || scenario.context || "Profile details are not available for this HCP.").trim();
 
-  useEffect(() => {
-    if (!previewing) {
-      setTypingText("");
-      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
-      return undefined;
-    }
-
-    let index = 0;
-    previewTimerRef.current = window.setInterval(() => {
-      index += 1;
-      setTypingText(openingScene.slice(0, index));
-      if (index >= openingScene.length && previewTimerRef.current) {
-        window.clearInterval(previewTimerRef.current);
-      }
-    }, 18);
-
-    return () => {
-      if (previewTimerRef.current) window.clearInterval(previewTimerRef.current);
-    };
-  }, [openingScene, previewing]);
-
   return (
-    <div className={`scenario-card self-start bg-white rounded-2xl border flex flex-col overflow-hidden ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"}`}>
-      <div className={`px-5 pt-5 ${expanded ? "pb-4" : "pb-5"} flex-1 space-y-3`}>
+    <div className={`scenario-card self-start overflow-hidden rounded-2xl border bg-white transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:border-teal-300 hover:shadow-lg ${expanded ? "scenario-card-expanded border-[#1A334D] shadow-xl shadow-teal-100/70" : "border-[#1A334D]/70 shadow-md"}`}>
+      <div className={`flex-1 space-y-4 px-5 pt-5 ${expanded ? "pb-4" : "pb-5"}`}>
         <div className="flex items-start gap-2">
           <h3 className="font-bold text-gray-900 text-sm leading-snug flex-1">{scenario.title}</h3>
           <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border flex-shrink-0 ${diff.color}`}>{diff.label}</span>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {scenario.category && <span className={`inline-flex items-center rounded-full border border-[#1A334D] px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>}
+          {scenario.specialty && <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>}
+        </div>
+
+        {scenario.description && <p className={`text-xs leading-relaxed text-gray-600 ${expanded ? "" : "line-clamp-2"}`}>{scenario.description}</p>}
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening Scene</p>
+            <button
+              type="button"
+              onClick={() => setPreviewing((value) => !value)}
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-150 ease-in-out hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            >
+              {previewing ? "Hide Scene" : openingSceneLabel}
+            </button>
+          </div>
+          <div className={`overflow-hidden transition-all duration-200 ease-in-out ${previewing ? "max-h-48" : "max-h-[3.75rem]"}`}>
+            <p className={`min-h-[40px] text-xs leading-relaxed text-slate-600 ${previewing ? "" : "line-clamp-3"}`}>
+              {openingScene}
+            </p>
+          </div>
+        </div>
+
         {expanded && (
-          <>
-            <div className="flex flex-wrap items-center gap-2">
-              {scenario.category && <span className={`inline-flex items-center rounded-full border border-[#1A334D] px-2.5 py-1 text-[11px] font-semibold ${catColor}`}>{scenario.category}</span>}
-              {scenario.specialty && <span className="text-[11px] font-medium text-gray-500">{scenario.specialty}</span>}
+          <div className="space-y-4 border-t border-slate-100 pt-4">
+            <div className="rounded-lg bg-gray-50 px-3 py-3">
+              <p className="mb-0.5 text-xs font-medium uppercase tracking-wide text-gray-500">HCP</p>
+              <p className="text-xs font-medium text-gray-800 line-clamp-3">{hcpSummary}</p>
             </div>
-
-            {scenario.description && <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">{scenario.description}</p>}
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Opening Scene</p>
-                <button
-                  type="button"
-                  onClick={() => setPreviewing((value) => !value)}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all duration-200 hover:border-teal-300 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-                >
-                  {previewing ? "Reset Preview" : openingSceneLabel}
-                </button>
+            <div>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Objective</p>
+              <div className="space-y-2">
+                {objectiveLines.map((line, index) => (
+                  <div key={index} className="flex gap-2 text-xs leading-relaxed text-gray-700">
+                    <span className="mt-[2px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-teal-500" />
+                    <span className="line-clamp-2">{line}</span>
+                  </div>
+                ))}
               </div>
-              <p className={`text-xs leading-relaxed text-slate-600 min-h-[40px] ${previewing ? "typing-preview" : "line-clamp-3"}`}>
-                {previewing ? typingText || " " : openingScene}
-              </p>
             </div>
-
-            <div className="space-y-3">
-              <div className="bg-gray-50 rounded-lg px-3 py-2">
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">HCP</p>
-                <p className="text-xs text-gray-800 font-medium line-clamp-3">{hcpSummary}</p>
-              </div>
+            {tacticalFocusLines.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Objective</p>
-                <div className="space-y-1.5">
-                  {objectiveLines.map((line, index) => (
-                    <div key={index} className="flex gap-2 text-xs text-gray-700 leading-relaxed">
-                      <span className="mt-[2px] h-1.5 w-1.5 rounded-full bg-teal-500 flex-shrink-0" />
-                      <span className="line-clamp-2">{line}</span>
-                    </div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Tactical Focus</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {tacticalFocusLines.map((item, index) => (
+                    <span key={index} className="max-w-full break-words rounded px-2 py-1 text-xs text-gray-700 bg-gray-100">{item}</span>
                   ))}
                 </div>
               </div>
-              {tacticalFocusLines.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Tactical Focus</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tacticalFocusLines.map((item, index) => (
-                      <span key={index} className="text-xs bg-gray-100 text-gray-700 rounded px-2 py-1 max-w-full break-words">{item}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
+            )}
+          </div>
         )}
       </div>
 
-      <div className="px-5 pb-5 flex items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap items-center gap-3 px-5 pb-5 pt-1">
         <button
           type="button"
           onClick={() => setExpanded((value) => !value)}
           aria-pressed={expanded}
-          className="inline-flex self-center items-center justify-center rounded-full border border-teal-300 bg-teal-50 px-5 py-2 text-sm font-medium text-teal-700 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+          className="inline-flex self-center items-center justify-center rounded-full border border-teal-300 bg-teal-50 px-5 py-2 text-sm font-medium text-teal-700 transition-all duration-150 ease-in-out hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
         >
           {expanded ? "Collapse Details" : "Expand for Details"}
         </button>

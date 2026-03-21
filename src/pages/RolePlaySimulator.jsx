@@ -497,9 +497,9 @@ export default function RolePlaySimulator() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 md:px-10 py-8">
+      <div className="max-w-7xl mx-auto px-6 md:px-10 py-10">
         {/* 4 Dropdown Filters — matches screenshot exactly */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4 mb-6 shadow-sm">
+        <div className="mb-7 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Select value={diseaseStateFilter} onValueChange={setDiseaseStateFilter}>
               <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC] focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
@@ -537,14 +537,14 @@ export default function RolePlaySimulator() {
         </div>
 
         {/* Search + Difficulty Row */}
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="mb-7 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search scenarios, stakeholders, disease states..."
-              className="pl-9 bg-white text-sm h-10"
+              className="h-10 bg-white pl-9 text-sm"
             />
             {search && (
               <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -557,10 +557,10 @@ export default function RolePlaySimulator() {
               <button
                 key={d}
                 onClick={() => setActiveDifficulty(d)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-150 ease-in-out ${
                   activeDifficulty === d
                     ? "border-transparent text-white"
-                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
+                    : "bg-white border-slate-200 text-gray-600 hover:-translate-y-[1px] hover:border-teal-300 hover:shadow-md"
                 }`}
                 style={activeDifficulty === d ? { background: "#1A334D" } : {}}
               >
@@ -571,15 +571,15 @@ export default function RolePlaySimulator() {
         </div>
 
         {/* Category Pills */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="mb-7 flex flex-wrap gap-2">
           {CATEGORIES.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-medium border transition-all ${
+              className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-medium transition-all duration-150 ease-in-out ${
                 activeCategory === cat
                   ? "text-white shadow-sm"
-                  : "bg-white border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:bg-teal-50 hover:text-teal-700"
+                  : "bg-white border-[#1A334D] text-[#1A334D] hover:-translate-y-[1px] hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 hover:shadow-sm"
               }`}
               style={activeCategory === cat ? { background: "#39ACAC", borderColor: "#1A334D" } : {}}
             >
@@ -604,14 +604,14 @@ export default function RolePlaySimulator() {
         )}
         {/* Scenario Grid */}
         {customScenario ? (
-          <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
             <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />
             {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
         ) : filteredScenarios.length > 0 ? (
-          <div className="grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
