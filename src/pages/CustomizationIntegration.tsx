@@ -200,29 +200,25 @@ function ListCard({ title, items, tone, itemTone }: ListCardProps) {
 
 
 function buildWorkspaceTips(inputs: { framework: string; template: string; barrier: string }) {
-  const framework = inputs.framework.toLowerCase();
-  const template = inputs.template.toLowerCase();
-  const barrier = inputs.barrier.toLowerCase();
+  const framework = inputs.framework.trim();
+  const template = inputs.template.trim();
+  const barrier = inputs.barrier.trim();
 
   if (!framework && !template && !barrier) {
     return [];
   }
 
-  const tips = [];
-  tips.push(
+  return [
     framework
-      ? `Lead with the ${inputs.framework} framework in your opener and anchor it to one measurable patient-impact outcome.`
-      : "Lead with a single framework-based opener tied to one measurable patient-impact outcome."
-  );
-
-  if (template.includes("objection") || barrier.includes("objection") || barrier.includes("pa") || barrier.includes("access")) {
-    tips.push("Use your objection template early and pre-wire one payer or access response before discussing product detail.");
-  } else {
-    tips.push("Use your selected messaging template to guide a 90-second value narrative before advancing to next-step asks.");
-  }
-
-  tips.push("Close with a concrete owner and timing for the next step, then push the recommendation into planning or practice.");
-  return tips.slice(0, 3);
+      ? `Lead with the ${framework} framework in your opener and anchor it to one measurable patient-impact outcome.`
+      : "Lead with the client framework in your opener and anchor it to one measurable patient-impact outcome.",
+    template
+      ? `Use your selected messaging template (${template}) to guide a 90-second value narrative before advancing to next-step asks.`
+      : "Use your selected messaging template to guide a 90-second value narrative before advancing to next-step asks.",
+    barrier
+      ? `Close with a concrete owner and timing for the next step, then push the recommendation into planning or practice while accounting for ${barrier}.`
+      : "Close with a concrete owner and timing for the next step, then push the recommendation into planning or practice.",
+  ];
 }
 
 export default function CustomizationIntegration() {
@@ -344,19 +340,19 @@ export default function CustomizationIntegration() {
                   value={workspaceInputs.framework}
                   onChange={(event) => setWorkspaceInputs((prev) => ({ ...prev, framework: event.target.value }))}
                   placeholder="Client framework (for example: ABC Value Sequence)"
-                  className="border-slate-200"
+                  className="ui-input-teal-hover"
                 />
                 <Input
                   value={workspaceInputs.template}
                   onChange={(event) => setWorkspaceInputs((prev) => ({ ...prev, template: event.target.value }))}
                   placeholder="Messaging template (for example: objection handling)"
-                  className="border-slate-200"
+                  className="ui-input-teal-hover"
                 />
                 <Input
                   value={workspaceInputs.barrier}
                   onChange={(event) => setWorkspaceInputs((prev) => ({ ...prev, barrier: event.target.value }))}
                   placeholder="Primary barrier (for example: PA workload, staffing, access)"
-                  className="border-slate-200"
+                  className="ui-input-teal-hover"
                 />
                 <Button type="button" variant="outline" onClick={generateWorkspaceTips} className="rounded-full border-[#1A334D] text-[#1A334D] hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC]">
                   Generate Top 3 Recommendations
@@ -383,13 +379,13 @@ export default function CustomizationIntegration() {
                 )}
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
-                <Link to={createPageUrl("PreCallPlanning")} onClick={sendToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-teal-300 px-3 py-1.5 text-xs font-semibold text-teal-100 transition-colors hover:bg-white/10">
+                <Link to={createPageUrl("PreCallPlanning")} onClick={sendToPlanning} className="ui-pill ui-pill-enterprise-action px-3 py-1.5 text-xs">
                   Send to Pre-Call Planning
                 </Link>
-                <Link to={createPageUrl("RolePlaySimulator")} onClick={sendToPlanning} className="inline-flex items-center gap-1.5 rounded-full border border-teal-300 px-3 py-1.5 text-xs font-semibold text-teal-100 transition-colors hover:bg-white/10">
+                <Link to={createPageUrl("RolePlaySimulator")} onClick={sendToPlanning} className="ui-pill ui-pill-enterprise-action px-3 py-1.5 text-xs">
                   Practice in Role Play
                 </Link>
-                <button type="button" onClick={copyWorkspaceTips} className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/10">
+                <button type="button" onClick={copyWorkspaceTips} className="ui-pill ui-pill-enterprise-action px-3 py-1.5 text-xs">
                   Copy Recommendations
                 </button>
               </div>

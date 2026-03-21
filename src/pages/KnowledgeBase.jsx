@@ -421,7 +421,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           <div className="space-y-4">
             {filteredArticles.map((article, idx) => (
               <Card key={article.title} className="ui-surface-card ui-surface-card-interactive border-teal-200">
-                <CardContent className="p-5 space-y-3">
+                <CardContent className="ui-card-top-padding space-y-3 p-5">
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-2">{article.title}</h3>
                     <p className="text-sm text-gray-700 leading-relaxed">{article.desc}</p>
@@ -447,12 +447,12 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                           </Button>
                         </div>
                       ) : (
-                        <NavPill onClick={() => setFollowUpIdx(idx)} className="mt-1"><MessageCircle className="w-3 h-3" /> Ask a follow-up</NavPill>
+                        <NavPill onClick={() => setFollowUpIdx(idx)} className="ui-pill-hover-green-border mt-1"><MessageCircle className="w-3 h-3" /> Ask a follow-up</NavPill>
                       )}
                     </div>
                   )}
                   {articleSummaries[idx] && !expandedSummaries[idx] && (
-                    <NavPill onClick={() => setExpandedSummaries(prev => ({ ...prev, [idx]: true }))}><ChevronDown className="w-3 h-3" /> Show summary</NavPill>
+                    <NavPill onClick={() => setExpandedSummaries(prev => ({ ...prev, [idx]: true }))} className="ui-pill-hover-green-border"><ChevronDown className="w-3 h-3" /> Show summary</NavPill>
                   )}
                   <div className="flex gap-1.5 flex-wrap">
                     {article.tags.map((tag) => <span key={tag} className="ui-pill px-2 py-1 text-xs">{tag}</span>)}
@@ -460,16 +460,16 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                   <div className="flex gap-2 flex-wrap items-center">
                     <div className="flex items-center gap-1 border rounded-md overflow-hidden">
                       {SUMMARY_LENGTHS.map(({ id, label }) => (
-                        <button key={id} onClick={() => setSummaryLengths(prev => ({ ...prev, [idx]: id }))} className={`text-xs px-2 py-1 transition-colors ${(summaryLengths[idx] || "brief") === id ? "bg-teal-500 text-white" : "text-gray-600 hover:bg-gray-50"}`}>{label}</button>
+                        <button key={id} onClick={() => setSummaryLengths(prev => ({ ...prev, [idx]: id }))} className={`ui-pill-hover-green-border border-r border-transparent text-xs px-2 py-1 transition-colors last:border-r-0 ${(summaryLengths[idx] || "brief") === id ? "bg-teal-500 text-white" : "text-gray-600 hover:bg-gray-50"}`}>{label}</button>
                       ))}
                     </div>
                     <NavPill
                       onClick={() => summarizeArticle(idx)}
-                      className={`flex-1 justify-center ${summarizingIdx === idx ? "opacity-60 pointer-events-none" : ""}`}
+                      className={`ui-pill-hover-green-border flex-1 justify-center ${summarizingIdx === idx ? "opacity-60 pointer-events-none" : ""}`}
                     >
                       {summarizingIdx === idx ? <><Loader2 className="w-3 h-3 animate-spin" /> Summarizing...</> : <><Zap className="w-3 h-3" /> Summarize</>}
                     </NavPill>
-                    <NavPill onClick={() => injectToQA(article.title)}><Sparkles className="w-3 h-3" /> Ask AI</NavPill>
+                    <NavPill onClick={() => injectToQA(article.title)} className="ui-pill-hover-green-border"><Sparkles className="w-3 h-3" /> Ask AI</NavPill>
                   </div>
                 </CardContent>
               </Card>
@@ -486,19 +486,19 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {communicationTemplates.map((tmpl, idx) => (
               <Card key={tmpl.title} className="ui-surface-card ui-surface-card-interactive border-teal-200">
-                <CardContent className="p-5 space-y-3">
+                <CardContent className="ui-card-top-padding space-y-3 p-5">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="font-semibold text-sm text-gray-900">{tmpl.title}</h4>
                     {tmpl.capability && <span className="ui-pill ui-pill-active px-2 py-1 flex-shrink-0">{CAPABILITY_LABELS[tmpl.capability]}</span>}
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 p-3 rounded-lg">{tmpl.content}</p>
                   <div className="flex gap-2">
-                    <NavPill onClick={() => openCustomize(tmpl)}><Wand2 className="w-3 h-3" /> Customize</NavPill>
-                    <NavPill onClick={() => copyTemplate(tmpl.content, idx)}><Copy className="w-3 h-3" />{copiedIdx === idx ? "Copied!" : "Copy"}</NavPill>
+                    <NavPill onClick={() => openCustomize(tmpl)} className="ui-pill-hover-green-border"><Wand2 className="w-3 h-3" /> Customize</NavPill>
+                    <NavPill onClick={() => copyTemplate(tmpl.content, idx)} className="ui-pill-hover-green-border"><Copy className="w-3 h-3" />{copiedIdx === idx ? "Copied!" : "Copy"}</NavPill>
                   </div>
                   {/* Ask AI about this template */}
                   <div className="border-t border-gray-100 pt-3">
-                    <NavPill onClick={() => setTemplateAiOpen(prev => ({ ...prev, [idx]: !prev[idx] }))}>
+                    <NavPill onClick={() => setTemplateAiOpen(prev => ({ ...prev, [idx]: !prev[idx] }))} className="ui-pill-hover-green-border">
                       <Sparkles className="w-3 h-3" /> Ask AI about this template
                       {templateAiOpen[idx] ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                     </NavPill>
@@ -542,7 +542,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
           {/* Share Form */}
           {showShareForm && (
             <Card className="ui-surface-card border-teal-200">
-              <CardContent className="p-5 space-y-3">
+              <CardContent className="ui-card-top-padding space-y-3 p-5">
                 <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2"><Users className="w-4 h-4 text-teal-500" /> Share Anonymously</h3>
                 <Input value={shareForm.title} onChange={e => setShareForm(p => ({ ...p, title: e.target.value }))} placeholder="Title (e.g. 'Handling the formulary objection')" className="text-sm" />
                 <Textarea value={shareForm.content} onChange={e => setShareForm(p => ({ ...p, content: e.target.value }))} placeholder="Share the exact language, approach, or strategy that worked..." className="text-sm min-h-[100px]" />
@@ -646,8 +646,8 @@ function SnippetCard({ snippet, upvoted, onUpvote, curated }) {
   const [copied, setCopied] = useState(false);
   const copy = () => { navigator.clipboard.writeText(snippet.content); setCopied(true); setTimeout(() => setCopied(false), 2000); };
   return (
-    <Card className={`ui-surface-card ui-surface-card-interactive ${curated ? "border-amber-200 bg-amber-50/30" : "border-teal-200"}`}>
-      <CardContent className="p-4 space-y-2">
+      <Card className={`ui-surface-card ui-surface-card-interactive ${curated ? "border-amber-200 bg-amber-50/30" : "border-teal-200"}`}>
+      <CardContent className="ui-card-top-padding-sm space-y-2 p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
             <h4 className="font-semibold text-sm text-gray-900">{snippet.title}</h4>
@@ -667,7 +667,7 @@ function SnippetCard({ snippet, upvoted, onUpvote, curated }) {
             </button>
             <span className="text-xs text-gray-400">{snippet.shared_by_role || "Anonymous Rep"}</span>
           </div>
-          <NavPill onClick={copy}><Copy className="w-3 h-3" />{copied ? "Copied!" : "Copy"}</NavPill>
+          <NavPill onClick={copy} className="ui-pill-hover-green-border"><Copy className="w-3 h-3" />{copied ? "Copied!" : "Copy"}</NavPill>
         </div>
       </CardContent>
     </Card>
