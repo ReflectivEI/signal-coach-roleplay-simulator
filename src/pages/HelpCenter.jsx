@@ -56,7 +56,7 @@ function FaqItem({ item, idx: _idx }) {
   return (
     <motion.div
       layout
-      className="border border-gray-100 rounded-xl overflow-hidden"
+      className="overflow-hidden rounded-xl border border-teal-200"
       whileHover={{ y: -1, boxShadow: "0 4px 16px rgba(26,51,77,0.07)" }}
       transition={{ duration: 0.15 }}
     >
@@ -90,7 +90,7 @@ function FaqItem({ item, idx: _idx }) {
 
 function InfoSection({ title, children }) {
   return (
-    <div className="mb-8 rounded-[24px] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+    <div className="mb-8 rounded-[24px] border border-teal-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
       <h2 className="text-base font-bold text-gray-900 mb-4 pb-3 border-b border-gray-100">{title}</h2>
       {children}
     </div>
@@ -147,7 +147,7 @@ Respond helpfully and conversationally. If they ask about Signal Intelligence, e
   };
 
   return (
-    <div className="flex flex-col h-[480px] bg-white rounded-[24px] border border-slate-200 overflow-hidden shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+    <div className="flex h-[480px] flex-col overflow-hidden rounded-[24px] border border-teal-200 bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
       <div className="px-4 py-3 border-b border-gray-100" style={{ background: "#1A334D" }}>
         <p className="text-sm font-semibold text-white">AI Coach — Help Center</p>
         <p className="text-xs" style={{ color: "#39ACAC" }}>Ask anything about the platform or Signal Intelligence™</p>
@@ -221,7 +221,7 @@ export default function HelpCenter() {
         </div>
       </div>
 
-      <div className="mb-6 rounded-[28px] border border-[#1A334D]/10 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+      <div className="mb-6 rounded-[28px] border border-teal-200 bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Featured Resources</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {RESOURCE_LINKS.map((link) => (
@@ -230,7 +230,7 @@ export default function HelpCenter() {
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="rounded-xl border border-[#1A334D] p-3 hover:border-teal-400 hover:bg-teal-50 hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
+              className="rounded-xl border border-teal-200 p-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-teal-400 hover:bg-teal-50 hover:shadow-md"
             >
               <p className="text-sm font-semibold text-[#1A334D]">{link.title}</p>
               <p className="text-xs text-gray-600 mt-1">{link.description}</p>
@@ -242,7 +242,7 @@ export default function HelpCenter() {
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Left Nav */}
         <aside className="lg:w-60 flex-shrink-0">
-          <nav className="space-y-1 sticky top-6 rounded-[24px] border border-[#1A334D]/10 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
+          <nav className="sticky top-6 space-y-1 rounded-[24px] border border-teal-200 bg-white p-3 shadow-[0_18px_45px_rgba(15,23,42,0.08)]">
             {SECTIONS.map(s => (
               <motion.button
                 key={s.id}
@@ -297,7 +297,7 @@ export default function HelpCenter() {
                 <InfoSection title="Role-Play Simulator">
                   <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
                     <p>The Role-Play Simulator is the primary practice environment. Each scenario pairs you with an AI-driven HCP persona that evolves based on your conversational behavior.</p>
-                    <div className="rounded-xl border border-gray-100 p-4 space-y-2" style={{ background: "#f8fafc" }}>
+                    <div className="space-y-2 rounded-xl border border-teal-200 p-4" style={{ background: "#f8fafc" }}>
                       <p className="font-semibold text-gray-900">How a Session Works</p>
                       <ol className="space-y-2 list-decimal pl-4">
                         {[
@@ -331,7 +331,7 @@ export default function HelpCenter() {
                         { cap: "Adaptive Response", def: "Adjusting approach based on new information or HCP feedback." },
                         { cap: "Commitment Generation", def: "Securing specific, voluntary next steps from the HCP." },
                       ].map(item => (
-                        <div key={item.cap} className="p-3 rounded-lg border border-gray-100 bg-white">
+                        <div key={item.cap} className="rounded-lg border border-teal-200 bg-white p-3">
                           <p className="font-semibold text-xs mb-0.5" style={{ color: "#1A334D" }}>{item.cap}</p>
                           <p className="text-xs text-gray-500">{item.def}</p>
                         </div>
@@ -352,7 +352,7 @@ export default function HelpCenter() {
                       { title: "Exercises", desc: "Topic-based AI quizzes and micro role-plays. Use these for targeted skill-building outside of full simulation sessions." },
                       { title: "Help Center AI Coach", desc: "Available on this page. Ask questions about the platform, capabilities, or best practices and receive immediate coaching guidance." },
                     ].map(tool => (
-                      <div key={tool.title} className="p-4 rounded-xl border border-gray-100 bg-white">
+                      <div key={tool.title} className="rounded-xl border border-teal-200 bg-white p-4">
                         <p className="font-semibold text-gray-900 mb-1">{tool.title}</p>
                         <p className="text-gray-600">{tool.desc}</p>
                       </div>

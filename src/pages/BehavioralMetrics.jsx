@@ -54,33 +54,40 @@ export default function BehavioralMetrics() {
       </div>
 
       <div className="flex flex-col gap-5 lg:flex-row">
-        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:max-w-[48%]">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-[52%] xl:max-w-[54%]">
           {metrics.map((metric) => {
             const isSelected = selected === metric.id;
             return (
               <Card
                 key={metric.title}
-                className={`ui-surface-card ui-surface-card-interactive min-h-[168px] cursor-pointer border ${isSelected ? "border-teal-300 bg-teal-50/80 shadow-[0_18px_36px_rgba(15,118,110,0.12)]" : "border-slate-200 bg-white"}`}
+                className={`ui-surface-card ui-surface-card-interactive min-h-[196px] cursor-pointer border ${isSelected ? "border-teal-300 bg-teal-50/80 shadow-[0_18px_36px_rgba(15,118,110,0.12)]" : "border-teal-200 bg-white"}`}
                 onClick={() => setSelected(isSelected ? null : metric.id)}
               >
-                <CardContent className="flex h-full flex-col p-5">
-                  <div className="mb-3 flex items-start gap-3">
-                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${metric.iconBg}`}>
-                      <metric.icon className="h-4 w-4" />
+                <CardContent className="flex h-full flex-col p-6">
+                  <div className="flex h-full flex-col justify-between gap-4">
+                    <div className="flex items-start gap-4 pt-1">
+                      <div className="flex min-w-[92px] flex-col items-start gap-3 pt-2">
+                        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${metric.iconBg}`}>
+                          <metric.icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Measured by</p>
+                          <p className="mt-1 text-xs leading-relaxed text-slate-600">{metric.measurement}</p>
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
+                        <p className="mt-3 text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
-                      <p className="mt-1 text-xs leading-relaxed text-slate-500">Measured by {metric.measurement}</p>
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                      <span className={`ui-pill px-2.5 py-1 text-[11px] ${isSelected ? "ui-pill-active" : ""}`}>{isSelected ? "Expanded" : "View details"}</span>
+                      {isSelected ? (
+                        <ChevronUp className="h-4 w-4 text-teal-600" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-slate-400" />
+                      )}
                     </div>
-                  </div>
-                  <p className="flex-1 text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className={`ui-pill px-2.5 py-1 text-[11px] ${isSelected ? "ui-pill-active" : ""}`}>{isSelected ? "Expanded" : "View details"}</span>
-                    {isSelected ? (
-                      <ChevronUp className="h-4 w-4 text-teal-600" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-slate-400" />
-                    )}
                   </div>
                 </CardContent>
               </Card>
