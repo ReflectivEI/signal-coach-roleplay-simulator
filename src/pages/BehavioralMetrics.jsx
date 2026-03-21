@@ -63,7 +63,7 @@ export default function BehavioralMetrics() {
                 className={`ui-surface-card ui-surface-card-interactive min-h-[196px] cursor-pointer border ${isSelected ? "border-teal-300 bg-teal-50/80 shadow-[0_18px_36px_rgba(15,118,110,0.12)]" : "border-teal-200 bg-white"}`}
                 onClick={() => setSelected(isSelected ? null : metric.id)}
               >
-                <CardContent className="flex h-full flex-col p-6">
+                <CardContent className="ui-card-top-padding flex h-full flex-col p-6">
                   <div className="flex h-full flex-col justify-between gap-4">
                     <div className="flex items-start gap-4 pt-1">
                       <div className="flex min-w-[92px] flex-col items-start gap-3 pt-2">

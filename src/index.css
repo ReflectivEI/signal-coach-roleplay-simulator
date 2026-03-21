@@ -211,6 +211,54 @@
     box-shadow: 0 10px 20px rgba(15, 118, 110, 0.18);
   }
 
+  .ui-pill-enterprise-action {
+    border-color: rgba(94, 234, 212, 0.82);
+    background: rgba(255, 255, 255, 0.04);
+    color: #ffffff;
+  }
+
+  .ui-pill-enterprise-action:hover,
+  .ui-pill-enterprise-action:focus-visible {
+    border-color: rgba(153, 246, 228, 0.95);
+    background: rgba(94, 234, 212, 0.28);
+    color: #ffffff;
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.18);
+  }
+
+  .ui-pill-hover-green-border {
+    transition: border-color 180ms ease, box-shadow 180ms ease;
+  }
+
+  .ui-pill-hover-green-border:hover,
+  .ui-pill-hover-green-border:focus-visible {
+    border-color: rgba(22, 101, 52, 0.96) !important;
+    box-shadow: 0 0 0 1px rgba(22, 101, 52, 0.14);
+  }
+
+  .ui-input-teal-hover {
+    border-color: rgb(203 213 225);
+    background: #ffffff;
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+
+  .ui-input-teal-hover:hover,
+  .ui-input-teal-hover:focus-visible {
+    border-color: rgb(45 212 191);
+    box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.28);
+  }
+
+  .ui-input-teal-hover:focus-visible {
+    --tw-ring-color: rgba(45, 212, 191, 0.32);
+  }
+
+  .ui-card-top-padding {
+    padding-top: 1.5rem !important;
+  }
+
+  .ui-card-top-padding-sm {
+    padding-top: 1.25rem !important;
+  }
+
   .ui-pill-ghost {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.12);

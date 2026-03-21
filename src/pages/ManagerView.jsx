@@ -280,10 +280,10 @@ export default function ManagerView() {
                 { label: 'Intervention queue', value: interventionQueue.length, sub: 'reps requiring action' },
                 { label: 'Reference panel', value: `${ENTERPRISE_SAMPLE_CONFIG.reps} reps`, sub: ENTERPRISE_SAMPLE_CONFIG.timeWindow },
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.sub}</p>
+                <div key={item.label} className="grid h-full min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-slate-200 bg-white p-4 pt-5">
+                  <p className="text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{item.label}</p>
+                  <p className="mt-3 self-center text-2xl font-bold text-slate-900">{item.value}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-slate-500">{item.sub}</p>
                 </div>
               ))}
             </div>
@@ -485,7 +485,7 @@ export default function ManagerView() {
         <TabsContent value="territory">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Radar */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-1">Team Signal Intelligence Profile</h3>
               <p className="text-xs text-gray-500 mb-4">Team average vs. industry benchmark across all 8 capabilities</p>
               <ResponsiveContainer width="100%" height={300}>
@@ -500,7 +500,7 @@ export default function ManagerView() {
             </div>
 
             {/* Sessions per rep bar */}
-            <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="bg-white border border-gray-200 rounded-xl p-5 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-1">Sessions per Rep (Last 30 Days)</h3>
               <p className="text-xs text-gray-500 mb-4">Platform engagement across the territory</p>
               <ResponsiveContainer width="100%" height={300}>
@@ -514,7 +514,7 @@ export default function ManagerView() {
             </div>
 
             {/* Rep performance table */}
-            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-5">
+            <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-5 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-4">Performance Snapshot</h3>
               <div className="space-y-3">
                 {[...REPS].sort((a, b) => b.avgScore - a.avgScore).map(rep => (
@@ -628,7 +628,7 @@ export default function ManagerView() {
               <p className="text-sm text-gray-600">Review recent role-play sessions and leave direct coaching feedback for your reps.</p>
             </div>
             {sessions.map(session => (
-              <div key={session.id} className={`bg-white border rounded-xl p-5 space-y-3 ${session.status === "needs_feedback" ? "border-amber-200" : "border-gray-200"}`}>
+              <div key={session.id} className={`bg-white border rounded-xl p-5 pt-6 space-y-3 ${session.status === "needs_feedback" ? "border-amber-200" : "border-gray-200"}`}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full text-white text-xs font-bold flex items-center justify-center flex-shrink-0" style={{ background: "#1A334D" }}>
@@ -696,7 +696,7 @@ export default function ManagerView() {
             ) : (
               <div className="space-y-3">
                 {snippets.map(snippet => (
-                  <div key={snippet.id} className={`bg-white border rounded-xl p-5 transition-all ${snippet.curated ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-teal-200"}`}>
+                  <div key={snippet.id} className={`bg-white border rounded-xl p-5 pt-6 transition-all ${snippet.curated ? "border-amber-300 bg-amber-50/30" : "border-gray-200 hover:border-teal-200"}`}>
                     <div className="flex items-start gap-3">
                       <div className="flex-1 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">

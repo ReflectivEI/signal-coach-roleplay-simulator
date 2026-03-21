@@ -331,7 +331,7 @@ function CoachingToolsTab() {
         const content = aiContent[t.id];
         return (
           <Card key={t.id} className="ui-surface-card ui-surface-card-interactive border-teal-200">
-            <CardContent className="p-6 space-y-3">
+            <CardContent className="ui-card-top-padding p-6 space-y-3">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#e6f7f7" }}>
                   <Icon className="w-5 h-5" style={{ color: "#39ACAC" }} />
@@ -417,7 +417,7 @@ export default function Frameworks() {
           { num: 2, title: "Behavioral Models", desc: "Supporting insight layer — how to adapt communication" },
           { num: 3, title: "Coaching Tools", desc: "Action layer — how improvement happens" },
         ].map(p => (
-          <div key={p.num} className="ui-surface-card ui-surface-card-interactive ui-teal-section p-5">
+          <div key={p.num} className="ui-surface-card ui-surface-card-interactive ui-teal-section p-5 pt-6">
             <div className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm mb-3" style={{ background: "#39ACAC" }}>{p.num}</div>
             <h3 className="font-semibold text-gray-900 mb-1">{p.title}</h3>
             <p className="text-xs text-gray-500">{p.desc}</p>
@@ -446,7 +446,7 @@ export default function Frameworks() {
             {signalFrameworks.map(fw => {
               const Icon = ICON_MAP[fw.id] || MessageSquare;
               return (
-                <div key={fw.id} className="ui-surface-card ui-surface-card-interactive border-teal-200 p-6">
+                <div key={fw.id} className="ui-surface-card ui-surface-card-interactive border-teal-200 p-6 pt-7">
                   <div className="flex items-start gap-4 mb-4">
                     <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "#39ACAC" }}>
                       <Icon className="w-5 h-5 text-white" />
@@ -488,12 +488,12 @@ export default function Frameworks() {
             </div>
           </div>
           <Card className="ui-surface-card">
-            <CardContent className="p-6">
+            <CardContent className="ui-card-top-padding p-6">
               <h3 className="text-lg font-bold text-gray-900 mb-1">{discModel.title}</h3>
               <p className="text-sm text-gray-500 mb-5 leading-relaxed">{discModel.description}</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {discModel.styles.map(s => (
-                  <div key={s.letter} className="ui-surface-card border-teal-200 bg-gray-50 p-4">
+                  <div key={s.letter} className="ui-surface-card border-teal-200 bg-gray-50 p-4 pt-5">
                     <div className="flex items-center gap-3 mb-2">
                       <span className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: "#1A334D" }}>{s.letter}</span>
                       <p className="font-semibold text-gray-800 text-sm">{s.name}</p>

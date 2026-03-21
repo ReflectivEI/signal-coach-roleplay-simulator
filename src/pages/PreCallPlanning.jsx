@@ -501,7 +501,7 @@ function PlanSectionCard({ title, children, tone = "default" }) {
   };
 
   return (
-    <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
+    <div className={`rounded-2xl border p-4 pt-5 ${tones[tone]}`}>
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{title}</p>
       <div className="mt-3">{children}</div>
     </div>
@@ -810,7 +810,7 @@ export default function PreCallPlanning() {
               const highlights = getPlanHighlights(structured);
               return (
                 <Card key={plan.id} className="border-teal-200/80 transition-shadow hover:shadow-md">
-                  <CardContent className="p-5">
+                  <CardContent className="ui-card-top-padding p-5">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
