@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ArrowDown,
   Briefcase,
   CheckCircle2,
   Compass,
@@ -160,11 +161,11 @@ function SectionHeader({ eyebrow, title, description }: SectionHeaderProps) {
 
 function PageSection({ children, tint = "white" }: PageSectionProps) {
   const sectionTone = tint === "teal"
-    ? "ui-teal-section"
-    : "bg-white";
+    ? "ui-teal-section border-teal-200/90 shadow-[0_0_0_1px_rgba(13,148,136,0.16),0_16px_40px_rgba(15,23,42,0.05)]"
+    : "bg-white border-teal-200/80 shadow-[0_0_0_1px_rgba(45,212,191,0.14),0_16px_40px_rgba(15,23,42,0.05)]";
 
   return (
-    <section className={`rounded-[32px] border border-slate-200/80 px-5 py-6 shadow-[0_16px_40px_rgba(15,23,42,0.05)] md:px-7 md:py-7 ${sectionTone}`}>
+    <section className={`rounded-[32px] border px-5 py-6 md:px-7 md:py-7 ${sectionTone}`}>
       {children}
     </section>
   );
@@ -246,7 +247,7 @@ export default function CustomizationIntegration() {
               return (
                 <React.Fragment key={layer.title}>
                   <div className="rounded-[28px] border border-slate-200/80 bg-white p-5 shadow-[0_14px_32px_rgba(15,23,42,0.07)] md:p-6">
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-center gap-4">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700 shadow-sm">
                         <Icon className="h-5 w-5" />
                       </div>
@@ -257,8 +258,10 @@ export default function CustomizationIntegration() {
                     </div>
                   </div>
                   {index < layeredModel.length - 1 ? (
-                    <div className="flex justify-center py-1 text-slate-400">
-                      <span className="inline-flex h-8 items-center justify-center text-lg leading-none">↓</span>
+                    <div className="flex justify-center py-1">
+                      <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-teal-100/90 text-teal-800 shadow-sm ring-1 ring-teal-200/90">
+                        <ArrowDown className="h-5 w-5 stroke-[2.75]" />
+                      </span>
                     </div>
                   ) : null}
                 </React.Fragment>
@@ -342,15 +345,15 @@ export default function CustomizationIntegration() {
           </p>
           <div className="mt-5 space-y-3">
             {protectionPoints.map((point) => (
-              <div key={point} className="ui-teal-surface rounded-2xl px-4 py-4 text-sm text-slate-700">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-600" />
-                <span>{point}</span>
+              <div key={point} className="ui-teal-surface flex min-h-[76px] items-center justify-start gap-3 rounded-2xl px-4 py-4 text-left text-sm text-slate-700 md:min-h-[72px] md:px-5">
+                <CheckCircle2 className="h-5 w-5 flex-shrink-0 text-teal-600" />
+                <span className="leading-relaxed">{point}</span>
               </div>
             ))}
           </div>
         </PageSection>
 
-        <section className="ui-teal-section px-5 py-6 text-center md:px-7 md:py-7">
+        <section className="ui-teal-section rounded-[32px] border border-teal-200/90 px-5 py-6 text-center shadow-[0_0_0_1px_rgba(13,148,136,0.16),0_16px_40px_rgba(15,23,42,0.05)] md:px-7 md:py-7">
           <div className="mx-auto max-w-4xl">
             <h2 className="text-2xl font-bold text-slate-900">Consistent measurement. Flexible enterprise alignment.</h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
