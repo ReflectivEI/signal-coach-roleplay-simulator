@@ -242,13 +242,42 @@ export default function CustomizationIntegration() {
   };
 
   const copyWorkspaceTips = async () => {
-    if (!workspaceTips.length) return;
-    try {
-      await navigator.clipboard.writeText(workspaceTips.map((tip, index) => `${index + 1}. ${tip}`).join("\n"));
-      setWorkspaceStatus("Recommendations copied.");
-    } catch {
-      setWorkspaceStatus("Unable to copy recommendations.");
+    if (!workspaceTips.length) {
+      setWorkspaceStatus("Generate recommendations before copying.");
+      return;
     }
+
+    const copyText = workspaceTips.map((tip, index) => `${index + 1}. ${tip}`).join("\n");
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(copyText);
+      } else {
+        throw new Error("Clipboard API unavailable");
+      }
+    } catch {
+      try {
+        const fallbackField = document.createElement("textarea");
+        fallbackField.value = copyText;
+        fallbackField.setAttribute("readonly", "");
+        fallbackField.style.position = "fixed";
+        fallbackField.style.opacity = "0";
+        document.body.appendChild(fallbackField);
+        fallbackField.focus();
+        fallbackField.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(fallbackField);
+
+        if (!copied) {
+          throw new Error("execCommand copy failed");
+        }
+      } catch {
+        setWorkspaceStatus("Unable to copy recommendations on this device/browser.");
+        return;
+      }
+    }
+
+    setWorkspaceStatus("Recommendations copied.");
   };
 
   const sendToPlanning = () => {

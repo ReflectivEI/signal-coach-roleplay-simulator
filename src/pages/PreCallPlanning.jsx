@@ -111,10 +111,25 @@ function cleanListEntry(line = "") {
   return line.replace(/^[-*•]\s*/, "").replace(/^\d+[.)]\s*/, "").trim();
 }
 
+function normalizeSentence(line = "") {
+  const cleaned = cleanListEntry(line)
+    .replace(/\s+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+
+  if (!cleaned) return "";
+  return /[.!?]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+}
+
 function normalizeBulletText(value = "") {
-  const lines = splitNormalizedLines(value).map(cleanListEntry).filter(Boolean);
+  const lines = splitNormalizedLines(value)
+    .map(normalizeSentence)
+    .filter(Boolean);
+
   if (!lines.length) return "";
-  return lines.map((line) => `- ${line}`).join("\n");
+
+  const dedupedLines = lines.filter((line, index) => lines.findIndex((entry) => entry.toLowerCase() === line.toLowerCase()) === index);
+  return dedupedLines.map((line) => `- ${line}`).join("\n");
 }
 
 function normalizeObjectionText(value = "") {
@@ -123,10 +138,15 @@ function normalizeObjectionText(value = "") {
 
   const blocks = [];
   let current = { concern: "", response: "" };
+  const startsLikeConcern = (line = "") => /^(concern|objection|pushback|risk|barrier)\s*:/i.test(line);
+  const startsLikeResponse = (line = "") => /^(response|approach|strategy|planned response|talk track|rebuttal)\s*:/i.test(line);
 
   const flush = () => {
     if (current.concern || current.response) {
-      blocks.push({ ...current });
+      blocks.push({
+        concern: normalizeSentence(current.concern || "Potential concern to prepare for"),
+        response: normalizeSentence(current.response || "Prepare a concise, evidence-based response tied to workflow or patient impact"),
+      });
       current = { concern: "", response: "" };
     }
   };
@@ -135,18 +155,18 @@ function normalizeObjectionText(value = "") {
     const line = cleanListEntry(rawLine);
     if (!line) return;
 
-    if (/^concern\s*:/i.test(line) || /^objection\s*:/i.test(line)) {
+    if (startsLikeConcern(line)) {
       if (current.concern && current.response) flush();
-      current.concern = line.replace(/^(concern|objection)\s*:/i, "").trim();
+      current.concern = line.replace(/^(concern|objection|pushback|risk|barrier)\s*:/i, "").trim();
       return;
     }
 
-    if (/^response\s*:/i.test(line) || /^approach\s*:/i.test(line) || /^strategy\s*:/i.test(line)) {
-      current.response = line.replace(/^(response|approach|strategy)\s*:/i, "").trim();
+    if (startsLikeResponse(line)) {
+      current.response = line.replace(/^(response|approach|strategy|planned response|talk track|rebuttal)\s*:/i, "").trim();
       return;
     }
 
-    const paired = line.match(/^(.*?)(?:\s*[—–-]\s*|:\s*)(.*)$/);
+    const paired = line.match(/^(.*?)(?:\s*(?:planned response|response|approach|strategy)\s*:\s*|\s*[—–-]\s*|\s+>\s+)(.*)$/i);
     if (!current.concern && paired && paired[1] && paired[2]) {
       current.concern = paired[1].trim();
       current.response = paired[2].trim();
@@ -169,7 +189,12 @@ function normalizeObjectionText(value = "") {
 
   if (!blocks.length) return "";
 
-  return blocks
+  const dedupedBlocks = blocks.filter((block, index) => {
+    const key = block.concern.toLowerCase();
+    return blocks.findIndex((candidate) => candidate.concern.toLowerCase() === key) === index;
+  });
+
+  return dedupedBlocks
     .map((block) => [
       `Concern: ${block.concern || "Potential concern to prepare for."}`,
       `Response: ${block.response || "Prepare a concise, evidence-based response tied to workflow or patient impact."}`,
@@ -217,7 +242,12 @@ function parseObjectionSection(value = "", fallback = []) {
   });
 
   if (current.concern || current.response) blocks.push(current);
-  return blocks.length ? blocks : fallback;
+  const dedupedBlocks = blocks.filter((block, index) => {
+    const key = `${block.concern}`.toLowerCase();
+    return blocks.findIndex((candidate) => `${candidate.concern}`.toLowerCase() === key) === index;
+  });
+
+  return dedupedBlocks.length ? dedupedBlocks : fallback;
 }
 
 function getStructuredPlan(plan) {
@@ -297,11 +327,16 @@ function drawPdfMetaCard(doc, plan, y) {
 }
 
 function drawPdfListSection(doc, label, items, y) {
-  y = ensurePdfSpace(doc, y, 26 + (items.length * 8));
   const pageWidth = doc.internal.pageSize.getWidth();
   const x = 18;
   const width = pageWidth - 36;
-  const estimatedHeight = Math.max(24, 14 + (items.length * 8));
+  const contentHeight = items.reduce((total, item) => {
+    const lines = doc.splitTextToSize(item, width - 14);
+    return total + (lines.length * 5) + 3;
+  }, 0);
+  const estimatedHeight = Math.max(24, 14 + contentHeight);
+
+  y = ensurePdfSpace(doc, y, estimatedHeight + 6);
 
   doc.setDrawColor(191, 219, 254);
   doc.setFillColor(255, 255, 255);
@@ -330,11 +365,17 @@ function drawPdfListSection(doc, label, items, y) {
 }
 
 function drawPdfObjectionSection(doc, blocks, y) {
-  y = ensurePdfSpace(doc, y, 34 + (blocks.length * 20));
   const pageWidth = doc.internal.pageSize.getWidth();
   const x = 18;
   const width = pageWidth - 36;
-  const estimatedHeight = Math.max(30, 16 + (blocks.length * 20));
+  const contentHeight = blocks.reduce((total, block, index) => {
+    const concernLines = doc.splitTextToSize(`Concern ${index + 1}: ${block.concern}`, width - 10);
+    const responseLines = doc.splitTextToSize(`Planned response: ${block.response}`, width - 14);
+    return total + (concernLines.length * 5) + (responseLines.length * 5) + 4;
+  }, 0);
+  const estimatedHeight = Math.max(30, 16 + contentHeight);
+
+  y = ensurePdfSpace(doc, y, estimatedHeight + 6);
 
   doc.setDrawColor(250, 204, 21);
   doc.setFillColor(255, 252, 235);
@@ -465,6 +506,14 @@ function PlanSectionCard({ title, children, tone = "default" }) {
       <div className="mt-3">{children}</div>
     </div>
   );
+}
+
+function getPlanHighlights(structured) {
+  return [
+    structured.objectives[0],
+    structured.key_messages[0],
+    structured.anticipated_objections[0]?.concern,
+  ].filter(Boolean).slice(0, 2);
 }
 
 export default function PreCallPlanning() {
@@ -758,6 +807,7 @@ export default function PreCallPlanning() {
           <div className="space-y-3">
             {plans.map((plan) => {
               const structured = getStructuredPlan(plan);
+              const highlights = getPlanHighlights(structured);
               return (
                 <Card key={plan.id} className="border-teal-200/80 transition-shadow hover:shadow-md">
                   <CardContent className="p-5">
@@ -771,23 +821,15 @@ export default function PreCallPlanning() {
                           {plan.specialty && <span className="ui-pill px-2 py-1 text-xs">{plan.specialty}</span>}
                           {plan.disease_state && <span className="ui-pill px-2 py-1 text-xs">{plan.disease_state}</span>}
                         </div>
-                        <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Plan Snapshot</p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-3">
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Objectives</p>
-                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.objectives[0]}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Key Message</p>
-                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.key_messages[0]}</p>
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Primary Objection</p>
-                              <p className="mt-1 text-sm leading-relaxed text-slate-600">{structured.anticipated_objections[0]?.concern}</p>
-                            </div>
+                        {highlights.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {highlights.map((highlight) => (
+                              <span key={highlight} className="inline-flex max-w-full items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs leading-relaxed text-slate-600">
+                                {highlight}
+                              </span>
+                            ))}
                           </div>
-                        </div>
+                        )}
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-2">
                         <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
