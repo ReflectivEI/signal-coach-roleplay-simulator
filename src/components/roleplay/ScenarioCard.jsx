@@ -63,8 +63,7 @@ export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassN
       <>
         <button
           onClick={handleButtonOnlyStart}
-          className={`inline-flex items-center justify-center py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 group-hover:shadow-md ${buttonClassName}`.trim()}
-          style={{ background: "#1A334D" }}
+          className={`inline-flex items-center justify-center rounded-xl border border-[#1A334D] bg-white py-2.5 text-sm font-semibold text-[#1A334D] transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:bg-[#1A334D] hover:text-white hover:shadow-md ${buttonClassName}`.trim()}
         >
           Start Scenario →
         </button>
@@ -109,7 +108,7 @@ export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassN
             </button>
             <button
               onClick={() => setPlaying(true)}
-              className="flex-1 py-2 rounded-lg text-md font-bold text-white bg-brand-teal hover:bg-brand-navy transition-all duration-200 shadow-sm"
+              className="flex-1 rounded-lg border border-[#1A334D] bg-white py-2 text-md font-bold text-[#1A334D] transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:bg-[#1A334D] hover:text-white hover:shadow-md"
             >
               Start Scenario
             </button>

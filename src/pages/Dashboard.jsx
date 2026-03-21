@@ -57,12 +57,14 @@ export default function Dashboard() {
         {/* Color mode + PDF export intentionally hidden; light mode remains default. */}
       </div>
 
-      <AIDailyInsights />
+      <div className="mb-10">
+        <AIDailyInsights />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         {/* Quick Actions */}
-        <div className={`lg:col-span-3 rounded-2xl border ${theme.cardBorder} bg-white p-5 shadow-sm`}>
-          <div className="flex items-start justify-between gap-3 mb-4">
+        <div className={`lg:col-span-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm`}>
+          <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h2>
               <p className="text-sm text-gray-600">Start your coaching journey</p>
@@ -73,7 +75,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <div className="mb-4 flex flex-wrap gap-2">
+          <div className="mb-5 flex flex-wrap gap-2">
             <button onClick={openSlack} className="inline-flex items-center gap-1.5 rounded-full border border-[#1A334D] px-3 py-1 text-xs font-semibold text-[#1A334D] hover:bg-slate-50">
               <MessageSquareShare className="w-3.5 h-3.5" /> Share to Slack
             </button>
@@ -82,7 +84,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {quickActions.map((action) => (
               <QuickActionCard key={action.title} {...action} />
             ))}
@@ -91,9 +93,9 @@ export default function Dashboard() {
 
         {/* Signal Intelligence Capabilities */}
         <div className="lg:col-span-2">
-          <div className="space-y-3">
+          <div className="space-y-4 rounded-xl border border-slate-300 bg-slate-50 p-4 shadow-sm">
             <SignalCapabilities />
-            <div className={`rounded-2xl border ${theme.cardBorder} bg-white p-4 shadow-sm`}>
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Platform Quality</p>
               <div className="space-y-2.5">
                 <div className="flex items-start gap-2 text-sm text-gray-700">

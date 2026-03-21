@@ -21,7 +21,7 @@ export default function SignalCapabilities() {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-100 p-5">
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center">
             <div className="w-3 h-3 border-2 border-teal-500 rounded-full" />
@@ -32,12 +32,12 @@ export default function SignalCapabilities() {
         <p className="text-xs text-gray-500 mb-5">
           Insights are based on observable interaction patterns. AI supports interpretation; humans decide responses.
         </p>
-        <div className="space-y-0">
+        <div className="space-y-1">
           {SIGNAL_CAPABILITIES.map((cap) => (
             <button
               key={cap.id}
               onClick={() => setOpen(cap.id)}
-              className="w-full flex items-center gap-2 py-2.5 px-2 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors rounded"
+              className="flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-3 text-left transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:border-teal-300 hover:bg-teal-50/60 hover:shadow-md"
             >
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colorDot[cap.color] || "bg-teal-500"}`} />
               <span className="text-sm text-gray-800 hover:text-teal-700 font-semibold flex-1 text-left leading-snug min-w-0 transition-colors">{cap.label}</span>
