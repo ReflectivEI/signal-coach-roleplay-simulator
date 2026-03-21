@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
   BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight, Link2,
-  ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send
+  ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send, X
 } from "lucide-react";
 
 const navSections = [
@@ -67,7 +67,7 @@ export default function Layout({ children, currentPageName }) {
   const [openSections, setOpenSections] = useState(
     navSections.reduce((acc, s) => ({ ...acc, [s.label]: s.defaultOpen }), {})
   );
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -80,6 +80,7 @@ export default function Layout({ children, currentPageName }) {
   const notifMenuRef = useRef(null);
   const assistantRef = useRef(null);
   const { user: authUser, logout } = useAuth();
+  const mobileOverlayOpen = sidebarOpen || assistantOpen;
 
   useEffect(() => {
     document.documentElement.classList.remove("dark");
@@ -88,13 +89,52 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   useEffect(() => {
-    const handler = (e) => {
+    const syncSidebarMode = () => {
+      if (window.innerWidth >= 768) {
+        setSidebarOpen(false);
+      }
+    };
+
+    syncSidebarMode();
+    window.addEventListener("resize", syncSidebarMode);
+    return () => window.removeEventListener("resize", syncSidebarMode);
+  }, []);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    if (mobileOverlayOpen && window.innerWidth < 768) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = previousOverflow || "";
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOverlayOpen]);
+
+  useEffect(() => {
+    const handlePointerDown = (e) => {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
       if (notifMenuRef.current && !notifMenuRef.current.contains(e.target)) setNotificationsOpen(false);
       if (assistantRef.current && !assistantRef.current.contains(e.target) && !e.target.closest("[data-chat-trigger='true']")) setAssistantOpen(false);
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setUserMenuOpen(false);
+        setNotificationsOpen(false);
+        setAssistantOpen(false);
+        setSidebarOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, []);
 
   const toggleSection = (label) => {
@@ -129,11 +169,11 @@ export default function Layout({ children, currentPageName }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "#f0f4f8" }}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 md:flex">
       <style>{`
         :root {
-          --brand-navy:   #1A334D;
-          --brand-teal:   #39ACAC;
+          --brand-navy: #1A334D;
+          --brand-teal: #39ACAC;
           --brand-teal-light: #e6f7f7;
           --brand-pale-yellow: #fefce8;
           --brand-light-gray: #f0f4f8;
@@ -144,19 +184,23 @@ export default function Layout({ children, currentPageName }) {
         ::-webkit-scrollbar-thumb { background: #39ACAC44; border-radius: 4px; }
       `}</style>
 
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-20 md:hidden"
-          onClick={() => setSidebarOpen(false)}
+      {mobileOverlayOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-slate-950/45 md:hidden"
+          onClick={() => {
+            setSidebarOpen(false);
+            setAssistantOpen(false);
+          }}
+          aria-label="Close open panel"
         />
-      )}
+      ) : null}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-30 w-72 flex flex-col transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden"
-          }`}
-        style={{ background: "#1A334D", borderRight: "1px solid #22405f" }}
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[calc(100vw-1.5rem)] flex-col border-r border-[#22405f] bg-[#1A334D] shadow-2xl transition-transform duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 md:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        aria-hidden={!sidebarOpen && typeof window !== "undefined" ? window.innerWidth < 768 : undefined}
       >
-        <div className="p-4 flex items-center gap-3 border-b" style={{ borderColor: "#22405f" }}>
+        <div className="flex items-center gap-3 border-b border-[#22405f] p-4">
           <div className="flex-shrink-0">
             <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="20" cy="20" r="20" fill="#1A334D" />
@@ -167,24 +211,32 @@ export default function Layout({ children, currentPageName }) {
           </div>
           <div className="min-w-0">
             <h1 className="font-bold text-lg leading-tight tracking-tight">
-              <span style={{ color: "#ffffff" }}>Reflectiv</span>
-              <span style={{ color: "#39ACAC" }}>AI</span>
+              <span className="text-white">Reflectiv</span>
+              <span className="text-[#39ACAC]">AI</span>
             </h1>
-            <p className="text-[11px] text-white/65 -mt-0.5">Sales Enablement</p>
+            <p className="-mt-0.5 text-[11px] text-white/65">Sales Enablement</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="ml-auto inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white transition hover:bg-white/10 md:hidden"
+            aria-label="Close navigation"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="px-3 py-3 border-b" style={{ borderColor: "#22405f" }}>
-          <div className="flex items-center gap-2 rounded-lg px-3 py-2 bg-white/10 border border-white/10" ref={userMenuRef}>
-            <div className="w-8 h-8 rounded-full bg-white/20 text-white text-xs font-bold flex items-center justify-center">
+        <div className="border-b border-[#22405f] px-3 py-3">
+          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2" ref={userMenuRef}>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
               {authUser?.name?.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "DU"}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-white truncate">{authUser?.name || "Demo User"}</div>
-              <div className="text-[11px] text-white/60 truncate">{authUser?.email || "demo@example.com"}</div>
+              <div className="truncate text-xs font-semibold text-white">{authUser?.name || "Demo User"}</div>
+              <div className="truncate text-[11px] text-white/60">{authUser?.email || "demo@example.com"}</div>
             </div>
-            <button onClick={() => setUserMenuOpen((v) => !v)} className="text-white/70 hover:text-white">
-              <ChevronDown className={`w-4 h-4 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
+            <button onClick={() => setUserMenuOpen((v) => !v)} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white/70 transition hover:bg-white/10 hover:text-white" aria-label="Toggle user menu">
+              <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
             <AnimatePresence>
@@ -193,12 +245,12 @@ export default function Layout({ children, currentPageName }) {
                   initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  className="absolute mt-32 right-4 z-40 w-48 rounded-lg border border-slate-200 bg-white shadow-lg p-1"
+                  className="absolute right-4 mt-32 z-[60] w-48 rounded-2xl border border-slate-200 bg-white p-1 shadow-lg"
                 >
-                  <Link to={createPageUrl("ProfileSettings")} className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                    <UserCircle className="w-4 h-4" /> Profile Settings
+                  <Link to={createPageUrl("ProfileSettings")} className="flex items-center gap-2 rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-slate-50">
+                    <UserCircle className="h-4 w-4" /> Profile Settings
                   </Link>
-                  <button onClick={() => logout?.()} className="w-full text-left flex items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 hover:bg-red-50">
+                  <button onClick={() => logout?.()} className="flex w-full items-center gap-2 rounded-xl px-3 py-3 text-left text-sm text-red-600 hover:bg-red-50">
                     Logout
                   </button>
                 </motion.div>
@@ -207,25 +259,19 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navSections.map((section) => (
             <div key={section.label} className="mb-1">
               <button
                 onClick={() => toggleSection(section.label)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 text-xs font-bold uppercase tracking-wider ${openSections[section.label]
-                  ? "text-white"
-                  : "text-white/50 hover:text-white/80"
-                  }`}
+                className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 ${openSections[section.label] ? "text-white" : "text-white/50 hover:text-white/80"}`}
               >
                 <section.icon className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1 text-left">{section.label}</span>
-                <ChevronRight
-                  className={`h-3.5 w-3.5 transition-transform duration-200 flex-shrink-0 ${openSections[section.label] ? "rotate-90" : ""
-                    }`}
-                />
+                <span className="flex-1">{section.label}</span>
+                <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${openSections[section.label] ? "rotate-90" : ""}`} />
               </button>
               {openSections[section.label] && (
-                <div className="ml-3 mt-0.5 space-y-0.5">
+                <div className="ml-3 mt-1 space-y-1">
                   {section.items.map((item) => {
                     const isActive = currentPageName === item.page;
                     return (
@@ -236,20 +282,15 @@ export default function Layout({ children, currentPageName }) {
                       >
                         <Link
                           to={createPageUrl(item.page)}
-                          className={`group relative flex items-center gap-3 pl-3 pr-2 py-2 rounded-md text-sm transition-all duration-200 ${isActive
-                            ? "text-white font-semibold"
-                            : "text-white/60 hover:text-white hover:bg-white/10"
-                            }`}
+                          className={`group relative flex min-h-11 items-center gap-3 rounded-xl py-3 pl-3 pr-2 text-sm transition-all duration-200 ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
                           style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
-                          onClick={() => {
-                            if (window.innerWidth < 768) setSidebarOpen(false);
-                          }}
+                          onClick={() => setSidebarOpen(false)}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           <span className="truncate">{item.label}</span>
                           {!isActive && (
-                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-semibold opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all duration-200"
-                              style={{ background: "#39ACAC", color: "#ffffff", border: "1px solid #79caca" }}
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 scale-95 rounded-full border border-[#79caca] px-2 py-0.5 text-[10px] font-semibold opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100"
+                              style={{ background: "#39ACAC", color: "#ffffff" }}
                             >
                               Open
                             </span>
@@ -263,17 +304,17 @@ export default function Layout({ children, currentPageName }) {
             </div>
           ))}
         </nav>
-
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b flex items-center justify-between px-4 flex-shrink-0" style={{ background: "#ffffff", borderBottom: "1px solid #e2e8f0" }}>
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-slate-50">
+        <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-1.5 rounded-md transition-colors" style={{ background: "transparent", color: "#6b7280" }}
+              onClick={() => setSidebarOpen((value) => !value)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Toggle navigation"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
@@ -285,32 +326,32 @@ export default function Layout({ children, currentPageName }) {
                 <path d="M20 10 C24 14 24 22 20 26 C16 22 16 14 20 10Z" fill="white" />
               </svg>
               <div className="flex items-baseline gap-0">
-                <span className="font-bold text-sm tracking-wide" style={{ color: "#1A334D" }}>Reflectiv</span>
-                <span className="font-bold text-sm tracking-wide" style={{ color: "#39ACAC" }}>AI</span>
+                <span className="text-sm font-bold tracking-wide text-[#1A334D]">Reflectiv</span>
+                <span className="text-sm font-bold tracking-wide text-[#39ACAC]">AI</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <div className="relative" ref={notifMenuRef}>
-              <button onClick={() => setNotificationsOpen((v) => !v)} className="p-2 rounded-md transition-colors hover:bg-slate-100" style={{ color: "#64748b" }}>
-                <Bell className="w-4 h-4" />
+              <button onClick={() => setNotificationsOpen((v) => !v)} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" aria-label="Toggle notifications">
+                <Bell className="h-4 w-4" />
               </button>
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-200 bg-white shadow-lg p-2 z-40">
-                  <p className="text-xs font-semibold text-slate-500 uppercase px-2 py-1">Notifications</p>
-                  <Link to={createPageUrl("RolePlaySimulator")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Role Play feedback is ready to review.</Link>
-                  <Link to={createPageUrl("PreCallPlanning")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Pre-Call Planning tips were updated.</Link>
-                  <Link to={createPageUrl("HelpCenter")} className="block rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Visit Help Center for platform guidance.</Link>
+                <div className="absolute right-0 mt-2 z-[60] w-72 rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <p className="px-2 py-1 text-xs font-semibold uppercase text-slate-500">Notifications</p>
+                  <Link to={createPageUrl("RolePlaySimulator")} className="block rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Role Play feedback is ready to review.</Link>
+                  <Link to={createPageUrl("PreCallPlanning")} className="block rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Pre-Call Planning tips were updated.</Link>
+                  <Link to={createPageUrl("HelpCenter")} className="block rounded-xl px-3 py-3 text-sm text-slate-700 hover:bg-teal-50 hover:text-teal-700">Visit Help Center for platform guidance.</Link>
                 </div>
               )}
             </div>
-            <Link to={createPageUrl("ProfileSettings")} className="p-2 rounded-md transition-colors hover:bg-slate-100" style={{ color: "#64748b" }} title="Profile Settings">
-              <User className="w-4 h-4" />
+            <Link to={createPageUrl("ProfileSettings")} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900" title="Profile Settings">
+              <User className="h-4 w-4" />
             </Link>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto" style={{ background: "#f0f4f8" }}>
+        <main className="flex-1 bg-slate-50">
           {children}
         </main>
       </div>
@@ -318,19 +359,29 @@ export default function Layout({ children, currentPageName }) {
       <button
         data-chat-trigger="true"
         onClick={() => setAssistantOpen((v) => !v)}
-        className="fixed bottom-9 right-5 z-50 h-14 w-14 rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl hover:-translate-y-0.5 hover:shadow-2xl transition-all"
+        className="fixed bottom-5 right-5 z-[70] inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-teal-300 bg-[#1A334D] text-white shadow-xl transition-all hover:-translate-y-0.5 hover:shadow-2xl"
         aria-label="Open platform assistant"
       >
-        <MessageCircle className="w-6 h-6 mx-auto" />
+        <MessageCircle className="h-6 w-6" />
       </button>
 
       {assistantOpen && (
-        <div ref={assistantRef} className="fixed bottom-28 right-5 z-50 w-[340px] max-w-[90vw] rounded-2xl border border-teal-200 bg-white shadow-2xl overflow-hidden">
-          <div className="px-4 py-3 bg-[#1A334D] text-white">
-            <p className="text-sm font-semibold">Platform Assistant</p>
-            <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>
+        <div ref={assistantRef} className="fixed bottom-24 right-4 z-[75] flex w-[min(340px,calc(100vw-2rem))] max-w-[90vw] flex-col overflow-hidden rounded-[28px] border border-teal-200 bg-white shadow-2xl md:right-5">
+          <div className="flex items-start justify-between gap-3 bg-[#1A334D] px-4 py-4 text-white">
+            <div>
+              <p className="text-sm font-semibold">Platform Assistant</p>
+              <p className="text-xs text-teal-100">Ask anything about using ReflectivAI.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAssistantOpen(false)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-white transition hover:bg-white/15"
+              aria-label="Close assistant"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <div className="h-[540px] max-h-[68vh] overflow-y-auto px-5 py-6 space-y-4 bg-white">
+          <div className="max-h-[min(68vh,540px)] space-y-4 overflow-y-auto bg-white px-5 py-5">
             {assistantMessages.map((m, idx) => (
               <div key={idx} className={`flex items-start gap-3 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && (
@@ -340,7 +391,7 @@ export default function Layout({ children, currentPageName }) {
                     className="mt-1 h-10 w-10 rounded-full border border-slate-200 object-cover shadow-sm"
                   />
                 )}
-                <div className={`max-w-[82%] rounded-[18px] border px-4 py-3 text-[15px] leading-8 shadow-sm ${m.role === "user" ? "bg-[#1A3F63] text-white border-[#1A3F63]" : "bg-slate-50 text-slate-700 border-slate-100"}`}>
+                <div className={`max-w-[82%] rounded-[18px] border px-4 py-3 text-[15px] shadow-sm ${m.role === "user" ? "border-[#1A3F63] bg-[#1A3F63] text-white" : "border-slate-100 bg-slate-50 text-slate-700"}`}>
                   <p className="leading-[1.55]">{m.content}</p>
                   {m.role === "assistant" && <p className="mt-2 text-xs leading-none text-slate-500">{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>}
                 </div>
@@ -356,7 +407,7 @@ export default function Layout({ children, currentPageName }) {
               placeholder="Ask me anything about ReflectivAI..."
               className="h-14 w-full rounded-2xl border-2 border-[#234D86] px-4 pr-16 text-[15px] text-slate-700 outline-none transition-colors placeholder:text-slate-500 focus:border-teal-500"
             />
-            <div className="pointer-events-none relative -mt-14 flex justify-end pr-2">
+            <div className="pointer-events-none absolute inset-y-0 right-6 flex items-center">
               <button
                 onClick={sendAssistantMessage}
                 className="pointer-events-auto inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#8EA7CC] text-white shadow-sm transition-colors hover:bg-[#6E8FBC] disabled:cursor-not-allowed disabled:opacity-60"
