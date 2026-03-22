@@ -146,8 +146,6 @@ export default function AssignmentPanel({ rep, assignments, onAssigned, onStatus
       ) : (
         <div className="space-y-2">
           {repAssignments.map(a => {
-            const statusCfg = STATUS_CONFIG[a.status] || STATUS_CONFIG.assigned;
-            const StatusIcon = statusCfg.icon;
             const isOverdue = a.deadline && new Date(a.deadline) < new Date() && a.status !== "completed";
             const displayStatus = isOverdue ? "overdue" : a.status;
             const cfg = STATUS_CONFIG[displayStatus];

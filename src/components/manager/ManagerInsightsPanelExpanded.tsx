@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, managerInsightsRequestSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
@@ -40,6 +40,15 @@ function sanitizeResponseContent(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getOutlookTone(trend: unknown) {
+  return outlookTone[(typeof trend === "string" ? trend : "") as keyof typeof outlookTone] ?? outlookTone.stable;
+}
+
+function normalizeInsightsPayload(payload: unknown) {
+  const parsed = managerInsightsResponseSchema.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
 function classifyInsight(text: string): Exclude<InsightFilter, "All">[] {
   const normalized = text.toLowerCase();
   const matches = new Set<Exclude<InsightFilter, "All">>();
@@ -71,6 +80,7 @@ function matchesFilter(text: string, filter: InsightFilter) {
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
   const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsUnavailable, setInsightsUnavailable] = useState(false);
   const [input, setInput] = useState("");
   const [response, setResponse] = useState<string | null>(null);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
@@ -88,11 +98,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   useEffect(() => {
     if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
       setInsights(null);
+      setInsightsUnavailable(false);
       return;
     }
 
     const controller = new AbortController();
     setLoadingInsights(true);
+    setInsightsUnavailable(false);
 
     fetch("/manager-insights", {
       method: "POST",
@@ -107,11 +119,19 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
         return res.json();
       })
       .then((payload: ManagerInsightsResponse) => {
-        setInsights(payload);
+        const normalizedPayload = normalizeInsightsPayload(payload);
+
+        if (!normalizedPayload) {
+          throw new Error("manager_insights_invalid_payload");
+        }
+
+        setInsights(normalizedPayload);
       })
       .catch((error: Error) => {
         if (error.name !== "AbortError") {
+          console.error("Expanded manager insights unavailable:", error);
           setInsights(null);
+          setInsightsUnavailable(true);
         }
       })
       .finally(() => {
@@ -155,19 +175,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     setLoading(true);
 
     try {
-      const res = await fetch("/chat", {
+      const res = await fetch("/api/llm/invoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a performance-focused sales coaching assistant. Use structured performance data and behavioral signals. Provide specific, actionable coaching steps. Do not be generic.",
-            },
-            {
-              role: "user",
-              content: `
+          prompt: `
+You are a performance-focused sales coaching assistant. Use structured performance data and behavioral signals. Provide specific, actionable coaching steps. Do not be generic.
+
 Context:
 ${JSON.stringify(data)}
 
@@ -177,8 +191,8 @@ ${selectedChips.join(", ")}
 Manager Question:
 ${input}
           `,
-            },
-          ],
+          temperature: 0.3,
+          max_tokens: 800,
         }),
       });
 
@@ -187,7 +201,7 @@ ${input}
       }
 
       const json = await res.json();
-      const content = sanitizeResponseContent(json?.content) || sanitizeResponseContent(json?.response);
+      const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
       setResponse(content || "");
     } catch {
       // Fail silently to preserve surrounding workflow.
@@ -201,26 +215,21 @@ ${input}
     setLoading(true);
 
     try {
-      const res = await fetch("/chat", {
+      const res = await fetch("/api/llm/invoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [
-            {
-              role: "system",
-              content: "You explain coaching recommendations using performance data. Be precise.",
-            },
-            {
-              role: "user",
-              content: `
+          prompt: `
+You explain coaching recommendations using performance data. Be precise.
+
 Recommendation:
 ${JSON.stringify(recommendation)}
 
 Context:
 ${JSON.stringify(data)}
           `,
-            },
-          ],
+          temperature: 0.2,
+          max_tokens: 600,
         }),
       });
 
@@ -229,7 +238,7 @@ ${JSON.stringify(data)}
       }
 
       const json = await res.json();
-      const content = sanitizeResponseContent(json?.content) || sanitizeResponseContent(json?.response);
+      const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
       setResponse(content || "");
     } catch {
       // Fail silently to preserve surrounding workflow.
@@ -264,10 +273,10 @@ ${JSON.stringify(data)}
         {insights?.predictiveOutlook ? (
           <div className="flex flex-col items-start gap-2 md:items-end">
             <div
-              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[insights.predictiveOutlook.performanceTrend].badge}`}
+              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}
             >
               <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-              {outlookTone[insights.predictiveOutlook.performanceTrend].label}
+              {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
             </div>
             <p className="text-sm font-semibold text-slate-700">
               Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}%
@@ -279,6 +288,10 @@ ${JSON.stringify(data)}
       {loadingInsights && !insights ? (
         <div className="flex min-h-[180px] items-center justify-center text-sm text-slate-500">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating explainable coaching insights…
+        </div>
+      ) : insightsUnavailable && !insights ? (
+        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+          Manager AI insights are temporarily unavailable. Rep summaries and assignment actions remain fully usable.
         </div>
       ) : (
         <div className="mt-5 space-y-5">
@@ -388,9 +401,9 @@ ${JSON.stringify(data)}
                 {insights?.predictiveOutlook ? (
                   <div className="space-y-3 text-sm text-slate-700">
                     <div
-                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[insights.predictiveOutlook.performanceTrend].badge}`}
+                      className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}
                     >
-                      {outlookTone[insights.predictiveOutlook.performanceTrend].label}
+                      {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Confidence</p>
