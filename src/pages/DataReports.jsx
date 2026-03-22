@@ -17,11 +17,30 @@ const SAMPLE_QUERIES = [
   "Compare prescription trends for oncology vs cardiology",
 ];
 
+const markdownComponents = {
+  ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
+  ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
+  li: ({ children }) => <li className="min-w-0 break-words">{children}</li>,
+  p: ({ children }) => <p className="my-0 whitespace-pre-wrap break-words leading-relaxed text-gray-700">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
+  code: ({ inline, children, ...props }) =>
+    inline ? (
+      <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-mono text-teal-700" {...props}>
+        {children}
+      </code>
+    ) : (
+      <pre className="my-3 overflow-x-auto rounded-xl bg-gray-900 p-4 text-xs font-mono text-gray-100">
+        <code {...props}>{children}</code>
+      </pre>
+    ),
+};
+
 export default function DataReports() {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState([]);
+  const normalizedResult = typeof result === "string" ? result : String(result ?? "");
 
   const translate = async (q) => {
     const question = q || query;
@@ -43,9 +62,9 @@ export default function DataReports() {
       });
       if (res.ok) {
         const data = await res.json();
-        let reportResult = sanitizeAiText(typeof data.response === 'string' ? data.response : String(data.response));
+        const reportResult = sanitizeAiText(data?.response ?? data?.text ?? data?.content ?? "");
         setResult(reportResult);
-        const entry = { id: Date.now(), question, result: reportResult, timestamp: new Date() };
+        const entry = { id: Date.now(), question, result: reportResult, timestamp: Date.now() };
         setHistory(prev => [entry, ...prev.slice(0, 9)]);
       } else {
         setResult("Unable to generate report. Please try again.");
@@ -151,7 +170,7 @@ export default function DataReports() {
           { label: "This Month", value: "0 sessions", icon: Calendar, color: "text-orange-500" },
         ].map((stat) => (
           <Card key={stat.label}>
-            <CardContent className="p-5">
+            <CardContent className="ui-card-top-padding p-5">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-500">{stat.label}</span>
                 <stat.icon className={`w-4 h-4 ${stat.color}`} />
@@ -166,7 +185,7 @@ export default function DataReports() {
         {/* Main Q&A */}
         <div className="lg:col-span-2 space-y-4">
           <Card className="overflow-hidden border-slate-200 shadow-sm">
-            <CardContent className="p-6 md:p-7">
+            <CardContent className="ui-card-top-padding p-6 md:p-7">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Ask a Question</h2>
               <p className="text-sm text-gray-500 mb-4">Enter a natural language question about your sales data</p>
               <textarea
@@ -192,17 +211,11 @@ export default function DataReports() {
           </Card>
 
           {/* Result */}
-          {result && (
+          {normalizedResult && (
             <Card className="overflow-hidden border-slate-200 shadow-sm">
-              <CardContent className="p-6 md:p-7">
-                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
-                  <ReactMarkdown
-                    components={{
-                      code: ({ node, inline, ...props }) => inline
-                        ? <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono text-teal-700" {...props} />
-                        : <pre className="bg-gray-900 text-gray-100 p-4 rounded-xl overflow-x-auto text-xs font-mono my-3"><code {...props} /></pre>
-                    }}
-                  >{result}</ReactMarkdown>
+              <CardContent className="ui-card-top-padding p-6 md:p-7">
+                <div className="ui-markdown prose prose-sm max-w-none text-gray-700 leading-relaxed">
+                  <ReactMarkdown components={markdownComponents}>{normalizedResult}</ReactMarkdown>
                 </div>
               </CardContent>
             </Card>
@@ -212,7 +225,7 @@ export default function DataReports() {
         {/* Query History */}
         <div>
           <Card className="overflow-hidden border-slate-200 shadow-sm">
-            <CardContent className="p-5 md:p-6">
+            <CardContent className="ui-card-top-padding p-5 md:p-6">
               <div className="flex items-center gap-2 mb-1">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <h2 className="text-sm font-semibold text-gray-900">Query History</h2>
@@ -225,7 +238,7 @@ export default function DataReports() {
                   {history.map((h) => (
                     <button key={h.id} onClick={() => { setQuery(h.question); setResult(h.result); }} className="w-full text-left rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-teal-200 hover:bg-teal-50/50">
                       <p className="mb-2 text-xs font-medium leading-relaxed text-gray-700 line-clamp-2">{h.question}</p>
-                      <p className="text-xs text-gray-400">{h.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                      <p className="text-xs text-gray-400">{new Date(h.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                     </button>
                   ))}
                 </div>

@@ -53,8 +53,8 @@ export default function BehavioralMetrics() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-5 lg:flex-row">
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-[56%] xl:max-w-[58%]">
+      <div className="flex flex-col gap-5 xl:flex-row">
+        <div className="grid flex-1 grid-cols-1 gap-4 xl:max-w-[58%] 2xl:grid-cols-2">
           {metrics.map((metric) => {
             const isSelected = selected === metric.id;
             return (
@@ -65,20 +65,18 @@ export default function BehavioralMetrics() {
               >
                 <CardContent className="ui-card-top-padding flex h-full flex-col p-6">
                   <div className="flex h-full min-w-0 flex-col justify-between gap-4">
-                    <div className="flex min-w-0 items-start gap-4 pt-1">
-                      <div className="flex min-w-[96px] flex-col items-start gap-3 pt-2">
+                    <div className="space-y-4 pt-1">
+                      <div className="flex min-w-0 items-start gap-4">
                         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${metric.iconBg}`}>
                           <metric.icon className="h-4 w-4" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <h3 className="break-words text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Measured by</p>
-                          <p className="mt-1 text-xs leading-relaxed text-slate-600">{metric.measurement}</p>
+                          <p className="break-words text-sm leading-relaxed text-slate-600">{metric.measurement}</p>
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1 space-y-3 pr-1">
-                        <h3 className="break-words text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
-                        <p className="break-words text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
-                      </div>
+                      <p className="break-words text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                       <span className={`ui-pill px-2.5 py-1 text-[11px] ${isSelected ? "ui-pill-active" : ""}`}>{isSelected ? "Expanded" : "View details"}</span>
@@ -95,7 +93,7 @@ export default function BehavioralMetrics() {
           })}
         </div>
 
-        <div className="flex-1">
+        <div className="flex-1 xl:min-w-[360px]">
           {!selectedMetric ? (
             <div className="flex min-h-[320px] h-full items-center justify-center rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 p-8 text-center">
               <div className="max-w-sm">

@@ -287,6 +287,12 @@
     align-items: flex-start;
     gap: 0.625rem;
     margin: 0;
+    min-width: 0;
+  }
+
+  .ui-bullet-list > li > * {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .ui-bullet-list > li::before {
@@ -337,6 +343,10 @@
   .ui-markdown li {
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  .ui-markdown li > * {
+    min-width: 0;
   }
 
   .ui-markdown li > p {
