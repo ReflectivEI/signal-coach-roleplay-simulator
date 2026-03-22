@@ -96,6 +96,11 @@ const TRAINING_MODULES = [
 
 const DERIVED_METRIC_GLOSSARY = [
   {
+    label: "Sales Outcome Score",
+    definition: "Manager-facing 5-point score used as the outcome anchor for rep and territory performance. It can be translated to percent of scale by dividing the score by 5.",
+    formula: "Scale-equivalent percent = (Sales Outcome Score ÷ 5) × 100",
+  },
+  {
     label: "Overall Score",
     definition: "Derived score that blends the Average of 8 Behavioral Metrics with the Sales Outcome Score.",
     formula: "(Average of 8 Behavioral Metrics × 0.65) + (Sales Outcome Score × 0.35)",
@@ -114,6 +119,11 @@ const DERIVED_METRIC_GLOSSARY = [
     label: "Territory Volatility",
     definition: "Derived territory spread showing how far rep sales outcome scores sit from the territory average.",
     formula: "Weighted average of |rep sales outcome score - territory average sales outcome score|",
+  },
+  {
+    label: "Predictive Confidence",
+    definition: "Reliability score for the predictive outlook. This percentage is not a conversion of a 5-point performance score.",
+    formula: "Weighted confidence model using data confidence, variance, stability, coverage, coaching responsiveness, and conversion proxy",
   },
 ];
 
@@ -142,6 +152,37 @@ const THRESHOLD_GLOSSARY = [
     label: "Distribution cap: 30% of reps",
     definition: "No single capability should be assigned as the capability requiring improvement for more than 30% of reps unless no near-tied alternative exists.",
     source: "Manager View balancing rule",
+  },
+];
+
+const ENTERPRISE_PARENT_CARD = "rounded-2xl border border-teal-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md";
+const ENTERPRISE_SUBCARD = "rounded-xl border border-slate-200 bg-slate-50 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
+const ENTERPRISE_SUBCARD_WHITE = "rounded-xl border border-slate-200 bg-white transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
+const METRIC_PILL_CLASSNAME = "inline-flex items-center gap-1 rounded-full border border-[#1A334D] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white";
+
+const MANAGER_VIEW_FOUNDATION = [
+  {
+    label: "Canonical Signal Intelligence capabilities",
+    definition: "The 8 behavioral metrics are the source of truth for Manager View. Every manager-facing capability, threshold, and explanation must stay aligned with these canonical definitions.",
+    whyItMatters: "This keeps coaching recommendations auditable and consistent with the rest of the platform.",
+  },
+  {
+    label: "Sales Outcome Score",
+    definition: "A manager-facing 5-point score summarizing sales execution performance for the current evaluation window. It is displayed on a 1-to-5 scale and can also be translated to a scale-equivalent percent by dividing by 5.",
+    formula: "scale-equivalent percent = (sales outcome score / 5) x 100",
+    whyItMatters: "This score gives managers a compact outcome anchor that can be blended with the 8 canonical behavioral metrics without replacing them.",
+  },
+  {
+    label: "Scale-equivalent percent",
+    definition: "A simple conversion of any 5-point score into percent of the 5-point scale. Example: 3.7/5 = 74% of scale, 3.9/5 = 78% of scale, and 3.49/5 = 69.8% of scale.",
+    formula: "(score / 5) x 100",
+    whyItMatters: "This percent explains where percentages such as 74% or 78% come from when a user wants a score translated into percent-of-scale language.",
+  },
+  {
+    label: "Predictive Confidence",
+    definition: "A model confidence measure, not a conversion of a 5-point score. It estimates how reliable the outlook is based on data quality, stability, coverage, and supporting evidence.",
+    formula: "weighted confidence model using data confidence, variance, trend stability, engagement stability, coaching responsiveness, and conversion proxy",
+    whyItMatters: "This separates predictive reliability from performance scoring so users do not confuse 75% confidence with 74% or 78% scale-equivalent performance.",
   },
 ];
 
@@ -197,7 +238,7 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
 
 function MetricSummaryCard({ labelKey, value, explanation }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+    <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
         <MetricPill explanation={explanation} label="Formula" />
@@ -284,7 +325,7 @@ function MetricPill({ explanation, label = "How calculated" }) {
     <MetricExplanationDialog explanation={explanation}>
       <button
         type="button"
-        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition-colors hover:border-teal-300 hover:text-teal-700"
+        className={METRIC_PILL_CLASSNAME}
       >
         <Info className="h-3 w-3" />
         {label}
@@ -297,7 +338,7 @@ function DefinitionsDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:text-teal-700">
+        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-[#1A334D] bg-white px-3 py-1.5 text-xs font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white">
           <Info className="h-3.5 w-3.5" />
           View definitions
         </button>
@@ -308,6 +349,19 @@ function DefinitionsDialog() {
           <DialogDescription>Canonical capabilities, derived metrics, and threshold definitions used throughout Manager View.</DialogDescription>
         </DialogHeader>
         <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Manager View foundations</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {MANAGER_VIEW_FOUNDATION.map((item) => (
+                <div key={item.label} className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{item.definition}</p>
+                  {item.formula ? <p className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-[11px] text-slate-700">{item.formula}</p> : null}
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">{item.whyItMatters}</p>
+                </div>
+              ))}
+            </div>
+          </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canonical Signal Intelligence capabilities</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -351,7 +405,7 @@ function DefinitionsDialog() {
 
 function RepRow({ rep, derived, explanations, onSelect, selected }) {
   return (
-    <tr onClick={() => onSelect(rep)} className={`cursor-pointer transition-colors ${selected ? "bg-teal-50" : "hover:bg-gray-50"}`}>
+    <tr onClick={() => onSelect(rep)} className={`cursor-pointer transition-colors ${selected ? "bg-teal-50/70" : "hover:bg-teal-50/35"}`}>
       <td className="px-4 py-3 align-top">
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: "#1A334D" }}>
@@ -397,7 +451,7 @@ function RepRow({ rep, derived, explanations, onSelect, selected }) {
       </td>
       <td className="px-4 py-3 align-top text-center">
         <p className="text-sm font-semibold text-slate-700">{rep.coachingModulesCompleted}</p>
-        <MetricPill explanation={explanations.moduleCompletion} label="%" />
+        <MetricPill explanation={explanations.moduleCompletion} label="Completion %" />
       </td>
     </tr>
   );
@@ -428,7 +482,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:text-teal-700">
+        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-[#1A334D] px-3 py-1.5 text-xs font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white">
           View contributors
           <ChevronRight className="h-3.5 w-3.5" />
         </button>
@@ -707,7 +761,7 @@ export default function ManagerView() {
         ) : null}
       </div>
 
-      <div className="mb-8 rounded-[28px] border border-slate-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
+      <div className="mb-8 rounded-[28px] border border-teal-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-600">Team intervention hub</p>
@@ -721,7 +775,7 @@ export default function ManagerView() {
             </div>
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
-                <div key={card.label} className="grid min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-slate-200 bg-white p-4 pt-5">
+                <div key={card.label} className="grid min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-teal-200 bg-white p-4 pt-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
                     <MetricPill explanation={card.explanation} label="Formula" />
@@ -733,7 +787,7 @@ export default function ManagerView() {
             </div>
           </div>
 
-          <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-slate-950 p-5 text-white">
+          <div className="w-full max-w-md rounded-3xl border border-teal-200 bg-slate-950 p-5 text-white shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
@@ -762,7 +816,7 @@ export default function ManagerView() {
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Priority queue</p>
@@ -772,7 +826,7 @@ export default function ManagerView() {
           </div>
           <div className="mt-4 space-y-3">
             {coachingPriority.slice(0, 4).map((rep, index) => (
-              <button key={rep.id} type="button" onClick={() => { setSelectedRepId(rep.id); setActiveTab("reps"); }} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:border-teal-200 hover:bg-teal-50/50">
+              <button key={rep.id} type="button" onClick={() => { setSelectedRepId(rep.id); setActiveTab("reps"); }} className={`flex w-full items-center justify-between gap-3 rounded-2xl p-4 text-left ${ENTERPRISE_SUBCARD}`}>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{index + 1}. {rep.name}</p>
                   <p className="mt-1 text-xs text-slate-500">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} · {rep.sessionsCompleted30d} sessions in 30d</p>
@@ -786,13 +840,13 @@ export default function ManagerView() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Manager operating standard</p>
           <h3 className="mt-1 text-lg font-bold text-slate-900">Intervention guidance</h3>
           <div className="mt-4 space-y-3 text-sm text-slate-600">
-            <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Escalate low-adoption, low-score reps into mandatory remediation sequences within Learning Paths.</div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">Use scenario-level weakness to assign a targeted module before asking for additional simulator volume.</div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">Package current territory summaries into Data and Reports for leadership visibility with auditable metric pills attached.</div>
+            <div className={`${ENTERPRISE_SUBCARD} border-teal-100 bg-teal-50 p-4`}>Escalate low-adoption, low-score reps into mandatory remediation sequences within Learning Paths.</div>
+            <div className={`${ENTERPRISE_SUBCARD} border-amber-100 bg-amber-50 p-4`}>Use scenario-level weakness to assign a targeted module before asking for additional simulator volume.</div>
+            <div className={`${ENTERPRISE_SUBCARD} p-4`}>Package current territory summaries into Data and Reports for leadership visibility with auditable metric pills attached.</div>
           </div>
         </div>
       </div>
@@ -806,7 +860,7 @@ export default function ManagerView() {
           };
           const selectedTone = toneMap[tone] || toneMap.navy;
           return (
-            <div key={label} className={`rounded-xl border p-4 ${selectedTone.card}`}>
+            <div key={label} className={`rounded-xl border border-teal-200 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/30 hover:shadow-md ${selectedTone.card}`}>
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${selectedTone.icon}`} />
@@ -833,7 +887,7 @@ export default function ManagerView() {
         <TabsContent value="reps">
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_320px] xl:items-start">
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className={`${ENTERPRISE_PARENT_CARD} overflow-hidden rounded-xl`}>
                 <div className="border-b border-gray-100 px-5 py-4">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                     <div>
@@ -895,7 +949,7 @@ export default function ManagerView() {
 
               <div className="space-y-4 self-start xl:sticky xl:top-4">
                 {selectedRep ? (
-                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5`}>
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#1A334D" }}>
                         {selectedRep.name.split(" ").map((word) => word[0]).join("")}
@@ -914,7 +968,7 @@ export default function ManagerView() {
                         { label: "Practice Streak", value: selectedRep.practiceStreakDays > 0 ? `${selectedRep.practiceStreakDays} days` : "None", explanation: null },
                         { label: "Modules Done", value: `${selectedRep.coachingModulesCompleted}/8`, explanation: viewState.explanations.rep[selectedRep.id].moduleCompletion },
                       ].map(({ label, value, explanation }) => (
-                        <div key={label} className="rounded-lg bg-gray-50 p-3">
+                        <div key={label} className={`${ENTERPRISE_SUBCARD} rounded-lg p-3`}>
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-xs text-gray-500">{label}</p>
                             <MetricPill explanation={explanation} label="Formula" />
@@ -939,7 +993,7 @@ export default function ManagerView() {
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className={`mt-4 rounded-xl border border-teal-200 bg-slate-50 p-4 shadow-sm`}>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric summary cards</p>
                         <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {selectedRep.observationDepth}</span>
@@ -953,7 +1007,7 @@ export default function ManagerView() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center shadow-sm">
+                  <div className="rounded-xl border border-dashed border-teal-200 bg-gray-50 p-8 text-center shadow-sm">
                     <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
                     <p className="text-sm text-gray-500">No rep selected. Territory-level insights remain active, and rep-level detail appears only after a manager makes an explicit selection.</p>
                     <div className="mt-4 flex justify-center">
@@ -968,7 +1022,7 @@ export default function ManagerView() {
             </div>
 
             {selectedRep ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral metrics</p>
@@ -980,7 +1034,7 @@ export default function ManagerView() {
                   {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
                     const metric = selectedRep.behavioralMetrics[metricKey];
                     return (
-                      <div key={metricKey} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:grid-cols-[minmax(0,1.5fr)_88px_84px_120px] sm:items-center">
+                      <div key={metricKey} className={`grid grid-cols-1 gap-3 rounded-xl px-4 py-3 sm:grid-cols-[minmax(0,1.5fr)_88px_84px_120px] sm:items-center ${ENTERPRISE_SUBCARD}`}>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-slate-900">{formatMetricLabel(metricKey)}</p>
                           <p className="mt-1 text-[11px] text-slate-500">{selectedRep.territory} rep metric</p>
@@ -1003,7 +1057,7 @@ export default function ManagerView() {
                   </div>
                 ) : null}
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
                     <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
@@ -1011,7 +1065,7 @@ export default function ManagerView() {
                   <div className="space-y-2">
                     {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
                       viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
-                        <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                        <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm transition-colors duration-200 hover:bg-teal-50/30 ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
                           <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
                           <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
                         </div>
@@ -1022,7 +1076,7 @@ export default function ManagerView() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
@@ -1045,7 +1099,7 @@ export default function ManagerView() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                   <AssignmentPanel
                     rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
                     assignments={assignments}
@@ -1098,7 +1152,7 @@ export default function ManagerView() {
                   ? territory.coachingOpportunityClusters.slice(0, 2).map((item) => normalizeManagerText(item))
                   : ["Continue current coaching coverage and re-check the territory on the next 30-day refresh."];
                 return (
-                  <div key={territory.territory} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div key={territory.territory} className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{territory.territory}</p>
@@ -1116,10 +1170,10 @@ export default function ManagerView() {
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="mt-4 rounded-2xl border border-teal-200 bg-slate-50 p-4 shadow-sm">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Executive summary</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        <div className="rounded-xl bg-white p-3">
+                        <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <p className="text-xs uppercase tracking-wide text-slate-500">Risk level</p>
@@ -1128,7 +1182,7 @@ export default function ManagerView() {
                             <MetricPill explanation={territoryExplanations.riskLevel} label="Rule" />
                           </div>
                         </div>
-                        <div className="rounded-xl bg-white p-3">
+                        <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <p className="text-xs uppercase tracking-wide text-slate-500">Primary gap</p>
@@ -1137,7 +1191,7 @@ export default function ManagerView() {
                             <MetricPill explanation={territoryExplanations.mostCommonCapabilityGap} label="Source" />
                           </div>
                         </div>
-                        <div className="rounded-xl bg-white p-3">
+                        <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <p className="text-xs uppercase tracking-wide text-slate-500">Key metrics</p>
@@ -1153,7 +1207,7 @@ export default function ManagerView() {
                     </div>
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-4`}>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What is driving this</p>
                         <ul className="mt-3 space-y-2 text-sm text-slate-700">
                           {driverBullets.slice(0, 3).map((item) => (
@@ -1164,7 +1218,7 @@ export default function ManagerView() {
                           ))}
                         </ul>
                       </div>
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className={`${ENTERPRISE_SUBCARD} rounded-2xl p-4`}>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What to do</p>
                         <ul className="mt-3 space-y-2 text-sm text-slate-700">
                           {actionBullets.map((item) => (
@@ -1200,7 +1254,7 @@ export default function ManagerView() {
               })}
             </div>
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="rounded-xl border border-gray-200 bg-white p-5 pt-6">
+              <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5 pt-6`}>
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">Team Signal Intelligence Profile</h3>
@@ -1219,7 +1273,7 @@ export default function ManagerView() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-5 pt-6">
+              <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5 pt-6`}>
                 <h3 className="mb-1 text-sm font-bold text-gray-900">Sessions per Rep (Last 30 Days)</h3>
                 <p className="mb-4 text-xs text-gray-500">Platform engagement across the current Manager View dataset</p>
                 <ResponsiveContainer width="100%" height={300}>
@@ -1232,7 +1286,7 @@ export default function ManagerView() {
                 </ResponsiveContainer>
               </div>
 
-              <div className="rounded-xl border border-gray-200 bg-white p-5 pt-6 lg:col-span-2">
+              <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5 pt-6 lg:col-span-2`}>
                 <h3 className="mb-4 text-sm font-bold text-gray-900">Performance Snapshot</h3>
                 <div className="space-y-3">
                   {[...reps].sort((a, b) => b.overallScore - a.overallScore).map((rep) => (
