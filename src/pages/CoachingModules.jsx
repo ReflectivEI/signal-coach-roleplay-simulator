@@ -159,10 +159,70 @@ function capabilityLabel(capabilityId) {
 const markdownComponents = {
   ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
   ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
-  li: ({ children }) => <li className="min-w-0 break-words">{children}</li>,
+  li: ({ children }) => (
+    <li className="min-w-0 break-words">
+      <span className="min-w-0 break-words">{children}</span>
+    </li>
+  ),
   p: ({ children }) => <p className="my-0 whitespace-pre-wrap break-words leading-relaxed text-gray-700">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
 };
+
+const coachMarkdownComponents = {
+  ...markdownComponents,
+  strong: ({ children }) => <strong className="font-semibold italic text-slate-900">{children}</strong>,
+};
+
+function normalizeCoachAdvice(rawValue) {
+  const sanitized = sanitizeAiText(rawValue);
+  if (!sanitized) return "";
+
+  const lines = sanitized.split("\n");
+  const normalizedLines = [];
+  let currentBullet = null;
+
+  const flushBullet = () => {
+    if (!currentBullet) return;
+    const prefix = currentBullet.match(/^(\s*[-*+]\s+)/)?.[1] || "- ";
+    let body = currentBullet.slice(prefix.length).replace(/\s+/g, " ").trim();
+    if (body && !/[.!?]$/.test(body)) {
+      body = `${body}.`;
+    }
+    normalizedLines.push(`${prefix}${body}`.trimEnd());
+    currentBullet = null;
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isBullet = /^[-*+]\s+/.test(trimmed);
+
+    if (isBullet) {
+      flushBullet();
+      currentBullet = trimmed;
+      continue;
+    }
+
+    if (currentBullet && trimmed) {
+      currentBullet = `${currentBullet} ${trimmed}`;
+      continue;
+    }
+
+    flushBullet();
+
+    if (!trimmed) {
+      if (normalizedLines[normalizedLines.length - 1] !== "") {
+        normalizedLines.push("");
+      }
+      continue;
+    }
+
+    normalizedLines.push(trimmed);
+  }
+
+  flushBullet();
+
+  return normalizedLines.join("\n").trim();
+}
 
 function SectionHeader({ icon: Icon, iconClassName, title }) {
   return (
@@ -469,10 +529,10 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${trimmedInput}"\n\nReturn clean markdown with exactly 3 concise bullet recommendations. Each bullet must begin with a bold action label and then one practical sentence. Do not use tables. Reference Signal Intelligence™ principles where relevant.` })
+        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${trimmedInput}"\n\nReturn clean markdown with exactly 3 concise bullet recommendations. Each bullet must begin with a bold action label using only the first 2-5 keywords, followed immediately by one continuous practical sentence that ends with a period. Do not insert line breaks inside any bullet. Do not use tables. Reference Signal Intelligence™ principles where relevant.` })
       });
       const data = await res.json();
-      setResponse(sanitizeAiText(data.response || data.text || data.content || ''));
+      setResponse(normalizeCoachAdvice(data.response || data.text || data.content || ''));
     } catch {
       setResponse('AI service unavailable.');
     }
@@ -498,7 +558,7 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
       </Button>
       {response && (
         <div className="ui-markdown overflow-hidden rounded-xl border border-teal-100 bg-white p-5 text-sm leading-relaxed text-gray-700 shadow-sm">
-          <ReactMarkdown components={markdownComponents}>{response}</ReactMarkdown>
+          <ReactMarkdown components={coachMarkdownComponents}>{response}</ReactMarkdown>
         </div>
       )}
     </div>
