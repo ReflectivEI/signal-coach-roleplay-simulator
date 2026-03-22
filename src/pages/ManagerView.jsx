@@ -37,6 +37,7 @@ import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsSha
 import {
   BEHAVIORAL_METRIC_KEYS,
   buildManagerInsightsRequest,
+  getBehavioralMetricDefinition,
   getBehavioralMetricLabel,
 } from "@/components/manager/managerPerformanceData";
 import { buildManagerViewState, getContributorSet } from "@/components/manager/managerViewModel";
@@ -73,7 +74,7 @@ const COLOR_MAP = {
 const SIGNAL_CAPABILITIES = BEHAVIORAL_METRIC_KEYS.map((key) => ({
   id: key,
   label: getBehavioralMetricLabel(key),
-  subtitle: key,
+  subtitle: getBehavioralMetricDefinition(key).measurement || "Canonical Signal Intelligence capability",
   icon: ICON_MAP[key] || Target,
   metrics: ["score", "trend", "sessionsObserved"],
   color: COLOR_MAP[key] || "#64748b",
@@ -83,11 +84,11 @@ const TRAINING_MODULES = [
   { id: 1, capability: "signalAwareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
   { id: 2, capability: "signalAwareness", title: "Question Timing Exercises", type: "Interactive", duration: "30 min", level: "Beginner" },
   { id: 3, capability: "signalInterpretation", title: "Interpretation Accuracy Drills", type: "Role-Play", duration: "60 min", level: "Advanced" },
-  { id: 4, capability: "valueCommunication", title: "Evidence-to-Outcome Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
-  { id: 5, capability: "emotionalAttunement", title: "Emotional Attunement Signals", type: "Video", duration: "25 min", level: "Beginner" },
-  { id: 6, capability: "objectionHandling", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
-  { id: 7, capability: "conversationControl", title: "Conversation Control & Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
-  { id: 8, capability: "adaptability", title: "Real-Time Adaptability Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
+  { id: 4, capability: "valueCommunication", title: "Value Connection Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
+  { id: 5, capability: "emotionalAttunement", title: "Customer Engagement Monitoring Signals", type: "Video", duration: "25 min", level: "Beginner" },
+  { id: 6, capability: "objectionHandling", title: "Objection Navigation Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
+  { id: 7, capability: "conversationControl", title: "Conversation Management Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
+  { id: 8, capability: "adaptability", title: "Adaptive Response Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
   { id: 9, capability: "commitmentGeneration", title: "Commitment Generation Strategies", type: "Video + Practice", duration: "40 min", level: "Intermediate" },
   { id: 10, capability: "signalInterpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
 ];
@@ -826,7 +827,7 @@ export default function ManagerView() {
                           { label: "Conversion Proxy", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
                           { label: "Sales Risk", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
                           { label: "Data Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
-                          { label: "Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
+                          { label: "Predictive Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
                         ].map(({ label, value, explanation }) => (
                           <div key={label} className="rounded-lg bg-white p-3 shadow-sm">
                             <div className="flex items-center justify-between gap-2">
@@ -836,6 +837,25 @@ export default function ManagerView() {
                             <p className="text-lg font-bold text-slate-900">{value}</p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
+                          viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
+                            <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
+                              <p className="font-semibold">{flag.label}</p>
+                              <p className="mt-1 text-xs leading-5">{flag.explanation}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
+                        )}
                       </div>
                     </div>
 
@@ -884,7 +904,7 @@ export default function ManagerView() {
               </div>
             </div>
 
-            {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload ? (
+            {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
               <div className="manager-insights-container">
                 <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
               </div>
@@ -894,16 +914,23 @@ export default function ManagerView() {
 
         <TabsContent value="territory">
           <div className="space-y-6">
-            <ManagerInsightsPanel
-              key={`territory-${viewState.version}`}
-              analyticsData={territoryInsightsData}
-              title="National Team Aggregate predictive coaching layer"
-              subtitle="Advisory outlook built from the current 14-rep Manager View dataset, territory performance, and deterministic behavior-level signals."
-            />
+            {viewState.validation.isValid ? (
+              <ManagerInsightsPanel
+                key={`territory-${viewState.version}`}
+                analyticsData={territoryInsightsData}
+                title="National Team Aggregate predictive coaching layer"
+                subtitle="Advisory outlook built from the current 14-rep Manager View dataset, territory performance, and deterministic behavior-level signals."
+              />
+            ) : (
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
+                Territory AI insights are hidden until metric validation passes. Deterministic territory aggregates remain available below.
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
               {[viewState.nationalTerritory, ...viewState.territories].map((territory) => {
                 const territoryExplanations = viewState.explanations.territory[territory.territory];
                 const territoryContributors = getContributorSet(viewState.contributors, territory.territory);
+                const territoryRiskFlags = viewState.territoryRiskFlagsByName[territory.territory] || [];
                 return (
                   <div key={territory.territory} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -936,6 +963,11 @@ export default function ManagerView() {
                         <span>Volatility {territory.territoryVolatility}</span>
                         <MetricPill explanation={territoryExplanations.territoryVolatility} label="Formula" />
                       </div>
+                      {territoryRiskFlags.length ? (
+                        <p>Risk rules {territoryRiskFlags.map((flag) => flag.explanation).join(" · ")}</p>
+                      ) : (
+                        <p>Risk rules None triggered</p>
+                      )}
                       <p>Top pattern {territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "None"}</p>
                       <p>Weighted aggregation {Object.entries(territory.aggregationWeights).map(([repId, weight]) => `${reps.find((rep) => rep.id === repId)?.name.split(" ")[0] || repId} ${Math.round(weight * 100)}%`).join(", ")}</p>
                     </div>

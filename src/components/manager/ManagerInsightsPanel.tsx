@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
 import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
+import { MANAGER_MODEL_THRESHOLDS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
 
 type ManagerInsightsPanelProps = {
   analyticsData: ManagerInsightsRequest;
@@ -52,16 +53,16 @@ function getScopeLabel(request: ManagerInsightsRequest) {
 function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
-      `${request.repData.improvementPriority} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs 3.5/5 threshold`,
-      `engagementScore ${request.derivedMetrics.engagementScore}/100 vs 60/100 threshold`,
-      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100 vs 62/100 threshold`,
+      `${getBehavioralMetricLabel(request.repData.improvementPriority)} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold`,
+      `Engagement Score ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
+      `Sales Risk ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
     ];
   }
 
   return [
-    `avgEngagement ${request.territoryData.avgEngagement}/100 vs 60/100 threshold`,
-    `${request.territoryData.mostCommonCapabilityGap ?? "capability coverage"} gap`,
-    `territoryVolatility ${request.territoryData.territoryVolatility} vs 0.4 threshold`,
+    `Territory Engagement ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
+    `${request.territoryData.mostCommonCapabilityGap ? getBehavioralMetricLabel(request.territoryData.mostCommonCapabilityGap) : "capability coverage"} gap`,
+    `Territory Volatility ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
   ];
 }
 
@@ -157,7 +158,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         {data && (
           <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
             <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {Math.round(data.predictiveOutlook.confidence * 100)}% confidence
+            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {Math.round(data.predictiveOutlook.confidence * 100)}% predictive confidence
           </div>
         )}
       </div>
@@ -240,7 +241,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
                 {outlookTone[data.predictiveOutlook.performanceTrend].label}
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">Confidence</p>
+                <p className="text-xs uppercase tracking-wide text-slate-500">Predictive confidence</p>
                 <p className="text-lg font-bold text-slate-900">{Math.round(data.predictiveOutlook.confidence * 100)}%</p>
               </div>
               <div>

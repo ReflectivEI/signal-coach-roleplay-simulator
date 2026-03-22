@@ -13,10 +13,10 @@ const TRAINING_MODULES = [
   { id: 3, capability: "signal_interpretation", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min" },
   { id: 4, capability: "value_connection", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min" },
   { id: 5, capability: "customer_engagement", title: "HCP Engagement Signals", type: "Video", duration: "25 min" },
-  { id: 6, capability: "objection_navigation", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min" },
-  { id: 7, capability: "conversation_management", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min" },
-  { id: 8, capability: "adaptive_response", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min" },
-  { id: 9, capability: "commitment_generation", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min" },
+  { id: 6, capability: "objection_navigation", title: "Objection Navigation Workshop", type: "Role-Play", duration: "50 min" },
+  { id: 7, capability: "conversation_management", title: "Conversation Management Flow", type: "Interactive", duration: "35 min" },
+  { id: 8, capability: "adaptive_response", title: "Adaptive Response Techniques", type: "Simulation", duration: "55 min" },
+  { id: 9, capability: "commitment_generation", title: "Commitment Generation Strategies", type: "Video + Practice", duration: "40 min" },
   { id: 10, capability: "signal_interpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min" },
 ];
 
