@@ -37,6 +37,49 @@ function Section({ icon: Icon, title, children }: { icon: typeof BrainCircuit; t
   );
 }
 
+function getScopeLabel(request: ManagerInsightsRequest) {
+  if (request.repData) {
+    return "Rep-specific";
+  }
+
+  if ((request.territoryData.repIds?.length ?? 0) <= 4) {
+    return "Cluster-specific";
+  }
+
+  return "Territory-wide";
+}
+
+function buildMonitoringTargets(request: ManagerInsightsRequest) {
+  if (request.repData && request.derivedMetrics) {
+    return [
+      `${request.repData.improvementPriority} score`,
+      `engagementScore ${request.derivedMetrics.engagementScore}/100`,
+      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100`,
+    ];
+  }
+
+  return [
+    `avgEngagement ${request.territoryData.avgEngagement}/100`,
+    `${request.territoryData.mostCommonCapabilityGap ?? "capability coverage"} gap`,
+    `territoryVolatility ${request.territoryData.territoryVolatility}`,
+  ];
+}
+
+function buildActionCards(data: ManagerInsightsResponse, request: ManagerInsightsRequest) {
+  const monitoringTargets = buildMonitoringTargets(request);
+  const scopeLabel = getScopeLabel(request);
+
+  return data.recommendations.map((recommendation, index) => ({
+    id: `${scopeLabel}-${index}-${recommendation.action}`,
+    scopeLabel,
+    primaryFinding: index === 0 ? data.summary : data.keyDrivers[index - 1] ?? data.keyDrivers[0] ?? data.summary,
+    dataBasis: data.keyDrivers[index] ?? data.risks[index] ?? data.keyDrivers[0] ?? "No additional data basis available.",
+    recommendedAction: recommendation.action,
+    expectedImpact: recommendation.expectedImpact,
+    monitorNext: monitoringTargets[index] ?? monitoringTargets[monitoringTargets.length - 1] ?? "Monitor the next scheduled metric refresh.",
+  }));
+}
+
 export default function ManagerInsightsPanel({ analyticsData, title, subtitle }: ManagerInsightsPanelProps) {
   const [data, setData] = useState<ManagerInsightsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -48,6 +91,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
   }, [analyticsData]);
 
   const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
+  const actionCards = useMemo(() => (data && requestBody ? buildActionCards(data, requestBody) : []), [data, requestBody]);
 
   useEffect(() => {
     if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
@@ -126,14 +170,14 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
           Manager insights are temporarily unavailable. The rest of Manager View remains fully usable.
         </div>
-      ) : data ? (
+      ) : data && requestBody ? (
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
           <div className="xl:col-span-2 rounded-2xl border border-teal-100 bg-teal-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Executive summary</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Primary finding</p>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{data.summary}</p>
           </div>
 
-          <Section icon={Radar} title="Key drivers">
+          <Section icon={Radar} title="Data basis">
             <ul className="space-y-2 text-sm text-slate-700">
               {data.keyDrivers.map((item) => (
                 <li key={item} className="flex gap-2">
@@ -144,9 +188,9 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
             </ul>
           </Section>
 
-          <Section icon={ShieldAlert} title="Risk signals">
+          <Section icon={ShieldAlert} title="What to monitor next">
             <ul className="space-y-2 text-sm text-slate-700">
-              {data.risks.map((item) => (
+              {buildMonitoringTargets(requestBody).map((item) => (
                 <li key={item} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
                   <span>{item}</span>
@@ -155,15 +199,36 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
             </ul>
           </Section>
 
-          <Section icon={BrainCircuit} title="Coaching recommendations">
+          <Section icon={BrainCircuit} title="Recommended action">
             <div className="space-y-3">
-              {data.recommendations.map((recommendation) => (
-                <div key={recommendation.action} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">{recommendation.action}</p>
-                  <p className="mt-1 text-xs uppercase tracking-wide text-slate-500">Rationale</p>
-                  <p className="text-sm text-slate-700">{recommendation.rationale}</p>
-                  <p className="mt-2 text-xs uppercase tracking-wide text-slate-500">Expected impact</p>
-                  <p className="text-sm text-slate-700">{recommendation.expectedImpact}</p>
+              {actionCards.map((card) => (
+                <div key={card.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-900">{card.scopeLabel}</p>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">Operational view</span>
+                  </div>
+                  <div className="space-y-3 text-sm text-slate-700">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Primary finding</p>
+                      <p>{card.primaryFinding}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Data basis</p>
+                      <p>{card.dataBasis}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Recommended action</p>
+                      <p className="font-semibold text-slate-900">{card.recommendedAction}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">Expected impact</p>
+                      <p>{card.expectedImpact}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-slate-500">What to monitor next</p>
+                      <p>{card.monitorNext}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
