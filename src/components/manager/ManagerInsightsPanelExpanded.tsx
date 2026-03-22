@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
 import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
@@ -44,9 +44,9 @@ function getOutlookTone(trend: unknown) {
   return outlookTone[(typeof trend === "string" ? trend : "") as keyof typeof outlookTone] ?? outlookTone.stable;
 }
 
-function normalizeInsightsPayload(payload: unknown) {
+function normalizeInsightsPayload(payload: unknown): ManagerInsightsResponse | null {
   const parsed = managerInsightsResponseSchema.safeParse(payload);
-  return parsed.success ? parsed.data : null;
+  return parsed.success ? (parsed.data as ManagerInsightsResponse) : null;
 }
 
 function classifyInsight(text: string): Exclude<InsightFilter, "All">[] {
@@ -179,19 +179,23 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `
-You are a performance-focused sales coaching assistant. Use structured performance data and behavioral signals. Provide specific, actionable coaching steps. Do not be generic.
-
-Context:
-${JSON.stringify(data)}
-
-Selected Context:
-${selectedChips.join(", ")}
-
-Manager Question:
-${input}
-          `,
-          temperature: 0.3,
+          prompt: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, and derived metrics. Do not generalize. Do not invent metrics. Reference exact capability names and data-backed coaching logic.",
+              },
+              {
+                role: "user",
+                content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
+Territory Data: ${JSON.stringify(data.territoryData)}
+Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
+Selected Context: ${JSON.stringify(selectedChips)}
+Manager Question: ${input}`,
+              },
+            ],
+          }),
+          temperature: 0.2,
           max_tokens: 800,
         }),
       });
@@ -219,15 +223,21 @@ ${input}
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `
-You explain coaching recommendations using performance data. Be precise.
-
-Recommendation:
-${JSON.stringify(recommendation)}
-
-Context:
-${JSON.stringify(data)}
-          `,
+          prompt: JSON.stringify({
+            messages: [
+              {
+                role: "system",
+                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, and derived metrics. Keep the response concise, auditable, and non-chatty.",
+              },
+              {
+                role: "user",
+                content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
+Territory Data: ${JSON.stringify(data.territoryData)}
+Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
+Recommendation: ${JSON.stringify(recommendation)}`,
+              },
+            ],
+          }),
           temperature: 0.2,
           max_tokens: 600,
         }),
@@ -266,7 +276,10 @@ ${JSON.stringify(data)}
             </div>
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            Advisory coaching guidance built from structured performance metrics and behavioral signals.
+            Advisory coaching guidance built from canonical rep data, territory aggregation, and deterministic derived metrics.
+          </p>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}
           </p>
         </div>
 

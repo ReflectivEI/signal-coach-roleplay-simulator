@@ -1,5 +1,6 @@
 // @ts-check
 import { z } from "zod";
+import { BEHAVIORAL_METRIC_KEYS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
 
 const TREND_VALUES = {
   up: 1,
@@ -7,33 +8,128 @@ const TREND_VALUES = {
   down: -1,
 };
 
-const LOW_SIGNAL_THRESHOLD = 3.3;
-const STRONG_SIGNAL_THRESHOLD = 4;
-const HIGH_RISK_THRESHOLD = 65;
-const IMPROVEMENT_THRESHOLD = 35;
+const HIGH_RISK_THRESHOLD = 62;
+const IMPROVEMENT_THRESHOLD = 34;
+const BEHAVIORAL_KEY_SET = new Set(BEHAVIORAL_METRIC_KEYS);
+const behavioralMetricKeyEnum = z.enum([
+  "signalAwareness",
+  "signalInterpretation",
+  "adaptability",
+  "objectionHandling",
+  "valueCommunication",
+  "commitmentGeneration",
+  "emotionalAttunement",
+  "conversationControl",
+]);
+
+const GENERIC_PHRASES = [
+  "improve communication",
+  "focus on performance",
+  "continue training",
+  "keep it up",
+  "general coaching",
+];
 
 /**
  * Shared feature flag for Manager AI Insights.
  */
 export const ENABLE_MANAGER_INSIGHTS = true;
 
+const behavioralMetricProfileSchema = z.object({
+  score: z.number().min(0).max(5),
+  trend: z.enum(["up", "down", "flat"]),
+  sessionsObserved: z.number().int().min(0).max(200),
+});
+
+const behavioralMetricsSchema = z.object({
+  signalAwareness: behavioralMetricProfileSchema,
+  signalInterpretation: behavioralMetricProfileSchema,
+  adaptability: behavioralMetricProfileSchema,
+  objectionHandling: behavioralMetricProfileSchema,
+  valueCommunication: behavioralMetricProfileSchema,
+  commitmentGeneration: behavioralMetricProfileSchema,
+  emotionalAttunement: behavioralMetricProfileSchema,
+  conversationControl: behavioralMetricProfileSchema,
+});
+
+const repDataSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  specialty: z.string().min(1),
+  territory: z.string().min(1),
+  status: z.enum(["active", "needs_attention", "inactive"]),
+  sessionsCompleted30d: z.number().int().min(0).max(1000),
+  coachingModulesCompleted: z.number().int().min(0).max(1000),
+  practiceStreakDays: z.number().int().min(0).max(365),
+  salesPerformance: z.number().min(0).max(5),
+  salesTrend: z.enum(["up", "down", "flat"]),
+  behavioralMetrics: behavioralMetricsSchema,
+  strongestCapability: behavioralMetricKeyEnum,
+  improvementPriority: behavioralMetricKeyEnum,
+  overallScore: z.number().min(0).max(5),
+  recentCoachingActivity: z.object({
+    coachingSessions30d: z.number().int().min(0).max(100),
+    managerReviews30d: z.number().int().min(0).max(100),
+    lastCoachingDate: z.string().min(1),
+  }),
+  scenarioMix: z.record(z.number().min(0).max(100)),
+  trainingTypeMix: z.record(z.number().min(0).max(100)),
+  lastPracticeDate: z.string().min(1),
+  engagementConsistency: z.number().min(0).max(100),
+  observationDepth: z.number().min(0).max(1000),
+  territoryContext: z.object({
+    marketTrend: z.enum(["up", "down", "flat"]),
+    accessComplexity: z.number().min(0).max(5),
+    payerPressure: z.number().min(0).max(5),
+    accountComplexity: z.number().min(0).max(5),
+  }),
+  evidence: z.record(z.unknown()).optional(),
+});
+
+const territoryDataSchema = z.object({
+  territory: z.string().min(1),
+  avgPerformance: z.number().min(0).max(5),
+  avgEngagement: z.number().min(0).max(100),
+  trend: z.enum(["up", "down", "flat"]),
+  riskLevel: z.enum(["low", "moderate", "high"]),
+  avgBehavioralMetrics: z.object({
+    signalAwareness: z.number().min(0).max(5),
+    signalInterpretation: z.number().min(0).max(5),
+    adaptability: z.number().min(0).max(5),
+    objectionHandling: z.number().min(0).max(5),
+    valueCommunication: z.number().min(0).max(5),
+    commitmentGeneration: z.number().min(0).max(5),
+    emotionalAttunement: z.number().min(0).max(5),
+    conversationControl: z.number().min(0).max(5),
+  }),
+  mostCommonCapabilityGap: behavioralMetricKeyEnum.nullable(),
+  topPerformingBehaviorPattern: z.array(behavioralMetricKeyEnum).max(8),
+  territoryVolatility: z.number().min(0).max(5),
+  atRiskRepCount: z.number().int().min(0).max(1000),
+  lowPerformerConcentration: z.number().min(0).max(1),
+  highPerformerConcentration: z.number().min(0).max(1),
+  coachingOpportunityClusters: z.array(z.string().min(1)).max(8),
+  repIds: z.array(z.string().min(1)).max(1000),
+});
+
+const repDerivedMetricsSchema = z.object({
+  strongestCapability: behavioralMetricKeyEnum,
+  improvementPriority: behavioralMetricKeyEnum,
+  behavioralVariance: z.number().min(0).max(5),
+  engagementScore: z.number().min(0).max(100),
+  readinessScore: z.number().min(0).max(100),
+  coachingResponsivenessScore: z.number().min(0).max(100).optional(),
+  territoryPressureScore: z.number().min(0).max(100),
+  salesRiskScore: z.number().min(0).max(100),
+  confidenceScore: z.number().min(0).max(1),
+});
+
 export const managerInsightsRequestSchema = z.object({
   repId: z.string().min(1).optional(),
   territoryId: z.string().min(1).optional(),
-  metrics: z.object({
-    sessionsCompleted: z.number().int().min(0).max(1000),
-    trainingModulesCompleted: z.number().int().min(0).max(1000),
-    avgEQScore: z.number().min(0).max(5),
-    recentPerformanceTrend: z.enum(["up", "down", "flat"]),
-    salesPerformance: z.number().min(0).max(5),
-    territoryPerformance: z.number().min(0).max(5).optional(),
-  }),
-  behavioralSignals: z.object({
-    signalAwareness: z.number().min(0).max(5).optional(),
-    signalInterpretation: z.number().min(0).max(5).optional(),
-    valueConnection: z.number().min(0).max(5).optional(),
-    objectionHandling: z.number().min(0).max(5).optional(),
-  }).default({}),
+  repData: repDataSchema.optional(),
+  territoryData: territoryDataSchema,
+  derivedMetrics: repDerivedMetricsSchema.optional(),
   timeframe: z.enum(["30d", "60d", "90d"]),
 });
 
@@ -58,20 +154,8 @@ export const managerInsightsResponseSchema = z.object({
  * @typedef {z.infer<typeof managerInsightsResponseSchema>} ManagerInsightsResponse
  */
 
-const capabilityLabels = {
-  signalAwareness: "signal awareness",
-  signalInterpretation: "signal interpretation",
-  valueConnection: "value connection",
-  objectionHandling: "objection handling",
-};
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
-}
-
-function normalizeCount(value, benchmark) {
-  if (!value || benchmark <= 0) return 0;
-  return clamp(value / benchmark, 0, 1);
 }
 
 function round(value, digits = 2) {
@@ -79,46 +163,63 @@ function round(value, digits = 2) {
   return Math.round(value * factor) / factor;
 }
 
+/** @param {Record<string, number>} metrics */
+function getBestMetricKeys(metrics) {
+  return Object.entries(metrics)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([key]) => key);
+}
+
 /**
  * @param {ManagerInsightsRequest} payload
  */
 export function deriveManagerInsightsFeatures(payload) {
-  const sessionComponent = normalizeCount(payload.metrics.sessionsCompleted, payload.timeframe === "90d" ? 24 : payload.timeframe === "60d" ? 16 : 8);
-  const moduleComponent = normalizeCount(payload.metrics.trainingModulesCompleted, payload.timeframe === "90d" ? 12 : payload.timeframe === "60d" ? 8 : 4);
-  const engagementScore = round(((sessionComponent * 0.6) + (moduleComponent * 0.4)) * 100, 1);
+  const rep = payload.repData;
+  const territory = payload.territoryData;
+  const derived = payload.derivedMetrics;
+  const territoryMetricRanking = getBestMetricKeys(territory.avgBehavioralMetrics);
 
-  const trendValue = TREND_VALUES[payload.metrics.recentPerformanceTrend];
-  const baselinePerformance = payload.metrics.salesPerformance * 20;
-  const performanceDelta = round(clamp(baselinePerformance + (trendValue * 12), 0, 100), 1);
+  const keyMetric = rep
+    ? rep.behavioralMetrics[rep.improvementPriority]
+    : payload.territoryData.mostCommonCapabilityGap
+      ? { score: territory.avgBehavioralMetrics[payload.territoryData.mostCommonCapabilityGap], trend: territory.trend, sessionsObserved: 0 }
+      : null;
 
-  const capabilityGaps = Object.entries(payload.behavioralSignals)
-    .filter(([, value]) => typeof value === "number" && value < LOW_SIGNAL_THRESHOLD)
-    .sort((a, b) => /** @type {number} */ (a[1]) - /** @type {number} */ (b[1]))
-    .map(([key, value]) => ({
-      capability: capabilityLabels[/** @type {keyof typeof capabilityLabels} */ (key)] || key,
-      score: round(/** @type {number} */ (value), 1),
-      severity: /** @type {number} */ (value) < 2.5 ? "high" : "moderate",
-    }));
+  const signalCoverage = rep
+    ? round(BEHAVIORAL_METRIC_KEYS.filter((key) => rep.behavioralMetrics[key].sessionsObserved > 0).length / BEHAVIORAL_METRIC_KEYS.length, 2)
+    : 1;
 
-  const lowEngagementPenalty = engagementScore < 45 ? 28 : engagementScore < 65 ? 14 : 0;
-  const trendPenalty = payload.metrics.recentPerformanceTrend === "down" ? 26 : payload.metrics.recentPerformanceTrend === "flat" ? 10 : -10;
-  const gapPenalty = capabilityGaps.length * 11;
-  const eqPenalty = payload.metrics.avgEQScore < LOW_SIGNAL_THRESHOLD ? 16 : payload.metrics.avgEQScore >= STRONG_SIGNAL_THRESHOLD ? -8 : 0;
-  const territoryPenalty = typeof payload.metrics.territoryPerformance === "number" && payload.metrics.territoryPerformance < 3.2 ? 8 : 0;
+  const confidence = rep
+    ? derived?.confidenceScore ?? 0.7
+    : round(clamp(0.58 + (territory.avgEngagement / 250) - (territory.territoryVolatility / 10), 0.45, 0.9), 2);
 
-  const riskIndex = round(clamp(25 + lowEngagementPenalty + trendPenalty + gapPenalty + eqPenalty + territoryPenalty, 0, 100), 1);
-  const signalCoverage = round(
-    Object.values(payload.behavioralSignals).filter((value) => typeof value === "number").length / 4,
-    2,
-  );
+  const riskIndex = rep
+    ? derived?.salesRiskScore ?? 50
+    : round(
+      clamp(
+        (territory.riskLevel === "high" ? 70 : territory.riskLevel === "moderate" ? 52 : 28)
+        + (territory.atRiskRepCount * 4)
+        + (territory.territoryVolatility * 10),
+        0,
+        100,
+      ),
+      1,
+    );
 
   return {
-    engagementScore,
-    performanceDelta,
-    capabilityGaps,
+    subjectName: rep?.name ?? `${territory.territory} territory`,
+    strongestCapability: rep?.strongestCapability ?? territory.topPerformingBehaviorPattern[0] ?? null,
+    improvementPriority: rep?.improvementPriority ?? territory.mostCommonCapabilityGap,
+    engagementScore: rep ? derived?.engagementScore ?? 0 : territory.avgEngagement,
+    readinessScore: rep ? derived?.readinessScore ?? 0 : round((territory.avgPerformance * 20 * 0.7) + (territory.avgEngagement * 0.3), 1),
+    territoryTrend: territory.trend,
+    performanceTrend: rep?.salesTrend ?? territory.trend,
     riskIndex,
+    confidence,
     signalCoverage,
-    performanceSignal: baselinePerformance,
+    keyMetric,
+    topBehaviorPattern: territoryMetricRanking,
   };
 }
 
@@ -128,99 +229,73 @@ export function deriveManagerInsightsFeatures(payload) {
  * @returns {ManagerInsightsResponse}
  */
 export function createFallbackManagerInsights(payload, derived) {
-  const subject = payload.repId ? "This rep" : "This territory";
-  const primaryGap = derived.capabilityGaps[0];
-  const lowCoverage = derived.signalCoverage < 0.5;
-  const isAtRisk = derived.riskIndex >= HIGH_RISK_THRESHOLD;
-  const isImproving = derived.riskIndex <= IMPROVEMENT_THRESHOLD
-    && payload.metrics.salesPerformance >= STRONG_SIGNAL_THRESHOLD
-    && payload.metrics.avgEQScore >= STRONG_SIGNAL_THRESHOLD
-    && payload.metrics.recentPerformanceTrend === "up";
+  const rep = payload.repData;
+  const territory = payload.territoryData;
+  const weakestCapability = derived.improvementPriority;
+  const strongestCapability = derived.strongestCapability;
+  const weakestMetricScore = weakestCapability && rep ? rep.behavioralMetrics[weakestCapability].score : null;
+  const strongestMetricScore = strongestCapability && rep ? rep.behavioralMetrics[strongestCapability].score : null;
 
   /** @type {"likely_improve" | "at_risk" | "stable"} */
-  const performanceTrend = isAtRisk
+  const performanceTrend = derived.riskIndex >= HIGH_RISK_THRESHOLD
     ? "at_risk"
-    : isImproving
+    : derived.riskIndex <= IMPROVEMENT_THRESHOLD && derived.performanceTrend === "up"
       ? "likely_improve"
       : "stable";
 
-  const confidence = round(clamp(0.42 + (derived.signalCoverage * 0.28) + (Math.abs(TREND_VALUES[payload.metrics.recentPerformanceTrend]) * 0.12), 0.35, 0.86), 2);
+  const subject = rep ? rep.name : `${territory.territory} territory`;
 
-  const keyDrivers = [
-    `${subject} logged ${payload.metrics.sessionsCompleted} sessions and ${payload.metrics.trainingModulesCompleted} completed modules in the last ${payload.timeframe}.`,
-    `Engagement score is ${derived.engagementScore}/100 with a performance signal of ${round(derived.performanceSignal, 0)}/100.`,
-  ];
+  const summary = rep
+    ? `${subject} shows ${strongestCapability} as the strongest observed capability and ${weakestCapability} as the primary improvement area, with territory context from ${territory.territory} shaping the coaching recommendation.`
+    : `${subject} shows a ${territory.riskLevel} coaching risk profile, with cross-rep patterns centered on ${territory.mostCommonCapabilityGap ?? "aligned capability coverage"}.`;
 
-  if (primaryGap) {
-    keyDrivers.push(`${primaryGap.capability} is the clearest capability gap at ${primaryGap.score}/5.`);
-  }
+  const keyDrivers = rep
+    ? [
+      `${rep.name} completed ${rep.sessionsCompleted30d} sessions, ${rep.coachingModulesCompleted} coaching modules, and carries an engagementScore of ${derived.engagementScore}/100.`,
+      `${rep.name}'s strongestCapability is ${rep.strongestCapability} at ${strongestMetricScore}/5, while improvementPriority is ${rep.improvementPriority} at ${weakestMetricScore}/5.`,
+      `${rep.name}'s salesPerformance is ${rep.salesPerformance}/5 with a ${rep.salesTrend} salesTrend, and ${territory.territory} is ${territory.trend} with avgPerformance ${territory.avgPerformance}/5.`,
+    ]
+    : [
+      `${territory.territory} averages ${territory.avgPerformance}/5 performance and ${territory.avgEngagement}/100 engagement across ${territory.repIds.length} reps.`,
+      `The mostCommonCapabilityGap is ${territory.mostCommonCapabilityGap ?? "none"}, while topPerformingBehaviorPattern is ${territory.topPerformingBehaviorPattern.join(", ") || "none"}.`,
+      `${territory.atRiskRepCount} reps are at risk, with territoryVolatility at ${territory.territoryVolatility} and ${Math.round(territory.lowPerformerConcentration * 100)}% low performer concentration.`,
+    ];
 
-  if (payload.metrics.recentPerformanceTrend === "up") {
-    keyDrivers.push("Recent performance direction is improving, which supports near-term coaching lift.");
-  } else if (payload.metrics.recentPerformanceTrend === "down") {
-    keyDrivers.push("Recent performance direction is declining, so coaching should focus on stabilizing execution first.");
-  }
+  const risks = rep
+    ? [
+      `${rep.name} carries a salesRiskScore of ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100, driven by ${rep.improvementPriority}, ${rep.salesTrend} salesTrend, and ${territory.territory} territory conditions.`,
+      `${rep.name}'s territoryPressureScore is ${payload.derivedMetrics?.territoryPressureScore ?? 0}/100, indicating ${rep.territoryContext.payerPressure >= 4 ? "payer-heavy pressure" : "moderate territory pressure"} in ${territory.territory}.`,
+    ]
+    : [
+      `${territory.territory} risk is tied to ${territory.mostCommonCapabilityGap ?? "mixed capability gaps"}, ${territory.atRiskRepCount} at-risk reps, and a ${territory.trend} territory trend.`,
+      `${territory.territory} has ${Math.round(territory.lowPerformerConcentration * 100)}% low performer concentration against ${Math.round(territory.highPerformerConcentration * 100)}% high performer concentration.`,
+    ];
 
-  const risks = [];
-  if (derived.engagementScore < 45) {
-    risks.push("Low practice volume is limiting repeat exposure to signal-based coaching.");
-  }
-  if (payload.metrics.recentPerformanceTrend === "down") {
-    risks.push("Declining recent performance increases the chance of missed coaching transfer.");
-  }
-  if (primaryGap) {
-    risks.push(`${primaryGap.capability} is below target, which can weaken in-call adaptation.`);
-  }
-  if (lowCoverage) {
-    risks.push("Behavioral signal coverage is incomplete, so confidence is heuristic rather than predictive.");
-  }
-
-  if (!risks.length) {
-    risks.push("No acute risk signal detected; continue monitoring engagement and capability consistency.");
-  }
-
-  const recommendations = [
-    {
-      action: primaryGap
-        ? `Assign one targeted module and one scenario focused on ${primaryGap.capability}.`
-        : "Assign one targeted practice scenario tied to the current business priority.",
-      rationale: primaryGap
-        ? `${primaryGap.capability} is the lowest observed behavior, so a narrow intervention is more useful than general coaching.`
-        : "Focused repetition is the fastest way to confirm whether the current trend is durable.",
-      expectedImpact: primaryGap
-        ? "Improves transfer from training into live rep behavior during the next practice cycle."
-        : "Maintains current momentum while surfacing any hidden capability gap earlier.",
-    },
-    {
-      action: derived.engagementScore < 55
-        ? "Set a manager checkpoint for two additional practice sessions before the next review."
-        : "Review the next two completed sessions for whether coaching points are showing up in execution.",
-      rationale: derived.engagementScore < 55
-        ? "Practice volume is currently too low to expect reliable behavior change without manager reinforcement."
-        : "Observed activity is sufficient for inspection, so the next step is validating coaching adoption rather than adding more volume.",
-      expectedImpact: derived.engagementScore < 55
-        ? "Raises engagement enough to make subsequent coaching recommendations more reliable."
-        : "Helps confirm whether observed strengths are consistent or isolated to a small sample.",
-    },
-  ];
-
-  const summary = isAtRisk
-    ? `${subject} shows combined engagement and capability risk that warrants targeted coaching, not broader remediation.`
-    : isImproving
-      ? `${subject} is positioned for near-term improvement if current behaviors stay consistent.`
-      : `${subject} is stable, with coaching opportunity concentrated in a small number of observable behaviors.`;
-
-  const reasoningParts = [
-    `This outlook is heuristic, based on a ${derived.riskIndex}/100 risk index and ${confidence * 100}% confidence.`,
-    `Recent trend is ${payload.metrics.recentPerformanceTrend} and engagement is ${derived.engagementScore}/100.`,
-  ];
-
-  if (primaryGap) {
-    reasoningParts.push(`${primaryGap.capability} remains the main observable constraint.`);
-  }
-  if (lowCoverage) {
-    reasoningParts.push("Some behavioral signals were missing, which lowers certainty.");
-  }
+  const recommendations = rep
+    ? [
+      {
+        action: `Run 2 targeted coaching sessions this week focused on ${rep.improvementPriority} in ${rep.specialty.toLowerCase()} account conversations.`,
+        rationale: `${rep.name}'s lowest behavioral metric is ${rep.improvementPriority} at ${weakestMetricScore}/5, and that gap aligns with ${rep.salesTrend} salesTrend plus ${territory.territory} territory pressure.`,
+        expectedImpact: `Improved ${rep.improvementPriority} execution should raise close quality, support readinessScore, and strengthen conversion consistency in ${territory.territory}.`,
+      },
+      {
+        action: `Use ${rep.strongestCapability} as the anchor behavior in the next manager review and inspect two recent sessions for transfer into ${rep.improvementPriority}.`,
+        rationale: `${rep.name}'s strongestCapability is ${rep.strongestCapability}, so leveraging that strength creates a data-grounded bridge into the weakest capability without changing the canonical profile.`,
+        expectedImpact: `This should improve coaching responsiveness while keeping the intervention aligned to observed evidence from the full 8-metric profile.`,
+      },
+    ]
+    : [
+      {
+        action: `Launch a territory coaching sprint on ${territory.mostCommonCapabilityGap ?? "capability consistency"} for the next 14 days across ${territory.territory}.`,
+        rationale: `${territory.territory} shows a shared gap in ${territory.mostCommonCapabilityGap ?? "behavioral consistency"}, with ${territory.atRiskRepCount} at-risk reps and ${territory.coachingOpportunityClusters[0] ?? "multiple cross-rep coaching opportunities"}.`,
+        expectedImpact: `A territory-level intervention should reduce volatility, concentrate manager attention on the dominant gap, and improve shared execution patterns.`,
+      },
+      {
+        action: `Review the highest-volatility reps in ${territory.territory} and rebalance scenario mix toward payer and access-heavy simulations where applicable.`,
+        rationale: `${territory.territory}'s territoryVolatility is ${territory.territoryVolatility}, and the coachingOpportunityClusters indicate where cross-rep friction is accumulating.`,
+        expectedImpact: `This should improve consistency across the territory rather than treating territory coaching as rep data multiplied.`,
+      },
+    ];
 
   return {
     summary,
@@ -229,8 +304,10 @@ export function createFallbackManagerInsights(payload, derived) {
     recommendations,
     predictiveOutlook: {
       performanceTrend,
-      confidence,
-      reasoning: reasoningParts.join(" "),
+      confidence: derived.confidence,
+      reasoning: rep
+        ? `Confidence is ${Math.round(derived.confidence * 100)}% based on confidenceScore, full 8-metric coverage, engagementScore ${derived.engagementScore}/100, and pattern strength between ${rep.improvementPriority}, ${rep.salesTrend} salesTrend, and ${territory.territory} territory conditions.`
+        : `Confidence is ${Math.round(derived.confidence * 100)}% based on cross-rep completeness, territory volatility, engagement, and the concentration of shared capability gaps in ${territory.territory}.`,
     },
   };
 }
@@ -246,10 +323,48 @@ function sanitizeBulletList(items, fallbackItems) {
     ? items
       .map((item) => sanitizeText(item, ""))
       .filter(Boolean)
-      .filter((item) => !/^improve communication$/i.test(item))
+      .filter((item) => !GENERIC_PHRASES.some((phrase) => item.toLowerCase().includes(phrase)))
     : [];
 
   return sanitized.length ? sanitized.slice(0, 4) : fallbackItems;
+}
+
+function containsInvalidCapabilityReference(text) {
+  const normalized = text.toLowerCase();
+  if (GENERIC_PHRASES.some((phrase) => normalized.includes(phrase))) {
+    return true;
+  }
+
+  const forbiddenAliases = [
+    "value connection",
+    "customer engagement",
+    "objection navigation",
+    "adaptive response",
+    "conversation management",
+    "listening & responsiveness",
+  ];
+
+  return forbiddenAliases.some((alias) => normalized.includes(alias));
+}
+
+/**
+ * @param {ManagerInsightsResponse} candidate
+ * @param {ManagerInsightsResponse} fallback
+ */
+function validateAlignedInsight(candidate, fallback) {
+  const textBlocks = [
+    candidate.summary,
+    ...candidate.keyDrivers,
+    ...candidate.risks,
+    ...candidate.recommendations.flatMap((item) => [item.action, item.rationale, item.expectedImpact]),
+    candidate.predictiveOutlook.reasoning,
+  ];
+
+  if (textBlocks.some((text) => containsInvalidCapabilityReference(text))) {
+    return fallback;
+  }
+
+  return candidate;
 }
 
 /**
@@ -295,5 +410,27 @@ export function normalizeManagerInsightsResponse(candidate, fallback) {
   };
 
   const parsed = managerInsightsResponseSchema.safeParse(normalized);
-  return parsed.success ? parsed.data : fallback;
+  if (!parsed.success) {
+    return fallback;
+  }
+
+  return validateAlignedInsight(parsed.data, fallback);
+}
+
+export function buildManagerExplainabilityNote(payload) {
+  if (!payload.repData) {
+    return `Data Source: Rep + Territory Metrics • Territory gap ${payload.territoryData.mostCommonCapabilityGap ?? "none"}`;
+  }
+
+  const weakest = payload.repData.improvementPriority;
+  const strongest = payload.repData.strongestCapability;
+  return `Data Source: Rep + Territory Metrics • ${payload.repData.name}: ${strongest} ${payload.repData.behavioralMetrics[strongest].score}/5 • ${weakest} ${payload.repData.behavioralMetrics[weakest].score}/5`;
+}
+
+export function getBehavioralMetricKeySet() {
+  return BEHAVIORAL_KEY_SET;
+}
+
+export function formatBehavioralMetricReference(metricKey, score) {
+  return `${metricKey} (${getBehavioralMetricLabel(metricKey)}): ${round(score, 1)}/5`;
 }

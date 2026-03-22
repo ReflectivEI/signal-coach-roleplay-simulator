@@ -1,20 +1,87 @@
+export type BehavioralMetricKey =
+  | "signalAwareness"
+  | "signalInterpretation"
+  | "adaptability"
+  | "objectionHandling"
+  | "valueCommunication"
+  | "commitmentGeneration"
+  | "emotionalAttunement"
+  | "conversationControl";
+
+export type RepMetricProfile = {
+  score: number;
+  trend: "up" | "down" | "flat";
+  sessionsObserved: number;
+};
+
+export type RepData = {
+  id: string;
+  name: string;
+  specialty: string;
+  territory: string;
+  status: "active" | "needs_attention" | "inactive";
+  sessionsCompleted30d: number;
+  coachingModulesCompleted: number;
+  practiceStreakDays: number;
+  salesPerformance: number;
+  salesTrend: "up" | "down" | "flat";
+  behavioralMetrics: Record<BehavioralMetricKey, RepMetricProfile>;
+  strongestCapability: BehavioralMetricKey;
+  improvementPriority: BehavioralMetricKey;
+  overallScore: number;
+  recentCoachingActivity: {
+    coachingSessions30d: number;
+    managerReviews30d: number;
+    lastCoachingDate: string;
+  };
+  scenarioMix: Record<string, number>;
+  trainingTypeMix: Record<string, number>;
+  lastPracticeDate: string;
+  engagementConsistency: number;
+  observationDepth: number;
+  territoryContext: {
+    marketTrend: "up" | "down" | "flat";
+    accessComplexity: number;
+    payerPressure: number;
+    accountComplexity: number;
+  };
+};
+
+export type RepDerivedMetrics = {
+  strongestCapability: BehavioralMetricKey;
+  improvementPriority: BehavioralMetricKey;
+  behavioralVariance: number;
+  engagementScore: number;
+  readinessScore: number;
+  coachingResponsivenessScore?: number;
+  territoryPressureScore: number;
+  salesRiskScore: number;
+  confidenceScore: number;
+};
+
+export type TerritoryData = {
+  territory: string;
+  avgPerformance: number;
+  avgEngagement: number;
+  trend: "up" | "down" | "flat";
+  riskLevel: "low" | "moderate" | "high";
+  avgBehavioralMetrics: Record<BehavioralMetricKey, number>;
+  mostCommonCapabilityGap: BehavioralMetricKey | null;
+  topPerformingBehaviorPattern: BehavioralMetricKey[];
+  territoryVolatility: number;
+  atRiskRepCount: number;
+  lowPerformerConcentration: number;
+  highPerformerConcentration: number;
+  coachingOpportunityClusters: string[];
+  repIds: string[];
+};
+
 export type ManagerInsightsRequest = {
   repId?: string;
   territoryId?: string;
-  metrics: {
-    sessionsCompleted: number;
-    trainingModulesCompleted: number;
-    avgEQScore: number;
-    recentPerformanceTrend: "up" | "down" | "flat";
-    salesPerformance: number;
-    territoryPerformance?: number;
-  };
-  behavioralSignals: {
-    signalAwareness?: number;
-    signalInterpretation?: number;
-    valueConnection?: number;
-    objectionHandling?: number;
-  };
+  repData?: RepData & { evidence?: Record<string, unknown> };
+  territoryData: TerritoryData;
+  derivedMetrics?: RepDerivedMetrics;
   timeframe: "30d" | "60d" | "90d";
 };
 
