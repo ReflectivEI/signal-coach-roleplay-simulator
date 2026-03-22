@@ -1,7 +1,5 @@
 // @ts-nocheck
 import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -12,8 +10,10 @@ import {
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
+import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
 import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getAdoptionBand } from "@/lib/enablementHub";
+import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 
@@ -292,6 +292,8 @@ export default function ManagerView() {
     timeframe: "30d",
   };
 
+  const managerMetricsPayload = selectedRepInsightsData || territoryInsightsData;
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto bg-slate-50/60 rounded-2xl">
       {/* Header */}
@@ -418,98 +420,96 @@ export default function ManagerView() {
 
         {/* ── REP OVERVIEW TAB ── */}
         <TabsContent value="reps">
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* Table */}
-            <div className="xl:col-span-2 bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-900">Sales Representatives</h2>
-                <p className="text-xs text-gray-500">Click a rep to view their detailed profile</p>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_360px] xl:items-start">
+              <div className="sales-rep-container self-start overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="px-5 py-4 border-b border-gray-100">
+                  <h2 className="text-sm font-bold text-gray-900">Sales Representatives</h2>
+                  <p className="text-xs text-gray-500">Click a rep to view their detailed profile</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Rep</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Territory</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Sessions</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Modules</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Weak Area</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {REPS.map(rep => (
+                        <RepRow key={rep.id} rep={rep} onSelect={setSelectedRep} selected={selectedRep?.id === rep.id} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Rep</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Territory</th>
-                      <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Sessions</th>
-                      <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Modules</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Weak Area</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {REPS.map(rep => (
-                      <RepRow key={rep.id} rep={rep} onSelect={setSelectedRep} selected={selectedRep?.id === rep.id} />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
 
-            {/* Rep Detail Card */}
-            <div>
-              {selectedRep ? (
-                <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4 sticky top-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full text-white text-sm font-bold flex items-center justify-center flex-shrink-0" style={{ background: "#1A334D" }}>
-                      {selectedRep.name.split(" ").map(w => w[0]).join("")}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
-                      <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
-                      <span className={`text-xs font-medium ${selectedRep.status === 'active' ? 'text-green-700' : selectedRep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{selectedRep.status.charAt(0).toUpperCase() + selectedRep.status.slice(1)}</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "Sessions (30d)", value: selectedRep.sessionsLast30 },
-                      { label: "Avg Score", value: selectedRep.avgScore > 0 ? `${selectedRep.avgScore}/5` : "—" },
-                      { label: "Practice Streak", value: selectedRep.streak > 0 ? `${selectedRep.streak} days` : "None" },
-                      { label: "Modules Done", value: `${selectedRep.modulesCompleted}/${selectedRep.modulesAssigned}` },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-xs text-gray-500">{label}</p>
-                        <p className="text-lg font-bold text-gray-900">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Focus Area
-                    </p>
-                    <p className="text-sm font-bold text-amber-900">{selectedRep.weakCapability}</p>
-                    <p className="text-xs text-amber-700 mt-1">Assign relevant coaching modules to address this gap.</p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Module Completion</p>
+              <div className="space-y-4 self-start xl:sticky xl:top-4">
+                {selectedRep ? (
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 bg-gray-100 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all"
-                          style={{
-                            width: `${(selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100}%`,
-                            background: selectedRep.modulesCompleted === selectedRep.modulesAssigned ? "#14b8a6" : "#f59e0b"
-                          }}
-                        />
+                      <div className="w-12 h-12 rounded-full text-white text-sm font-bold flex items-center justify-center flex-shrink-0" style={{ background: "#1A334D" }}>
+                        {selectedRep.name.split(" ").map(w => w[0]).join("")}
                       </div>
-                      <span className="text-xs text-gray-600 font-medium">{Math.round((selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100)}%</span>
+                      <div>
+                        <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
+                        <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
+                        <span className={`text-xs font-medium ${selectedRep.status === 'active' ? 'text-green-700' : selectedRep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{selectedRep.status.charAt(0).toUpperCase() + selectedRep.status.slice(1)}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      {[
+                        { label: "Sessions (30d)", value: selectedRep.sessionsLast30 },
+                        { label: "Avg Score", value: selectedRep.avgScore > 0 ? `${selectedRep.avgScore}/5` : "—" },
+                        { label: "Practice Streak", value: selectedRep.streak > 0 ? `${selectedRep.streak} days` : "None" },
+                        { label: "Modules Done", value: `${selectedRep.modulesCompleted}/${selectedRep.modulesAssigned}` },
+                      ].map(({ label, value }) => (
+                        <div key={label} className="bg-gray-50 rounded-lg p-3">
+                          <p className="text-xs text-gray-500">{label}</p>
+                          <p className="text-lg font-bold text-gray-900">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                      <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Focus Area
+                      </p>
+                      <p className="text-sm font-bold text-amber-900">{selectedRep.weakCapability}</p>
+                      <p className="text-xs text-amber-700 mt-1">Assign relevant coaching modules to address this gap.</p>
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Module Completion</p>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 bg-gray-100 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full transition-all"
+                            style={{
+                              width: `${(selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100}%`,
+                              background: selectedRep.modulesCompleted === selectedRep.modulesAssigned ? "#14b8a6" : "#f59e0b"
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-600 font-medium">{Math.round((selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100)}%</span>
+                      </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center shadow-sm">
+                    <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Select a rep to view their detailed profile</p>
+                  </div>
+                )}
 
-                  {selectedRepInsightsData && (
-                    <ManagerInsightsPanel
-                      analyticsData={selectedRepInsightsData}
-                      title={`${selectedRep.name} coaching outlook`}
-                      subtitle="Behavior-based guidance generated from recent engagement, performance, and observed capability coverage."
-                    />
-                  )}
-
-                  {/* Assignment Panel */}
-                  <div className="border-t border-gray-100 pt-4">
+                {selectedRep ? (
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                     <AssignmentPanel
                       rep={selectedRep}
                       assignments={assignments}
@@ -518,14 +518,15 @@ export default function ManagerView() {
                       onDelete={handleDelete}
                     />
                   </div>
-                </div>
-              ) : (
-                <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-8 text-center">
-                  <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500">Select a rep to view their detailed profile</p>
-                </div>
-              )}
+                ) : null}
+              </div>
             </div>
+
+            {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload ? (
+              <div className="manager-insights-container">
+                <ManagerInsightsPanelExpanded data={managerMetricsPayload} />
+              </div>
+            ) : null}
           </div>
         </TabsContent>
 

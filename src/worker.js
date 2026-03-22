@@ -336,7 +336,7 @@ async function invokeStructuredLlm({ env, prompt, schemaHint, max_tokens = 900, 
                 messages: [
                     {
                         role: "system",
-                        content: `You are the Manager AI Insights layer for a sales coaching platform. Use deterministic inputs exactly as provided. Return JSON only. Do not provide generic advice, personality judgments, or unsupported claims. ${schemaHint}`
+                        content: `You are a performance-focused sales coaching system. You MUST use ONLY provided structured data, avoid generic advice, tie every recommendation to a specific observed gap, and use behavior-based coaching. Return strict JSON only. Reject vague language, unsupported claims, personality judgments, and scoring changes. ${schemaHint}`
                     },
                     { role: "user", content: prompt }
                 ]
@@ -367,18 +367,44 @@ async function invokeStructuredLlm({ env, prompt, schemaHint, max_tokens = 900, 
 }
 
 function buildManagerInsightsPrompt(payload, derived) {
-    return JSON.stringify({
-        task: "Interpret the structured manager analytics and generate concise, behavior-specific coaching guidance.",
-        instructions: [
-            "Return JSON with keys summary, keyDrivers, risks, recommendations, predictiveOutlook.",
-            "Recommendations must each include action, rationale, and expectedImpact.",
-            "No generic advice, no long paragraphs, no psychological inference, and no scoring changes.",
-            "Keep every statement explainable from the metrics or derived features.",
-            "Predictive outlook must remain heuristic and advisory, not deterministic or evaluative."
-        ],
-        analytics: payload,
-        derived
-    });
+    return [
+        "You are a performance-focused sales coaching system.",
+        "",
+        "You MUST:",
+        "- Use ONLY provided structured data",
+        "- Avoid generic advice",
+        "- Tie every recommendation to a specific observed gap",
+        "- Use behavior-based coaching",
+        "",
+        "DATA INPUT:",
+        `Metrics: ${JSON.stringify(payload.metrics)}`,
+        `Behavioral Signals: ${JSON.stringify(payload.behavioralSignals)}`,
+        `Derived: ${JSON.stringify({
+            engagementScore: derived.engagementScore,
+            performanceDelta: derived.performanceDelta,
+            capabilityGaps: derived.capabilityGaps,
+            riskIndex: derived.riskIndex,
+        })}`,
+        "",
+        "OUTPUT: STRICT JSON",
+        "",
+        "RULES:",
+        "1. Recommendations MUST follow Action → Situation → Expected Outcome.",
+        "2. DO NOT say: improve communication; focus on performance; continue training.",
+        "3. Every recommendation MUST include WHAT to do, WHEN to do it, and WHY it matters.",
+        "4. Key drivers MUST map directly to metrics or behavioral signals.",
+        "5. Risks MUST include a root cause tied to the provided data.",
+        "6. Predictive outlook MUST reference performance trend, engagement, and capability gaps.",
+        "7. Confidence must be justified using those factors.",
+        "8. Reject output if generic phrasing exists, no linkage to data exists, or recommendations are vague.",
+        "",
+        "Recommendation example:",
+        JSON.stringify({
+            action: "Run 2 role-play sessions this week focused on payer objection handling",
+            rationale: "Low objection handling score and declining sales trend",
+            expectedImpact: "Improved access conversations and increased conversions",
+        }),
+    ].join("\n");
 }
 
 async function handleManagerInsights(request, env) {

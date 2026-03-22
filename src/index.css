@@ -416,3 +416,29 @@
     50%, 100% { border-right-color: transparent; }
   }
 }
+
+
+.sales-rep-container {
+  min-height: 0;
+}
+
+.manager-insights-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.manager-insights-container > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.manager-insights-panel-expanded {
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .manager-insights-container {
+    grid-template-columns: 1fr;
+  }
+}
