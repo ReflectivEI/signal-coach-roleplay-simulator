@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert 
 import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { MANAGER_MODEL_THRESHOLDS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
+import { formatMetricLabel, normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
 const CONTEXT_CHIPS = [
@@ -46,7 +47,7 @@ function getOutlookTone(trend: unknown) {
 
 function normalizeInsightsPayload(payload: unknown): ManagerInsightsResponse | null {
   const parsed = managerInsightsResponseSchema.safeParse(payload);
-  return parsed.success ? (parsed.data as ManagerInsightsResponse) : null;
+  return parsed.success ? (normalizeManagerInsightsResponse(parsed.data as ManagerInsightsResponse) as ManagerInsightsResponse) : null;
 }
 
 function classifyInsight(text: string): Exclude<InsightFilter, "All">[] {
@@ -76,22 +77,22 @@ function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
       `${getBehavioralMetricLabel(request.repData.improvementPriority)} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold`,
-      `Engagement Score ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
-      `Sales Risk ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
-      `Predictive Confidence ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
+      `${formatMetricLabel("engagementScore")} ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
+      `${formatMetricLabel("salesRiskScore")} ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
+      `${formatMetricLabel("confidenceScore")} ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
     ];
   }
 
   return [
-    `Territory Engagement ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
+    `${formatMetricLabel("avgEngagement")} ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
     `${request.territoryData.mostCommonCapabilityGap ? getBehavioralMetricLabel(request.territoryData.mostCommonCapabilityGap) : "capability coverage"} gap`,
-    `Territory Volatility ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
-    `At-Risk Rep Count ${request.territoryData.atRiskRepCount}`,
+    `${formatMetricLabel("territoryVolatility")} ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
+    `${formatMetricLabel("atRiskRepCount")} ${request.territoryData.atRiskRepCount}`,
   ];
 }
 
 function containsInvalidInsightText(text: string) {
-  if (/(emotional attunement|adaptability|objection handling|value communication|conversation control|signalAwareness|signalInterpretation|valueCommunication|emotionalAttunement|conversationControl)/i.test(text)) {
+  if (/(signalAwareness|signalInterpretation|valueCommunication|emotionalAttunement|conversationControl|commitmentGeneration|engagementStabilityScore|coachingResponsivenessScore|avgEngagement|territoryVolatility|salesRiskScore|confidenceScore|dataConfidenceIndex)/.test(text)) {
     return true;
   }
 
@@ -223,7 +224,8 @@ Manager Question: ${input}`,
       if (!res.ok) return;
       const json = await res.json();
       const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      setResponse(content && !containsInvalidInsightText(content) ? content : "Insight hidden because the generated response used a non-canonical metric label or unsupported phrasing.");
+      const normalizedContent = normalizeManagerText(content);
+      setResponse(normalizedContent && !containsInvalidInsightText(normalizedContent) ? normalizedContent : "Insight hidden because the generated response used an unsupported internal metric label or unsupported phrasing.");
     } catch {
       // Fail silently to preserve surrounding workflow.
     } finally {
@@ -265,7 +267,8 @@ Recommendation: ${JSON.stringify(recommendation)}`,
       if (!res.ok) return;
       const json = await res.json();
       const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      setResponse(content && !containsInvalidInsightText(content) ? content : "Insight hidden because the generated response used a non-canonical metric label or unsupported phrasing.");
+      const normalizedContent = normalizeManagerText(content);
+      setResponse(normalizedContent && !containsInvalidInsightText(normalizedContent) ? normalizedContent : "Insight hidden because the generated response used an unsupported internal metric label or unsupported phrasing.");
     } catch {
       // Fail silently to preserve surrounding workflow.
     } finally {
@@ -316,12 +319,13 @@ Recommendation: ${JSON.stringify(recommendation)}`,
         <div className="mt-5 space-y-5">
           <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Primary finding</p>
-            <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{insights?.summary || "Select a rep to load predictive coaching context for this territory."}</p>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{normalizeManagerText(insights?.summary || "Select a rep to load predictive coaching context for this territory.")}</p>
           </div>
 
           <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Filter insights</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Filters refine which dimensions of performance and behavior are displayed. They do not change the underlying dataset.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {FILTERS.map((filter) => {
                   const active = activeFilter === filter;
@@ -336,6 +340,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Context chips</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Context chips refine how insights and recommendations are interpreted, based on real-world scenarios such as new reps, inconsistent performance, or territory dynamics.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {CONTEXT_CHIPS.map((chip) => {
                   const active = selectedChips.includes(chip);
@@ -360,7 +365,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                   {filteredKeyDrivers.length ? filteredKeyDrivers.map((item) => (
                     <li key={item} className="flex gap-2">
                       <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-teal-500" />
-                      <span>{item}</span>
+                      <span>{normalizeManagerText(item)}</span>
                     </li>
                   )) : <li className="text-slate-500">No data basis items match the current filter.</li>}
                 </ul>
@@ -375,7 +380,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                   {filteredRisks.length ? filteredRisks.map((item) => (
                     <li key={item} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2">
                       <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-                      <span>{item}</span>
+                      <span>{normalizeManagerText(item)}</span>
                     </li>
                   )) : <li className="text-slate-500">No risk signals match the current filter.</li>}
                 </ul>
@@ -400,7 +405,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Reasoning</p>
-                      <p className="text-sm leading-6 text-slate-700">{insights.predictiveOutlook.reasoning}</p>
+                      <p className="text-sm leading-6 text-slate-700">{normalizeManagerText(insights.predictiveOutlook.reasoning)}</p>
                     </div>
                   </div>
                 ) : (
@@ -429,23 +434,23 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                         <div className="space-y-3 text-sm text-slate-700">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
-                            <p>{card.primaryFinding}</p>
+                            <p>{normalizeManagerText(card.primaryFinding)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data basis</p>
-                            <p>{card.dataBasis}</p>
+                            <p>{normalizeManagerText(card.dataBasis)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommended action</p>
-                            <p className="font-semibold text-slate-900">{card.recommendedAction}</p>
+                            <p className="font-semibold text-slate-900">{normalizeManagerText(card.recommendedAction)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected impact</p>
-                            <p>{card.expectedImpact}</p>
+                            <p>{normalizeManagerText(card.expectedImpact)}</p>
                           </div>
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What to monitor next</p>
-                            <p>{card.monitorNext}</p>
+                            <p>{normalizeManagerText(card.monitorNext)}</p>
                           </div>
                         </div>
                       </div>

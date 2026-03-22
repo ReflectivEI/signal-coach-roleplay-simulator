@@ -34,6 +34,7 @@ import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
 import { ENABLEMENT_HUB_SPOKES, getAdoptionBand } from "@/lib/enablementHub";
 import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
+import { formatMetricLabel, normalizeExplanation, normalizeManagerText } from "@/components/manager/managerMetricFormatting";
 import {
   BEHAVIORAL_METRIC_KEYS,
   buildManagerInsightsRequest,
@@ -143,39 +144,54 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
   );
 }
 
+function MetricSummaryCard({ labelKey, value, explanation }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
+        <MetricPill explanation={explanation} label="Formula" />
+      </div>
+      <p className="mt-2 text-lg font-bold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
 function MetricExplanationDialog({ explanation, children }) {
   if (!explanation) {
     return null;
   }
+
+  const normalizedExplanation = normalizeExplanation(explanation);
 
   return (
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{explanation.label}</DialogTitle>
-          <DialogDescription>{explanation.definition}</DialogDescription>
+          <DialogTitle>{normalizedExplanation.label}</DialogTitle>
+          <DialogDescription>{normalizedExplanation.definition}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 text-sm text-slate-700">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Formula</p>
-            <p className="mt-2 font-mono text-xs leading-6 text-slate-700">{explanation.formula}</p>
+            <p className="mt-2 font-mono text-xs leading-6 text-slate-700">{normalizedExplanation.formula}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Current inputs</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Source</p>
+            <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.definition}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {Object.entries(explanation.inputs || {}).map(([key, value]) => (
+              {Object.entries(normalizedExplanation.inputs || {}).map(([key, value]) => (
                 <div key={key} className="rounded-xl bg-slate-50 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{key}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{normalizeManagerText(key)}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{String(value)}</p>
                 </div>
               ))}
             </div>
           </div>
           <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Current output</p>
-            <p className="mt-2 text-lg font-bold text-slate-900">{String(explanation.output)}</p>
-            {explanation.notes ? <p className="mt-2 text-xs leading-5 text-slate-600">{explanation.notes}</p> : null}
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Rule</p>
+            <p className="mt-2 text-lg font-bold text-slate-900">{String(normalizedExplanation.output)}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-600">{normalizedExplanation.notes || "Thresholds and weighting rules are fixed by the deterministic Manager View model."}</p>
           </div>
         </div>
       </DialogContent>
@@ -243,7 +259,7 @@ function RepRow({ rep, derived, explanations, onSelect, selected }) {
       <td className="px-4 py-3 align-top">
         <StatusBadge status={rep.status} />
         <div className="mt-2 flex items-center gap-2">
-          <p className="text-[11px] text-slate-500">Risk {derived.salesRiskScore}/100</p>
+          <p className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</p>
           <MetricPill explanation={explanations.salesRiskScore} label="Formula" />
         </div>
       </td>
@@ -304,8 +320,8 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{item.metricLabel}: {item.metricValue} · Weight {Math.round((item.weight || 0) * 100)}%</p>
-                          <p className="mt-2 text-sm leading-6 text-slate-700">{item.why}</p>
+                          <p className="mt-1 text-xs text-slate-500">{normalizeManagerText(item.metricLabel)}: {item.metricValue} · Weight {Math.round((item.weight || 0) * 100)}%</p>
+                          <p className="mt-2 text-sm leading-6 text-slate-700">{normalizeManagerText(item.why)}</p>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => onSelectRep(item.repId)}>
                           Open rep
@@ -681,7 +697,7 @@ export default function ManagerView() {
 
         <TabsContent value="reps">
           <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_380px] xl:items-start">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_320px] xl:items-start">
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-100 px-5 py-4">
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -702,8 +718,8 @@ export default function ManagerView() {
                     </div>
                   </div>
                 </div>
-                <div className="max-h-[780px] overflow-auto">
-                  <table className="w-full min-w-[1120px] table-fixed text-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1040px] table-fixed text-sm">
                     <colgroup>
                       <col className="w-[240px]" />
                       <col className="w-[120px]" />
@@ -790,91 +806,14 @@ export default function ManagerView() {
 
                     <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral Metrics</p>
-                          <p className="mt-1 text-xs text-slate-500">Data Source: Rep + Territory Metrics · Full 8-metric profile for explainability and auditability.</p>
-                        </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">Observation depth {selectedRep.observationDepth}</span>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric summary cards</p>
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {selectedRep.observationDepth}</span>
                       </div>
-                      <div className="mt-4 grid gap-3">
-                        {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
-                          const metric = selectedRep.behavioralMetrics[metricKey];
-                          return (
-                            <div key={metricKey} className="grid grid-cols-[minmax(0,1.4fr)_80px_72px_96px] items-center gap-3 rounded-xl border border-white bg-white px-3 py-2 shadow-sm">
-                              <div>
-                                <p className="text-sm font-semibold text-slate-900">{getBehavioralMetricLabel(metricKey)}</p>
-                                <p className="text-[11px] text-slate-500">{selectedRep.territory} rep metric</p>
-                              </div>
-                              <p className="text-sm font-bold text-slate-900">{metric.score}/5</p>
-                              <TrendBadge trend={metric.trend} />
-                              <p className="text-xs text-slate-500">Observed {metric.sessionsObserved}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic derived metrics</p>
-                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Current demo calculation logic</span>
-                      </div>
-                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {[
-                          { label: "Engagement", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
-                          { label: "Readiness", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
-                          { label: "Engagement Stability", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
-                          { label: "Conversion Proxy", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
-                          { label: "Sales Risk", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
-                          { label: "Data Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
-                          { label: "Predictive Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
-                        ].map(({ label, value, explanation }) => (
-                          <div key={label} className="rounded-lg bg-white p-3 shadow-sm">
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs text-slate-500">{label}</p>
-                              <MetricPill explanation={explanation} label="Formula" />
-                            </div>
-                            <p className="text-lg font-bold text-slate-900">{value}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
-                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
-                          viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
-                            <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-white text-slate-700"}`}>
-                              <p className="font-semibold">{flag.label}</p>
-                              <p className="mt-1 text-xs leading-5">{flag.explanation}</p>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="rounded-lg border border-teal-200 bg-white px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-4">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Module Completion</p>
-                        <MetricPill explanation={viewState.explanations.rep[selectedRep.id].moduleCompletion} label="Formula" />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="h-2 flex-1 rounded-full bg-gray-100">
-                          <div
-                            className="h-2 rounded-full transition-all"
-                            style={{
-                              width: `${(selectedRep.coachingModulesCompleted / 8) * 100}%`,
-                              background: selectedRep.coachingModulesCompleted === 8 ? "#14b8a6" : "#f59e0b",
-                            }}
-                          />
-                        </div>
-                        <span className="text-xs font-medium text-gray-600">{Math.round((selectedRep.coachingModulesCompleted / 8) * 100)}%</span>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        <MetricSummaryCard labelKey="engagementScore" value={`${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].engagementScore} />
+                        <MetricSummaryCard labelKey="readinessScore" value={`${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].readinessScore} />
+                        <MetricSummaryCard labelKey="salesRiskScore" value={`${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].salesRiskScore} />
+                        <MetricSummaryCard labelKey="confidenceScore" value={`${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`} explanation={viewState.explanations.rep[selectedRep.id].confidenceScore} />
                       </div>
                     </div>
                   </div>
@@ -890,21 +829,100 @@ export default function ManagerView() {
                   </div>
                 )}
 
-                {selectedRep ? (
-                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <AssignmentPanel
-                      rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
-                      assignments={assignments}
-                      onAssigned={loadAssignments}
-                      onStatusChange={handleStatusChange}
-                      onDelete={handleDelete}
-                    />
-                  </div>
-                ) : null}
               </div>
             </div>
 
-            {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
+            {selectedRep ? (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral metrics</p>
+                    <p className="mt-1 text-sm text-slate-500">Full rep profile aligned to the deterministic 8-metric model, using normalized display labels only.</p>
+                  </div>
+                  <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">Stable row layout</span>
+                </div>
+                <div className="grid gap-3">
+                  {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
+                    const metric = selectedRep.behavioralMetrics[metricKey];
+                    return (
+                      <div key={metricKey} className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 sm:grid-cols-[minmax(0,1.5fr)_88px_84px_120px] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{formatMetricLabel(metricKey)}</p>
+                          <p className="mt-1 text-[11px] text-slate-500">{selectedRep.territory} rep metric</p>
+                        </div>
+                        <p className="text-sm font-bold text-slate-900">{metric.score}/5</p>
+                        <TrendBadge trend={metric.trend} />
+                        <p className="text-xs text-slate-500">Observed {metric.sessionsObserved}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {selectedRep ? (
+              <div className="space-y-6">
+                {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
+                  <div className="manager-insights-container">
+                    <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
+                  </div>
+                  <div className="space-y-2">
+                    {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
+                      viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
+                        <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                          <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
+                          <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
+                      <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
+                    </div>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Formula · Source · Rule</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {[
+                      { key: "engagementScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
+                      { key: "readinessScore", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
+                      { key: "engagementStabilityScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
+                      { key: "conversionProxyScore", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
+                      { key: "salesRiskScore", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
+                      { key: "dataConfidenceIndex", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
+                      { key: "confidenceScore", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
+                    ].map(({ key, value, explanation }) => (
+                      <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <AssignmentPanel
+                    rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
+                    assignments={assignments}
+                    onAssigned={loadAssignments}
+                    onStatusChange={handleStatusChange}
+                    onDelete={handleDelete}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {!selectedRep && ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
               <div className="manager-insights-container">
                 <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
               </div>
@@ -952,15 +970,15 @@ export default function ManagerView() {
                     </div>
                     <div className="mt-3 space-y-2 text-xs text-slate-500">
                       <div className="flex items-center justify-between gap-2">
-                        <span>Gap {territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "None"}</span>
+                        <span>{formatMetricLabel("mostCommonCapabilityGap")} {territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "None"}</span>
                         <MetricPill explanation={territoryExplanations.mostCommonCapabilityGap} label="Source" />
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <span>Engagement {territory.avgEngagement}/100</span>
+                        <span>{formatMetricLabel("avgEngagement")} {territory.avgEngagement}/100</span>
                         <MetricPill explanation={territoryExplanations.avgEngagement} label="Formula" />
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <span>Volatility {territory.territoryVolatility}</span>
+                        <span>{formatMetricLabel("territoryVolatility")} {territory.territoryVolatility}</span>
                         <MetricPill explanation={territoryExplanations.territoryVolatility} label="Formula" />
                       </div>
                       {territoryRiskFlags.length ? (
