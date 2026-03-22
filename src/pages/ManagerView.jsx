@@ -11,94 +11,115 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, 
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
-import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getAdoptionBand } from "@/lib/enablementHub";
 import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
+import {
+  BEHAVIORAL_METRIC_KEYS,
+  MANAGER_REP_DATASET,
+  MANAGER_DERIVED_BY_REP_ID,
+  MANAGER_TERRITORY_DATASET,
+  NATIONAL_TERRITORY_DATA,
+  MANAGER_DATASET_VALIDATION,
+  buildManagerInsightsRequest,
+  getBehavioralMetricLabel,
+} from "@/components/manager/managerPerformanceData";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createPageUrl } from "@/utils";
 
-// ── Mock territory data ──────────────────────────────────────────────────────
-const REPS = [
-  { id: 1, name: "Alex Thompson", territory: "Northeast", specialty: "Oncology", sessionsLast30: 12, avgScore: 4.1, streak: 5, modulesCompleted: 6, modulesAssigned: 8, weakCapability: "Commitment Generation", status: "active" },
-  { id: 2, name: "Maria Santos", territory: "Southeast", specialty: "Cardiology", sessionsLast30: 8, avgScore: 3.6, streak: 2, modulesCompleted: 4, modulesAssigned: 8, weakCapability: "Objection Navigation", status: "active" },
-  { id: 3, name: "James Park", territory: "Midwest", specialty: "Infectious Disease", sessionsLast30: 15, avgScore: 4.4, streak: 8, modulesCompleted: 8, modulesAssigned: 8, weakCapability: "Adaptive Response", status: "active" },
-  { id: 4, name: "Sarah Williams", territory: "Southwest", specialty: "Neurology", sessionsLast30: 3, avgScore: 2.9, streak: 0, modulesCompleted: 2, modulesAssigned: 8, weakCapability: "Signal Awareness", status: "needs-attention" },
-  { id: 5, name: "David Chen", territory: "West Coast", specialty: "Immunology", sessionsLast30: 10, avgScore: 3.8, streak: 4, modulesCompleted: 5, modulesAssigned: 8, weakCapability: "Value Connection", status: "active" },
-  { id: 6, name: "Linda Nguyen", territory: "Mid-Atlantic", specialty: "Rare Disease", sessionsLast30: 0, avgScore: 0, streak: 0, modulesCompleted: 1, modulesAssigned: 8, weakCapability: "All areas", status: "inactive" },
-];
+const REPS = MANAGER_REP_DATASET;
+const TERRITORIES = MANAGER_TERRITORY_DATASET;
+const NATIONAL_TERRITORY = NATIONAL_TERRITORY_DATA;
 
-// Icon mapping for capabilities
 const ICON_MAP = {
-  signal_awareness: Search,
-  signal_interpretation: Ear,
-  value_connection: Heart,
-  customer_engagement: Users,
-  objection_navigation: Shield,
-  conversation_management: GitFork,
-  adaptive_response: Shuffle,
-  commitment_generation: Target,
+  signalAwareness: Search,
+  signalInterpretation: Ear,
+  adaptability: Shuffle,
+  objectionHandling: Shield,
+  valueCommunication: Heart,
+  commitmentGeneration: Target,
+  emotionalAttunement: Users,
+  conversationControl: GitFork,
 };
 
 const COLOR_MAP = {
-  signal_awareness: "#14b8a6",
-  signal_interpretation: "#0284c7",
-  value_connection: "#8b5cf6",
-  customer_engagement: "#f59e0b",
-  objection_navigation: "#f97316",
-  conversation_management: "#1A334D",
-  adaptive_response: "#06b6d4",
-  commitment_generation: "#10b981",
+  signalAwareness: "#14b8a6",
+  signalInterpretation: "#0284c7",
+  adaptability: "#06b6d4",
+  objectionHandling: "#f97316",
+  valueCommunication: "#8b5cf6",
+  commitmentGeneration: "#10b981",
+  emotionalAttunement: "#f59e0b",
+  conversationControl: "#1A334D",
 };
 
-// Transform SOT data into manager view format with correct metric names from SOT
-const SIGNAL_CAPABILITIES = SOT_CAPABILITIES.map(cap => ({
-  id: cap.id,
-  label: cap.label,
-  subtitle: cap.measurement ? `(${cap.measurement})` : "",
-  icon: ICON_MAP[cap.id] || Target,
-  metrics: cap.coreMetrics.map(m => m.name),
-  color: COLOR_MAP[cap.id] || "#64748b",
+const SIGNAL_CAPABILITIES = BEHAVIORAL_METRIC_KEYS.map((key) => ({
+  id: key,
+  label: getBehavioralMetricLabel(key),
+  subtitle: key,
+  icon: ICON_MAP[key] || Target,
+  metrics: ["score", "trend", "sessionsObserved"],
+  color: COLOR_MAP[key] || "#64748b",
 }));
 
 const TRAINING_MODULES = [
-  { id: 1, capability: "signal_awareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
-  { id: 2, capability: "signal_awareness", title: "Question Mastery Exercises", type: "Interactive", duration: "30 min", level: "Beginner" },
-  { id: 3, capability: "signal_interpretation", title: "Listening & Responsiveness Drills", type: "Role-Play", duration: "60 min", level: "Advanced" },
-  { id: 4, capability: "value_connection", title: "Clinical Evidence Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
-  { id: 5, capability: "customer_engagement", title: "HCP Engagement Signals", type: "Video", duration: "25 min", level: "Beginner" },
-  { id: 6, capability: "objection_navigation", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
-  { id: 7, capability: "conversation_management", title: "Conversation Structure & Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
-  { id: 8, capability: "adaptive_response", title: "Real-Time Adaptation Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
-  { id: 9, capability: "commitment_generation", title: "Commitment Gaining Strategies", type: "Video + Practice", duration: "40 min", level: "Intermediate" },
-  { id: 10, capability: "signal_interpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
+  { id: 1, capability: "signalAwareness", title: "Signal Awareness Masterclass", type: "Video + Practice", duration: "45 min", level: "Intermediate" },
+  { id: 2, capability: "signalAwareness", title: "Question Timing Exercises", type: "Interactive", duration: "30 min", level: "Beginner" },
+  { id: 3, capability: "signalInterpretation", title: "Interpretation Accuracy Drills", type: "Role-Play", duration: "60 min", level: "Advanced" },
+  { id: 4, capability: "valueCommunication", title: "Evidence-to-Outcome Framing", type: "Case Studies", duration: "40 min", level: "Intermediate" },
+  { id: 5, capability: "emotionalAttunement", title: "Emotional Attunement Signals", type: "Video", duration: "25 min", level: "Beginner" },
+  { id: 6, capability: "objectionHandling", title: "Objection Handling Workshop", type: "Role-Play", duration: "50 min", level: "Advanced" },
+  { id: 7, capability: "conversationControl", title: "Conversation Control & Flow", type: "Interactive", duration: "35 min", level: "Intermediate" },
+  { id: 8, capability: "adaptability", title: "Real-Time Adaptability Techniques", type: "Simulation", duration: "55 min", level: "Advanced" },
+  { id: 9, capability: "commitmentGeneration", title: "Commitment Generation Strategies", type: "Video + Practice", duration: "40 min", level: "Intermediate" },
+  { id: 10, capability: "signalInterpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
 ];
 
-const territoryRadarData = [
-  { capability: "Signal Awareness", team: 3.8, benchmark: 3.5 },
-  { capability: "Signal Interpretation", team: 3.5, benchmark: 3.4 },
-  { capability: "Value Connection", team: 3.6, benchmark: 3.2 },
-  { capability: "Customer Engagement", team: 3.4, benchmark: 3.1 },
-  { capability: "Objection Navigation", team: 3.2, benchmark: 3.0 },
-  { capability: "Commitment Generation", team: 3.4, benchmark: 3.3 },
-  { capability: "Conv. Management", team: 3.7, benchmark: 3.1 },
-  { capability: "Adaptive Response", team: 3.3, benchmark: 3.2 },
-];
+const territoryRadarData = BEHAVIORAL_METRIC_KEYS.map((key) => ({
+  capability: getBehavioralMetricLabel(key),
+  team: NATIONAL_TERRITORY.avgBehavioralMetrics[key],
+  benchmark: Math.max(3.2, NATIONAL_TERRITORY.avgBehavioralMetrics[key] - 0.2),
+}));
 
-// Mock recent role-play sessions for manager feedback
-const MOCK_SESSIONS = [
-  { id: "s1", rep_name: "Alex Thompson", rep_id: 1, scenario: "PrEP Access Barriers Despite Strong Adoption", date: "Feb 21, 2026", score: 4.1, status: "needs_feedback" },
-  { id: "s2", rep_name: "Maria Santos", rep_id: 2, scenario: "Heart Failure GDMT Optimization Challenge", date: "Feb 20, 2026", score: 3.6, status: "needs_feedback" },
-  { id: "s3", rep_name: "James Park", rep_id: 3, scenario: "HIV Prevention Gap in High-Risk Population", date: "Feb 19, 2026", score: 4.4, status: "reviewed" },
-  { id: "s4", rep_name: "Sarah Williams", rep_id: 4, scenario: "Oncology KOL Introduction", date: "Feb 18, 2026", score: 2.9, status: "needs_feedback" },
-  { id: "s5", rep_name: "David Chen", rep_id: 5, scenario: "Cardiology Formulary Review", date: "Feb 17, 2026", score: 3.8, status: "reviewed" },
-];
+const MOCK_SESSIONS = REPS.slice(0, 5).map((rep, index) => ({
+  id: `s${index + 1}`,
+  rep_name: rep.name,
+  rep_id: rep.id,
+  scenario: `${rep.specialty} scenario review`,
+  date: ["Mar 21, 2026", "Mar 20, 2026", "Mar 19, 2026", "Mar 18, 2026", "Mar 17, 2026"][index],
+  score: rep.overallScore,
+  status: index % 2 === 0 ? "needs_feedback" : "reviewed",
+}));
 
-// ...existing code...
+function formatStatus(status) {
+  return status === "needs_attention" ? "Needs Attention" : status.charAt(0).toUpperCase() + status.slice(1);
+}
 
-function RepRow({ rep, onSelect, selected }) {
-  const completionPct = Math.round((rep.modulesCompleted / rep.modulesAssigned) * 100);
+function StatusBadge({ status }) {
+  return <span className={`text-xs font-medium ${status === 'active' ? 'text-green-700' : status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{formatStatus(status)}</span>;
+}
+
+function TrendBadge({ trend }) {
+  const tone = trend === "up" ? "bg-teal-50 text-teal-700" : trend === "down" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>{trend}</span>;
+}
+
+function CapabilityPill({ metricKey, tone = "slate" }) {
+  const toneClasses = {
+    slate: "bg-slate-100 text-slate-700 border-slate-200",
+    teal: "bg-teal-50 text-teal-700 border-teal-200",
+    amber: "bg-amber-50 text-amber-700 border-amber-200",
+  };
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${toneClasses[tone] || toneClasses.slate}`}>
+      {getBehavioralMetricLabel(metricKey)}
+      <span className="ml-1 font-mono text-[10px] text-slate-500">{metricKey}</span>
+    </span>
+  );
+}
+
+function RepRow({ rep, derived, onSelect, selected }) {
   return (
     <tr
       onClick={() => onSelect(rep)}
@@ -111,29 +132,25 @@ function RepRow({ rep, onSelect, selected }) {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-900">{rep.name}</p>
-            <p className="text-xs text-gray-500">{rep.specialty}</p>
           </div>
         </div>
       </td>
+      <td className="px-4 py-3 text-xs text-gray-600">{rep.specialty}</td>
       <td className="px-4 py-3 text-xs text-gray-600"><MapPin className="w-3 h-3 inline mr-1 text-gray-500" />{rep.territory}</td>
       <td className="px-4 py-3 text-center">
-        <span className={`text-sm font-bold ${rep.sessionsLast30 >= 8 ? "text-teal-600" : rep.sessionsLast30 >= 4 ? "text-amber-600" : "text-red-500"}`}>{rep.sessionsLast30}</span>
-      </td>
-      <td className="px-4 py-3 text-center">
-        <span className={`text-sm font-bold ${rep.avgScore >= 4 ? "text-teal-600" : rep.avgScore >= 3.3 ? "text-blue-600" : rep.avgScore > 0 ? "text-amber-600" : "text-gray-500"}`}>
-          {rep.avgScore > 0 ? `${rep.avgScore}/5` : "—"}
+        <span className={`text-sm font-bold ${rep.overallScore >= 4 ? "text-teal-600" : rep.overallScore >= 3.3 ? "text-blue-600" : "text-amber-600"}`}>
+          {rep.overallScore}/5
         </span>
       </td>
+      <td className="px-4 py-3"><CapabilityPill metricKey={rep.strongestCapability} tone="teal" /></td>
+      <td className="px-4 py-3"><CapabilityPill metricKey={rep.improvementPriority} tone="amber" /></td>
+      <td className="px-4 py-3 text-center text-sm font-bold text-slate-700">{rep.sessionsCompleted30d}</td>
+      <td className="px-4 py-3 text-center text-sm text-slate-700">{rep.coachingModulesCompleted}</td>
+      <td className="px-4 py-3"><TrendBadge trend={rep.salesTrend} /></td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="flex-1 bg-gray-100 rounded-full h-1.5 min-w-[60px]">
-            <div className="rounded-full h-1.5" style={{ width: `${completionPct}%`, background: completionPct === 100 ? "#14b8a6" : "#f59e0b" }} />
-          </div>
-          <span className="text-xs text-gray-500">{rep.modulesCompleted}/{rep.modulesAssigned}</span>
-        </div>
+        <StatusBadge status={rep.status} />
+        <p className="mt-1 text-[11px] text-slate-500">Risk {derived.salesRiskScore}/100</p>
       </td>
-      <td className="px-4 py-3 text-xs text-amber-700 bg-amber-50 rounded">{rep.weakCapability}</td>
-      <td className="px-4 py-3"><span className={`text-xs font-medium ${rep.status === 'active' ? 'text-green-700' : rep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{rep.status.charAt(0).toUpperCase() + rep.status.slice(1)}</span></td>
     </tr>
   );
 }
@@ -239,58 +256,22 @@ export default function ManagerView() {
     }
   };
 
-  const totalSessions = REPS.reduce((s, r) => s + r.sessionsLast30, 0);
-  const avgTeamScore = Math.round(REPS.filter(r => r.avgScore > 0).reduce((s, r) => s + r.avgScore, 0) / REPS.filter(r => r.avgScore > 0).length * 10) / 10;
-  const atRisk = REPS.filter(r => r.status !== "active").length;
+  const totalSessions = REPS.reduce((sum, rep) => sum + rep.sessionsCompleted30d, 0);
+  const avgTeamScore = Math.round((REPS.reduce((sum, rep) => sum + rep.overallScore, 0) / REPS.length) * 10) / 10;
+  const atRisk = REPS.filter(rep => rep.status !== "active").length;
 
   const filteredModules = selectedCapabilityFilter === "all"
     ? TRAINING_MODULES
     : TRAINING_MODULES.filter(m => m.capability === selectedCapabilityFilter);
-  const adoptionRate = Math.round((REPS.filter(r => r.sessionsLast30 >= 8).length / REPS.length) * 100);
-  const moduleCompletionRate = Math.round(REPS.reduce((sum, rep) => sum + (rep.modulesCompleted / rep.modulesAssigned), 0) / REPS.length * 100);
-  const interventionQueue = REPS.filter(r => r.status !== "active" || r.sessionsLast30 < 4 || r.avgScore < 3.3);
-  const coachingPriority = interventionQueue.slice().sort((a, b) => a.avgScore - b.avgScore || a.sessionsLast30 - b.sessionsLast30);
+  const adoptionRate = Math.round((REPS.filter(rep => rep.sessionsCompleted30d >= 8).length / REPS.length) * 100);
+  const moduleCompletionRate = Math.round((REPS.reduce((sum, rep) => sum + (rep.coachingModulesCompleted / 8), 0) / REPS.length) * 100);
+  const interventionQueue = REPS.filter(rep => rep.status !== "active" || MANAGER_DERIVED_BY_REP_ID[rep.id].salesRiskScore >= 55 || rep.overallScore < 3.4);
+  const coachingPriority = interventionQueue.slice().sort((a, b) => MANAGER_DERIVED_BY_REP_ID[b.id].salesRiskScore - MANAGER_DERIVED_BY_REP_ID[a.id].salesRiskScore);
   const adoptionBand = getAdoptionBand(adoptionRate);
+  const selectedTerritoryData = (selectedRep && TERRITORIES.find((territory) => territory.territory === selectedRep.territory)) || NATIONAL_TERRITORY;
 
-  const selectedRepInsightsData = selectedRep ? {
-    repId: String(selectedRep.id),
-    territoryId: selectedRep.territory,
-    metrics: {
-      sessionsCompleted: selectedRep.sessionsLast30,
-      trainingModulesCompleted: selectedRep.modulesCompleted,
-      avgEQScore: selectedRep.avgScore,
-      recentPerformanceTrend: selectedRep.avgScore >= 4 ? "up" : selectedRep.avgScore < 3.3 || selectedRep.sessionsLast30 < 4 ? "down" : "flat",
-      salesPerformance: selectedRep.avgScore,
-      territoryPerformance: territoryRadarData.reduce((sum, entry) => sum + entry.team, 0) / territoryRadarData.length,
-    },
-    behavioralSignals: {
-      signalAwareness: selectedRep.weakCapability === "Signal Awareness" ? 2.4 : Math.min(4.5, selectedRep.avgScore + 0.2),
-      signalInterpretation: selectedRep.weakCapability === "Adaptive Response" ? 2.8 : Math.min(4.4, selectedRep.avgScore + 0.1),
-      valueConnection: selectedRep.weakCapability === "Value Connection" ? 2.6 : Math.min(4.3, selectedRep.avgScore + 0.15),
-      objectionHandling: selectedRep.weakCapability === "Objection Navigation" ? 2.5 : Math.min(4.2, selectedRep.avgScore + 0.05),
-    },
-    timeframe: "30d",
-  } : null;
-
-  const territoryInsightsData = {
-    territoryId: "national-manager-view",
-    metrics: {
-      sessionsCompleted: totalSessions,
-      trainingModulesCompleted: REPS.reduce((sum, rep) => sum + rep.modulesCompleted, 0),
-      avgEQScore: avgTeamScore,
-      recentPerformanceTrend: avgTeamScore >= 4 ? "up" : avgTeamScore < 3.3 || atRisk >= 2 ? "down" : "flat",
-      salesPerformance: avgTeamScore,
-      territoryPerformance: territoryRadarData.reduce((sum, entry) => sum + entry.team, 0) / territoryRadarData.length,
-    },
-    behavioralSignals: {
-      signalAwareness: territoryRadarData.find(entry => entry.capability === "Signal Awareness")?.team,
-      signalInterpretation: territoryRadarData.find(entry => entry.capability === "Signal Interpretation")?.team,
-      valueConnection: territoryRadarData.find(entry => entry.capability === "Value Connection")?.team,
-      objectionHandling: territoryRadarData.find(entry => entry.capability === "Objection Navigation")?.team,
-    },
-    timeframe: "30d",
-  };
-
+  const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData) : null;
+  const territoryInsightsData = buildManagerInsightsRequest(null, NATIONAL_TERRITORY);
   const managerMetricsPayload = selectedRepInsightsData || territoryInsightsData;
 
   return (
@@ -304,6 +285,9 @@ export default function ManagerView() {
           <h1 className="text-2xl font-bold text-gray-900">Manager View</h1>
         </div>
         <p className="text-sm text-gray-500">Territory performance, rep activity, and training alignment across your team.</p>
+        <div className="mt-3 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+          Data integrity {MANAGER_DATASET_VALIDATION.isValid ? "verified" : "needs review"} · 14 reps · full 8-metric canonical model
+        </div>
       </div>
 
       <div className="mb-8 rounded-[28px] border border-slate-200 bg-gradient-to-r from-white to-slate-100 p-6 shadow-sm">
@@ -359,11 +343,11 @@ export default function ManagerView() {
               <div key={rep.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{index + 1}. {rep.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{rep.territory} · {rep.weakCapability} · {rep.sessionsLast30} sessions in 30d</p>
+                  <p className="mt-1 text-xs text-slate-500">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} · {rep.sessionsCompleted30d} sessions in 30d</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-bold text-slate-900">{rep.avgScore > 0 ? `${rep.avgScore}/5` : '—'}</p>
-                  <p className="text-xs text-slate-500">{rep.status}</p>
+                  <p className="text-sm font-bold text-slate-900">{rep.overallScore}/5</p>
+                  <StatusBadge status={rep.status} />
                 </div>
               </div>
             ))}
@@ -431,17 +415,20 @@ export default function ManagerView() {
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50">
                         <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Rep</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Specialty</th>
                         <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Territory</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Overall</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Strongest</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Needs Improvement</th>
                         <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Sessions</th>
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Score</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Modules</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Weak Area</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide">Modules</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Sales Trend</th>
                         <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                       {REPS.map(rep => (
-                        <RepRow key={rep.id} rep={rep} onSelect={setSelectedRep} selected={selectedRep?.id === rep.id} />
+                        <RepRow key={rep.id} rep={rep} derived={MANAGER_DERIVED_BY_REP_ID[rep.id]} onSelect={setSelectedRep} selected={selectedRep?.id === rep.id} />
                       ))}
                     </tbody>
                   </table>
@@ -458,16 +445,16 @@ export default function ManagerView() {
                       <div>
                         <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
                         <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
-                        <span className={`text-xs font-medium ${selectedRep.status === 'active' ? 'text-green-700' : selectedRep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{selectedRep.status.charAt(0).toUpperCase() + selectedRep.status.slice(1)}</span>
+                        <StatusBadge status={selectedRep.status} />
                       </div>
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       {[
-                        { label: "Sessions (30d)", value: selectedRep.sessionsLast30 },
-                        { label: "Avg Score", value: selectedRep.avgScore > 0 ? `${selectedRep.avgScore}/5` : "—" },
-                        { label: "Practice Streak", value: selectedRep.streak > 0 ? `${selectedRep.streak} days` : "None" },
-                        { label: "Modules Done", value: `${selectedRep.modulesCompleted}/${selectedRep.modulesAssigned}` },
+                        { label: "Sessions (30d)", value: selectedRep.sessionsCompleted30d },
+                        { label: "Overall Score", value: `${selectedRep.overallScore}/5` },
+                        { label: "Practice Streak", value: selectedRep.practiceStreakDays > 0 ? `${selectedRep.practiceStreakDays} days` : "None" },
+                        { label: "Modules Done", value: `${selectedRep.coachingModulesCompleted}/8` },
                       ].map(({ label, value }) => (
                         <div key={label} className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-500">{label}</p>
@@ -476,12 +463,64 @@ export default function ManagerView() {
                       ))}
                     </div>
 
-                    <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3" /> Focus Area
-                      </p>
-                      <p className="text-sm font-bold text-amber-900">{selectedRep.weakCapability}</p>
-                      <p className="text-xs text-amber-700 mt-1">Assign relevant coaching modules to address this gap.</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-teal-800 mb-1 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Strongest Capability
+                        </p>
+                        <p className="text-sm font-bold text-teal-900">{getBehavioralMetricLabel(selectedRep.strongestCapability)} <span className="font-mono text-xs text-teal-700">({selectedRep.strongestCapability})</span></p>
+                        <p className="text-xs text-teal-700 mt-1">Score {selectedRep.behavioralMetrics[selectedRep.strongestCapability].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.strongestCapability].trend}</p>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-amber-800 mb-1 flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3" /> Capability Requiring Improvement
+                        </p>
+                        <p className="text-sm font-bold text-amber-900">{getBehavioralMetricLabel(selectedRep.improvementPriority)} <span className="font-mono text-xs text-amber-700">({selectedRep.improvementPriority})</span></p>
+                        <p className="text-xs text-amber-700 mt-1">Score {selectedRep.behavioralMetrics[selectedRep.improvementPriority].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.improvementPriority].trend}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral Metrics</p>
+                          <p className="mt-1 text-xs text-slate-500">Data Source: Rep + Territory Metrics · Full 8-metric profile for explainability and auditability.</p>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">Observation depth {selectedRep.observationDepth}</span>
+                      </div>
+                      <div className="mt-4 grid gap-3">
+                        {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
+                          const metric = selectedRep.behavioralMetrics[metricKey];
+                          return (
+                            <div key={metricKey} className="grid grid-cols-[minmax(0,1.4fr)_80px_72px_96px] items-center gap-3 rounded-xl border border-white bg-white px-3 py-2 shadow-sm">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{getBehavioralMetricLabel(metricKey)}</p>
+                                <p className="text-[11px] font-mono text-slate-500">{metricKey}</p>
+                              </div>
+                              <p className="text-sm font-bold text-slate-900">{metric.score}/5</p>
+                              <TrendBadge trend={metric.trend} />
+                              <p className="text-xs text-slate-500">Observed {metric.sessionsObserved}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic derived metrics</p>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        {[
+                          { label: 'Engagement', value: `${MANAGER_DERIVED_BY_REP_ID[selectedRep.id].engagementScore}/100` },
+                          { label: 'Readiness', value: `${MANAGER_DERIVED_BY_REP_ID[selectedRep.id].readinessScore}/100` },
+                          { label: 'Sales Risk', value: `${MANAGER_DERIVED_BY_REP_ID[selectedRep.id].salesRiskScore}/100` },
+                          { label: 'Confidence', value: `${Math.round(MANAGER_DERIVED_BY_REP_ID[selectedRep.id].confidenceScore * 100)}%` },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="rounded-lg bg-white p-3 shadow-sm">
+                            <p className="text-xs text-slate-500">{label}</p>
+                            <p className="text-lg font-bold text-slate-900">{value}</p>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="mt-4">
@@ -491,12 +530,12 @@ export default function ManagerView() {
                           <div
                             className="h-2 rounded-full transition-all"
                             style={{
-                              width: `${(selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100}%`,
-                              background: selectedRep.modulesCompleted === selectedRep.modulesAssigned ? "#14b8a6" : "#f59e0b"
+                              width: `${(selectedRep.coachingModulesCompleted / 8) * 100}%`,
+                              background: selectedRep.coachingModulesCompleted === 8 ? "#14b8a6" : "#f59e0b"
                             }}
                           />
                         </div>
-                        <span className="text-xs text-gray-600 font-medium">{Math.round((selectedRep.modulesCompleted / selectedRep.modulesAssigned) * 100)}%</span>
+                        <span className="text-xs text-gray-600 font-medium">{Math.round((selectedRep.coachingModulesCompleted / 8) * 100)}%</span>
                       </div>
                     </div>
                   </div>
@@ -510,7 +549,7 @@ export default function ManagerView() {
                 {selectedRep ? (
                   <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
                     <AssignmentPanel
-                      rep={selectedRep}
+                      rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
                       assignments={assignments}
                       onAssigned={loadAssignments}
                       onStatusChange={handleStatusChange}
@@ -537,6 +576,23 @@ export default function ManagerView() {
               title="Territory predictive coaching layer"
               subtitle="Advisory outlook built from team engagement, territory performance, and behavior-level capability signals."
             />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {TERRITORIES.map((territory) => (
+                <div key={territory.territory} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{territory.territory}</p>
+                      <p className="mt-1 text-lg font-bold text-slate-900">{territory.avgPerformance}/5</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${territory.riskLevel === 'high' ? 'bg-amber-50 text-amber-700' : territory.riskLevel === 'moderate' ? 'bg-slate-100 text-slate-700' : 'bg-teal-50 text-teal-700'}`}>
+                      {territory.riskLevel} risk
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">Gap {territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : 'None'} · Engagement {territory.avgEngagement}/100</p>
+                  <p className="mt-2 text-xs text-slate-500">Top pattern {territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(', ') || 'None'}</p>
+                </div>
+              ))}
+            </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Radar */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 pt-6">
@@ -558,10 +614,10 @@ export default function ManagerView() {
               <h3 className="text-sm font-bold text-gray-900 mb-1">Sessions per Rep (Last 30 Days)</h3>
               <p className="text-xs text-gray-500 mb-4">Platform engagement across the territory</p>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={REPS.map(r => ({ name: r.name.split(" ")[0], sessions: r.sessionsLast30, score: r.avgScore }))} layout="vertical">
+                <BarChart data={REPS.map(r => ({ name: r.name.split(" ")[0], sessions: r.sessionsCompleted30d, score: r.overallScore }))} layout="vertical">
                   <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: "#475569" }} width={70} />
-                  <Tooltip formatter={(v, n) => [v, n === "sessions" ? "Sessions" : "Avg Score"]} />
+                  <Tooltip formatter={(v, n) => [v, n === "sessions" ? "Sessions" : "Overall Score"]} />
                   <Bar dataKey="sessions" fill="#14b8a6" radius={[0, 4, 4, 0]} name="Sessions" />
                 </BarChart>
               </ResponsiveContainer>
@@ -571,19 +627,19 @@ export default function ManagerView() {
             <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-5 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-4">Performance Snapshot</h3>
               <div className="space-y-3">
-                {[...REPS].sort((a, b) => b.avgScore - a.avgScore).map(rep => (
+                {[...REPS].sort((a, b) => b.overallScore - a.overallScore).map(rep => (
                   <div key={rep.id} className="flex items-center gap-4">
                     <div className="w-28 text-xs font-medium text-gray-700 truncate">{rep.name.split(" ")[0]}</div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-gray-100 rounded-full h-2">
-                          <div className="h-2 rounded-full" style={{ width: `${(rep.avgScore / 5) * 100}%`, background: rep.avgScore >= 4 ? "#14b8a6" : rep.avgScore >= 3.3 ? "#3b82f6" : rep.avgScore > 0 ? "#f97316" : "#e5e7eb" }} />
+                          <div className="h-2 rounded-full" style={{ width: `${(rep.overallScore / 5) * 100}%`, background: rep.overallScore >= 4 ? "#14b8a6" : rep.overallScore >= 3.3 ? "#3b82f6" : "#f97316" }} />
                         </div>
-                        <span className="text-xs font-bold text-gray-700 w-10">{rep.avgScore > 0 ? `${rep.avgScore}/5` : "—"}</span>
+                        <span className="text-xs font-bold text-gray-700 w-10">{rep.overallScore}/5</span>
                       </div>
                     </div>
-                    <span className="text-xs text-gray-500 w-16 text-right">{rep.sessionsLast30} sessions</span>
-                    <span className={`text-xs font-medium ${rep.status === 'active' ? 'text-green-700' : rep.status === 'inactive' ? 'text-red-700' : 'text-amber-700'}`}>{rep.status.charAt(0).toUpperCase() + rep.status.slice(1)}</span>
+                    <span className="text-xs text-gray-500 w-16 text-right">{rep.sessionsCompleted30d} sessions</span>
+                    <StatusBadge status={rep.status} />
                   </div>
                 ))}
               </div>
@@ -617,7 +673,7 @@ export default function ManagerView() {
                 const capModules = filteredModules.filter(m => m.capability === cap.id);
                 const Icon = cap.icon;
                 // Find reps weak in this area
-                const weakReps = REPS.filter(r => r.weakCapability.toLowerCase().includes(cap.label.toLowerCase().split(" ")[0].toLowerCase()));
+                const weakReps = REPS.filter(r => r.improvementPriority === cap.id);
                 return (
                   <div key={cap.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-teal-200 hover:shadow-md transition-all">
                     {/* Cap header */}

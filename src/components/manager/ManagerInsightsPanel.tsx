@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, managerInsightsRequestSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 
 type ManagerInsightsPanelProps = {
@@ -108,6 +108,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
             </div>
           </div>
           <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+          <p className="mt-2 text-xs font-medium text-slate-500">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
         </div>
         {data && (
           <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
