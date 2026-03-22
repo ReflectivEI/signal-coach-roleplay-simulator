@@ -94,6 +94,57 @@ const TRAINING_MODULES = [
   { id: 10, capability: "signalInterpretation", title: "Stakeholder Mapping Intensive", type: "Workshop", duration: "60 min", level: "Advanced" },
 ];
 
+const DERIVED_METRIC_GLOSSARY = [
+  {
+    label: "Overall Score",
+    definition: "Derived score that blends the Average of 8 Behavioral Metrics with the Sales Outcome Score.",
+    formula: "(Average of 8 Behavioral Metrics × 0.65) + (Sales Outcome Score × 0.35)",
+  },
+  {
+    label: "Learning Engagement Score",
+    definition: "Derived activity score built from sessions, module completion, practice streak, engagement consistency, and coaching cadence.",
+    formula: "(Session volume × 0.34) + (Module completion × 0.22) + (Practice streak × 0.18) + (Engagement consistency × 0.16) + coaching bonus",
+  },
+  {
+    label: "Sales Risk",
+    definition: "Derived risk score that combines sales outcome, average behavioral execution, learning engagement, trend, status, and commitment generation threshold checks.",
+    formula: "58 - (Sales Outcome Score × 9) - (Average of 8 Behavioral Metrics × 6) - (Learning Engagement Score × 0.16) + adjustments",
+  },
+  {
+    label: "Territory Volatility",
+    definition: "Derived territory spread showing how far rep sales outcome scores sit from the territory average.",
+    formula: "Weighted average of |rep sales outcome score - territory average sales outcome score|",
+  },
+];
+
+const THRESHOLD_GLOSSARY = [
+  {
+    label: "Capability baseline: 3.5/5",
+    definition: "Minimum acceptable capability score used in deterministic rep risk rules.",
+    source: "Rule-based manager configuration",
+  },
+  {
+    label: "Learning engagement watch: 60/100",
+    definition: "Below this point, the rep is flagged for monitoring because activity and practice behavior are trailing expectations.",
+    source: "Rule-based manager configuration",
+  },
+  {
+    label: "Territory engagement risk: 55/100",
+    definition: "Below this point, the territory is treated as elevated risk because the aggregated learning engagement score is low.",
+    source: "Rule-based manager configuration",
+  },
+  {
+    label: "Territory volatility watch: 0.4",
+    definition: "Above this point, sales outcome scores are spread enough to require manager attention.",
+    source: "Rule-based manager configuration",
+  },
+  {
+    label: "Distribution cap: 30% of reps",
+    definition: "No single capability should be assigned as the capability requiring improvement for more than 30% of reps unless no near-tied alternative exists.",
+    source: "Manager View balancing rule",
+  },
+];
+
 function buildMockSessions(reps) {
   return reps.slice(0, 5).map((rep, index) => ({
     id: `s${index + 1}`,
@@ -173,12 +224,11 @@ function MetricExplanationDialog({ explanation, children }) {
         </DialogHeader>
         <div className="space-y-4 text-sm text-slate-700">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Formula</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Calculation</p>
             <p className="mt-2 font-mono text-xs leading-6 text-slate-700">{normalizedExplanation.formula}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Source</p>
-            <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.definition}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Inputs</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {Object.entries(normalizedExplanation.inputs || {}).map(([key, value]) => (
                 <div key={key} className="rounded-xl bg-slate-50 px-3 py-2">
@@ -188,10 +238,36 @@ function MetricExplanationDialog({ explanation, children }) {
               ))}
             </div>
           </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Data source</p>
+              <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.dataSource || "Manager View deterministic dataset"}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Time window</p>
+              <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.timeWindow || "Last 30 days"}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Definition</p>
+              <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.definition}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Thresholds and meaning</p>
+            <div className="mt-2 space-y-2 text-xs leading-6 text-slate-600">
+              {(normalizedExplanation.thresholds || []).length ? (
+                normalizedExplanation.thresholds.map((item) => (
+                  <p key={item}>• {item}</p>
+                ))
+              ) : (
+                <p>• No threshold is used for this metric. It is descriptive only.</p>
+              )}
+            </div>
+          </div>
           <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Rule</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Current output</p>
             <p className="mt-2 text-lg font-bold text-slate-900">{String(normalizedExplanation.output)}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-600">{normalizedExplanation.notes || "Thresholds and weighting rules are fixed by the deterministic Manager View model."}</p>
+            <p className="mt-2 text-xs leading-5 text-slate-600">{normalizedExplanation.notes || "This explanation is generated from auditable inputs only."}</p>
           </div>
         </div>
       </DialogContent>
@@ -214,6 +290,62 @@ function MetricPill({ explanation, label = "How calculated" }) {
         {label}
       </button>
     </MetricExplanationDialog>
+  );
+}
+
+function DefinitionsDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button type="button" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:text-teal-700">
+          <Info className="h-3.5 w-3.5" />
+          View definitions
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Manager View glossary</DialogTitle>
+          <DialogDescription>Canonical capabilities, derived metrics, and threshold definitions used throughout Manager View.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canonical Signal Intelligence capabilities</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {SIGNAL_CAPABILITIES.map((capability) => (
+                <div key={capability.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{capability.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{capability.subtitle}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {DERIVED_METRIC_GLOSSARY.map((metric) => (
+                <div key={metric.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{metric.definition}</p>
+                  <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-700">{metric.formula}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Threshold definitions</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {THRESHOLD_GLOSSARY.map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">{item.definition}</p>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source · {item.source}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -561,9 +693,12 @@ export default function ManagerView() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Manager View</h1>
         </div>
-        <p className="text-sm text-gray-500">Territory performance, rep activity, and training alignment across the current Manager View demo dataset.</p>
-        <div className="mt-3 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-          Data integrity {viewState.validation.isValid ? "verified" : "needs review"} · {viewState.datasetScope.detail} · full 8-metric canonical model
+        <p className="text-sm text-gray-500">Manager-friendly summaries built on the 8 canonical Signal Intelligence capabilities, auditable derived metrics, and the current 30-day demo dataset.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+            Data integrity {viewState.validation.isValid ? "verified" : "needs review"} · {viewState.datasetScope.detail} · full 8-metric canonical model
+          </div>
+          <DefinitionsDialog />
         </div>
         {!viewState.validation.isValid ? (
           <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
@@ -578,7 +713,7 @@ export default function ManagerView() {
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-teal-600">Team intervention hub</p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900">Manager View is now the intervention spoke for enterprise enablement.</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              This layer translates platform intelligence into manager actions: who needs support, what should be assigned, and where training adoption is drifting from performance outcomes.
+              This layer translates the canonical Signal Intelligence profile into manager actions: who needs support, which capability is weakest, and what to do next without exposing internal-only terms.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">Current scope: {viewState.datasetScope.detail}</span>
@@ -602,7 +737,7 @@ export default function ManagerView() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-200">Hub and spoke routing</p>
-                <p className="mt-1 text-xs text-slate-300">Current dataset refresh and reset actions re-run derived metrics, territory aggregates, insights, and recommendation mapping across the page.</p>
+                <p className="mt-1 text-xs text-slate-300">Refresh and reset actions recompute derived metrics, territory aggregates, balanced capability distribution, and auditable explanation metadata across the page.</p>
               </div>
               <div className="flex gap-2">
                 <Button size="icon" variant="secondary" className="h-10 w-10 rounded-2xl border border-white/10 bg-white/10 text-white hover:bg-white/20" onClick={handleRefreshDataset}>
@@ -703,7 +838,7 @@ export default function ManagerView() {
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                     <div>
                       <h2 className="text-sm font-bold text-gray-900">Rep performance snapshot</h2>
-                      <p className="text-xs text-gray-500">Aligned to the current 14-rep Manager View dataset. No rep is selected by default; click a row to open rep-level detail and coaching context.</p>
+                      <p className="text-xs text-gray-500">Each row uses the 8 canonical behavioral metrics plus clearly defined derived scores. Click a rep to inspect score lineage and coaching context.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">{viewState.datasetScope.detail}</span>
@@ -820,7 +955,7 @@ export default function ManagerView() {
                 ) : (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center shadow-sm">
                     <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                    <p className="text-sm text-gray-500">No rep selected. Territory-level insights remain active, and rep-level insights will render only after an explicit selection.</p>
+                    <p className="text-sm text-gray-500">No rep selected. Territory-level insights remain active, and rep-level detail appears only after a manager makes an explicit selection.</p>
                     <div className="mt-4 flex justify-center">
                       <Button size="sm" variant="outline" onClick={handleRefreshDataset}>
                         <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh dataset
@@ -837,7 +972,7 @@ export default function ManagerView() {
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral metrics</p>
-                    <p className="mt-1 text-sm text-slate-500">Full rep profile aligned to the deterministic 8-metric model, using normalized display labels only.</p>
+                    <p className="mt-1 text-sm text-slate-500">Full rep profile aligned to the 8 canonical Signal Intelligence capabilities only.</p>
                   </div>
                   <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">Stable row layout</span>
                 </div>
@@ -937,27 +1072,39 @@ export default function ManagerView() {
                 key={`territory-${viewState.version}`}
                 analyticsData={territoryInsightsData}
                 title="National Team Aggregate predictive coaching layer"
-                subtitle="Advisory outlook built from the current 14-rep Manager View dataset, territory performance, and deterministic behavior-level signals."
+                subtitle="Advisory outlook built from the current 14-rep Manager View dataset, territory performance, and deterministic canonical behavior signals."
               />
             ) : (
               <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
                 Territory AI insights are hidden until metric validation passes. Deterministic territory aggregates remain available below.
               </div>
             )}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               {[viewState.nationalTerritory, ...viewState.territories].map((territory) => {
                 const territoryExplanations = viewState.explanations.territory[territory.territory];
                 const territoryContributors = getContributorSet(viewState.contributors, territory.territory);
                 const territoryRiskFlags = viewState.territoryRiskFlagsByName[territory.territory] || [];
+                const driverBullets = territoryRiskFlags.length
+                  ? territoryRiskFlags.map((flag) => normalizeManagerText(flag.explanation))
+                  : [
+                    territory.mostCommonCapabilityGap
+                      ? `Primary gap is ${getBehavioralMetricLabel(territory.mostCommonCapabilityGap)} across the current rep mix.`
+                      : "No single capability gap dominates the current territory mix.",
+                    territory.topPerformingBehaviorPattern.length
+                      ? `Strongest territory pattern is ${territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ")}.`
+                      : "No capability is materially above the current territory baseline.",
+                  ];
+                const actionBullets = territory.coachingOpportunityClusters.length
+                  ? territory.coachingOpportunityClusters.slice(0, 2).map((item) => normalizeManagerText(item))
+                  : ["Continue current coaching coverage and re-check the territory on the next 30-day refresh."];
                 return (
-                  <div key={territory.territory} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-center justify-between gap-3">
+                  <div key={territory.territory} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{territory.territory}</p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <p className="text-lg font-bold text-slate-900">{territory.avgPerformance}/5</p>
-                          <MetricPill explanation={territoryExplanations.avgPerformance} label="Formula" />
-                        </div>
+                        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                          {territory.riskLevel === "high" ? "Manager attention is required." : territory.riskLevel === "moderate" ? "Manager follow-up is recommended." : "This territory is operating within the current manager guardrails."}
+                        </p>
                       </div>
                       <div className="space-y-2 text-right">
                         <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${territory.riskLevel === "high" ? "bg-amber-50 text-amber-700" : territory.riskLevel === "moderate" ? "bg-slate-100 text-slate-700" : "bg-teal-50 text-teal-700"}`}>
@@ -968,32 +1115,79 @@ export default function ManagerView() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 space-y-2 text-xs text-slate-500">
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{formatMetricLabel("mostCommonCapabilityGap")} {territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "None"}</span>
-                        <MetricPill explanation={territoryExplanations.mostCommonCapabilityGap} label="Source" />
+
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Executive summary</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <div className="rounded-xl bg-white p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-slate-500">Risk level</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">{territory.riskLevel}</p>
+                            </div>
+                            <MetricPill explanation={territoryExplanations.riskLevel} label="Rule" />
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-slate-500">Primary gap</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">{territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "No dominant gap"}</p>
+                            </div>
+                            <MetricPill explanation={territoryExplanations.mostCommonCapabilityGap} label="Source" />
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-white p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <p className="text-xs uppercase tracking-wide text-slate-500">Key metrics</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-900">{territory.avgPerformance}/5 · {territory.avgEngagement}/100</p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              <MetricPill explanation={territoryExplanations.avgPerformance} label="Sales outcome" />
+                              <MetricPill explanation={territoryExplanations.avgEngagement} label="Engagement" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{formatMetricLabel("avgEngagement")} {territory.avgEngagement}/100</span>
-                        <MetricPill explanation={territoryExplanations.avgEngagement} label="Formula" />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{formatMetricLabel("territoryVolatility")} {territory.territoryVolatility}</span>
-                        <MetricPill explanation={territoryExplanations.territoryVolatility} label="Formula" />
-                      </div>
-                      {territoryRiskFlags.length ? (
-                        <p>Risk rules {territoryRiskFlags.map((flag) => flag.explanation).join(" · ")}</p>
-                      ) : (
-                        <p>Risk rules None triggered</p>
-                      )}
-                      <p>Top pattern {territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "None"}</p>
-                      <p>Weighted aggregation {Object.entries(territory.aggregationWeights).map(([repId, weight]) => `${reps.find((rep) => rep.id === repId)?.name.split(" ")[0] || repId} ${Math.round(weight * 100)}%`).join(", ")}</p>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                        <Activity className="h-3 w-3" />
-                        {territory.repIds.length} reps in aggregate
-                      </span>
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+                      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What is driving this</p>
+                        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                          {driverBullets.slice(0, 3).map((item) => (
+                            <li key={item} className="flex gap-2">
+                              <span className="mt-2 h-1.5 w-1.5 rounded-full bg-slate-400" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What to do</p>
+                        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                          {actionBullets.map((item) => (
+                            <li key={item} className="flex gap-2">
+                              <span className="mt-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
+                              <span>{item}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                          <Activity className="h-3 w-3" />
+                          {territory.repIds.length} reps in aggregate
+                        </span>
+                        <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                          Territory Volatility {territory.territoryVolatility}
+                        </span>
+                        <MetricPill explanation={territoryExplanations.territoryVolatility} label="Threshold" />
+                      </div>
                       <ContributorDialog
                         territory={territory}
                         contributors={territoryContributors}

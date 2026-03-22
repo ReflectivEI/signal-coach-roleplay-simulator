@@ -298,23 +298,23 @@ export function createFallbackManagerInsights(payload, derived) {
 
   const keyDrivers = rep
     ? [
-      `${rep.name} completed ${rep.sessionsCompleted30d} sessions, ${rep.coachingModulesCompleted} coaching modules, and carries engagementScore ${derived.engagementScore}/100 against the ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 risk threshold.`,
+      `${rep.name} completed ${rep.sessionsCompleted30d} sessions, ${rep.coachingModulesCompleted} coaching modules, and has a learning engagement score of ${derived.engagementScore}/100 against the ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 monitoring threshold.`,
       `${rep.name}'s strongest capability is ${strongestCapabilityLabel} at ${strongestMetricScore}/5, while ${weakestCapabilityLabel} is ${weakestMetricScore}/5 against the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold.`,
-      `${rep.name}'s salesPerformance is ${rep.salesPerformance}/5 with a ${rep.salesTrend} salesTrend, salesRiskScore ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100, and ${territory.territory} weighted avgPerformance ${territory.avgPerformance}/5.`,
+      `${rep.name}'s sales outcome score is ${rep.salesPerformance}/5 with a ${rep.salesTrend} trend, sales risk ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100, and ${territory.territory} average sales outcome score ${territory.avgPerformance}/5.`,
     ]
     : [
-      `${territory.territory} averages ${territory.avgPerformance}/5 performance and ${territory.avgEngagement}/100 engagement across ${territory.repIds.length} weighted reps.`,
-      `The most common capability gap is ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "none"}, top behavior patterns are ${territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "none"}, and aggregationWeights are ${JSON.stringify(territory.aggregationWeights)}.`,
-      `${territory.atRiskRepCount} reps are at risk, territoryVolatility is ${territory.territoryVolatility} against the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold, and low performer concentration is ${Math.round(territory.lowPerformerConcentration * 100)}%.`,
+      `${territory.territory} averages ${territory.avgPerformance}/5 on sales outcome score and ${territory.avgEngagement}/100 on learning engagement across ${territory.repIds.length} weighted reps.`,
+      `The primary capability gap is ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "none"}, and the top capability pattern is ${territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "none"}.`,
+      `${territory.atRiskRepCount} reps are at risk, territory volatility is ${territory.territoryVolatility} against the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold, and low performer concentration is ${Math.round(territory.lowPerformerConcentration * 100)}%.`,
     ];
 
   const risks = rep
     ? [
-      `${rep.name} carries salesRiskScore ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100; this is ${(payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex) >= MANAGER_MODEL_THRESHOLDS.salesRiskHigh ? "at or above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 high-risk threshold and is most sensitive to ${weakestCapabilityLabel}.`,
-      `${rep.name}'s territoryPressureScore is ${payload.derivedMetrics?.territoryPressureScore ?? 0}/100 and dataConfidenceIndex is ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, indicating ${rep.territoryContext.payerPressure >= 4 ? "payer-heavy pressure" : "moderate territory pressure"} in ${territory.territory}.`,
+      `${rep.name} carries sales risk ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100; this is ${(payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex) >= MANAGER_MODEL_THRESHOLDS.salesRiskHigh ? "at or above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 high-risk threshold and is most sensitive to ${weakestCapabilityLabel}.`,
+      `${rep.name}'s territory pressure is ${payload.derivedMetrics?.territoryPressureScore ?? 0}/100 and data confidence is ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, indicating ${rep.territoryContext.payerPressure >= 4 ? "payer-heavy pressure" : "moderate territory pressure"} in ${territory.territory}.`,
     ]
     : [
-      `${territory.territory} risk is tied to ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "mixed capability gaps"}, ${territory.atRiskRepCount} at-risk reps, and a ${territory.trend} territory trend with dataConfidenceIndex ${Math.round(derived.territoryDataConfidence * 100)}%.`,
+      `${territory.territory} risk is tied to ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "mixed capability gaps"}, ${territory.atRiskRepCount} at-risk reps, and a ${territory.trend} territory trend with data confidence ${Math.round(derived.territoryDataConfidence * 100)}%.`,
       `${territory.territory} has ${Math.round(territory.lowPerformerConcentration * 100)}% low performer concentration against ${Math.round(territory.highPerformerConcentration * 100)}% high performer concentration and weight variance ${derived.territoryWeightVariance}.`,
     ];
 
@@ -322,8 +322,8 @@ export function createFallbackManagerInsights(payload, derived) {
     ? [
       {
         action: `Run 2 targeted coaching sessions this week focused on ${weakestCapabilityLabel} because ${rep.name} is at ${weakestMetricScore}/5 versus the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold.`,
-        rationale: `${rep.name}'s lowest behavioral metric is ${weakestCapabilityLabel} at ${weakestMetricScore}/5, engagementScore is ${derived.engagementScore}/100, and salesRiskScore is ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100 in ${territory.territory}.`,
-        expectedImpact: `Improving ${weakestCapabilityLabel} above ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 should lift conversionProxyScore and reduce risk in ${territory.territory}.`,
+        rationale: `${rep.name}'s lowest behavioral metric is ${weakestCapabilityLabel} at ${weakestMetricScore}/5, learning engagement score is ${derived.engagementScore}/100, and sales risk is ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100 in ${territory.territory}.`,
+        expectedImpact: `Improving ${weakestCapabilityLabel} above ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 should lift the conversion proxy and reduce risk in ${territory.territory}.`,
       },
       {
         action: `Use ${strongestCapabilityLabel} as the anchor behavior in the next manager review and inspect two recent sessions for transfer into ${weakestCapabilityLabel}.`,
@@ -334,12 +334,12 @@ export function createFallbackManagerInsights(payload, derived) {
     : [
       {
         action: `Launch a territory coaching sprint on ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "capability consistency"} for the next 14 days across ${territory.territory}.`,
-        rationale: `${territory.territory} shows a weighted gap in ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "behavioral consistency"}, with ${territory.atRiskRepCount} at-risk reps, avgEngagement ${territory.avgEngagement}/100, and ${territory.coachingOpportunityClusters[0] ?? "multiple cross-rep coaching opportunities"}.`,
+        rationale: `${territory.territory} shows a weighted gap in ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "behavioral consistency"}, with ${territory.atRiskRepCount} at-risk reps, average learning engagement ${territory.avgEngagement}/100, and ${territory.coachingOpportunityClusters[0] ?? "multiple cross-rep coaching opportunities"}.`,
         expectedImpact: `A territory-level intervention should reduce weighted volatility and move the territory above the monitored thresholds.`,
       },
       {
         action: `Review the highest-volatility reps in ${territory.territory} and rebalance scenario mix toward payer and access-heavy simulations where applicable.`,
-        rationale: `${territory.territory}'s territoryVolatility is ${territory.territoryVolatility} versus the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold, and aggregationWeights show which reps drive the movement.`,
+        rationale: `${territory.territory}'s territory volatility is ${territory.territoryVolatility} versus the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold, and the contributor view shows which reps drive the movement.`,
         expectedImpact: `This should improve consistency across the territory rather than treating territory coaching as rep data multiplied.`,
       },
     ];
@@ -353,8 +353,8 @@ export function createFallbackManagerInsights(payload, derived) {
       performanceTrend,
       confidence: derived.confidence,
       reasoning: rep
-        ? `Predictive confidence is ${Math.round(derived.confidence * 100)}% from dataConfidenceIndex ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, sessions ${rep.sessionsCompleted30d}, behavioralVariance ${payload.derivedMetrics?.behavioralVariance}, engagementStability ${payload.derivedMetrics?.engagementStabilityScore}/100, and trend stability on ${weakestCapabilityLabel}.`
-        : `Confidence is ${Math.round(derived.confidence * 100)}% from weighted rep coverage, territoryVolatility ${territory.territoryVolatility}, avgEngagement ${territory.avgEngagement}/100, and aggregation weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
+        ? `Predictive confidence is ${Math.round(derived.confidence * 100)}% from data confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, sessions ${rep.sessionsCompleted30d}, behavioral variance ${payload.derivedMetrics?.behavioralVariance}, engagement stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and trend stability on ${weakestCapabilityLabel}.`
+        : `Confidence is ${Math.round(derived.confidence * 100)}% from weighted rep coverage, territory volatility ${territory.territoryVolatility}, average learning engagement ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
     },
   };
 }
