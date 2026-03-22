@@ -291,6 +291,8 @@ export function createFallbackManagerInsights(payload, derived) {
       : "stable";
 
   const subject = rep ? rep.name : `${territory.territory} territory`;
+  const formatScalePercent = (score) => `${score}/5 (${Math.round((score / 5) * 1000) / 10}% of 5-point scale)`;
+  const predictiveConfidencePercent = Math.round(derived.confidence * 100);
 
   const summary = rep
     ? `${subject} is evaluated on the canonical Signal Intelligence metrics. Strongest capability is ${strongestCapabilityLabel} and the capability requiring improvement is ${weakestCapabilityLabel}, with deterministic threshold flags ${derived.thresholdFlags.join("; ") || "none"} in ${territory.territory}.`
@@ -300,10 +302,10 @@ export function createFallbackManagerInsights(payload, derived) {
     ? [
       `${rep.name} completed ${rep.sessionsCompleted30d} sessions, ${rep.coachingModulesCompleted} coaching modules, and has a learning engagement score of ${derived.engagementScore}/100 against the ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 monitoring threshold.`,
       `${rep.name}'s strongest capability is ${strongestCapabilityLabel} at ${strongestMetricScore}/5, while ${weakestCapabilityLabel} is ${weakestMetricScore}/5 against the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold.`,
-      `${rep.name}'s sales outcome score is ${rep.salesPerformance}/5 with a ${rep.salesTrend} trend, sales risk ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100, and ${territory.territory} average sales outcome score ${territory.avgPerformance}/5.`,
+      `${rep.name}'s sales outcome score is ${formatScalePercent(rep.salesPerformance)} with a ${rep.salesTrend} trend, sales risk ${payload.derivedMetrics?.salesRiskScore ?? derived.riskIndex}/100, and ${territory.territory} average sales outcome score ${formatScalePercent(territory.avgPerformance)}.`,
     ]
     : [
-      `${territory.territory} averages ${territory.avgPerformance}/5 on sales outcome score and ${territory.avgEngagement}/100 on learning engagement across ${territory.repIds.length} weighted reps.`,
+      `${territory.territory} averages ${formatScalePercent(territory.avgPerformance)} on sales outcome score and ${territory.avgEngagement}/100 on learning engagement across ${territory.repIds.length} weighted reps.`,
       `The primary capability gap is ${territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "none"}, and the top capability pattern is ${territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "none"}.`,
       `${territory.atRiskRepCount} reps are at risk, territory volatility is ${territory.territoryVolatility} against the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold, and low performer concentration is ${Math.round(territory.lowPerformerConcentration * 100)}%.`,
     ];
@@ -353,8 +355,8 @@ export function createFallbackManagerInsights(payload, derived) {
       performanceTrend,
       confidence: derived.confidence,
       reasoning: rep
-        ? `Predictive confidence is ${Math.round(derived.confidence * 100)}% from data confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, sessions ${rep.sessionsCompleted30d}, behavioral variance ${payload.derivedMetrics?.behavioralVariance}, engagement stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and trend stability on ${weakestCapabilityLabel}.`
-        : `Confidence is ${Math.round(derived.confidence * 100)}% from weighted rep coverage, territory volatility ${territory.territoryVolatility}, average learning engagement ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
+        ? `Predictive confidence is ${predictiveConfidencePercent}%. This is a reliability measure, not the percent conversion of the sales outcome score. Sales outcome is ${formatScalePercent(rep.salesPerformance)}, while predictive confidence is driven by data confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, sessions ${rep.sessionsCompleted30d}, behavioral variance ${payload.derivedMetrics?.behavioralVariance}, engagement stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and trend stability on ${weakestCapabilityLabel}.`
+        : `Predictive confidence is ${predictiveConfidencePercent}%. This is a reliability measure, not a conversion of the territory sales outcome score. Territory sales outcome is ${formatScalePercent(territory.avgPerformance)}, while predictive confidence is driven by weighted rep coverage, territory volatility ${territory.territoryVolatility}, average learning engagement ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
     },
   };
 }

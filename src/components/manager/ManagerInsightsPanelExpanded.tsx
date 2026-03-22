@@ -37,6 +37,10 @@ const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performa
   },
 };
 
+const ENTERPRISE_PANEL = "rounded-3xl border border-teal-200 bg-white shadow-sm";
+const ENTERPRISE_SUBCARD = "rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
+const ENTERPRISE_SUBCARD_WHITE = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
+
 function sanitizeResponseContent(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -280,7 +284,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
   if (!ENABLE_MANAGER_INSIGHTS) return null;
 
   return (
-    <section className="manager-insights-panel-expanded rounded-3xl border border-slate-200 bg-white p-5 shadow-sm md:p-6">
+    <section className={`manager-insights-panel-expanded ${ENTERPRISE_PANEL} p-5 md:p-6`}>
       <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -317,12 +321,12 @@ Recommendation: ${JSON.stringify(recommendation)}`,
         </div>
       ) : (
         <div className="mt-5 space-y-5">
-          <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
+          <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm transition-colors duration-200 hover:bg-teal-50/80">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Primary finding</p>
             <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{normalizeManagerText(insights?.summary || "Select a rep to load predictive coaching context for this territory.")}</p>
           </div>
 
-          <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className={ENTERPRISE_SUBCARD}>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Filter insights</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Filters refine which dimensions of performance and behavior are displayed. They do not change the underlying dataset.</p>
@@ -356,7 +360,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
 
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className={ENTERPRISE_SUBCARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <Radar className="h-4 w-4 text-slate-600" />
                   <h4 className="text-sm font-semibold text-slate-900">Data Basis</h4>
@@ -371,7 +375,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                 </ul>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className={ENTERPRISE_SUBCARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <ShieldAlert className="h-4 w-4 text-slate-600" />
                   <h4 className="text-sm font-semibold text-slate-900">Risk Signals</h4>
@@ -388,23 +392,24 @@ Recommendation: ${JSON.stringify(recommendation)}`,
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className={ENTERPRISE_SUBCARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <ArrowUpRight className="h-4 w-4 text-slate-600" />
                   <h4 className="text-sm font-semibold text-slate-900">Predictive Outlook</h4>
                 </div>
 
                 {insights?.predictiveOutlook ? (
-                  <div className="space-y-3 text-sm text-slate-700">
-                    <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}>
-                      {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Confidence</p>
-                      <p className="text-lg font-bold text-slate-900">{Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
-                    </div>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">Reasoning</p>
+                    <div className="space-y-3 text-sm text-slate-700">
+                      <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}>
+                        {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Confidence</p>
+                        <p className="text-lg font-bold text-slate-900">{Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">Reliability of the prediction. This is not a percent conversion of a 5-point performance score.</p>
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-slate-500">Reasoning</p>
                       <p className="text-sm leading-6 text-slate-700">{normalizeManagerText(insights.predictiveOutlook.reasoning)}</p>
                     </div>
                   </div>
@@ -413,7 +418,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                 )}
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className={ENTERPRISE_SUBCARD}>
                 <div className="mb-3 flex items-center gap-2">
                   <BrainCircuit className="h-4 w-4 text-slate-600" />
                   <h4 className="text-sm font-semibold text-slate-900">Recommended Action</h4>
@@ -422,7 +427,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
                   {filteredOperationalCards.length ? filteredOperationalCards.map((card) => {
                     const sourceRecommendation = filteredRecommendations.find((item) => item.action === card.recommendedAction);
                     return (
-                      <div key={card.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div key={card.id} className={ENTERPRISE_SUBCARD_WHITE}>
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">{card.scopeLabel}</span>
                           {sourceRecommendation ? (
@@ -461,7 +466,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className={ENTERPRISE_SUBCARD}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Interactive AI coaching</p>
             <div className="mt-3 space-y-3">
               <textarea

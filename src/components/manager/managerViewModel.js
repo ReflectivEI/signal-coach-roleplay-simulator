@@ -60,6 +60,14 @@ function calculateMetricAverage(behavioralMetrics) {
   );
 }
 
+function toScalePercent(score) {
+  return round((score / 5) * 100, 1);
+}
+
+function formatScoreWithPercent(score) {
+  return `${score}/5 (${toScalePercent(score)}% of 5-point scale)`;
+}
+
 function buildMetricExplanation({
   label,
   definition,
@@ -290,7 +298,7 @@ function buildOverviewExplanations(overviewMetrics) {
       formula: "average(rep salesOutcomeScore)",
       inputs: { repCount: overviewMetrics.repCount },
       output: `${overviewMetrics.territoryAverage}/5`,
-      notes: "Sales outcome score is the existing rep salesPerformance field displayed with manager-friendly language only.",
+      notes: `Sales outcome score is the existing rep salesPerformance field displayed with manager-friendly language only. ${overviewMetrics.territoryAverage}/5 equals ${toScalePercent(overviewMetrics.territoryAverage)}% of the 5-point scale.`,
     }),
     needsAttention: buildMetricExplanation({
       label: "Needs Attention",
@@ -324,11 +332,11 @@ function buildRepExplanations(rep, derivedByRepId) {
       definition: "Weighted summary of the canonical behavioral profile and the derived sales outcome score.",
       formula: "(average of 8 behavioral metrics x 0.65) + (sales outcome score x 0.35)",
       inputs: {
-        "Average of 8 Behavioral Metrics": `${averageBehavior}/5`,
-        "Sales Outcome Score": `${rep.salesPerformance}/5`,
+        "Average of 8 Behavioral Metrics": formatScoreWithPercent(averageBehavior),
+        "Sales Outcome Score": formatScoreWithPercent(rep.salesPerformance),
       },
       output: `${rep.overallScore}/5`,
-      notes: "The behavioral portion uses the eight canonical Signal Intelligence capabilities only.",
+      notes: `The behavioral portion uses the eight canonical Signal Intelligence capabilities only. ${rep.overallScore}/5 equals ${toScalePercent(rep.overallScore)}% of the 5-point scale.`,
       thresholds: [
         "Priority queue review starts below 3.4/5 overall score (rule-based manager configuration).",
       ],
@@ -375,8 +383,8 @@ function buildRepExplanations(rep, derivedByRepId) {
       definition: "Weighted readiness estimate combining behavioral execution, sales outcome score, and learning engagement quality.",
       formula: "(average of 8 behavioral metrics x 20 x 0.45) + (sales outcome score x 20 x 0.35) + (learning engagement score x 0.2)",
       inputs: {
-        "Average of 8 Behavioral Metrics": `${averageBehavior}/5`,
-        "Sales Outcome Score": `${rep.salesPerformance}/5`,
+        "Average of 8 Behavioral Metrics": formatScoreWithPercent(averageBehavior),
+        "Sales Outcome Score": formatScoreWithPercent(rep.salesPerformance),
         "Learning Engagement Score": `${derived.engagementScore}/100`,
       },
       output: `${derived.readinessScore}/100`,
@@ -396,8 +404,8 @@ function buildRepExplanations(rep, derivedByRepId) {
       definition: "Derived risk score combining sales outcome score, the average of 8 behavioral metrics, learning engagement, trend, status, and commitment generation threshold checks.",
       formula: "58 - (sales outcome score x 9) - (average of 8 behavioral metrics x 6) - (learning engagement score x 0.16) + trend adjustment + status weight + commitment penalty",
       inputs: {
-        "Sales Outcome Score": `${rep.salesPerformance}/5`,
-        "Average of 8 Behavioral Metrics": `${averageBehavior}/5`,
+        "Sales Outcome Score": formatScoreWithPercent(rep.salesPerformance),
+        "Average of 8 Behavioral Metrics": formatScoreWithPercent(averageBehavior),
         "Learning Engagement Score": `${derived.engagementScore}/100`,
         "Sales trend": rep.salesTrend,
         Status: rep.status,
@@ -434,7 +442,7 @@ function buildRepExplanations(rep, derivedByRepId) {
         conversionProxyScore: derived.conversionProxyScore,
       },
       output: `${confidencePercent}%`,
-      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above.`,
+      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above. This is a reliability signal, not the percent conversion of a 5-point performance score.`,
     }),
     strongestCapability: buildMetricExplanation({
       label: "Strongest Capability",
