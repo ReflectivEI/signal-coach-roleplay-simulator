@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
@@ -178,7 +178,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only these exact canonical Signal Intelligence capability names: Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management. Do not invent thresholds, scores, labels, contributors, or non-canonical metrics. Return exactly four sections in this order: Primary finding, Why it matters, Action, Monitor. Primary finding must be one sentence with one strength and one gap. Why it matters must be one sentence. Action must be one sentence. Monitor must contain at most 3 bullet items and every item must include a score, threshold comparison, and scale.",
+                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only these exact canonical Signal Intelligence capability names: Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management. Reject and regenerate if any non-canonical term, synonym, or alternate label appears. Do not invent thresholds, scores, labels, contributors, or non-canonical metrics. Return exactly four sections in this order: Primary finding, Why it matters, Action, Monitor. Every section must include exact metric values, threshold comparisons, directionality, and the correct 5-point or 100-point scale whenever a metric is referenced. Every insight must make the causal chain explicit as capability → behavior impact → business outcome. Highlight the single most urgent metric in Primary finding or Monitor based on the largest gap or threshold breach severity. Predictive Confidence must always be described as prediction reliability (not a performance score). Primary finding must be one sentence with one strength and one gap. Why it matters must be one sentence. Action must be one sentence. Monitor must contain at most 3 bullet items and every item must include a score, threshold comparison, and scale.",
               },
               {
                 role: "user",
@@ -255,7 +255,8 @@ Manager Question: ${input}`,
               <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
               {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
             </div>
-            <p className="text-sm font-semibold text-slate-700">Predictive confidence {Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
+            <p className="text-sm font-semibold text-slate-700">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100</p>
+            <p className="text-[11px] text-slate-500">{PREDICTIVE_CONFIDENCE_LABEL}</p>
           </div>
         ) : null}
       </div>
@@ -326,6 +327,7 @@ Manager Question: ${input}`,
                       {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
                     </div>
                     <p className="text-xs font-semibold text-slate-500">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100 scale</p>
+                    <p className="text-[11px] text-slate-500">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                   </div>
                 ) : null}
               </div>

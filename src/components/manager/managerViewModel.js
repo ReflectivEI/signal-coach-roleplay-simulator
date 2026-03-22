@@ -78,6 +78,7 @@ function buildMetricExplanation({
   dataSource = "Manager View deterministic demo dataset",
   timeWindow = "Last 30 days",
   thresholds = [],
+  derivedFrom = undefined,
 }) {
   return {
     label,
@@ -89,6 +90,7 @@ function buildMetricExplanation({
     dataSource,
     timeWindow,
     thresholds,
+    derivedFrom,
   };
 }
 
@@ -262,6 +264,7 @@ function buildOverviewExplanations(overviewMetrics) {
       },
       output: `${overviewMetrics.adoptionHealth}%`,
       notes: "Current Manager View demo logic uses the 14-rep active dataset only.",
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     moduleCompletion: buildMetricExplanation({
       label: "Module Completion",
@@ -272,6 +275,7 @@ function buildOverviewExplanations(overviewMetrics) {
         modulePathSize: 8,
       },
       output: `${overviewMetrics.moduleCompletion}%`,
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     interventionQueue: buildMetricExplanation({
       label: "Intervention Queue",
@@ -282,6 +286,7 @@ function buildOverviewExplanations(overviewMetrics) {
         queueSize: overviewMetrics.interventionQueue.length,
       },
       output: overviewMetrics.interventionQueue.length,
+      derivedFrom: ["Sales Outcome Score", "Commitment Generation", "Learning Engagement Score"],
     }),
     avgTeamScore: buildMetricExplanation({
       label: "Team Average Score",
@@ -291,6 +296,7 @@ function buildOverviewExplanations(overviewMetrics) {
       output: `${overviewMetrics.avgTeamScore}/5`,
       dataSource: "Rep overall score cards across the active Manager View dataset",
       timeWindow: "Last 30 days",
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     territoryAverage: buildMetricExplanation({
       label: "Average Sales Outcome Score",
@@ -299,6 +305,7 @@ function buildOverviewExplanations(overviewMetrics) {
       inputs: { repCount: overviewMetrics.repCount },
       output: `${overviewMetrics.territoryAverage}/5`,
       notes: `Sales outcome score is the existing rep salesPerformance field displayed with manager-friendly language only. ${overviewMetrics.territoryAverage}/5 equals ${toScalePercent(overviewMetrics.territoryAverage)}% of the 5-point scale.`,
+      derivedFrom: ["Sales Outcome Score"],
     }),
     needsAttention: buildMetricExplanation({
       label: "Needs Attention",
@@ -309,6 +316,7 @@ function buildOverviewExplanations(overviewMetrics) {
         totalReps: overviewMetrics.repCount,
       },
       output: overviewMetrics.attentionCount,
+      derivedFrom: ["Sales Outcome Score", "Commitment Generation", "Learning Engagement Score"],
     }),
   };
 }
@@ -340,6 +348,7 @@ function buildRepExplanations(rep, derivedByRepId) {
       thresholds: [
         "Priority queue review starts below 3.4/5 overall score (rule-based manager configuration).",
       ],
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     moduleCompletion: buildMetricExplanation({
       label: "Module Completion",
@@ -366,6 +375,7 @@ function buildRepExplanations(rep, derivedByRepId) {
       thresholds: [
         `${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 = monitoring threshold from rule-based manager configuration.`,
       ],
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     engagementStabilityScore: buildMetricExplanation({
       label: "Engagement Stability",
@@ -377,6 +387,7 @@ function buildRepExplanations(rep, derivedByRepId) {
         lastPracticeDate: rep.lastPracticeDate,
       },
       output: `${derived.engagementStabilityScore}/100`,
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     readinessScore: buildMetricExplanation({
       label: "Readiness Score",
@@ -388,6 +399,7 @@ function buildRepExplanations(rep, derivedByRepId) {
         "Learning Engagement Score": `${derived.engagementScore}/100`,
       },
       output: `${derived.readinessScore}/100`,
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     conversionProxyScore: buildMetricExplanation({
       label: "Conversion Proxy",
@@ -398,6 +410,7 @@ function buildRepExplanations(rep, derivedByRepId) {
         valueConnection: rep.behavioralMetrics.valueCommunication.score,
       },
       output: `${derived.conversionProxyScore}/100`,
+      derivedFrom: ["Commitment Generation", "Value Connection"],
     }),
     salesRiskScore: buildMetricExplanation({
       label: "Sales Risk",
@@ -415,6 +428,7 @@ function buildRepExplanations(rep, derivedByRepId) {
       thresholds: [
         `${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 = high-risk threshold from rule-based manager configuration.`,
       ],
+      derivedFrom: ["Sales Outcome Score", "Commitment Generation", "Learning Engagement Score"],
     }),
     dataConfidenceIndex: buildMetricExplanation({
       label: "Data Confidence Index",
@@ -427,10 +441,11 @@ function buildRepExplanations(rep, derivedByRepId) {
         engagementStabilityRatio: round(derived.engagementStabilityScore / 100, 2),
       },
       output: `${Math.round(derived.dataConfidenceIndex * 100)}%`,
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     confidenceScore: buildMetricExplanation({
       label: "Predictive Confidence",
-      definition: "Predictive confidence derived from auditable inputs only: data confidence, variance, trend stability, engagement stability, coaching responsiveness, and conversion proxy.",
+      definition: "Prediction reliability (not a performance score) derived from auditable inputs only: data confidence, variance, trend stability, engagement stability, coaching responsiveness, and conversion proxy.",
       formula: "(data confidence x 0.34) + (variance penalty x 0.14) + (trend stability x 0.12) + (metric coverage x 0.10) + (engagement stability x 0.12) + (coaching responsiveness x 0.10) + (conversion proxy x 0.08)",
       inputs: {
         dataConfidenceIndex: round(derived.dataConfidenceIndex, 2),
@@ -442,7 +457,8 @@ function buildRepExplanations(rep, derivedByRepId) {
         conversionProxyScore: derived.conversionProxyScore,
       },
       output: `${confidencePercent}%`,
-      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above. This is a reliability signal, not the percent conversion of a 5-point performance score.`,
+      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above. Prediction reliability (not a performance score) is a reliability signal, not the percent conversion of a 5-point performance score.`,
+      derivedFrom: ["Data Confidence", "Behavioral Variance", "Engagement Stability"],
     }),
     strongestCapability: buildMetricExplanation({
       label: "Strongest Capability",
@@ -552,6 +568,7 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
         `${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 = territory risk threshold from rule-based manager configuration.`,
         `${MANAGER_MODEL_THRESHOLDS.territoryEngagementModerate}/100 = watch threshold from rule-based manager configuration.`,
       ],
+      derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
     }),
     territoryVolatility: buildMetricExplanation({
       label: `${territory.territory} Volatility`,
@@ -565,6 +582,7 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
       thresholds: [
         `${MANAGER_MODEL_THRESHOLDS.volatilityModerate} = volatility watch threshold from rule-based manager configuration.`,
       ],
+      derivedFrom: ["Sales Outcome Score"],
     }),
     riskLevel: buildMetricExplanation({
       label: `${territory.territory} Risk Level`,
@@ -580,6 +598,7 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
         "High risk = two or more at-risk reps, or weak average sales outcome score, or weak territory engagement.",
         "Moderate risk = one at-risk rep, or mid-range sales outcome score, or watch-level engagement.",
       ],
+      derivedFrom: ["Sales Outcome Score", "Learning Engagement Score"],
     }),
     mostCommonCapabilityGap: territory.mostCommonCapabilityGap
       ? buildMetricExplanation({
@@ -592,6 +611,7 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
         },
         output: getBehavioralMetricLabel(territory.mostCommonCapabilityGap),
         notes: "This territory gap comes from the balanced rep-level improvement priorities, not from raw debug weighting output.",
+        derivedFrom: ["Signal Awareness", "Signal Interpretation", "Adaptive Response", "Objection Navigation", "Value Connection", "Commitment Generation", "Customer Engagement Monitoring", "Conversation Management"],
       })
       : null,
   };

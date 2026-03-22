@@ -186,6 +186,7 @@ export function normalizeExplanation(explanation) {
     dataSource: normalizeManagerText(explanation.dataSource),
     timeWindow: normalizeManagerText(explanation.timeWindow),
     thresholds: Array.isArray(explanation.thresholds) ? explanation.thresholds.map((item) => normalizeManagerText(item)) : explanation.thresholds,
+    derivedFrom: Array.isArray(explanation.derivedFrom) ? explanation.derivedFrom.map((item) => normalizeManagerText(item)) : explanation.derivedFrom,
     output: typeof explanation.output === "string" ? normalizeManagerText(explanation.output) : explanation.output,
     inputs: explanation.inputs ? normalizeManagerValue(explanation.inputs) : explanation.inputs,
   };
