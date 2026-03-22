@@ -287,7 +287,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{territory.territory} contributor traceability</DialogTitle>
-          <DialogDescription>Inspect which reps drive the current territory patterns, then jump directly to rep-specific coaching context.</DialogDescription>
+          <DialogDescription>Inspect which reps drive the current territory patterns, their weighted contribution to the aggregate, then jump directly to rep-specific coaching context.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {sections.map((section) => (
@@ -303,7 +303,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{item.metricLabel}: {item.metricValue}</p>
+                          <p className="mt-1 text-xs text-slate-500">{item.metricLabel}: {item.metricValue} · Weight {Math.round((item.weight || 0) * 100)}%</p>
                           <p className="mt-2 text-sm leading-6 text-slate-700">{item.why}</p>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => onSelectRep(item.repId)}>
@@ -327,7 +327,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
 export default function ManagerView() {
   const [activeTab, setActiveTab] = useState("reps");
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
-  const [selectedRepId, setSelectedRepId] = useState(INITIAL_VIEW_STATE.reps[0]?.id ?? null);
+  const [selectedRepId, setSelectedRepId] = useState(null);
   const [selectedCapabilityFilter, setSelectedCapabilityFilter] = useState("all");
   const [assignments, setAssignments] = useState([]);
   const [snippets, setSnippets] = useState([]);
@@ -347,7 +347,7 @@ export default function ManagerView() {
 
   useEffect(() => {
     if (selectedRepId && !reps.some((rep) => rep.id === selectedRepId)) {
-      setSelectedRepId(reps[0]?.id ?? null);
+      setSelectedRepId(null);
     }
   }, [reps, selectedRepId]);
 
@@ -439,7 +439,7 @@ export default function ManagerView() {
     setFeedbackDraft({});
     setFeedbackSaving({});
     setFeedbackSaved({});
-    setSelectedRepId((current) => (nextState.reps.some((rep) => rep.id === current) ? current : nextState.reps[0]?.id ?? null));
+    setSelectedRepId((current) => (nextState.reps.some((rep) => rep.id === current) ? current : null));
   };
 
   const handleRefreshDataset = () => {
@@ -463,7 +463,7 @@ export default function ManagerView() {
   const interventionQueue = viewState.overviewMetrics.interventionQueue;
   const coachingPriority = interventionQueue.slice().sort((a, b) => viewState.derivedByRepId[b.id].salesRiskScore - viewState.derivedByRepId[a.id].salesRiskScore);
   const selectedTerritoryData = (selectedRep && viewState.territories.find((territory) => territory.territory === selectedRep.territory)) || viewState.nationalTerritory;
-  const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData) : null;
+  const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData, viewState.derivedByRepId[selectedRep.id]) : null;
   const territoryInsightsData = buildManagerInsightsRequest(null, viewState.nationalTerritory);
   const managerMetricsPayload = selectedRepInsightsData || territoryInsightsData;
 
@@ -683,29 +683,46 @@ export default function ManagerView() {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_380px] xl:items-start">
               <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-100 px-5 py-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                     <div>
                       <h2 className="text-sm font-bold text-gray-900">Rep performance snapshot</h2>
-                      <p className="text-xs text-gray-500">Aligned to the current 14-rep Manager View dataset. Click a rep row to open full detail and coaching context.</p>
+                      <p className="text-xs text-gray-500">Aligned to the current 14-rep Manager View dataset. No rep is selected by default; click a row to open rep-level detail and coaching context.</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">{viewState.datasetScope.detail}</span>
                       <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">Last refreshed {formatRefreshTimestamp(viewState.refreshedAt)}</span>
+                      <span className={`rounded-full border px-2.5 py-1 font-semibold ${selectedRep ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-600"}`}>{selectedRep ? `${selectedRep.name} selected` : "No rep selected"}</span>
+                      <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={handleRefreshDataset}>
+                        <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh
+                      </Button>
+                      <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setSelectedRepId(null)}>
+                        <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset selection
+                      </Button>
                     </div>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
+                <div className="max-h-[780px] overflow-auto">
+                  <table className="w-full min-w-[1120px] table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[240px]" />
+                      <col className="w-[120px]" />
+                      <col className="w-[120px]" />
+                      <col className="w-[180px]" />
+                      <col className="w-[210px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[170px]" />
+                      <col className="w-[130px]" />
+                    </colgroup>
+                    <thead className="sticky top-0 z-10 bg-gray-50">
                       <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
-                        <th className="px-4 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Modules Completed</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Modules Completed</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -801,11 +818,14 @@ export default function ManagerView() {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic derived metrics</p>
                         <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Current demo calculation logic</span>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         {[
                           { label: "Engagement", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
                           { label: "Readiness", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
+                          { label: "Engagement Stability", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
+                          { label: "Conversion Proxy", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
                           { label: "Sales Risk", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
+                          { label: "Data Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
                           { label: "Confidence", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
                         ].map(({ label, value, explanation }) => (
                           <div key={label} className="rounded-lg bg-white p-3 shadow-sm">
@@ -841,7 +861,12 @@ export default function ManagerView() {
                 ) : (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center shadow-sm">
                     <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                    <p className="text-sm text-gray-500">Select a rep to view their detailed profile</p>
+                    <p className="text-sm text-gray-500">No rep selected. Territory-level insights remain active, and rep-level insights will render only after an explicit selection.</p>
+                    <div className="mt-4 flex justify-center">
+                      <Button size="sm" variant="outline" onClick={handleRefreshDataset}>
+                        <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh dataset
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -912,6 +937,7 @@ export default function ManagerView() {
                         <MetricPill explanation={territoryExplanations.territoryVolatility} label="Formula" />
                       </div>
                       <p>Top pattern {territory.topPerformingBehaviorPattern.map(getBehavioralMetricLabel).join(", ") || "None"}</p>
+                      <p>Weighted aggregation {Object.entries(territory.aggregationWeights).map(([repId, weight]) => `${reps.find((rep) => rep.id === repId)?.name.split(" ")[0] || repId} ${Math.round(weight * 100)}%`).join(", ")}</p>
                     </div>
                     <div className="mt-4 flex items-center justify-between gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">

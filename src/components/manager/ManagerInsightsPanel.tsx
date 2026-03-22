@@ -52,16 +52,16 @@ function getScopeLabel(request: ManagerInsightsRequest) {
 function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
-      `${request.repData.improvementPriority} score`,
-      `engagementScore ${request.derivedMetrics.engagementScore}/100`,
-      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100`,
+      `${request.repData.improvementPriority} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs 3.5/5 threshold`,
+      `engagementScore ${request.derivedMetrics.engagementScore}/100 vs 60/100 threshold`,
+      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100 vs 62/100 threshold`,
     ];
   }
 
   return [
-    `avgEngagement ${request.territoryData.avgEngagement}/100`,
+    `avgEngagement ${request.territoryData.avgEngagement}/100 vs 60/100 threshold`,
     `${request.territoryData.mostCommonCapabilityGap ?? "capability coverage"} gap`,
-    `territoryVolatility ${request.territoryData.territoryVolatility}`,
+    `territoryVolatility ${request.territoryData.territoryVolatility} vs 0.4 threshold`,
   ];
 }
 
@@ -87,7 +87,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
 
   const requestBody = useMemo(() => {
     const parsed = managerInsightsRequestSchema.safeParse(analyticsData);
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
   }, [analyticsData]);
 
   const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
