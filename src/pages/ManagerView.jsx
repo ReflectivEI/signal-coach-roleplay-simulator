@@ -185,8 +185,6 @@ export default function ManagerView() {
     }
   };
 
-  useEffect(() => { loadAssignments(); loadSnippets(); }, []);
-
   const saveSessionFeedback = async (sessionId) => {
     const text = feedbackDraft[sessionId]?.trim();
     if (!text) return;
@@ -242,7 +240,6 @@ export default function ManagerView() {
   const totalSessions = REPS.reduce((s, r) => s + r.sessionsLast30, 0);
   const avgTeamScore = Math.round(REPS.filter(r => r.avgScore > 0).reduce((s, r) => s + r.avgScore, 0) / REPS.filter(r => r.avgScore > 0).length * 10) / 10;
   const atRisk = REPS.filter(r => r.status !== "active").length;
-  const topPerformer = [...REPS].sort((a, b) => b.avgScore - a.avgScore)[0];
 
   const filteredModules = selectedCapabilityFilter === "all"
     ? TRAINING_MODULES
