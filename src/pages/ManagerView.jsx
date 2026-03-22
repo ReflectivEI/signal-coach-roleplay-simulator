@@ -15,6 +15,8 @@ import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/s
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getAdoptionBand } from "@/lib/enablementHub";
 import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
 import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { createPageUrl } from "@/utils";
 
 // ── Mock territory data ──────────────────────────────────────────────────────
