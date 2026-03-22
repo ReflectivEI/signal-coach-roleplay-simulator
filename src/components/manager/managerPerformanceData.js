@@ -74,6 +74,9 @@ const CAPABILITY_BY_MANAGER_KEY = Object.fromEntries(
   CANONICAL_BEHAVIORAL_METRICS.map((item) => [item.key, item]),
 );
 
+const MAX_IMPROVEMENT_PRIORITY_SHARE = 0.3;
+const BALANCED_PRIORITY_DELTAS = [0, 0.15, 0.3, 0.45];
+
 export const MANAGER_RISK_RULES = {
   rep: [
     {
@@ -88,7 +91,7 @@ export const MANAGER_RISK_RULES = {
       severity: "moderate",
       threshold: MANAGER_MODEL_THRESHOLDS.engagementRisk,
       comparator: "<",
-      explanationTemplate: ({ value, threshold }) => `Engagement is ${value}/100, below the ${threshold}/100 monitoring threshold.`,
+      explanationTemplate: ({ value, threshold }) => `Learning engagement score is ${value}/100, below the ${threshold}/100 monitoring threshold.`,
     },
     {
       id: "high_sales_risk",
@@ -330,6 +333,73 @@ function getCapabilityExtremes(behavioralMetrics) {
   );
 }
 
+/**
+ * @param {RepData} rep
+ * @returns {{ key: BehavioralMetricKey; score: number }[]}
+ */
+function getOrderedWeaknesses(rep) {
+  return BEHAVIORAL_METRIC_KEYS
+    .map((key) => ({ key, score: rep.behavioralMetrics[key].score }))
+    .sort((a, b) => a.score - b.score);
+}
+
+/**
+ * Rebalances the displayed improvement priority so that manager snapshots do not
+ * over-cluster on a single capability when multiple low-scoring capabilities are
+ * effectively tied. The chosen capability must stay inside the rep's weakest band
+ * whenever possible.
+ *
+ * @param {RepData[]} reps
+ * @returns {RepData[]}
+ */
+function rebalanceImprovementPriorities(reps) {
+  if (!reps.length) return reps;
+
+  const perCapabilityCap = Math.max(1, Math.floor(reps.length * MAX_IMPROVEMENT_PRIORITY_SHARE));
+  const counts = /** @type {Record<BehavioralMetricKey, number>} */ (
+    Object.fromEntries(BEHAVIORAL_METRIC_KEYS.map((key) => [key, 0]))
+  );
+  const assignments = new Map();
+
+  const queue = reps
+    .map((rep) => {
+      const ordered = getOrderedWeaknesses(rep);
+      return {
+        rep,
+        ordered,
+        minScore: ordered[0]?.score ?? 5,
+        spreadToSecond: round((ordered[1]?.score ?? ordered[0]?.score ?? 5) - (ordered[0]?.score ?? 5), 2),
+      };
+    })
+    .sort((a, b) => {
+      if (a.minScore !== b.minScore) return a.minScore - b.minScore;
+      if (a.spreadToSecond !== b.spreadToSecond) return a.spreadToSecond - b.spreadToSecond;
+      return a.rep.name.localeCompare(b.rep.name);
+    });
+
+  queue.forEach(({ rep, ordered, minScore }) => {
+    let selectedKey = ordered[0]?.key ?? rep.improvementPriority;
+    for (const delta of BALANCED_PRIORITY_DELTAS) {
+      const candidates = ordered.filter((item) => item.score <= minScore + delta);
+      const underCapCandidates = candidates.filter((item) => counts[item.key] < perCapabilityCap);
+      if (underCapCandidates.length) {
+        selectedKey = underCapCandidates
+          .slice()
+          .sort((a, b) => (counts[a.key] - counts[b.key]) || (a.score - b.score))[0].key;
+        break;
+      }
+    }
+
+    assignments.set(rep.id, selectedKey);
+    counts[selectedKey] += 1;
+  });
+
+  return reps.map((rep) => ({
+    ...rep,
+    improvementPriority: assignments.get(rep.id) ?? rep.improvementPriority,
+  }));
+}
+
 /** @param {Record<BehavioralMetricKey, RepMetricProfile>} behavioralMetrics */
 function averageBehavioralScore(behavioralMetrics) {
   const total = BEHAVIORAL_METRIC_KEYS.reduce((sum, key) => sum + behavioralMetrics[key].score, 0);
@@ -358,8 +428,9 @@ function getRecencyWeight(dateString) {
 /** @param {RepData} rep */
 export function deriveRepMetrics(rep) {
   const averageBehavior = averageBehavioralScore(rep.behavioralMetrics);
-  const strongestCapability = getCapabilityExtremes(rep.behavioralMetrics).strongest;
-  const improvementPriority = getCapabilityExtremes(rep.behavioralMetrics).improvement;
+  const extremes = getCapabilityExtremes(rep.behavioralMetrics);
+  const strongestCapability = rep.strongestCapability ?? extremes.strongest;
+  const improvementPriority = rep.improvementPriority ?? extremes.improvement;
   const scores = BEHAVIORAL_METRIC_KEYS.map((key) => rep.behavioralMetrics[key].score);
   const maxScore = Math.max(...scores);
   const minScore = Math.min(...scores);
@@ -517,7 +588,7 @@ export function evaluateRepRiskFlags(rep, derived) {
     }),
     buildThresholdEvaluation({
       ruleId: "low_engagement",
-      label: "Engagement Score",
+      label: "Learning Engagement Score",
       value: derived.engagementScore,
       threshold: MANAGER_MODEL_THRESHOLDS.engagementRisk,
       comparator: "<",
@@ -1150,25 +1221,38 @@ const rawRepSeed = [
 ];
 
 const rawReps = /** @type {RepData[]} */ (rawRepSeed.map((rep) => finalizeRep(/** @type {any} */ (rep))));
+const balancedRawReps = rebalanceImprovementPriorities(rawReps);
 
 /** @param {RepData[]} reps */
 export function validateManagerDataset(reps) {
   const issues = [];
   const canonicalLabelSet = new Set(SIGNAL_CAPABILITIES.map((capability) => capability.label));
+  const maxPriorityCount = Math.max(1, Math.floor(reps.length * MAX_IMPROVEMENT_PRIORITY_SHARE));
+  const priorityCounts = /** @type {Record<string, number>} */ ({});
 
   reps.forEach((rep) => {
     const extremes = getCapabilityExtremes(rep.behavioralMetrics);
     if (rep.strongestCapability !== extremes.strongest) {
       issues.push(`${rep.name}: strongestCapability mismatch`);
     }
-    if (rep.improvementPriority !== extremes.improvement) {
-      issues.push(`${rep.name}: improvementPriority mismatch`);
+    const weakestBand = getOrderedWeaknesses(rep)
+      .filter((item) => item.score <= rep.behavioralMetrics[extremes.improvement].score + 0.3)
+      .map((item) => item.key);
+    if (!weakestBand.includes(rep.improvementPriority)) {
+      issues.push(`${rep.name}: improvementPriority is outside the weakest capability band`);
     }
     if (BEHAVIORAL_METRIC_KEYS.some((key) => typeof rep.behavioralMetrics[key]?.score !== "number")) {
       issues.push(`${rep.name}: incomplete 8-metric profile`);
     }
     if (BEHAVIORAL_METRIC_KEYS.some((key) => !canonicalLabelSet.has(getBehavioralMetricLabel(key)))) {
       issues.push(`${rep.name}: non-canonical metric label detected`);
+    }
+    priorityCounts[rep.improvementPriority] = (priorityCounts[rep.improvementPriority] || 0) + 1;
+  });
+
+  Object.entries(priorityCounts).forEach(([metricKey, count]) => {
+    if (count > maxPriorityCount) {
+      issues.push(`${metricKey}: improvementPriority exceeds ${Math.round(MAX_IMPROVEMENT_PRIORITY_SHARE * 100)}% dataset share`);
     }
   });
 
@@ -1178,14 +1262,14 @@ export function validateManagerDataset(reps) {
   };
 }
 
-export const MANAGER_REP_DATASET = rawReps;
-export const MANAGER_DERIVED_BY_REP_ID = Object.fromEntries(rawReps.map((rep) => [rep.id, deriveRepMetrics(rep)]));
-export const MANAGER_TERRITORY_DATASET = buildTerritoryDataset(rawReps);
+export const MANAGER_REP_DATASET = balancedRawReps;
+export const MANAGER_DERIVED_BY_REP_ID = Object.fromEntries(balancedRawReps.map((rep) => [rep.id, deriveRepMetrics(rep)]));
+export const MANAGER_TERRITORY_DATASET = buildTerritoryDataset(balancedRawReps);
 export const NATIONAL_TERRITORY_DATA = {
-  ...buildTerritoryDataset(rawReps.map((rep) => ({ ...rep, territory: "National" })))[0],
+  ...buildTerritoryDataset(balancedRawReps.map((rep) => ({ ...rep, territory: "National" })))[0],
   territory: "National Team Aggregate",
 };
-export const MANAGER_DATASET_VALIDATION = validateManagerDataset(rawReps);
+export const MANAGER_DATASET_VALIDATION = validateManagerDataset(balancedRawReps);
 
 export function getManagerViewDataset() {
   return {
