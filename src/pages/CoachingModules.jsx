@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 
 const ALL_CAPABILITY_IDS = SIGNAL_CAPABILITIES.map((c) => c.id);
 const CAPABILITY_LABELS = Object.fromEntries(SIGNAL_CAPABILITIES.map((capability) => [capability.id, capability.label || capability.name || capability.id.replace(/_/g, " ")]));
@@ -158,8 +159,8 @@ function capabilityLabel(capabilityId) {
 const markdownComponents = {
   ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
   ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
-  li: ({ children }) => <li>{children}</li>,
-  p: ({ children }) => <p className="leading-relaxed text-gray-700">{children}</p>,
+  li: ({ children }) => <li className="min-w-0 break-words">{children}</li>,
+  p: ({ children }) => <p className="my-0 whitespace-pre-wrap break-words leading-relaxed text-gray-700">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
 };
 
@@ -187,9 +188,9 @@ export default function CoachingModules() {
     setAiLoading(key);
     const module = modules.find((m) => m.id === moduleId);
     const prompts = {
-      tips: `You are a pharma sales coach. Provide 5 advanced, actionable tips for mastering "${module.title}" based on Signal Intelligence™. Focus on observable behaviors and real-world application.`,
-      example: `Write a realistic example conversation between a sales rep and HCP, where the rep demonstrates excellent "${module.title}". Include dialogue and brief coaching notes on what made each exchange effective.`,
-      checklist: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions.`,
+      tips: `You are a pharma sales coach. Provide 5 advanced, actionable tips for mastering "${module.title}" based on Signal Intelligence™. Return clean markdown bullets only, no tables. Focus on observable behaviors and real-world application.`,
+      example: `Write a realistic example conversation between a sales rep and HCP, where the rep demonstrates excellent "${module.title}". Return clean markdown with short dialogue bullets and brief coaching notes. Do not use tables.`,
+      checklist: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions. Do not use tables.`,
     };
     try {
       const res = await fetch('/api/llm/invoke', {
@@ -198,8 +199,7 @@ export default function CoachingModules() {
         body: JSON.stringify({ prompt: prompts[type] })
       });
       const data = await res.json();
-      let content = data.response || data.text || data.content || '';
-      content = content.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+      let content = sanitizeAiText(data.response || data.text || data.content || '');
       setAiContent((prev) => ({ ...prev, [key]: content }));
     } catch {
       setAiContent((prev) => ({ ...prev, [key]: 'AI service unavailable.' }));
@@ -455,16 +455,24 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
   const [isLoading, setIsLoading] = React.useState(false);
 
   const handleGetAdvice = async () => {
-    if (!input.trim()) return;
+    const trimmedInput = input.trim();
+    if (!trimmedInput) return;
+
+    const guardrailReply = getTopicGuardResponse(trimmedInput, "coach");
+    if (guardrailReply) {
+      setResponse(guardrailReply);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${input}"\n\nProvide 2-3 specific, actionable recommendations grounded in observable behavior. Reference Signal Intelligence™ principles where relevant. Keep response concise and practical.` })
+        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${trimmedInput}"\n\nReturn clean markdown with exactly 3 concise bullet recommendations. Each bullet must begin with a bold action label and then one practical sentence. Do not use tables. Reference Signal Intelligence™ principles where relevant.` })
       });
       const data = await res.json();
-      setResponse(data.response || data.text || data.content || '');
+      setResponse(sanitizeAiText(data.response || data.text || data.content || ''));
     } catch {
       setResponse('AI service unavailable.');
     }
@@ -489,7 +497,7 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
         {isLoading ? "Getting Advice..." : "Get AI Advice"}
       </Button>
       {response && (
-        <div className="ui-markdown rounded-lg border border-teal-100 bg-white p-5 text-sm leading-relaxed text-gray-700">
+        <div className="ui-markdown overflow-hidden rounded-xl border border-teal-100 bg-white p-5 text-sm leading-relaxed text-gray-700 shadow-sm">
           <ReactMarkdown components={markdownComponents}>{response}</ReactMarkdown>
         </div>
       )}

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuth } from "@/lib/AuthContext";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
@@ -149,6 +150,13 @@ export default function Layout({ children, currentPageName }) {
     const newMessages = [...assistantMessages, userMsg];
     setAssistantMessages(newMessages);
     setAssistantInput("");
+
+    const guardrailReply = getTopicGuardResponse(text, "platform");
+    if (guardrailReply) {
+      setAssistantMessages((prev) => [...prev, { role: "assistant", content: guardrailReply }]);
+      return;
+    }
+
     setAssistantLoading(true);
 
     try {
@@ -159,7 +167,7 @@ export default function Layout({ children, currentPageName }) {
         body: JSON.stringify({ prompt, max_tokens: 300 }),
       });
       const data = await res.json().catch(() => ({}));
-      const responseText = String(data?.response || data?.text || data?.content || "I couldn’t generate an answer right now. Please try again.");
+      const responseText = sanitizeAiText(data?.response || data?.text || data?.content || "I couldn’t generate an answer right now. Please try again.");
       setAssistantMessages((prev) => [...prev, { role: "assistant", content: responseText }]);
     } catch {
       setAssistantMessages((prev) => [...prev, { role: "assistant", content: "Service is temporarily unavailable. Please try again." }]);
@@ -392,7 +400,7 @@ export default function Layout({ children, currentPageName }) {
                   />
                 )}
                 <div className={`max-w-[82%] rounded-[18px] border px-4 py-3 text-[15px] shadow-sm ${m.role === "user" ? "border-[#1A3F63] bg-[#1A3F63] text-white" : "border-slate-100 bg-slate-50 text-slate-700"}`}>
-                  <p className="leading-[1.55]">{m.content}</p>
+                  <p className="whitespace-pre-wrap break-words leading-[1.55]">{m.content}</p>
                   {m.role === "assistant" && <p className="mt-2 text-xs leading-none text-slate-500">{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>}
                 </div>
               </div>

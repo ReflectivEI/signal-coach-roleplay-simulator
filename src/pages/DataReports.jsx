@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG } from "@/lib/enablementHub";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 
 const SAMPLE_QUERIES = [
   "Show me the top 10 prescribers by total prescriptions in the last quarter",
@@ -25,6 +26,12 @@ export default function DataReports() {
   const translate = async (q) => {
     const question = q || query;
     if (!question.trim()) return;
+    const guardrailReply = getTopicGuardResponse(question, "analytics");
+    if (guardrailReply) {
+      setResult(guardrailReply);
+      return;
+    }
+
     setIsLoading(true);
     setResult(null);
     try {
@@ -36,11 +43,9 @@ export default function DataReports() {
       });
       if (res.ok) {
         const data = await res.json();
-        let reportResult = typeof data.response === 'string' ? data.response : String(data.response);
-        // Strip markdown code blocks for clean display
-        reportResult = reportResult.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+        let reportResult = sanitizeAiText(typeof data.response === 'string' ? data.response : String(data.response));
         setResult(reportResult);
-        const entry = { id: Date.now(), question, result: reportResult, timestamp: new Date().toLocaleString() };
+        const entry = { id: Date.now(), question, result: reportResult, timestamp: new Date() };
         setHistory(prev => [entry, ...prev.slice(0, 9)]);
       } else {
         setResult("Unable to generate report. Please try again.");
@@ -160,8 +165,8 @@ export default function DataReports() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Q&A */}
         <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardContent className="p-6">
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <CardContent className="p-6 md:p-7">
               <h2 className="text-base font-semibold text-gray-900 mb-1">Ask a Question</h2>
               <p className="text-sm text-gray-500 mb-4">Enter a natural language question about your sales data</p>
               <textarea
@@ -188,8 +193,8 @@ export default function DataReports() {
 
           {/* Result */}
           {result && (
-            <Card>
-              <CardContent className="p-6">
+            <Card className="overflow-hidden border-slate-200 shadow-sm">
+              <CardContent className="p-6 md:p-7">
                 <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed">
                   <ReactMarkdown
                     components={{
@@ -206,8 +211,8 @@ export default function DataReports() {
 
         {/* Query History */}
         <div>
-          <Card>
-            <CardContent className="p-5">
+          <Card className="overflow-hidden border-slate-200 shadow-sm">
+            <CardContent className="p-5 md:p-6">
               <div className="flex items-center gap-2 mb-1">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <h2 className="text-sm font-semibold text-gray-900">Query History</h2>
@@ -217,9 +222,9 @@ export default function DataReports() {
                 <p className="text-sm text-gray-400 text-center py-8">No queries yet. Ask a question to get started.</p>
               ) : (
                 <div className="space-y-3">
-                  {history.map((h, i) => (
-                    <button key={i} onClick={() => { setQuery(h.question); setResult(h.result); }} className="w-full text-left p-3 rounded-lg border border-gray-100 hover:border-teal-200 hover:bg-teal-50/50 transition-all">
-                      <p className="text-xs font-medium text-gray-700 line-clamp-2 mb-1">{h.question}</p>
+                  {history.map((h) => (
+                    <button key={h.id} onClick={() => { setQuery(h.question); setResult(h.result); }} className="w-full text-left rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-teal-200 hover:bg-teal-50/50">
+                      <p className="mb-2 text-xs font-medium leading-relaxed text-gray-700 line-clamp-2">{h.question}</p>
                       <p className="text-xs text-gray-400">{h.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                     </button>
                   ))}

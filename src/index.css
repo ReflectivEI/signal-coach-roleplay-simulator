@@ -325,6 +325,34 @@
     margin: 0.75rem 0 0;
   }
 
+
+  .ui-markdown p {
+    margin: 0;
+  }
+
+  .ui-markdown p + p {
+    margin-top: 0.9rem;
+  }
+
+  .ui-markdown li {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .ui-markdown li > p {
+    margin: 0;
+  }
+
+  .ui-markdown strong {
+    color: #0f172a;
+  }
+
+  .ui-markdown,
+  .ui-markdown * {
+    word-break: normal;
+    overflow-wrap: anywhere;
+  }
+
   .ui-banner-note {
     border-radius: 18px;
     border: 1px solid rgba(254, 215, 170, 0.9);
