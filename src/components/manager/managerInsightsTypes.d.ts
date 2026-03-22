@@ -54,8 +54,11 @@ export type RepDerivedMetrics = {
   engagementScore: number;
   readinessScore: number;
   coachingResponsivenessScore?: number;
+  engagementStabilityScore: number;
+  conversionProxyScore: number;
   territoryPressureScore: number;
   salesRiskScore: number;
+  dataConfidenceIndex: number;
   confidenceScore: number;
 };
 
@@ -74,6 +77,7 @@ export type TerritoryData = {
   highPerformerConcentration: number;
   coachingOpportunityClusters: string[];
   repIds: string[];
+  aggregationWeights: Record<string, number>;
 };
 
 export type ManagerInsightsRequest = {

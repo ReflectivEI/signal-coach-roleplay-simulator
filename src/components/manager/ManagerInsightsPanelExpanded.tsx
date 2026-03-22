@@ -74,17 +74,17 @@ function getScopeLabel(request: ManagerInsightsRequest) {
 function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
-      `${request.repData.improvementPriority} score`,
-      `engagementScore ${request.derivedMetrics.engagementScore}/100`,
-      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100`,
+      `${request.repData.improvementPriority} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs 3.5/5 threshold`,
+      `engagementScore ${request.derivedMetrics.engagementScore}/100 vs 60/100 threshold`,
+      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100 vs 62/100 threshold`,
       `confidence ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
     ];
   }
 
   return [
-    `avgEngagement ${request.territoryData.avgEngagement}/100`,
+    `avgEngagement ${request.territoryData.avgEngagement}/100 vs 60/100 threshold`,
     `${request.territoryData.mostCommonCapabilityGap ?? "capability coverage"} gap`,
-    `territoryVolatility ${request.territoryData.territoryVolatility}`,
+    `territoryVolatility ${request.territoryData.territoryVolatility} vs 0.4 threshold`,
     `atRiskRepCount ${request.territoryData.atRiskRepCount}`,
   ];
 }
@@ -117,7 +117,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
 
   const requestBody = useMemo(() => {
     const parsed = managerInsightsRequestSchema.safeParse(data);
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
   }, [data]);
 
   const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
@@ -185,7 +185,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Use exact metric names and values.",
+                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Use exact metric names, exact values, exact thresholds, and exact rep names.",
               },
               {
                 role: "user",
@@ -226,7 +226,7 @@ Manager Question: ${input}`,
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Keep it concise and auditable.",
+                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Keep it concise, auditable, and explicit about thresholds.",
               },
               {
                 role: "user",

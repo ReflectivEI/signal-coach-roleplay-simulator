@@ -31,6 +31,20 @@ export const METRIC_LABELS = {
 const TREND_VALUES = { up: 1, flat: 0, down: -1 };
 const STATUS_RISK_WEIGHT = { active: 0, needs_attention: 12, inactive: 24 };
 const TERRITORY_BASELINE = 3.7;
+const REFERENCE_DATE = "2026-03-22";
+
+export const MANAGER_MODEL_THRESHOLDS = {
+  repMetricLow: 3.5,
+  engagementRisk: 60,
+  territoryEngagementRisk: 55,
+  territoryEngagementModerate: 68,
+  salesRiskHigh: 62,
+  salesRiskModerate: 48,
+  volatilityHigh: 0.6,
+  volatilityModerate: 0.4,
+  confidenceHigh: 0.75,
+  confidenceModerate: 0.6,
+};
 
 /** @typedef {typeof BEHAVIORAL_METRIC_KEYS[number]} BehavioralMetricKey */
 
@@ -111,8 +125,11 @@ const TERRITORY_BASELINE = 3.7;
  *   engagementScore: number;
  *   readinessScore: number;
  *   coachingResponsivenessScore?: number;
+ *   engagementStabilityScore: number;
+ *   conversionProxyScore: number;
  *   territoryPressureScore: number;
  *   salesRiskScore: number;
+ *   dataConfidenceIndex: number;
  *   confidenceScore: number;
  * }} RepDerivedMetrics
  */
@@ -133,6 +150,7 @@ const TERRITORY_BASELINE = 3.7;
  *   highPerformerConcentration: number;
  *   coachingOpportunityClusters: string[];
  *   repIds: string[];
+ *   aggregationWeights: Record<string, number>;
  * }} TerritoryData
  */
 
@@ -181,6 +199,25 @@ function averageBehavioralScore(behavioralMetrics) {
   return round(total / BEHAVIORAL_METRIC_KEYS.length, 2);
 }
 
+function getDaysSinceReference(dateString) {
+  const reference = new Date(`${REFERENCE_DATE}T12:00:00.000Z`);
+  const value = new Date(`${dateString}T12:00:00.000Z`);
+  return Math.max(0, Math.round((reference.getTime() - value.getTime()) / 86400000));
+}
+
+function getDominantTrendShare(behavioralMetrics) {
+  const trendCounts = BEHAVIORAL_METRIC_KEYS.reduce((acc, key) => {
+    const trend = behavioralMetrics[key].trend;
+    acc[trend] = (acc[trend] || 0) + 1;
+    return acc;
+  }, {});
+  return Math.max(...Object.values(trendCounts)) / BEHAVIORAL_METRIC_KEYS.length;
+}
+
+function getRecencyWeight(dateString) {
+  return clamp(1 - (getDaysSinceReference(dateString) / 30), 0.2, 1);
+}
+
 /** @param {RepData} rep */
 export function deriveRepMetrics(rep) {
   const averageBehavior = averageBehavioralScore(rep.behavioralMetrics);
@@ -195,12 +232,24 @@ export function deriveRepMetrics(rep) {
   const modulesScore = clamp((rep.coachingModulesCompleted / 8) * 100, 0, 100);
   const streakScore = clamp((rep.practiceStreakDays / 14) * 100, 0, 100);
   const engagementConsistencyScore = clamp(rep.engagementConsistency, 0, 100);
+  const coachingFrequencyBonus = clamp(rep.recentCoachingActivity.coachingSessions30d / 4, 0, 1) * 10;
   const engagementScore = round(
     (sessionsScore * 0.34)
       + (modulesScore * 0.22)
       + (streakScore * 0.18)
       + (engagementConsistencyScore * 0.16)
-      + (clamp(rep.recentCoachingActivity.coachingSessions30d / 4, 0, 1) * 10),
+      + coachingFrequencyBonus,
+    1,
+  );
+
+  const engagementStabilityScore = round(
+    clamp(
+      (engagementConsistencyScore * 0.7)
+      + (clamp(1 - (behavioralVariance / 2.5), 0, 1) * 20)
+      + (clamp(1 - (getDaysSinceReference(rep.lastPracticeDate) / 30), 0, 1) * 10),
+      0,
+      100,
+    ),
     1,
   );
 
@@ -226,6 +275,16 @@ export function deriveRepMetrics(rep) {
     )
     : undefined;
 
+  const conversionProxyScore = round(
+    clamp(
+      (rep.behavioralMetrics.commitmentGeneration.score * 20 * 0.55)
+      + (rep.behavioralMetrics.valueCommunication.score * 20 * 0.45),
+      0,
+      100,
+    ),
+    1,
+  );
+
   const territoryPressureScore = round(
     clamp(
       ((rep.territoryContext.accessComplexity + rep.territoryContext.payerPressure + rep.territoryContext.accountComplexity) / 15) * 100
@@ -243,18 +302,45 @@ export function deriveRepMetrics(rep) {
       - (averageBehavior * 6)
       - (engagementScore * 0.16)
       + (rep.salesTrend === "down" ? 18 : rep.salesTrend === "flat" ? 7 : -8)
-      + STATUS_RISK_WEIGHT[rep.status],
+      + STATUS_RISK_WEIGHT[rep.status]
+      + (rep.behavioralMetrics.commitmentGeneration.score < MANAGER_MODEL_THRESHOLDS.repMetricLow ? 7 : 0),
       0,
       100,
     ),
     1,
   );
 
-  const completenessScore = BEHAVIORAL_METRIC_KEYS.every((key) => rep.behavioralMetrics[key].sessionsObserved > 0) ? 1 : 0.8;
-  const observationDepthScore = clamp(rep.observationDepth / 18, 0, 1);
-  const consistencyScore = clamp(rep.engagementConsistency / 100, 0, 1);
+  const metricCoverageRatio = round(
+    BEHAVIORAL_METRIC_KEYS.filter((key) => rep.behavioralMetrics[key].sessionsObserved > 0).length / BEHAVIORAL_METRIC_KEYS.length,
+    2,
+  );
+  const avgObservedSessions = BEHAVIORAL_METRIC_KEYS.reduce((sum, key) => sum + rep.behavioralMetrics[key].sessionsObserved, 0) / BEHAVIORAL_METRIC_KEYS.length;
+  const sampleSizeRatio = round(clamp(((avgObservedSessions / 14) * 0.6) + ((rep.sessionsCompleted30d / 16) * 0.4), 0, 1), 2);
+  const variancePenaltyRatio = round(clamp(1 - (behavioralVariance / 2.5), 0, 1), 2);
+  const trendStabilityRatio = round(clamp((getDominantTrendShare(rep.behavioralMetrics) * 0.6) + (rep.salesTrend === "flat" ? 0.2 : 0.1), 0, 1), 2);
+  const engagementConsistencyRatio = round(clamp(engagementStabilityScore / 100, 0, 1), 2);
+  const recencyRatio = round(getRecencyWeight(rep.lastPracticeDate), 2);
+  const dataConfidenceIndex = round(
+    clamp(
+      (metricCoverageRatio * 0.28)
+      + (sampleSizeRatio * 0.24)
+      + (recencyRatio * 0.18)
+      + (engagementConsistencyRatio * 0.18)
+      + (clamp(rep.observationDepth / 18, 0, 1) * 0.12),
+      0,
+      1,
+    ),
+    2,
+  );
   const confidenceScore = round(
-    clamp((completenessScore * 0.4) + (observationDepthScore * 0.35) + (consistencyScore * 0.25), 0, 1),
+    clamp(
+      (dataConfidenceIndex * 0.52)
+      + (variancePenaltyRatio * 0.18)
+      + (trendStabilityRatio * 0.18)
+      + (metricCoverageRatio * 0.12),
+      0,
+      1,
+    ),
     2,
   );
 
@@ -265,8 +351,11 @@ export function deriveRepMetrics(rep) {
     engagementScore,
     readinessScore,
     coachingResponsivenessScore,
+    engagementStabilityScore,
+    conversionProxyScore,
     territoryPressureScore,
     salesRiskScore,
+    dataConfidenceIndex,
     confidenceScore,
   };
 }
@@ -285,6 +374,12 @@ function finalizeRep(rep) {
   };
 }
 
+function getAggregationWeight(rep) {
+  const sessionWeight = clamp(rep.sessionsCompleted30d / 16, 0.2, 1);
+  const recencyWeight = getRecencyWeight(rep.lastPracticeDate);
+  return round((sessionWeight * 0.7) + (recencyWeight * 0.3), 4);
+}
+
 /** @param {RepData[]} reps */
 export function buildTerritoryDataset(reps) {
   const grouped = reps.reduce((acc, rep) => {
@@ -295,19 +390,24 @@ export function buildTerritoryDataset(reps) {
 
   return Object.entries(grouped).map(([territory, territoryReps]) => {
     const derived = territoryReps.map((rep) => deriveRepMetrics(rep));
-    const avgPerformance = round(territoryReps.reduce((sum, rep) => sum + rep.salesPerformance, 0) / territoryReps.length, 2);
-    const avgEngagement = round(derived.reduce((sum, item) => sum + item.engagementScore, 0) / territoryReps.length, 1);
+    const rawWeights = Object.fromEntries(territoryReps.map((rep) => [rep.id, getAggregationWeight(rep)]));
+    const totalWeight = Object.values(rawWeights).reduce((sum, value) => sum + value, 0) || 1;
+    const aggregationWeights = Object.fromEntries(Object.entries(rawWeights).map(([repId, value]) => [repId, round(value / totalWeight, 4)]));
+    const weightedAverage = (resolver) => round(territoryReps.reduce((sum, rep) => sum + (resolver(rep) * aggregationWeights[rep.id]), 0), 2);
+
+    const avgPerformance = weightedAverage((rep) => rep.salesPerformance);
+    const avgEngagement = round(territoryReps.reduce((sum, rep, index) => sum + (derived[index].engagementScore * aggregationWeights[rep.id]), 0), 1);
     const avgBehavioralMetrics = /** @type {Record<BehavioralMetricKey, number>} */ (
       Object.fromEntries(
         BEHAVIORAL_METRIC_KEYS.map((key) => [
           key,
-          round(territoryReps.reduce((sum, rep) => sum + rep.behavioralMetrics[key].score, 0) / territoryReps.length, 2),
+          weightedAverage((rep) => rep.behavioralMetrics[key].score),
         ]),
       )
     );
 
     const gapCounts = territoryReps.reduce((acc, rep) => {
-      acc[rep.improvementPriority] = (acc[rep.improvementPriority] || 0) + 1;
+      acc[rep.improvementPriority] = (acc[rep.improvementPriority] || 0) + aggregationWeights[rep.id];
       return acc;
     }, /** @type {Record<string, number>} */ ({}));
 
@@ -322,26 +422,26 @@ export function buildTerritoryDataset(reps) {
       .slice(0, 3);
 
     const volatility = round(
-      territoryReps.reduce((sum, rep) => sum + Math.abs(rep.salesPerformance - avgPerformance), 0) / territoryReps.length,
+      territoryReps.reduce((sum, rep) => sum + (Math.abs(rep.salesPerformance - avgPerformance) * aggregationWeights[rep.id]), 0),
       2,
     );
 
     const atRiskRepCount = territoryReps.filter((rep, index) => rep.status !== "active" || derived[index].salesRiskScore >= 55).length;
-    const lowPerformerConcentration = round(territoryReps.filter((rep) => rep.salesPerformance < 3.3).length / territoryReps.length, 2);
-    const highPerformerConcentration = round(territoryReps.filter((rep) => rep.salesPerformance >= 4.2).length / territoryReps.length, 2);
-    const avgTrend = territoryReps.reduce((sum, rep) => sum + TREND_VALUES[rep.salesTrend], 0) / territoryReps.length;
+    const lowPerformerConcentration = round(territoryReps.reduce((sum, rep) => sum + (rep.salesPerformance < 3.3 ? aggregationWeights[rep.id] : 0), 0), 2);
+    const highPerformerConcentration = round(territoryReps.reduce((sum, rep) => sum + (rep.salesPerformance >= 4.2 ? aggregationWeights[rep.id] : 0), 0), 2);
+    const avgTrend = territoryReps.reduce((sum, rep) => sum + (TREND_VALUES[rep.salesTrend] * aggregationWeights[rep.id]), 0);
     const trend = avgTrend > 0.2 ? "up" : avgTrend < -0.2 ? "down" : "flat";
 
-    const riskLevel = atRiskRepCount >= 2 || avgPerformance < 3.4 || avgEngagement < 55
+    const riskLevel = atRiskRepCount >= 2 || avgPerformance < 3.4 || avgEngagement < MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk
       ? "high"
-      : atRiskRepCount >= 1 || avgPerformance < 3.8 || avgEngagement < 68
+      : atRiskRepCount >= 1 || avgPerformance < 3.8 || avgEngagement < MANAGER_MODEL_THRESHOLDS.territoryEngagementModerate
         ? "moderate"
         : "low";
 
     const coachingOpportunityClusters = [
       mostCommonCapabilityGap ? `Cluster on ${mostCommonCapabilityGap} coaching in ${territory}` : null,
-      avgEngagement < 60 ? "Increase guided practice frequency and manager inspection cadence" : null,
-      volatility > 0.45 ? "Stabilize performance transfer across mixed-tenure reps" : null,
+      avgEngagement < MANAGER_MODEL_THRESHOLDS.engagementRisk ? `Increase guided practice frequency because weighted engagement is ${avgEngagement}/100 below the ${MANAGER_MODEL_THRESHOLDS.engagementRisk} threshold` : null,
+      volatility > MANAGER_MODEL_THRESHOLDS.volatilityModerate ? `Stabilize performance transfer because weighted volatility is ${volatility} against the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold` : null,
       territoryReps.some((rep) => rep.territoryContext.payerPressure >= 4) ? "Add payer-heavy access scenarios to scenario mix" : null,
     ].filter(Boolean);
 
@@ -360,6 +460,7 @@ export function buildTerritoryDataset(reps) {
       highPerformerConcentration,
       coachingOpportunityClusters,
       repIds: territoryReps.map((rep) => rep.id),
+      aggregationWeights,
     };
   });
 }
@@ -840,13 +941,13 @@ export function getRepEvidenceSummary(rep) {
  * @param {RepData | null} rep
  * @param {TerritoryData} territoryData
  */
-export function buildManagerInsightsRequest(rep, territoryData) {
+export function buildManagerInsightsRequest(rep, territoryData, derivedMetrics = undefined) {
   return {
     repId: rep?.id,
     territoryId: territoryData.territory,
     repData: rep ? { ...rep, evidence: getRepEvidenceSummary(rep) } : undefined,
     territoryData,
-    derivedMetrics: rep ? MANAGER_DERIVED_BY_REP_ID[rep.id] : undefined,
+    derivedMetrics: rep ? (derivedMetrics ?? MANAGER_DERIVED_BY_REP_ID[rep.id]) : undefined,
     timeframe: "30d",
   };
 }

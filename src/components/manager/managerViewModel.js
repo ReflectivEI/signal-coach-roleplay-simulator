@@ -6,6 +6,7 @@ import {
   deriveRepMetrics,
   buildTerritoryDataset,
   getBehavioralMetricLabel,
+  MANAGER_MODEL_THRESHOLDS,
   validateManagerDataset,
 } from "./managerPerformanceData.js";
 
@@ -234,6 +235,10 @@ function buildRepExplanations(rep, derivedByRepId) {
   const modulesScore = round(clamp((rep.coachingModulesCompleted / 8) * 100, 0, 100), 1);
   const streakScore = round(clamp((rep.practiceStreakDays / 14) * 100, 0, 100), 1);
   const coachingFrequencyBonus = round(clamp(rep.recentCoachingActivity.coachingSessions30d / 4, 0, 1) * 10, 1);
+  const metricCoverageRatio = round(BEHAVIORAL_METRIC_KEYS.filter((key) => rep.behavioralMetrics[key].sessionsObserved > 0).length / BEHAVIORAL_METRIC_KEYS.length, 2);
+  const avgObservedSessions = round(BEHAVIORAL_METRIC_KEYS.reduce((sum, key) => sum + rep.behavioralMetrics[key].sessionsObserved, 0) / BEHAVIORAL_METRIC_KEYS.length, 2);
+  const sampleSizeRatio = round(clamp(((avgObservedSessions / 14) * 0.6) + ((rep.sessionsCompleted30d / 16) * 0.4), 0, 1), 2);
+  const variancePenaltyRatio = round(clamp(1 - (derived.behavioralVariance / 2.5), 0, 1), 2);
   const confidencePercent = Math.round(derived.confidenceScore * 100);
 
   return {
@@ -267,8 +272,20 @@ function buildRepExplanations(rep, derivedByRepId) {
         streakScore,
         engagementConsistency: rep.engagementConsistency,
         coachingFrequencyBonus,
+        alertThreshold: `${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100`,
       },
       output: `${derived.engagementScore}/100`,
+    }),
+    engagementStabilityScore: buildMetricExplanation({
+      label: "Engagement Stability",
+      definition: "Consistency score combining engagement consistency, behavioral variance, and data recency.",
+      formula: "(engagementConsistency x 0.7) + ((1 - behavioralVariance / 2.5) x 20) + recencyBonus",
+      inputs: {
+        engagementConsistency: rep.engagementConsistency,
+        behavioralVariance: derived.behavioralVariance,
+        lastPracticeDate: rep.lastPracticeDate,
+      },
+      output: `${derived.engagementStabilityScore}/100`,
     }),
     readinessScore: buildMetricExplanation({
       label: "Readiness Score",
@@ -281,30 +298,56 @@ function buildRepExplanations(rep, derivedByRepId) {
       },
       output: `${derived.readinessScore}/100`,
     }),
+    conversionProxyScore: buildMetricExplanation({
+      label: "Conversion Proxy",
+      definition: "Weighted proxy for moving a conversation to the next step based on commitment generation and value communication.",
+      formula: "(commitmentGeneration x 20 x 0.55) + (valueCommunication x 20 x 0.45)",
+      inputs: {
+        commitmentGeneration: rep.behavioralMetrics.commitmentGeneration.score,
+        valueCommunication: rep.behavioralMetrics.valueCommunication.score,
+      },
+      output: `${derived.conversionProxyScore}/100`,
+    }),
     salesRiskScore: buildMetricExplanation({
       label: "Sales Risk",
-      definition: "Deterministic risk score combining performance, behavior, engagement, sales trend, and status.",
-      formula: "58 - (salesPerformance x 9) - (averageBehavior x 6) - (engagementScore x 0.16) + trendAdjustment + statusWeight",
+      definition: "Deterministic risk score combining performance, behavior, engagement, sales trend, status, and commitment generation threshold checks.",
+      formula: "58 - (salesPerformance x 9) - (averageBehavior x 6) - (engagementScore x 0.16) + trendAdjustment + statusWeight + commitmentPenalty",
       inputs: {
         salesPerformance: rep.salesPerformance,
         averageBehavior,
         engagementScore: derived.engagementScore,
         salesTrend: rep.salesTrend,
         status: rep.status,
+        commitmentGeneration: rep.behavioralMetrics.commitmentGeneration.score,
+        highRiskThreshold: `${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100`,
       },
       output: `${derived.salesRiskScore}/100`,
     }),
+    dataConfidenceIndex: buildMetricExplanation({
+      label: "Data Confidence Index",
+      definition: "Reliability of the underlying rep dataset before predictive interpretation is applied.",
+      formula: "(metricCoverage x 0.28) + (sampleSize x 0.24) + (recency x 0.18) + (engagementStability x 0.18) + (observationDepth x 0.12)",
+      inputs: {
+        metricCoverageRatio,
+        sampleSizeRatio,
+        observationDepthRatio: round(clamp(rep.observationDepth / 18, 0, 1), 2),
+        engagementStabilityRatio: round(derived.engagementStabilityScore / 100, 2),
+      },
+      output: `${Math.round(derived.dataConfidenceIndex * 100)}%`,
+    }),
     confidenceScore: buildMetricExplanation({
       label: "Confidence",
-      definition: "Confidence in the derived signal based on 8-metric completeness, observation depth, and engagement consistency.",
-      formula: "(completeness x 0.4) + (observationDepthRatio x 0.35) + (engagementConsistencyRatio x 0.25)",
+      definition: "Predictive confidence derived from data completeness, sample size, variance, trend stability, and engagement stability. Remove this number if the underlying inputs are missing.",
+      formula: "(dataConfidenceIndex x 0.52) + (variancePenalty x 0.18) + (trendStability x 0.18) + (metricCoverage x 0.12)",
       inputs: {
-        completeMetricCoverage: BEHAVIORAL_METRIC_KEYS.every((key) => rep.behavioralMetrics[key].sessionsObserved > 0) ? 1 : 0.8,
-        observationDepthRatio: round(clamp(rep.observationDepth / 18, 0, 1), 2),
-        engagementConsistencyRatio: round(clamp(rep.engagementConsistency / 100, 0, 1), 2),
+        dataConfidenceIndex: round(derived.dataConfidenceIndex, 2),
+        metricCoverageRatio,
+        sampleSizeRatio,
+        variancePenaltyRatio,
+        engagementStabilityScore: derived.engagementStabilityScore,
       },
       output: `${confidencePercent}%`,
-      notes: "Confidence is rounded for display but preserved as a decimal in the derivation layer.",
+      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above.`,
     }),
     strongestCapability: buildMetricExplanation({
       label: "Strongest Capability",
@@ -317,7 +360,7 @@ function buildRepExplanations(rep, derivedByRepId) {
       label: "Capability Requiring Improvement",
       definition: "Lowest scoring capability in the current 8-metric profile.",
       formula: "min(behavioralMetrics.score)",
-      inputs: { capability: getBehavioralMetricLabel(rep.improvementPriority), score: rep.behavioralMetrics[rep.improvementPriority].score },
+      inputs: { capability: getBehavioralMetricLabel(rep.improvementPriority), score: rep.behavioralMetrics[rep.improvementPriority].score, threshold: `${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5` },
       output: `${getBehavioralMetricLabel(rep.improvementPriority)} (${rep.behavioralMetrics[rep.improvementPriority].score}/5)`,
     }),
   };
@@ -336,7 +379,8 @@ function buildTerritoryContributors(territory, reps, derivedByRepId) {
         name: rep.name,
         metricLabel: getBehavioralMetricLabel(gapMetric),
         metricValue: rep.behavioralMetrics[gapMetric].score,
-        why: `${rep.name} is below the territory average in ${getBehavioralMetricLabel(gapMetric)} at ${rep.behavioralMetrics[gapMetric].score}/5.`,
+        weight: territory.aggregationWeights[rep.id],
+        why: `${rep.name} is below the weighted territory average in ${getBehavioralMetricLabel(gapMetric)} at ${rep.behavioralMetrics[gapMetric].score}/5 with ${Math.round((territory.aggregationWeights[rep.id] || 0) * 100)}% aggregation weight.`,
       }))
     : [];
 
@@ -349,7 +393,8 @@ function buildTerritoryContributors(territory, reps, derivedByRepId) {
       name: rep.name,
       metricLabel: "Engagement Score",
       metricValue: derivedByRepId[rep.id].engagementScore,
-      why: `${rep.name} is pulling the territory engagement average down at ${derivedByRepId[rep.id].engagementScore}/100.`,
+      weight: territory.aggregationWeights[rep.id],
+      why: `${rep.name} is pulling the weighted territory engagement average down at ${derivedByRepId[rep.id].engagementScore}/100 with ${Math.round((territory.aggregationWeights[rep.id] || 0) * 100)}% weight.`,
     }));
 
   const volatilityContributors = territoryReps
@@ -365,7 +410,8 @@ function buildTerritoryContributors(territory, reps, derivedByRepId) {
       name: rep.name,
       metricLabel: "Sales Performance Delta",
       metricValue: round(delta, 2),
-      why: `${rep.name} sits ${round(delta, 2)} points away from the territory average sales performance of ${territory.avgPerformance}/5.`,
+      weight: territory.aggregationWeights[rep.id],
+      why: `${rep.name} sits ${round(delta, 2)} points away from the weighted territory average sales performance of ${territory.avgPerformance}/5 with ${Math.round((territory.aggregationWeights[rep.id] || 0) * 100)}% weight.`,
     }));
 
   return {
@@ -381,29 +427,29 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
   return {
     avgPerformance: buildMetricExplanation({
       label: `${territory.territory} Average Performance`,
-      definition: "Average sales performance for reps included in this territory aggregate.",
-      formula: "average(rep salesPerformance)",
-      inputs: { repCount: territoryReps.length },
+      definition: "Weighted average sales performance for reps included in this territory aggregate.",
+      formula: "weightedAverage(rep salesPerformance, weight = 0.7 sessions + 0.3 recency)",
+      inputs: { repCount: territoryReps.length, aggregationWeights: JSON.stringify(territory.aggregationWeights) },
       output: `${territory.avgPerformance}/5`,
     }),
     avgEngagement: buildMetricExplanation({
       label: `${territory.territory} Engagement`,
-      definition: "Average engagement score for reps in this territory aggregate.",
-      formula: "average(rep engagementScore)",
-      inputs: { repCount: territoryReps.length },
+      definition: "Weighted average engagement score for reps in this territory aggregate.",
+      formula: "weightedAverage(rep engagementScore, weight = 0.7 sessions + 0.3 recency)",
+      inputs: { repCount: territoryReps.length, aggregationWeights: JSON.stringify(territory.aggregationWeights), riskThreshold: `${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100` },
       output: `${territory.avgEngagement}/100`,
     }),
     territoryVolatility: buildMetricExplanation({
       label: `${territory.territory} Volatility`,
-      definition: "Average absolute distance between each rep sales performance and the territory average.",
-      formula: "average(abs(rep salesPerformance - territory avgPerformance))",
-      inputs: { repCount: territoryReps.length, avgPerformance: territory.avgPerformance },
+      definition: "Weighted average absolute distance between each rep sales performance and the territory average.",
+      formula: "weightedAverage(abs(rep salesPerformance - territory avgPerformance), weight = aggregationWeight)",
+      inputs: { repCount: territoryReps.length, avgPerformance: territory.avgPerformance, watchThreshold: MANAGER_MODEL_THRESHOLDS.volatilityModerate },
       output: territory.territoryVolatility,
     }),
     riskLevel: buildMetricExplanation({
       label: `${territory.territory} Risk Level`,
-      definition: "Rule-based territory risk category driven by at-risk reps, performance, and engagement.",
-      formula: "high if atRiskRepCount >= 2 OR avgPerformance < 3.4 OR avgEngagement < 55; moderate if atRiskRepCount >= 1 OR avgPerformance < 3.8 OR avgEngagement < 68; else low",
+      definition: "Rule-based territory risk category driven by at-risk reps, weighted performance, and weighted engagement.",
+      formula: `high if atRiskRepCount >= 2 OR avgPerformance < 3.4 OR avgEngagement < ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}; moderate if atRiskRepCount >= 1 OR avgPerformance < 3.8 OR avgEngagement < ${MANAGER_MODEL_THRESHOLDS.territoryEngagementModerate}; else low`,
       inputs: {
         atRiskRepCount: territory.atRiskRepCount,
         avgPerformance: territory.avgPerformance,
@@ -414,11 +460,11 @@ function buildTerritoryExplanations(territory, reps, derivedByRepId) {
     mostCommonCapabilityGap: territory.mostCommonCapabilityGap
       ? buildMetricExplanation({
         label: `${territory.territory} Capability Gap`,
-        definition: "Most common lowest-scoring capability among reps in this territory aggregate.",
-        formula: "mode(rep improvementPriority)",
+        definition: "Weighted mode of each rep's improvementPriority in this territory aggregate.",
+        formula: "weightedMode(rep improvementPriority, weight = aggregationWeight)",
         inputs: {
           territoryRepCount: territoryReps.length,
-          contributingReps: contributors.gapContributors.map((item) => item.name).join(", "),
+          contributingReps: contributors.gapContributors.map((item) => `${item.name} (${Math.round((item.weight || 0) * 100)}%)`).join(", "),
         },
         output: getBehavioralMetricLabel(territory.mostCommonCapabilityGap),
       })
@@ -445,7 +491,7 @@ function validateRuntimeState(dataset) {
     if (territoryReps.length !== territory.repIds.length) {
       issues.push(`${territory.territory}: repIds mismatch`);
     }
-    const actualAvgPerformance = round(territoryReps.reduce((sum, rep) => sum + rep.salesPerformance, 0) / territoryReps.length, 2);
+    const actualAvgPerformance = round(territoryReps.reduce((sum, rep) => sum + (rep.salesPerformance * territory.aggregationWeights[rep.id]), 0), 2);
     if (actualAvgPerformance !== territory.avgPerformance) {
       issues.push(`${territory.territory}: avgPerformance mismatch`);
     }
