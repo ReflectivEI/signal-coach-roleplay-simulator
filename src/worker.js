@@ -4,6 +4,12 @@
 
 import { getAssetFromKV } from "@cloudflare/kv-asset-handler";
 import manifestJSON from "__STATIC_CONTENT_MANIFEST";
+import {
+    managerInsightsRequestSchema,
+    deriveManagerInsightsFeatures,
+    createFallbackManagerInsights,
+    normalizeManagerInsightsResponse
+} from "./components/manager/managerInsightsShared.js";
 const assetManifest = JSON.parse(manifestJSON);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -279,6 +285,128 @@ async function handleAppSettings(pathname) {
     return Response.json(settings);
 }
 
+function getLlmProvider(env, requestedProvider) {
+    const openaiApiKey = env?.OPENAI_API_KEY;
+    const groqApiKey = env?.GROQ_API_KEY;
+
+    const provider = requestedProvider === "openai"
+        ? "openai"
+        : requestedProvider === "groq"
+            ? "groq"
+            : groqApiKey
+                ? "groq"
+                : openaiApiKey
+                    ? "openai"
+                    : null;
+
+    return {
+        provider,
+        openaiApiKey,
+        groqApiKey
+    };
+}
+
+async function invokeStructuredLlm({ env, prompt, schemaHint, max_tokens = 900, temperature = 0.2, provider: requestedProvider }) {
+    const { provider, openaiApiKey, groqApiKey } = getLlmProvider(env, requestedProvider);
+
+    if (!provider) {
+        return { unavailable: true };
+    }
+
+    const model = provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4-turbo";
+    const llmUrl = provider === "groq"
+        ? "https://api.groq.com/openai/v1/chat/completions"
+        : "https://api.openai.com/v1/chat/completions";
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Number(env?.LLM_TIMEOUT_MS || 25000));
+
+    try {
+        const response = await fetch(llmUrl, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${provider === "groq" ? groqApiKey : openaiApiKey}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                model,
+                temperature,
+                max_tokens,
+                response_format: { type: "json_object" },
+                messages: [
+                    {
+                        role: "system",
+                        content: `You are the Manager AI Insights layer for a sales coaching platform. Use deterministic inputs exactly as provided. Return JSON only. Do not provide generic advice, personality judgments, or unsupported claims. ${schemaHint}`
+                    },
+                    { role: "user", content: prompt }
+                ]
+            }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            const details = await response.text();
+            console.error("Manager insights LLM error:", response.status, details);
+            return { unavailable: true, status: response.status, details };
+        }
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        return {
+            unavailable: false,
+            model,
+            provider,
+            content: JSON.parse(content)
+        };
+    } catch (error) {
+        console.error("Manager insights LLM invoke error:", error);
+        return { unavailable: true, details: error.message };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function buildManagerInsightsPrompt(payload, derived) {
+    return JSON.stringify({
+        task: "Interpret the structured manager analytics and generate concise, behavior-specific coaching guidance.",
+        instructions: [
+            "Return JSON with keys summary, keyDrivers, risks, recommendations, predictiveOutlook.",
+            "Recommendations must each include action, rationale, and expectedImpact.",
+            "No generic advice, no long paragraphs, no psychological inference, and no scoring changes.",
+            "Keep every statement explainable from the metrics or derived features.",
+            "Predictive outlook must remain heuristic and advisory, not deterministic or evaluative."
+        ],
+        analytics: payload,
+        derived
+    });
+}
+
+async function handleManagerInsights(request, env) {
+    const body = await request.json().catch(() => null);
+    const parsed = managerInsightsRequestSchema.safeParse(body);
+
+    if (!parsed.success) {
+        return Response.json({
+            error: "Invalid manager insights payload",
+            details: parsed.error.flatten()
+        }, { status: 400 });
+    }
+
+    const payload = parsed.data;
+    const derived = deriveManagerInsightsFeatures(payload);
+    const fallback = createFallbackManagerInsights(payload, derived);
+
+    const schemaHint = `Schema: { summary: string, keyDrivers: string[], risks: string[], recommendations: [{ action: string, rationale: string, expectedImpact: string }], predictiveOutlook: { performanceTrend: "likely_improve" | "at_risk" | "stable", confidence: number 0-1, reasoning: string } }`;
+    const prompt = buildManagerInsightsPrompt(payload, derived);
+    const llmResponse = await invokeStructuredLlm({ env, prompt, schemaHint, provider: body?.provider });
+
+    if (llmResponse.unavailable) {
+        return Response.json(fallback);
+    }
+
+    return Response.json(normalizeManagerInsightsResponse(llmResponse.content, fallback));
+}
+
 // LLM: Invoke AI for coaching, analysis, or generation
 async function handleLlmInvoke(request, env) {
     const body = await request.json().catch(() => ({}));
@@ -291,19 +419,8 @@ async function handleLlmInvoke(request, env) {
         );
     }
 
-    const openaiApiKey = env?.OPENAI_API_KEY;
-    const groqApiKey = env?.GROQ_API_KEY;
     const requestedProvider = body?.provider;
-
-    const provider = requestedProvider === "openai"
-        ? "openai"
-        : requestedProvider === "groq"
-            ? "groq"
-            : groqApiKey
-                ? "groq"
-                : openaiApiKey
-                    ? "openai"
-                    : null;
+    const { provider, openaiApiKey, groqApiKey } = getLlmProvider(env, requestedProvider);
 
     if (!provider) {
         console.warn("No LLM API key configured, returning mock response");
@@ -662,6 +779,7 @@ async function handleHealth() {
             "POST /api/scenarios",
             "PUT /api/scenarios",
             "DELETE /api/scenarios",
+            "POST /manager-insights",
             "GET /health"
         ]
     });
@@ -735,6 +853,10 @@ export default {
 
             if (pathname === "/api/scenarios" && (request.method === "GET" || request.method === "POST" || request.method === "PUT" || request.method === "DELETE")) {
                 return setCorsHeaders(await handleCustomScenarios(request));
+            }
+
+            if (pathname === "/manager-insights" && request.method === "POST") {
+                return setCorsHeaders(await handleManagerInsights(request, env));
             }
 
             // ============ STATIC FILES ============

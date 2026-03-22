@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
+import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import { SIGNAL_CAPABILITIES as SOT_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getAdoptionBand } from "@/lib/enablementHub";
 import { Link } from "react-router-dom";
@@ -252,6 +253,45 @@ export default function ManagerView() {
   const coachingPriority = interventionQueue.slice().sort((a, b) => a.avgScore - b.avgScore || a.sessionsLast30 - b.sessionsLast30);
   const adoptionBand = getAdoptionBand(adoptionRate);
 
+  const selectedRepInsightsData = selectedRep ? {
+    repId: String(selectedRep.id),
+    territoryId: selectedRep.territory,
+    metrics: {
+      sessionsCompleted: selectedRep.sessionsLast30,
+      trainingModulesCompleted: selectedRep.modulesCompleted,
+      avgEQScore: selectedRep.avgScore,
+      recentPerformanceTrend: selectedRep.avgScore >= 4 ? "up" : selectedRep.avgScore < 3.3 || selectedRep.sessionsLast30 < 4 ? "down" : "flat",
+      salesPerformance: selectedRep.avgScore,
+      territoryPerformance: territoryRadarData.reduce((sum, entry) => sum + entry.team, 0) / territoryRadarData.length,
+    },
+    behavioralSignals: {
+      signalAwareness: selectedRep.weakCapability === "Signal Awareness" ? 2.4 : Math.min(4.5, selectedRep.avgScore + 0.2),
+      signalInterpretation: selectedRep.weakCapability === "Adaptive Response" ? 2.8 : Math.min(4.4, selectedRep.avgScore + 0.1),
+      valueConnection: selectedRep.weakCapability === "Value Connection" ? 2.6 : Math.min(4.3, selectedRep.avgScore + 0.15),
+      objectionHandling: selectedRep.weakCapability === "Objection Navigation" ? 2.5 : Math.min(4.2, selectedRep.avgScore + 0.05),
+    },
+    timeframe: "30d",
+  } : null;
+
+  const territoryInsightsData = {
+    territoryId: "national-manager-view",
+    metrics: {
+      sessionsCompleted: totalSessions,
+      trainingModulesCompleted: REPS.reduce((sum, rep) => sum + rep.modulesCompleted, 0),
+      avgEQScore: avgTeamScore,
+      recentPerformanceTrend: avgTeamScore >= 4 ? "up" : avgTeamScore < 3.3 || atRisk >= 2 ? "down" : "flat",
+      salesPerformance: avgTeamScore,
+      territoryPerformance: territoryRadarData.reduce((sum, entry) => sum + entry.team, 0) / territoryRadarData.length,
+    },
+    behavioralSignals: {
+      signalAwareness: territoryRadarData.find(entry => entry.capability === "Signal Awareness")?.team,
+      signalInterpretation: territoryRadarData.find(entry => entry.capability === "Signal Interpretation")?.team,
+      valueConnection: territoryRadarData.find(entry => entry.capability === "Value Connection")?.team,
+      objectionHandling: territoryRadarData.find(entry => entry.capability === "Objection Navigation")?.team,
+    },
+    timeframe: "30d",
+  };
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto bg-slate-50/60 rounded-2xl">
       {/* Header */}
@@ -460,6 +500,14 @@ export default function ManagerView() {
                     </div>
                   </div>
 
+                  {selectedRepInsightsData && (
+                    <ManagerInsightsPanel
+                      analyticsData={selectedRepInsightsData}
+                      title={`${selectedRep.name} coaching outlook`}
+                      subtitle="Behavior-based guidance generated from recent engagement, performance, and observed capability coverage."
+                    />
+                  )}
+
                   {/* Assignment Panel */}
                   <div className="border-t border-gray-100 pt-4">
                     <AssignmentPanel
@@ -483,7 +531,13 @@ export default function ManagerView() {
 
         {/* ── TERRITORY ANALYTICS TAB ── */}
         <TabsContent value="territory">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            <ManagerInsightsPanel
+              analyticsData={territoryInsightsData}
+              title="Territory predictive coaching layer"
+              subtitle="Advisory outlook built from team engagement, territory performance, and behavior-level capability signals."
+            />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Radar */}
             <div className="bg-white border border-gray-200 rounded-xl p-5 pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-1">Team Signal Intelligence Profile</h3>
@@ -534,6 +588,7 @@ export default function ManagerView() {
                 ))}
               </div>
             </div>
+          </div>
           </div>
         </TabsContent>
 
