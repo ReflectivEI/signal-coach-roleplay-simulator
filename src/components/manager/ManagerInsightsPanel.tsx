@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert 
 import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { MANAGER_MODEL_THRESHOLDS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
+import { formatMetricLabel, normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 
 type ManagerInsightsPanelProps = {
   analyticsData: ManagerInsightsRequest;
@@ -54,15 +55,15 @@ function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
       `${getBehavioralMetricLabel(request.repData.improvementPriority)} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold`,
-      `Engagement Score ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
-      `Sales Risk ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
+      `${formatMetricLabel("engagementScore")} ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
+      `${formatMetricLabel("salesRiskScore")} ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
     ];
   }
 
   return [
-    `Territory Engagement ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
+    `${formatMetricLabel("avgEngagement")} ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
     `${request.territoryData.mostCommonCapabilityGap ? getBehavioralMetricLabel(request.territoryData.mostCommonCapabilityGap) : "capability coverage"} gap`,
-    `Territory Volatility ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
+    `${formatMetricLabel("territoryVolatility")} ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
   ];
 }
 
@@ -118,7 +119,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         return response.json();
       })
       .then((payload: ManagerInsightsResponse) => {
-        setData(payload);
+        setData(normalizeManagerInsightsResponse(payload));
       })
       .catch((error: Error) => {
         if (error.name !== "AbortError") {
@@ -152,7 +153,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               <h3 className="text-lg font-bold text-slate-900">{title}</h3>
             </div>
           </div>
-          <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+          <p className="mt-2 text-sm text-slate-500">{normalizeManagerText(subtitle)}</p>
           <p className="mt-2 text-xs font-medium text-slate-500">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
         </div>
         {data && (
@@ -175,7 +176,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         <div className="mt-5 grid gap-4 xl:grid-cols-2">
           <div className="xl:col-span-2 rounded-2xl border border-teal-100 bg-teal-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Primary finding</p>
-            <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{data.summary}</p>
+            <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{normalizeManagerText(data.summary)}</p>
           </div>
 
           <Section icon={Radar} title="Data basis">
@@ -183,7 +184,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               {data.keyDrivers.map((item) => (
                 <li key={item} className="flex gap-2">
                   <span className="mt-1 h-1.5 w-1.5 rounded-full bg-teal-500" />
-                  <span>{item}</span>
+                  <span>{normalizeManagerText(item)}</span>
                 </li>
               ))}
             </ul>
@@ -194,7 +195,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               {buildMonitoringTargets(requestBody).map((item) => (
                 <li key={item} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-                  <span>{item}</span>
+                  <span>{normalizeManagerText(item)}</span>
                 </li>
               ))}
             </ul>
@@ -211,23 +212,23 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
                   <div className="space-y-3 text-sm text-slate-700">
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Primary finding</p>
-                      <p>{card.primaryFinding}</p>
+                      <p>{normalizeManagerText(card.primaryFinding)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Data basis</p>
-                      <p>{card.dataBasis}</p>
+                      <p>{normalizeManagerText(card.dataBasis)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Recommended action</p>
-                      <p className="font-semibold text-slate-900">{card.recommendedAction}</p>
+                      <p className="font-semibold text-slate-900">{normalizeManagerText(card.recommendedAction)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">Expected impact</p>
-                      <p>{card.expectedImpact}</p>
+                      <p>{normalizeManagerText(card.expectedImpact)}</p>
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-slate-500">What to monitor next</p>
-                      <p>{card.monitorNext}</p>
+                      <p>{normalizeManagerText(card.monitorNext)}</p>
                     </div>
                   </div>
                 </div>
@@ -246,7 +247,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-slate-500">Reasoning</p>
-                <p className="text-sm leading-6 text-slate-700">{data.predictiveOutlook.reasoning}</p>
+                <p className="text-sm leading-6 text-slate-700">{normalizeManagerText(data.predictiveOutlook.reasoning)}</p>
               </div>
             </div>
           </Section>
