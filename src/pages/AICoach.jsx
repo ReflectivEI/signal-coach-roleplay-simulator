@@ -54,6 +54,7 @@ import ReactMarkdown from "react-markdown";
 import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
 import TodaysTipCard from "@/components/shared/TodaysTipCard";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -197,7 +198,7 @@ Rules:
 
       if (res.ok) {
         const data = await res.json();
-        const coachResponse = (data.response || data.text || data.content || '');
+        const coachResponse = sanitizeAiText(data.response || data.text || data.content || '');
         const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
         const finalResponse = addRolePlayLinks(coachText);
         const updatedMessages = [{ role: "assistant", content: finalResponse }];
@@ -227,6 +228,15 @@ Rules:
 
     setMessages(newMessages);
     setInput("");
+
+    const guardrailReply = getTopicGuardResponse(userMsg, "coach");
+    if (guardrailReply) {
+      const guardedMessages = [...newMessages, { role: "assistant", content: guardrailReply }];
+      setMessages(guardedMessages);
+      generateSessionSummary(guardedMessages);
+      return;
+    }
+
     setIsLoading(true);
 
     const conversationHistory = newMessages
@@ -277,7 +287,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
       });
       if (res.ok) {
         const data = await res.json();
-        const coachResponse = (data.response || data.text || data.content || '');
+        const coachResponse = sanitizeAiText(data.response || data.text || data.content || '');
         const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
 
         let finalResponse = coachText;
@@ -510,20 +520,20 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                           }`}
                       >
                         {msg.role === "assistant" ? (
-                          <div className="prose prose-sm max-w-none text-gray-700 space-y-3">
+                          <div className="ui-markdown prose prose-sm max-w-none break-words text-gray-700 space-y-3">
                             <ReactMarkdown
                               components={{
                                 p: ({ children, ...props }) => {
                                   const text = String(children ?? "").trim();
                                   if (!text) return null;
-                                  return <p className="leading-relaxed mb-2" {...props}>{children}</p>;
+                                  return <p className="mb-2 whitespace-pre-wrap break-words leading-relaxed" {...props}>{children}</p>;
                                 },
                                 ul: ({ ...props }) => <ul className="list-disc pl-5 space-y-1.5 my-2" {...props} />,
                                 ol: ({ ...props }) => <ol className="list-decimal pl-5 space-y-1.5 my-2" {...props} />,
                                 li: ({ children, ...props }) => {
                                   const text = String(children ?? "").trim();
                                   if (!text) return null;
-                                  return <li className="text-sm text-gray-700 leading-relaxed" {...props}>{children}</li>;
+                                  return <li className="break-words text-sm leading-relaxed text-gray-700" {...props}>{children}</li>;
                                 },
                                 h1: ({ ...props }) => <h1 className="text-base font-bold mt-4 mb-2" {...props} />,
                                 h2: ({ ...props }) => <h2 className="text-sm font-bold mt-3 mb-1.5" {...props} />,

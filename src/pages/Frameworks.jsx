@@ -9,6 +9,7 @@ import {
   Users, ShieldAlert, GitFork, Shuffle, Target, Send, Loader2, Search, Ear, Brain, RefreshCw, BarChart2, Play,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
@@ -161,6 +162,12 @@ function FrameworkDetailModal({ fw, onClose }) {
 
   const getAdvice = async () => {
     if (!situation.trim()) return;
+    const guardrailReply = getTopicGuardResponse(situation.trim(), "coach");
+    if (guardrailReply) {
+      setAdvice(guardrailReply);
+      return;
+    }
+
     setLoading(true);
     try {
       const prompt = `You are an expert sales coach specializing in the DISC framework and sales effectiveness. The user has described the following situation: "${situation}"\n\nBased on this context and the ${fw.name} framework, provide specific, actionable advice for handling this situation. Include:\n1. Key principles from the ${fw.name} framework that apply\n2. Specific actions they should take\n3. What to avoid\n4. Expected outcomes if they follow this advice`;
@@ -171,7 +178,7 @@ function FrameworkDetailModal({ fw, onClose }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setAdvice(typeof data.response === 'string' ? data.response : String(data.response));
+        setAdvice(sanitizeAiText(typeof data.response === 'string' ? data.response : String(data.response)));
       } else {
         setAdvice("Unable to generate advice. Please try again.");
       }

@@ -30,7 +30,7 @@ const metrics = SIGNAL_CAPABILITIES.map(cap => ({
 }));
 
 export default function BehavioralMetrics() {
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(metrics[0]?.id ?? null);
   const selectedMetric = metrics.find((m) => m.id === selected);
 
   return (
@@ -54,7 +54,7 @@ export default function BehavioralMetrics() {
       </div>
 
       <div className="flex flex-col gap-5 lg:flex-row">
-        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-[52%] xl:max-w-[54%]">
+        <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 lg:max-w-[56%] xl:max-w-[58%]">
           {metrics.map((metric) => {
             const isSelected = selected === metric.id;
             return (
@@ -64,9 +64,9 @@ export default function BehavioralMetrics() {
                 onClick={() => setSelected(isSelected ? null : metric.id)}
               >
                 <CardContent className="ui-card-top-padding flex h-full flex-col p-6">
-                  <div className="flex h-full flex-col justify-between gap-4">
-                    <div className="flex items-start gap-4 pt-1">
-                      <div className="flex min-w-[92px] flex-col items-start gap-3 pt-2">
+                  <div className="flex h-full min-w-0 flex-col justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-4 pt-1">
+                      <div className="flex min-w-[96px] flex-col items-start gap-3 pt-2">
                         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${metric.iconBg}`}>
                           <metric.icon className="h-4 w-4" />
                         </div>
@@ -75,9 +75,9 @@ export default function BehavioralMetrics() {
                           <p className="mt-1 text-xs leading-relaxed text-slate-600">{metric.measurement}</p>
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
-                        <p className="mt-3 text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
+                      <div className="min-w-0 flex-1 space-y-3 pr-1">
+                        <h3 className="break-words text-base font-semibold leading-snug text-slate-900">{metric.title}</h3>
+                        <p className="break-words text-sm leading-relaxed text-slate-600">“{metric.canonicalQuestion}”</p>
                       </div>
                     </div>
                     <div className="flex items-center justify-between border-t border-slate-100 pt-3">
@@ -104,7 +104,7 @@ export default function BehavioralMetrics() {
               </div>
             </div>
           ) : (
-            <div className="ui-surface-card sticky top-4 space-y-5 border border-slate-200 p-6">
+            <div className="ui-surface-card sticky top-4 space-y-5 border border-slate-200 p-6 lg:p-7">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
                 <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${selectedMetric.iconBg}`}>
                   <selectedMetric.icon className="h-5 w-5" />
@@ -115,7 +115,7 @@ export default function BehavioralMetrics() {
                 </div>
               </div>
 
-              <p className="text-sm leading-relaxed text-slate-700">{selectedMetric.description}</p>
+              <p className="break-words text-sm leading-relaxed text-slate-700">{selectedMetric.description}</p>
 
               <section>
                 <div className="mb-3 flex items-center justify-between gap-3">

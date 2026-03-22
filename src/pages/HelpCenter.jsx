@@ -114,6 +114,13 @@ function AIChatPanel() {
     const userMsg = { role: "user", content: input.trim() };
     setMessages(prev => [...prev, userMsg]);
     setInput("");
+
+    const guardrailReply = getTopicGuardResponse(userMsg.content, "platform");
+    if (guardrailReply) {
+      setMessages(prev => [...prev, { role: "assistant", content: guardrailReply }]);
+      return;
+    }
+
     setLoading(true);
 
     const history = [...messages, userMsg].map(m => `${m.role === "user" ? "User" : "Coach"}: ${m.content}`).join("\n");
@@ -134,9 +141,7 @@ Respond helpfully and conversationally. If they ask about Signal Intelligence, e
       });
       if (res.ok) {
         const data = await res.json();
-        reply = typeof data.response === 'string' ? data.response : String(data.response);
-        // Strip markdown code blocks for clean display
-        reply = reply.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
+        reply = sanitizeAiText(typeof data.response === 'string' ? data.response : String(data.response));
       }
     } catch (err) {
       console.error('Help center error:', err);
