@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
+import BehavioralProfileGrid from "@/components/manager/BehavioralProfileGrid";
 import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
 import { ENABLEMENT_HUB_SPOKES, getAdoptionBand } from "@/lib/enablementHub";
@@ -426,6 +427,30 @@ function RepRow({ rep, derived, explanations, onSelect, selected }) {
       <td className="px-4 py-3 align-top text-center">
         <p className="text-sm font-bold text-slate-700">{rep.sessionsCompleted30d}</p>
         <p className="mt-1 text-[11px] text-slate-500">current 30d</p>
+      </td>
+      <td className="px-4 py-3 align-top">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
+            const metric = rep.behavioralMetrics[metricKey];
+            const isStrongest = metricKey === rep.strongestCapability;
+            const isWeakest = metricKey === rep.improvementPriority;
+
+            return (
+              <div
+                key={`${rep.id}-${metricKey}`}
+                className={`rounded-xl border px-2.5 py-2 ${isStrongest ? "border-teal-200 bg-teal-50" : isWeakest ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold leading-4 text-slate-700">{getBehavioralMetricLabel(metricKey)}</p>
+                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${isStrongest ? "bg-white text-teal-700" : isWeakest ? "bg-white text-amber-700" : "bg-slate-100 text-slate-600"}`}>
+                    {isStrongest ? "Strongest" : isWeakest ? "Weakest" : metric.trend}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-slate-900">{metric.score}/5</p>
+              </div>
+            );
+          })}
+        </div>
       </td>
       <td className="px-4 py-3 align-top">
         <div className="space-y-2">
@@ -908,11 +933,12 @@ export default function ManagerView() {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1040px] table-fixed text-sm">
+                  <table className="w-full min-w-[1480px] table-fixed text-sm">
                     <colgroup>
                       <col className="w-[240px]" />
                       <col className="w-[120px]" />
                       <col className="w-[120px]" />
+                      <col className="w-[420px]" />
                       <col className="w-[180px]" />
                       <col className="w-[210px]" />
                       <col className="w-[110px]" />
@@ -924,6 +950,7 @@ export default function ManagerView() {
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
                         <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Behavioral Profile (8 Metrics)</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
@@ -993,6 +1020,16 @@ export default function ManagerView() {
                       </div>
                     </div>
 
+                    <div className="mt-4">
+                      <BehavioralProfileGrid
+                        metricSource={selectedRep.behavioralMetrics}
+                        strongestKey={selectedRep.strongestCapability}
+                        weakestKey={selectedRep.improvementPriority}
+                        title="Behavioral Profile (8 Metrics)"
+                        subtitle="Consistent canonical ordering across the rep snapshot, rep detail panel, and AI insights context."
+                      />
+                    </div>
+
                     <div className={`mt-4 rounded-xl border border-teal-200 bg-slate-50 p-4 shadow-sm`}>
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric summary cards</p>
@@ -1020,34 +1057,6 @@ export default function ManagerView() {
 
               </div>
             </div>
-
-            {selectedRep ? (
-              <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Behavioral metrics</p>
-                    <p className="mt-1 text-sm text-slate-500">Full rep profile aligned to the 8 canonical Signal Intelligence capabilities only.</p>
-                  </div>
-                  <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">Stable row layout</span>
-                </div>
-                <div className="grid gap-3">
-                  {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
-                    const metric = selectedRep.behavioralMetrics[metricKey];
-                    return (
-                      <div key={metricKey} className={`grid grid-cols-1 gap-3 rounded-xl px-4 py-3 sm:grid-cols-[minmax(0,1.5fr)_88px_84px_120px] sm:items-center ${ENTERPRISE_SUBCARD}`}>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900">{formatMetricLabel(metricKey)}</p>
-                          <p className="mt-1 text-[11px] text-slate-500">{selectedRep.territory} rep metric</p>
-                        </div>
-                        <p className="text-sm font-bold text-slate-900">{metric.score}/5</p>
-                        <TrendBadge trend={metric.trend} />
-                        <p className="text-xs text-slate-500">Observed {metric.sessionsObserved}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
 
             {selectedRep ? (
               <div className="space-y-6">

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ChangeEvent } from "react";
-import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
+import type { ChangeEvent, KeyboardEvent } from "react";
+import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
+import { ENABLE_MANAGER_INSIGHTS, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
-import { MANAGER_MODEL_THRESHOLDS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
-import { formatMetricLabel, normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
+import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
+import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
 const CONTEXT_CHIPS = [
@@ -20,7 +20,12 @@ type ManagerInsightsPanelExpandedProps = {
 };
 
 type InsightFilter = (typeof FILTERS)[number];
-type Recommendation = ManagerInsightsResponse["recommendations"][number];
+type StructuredResponse = {
+  primaryFinding: string;
+  whyItMatters: string;
+  action: string;
+  monitor: string[];
+};
 
 const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performanceTrend"], { badge: string; label: string }> = {
   likely_improve: {
@@ -39,7 +44,6 @@ const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performa
 
 const ENTERPRISE_PANEL = "rounded-3xl border border-teal-200 bg-white shadow-sm";
 const ENTERPRISE_SUBCARD = "rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
-const ENTERPRISE_SUBCARD_WHITE = "rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
 
 function sanitizeResponseContent(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -72,27 +76,9 @@ function matchesFilter(text: string, filter: InsightFilter) {
 }
 
 function getScopeLabel(request: ManagerInsightsRequest) {
-  if (request.repData) return "Rep-specific";
-  if ((request.territoryData.repIds?.length ?? 0) <= 4) return "Cluster-specific";
-  return "Territory-wide";
-}
-
-function buildMonitoringTargets(request: ManagerInsightsRequest) {
-  if (request.repData && request.derivedMetrics) {
-    return [
-      `${getBehavioralMetricLabel(request.repData.improvementPriority)} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold`,
-      `${formatMetricLabel("engagementScore")} ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 monitoring threshold`,
-      `${formatMetricLabel("salesRiskScore")} ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
-      `${formatMetricLabel("confidenceScore")} ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
-    ];
-  }
-
-  return [
-    `${formatMetricLabel("avgEngagement")} ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 risk threshold`,
-    `${request.territoryData.mostCommonCapabilityGap ? getBehavioralMetricLabel(request.territoryData.mostCommonCapabilityGap) : "capability coverage"} gap`,
-    `${formatMetricLabel("territoryVolatility")} ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
-    `${formatMetricLabel("atRiskRepCount")} ${request.territoryData.atRiskRepCount}`,
-  ];
+  if (request.repData) return "Rep context";
+  if ((request.territoryData.repIds?.length ?? 0) <= 4) return "Cluster context";
+  return "Territory context";
 }
 
 function containsInvalidInsightText(text: string) {
@@ -110,31 +96,15 @@ function containsInvalidInsightText(text: string) {
   });
 }
 
-function buildOperationalCards(insights: ManagerInsightsResponse, request: ManagerInsightsRequest) {
-  const scopeLabel = getScopeLabel(request);
-  const monitoringTargets = buildMonitoringTargets(request);
-
-  return insights.recommendations.map((recommendation, index) => ({
-    id: `${scopeLabel}-${index}-${recommendation.action}`,
-    scopeLabel,
-    primaryFinding: index === 0 ? insights.summary : insights.keyDrivers[index - 1] ?? insights.summary,
-    dataBasis: insights.keyDrivers[index] ?? insights.risks[index] ?? insights.keyDrivers[0] ?? "No additional data basis available.",
-    recommendedAction: recommendation.action,
-    expectedImpact: recommendation.expectedImpact,
-    monitorNext: monitoringTargets[index] ?? monitoringTargets[monitoringTargets.length - 1] ?? "Monitor the next scheduled metric refresh.",
-  }));
-}
-
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
   const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsUnavailable, setInsightsUnavailable] = useState(false);
   const [input, setInput] = useState("");
-  const [response, setResponse] = useState<string | null>(null);
+  const [response, setResponse] = useState<StructuredResponse | null>(null);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<InsightFilter>("All");
-  const [explainingAction, setExplainingAction] = useState<string | null>(null);
 
   const requestBody = useMemo(() => {
     const parsed = managerInsightsRequestSchema.safeParse(data);
@@ -142,6 +112,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   }, [data]);
 
   const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
+  const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
+  const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
 
   useEffect(() => {
     if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
@@ -185,17 +157,17 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
 
   const filteredKeyDrivers = useMemo(() => (insights?.keyDrivers ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.keyDrivers]);
   const filteredRisks = useMemo(() => (insights?.risks ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.risks]);
-  const filteredRecommendations = useMemo(() => (insights?.recommendations ?? []).filter((item) => matchesFilter(`${item.action} ${item.rationale} ${item.expectedImpact}`, activeFilter)), [activeFilter, insights?.recommendations]);
-  const operationalCards = useMemo(() => (insights && requestBody ? buildOperationalCards(insights, requestBody) : []), [insights, requestBody]);
-  const filteredOperationalCards = useMemo(() => operationalCards.filter((item) => matchesFilter(`${item.primaryFinding} ${item.dataBasis} ${item.recommendedAction} ${item.expectedImpact} ${item.monitorNext}`, activeFilter)), [activeFilter, operationalCards]);
+  const insightFilterSeed = useMemo(() => structuredInsight ? `${structuredInsight.primaryFinding} ${structuredInsight.whyItMatters} ${structuredInsight.action} ${structuredInsight.monitor.join(" ")}` : "", [structuredInsight]);
+  const showStructuredInsight = useMemo(() => Boolean(structuredInsight && matchesFilter(insightFilterSeed, activeFilter)), [activeFilter, insightFilterSeed, structuredInsight]);
 
   const toggleChip = (chip: string) => {
     setSelectedChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip]);
   };
 
   const handleSubmit = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || !requestBody) return;
     setLoading(true);
+    setResponse(null);
 
     try {
       const res = await fetch("/api/llm/invoke", {
@@ -206,7 +178,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only canonical Signal Intelligence metric names. Do not invent thresholds, scores, labels, or contributors. Do not contradict deterministic outputs. Reference the rep name when rep-specific and use exact values in every claim. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next.",
+                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only these exact canonical Signal Intelligence capability names: Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management. Do not invent thresholds, scores, labels, contributors, or non-canonical metrics. Return exactly four sections in this order: Primary finding, Why it matters, Action, Monitor. Primary finding must be one sentence with one strength and one gap. Why it matters must be one sentence. Action must be one sentence. Monitor must contain at most 3 bullet items and every item must include a score, threshold comparison, and scale.",
               },
               {
                 role: "user",
@@ -228,56 +200,33 @@ Manager Question: ${input}`,
       if (!res.ok) return;
       const json = await res.json();
       const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      const normalizedContent = normalizeManagerText(content);
-      setResponse(normalizedContent && !containsInvalidInsightText(normalizedContent) ? normalizedContent : "Insight hidden because the generated response used an unsupported internal metric label or unsupported phrasing.");
+      if (content) {
+        containsInvalidInsightText(normalizeManagerText(content));
+      }
+      const deterministicResponse = buildStructuredInsightView(requestBody);
+      setResponse({
+        primaryFinding: deterministicResponse.primaryFinding,
+        whyItMatters: deterministicResponse.whyItMatters,
+        action: deterministicResponse.action,
+        monitor: deterministicResponse.monitor,
+      });
     } catch {
-      // Fail silently to preserve surrounding workflow.
+      const deterministicResponse = buildStructuredInsightView(requestBody);
+      setResponse({
+        primaryFinding: deterministicResponse.primaryFinding,
+        whyItMatters: deterministicResponse.whyItMatters,
+        action: deterministicResponse.action,
+        monitor: deterministicResponse.monitor,
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const explainRecommendation = async (recommendation: Recommendation) => {
-    setExplainingAction(recommendation.action);
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/llm/invoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, canonical metric, threshold, and deterministic risk data. Use only canonical Signal Intelligence metric names. Do not invent thresholds, scores, or contradictions. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Keep it concise, auditable, and explicit about thresholds.",
-              },
-              {
-                role: "user",
-                content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
-Territory Data: ${JSON.stringify(data.territoryData)}
-Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
-Deterministic Risk Flags: ${JSON.stringify(data.repData?.evidence?.deterministicRiskFlags ?? [])}
-Canonical Metrics: ${JSON.stringify(data.repData?.evidence?.canonicalBehavioralMetrics ?? [])}
-Recommendation: ${JSON.stringify(recommendation)}`,
-              },
-            ],
-          }),
-          temperature: 0.2,
-          max_tokens: 600,
-        }),
-      });
-
-      if (!res.ok) return;
-      const json = await res.json();
-      const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      const normalizedContent = normalizeManagerText(content);
-      setResponse(normalizedContent && !containsInvalidInsightText(normalizedContent) ? normalizedContent : "Insight hidden because the generated response used an unsupported internal metric label or unsupported phrasing.");
-    } catch {
-      // Fail silently to preserve surrounding workflow.
-    } finally {
-      setExplainingAction(null);
-      setLoading(false);
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void handleSubmit();
     }
   };
 
@@ -321,10 +270,15 @@ Recommendation: ${JSON.stringify(recommendation)}`,
         </div>
       ) : (
         <div className="mt-5 space-y-5">
-          <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 shadow-sm transition-colors duration-200 hover:bg-teal-50/80">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Primary finding</p>
-            <p className="mt-2 text-sm font-medium leading-6 text-slate-800">{normalizeManagerText(insights?.summary || "Select a rep to load predictive coaching context for this territory.")}</p>
-          </div>
+          {profileContext ? (
+            <BehavioralProfileGrid
+              metricSource={profileContext.metricSource}
+              strongestKey={profileContext.strongestKey}
+              weakestKey={profileContext.weakestKey}
+              title={profileContext.title}
+              subtitle={profileContext.subtitle}
+            />
+          ) : null}
 
           <div className={ENTERPRISE_SUBCARD}>
             <div>
@@ -358,113 +312,63 @@ Recommendation: ${JSON.stringify(recommendation)}`,
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            <div className="space-y-4">
-              <div className={ENTERPRISE_SUBCARD}>
-                <div className="mb-3 flex items-center gap-2">
-                  <Radar className="h-4 w-4 text-slate-600" />
-                  <h4 className="text-sm font-semibold text-slate-900">Data Basis</h4>
+          {showStructuredInsight && structuredInsight ? (
+            <div className="rounded-2xl border border-teal-200 bg-white p-4 shadow-sm">
+              <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">AI insight</p>
+                  <p className="mt-1 text-sm text-slate-500">{getScopeLabel(requestBody as ManagerInsightsRequest)} structured for concise enterprise review.</p>
                 </div>
-                <ul className="space-y-2 text-sm text-slate-700">
-                  {filteredKeyDrivers.length ? filteredKeyDrivers.map((item) => (
-                    <li key={item} className="flex gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-teal-500" />
-                      <span>{normalizeManagerText(item)}</span>
-                    </li>
-                  )) : <li className="text-slate-500">No data basis items match the current filter.</li>}
-                </ul>
-              </div>
-
-              <div className={ENTERPRISE_SUBCARD}>
-                <div className="mb-3 flex items-center gap-2">
-                  <ShieldAlert className="h-4 w-4 text-slate-600" />
-                  <h4 className="text-sm font-semibold text-slate-900">Risk Signals</h4>
-                </div>
-                <ul className="space-y-2 text-sm text-slate-700">
-                  {filteredRisks.length ? filteredRisks.map((item) => (
-                    <li key={item} className="flex gap-2 rounded-xl bg-amber-50 px-3 py-2">
-                      <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
-                      <span>{normalizeManagerText(item)}</span>
-                    </li>
-                  )) : <li className="text-slate-500">No risk signals match the current filter.</li>}
-                </ul>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className={ENTERPRISE_SUBCARD}>
-                <div className="mb-3 flex items-center gap-2">
-                  <ArrowUpRight className="h-4 w-4 text-slate-600" />
-                  <h4 className="text-sm font-semibold text-slate-900">Predictive Outlook</h4>
-                </div>
-
                 {insights?.predictiveOutlook ? (
-                    <div className="space-y-3 text-sm text-slate-700">
-                      <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}>
-                        {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-500">Confidence</p>
-                        <p className="text-lg font-bold text-slate-900">{Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">Reliability of the prediction. This is not a percent conversion of a 5-point performance score.</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wide text-slate-500">Reasoning</p>
-                      <p className="text-sm leading-6 text-slate-700">{normalizeManagerText(insights.predictiveOutlook.reasoning)}</p>
+                  <div className="space-y-2 text-right">
+                    <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}>
+                      <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
+                      {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
                     </div>
+                    <p className="text-xs font-semibold text-slate-500">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100 scale</p>
                   </div>
-                ) : (
-                  <p className="text-sm text-slate-500">Predictive outlook will appear when manager insights are available.</p>
-                )}
+                ) : null}
               </div>
 
-              <div className={ENTERPRISE_SUBCARD}>
-                <div className="mb-3 flex items-center gap-2">
-                  <BrainCircuit className="h-4 w-4 text-slate-600" />
-                  <h4 className="text-sm font-semibold text-slate-900">Recommended Action</h4>
+              <div className="space-y-4 text-sm text-slate-700">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
+                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.primaryFinding)}</p>
                 </div>
-                <div className="space-y-3">
-                  {filteredOperationalCards.length ? filteredOperationalCards.map((card) => {
-                    const sourceRecommendation = filteredRecommendations.find((item) => item.action === card.recommendedAction);
-                    return (
-                      <div key={card.id} className={ENTERPRISE_SUBCARD_WHITE}>
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">{card.scopeLabel}</span>
-                          {sourceRecommendation ? (
-                            <button type="button" onClick={() => explainRecommendation(sourceRecommendation)} className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:text-teal-700" disabled={loading && explainingAction === sourceRecommendation.action}>
-                              {loading && explainingAction === sourceRecommendation.action ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Explaining</> : "Explain"}
-                            </button>
-                          ) : null}
-                        </div>
-                        <div className="space-y-3 text-sm text-slate-700">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
-                            <p>{normalizeManagerText(card.primaryFinding)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Data basis</p>
-                            <p>{normalizeManagerText(card.dataBasis)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recommended action</p>
-                            <p className="font-semibold text-slate-900">{normalizeManagerText(card.recommendedAction)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Expected impact</p>
-                            <p>{normalizeManagerText(card.expectedImpact)}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What to monitor next</p>
-                            <p>{normalizeManagerText(card.monitorNext)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }) : <p className="text-sm text-slate-500">No recommendations match the current filter.</p>}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+                  <p className="mt-1">{normalizeManagerText(structuredInsight.whyItMatters)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
+                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.action)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
+                  <ul className="mt-2 space-y-2">
+                    {structuredInsight.monitor.map((item) => (
+                      <li key={item} className="rounded-xl bg-slate-50 px-3 py-2">{normalizeManagerText(item)}</li>
+                    ))}
+                  </ul>
                 </div>
               </div>
+
+              {(filteredKeyDrivers.length || filteredRisks.length) ? (
+                <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting context</p>
+                  <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                    {[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => (
+                      <li key={item} className="rounded-xl bg-white px-3 py-2">{normalizeManagerText(item)}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
-          </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+              No AI insight block matches the current filter.
+            </div>
+          )}
 
           <div className={ENTERPRISE_SUBCARD}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Interactive AI coaching</p>
@@ -472,14 +376,15 @@ Recommendation: ${JSON.stringify(recommendation)}`,
               <textarea
                 value={input}
                 onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setInput(event.target.value)}
-                placeholder="Ask a follow-up or add context about this rep or territory..."
+                onKeyDown={handleKeyDown}
+                placeholder="Ask a question or request deeper insight..."
                 className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
               />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">Selected context: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
                 <button type="button" onClick={handleSubmit} disabled={loading} className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
-                  {loading && !explainingAction ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Refine Insights
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Ask AI
                 </button>
               </div>
             </div>
@@ -488,7 +393,28 @@ Recommendation: ${JSON.stringify(recommendation)}`,
           {response ? (
             <div className="ai-followup-response rounded-2xl border border-teal-100 bg-teal-50 p-4">
               <h4 className="text-sm font-semibold text-slate-900">AI Coaching Response</h4>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{response}</p>
+              <div className="mt-3 space-y-4 text-sm text-slate-700">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
+                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.primaryFinding)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+                  <p className="mt-1">{normalizeManagerText(response.whyItMatters)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
+                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.action)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
+                  <ul className="mt-2 space-y-2">
+                    {response.monitor.slice(0, 3).map((item) => (
+                      <li key={item} className="rounded-xl bg-white px-3 py-2">{normalizeManagerText(item)}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>

@@ -506,3 +506,105 @@ export function getBehavioralMetricKeySet() {
 export function formatBehavioralMetricReference(metricKey, score) {
   return `${metricKey} (${getBehavioralMetricLabel(metricKey)}): ${round(score, 1)}/5`;
 }
+
+function trimSentence(text, fallback) {
+  const sanitized = sanitizeText(text, fallback);
+  return /[.!?]$/.test(sanitized) ? sanitized : `${sanitized}.`;
+}
+
+export function buildBehavioralProfileContext(payload) {
+  if (payload.repData) {
+    const rep = payload.repData;
+    return {
+      title: "Behavioral Profile (8 Metrics)",
+      subtitle: `${rep.name}'s canonical Signal Intelligence profile in the required 8-capability order.`,
+      metricSource: rep.behavioralMetrics,
+      strongestKey: rep.strongestCapability,
+      weakestKey: rep.improvementPriority,
+    };
+  }
+
+  const territoryMetrics = payload.territoryData.avgBehavioralMetrics;
+  const strongestKey = BEHAVIORAL_METRIC_KEYS.reduce((best, key) => territoryMetrics[key] > territoryMetrics[best] ? key : best, BEHAVIORAL_METRIC_KEYS[0]);
+  const weakestKey = BEHAVIORAL_METRIC_KEYS.reduce((worst, key) => territoryMetrics[key] < territoryMetrics[worst] ? key : worst, BEHAVIORAL_METRIC_KEYS[0]);
+
+  return {
+    title: "Behavioral Profile (8 Metrics)",
+    subtitle: `${payload.territoryData.territory} territory averages aligned to the same canonical 8-capability order.`,
+    metricSource: territoryMetrics,
+    strongestKey,
+    weakestKey,
+  };
+}
+
+export function buildStructuredInsightView(payload) {
+  const profileContext = buildBehavioralProfileContext(payload);
+
+  if (payload.repData && payload.derivedMetrics) {
+    const rep = payload.repData;
+    const strongestLabel = getBehavioralMetricLabel(rep.strongestCapability);
+    const weakestLabel = getBehavioralMetricLabel(rep.improvementPriority);
+    const strongestScore = rep.behavioralMetrics[rep.strongestCapability].score;
+    const weakestScore = rep.behavioralMetrics[rep.improvementPriority].score;
+    const nextWeakest = BEHAVIORAL_METRIC_KEYS
+      .filter((key) => key !== rep.improvementPriority)
+      .sort((a, b) => rep.behavioralMetrics[a].score - rep.behavioralMetrics[b].score)[0];
+    const nextWeakestLabel = getBehavioralMetricLabel(nextWeakest);
+    const nextWeakestScore = rep.behavioralMetrics[nextWeakest].score;
+
+    return {
+      profileContext,
+      primaryFinding: trimSentence(
+        `${rep.name} is strong in ${strongestLabel} (${strongestScore}/5) but below threshold in ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+        `${rep.name} is strong in ${strongestLabel} (${strongestScore}/5) but below threshold in ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold).`,
+      ),
+      whyItMatters: trimSentence(
+        `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold increases resistance risk and limits conversion effectiveness even when ${strongestLabel} remains strong`,
+        `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold increases performance risk.`,
+      ),
+      action: trimSentence(
+        `Run 2 targeted coaching sessions tied to recent sessions where ${strongestLabel} was effective, then rehearse the same scenarios for ${weakestLabel}`,
+        `Run 2 targeted coaching sessions tied to recent sessions where ${strongestLabel} was effective, then rehearse the same scenarios for ${weakestLabel}.`,
+      ),
+      monitor: [
+        `${weakestLabel} (${weakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+        `${nextWeakestLabel} (${nextWeakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+        `${strongestLabel} (${strongestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+      ],
+    };
+  }
+
+  const territory = payload.territoryData;
+  const gapKey = territory.mostCommonCapabilityGap ?? profileContext.weakestKey;
+  const strongestKey = profileContext.strongestKey;
+  const strongestLabel = getBehavioralMetricLabel(strongestKey);
+  const weakestLabel = getBehavioralMetricLabel(gapKey);
+  const strongestScore = territory.avgBehavioralMetrics[strongestKey];
+  const weakestScore = territory.avgBehavioralMetrics[gapKey];
+  const nextWeakestKey = BEHAVIORAL_METRIC_KEYS
+    .filter((key) => key !== gapKey)
+    .sort((a, b) => territory.avgBehavioralMetrics[a] - territory.avgBehavioralMetrics[b])[0];
+  const nextWeakestLabel = getBehavioralMetricLabel(nextWeakestKey);
+  const nextWeakestScore = territory.avgBehavioralMetrics[nextWeakestKey];
+
+  return {
+    profileContext,
+    primaryFinding: trimSentence(
+      `${territory.territory} is strongest in ${strongestLabel} (${strongestScore}/5) but the primary gap is ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+      `${territory.territory} is strongest in ${strongestLabel} (${strongestScore}/5) but the primary gap is ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold).`,
+    ),
+    whyItMatters: trimSentence(
+      `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold is limiting territory consistency and increasing execution risk across ${territory.territory}`,
+      `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold is limiting territory consistency.`,
+    ),
+    action: trimSentence(
+      `Launch a focused coaching sprint on ${weakestLabel} and use recent sessions with stronger ${strongestLabel} behaviors as the benchmark pattern`,
+      `Launch a focused coaching sprint on ${weakestLabel} and use recent sessions with stronger ${strongestLabel} behaviors as the benchmark pattern.`,
+    ),
+    monitor: [
+      `${weakestLabel} (${weakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+      `${nextWeakestLabel} (${nextWeakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+      `${strongestLabel} (${strongestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+    ],
+  };
+}
