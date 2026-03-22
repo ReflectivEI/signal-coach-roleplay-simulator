@@ -60,6 +60,7 @@ export type RepDerivedMetrics = {
   salesRiskScore: number;
   dataConfidenceIndex: number;
   confidenceScore: number;
+  predictiveConfidence?: number;
 };
 
 export type TerritoryData = {

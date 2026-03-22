@@ -1,5 +1,7 @@
 // @ts-check
 
+import { SIGNAL_CAPABILITIES } from "../roleplay/signalIntelligenceSOT.jsx";
+
 /**
  * Canonical Manager View dataset and deterministic derivation layer.
  * This module is the single source of truth for Manager View table rows,
@@ -20,12 +22,12 @@ export const BEHAVIORAL_METRIC_KEYS = [
 export const METRIC_LABELS = {
   signalAwareness: "Signal Awareness",
   signalInterpretation: "Signal Interpretation",
-  adaptability: "Adaptability",
-  objectionHandling: "Objection Handling",
-  valueCommunication: "Value Communication",
+  adaptability: "Adaptive Response",
+  objectionHandling: "Objection Navigation",
+  valueCommunication: "Value Connection",
   commitmentGeneration: "Commitment Generation",
-  emotionalAttunement: "Emotional Attunement",
-  conversationControl: "Conversation Control",
+  emotionalAttunement: "Customer Engagement Monitoring",
+  conversationControl: "Conversation Management",
 };
 
 const TREND_VALUES = { up: 1, flat: 0, down: -1 };
@@ -44,6 +46,102 @@ export const MANAGER_MODEL_THRESHOLDS = {
   volatilityModerate: 0.4,
   confidenceHigh: 0.75,
   confidenceModerate: 0.6,
+};
+
+export const CANONICAL_CAPABILITY_ID_BY_KEY = {
+  signalAwareness: "signal_awareness",
+  signalInterpretation: "signal_interpretation",
+  adaptability: "adaptive_response",
+  objectionHandling: "objection_navigation",
+  valueCommunication: "value_connection",
+  commitmentGeneration: "commitment_generation",
+  emotionalAttunement: "customer_engagement",
+  conversationControl: "conversation_management",
+};
+
+export const CANONICAL_BEHAVIORAL_METRICS = BEHAVIORAL_METRIC_KEYS.map((key) => {
+  const capability = SIGNAL_CAPABILITIES.find((item) => item.id === CANONICAL_CAPABILITY_ID_BY_KEY[key]);
+  return {
+    key,
+    canonicalId: CANONICAL_CAPABILITY_ID_BY_KEY[key],
+    label: capability?.label ?? METRIC_LABELS[key],
+    measurement: capability?.measurement ?? null,
+    canonicalQuestion: capability?.canonicalQuestion ?? null,
+  };
+});
+
+const CAPABILITY_BY_MANAGER_KEY = Object.fromEntries(
+  CANONICAL_BEHAVIORAL_METRICS.map((item) => [item.key, item]),
+);
+
+export const MANAGER_RISK_RULES = {
+  rep: [
+    {
+      id: "low_capability",
+      severity: "high",
+      threshold: MANAGER_MODEL_THRESHOLDS.repMetricLow,
+      comparator: "<",
+      explanationTemplate: ({ label, value, threshold }) => `${label} is ${value}/5, below the ${threshold}/5 capability threshold.`,
+    },
+    {
+      id: "low_engagement",
+      severity: "moderate",
+      threshold: MANAGER_MODEL_THRESHOLDS.engagementRisk,
+      comparator: "<",
+      explanationTemplate: ({ value, threshold }) => `Engagement is ${value}/100, below the ${threshold}/100 monitoring threshold.`,
+    },
+    {
+      id: "high_sales_risk",
+      severity: "high",
+      threshold: MANAGER_MODEL_THRESHOLDS.salesRiskHigh,
+      comparator: ">=",
+      explanationTemplate: ({ value, threshold }) => `Sales risk is ${value}/100, at or above the ${threshold}/100 high-risk threshold.`,
+    },
+    {
+      id: "elevated_variance",
+      severity: "moderate",
+      threshold: MANAGER_MODEL_THRESHOLDS.volatilityModerate,
+      comparator: ">",
+      explanationTemplate: ({ value, threshold }) => `Behavioral variance is ${value}, above the ${threshold} watch threshold.`,
+    },
+    {
+      id: "low_data_confidence",
+      severity: "moderate",
+      threshold: MANAGER_MODEL_THRESHOLDS.confidenceModerate,
+      comparator: "<",
+      explanationTemplate: ({ value, threshold }) => `Data confidence is ${Math.round(value * 100)}%, below the ${Math.round(threshold * 100)}% minimum confidence threshold.`,
+    },
+  ],
+  territory: [
+    {
+      id: "territory_low_engagement",
+      severity: "high",
+      threshold: MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk,
+      comparator: "<",
+      explanationTemplate: ({ value, threshold }) => `Territory engagement is ${value}/100, below the ${threshold}/100 territory risk threshold.`,
+    },
+    {
+      id: "territory_watch_engagement",
+      severity: "moderate",
+      threshold: MANAGER_MODEL_THRESHOLDS.territoryEngagementModerate,
+      comparator: "<",
+      explanationTemplate: ({ value, threshold }) => `Territory engagement is ${value}/100, below the ${threshold}/100 watch threshold.`,
+    },
+    {
+      id: "territory_high_volatility",
+      severity: "moderate",
+      threshold: MANAGER_MODEL_THRESHOLDS.volatilityModerate,
+      comparator: ">",
+      explanationTemplate: ({ value, threshold }) => `Territory volatility is ${value}, above the ${threshold} watch threshold.`,
+    },
+    {
+      id: "territory_multiple_at_risk",
+      severity: "high",
+      threshold: 2,
+      comparator: ">=",
+      explanationTemplate: ({ value, threshold }) => `${value} reps are currently at risk, meeting the ${threshold}-rep escalation rule.`,
+    },
+  ],
 };
 
 /** @typedef {typeof BEHAVIORAL_METRIC_KEYS[number]} BehavioralMetricKey */
@@ -131,6 +229,7 @@ export const MANAGER_MODEL_THRESHOLDS = {
  *   salesRiskScore: number;
  *   dataConfidenceIndex: number;
  *   confidenceScore: number;
+ *   predictiveConfidence: number;
  * }} RepDerivedMetrics
  */
 
@@ -171,6 +270,44 @@ function clamp(value, min, max) {
 function round(value, digits = 1) {
   const factor = 10 ** digits;
   return Math.round(value * factor) / factor;
+}
+
+export function getBehavioralMetricDefinition(key) {
+  return CAPABILITY_BY_MANAGER_KEY[key] ?? {
+    key,
+    canonicalId: key,
+    label: METRIC_LABELS[key] ?? key,
+    measurement: null,
+    canonicalQuestion: null,
+  };
+}
+
+function compareThreshold(value, comparator, threshold) {
+  if (comparator === "<") return value < threshold;
+  if (comparator === "<=") return value <= threshold;
+  if (comparator === ">") return value > threshold;
+  if (comparator === ">=") return value >= threshold;
+  return false;
+}
+
+function buildThresholdEvaluation({ ruleId, metricKey = null, label, value, threshold, comparator, severity, explanationTemplate }) {
+  const triggered = compareThreshold(value, comparator, threshold);
+  return {
+    ruleId,
+    metricKey,
+    label,
+    value: round(value, 2),
+    threshold,
+    comparator,
+    severity,
+    triggered,
+    explanation: explanationTemplate({
+      label,
+      value: round(value, 2),
+      threshold,
+      comparator,
+    }),
+  };
 }
 
 /** @param {Record<BehavioralMetricKey, RepMetricProfile>} behavioralMetrics */
@@ -334,10 +471,13 @@ export function deriveRepMetrics(rep) {
   );
   const confidenceScore = round(
     clamp(
-      (dataConfidenceIndex * 0.52)
-      + (variancePenaltyRatio * 0.18)
-      + (trendStabilityRatio * 0.18)
-      + (metricCoverageRatio * 0.12),
+      (dataConfidenceIndex * 0.34)
+      + (variancePenaltyRatio * 0.14)
+      + (trendStabilityRatio * 0.12)
+      + (metricCoverageRatio * 0.1)
+      + ((engagementStabilityScore / 100) * 0.12)
+      + (((coachingResponsivenessScore ?? 50) / 100) * 0.1)
+      + ((conversionProxyScore / 100) * 0.08),
       0,
       1,
     ),
@@ -357,7 +497,61 @@ export function deriveRepMetrics(rep) {
     salesRiskScore,
     dataConfidenceIndex,
     confidenceScore,
+    predictiveConfidence: confidenceScore,
   };
+}
+
+/** @param {RepData} rep @param {RepDerivedMetrics} derived */
+export function evaluateRepRiskFlags(rep, derived) {
+  const weakestMetricValue = rep.behavioralMetrics[rep.improvementPriority].score;
+  return [
+    buildThresholdEvaluation({
+      ruleId: "low_capability",
+      metricKey: rep.improvementPriority,
+      label: getBehavioralMetricLabel(rep.improvementPriority),
+      value: weakestMetricValue,
+      threshold: MANAGER_MODEL_THRESHOLDS.repMetricLow,
+      comparator: "<",
+      severity: "high",
+      explanationTemplate: MANAGER_RISK_RULES.rep[0].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "low_engagement",
+      label: "Engagement Score",
+      value: derived.engagementScore,
+      threshold: MANAGER_MODEL_THRESHOLDS.engagementRisk,
+      comparator: "<",
+      severity: "moderate",
+      explanationTemplate: MANAGER_RISK_RULES.rep[1].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "high_sales_risk",
+      label: "Sales Risk",
+      value: derived.salesRiskScore,
+      threshold: MANAGER_MODEL_THRESHOLDS.salesRiskHigh,
+      comparator: ">=",
+      severity: "high",
+      explanationTemplate: MANAGER_RISK_RULES.rep[2].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "elevated_variance",
+      label: "Behavioral Variance",
+      value: derived.behavioralVariance,
+      threshold: MANAGER_MODEL_THRESHOLDS.volatilityModerate,
+      comparator: ">",
+      severity: "moderate",
+      explanationTemplate: MANAGER_RISK_RULES.rep[3].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "low_data_confidence",
+      label: "Data Confidence Index",
+      value: derived.dataConfidenceIndex,
+      threshold: MANAGER_MODEL_THRESHOLDS.confidenceModerate,
+      comparator: "<",
+      severity: "moderate",
+      explanationTemplate: MANAGER_RISK_RULES.rep[4].explanationTemplate,
+    }),
+  ];
 }
 
 /** @param {Omit<RepData, "strongestCapability" | "improvementPriority" | "overallScore">} rep */
@@ -439,7 +633,7 @@ export function buildTerritoryDataset(reps) {
         : "low";
 
     const coachingOpportunityClusters = [
-      mostCommonCapabilityGap ? `Cluster on ${mostCommonCapabilityGap} coaching in ${territory}` : null,
+      mostCommonCapabilityGap ? `Cluster on ${getBehavioralMetricLabel(mostCommonCapabilityGap)} coaching in ${territory}` : null,
       avgEngagement < MANAGER_MODEL_THRESHOLDS.engagementRisk ? `Increase guided practice frequency because weighted engagement is ${avgEngagement}/100 below the ${MANAGER_MODEL_THRESHOLDS.engagementRisk} threshold` : null,
       volatility > MANAGER_MODEL_THRESHOLDS.volatilityModerate ? `Stabilize performance transfer because weighted volatility is ${volatility} against the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold` : null,
       territoryReps.some((rep) => rep.territoryContext.payerPressure >= 4) ? "Add payer-heavy access scenarios to scenario mix" : null,
@@ -461,6 +655,87 @@ export function buildTerritoryDataset(reps) {
       coachingOpportunityClusters,
       repIds: territoryReps.map((rep) => rep.id),
       aggregationWeights,
+    };
+  });
+}
+
+/** @param {TerritoryData} territory */
+export function evaluateTerritoryRiskFlags(territory) {
+  const rules = [
+    buildThresholdEvaluation({
+      ruleId: "territory_low_engagement",
+      label: "Territory Engagement",
+      value: territory.avgEngagement,
+      threshold: MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk,
+      comparator: "<",
+      severity: "high",
+      explanationTemplate: MANAGER_RISK_RULES.territory[0].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "territory_watch_engagement",
+      label: "Territory Engagement",
+      value: territory.avgEngagement,
+      threshold: MANAGER_MODEL_THRESHOLDS.territoryEngagementModerate,
+      comparator: "<",
+      severity: "moderate",
+      explanationTemplate: MANAGER_RISK_RULES.territory[1].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "territory_high_volatility",
+      label: "Territory Volatility",
+      value: territory.territoryVolatility,
+      threshold: MANAGER_MODEL_THRESHOLDS.volatilityModerate,
+      comparator: ">",
+      severity: "moderate",
+      explanationTemplate: MANAGER_RISK_RULES.territory[2].explanationTemplate,
+    }),
+    buildThresholdEvaluation({
+      ruleId: "territory_multiple_at_risk",
+      label: "At-Risk Rep Count",
+      value: territory.atRiskRepCount,
+      threshold: 2,
+      comparator: ">=",
+      severity: "high",
+      explanationTemplate: MANAGER_RISK_RULES.territory[3].explanationTemplate,
+    }),
+  ];
+
+  return rules.filter((rule) => {
+    if (rule.ruleId === "territory_watch_engagement") {
+      return rule.triggered && territory.avgEngagement >= MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk;
+    }
+    return rule.triggered;
+  });
+}
+
+/** @param {RepData} rep */
+export function buildCanonicalBehavioralMetrics(rep) {
+  return BEHAVIORAL_METRIC_KEYS.map((key) => {
+    const capability = getBehavioralMetricDefinition(key);
+    const metric = rep.behavioralMetrics[key];
+    return {
+      key,
+      canonicalId: capability.canonicalId,
+      label: capability.label,
+      measurement: capability.measurement,
+      canonicalQuestion: capability.canonicalQuestion,
+      score: metric.score,
+      trend: metric.trend,
+      sessionsObserved: metric.sessionsObserved,
+    };
+  });
+}
+
+/** @param {TerritoryData} territory */
+export function buildCanonicalTerritoryMetrics(territory) {
+  return BEHAVIORAL_METRIC_KEYS.map((key) => {
+    const capability = getBehavioralMetricDefinition(key);
+    return {
+      key,
+      canonicalId: capability.canonicalId,
+      label: capability.label,
+      measurement: capability.measurement,
+      score: territory.avgBehavioralMetrics[key],
     };
   });
 }
@@ -879,6 +1154,7 @@ const rawReps = /** @type {RepData[]} */ (rawRepSeed.map((rep) => finalizeRep(/*
 /** @param {RepData[]} reps */
 export function validateManagerDataset(reps) {
   const issues = [];
+  const canonicalLabelSet = new Set(SIGNAL_CAPABILITIES.map((capability) => capability.label));
 
   reps.forEach((rep) => {
     const extremes = getCapabilityExtremes(rep.behavioralMetrics);
@@ -890,6 +1166,9 @@ export function validateManagerDataset(reps) {
     }
     if (BEHAVIORAL_METRIC_KEYS.some((key) => typeof rep.behavioralMetrics[key]?.score !== "number")) {
       issues.push(`${rep.name}: incomplete 8-metric profile`);
+    }
+    if (BEHAVIORAL_METRIC_KEYS.some((key) => !canonicalLabelSet.has(getBehavioralMetricLabel(key)))) {
+      issues.push(`${rep.name}: non-canonical metric label detected`);
     }
   });
 
@@ -920,7 +1199,7 @@ export function getManagerViewDataset() {
 
 /** @param {BehavioralMetricKey} key */
 export function getBehavioralMetricLabel(key) {
-  return METRIC_LABELS[key] ?? key;
+  return getBehavioralMetricDefinition(key).label;
 }
 
 /** @param {RepData} rep */
@@ -934,6 +1213,7 @@ export function getRepEvidenceSummary(rep) {
     trainingTypeMix: rep.trainingTypeMix,
     lastPracticeDate: rep.lastPracticeDate,
     observationDepth: rep.observationDepth,
+    canonicalBehavioralMetrics: buildCanonicalBehavioralMetrics(rep),
   };
 }
 
@@ -942,12 +1222,24 @@ export function getRepEvidenceSummary(rep) {
  * @param {TerritoryData} territoryData
  */
 export function buildManagerInsightsRequest(rep, territoryData, derivedMetrics = undefined) {
+  const resolvedDerivedMetrics = rep ? (derivedMetrics ?? MANAGER_DERIVED_BY_REP_ID[rep.id]) : undefined;
   return {
     repId: rep?.id,
     territoryId: territoryData.territory,
-    repData: rep ? { ...rep, evidence: getRepEvidenceSummary(rep) } : undefined,
+    repData: rep
+      ? {
+        ...rep,
+        evidence: {
+          ...getRepEvidenceSummary(rep),
+          strongestCapabilityLabel: getBehavioralMetricLabel(rep.strongestCapability),
+          improvementPriorityLabel: getBehavioralMetricLabel(rep.improvementPriority),
+          deterministicRiskFlags: resolvedDerivedMetrics ? evaluateRepRiskFlags(rep, resolvedDerivedMetrics) : [],
+          thresholdEvaluations: resolvedDerivedMetrics ? evaluateRepRiskFlags(rep, resolvedDerivedMetrics) : [],
+        },
+      }
+      : undefined,
     territoryData,
-    derivedMetrics: rep ? (derivedMetrics ?? MANAGER_DERIVED_BY_REP_ID[rep.id]) : undefined,
+    derivedMetrics: resolvedDerivedMetrics,
     timeframe: "30d",
   };
 }

@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import { AlertTriangle, ArrowUpRight, BrainCircuit, Loader2, Radar, ShieldAlert } from "lucide-react";
 import { ENABLE_MANAGER_INSIGHTS, buildManagerExplainabilityNote, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
+import { MANAGER_MODEL_THRESHOLDS, getBehavioralMetricLabel } from "./managerPerformanceData.js";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
 const CONTEXT_CHIPS = [
@@ -74,19 +75,34 @@ function getScopeLabel(request: ManagerInsightsRequest) {
 function buildMonitoringTargets(request: ManagerInsightsRequest) {
   if (request.repData && request.derivedMetrics) {
     return [
-      `${request.repData.improvementPriority} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs 3.5/5 threshold`,
-      `engagementScore ${request.derivedMetrics.engagementScore}/100 vs 60/100 threshold`,
-      `salesRiskScore ${request.derivedMetrics.salesRiskScore}/100 vs 62/100 threshold`,
-      `confidence ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
+      `${getBehavioralMetricLabel(request.repData.improvementPriority)} ${request.repData.behavioralMetrics[request.repData.improvementPriority].score}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold`,
+      `Engagement Score ${request.derivedMetrics.engagementScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.engagementRisk}/100 threshold`,
+      `Sales Risk ${request.derivedMetrics.salesRiskScore}/100 vs ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
+      `Predictive Confidence ${Math.round(request.derivedMetrics.confidenceScore * 100)}%`,
     ];
   }
 
   return [
-    `avgEngagement ${request.territoryData.avgEngagement}/100 vs 60/100 threshold`,
-    `${request.territoryData.mostCommonCapabilityGap ?? "capability coverage"} gap`,
-    `territoryVolatility ${request.territoryData.territoryVolatility} vs 0.4 threshold`,
-    `atRiskRepCount ${request.territoryData.atRiskRepCount}`,
+    `Territory Engagement ${request.territoryData.avgEngagement}/100 vs ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 threshold`,
+    `${request.territoryData.mostCommonCapabilityGap ? getBehavioralMetricLabel(request.territoryData.mostCommonCapabilityGap) : "capability coverage"} gap`,
+    `Territory Volatility ${request.territoryData.territoryVolatility} vs ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} threshold`,
+    `At-Risk Rep Count ${request.territoryData.atRiskRepCount}`,
   ];
+}
+
+function containsInvalidInsightText(text: string) {
+  if (/(emotional attunement|adaptability|objection handling|value communication|conversation control|signalAwareness|signalInterpretation|valueCommunication|emotionalAttunement|conversationControl)/i.test(text)) {
+    return true;
+  }
+
+  return Array.from(text.matchAll(/(\d+(?:\.\d+)?)\s*\/?\d*\s*(?:is\s*)?(below|under|above|over|at or above|at least)\s+(?:the\s+)?(\d+(?:\.\d+)?)/gi)).some((match) => {
+    const current = Number(match[1]);
+    const operator = match[2].toLowerCase();
+    const threshold = Number(match[3]);
+    if ((operator === "below" || operator === "under") && !(current < threshold)) return true;
+    if ((operator === "above" || operator === "over" || operator === "at or above" || operator === "at least") && !(current >= threshold)) return true;
+    return false;
+  });
 }
 
 function buildOperationalCards(insights: ManagerInsightsResponse, request: ManagerInsightsRequest) {
@@ -185,13 +201,15 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Use exact metric names, exact values, exact thresholds, and exact rep names.",
+                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only canonical Signal Intelligence metric names. Do not invent thresholds, scores, labels, or contributors. Do not contradict deterministic outputs. Reference the rep name when rep-specific and use exact values in every claim. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next.",
               },
               {
                 role: "user",
                 content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
 Territory Data: ${JSON.stringify(data.territoryData)}
 Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
+Deterministic Risk Flags: ${JSON.stringify(data.repData?.evidence?.deterministicRiskFlags ?? [])}
+Canonical Metrics: ${JSON.stringify(data.repData?.evidence?.canonicalBehavioralMetrics ?? [])}
 Selected Context: ${JSON.stringify(selectedChips)}
 Manager Question: ${input}`,
               },
@@ -205,7 +223,7 @@ Manager Question: ${input}`,
       if (!res.ok) return;
       const json = await res.json();
       const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      setResponse(content || "");
+      setResponse(content && !containsInvalidInsightText(content) ? content : "Insight hidden because the generated response used a non-canonical metric label or unsupported phrasing.");
     } catch {
       // Fail silently to preserve surrounding workflow.
     } finally {
@@ -226,13 +244,15 @@ Manager Question: ${input}`,
             messages: [
               {
                 role: "system",
-                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, and derived metrics. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Keep it concise, auditable, and explicit about thresholds.",
+                content: "You are a data-grounded sales coaching assistant. Explain recommendations using only the supplied rep, territory, canonical metric, threshold, and deterministic risk data. Use only canonical Signal Intelligence metric names. Do not invent thresholds, scores, or contradictions. Return five labeled sections in this exact order: Primary finding, Data basis, Recommended action, Expected impact, What to monitor next. Keep it concise, auditable, and explicit about thresholds.",
               },
               {
                 role: "user",
                 content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
 Territory Data: ${JSON.stringify(data.territoryData)}
 Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
+Deterministic Risk Flags: ${JSON.stringify(data.repData?.evidence?.deterministicRiskFlags ?? [])}
+Canonical Metrics: ${JSON.stringify(data.repData?.evidence?.canonicalBehavioralMetrics ?? [])}
 Recommendation: ${JSON.stringify(recommendation)}`,
               },
             ],
@@ -245,7 +265,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
       if (!res.ok) return;
       const json = await res.json();
       const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      setResponse(content || "");
+      setResponse(content && !containsInvalidInsightText(content) ? content : "Insight hidden because the generated response used a non-canonical metric label or unsupported phrasing.");
     } catch {
       // Fail silently to preserve surrounding workflow.
     } finally {
@@ -279,7 +299,7 @@ Recommendation: ${JSON.stringify(recommendation)}`,
               <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
               {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
             </div>
-            <p className="text-sm font-semibold text-slate-700">Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
+            <p className="text-sm font-semibold text-slate-700">Predictive confidence {Math.round(insights.predictiveOutlook.confidence * 100)}%</p>
           </div>
         ) : null}
       </div>

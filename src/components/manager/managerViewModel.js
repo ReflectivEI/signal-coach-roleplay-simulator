@@ -5,6 +5,9 @@ import {
   MANAGER_REP_DATASET,
   deriveRepMetrics,
   buildTerritoryDataset,
+  buildCanonicalTerritoryMetrics,
+  evaluateRepRiskFlags,
+  evaluateTerritoryRiskFlags,
   getBehavioralMetricLabel,
   MANAGER_MODEL_THRESHOLDS,
   validateManagerDataset,
@@ -300,11 +303,11 @@ function buildRepExplanations(rep, derivedByRepId) {
     }),
     conversionProxyScore: buildMetricExplanation({
       label: "Conversion Proxy",
-      definition: "Weighted proxy for moving a conversation to the next step based on commitment generation and value communication.",
-      formula: "(commitmentGeneration x 20 x 0.55) + (valueCommunication x 20 x 0.45)",
+      definition: "Weighted proxy for moving a conversation to the next step based on Commitment Generation and Value Connection.",
+      formula: "(Commitment Generation x 20 x 0.55) + (Value Connection x 20 x 0.45)",
       inputs: {
         commitmentGeneration: rep.behavioralMetrics.commitmentGeneration.score,
-        valueCommunication: rep.behavioralMetrics.valueCommunication.score,
+        valueConnection: rep.behavioralMetrics.valueCommunication.score,
       },
       output: `${derived.conversionProxyScore}/100`,
     }),
@@ -336,15 +339,17 @@ function buildRepExplanations(rep, derivedByRepId) {
       output: `${Math.round(derived.dataConfidenceIndex * 100)}%`,
     }),
     confidenceScore: buildMetricExplanation({
-      label: "Confidence",
-      definition: "Predictive confidence derived from data completeness, sample size, variance, trend stability, and engagement stability. Remove this number if the underlying inputs are missing.",
-      formula: "(dataConfidenceIndex x 0.52) + (variancePenalty x 0.18) + (trendStability x 0.18) + (metricCoverage x 0.12)",
+      label: "Predictive Confidence",
+      definition: "Predictive confidence derived from auditable inputs only: data confidence, variance, trend stability, engagement stability, coaching responsiveness, and conversion proxy.",
+      formula: "(dataConfidenceIndex x 0.34) + (variancePenalty x 0.14) + (trendStability x 0.12) + (metricCoverage x 0.10) + (engagementStability x 0.12) + (coachingResponsiveness x 0.10) + (conversionProxy x 0.08)",
       inputs: {
         dataConfidenceIndex: round(derived.dataConfidenceIndex, 2),
         metricCoverageRatio,
         sampleSizeRatio,
         variancePenaltyRatio,
         engagementStabilityScore: derived.engagementStabilityScore,
+        coachingResponsivenessScore: derived.coachingResponsivenessScore ?? "not enough coaching observations",
+        conversionProxyScore: derived.conversionProxyScore,
       },
       output: `${confidencePercent}%`,
       notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above.`,
@@ -484,6 +489,14 @@ function validateRuntimeState(dataset) {
     if (!dataset.explanations.rep[rep.id]?.overallScore || !dataset.explanations.rep[rep.id]?.engagementScore) {
       issues.push(`${rep.name}: missing metric explanation metadata`);
     }
+    const invalidRiskFlag = (dataset.repRiskFlagsByRepId?.[rep.id] || []).find((flag) => {
+      if (!flag.triggered) return false;
+      if (flag.metricKey && getBehavioralMetricLabel(flag.metricKey) === flag.metricKey) return true;
+      return false;
+    });
+    if (invalidRiskFlag) {
+      issues.push(`${rep.name}: non-canonical risk flag label`);
+    }
   });
 
   dataset.territories.forEach((territory) => {
@@ -498,6 +511,10 @@ function validateRuntimeState(dataset) {
     if (!dataset.explanations.territory[territory.territory]?.avgEngagement) {
       issues.push(`${territory.territory}: missing territory explanation metadata`);
     }
+    const missingTerritoryTrace = buildCanonicalTerritoryMetrics(territory).some((metric) => typeof metric.score !== "number");
+    if (missingTerritoryTrace) {
+      issues.push(`${territory.territory}: territory metric traceability failed`);
+    }
   });
 
   return {
@@ -511,6 +528,10 @@ export function buildManagerViewState(version = 0) {
   const derivedByRepId = Object.fromEntries(reps.map((rep) => [rep.id, deriveRepMetrics(rep)]));
   const territories = buildTerritoryDataset(reps);
   const nationalTerritory = buildNationalTerritory(reps);
+  const repRiskFlagsByRepId = Object.fromEntries(reps.map((rep) => [rep.id, evaluateRepRiskFlags(rep, derivedByRepId[rep.id]).filter((flag) => flag.triggered)]));
+  const territoryRiskFlagsByName = Object.fromEntries(
+    [...territories, nationalTerritory].map((territory) => [territory.territory, evaluateTerritoryRiskFlags(/** @type {any} */ (territory))]),
+  );
   const overviewMetrics = buildOverviewMetrics(reps, derivedByRepId);
   const explanations = {
     overview: buildOverviewExplanations(overviewMetrics),
@@ -528,6 +549,8 @@ export function buildManagerViewState(version = 0) {
     nationalTerritory,
     validation: validateManagerDataset(reps),
     explanations,
+    repRiskFlagsByRepId,
+    territoryRiskFlagsByName,
   });
 
   return {
@@ -546,6 +569,8 @@ export function buildManagerViewState(version = 0) {
     overviewMetrics,
     explanations,
     contributors,
+    repRiskFlagsByRepId,
+    territoryRiskFlagsByName,
     validation,
   };
 }
