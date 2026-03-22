@@ -105,26 +105,31 @@ const DERIVED_METRIC_GLOSSARY = [
     label: "Overall Score",
     definition: "Derived score that blends the Average of 8 Behavioral Metrics with the Sales Outcome Score.",
     formula: "(Average of 8 Behavioral Metrics × 0.65) + (Sales Outcome Score × 0.35)",
+    derivedFrom: "Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management",
   },
   {
     label: "Learning Engagement Score",
     definition: "Derived activity score built from sessions, module completion, practice streak, engagement consistency, and coaching cadence.",
     formula: "(Session volume × 0.34) + (Module completion × 0.22) + (Practice streak × 0.18) + (Engagement consistency × 0.16) + coaching bonus",
+    derivedFrom: "Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management",
   },
   {
     label: "Sales Risk",
     definition: "Derived risk score that combines sales outcome, average behavioral execution, learning engagement, trend, status, and commitment generation threshold checks.",
     formula: "58 - (Sales Outcome Score × 9) - (Average of 8 Behavioral Metrics × 6) - (Learning Engagement Score × 0.16) + adjustments",
+    derivedFrom: "Sales Outcome Score, Commitment Generation, Learning Engagement Score",
   },
   {
     label: "Territory Volatility",
     definition: "Derived territory spread showing how far rep sales outcome scores sit from the territory average.",
     formula: "Weighted average of |rep sales outcome score - territory average sales outcome score|",
+    derivedFrom: "Sales Outcome Score",
   },
   {
     label: "Predictive Confidence",
-    definition: "Reliability score for the predictive outlook. This percentage is not a conversion of a 5-point performance score.",
+    definition: "Prediction reliability (not a performance score) for the predictive outlook.",
     formula: "Weighted confidence model using data confidence, variance, stability, coverage, coaching responsiveness, and conversion proxy",
+    derivedFrom: "Data Confidence, Behavioral Variance, Engagement Stability",
   },
 ];
 
@@ -181,7 +186,7 @@ const MANAGER_VIEW_FOUNDATION = [
   },
   {
     label: "Predictive Confidence",
-    definition: "A model confidence measure, not a conversion of a 5-point score. It estimates how reliable the outlook is based on data quality, stability, coverage, and supporting evidence.",
+    definition: "Prediction reliability (not a performance score). It estimates how reliable the outlook is based on data quality, stability, coverage, and supporting evidence.",
     formula: "weighted confidence model using data confidence, variance, trend stability, engagement stability, coaching responsiveness, and conversion proxy",
     whyItMatters: "This separates predictive reliability from performance scoring so users do not confuse 75% confidence with 74% or 78% scale-equivalent performance.",
   },
@@ -238,6 +243,7 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
 }
 
 function MetricSummaryCard({ labelKey, value, explanation }) {
+  const normalizedExplanation = explanation ? normalizeExplanation(explanation) : null;
   return (
     <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
       <div className="flex items-start justify-between gap-2">
@@ -245,6 +251,9 @@ function MetricSummaryCard({ labelKey, value, explanation }) {
         <MetricPill explanation={explanation} label="Formula" />
       </div>
       <p className="mt-2 text-lg font-bold text-slate-900">{value}</p>
+      {normalizedExplanation?.derivedFrom?.length ? (
+        <p className="mt-2 text-[11px] leading-5 text-slate-500">Derived from: {normalizedExplanation.derivedFrom.join(", ")}</p>
+      ) : null}
     </div>
   );
 }
@@ -305,6 +314,12 @@ function MetricExplanationDialog({ explanation, children }) {
                 <p>• No threshold is used for this metric. It is descriptive only.</p>
               )}
             </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric lineage</p>
+            <p className="mt-2 text-xs leading-6 text-slate-600">
+              {normalizedExplanation.derivedFrom?.length ? `Derived from: ${normalizedExplanation.derivedFrom.join(", ")}` : "Derived from: This metric is canonical or descriptive only."}
+            </p>
           </div>
           <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Current output</p>
@@ -382,6 +397,7 @@ function DefinitionsDialog() {
                   <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">{metric.definition}</p>
                   <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-700">{metric.formula}</p>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-500">Derived from: {metric.derivedFrom}</p>
                 </div>
               ))}
             </div>

@@ -13,6 +13,7 @@ import {
 const HIGH_RISK_THRESHOLD = MANAGER_MODEL_THRESHOLDS.salesRiskHigh;
 const IMPROVEMENT_THRESHOLD = 34;
 const BEHAVIORAL_KEY_SET = new Set(BEHAVIORAL_METRIC_KEYS);
+export const PREDICTIVE_CONFIDENCE_LABEL = "Prediction reliability (not a performance score)";
 const behavioralMetricKeyEnum = z.enum([
   "signalAwareness",
   "signalInterpretation",
@@ -355,8 +356,8 @@ export function createFallbackManagerInsights(payload, derived) {
       performanceTrend,
       confidence: derived.confidence,
       reasoning: rep
-        ? `Predictive confidence is ${predictiveConfidencePercent}%. This is a reliability measure, not the percent conversion of the sales outcome score. Sales outcome is ${formatScalePercent(rep.salesPerformance)}, while predictive confidence is driven by data confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}%, sessions ${rep.sessionsCompleted30d}, behavioral variance ${payload.derivedMetrics?.behavioralVariance}, engagement stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and trend stability on ${weakestCapabilityLabel}.`
-        : `Predictive confidence is ${predictiveConfidencePercent}%. This is a reliability measure, not a conversion of the territory sales outcome score. Territory sales outcome is ${formatScalePercent(territory.avgPerformance)}, while predictive confidence is driven by weighted rep coverage, territory volatility ${territory.territoryVolatility}, average learning engagement ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
+        ? `${PREDICTIVE_CONFIDENCE_LABEL}: ${predictiveConfidencePercent}/100. Sales Outcome Score is ${formatScalePercent(rep.salesPerformance)} on the 5-point scale, while prediction reliability is derived from Data Confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}/100, Behavioral Variance ${payload.derivedMetrics?.behavioralVariance}, Engagement Stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and ${formatTrendLabel(rep.salesTrend)} sales directionality.`
+        : `${PREDICTIVE_CONFIDENCE_LABEL}: ${predictiveConfidencePercent}/100. Territory Sales Outcome Score is ${formatScalePercent(territory.avgPerformance)} on the 5-point scale, while prediction reliability is derived from weighted rep coverage, Territory Volatility ${territory.territoryVolatility}, Learning Engagement Score ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
     },
   };
 }
@@ -512,6 +513,69 @@ function trimSentence(text, fallback) {
   return /[.!?]$/.test(sanitized) ? sanitized : `${sanitized}.`;
 }
 
+function formatTrendLabel(trend) {
+  return trend === "up" ? "up" : trend === "down" ? "down" : "flat";
+}
+
+function formatFivePointComparison(score, threshold) {
+  const delta = round(score - threshold, 1);
+  const comparator = delta >= 0 ? `${delta}/5 above` : `${Math.abs(delta)}/5 below`;
+  return `${score}/5 (${comparator} the ${threshold}/5 threshold)`;
+}
+
+function formatHundredPointComparison(score, threshold) {
+  const delta = round(score - threshold, 1);
+  const comparator = delta >= 0 ? `${delta}/100 above` : `${Math.abs(delta)}/100 below`;
+  return `${score}/100 (${comparator} the ${threshold}/100 threshold)`;
+}
+
+function pickUrgentRepMetric(rep, derived) {
+  const weakestScore = rep.behavioralMetrics[rep.improvementPriority].score;
+  const weakestLabel = getBehavioralMetricLabel(rep.improvementPriority);
+
+  return [
+    {
+      label: weakestLabel,
+      severity: Math.max(0, MANAGER_MODEL_THRESHOLDS.repMetricLow - weakestScore),
+      summary: `${weakestLabel} is ${formatFivePointComparison(weakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale with ${formatTrendLabel(rep.behavioralMetrics[rep.improvementPriority].trend)} directionality`,
+    },
+    {
+      label: "Sales Risk",
+      severity: Math.max(0, (derived.salesRiskScore - MANAGER_MODEL_THRESHOLDS.salesRiskHigh) / 20),
+      summary: `Sales Risk is ${formatHundredPointComparison(derived.salesRiskScore, MANAGER_MODEL_THRESHOLDS.salesRiskHigh)} on the 100-point scale with ${formatTrendLabel(rep.salesTrend)} sales directionality`,
+    },
+    {
+      label: "Learning Engagement Score",
+      severity: Math.max(0, (MANAGER_MODEL_THRESHOLDS.engagementRisk - derived.engagementScore) / 20),
+      summary: `Learning Engagement Score is ${formatHundredPointComparison(derived.engagementScore, MANAGER_MODEL_THRESHOLDS.engagementRisk)} on the 100-point scale with ${rep.sessionsCompleted30d} sessions completed in the last 30 days`,
+    },
+  ].sort((a, b) => b.severity - a.severity)[0];
+}
+
+function pickUrgentTerritoryMetric(territory) {
+  const gapKey = territory.mostCommonCapabilityGap ?? BEHAVIORAL_METRIC_KEYS[0];
+  const gapScore = territory.avgBehavioralMetrics[gapKey];
+  const gapLabel = getBehavioralMetricLabel(gapKey);
+
+  return [
+    {
+      label: gapLabel,
+      severity: Math.max(0, MANAGER_MODEL_THRESHOLDS.repMetricLow - gapScore),
+      summary: `${gapLabel} is ${formatFivePointComparison(gapScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale with ${formatTrendLabel(territory.trend)} territory directionality`,
+    },
+    {
+      label: "Learning Engagement Score",
+      severity: Math.max(0, (MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk - territory.avgEngagement) / 20),
+      summary: `Learning Engagement Score is ${formatHundredPointComparison(territory.avgEngagement, MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk)} on the 100-point scale across the weighted territory`,
+    },
+    {
+      label: "Territory Volatility",
+      severity: Math.max(0, territory.territoryVolatility - MANAGER_MODEL_THRESHOLDS.volatilityModerate),
+      summary: `Territory Volatility is ${territory.territoryVolatility}, which is ${territory.territoryVolatility >= MANAGER_MODEL_THRESHOLDS.volatilityModerate ? "above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold`,
+    },
+  ].sort((a, b) => b.severity - a.severity)[0];
+}
+
 export function buildBehavioralProfileContext(payload) {
   if (payload.repData) {
     const rep = payload.repData;
@@ -542,34 +606,38 @@ export function buildStructuredInsightView(payload) {
 
   if (payload.repData && payload.derivedMetrics) {
     const rep = payload.repData;
+    const derived = payload.derivedMetrics;
     const strongestLabel = getBehavioralMetricLabel(rep.strongestCapability);
     const weakestLabel = getBehavioralMetricLabel(rep.improvementPriority);
     const strongestScore = rep.behavioralMetrics[rep.strongestCapability].score;
     const weakestScore = rep.behavioralMetrics[rep.improvementPriority].score;
+    const strongestTrend = formatTrendLabel(rep.behavioralMetrics[rep.strongestCapability].trend);
+    const weakestTrend = formatTrendLabel(rep.behavioralMetrics[rep.improvementPriority].trend);
     const nextWeakest = BEHAVIORAL_METRIC_KEYS
       .filter((key) => key !== rep.improvementPriority)
       .sort((a, b) => rep.behavioralMetrics[a].score - rep.behavioralMetrics[b].score)[0];
     const nextWeakestLabel = getBehavioralMetricLabel(nextWeakest);
     const nextWeakestScore = rep.behavioralMetrics[nextWeakest].score;
+    const urgentMetric = pickUrgentRepMetric(rep, derived);
 
     return {
       profileContext,
       primaryFinding: trimSentence(
-        `${rep.name} is strong in ${strongestLabel} (${strongestScore}/5) but below threshold in ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-        `${rep.name} is strong in ${strongestLabel} (${strongestScore}/5) but below threshold in ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold).`,
+        `Most urgent metric: ${urgentMetric.label}. ${rep.name} shows ${strongestLabel} at ${strongestScore}/5 on the 5-point scale with ${strongestTrend} directionality, but ${weakestLabel} is ${formatFivePointComparison(weakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} with ${weakestTrend} directionality, so ${weakestLabel} → handling resistance behavior → Conversion Proxy ${derived.conversionProxyScore}/100 → Sales Risk ${derived.salesRiskScore}/100`,
+        `Most urgent metric: ${urgentMetric.label}. ${rep.name} shows ${strongestLabel} at ${strongestScore}/5 on the 5-point scale, but ${weakestLabel} is ${formatFivePointComparison(weakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)}.`,
       ),
       whyItMatters: trimSentence(
-        `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold increases resistance risk and limits conversion effectiveness even when ${strongestLabel} remains strong`,
-        `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold increases performance risk.`,
+        `${weakestLabel} is the capability gap, it weakens handling resistance behavior in live calls, and that behavior drag is visible in Conversion Proxy ${derived.conversionProxyScore}/100 and Sales Risk ${derived.salesRiskScore}/100, which is ${derived.salesRiskScore >= MANAGER_MODEL_THRESHOLDS.salesRiskHigh ? "at or above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100 threshold`,
+        `${weakestLabel} is the capability gap and is dragging business outcomes.`,
       ),
       action: trimSentence(
-        `Run 2 targeted coaching sessions tied to recent sessions where ${strongestLabel} was effective, then rehearse the same scenarios for ${weakestLabel}`,
+        `Run 2 targeted coaching sessions that start from ${strongestLabel} examples, then rehearse the exact objection moments where ${weakestLabel} sits ${round(MANAGER_MODEL_THRESHOLDS.repMetricLow - weakestScore, 1)}/5 below threshold so the next review can move ${weakestLabel} up and pull Sales Risk down`,
         `Run 2 targeted coaching sessions tied to recent sessions where ${strongestLabel} was effective, then rehearse the same scenarios for ${weakestLabel}.`,
       ),
       monitor: [
-        `${weakestLabel} (${weakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-        `${nextWeakestLabel} (${nextWeakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-        `${strongestLabel} (${strongestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+        `Most urgent metric: ${urgentMetric.summary}.`,
+        `${nextWeakestLabel} is ${formatFivePointComparison(nextWeakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale with ${formatTrendLabel(rep.behavioralMetrics[nextWeakest].trend)} directionality.`,
+        `${PREDICTIVE_CONFIDENCE_LABEL}: ${Math.round(derived.confidenceScore * 100)}/100, derived from: Data Confidence ${Math.round(derived.dataConfidenceIndex * 100)}/100, Behavioral Variance ${derived.behavioralVariance}, Engagement Stability ${derived.engagementStabilityScore}/100.`,
       ],
     };
   }
@@ -581,6 +649,7 @@ export function buildStructuredInsightView(payload) {
   const weakestLabel = getBehavioralMetricLabel(gapKey);
   const strongestScore = territory.avgBehavioralMetrics[strongestKey];
   const weakestScore = territory.avgBehavioralMetrics[gapKey];
+  const urgentMetric = pickUrgentTerritoryMetric(territory);
   const nextWeakestKey = BEHAVIORAL_METRIC_KEYS
     .filter((key) => key !== gapKey)
     .sort((a, b) => territory.avgBehavioralMetrics[a] - territory.avgBehavioralMetrics[b])[0];
@@ -590,21 +659,21 @@ export function buildStructuredInsightView(payload) {
   return {
     profileContext,
     primaryFinding: trimSentence(
-      `${territory.territory} is strongest in ${strongestLabel} (${strongestScore}/5) but the primary gap is ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-      `${territory.territory} is strongest in ${strongestLabel} (${strongestScore}/5) but the primary gap is ${weakestLabel} (${weakestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold).`,
+      `Most urgent metric: ${urgentMetric.label}. ${territory.territory} is strongest in ${strongestLabel} at ${strongestScore}/5 on the 5-point scale, but ${weakestLabel} is ${formatFivePointComparison(weakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} with ${formatTrendLabel(territory.trend)} territory directionality, so ${weakestLabel} → execution consistency → Sales Outcome Score ${territory.avgPerformance}/5 → territory risk ${territory.riskLevel}`,
+      `Most urgent metric: ${urgentMetric.label}. ${territory.territory} is strongest in ${strongestLabel}, but the primary gap is ${weakestLabel}.`,
     ),
     whyItMatters: trimSentence(
-      `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold is limiting territory consistency and increasing execution risk across ${territory.territory}`,
+      `${weakestLabel} is the shared capability gap, it weakens execution consistency across reps, and that behavior drag keeps Sales Outcome Score at ${territory.avgPerformance}/5 and Learning Engagement Score at ${territory.avgEngagement}/100, which is ${territory.avgEngagement >= MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk ? "above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk}/100 territory risk threshold`,
       `${weakestLabel} below the ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold is limiting territory consistency.`,
     ),
     action: trimSentence(
-      `Launch a focused coaching sprint on ${weakestLabel} and use recent sessions with stronger ${strongestLabel} behaviors as the benchmark pattern`,
+      `Launch a focused coaching sprint on ${weakestLabel}, benchmark the stronger ${strongestLabel} pattern, and review weighted reps until ${weakestLabel} closes its ${round(MANAGER_MODEL_THRESHOLDS.repMetricLow - weakestScore, 1)}/5 gap and Territory Volatility stops rising`,
       `Launch a focused coaching sprint on ${weakestLabel} and use recent sessions with stronger ${strongestLabel} behaviors as the benchmark pattern.`,
     ),
     monitor: [
-      `${weakestLabel} (${weakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-      `${nextWeakestLabel} (${nextWeakestScore}/5 → ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
-      `${strongestLabel} (${strongestScore}/5 vs ${MANAGER_MODEL_THRESHOLDS.repMetricLow}/5 threshold)`,
+      `Most urgent metric: ${urgentMetric.summary}.`,
+      `${nextWeakestLabel} is ${formatFivePointComparison(nextWeakestScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale with ${formatTrendLabel(territory.trend)} territory directionality.`,
+      `Learning Engagement Score is ${formatHundredPointComparison(territory.avgEngagement, MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk)} on the 100-point scale, and Territory Volatility is ${territory.territoryVolatility} versus the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold.`,
     ],
   };
 }
