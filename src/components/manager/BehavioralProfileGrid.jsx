@@ -69,10 +69,10 @@ export default function BehavioralProfileGrid({
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
       <div className="flex flex-col gap-2 border-b border-slate-200 pb-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{title}</p>
-          {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">{title}</p>
+          {subtitle ? <p className="mt-1 text-sm text-slate-700">{subtitle}</p> : null}
         </div>
-        <span className="inline-flex max-w-full self-start rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Canonical order · 8 capabilities</span>
+        <span className="inline-flex max-w-full self-start rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-700">Canonical order · 8 capabilities</span>
       </div>
 
       <div className={`mt-4 grid gap-3 ${compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"}`}>
@@ -90,7 +90,7 @@ export default function BehavioralProfileGrid({
               </div>
               <p className="mt-2 text-lg font-bold">{item.score}/5</p>
               {showMeta ? (
-                <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                <p className="mt-1 text-[11px] leading-5 text-slate-700">
                   {item.trend ? `Trend ${item.trend}` : "Territory aggregate"}{item.sessionsObserved !== null ? ` · Observed ${item.sessionsObserved}` : ""}
                 </p>
               ) : null}
