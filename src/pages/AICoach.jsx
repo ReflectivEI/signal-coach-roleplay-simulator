@@ -380,58 +380,60 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
   };
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-slate-100/70">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col overflow-hidden bg-slate-100/70 xl:h-[calc(100vh-3.5rem)] xl:flex-row">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 bg-white/95 backdrop-blur-sm flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 flex-shrink-0" aria-hidden="true" />
-            <div>
-              <h1 className="text-[28px] leading-none font-bold text-slate-900">AI Coach</h1>
-              <div className="mt-1 space-y-1 text-sm text-slate-600">
-                <p>Work through real conversation challenges and refine your messaging with clarity and precision.</p>
-                <p>Improve how you approach complex discussions through structured guidance and coaching.</p>
+        <div className="w-full border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
+          <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex w-full min-w-0 items-start gap-3">
+              <div className="hidden h-11 w-11 flex-shrink-0 sm:block" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-bold leading-tight text-slate-900 sm:text-[28px]">AI Coach</h1>
+                <div className="mt-2 w-full max-w-none space-y-1 text-sm leading-6 text-slate-600">
+                  <p className="max-w-none break-words [word-break:normal] [overflow-wrap:break-word]">Work through real conversation challenges and refine your messaging with clarity and precision.</p>
+                  <p className="max-w-none break-words [word-break:normal] [overflow-wrap:break-word]">Improve how you approach complex discussions through structured guidance and coaching.</p>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <SessionSummaryPill
-              sessionData={
-                messages.filter(m => !m.hidden).length > 0
-                  ? {
-                    title: "AI Coach Session",
-                    duration: `${messages.filter(m => !m.hidden).length} messages`,
-                    summary: sessionSummary || "Generating summary…",
-                  }
-                  : null
-              }
-              onRefresh={() => generateSessionSummary(messages)}
-              isRefreshing={generatingSummary}
-            />
-            <Link to={createPageUrl("PreCallPlanning")}>
-              <Button variant="outline" size="sm" className="text-xs">
-                <ClipboardList className="w-3 h-3 mr-1" />
-                Pre-Call Plan
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end">
+              <SessionSummaryPill
+                sessionData={
+                  messages.filter(m => !m.hidden).length > 0
+                    ? {
+                      title: "AI Coach Session",
+                      duration: `${messages.filter(m => !m.hidden).length} messages`,
+                      summary: sessionSummary || "Generating summary…",
+                    }
+                    : null
+                }
+                onRefresh={() => generateSessionSummary(messages)}
+                isRefreshing={generatingSummary}
+              />
+              <Link to={createPageUrl("PreCallPlanning")} className="w-full sm:w-auto">
+                <Button variant="outline" size="sm" className="w-full justify-center text-xs">
+                  <ClipboardList className="mr-1 h-3 w-3" />
+                  Pre-Call Plan
+                </Button>
+              </Link>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-center bg-teal-500 text-xs text-white hover:bg-teal-600 sm:w-auto"
+                onClick={handleNewChat}
+              >
+                <RefreshCw className="mr-1 h-3 w-3" />
+                New Chat
               </Button>
-            </Link>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-teal-500 text-white hover:bg-teal-600 text-xs"
-              onClick={handleNewChat}
-            >
-              <RefreshCw className="w-3 h-3 mr-1" />
-              New Chat
-            </Button>
+            </div>
           </div>
         </div>
 
         {/* Content Tools Toolbar */}
-        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/90">
-          <div className="mx-auto flex w-full max-w-5xl items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mr-1">
-              <Sparkles className="w-3.5 h-3.5 text-teal-500" />
+        <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3 sm:px-6">
+          <div className="mx-auto flex w-full max-w-5xl flex-wrap items-start gap-2 overflow-hidden">
+            <div className="mr-1 flex w-full items-center gap-1.5 text-xs font-semibold text-slate-500 sm:w-auto">
+              <Sparkles className="h-3.5 w-3.5 text-teal-500" />
               Content Tools:
             </div>
             {contentTools.map((tool) => (
@@ -445,7 +447,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                   }
                 }}
                 disabled={isLoading || contentToolMode !== null}
-                className="ui-pill px-3 py-1.5 text-xs disabled:opacity-50"
+                className="ui-pill max-w-full flex-shrink-0 px-3 py-1.5 text-xs disabled:opacity-50"
               >
                 {tool.label}
               </button>
@@ -454,21 +456,21 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(241,245,249,0.7)_100%)]">
-          <div className="max-w-4xl mx-auto space-y-4">
-            <div className="max-w-[56rem] mx-auto">
+        <div className="flex-1 overflow-x-hidden overflow-y-auto bg-[linear-gradient(180deg,rgba(248,250,252,0.9)_0%,rgba(241,245,249,0.7)_100%)] px-4 py-4 sm:px-5">
+          <div className="mx-auto w-full max-w-4xl space-y-4">
+            <div className="mx-auto w-full max-w-[56rem]">
               <TodaysTipCard />
             </div>
             {messages.filter(m => !m.hidden).length === 0 && !isLoading ? (
-              <div className="enterprise-hero max-w-[56rem] mx-auto px-10 py-7 text-center">
-                <div className="mx-auto mb-5 flex items-center justify-center gap-3 text-white">
-                  <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
+              <div className="enterprise-hero mx-auto w-full max-w-[56rem] px-4 py-6 text-center sm:px-10 sm:py-7">
+                <div className="mx-auto mb-5 flex flex-col items-center justify-center gap-3 text-white sm:flex-row">
+                  <h2 className="text-3xl font-bold leading-[1.05] sm:text-[44px]">Start a Conversation</h2>
                   <MessageSquare className="w-10 h-10 text-teal-200" />
                 </div>
-                <p className="mb-5 text-sm font-medium leading-6 text-slate-200/85">
+                <p className="mb-5 px-1 text-sm font-medium leading-6 text-slate-200/85">
                   What would you like to improve today?
                 </p>
-                <div className="w-full max-w-3xl mx-auto grid grid-cols-1 gap-3">
+                <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-3">
                   {suggestedQuestions.map((q) => (
                     <button
                       key={q}
@@ -482,7 +484,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                 </div>
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-[58rem] space-y-5">
+              <div className="mx-auto w-full max-w-[58rem] space-y-5 overflow-x-hidden">
                 {/* Session context banner */}
                 {sessionContext && (
                   <div className="ui-surface-card space-y-3 p-4">
@@ -490,7 +492,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                       <Sparkles className="w-3.5 h-3.5" />
                       Coaching session loaded from: <span className="italic">{sessionContext.scenarioTitle}</span>
                     </div>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap gap-3 overflow-hidden">
                       {sessionContext.misalignments?.length > 0 && (
                         <div className="flex-1 min-w-0 rounded-xl bg-rose-50 px-3 py-2">
                           <p className="text-xs font-semibold text-red-600 flex items-center gap-1 mb-1"><AlertTriangle className="w-3 h-3" /> Misalignments</p>
@@ -515,15 +517,15 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                     key={visIdx}
                     className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                   >
-                    <div className={`max-w-[80%] ${msg.role === "user" ? "" : "w-full"}`}>
+                    <div className={`w-full max-w-full sm:max-w-[88%] ${msg.role === "user" ? "sm:w-auto" : ""}`}>
                       <div
-                        className={`rounded-2xl px-5 py-4 text-sm shadow-sm ${msg.role === "user"
+                        className={`overflow-hidden rounded-2xl px-4 py-4 text-sm shadow-sm sm:px-5 ${msg.role === "user"
                           ? "bg-teal-500 text-white"
                           : "bg-white border border-gray-200 text-gray-700"
                           }`}
                       >
                         {msg.role === "assistant" ? (
-                          <div className="ui-markdown prose prose-sm max-w-none break-words text-gray-700 space-y-3">
+                          <div className="ui-markdown prose prose-sm max-w-none break-words text-gray-700 space-y-3 overflow-hidden">
                             <ReactMarkdown
                               components={{
                                 p: ({ children, ...props }) => {
@@ -603,9 +605,9 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         </div>
 
         {/* Input */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-white">
+        <div className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.04)] sm:px-6 sm:py-4">
           {contentToolMode && (
-            <div className="mb-3 flex items-center gap-2 text-xs bg-teal-50 border border-teal-200 rounded-lg px-3 py-2">
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs">
               <Sparkles className="w-3.5 h-3.5 text-teal-600" />
               <span className="text-teal-700 font-medium">Using: {contentToolMode}</span>
               <button
@@ -629,23 +631,25 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                 sendMessage();
               }
             }}
-            className="flex gap-3 max-w-3xl mx-auto"
+            className="mx-auto flex w-full max-w-3xl flex-col gap-3 sm:flex-row"
           >
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder={contentToolMode ? `Share your specific situation for ${contentToolMode}...` : "Type your message..."}
-              className="flex-1"
+              className="min-h-[48px] w-full flex-1"
               disabled={isLoading}
             />
-            <Button type="submit" disabled={isLoading || !input.trim()} className="bg-teal-500 hover:bg-teal-600">
-              <Send className="w-4 h-4" />
+            <Button type="submit" disabled={isLoading || !input.trim()} className="w-full bg-teal-500 hover:bg-teal-600 sm:w-auto">
+              <Send className="h-4 w-4" />
             </Button>
           </form>
         </div>
       </div>
 
-      <InsightsSidebar key={`insights-${chatResetKey}`} onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
+      <div className="order-2 hidden xl:flex">
+        <InsightsSidebar key={`insights-${chatResetKey}`} onSuggestedTopic={(topic) => sendMessage(topic)} messages={messages} />
+      </div>
     </div>
   );
 }

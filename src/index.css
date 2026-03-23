@@ -80,6 +80,7 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    box-sizing: border-box;
   }
 
 
@@ -91,6 +92,7 @@
   body {
     @apply min-h-screen bg-background text-foreground antialiased;
     line-height: 1.5;
+    overflow-x: hidden;
   }
 }
 

@@ -71,7 +71,7 @@ export default function SessionSummaryPill({ sessionData }) {
   };
 
   if (!sessionData) return (
-    <ButtonField size="sm" variant="outline" className="text-xs border-gray-200 text-gray-400 cursor-not-allowed flex items-center gap-1" disabled>
+    <ButtonField size="sm" variant="outline" className="flex w-full items-center justify-center gap-1 text-xs border-gray-200 text-gray-400 sm:w-auto cursor-not-allowed" disabled>
       <FileText className="w-3 h-3" />
       Session Summary
     </ButtonField>
@@ -82,7 +82,7 @@ export default function SessionSummaryPill({ sessionData }) {
       <ButtonField
         size="sm"
         variant="outline"
-        className="text-xs border-teal-300 text-teal-600 hover:bg-teal-50 flex items-center gap-1"
+        className="flex w-full items-center justify-center gap-1 text-xs border-teal-300 text-teal-600 hover:bg-teal-50 sm:w-auto"
         onClick={() => setIsOpen(true)}
       >
         <FileText className="w-3 h-3" />
