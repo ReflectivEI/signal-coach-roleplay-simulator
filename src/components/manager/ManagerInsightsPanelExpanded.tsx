@@ -20,11 +20,14 @@ type ManagerInsightsPanelExpandedProps = {
 };
 
 type InsightFilter = (typeof FILTERS)[number];
+type CoachingResponseMode = "structured" | "free_form";
 type StructuredResponse = {
+  mode: CoachingResponseMode;
   primaryFinding: string;
   whyItMatters: string;
   action: string;
   monitor: string[];
+  answer?: string;
 };
 
 const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performanceTrend"], { badge: string; label: string }> = {
@@ -81,6 +84,111 @@ function getScopeLabel(request: ManagerInsightsRequest) {
 
 function getWorkspaceTitle(request: ManagerInsightsRequest) {
   return request.repData ? `${request.repData.name} coaching workspace` : "Territory predictive coaching workspace";
+}
+
+function classifyCoachingInput(text: string): CoachingResponseMode {
+  const normalized = text.trim().toLowerCase();
+  const wordCount = normalized.split(/\s+/).filter(Boolean).length;
+  const hasQuestionIndicator = /\b(how|why|what|when|does|should)\b/.test(normalized);
+
+  return wordCount >= 9 && hasQuestionIndicator ? "free_form" : "structured";
+}
+
+function buildRepContext(
+  requestBody: ManagerInsightsRequest,
+  structuredInsight: ReturnType<typeof buildStructuredInsightView> | null,
+  selectedChips: string[],
+  insights: ManagerInsightsResponse | null,
+) {
+  const chipContext = selectedChips.length ? `Selected manager context: ${selectedChips.join(", ")}.` : "Selected manager context: None.";
+
+  if (requestBody.repData && requestBody.derivedMetrics) {
+    const { repData, derivedMetrics, territoryData } = requestBody;
+    const strongestMetric = repData.behavioralMetrics[repData.strongestCapability];
+    const weakestMetric = repData.behavioralMetrics[repData.improvementPriority];
+
+    return [
+      `Rep: ${repData.name}`,
+      `Specialty/Territory: ${repData.specialty} in ${repData.territory}`,
+      `Strongest capability: ${normalizeManagerText(repData.strongestCapability)} at ${strongestMetric?.score ?? "N/A"}/5 with ${strongestMetric?.trend ?? "flat"} directionality`,
+      `Priority capability: ${normalizeManagerText(repData.improvementPriority)} at ${weakestMetric?.score ?? "N/A"}/5 with ${weakestMetric?.trend ?? "flat"} directionality`,
+      `Learning Engagement Score: ${derivedMetrics.engagementScore}/100`,
+      `Readiness Score: ${derivedMetrics.readinessScore}/100`,
+      `Conversion Proxy: ${derivedMetrics.conversionProxyScore}/100`,
+      `Sales Risk: ${derivedMetrics.salesRiskScore}/100`,
+      `Predictive Confidence: ${Math.round(derivedMetrics.confidenceScore * 100)}/100`,
+      structuredInsight ? `Current structured recommendation: ${structuredInsight.primaryFinding} | ${structuredInsight.whyItMatters} | ${structuredInsight.action}` : "",
+      insights?.keyDrivers?.length ? `Supporting drivers: ${insights.keyDrivers.slice(0, 3).join(" | ")}` : "",
+      insights?.risks?.length ? `Active risks: ${insights.risks.slice(0, 3).join(" | ")}` : "",
+      `Territory benchmark: ${territoryData.territory}, avg engagement ${territoryData.avgEngagement}/100, avg performance ${territoryData.avgPerformance}/5`,
+      chipContext,
+    ].filter(Boolean).join("\n");
+  }
+
+  const territory = requestBody.territoryData;
+  return [
+    `Territory: ${territory.territory}`,
+    `Average performance: ${territory.avgPerformance}/5`,
+    `Average engagement: ${territory.avgEngagement}/100`,
+    `Most common capability gap: ${normalizeManagerText(territory.mostCommonCapabilityGap ?? "Not specified")}`,
+    `Territory volatility: ${territory.territoryVolatility}`,
+    `At-risk reps: ${territory.atRiskRepCount}`,
+    structuredInsight ? `Current structured recommendation: ${structuredInsight.primaryFinding} | ${structuredInsight.whyItMatters} | ${structuredInsight.action}` : "",
+    insights?.keyDrivers?.length ? `Supporting drivers: ${insights.keyDrivers.slice(0, 3).join(" | ")}` : "",
+    insights?.risks?.length ? `Active risks: ${insights.risks.slice(0, 3).join(" | ")}` : "",
+    chipContext,
+  ].filter(Boolean).join("\n");
+}
+
+function buildFreeFormMessages(userInput: string, repContext: string) {
+  return [
+    {
+      role: "system",
+      content: "You are an AI coaching assistant. Answer the user’s question directly using the provided rep context. Do NOT repeat structured coaching templates unless explicitly asked.",
+    },
+    {
+      role: "user",
+      content: `
+User Question:
+${userInput}
+
+Rep Context:
+${repContext}
+
+Instructions:
+- Answer the question directly
+- Be concise and specific
+- Use rep data where relevant
+- Do NOT restate full coaching framework
+`.trim(),
+    },
+  ];
+}
+
+function stripStructuredSections(text: string) {
+  return text
+    .replace(/\bPRIMARY FINDING\b[:\s-]*/gi, "")
+    .replace(/\bWHY IT MATTERS\b[:\s-]*/gi, "")
+    .replace(/\bACTION\b[:\s-]*/gi, "")
+    .replace(/\bMONITOR\b[:\s-]*/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ensureDirectAnswer(answer: string, question: string) {
+  const trimmedQuestion = question.trim();
+  const cleanedAnswer = stripStructuredSections(answer).trim();
+
+  if (!cleanedAnswer) {
+    return `In response to your question, "${trimmedQuestion}," I need a bit more detail to answer precisely, but the available rep context suggests focusing on the current priority metric and recent session trends first.`;
+  }
+
+  const normalizedQuestion = trimmedQuestion.toLowerCase();
+  const referencesQuestion = cleanedAnswer.toLowerCase().includes(normalizedQuestion) || /your question/.test(cleanedAnswer.toLowerCase());
+
+  return referencesQuestion
+    ? cleanedAnswer
+    : `Regarding your question, "${trimmedQuestion}," ${cleanedAnswer}`;
 }
 
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
@@ -171,12 +279,61 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     setResponse(null);
 
     try {
+      const responseMode = classifyCoachingInput(input);
+
+      if (responseMode === "free_form") {
+        const repContext = buildRepContext(requestBody, structuredInsight, selectedChips, insights);
+        const messages = buildFreeFormMessages(input.trim(), repContext);
+        const prompt = messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join("\n\n");
+        const res = await fetch("/api/llm/invoke", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, max_tokens: 500, temperature: 0.3 }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`interactive_ai_${res.status}`);
+        }
+
+        const payload = await res.json();
+        const rawAnswer = typeof payload?.response === "string"
+          ? payload.response
+          : typeof payload?.text === "string"
+            ? payload.text
+            : typeof payload?.content === "string"
+              ? payload.content
+              : "";
+
+        const finalAnswer = ensureDirectAnswer(rawAnswer, input.trim());
+        setResponse({
+          mode: "free_form",
+          primaryFinding: "",
+          whyItMatters: "",
+          action: "",
+          monitor: [],
+          answer: finalAnswer,
+        });
+        return;
+      }
+
       const deterministicResponse = buildInteractiveCoachingResponse(requestBody, input, selectedChips);
       setResponse({
+        mode: "structured",
         primaryFinding: deterministicResponse.primaryFinding,
         whyItMatters: deterministicResponse.whyItMatters,
         action: deterministicResponse.action,
         monitor: deterministicResponse.monitor,
+      });
+    } catch (error) {
+      console.error("Interactive AI coaching failed:", error);
+      const fallbackAnswer = ensureDirectAnswer("", input.trim());
+      setResponse({
+        mode: classifyCoachingInput(input),
+        primaryFinding: classifyCoachingInput(input) === "structured" ? fallbackAnswer : "",
+        whyItMatters: classifyCoachingInput(input) === "structured" ? "The interactive response fallback was used because live generation was unavailable." : "",
+        action: classifyCoachingInput(input) === "structured" ? "Retry the question or refine it with a more specific coaching ask." : "",
+        monitor: classifyCoachingInput(input) === "structured" ? ["Watch the current priority metric and recent session evidence while retrying the request."] : [],
+        answer: classifyCoachingInput(input) === "free_form" ? fallbackAnswer : undefined,
       });
     } finally {
       setLoading(false);
@@ -422,25 +579,29 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold text-slate-900">AI Coaching Response</h4><span className="rounded-full border border-teal-200 bg-white px-3 py-1 text-[11px] font-semibold text-teal-700">{askAiContext}</span></div>
               <div className="mt-3 space-y-4 text-sm text-slate-700">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Primary finding</p>
-                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.primaryFinding)}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">{response.mode === "free_form" ? "AI Answer" : "Primary finding"}</p>
+                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.mode === "free_form" ? response.answer ?? "" : response.primaryFinding)}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Why it matters</p>
-                  <p className="mt-1">{normalizeManagerText(response.whyItMatters)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Action</p>
-                  <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.action)}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Monitor</p>
-                  <ul className="mt-2 space-y-2">
-                    {response.monitor.slice(0, 3).map((item) => (
-                      <li key={item} className="rounded-xl bg-white px-3 py-2 text-slate-700">{normalizeManagerText(item)}</li>
-                    ))}
-                  </ul>
-                </div>
+                {response.mode === "structured" ? (
+                  <>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Why it matters</p>
+                      <p className="mt-1">{normalizeManagerText(response.whyItMatters)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Action</p>
+                      <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.action)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Monitor</p>
+                      <ul className="mt-2 space-y-2">
+                        {response.monitor.slice(0, 3).map((item) => (
+                          <li key={item} className="rounded-xl bg-white px-3 py-2 text-slate-700">{normalizeManagerText(item)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </div>
           ) : null}
