@@ -759,15 +759,6 @@ function RepExpandedContent({ rep, derived, viewState, assignments, loadAssignme
 function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationAnalytics, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp }) {
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onToggle(rep.id)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onToggle(rep.id);
-        }
-      }}
       className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 ${
         selected ? "border-teal-300 bg-teal-50/60" : "border-slate-200 bg-white hover:border-teal-200 hover:bg-teal-50/30"
       }`}
@@ -788,10 +779,15 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800" aria-expanded={selected}>
+        <button
+          type="button"
+          aria-expanded={selected}
+          onClick={() => onToggle(rep.id)}
+          className="flex items-center gap-2 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-800 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+        >
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
           {selected ? "Collapse details" : "Expand details"}
-        </div>
+        </button>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -826,7 +822,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
       </div>
 
       {selected ? (
-        <div className="mt-4">
+        <div className="mt-4" onClick={(event) => event.stopPropagation()}>
           <RepExpandedContent
             rep={rep}
             derived={derived}
