@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { AlertTriangle, Send, Loader2, Clock, Database, BarChart3, TrendingUp, FileText, Calendar } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { createPageUrl, formatStructuredAiText } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG } from "@/lib/enablementHub";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 
@@ -19,9 +19,9 @@ const SAMPLE_QUERIES = [
 
 const markdownComponents = {
   ul: ({ children }) => <ul className="ui-bullet-list">{children}</ul>,
-  ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered">{children}</ol>,
-  li: ({ children }) => <li className="min-w-0 break-words">{children}</li>,
-  p: ({ children }) => <p className="my-0 whitespace-pre-wrap break-words leading-relaxed text-gray-700">{children}</p>,
+  ol: ({ children }) => <ol className="ui-bullet-list ui-bullet-list-ordered space-y-4">{children}</ol>,
+  li: ({ children }) => <li className="min-w-0 break-words pl-1">{children}</li>,
+  p: ({ children }) => <p className="my-0 whitespace-pre-wrap break-words leading-7 text-gray-700">{children}</p>,
   strong: ({ children }) => <strong className="font-semibold text-slate-900">{children}</strong>,
   code: ({ inline, children, ...props }) =>
     inline ? (
@@ -215,7 +215,7 @@ export default function DataReports() {
             <Card className="overflow-hidden border-slate-200 shadow-sm">
               <CardContent className="ui-card-top-padding p-6 md:p-7">
                 <div className="ui-markdown prose prose-sm max-w-none text-gray-700 leading-relaxed">
-                  <ReactMarkdown components={markdownComponents}>{normalizedResult}</ReactMarkdown>
+                  <ReactMarkdown components={markdownComponents}>{formatStructuredAiText(normalizedResult)}</ReactMarkdown>
                 </div>
               </CardContent>
             </Card>

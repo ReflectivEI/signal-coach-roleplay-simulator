@@ -424,9 +424,11 @@ export default function Frameworks() {
           { num: 2, title: "Behavioral Models", desc: "Supporting insight layer — how to adapt communication" },
           { num: 3, title: "Coaching Tools", desc: "Action layer — how improvement happens" },
         ].map(p => (
-          <div key={p.num} className="ui-surface-card ui-surface-card-interactive ui-teal-section p-5 pt-6">
-            <div className="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-sm mb-3" style={{ background: "#39ACAC" }}>{p.num}</div>
-            <h3 className="font-semibold text-gray-900 mb-1">{p.title}</h3>
+          <div key={p.num} className="ui-surface-card ui-surface-card-interactive ui-teal-section p-5">
+            <div className="mb-2 flex items-center gap-3">
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#39ACAC" }}>{p.num}</div>
+              <h3 className="text-base font-semibold text-gray-900 leading-none">{p.title}</h3>
+            </div>
             <p className="text-xs text-gray-500">{p.desc}</p>
           </div>
         ))}
