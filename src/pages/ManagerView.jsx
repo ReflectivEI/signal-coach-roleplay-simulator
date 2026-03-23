@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
+import InterventionValidationPanel from "@/components/manager/InterventionValidationPanel";
 import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
 import { ENABLEMENT_HUB_SPOKES, getAdoptionBand } from "@/lib/enablementHub";
 import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
@@ -43,6 +44,8 @@ import {
   getBehavioralMetricLabel,
 } from "@/components/manager/managerPerformanceData";
 import { buildManagerViewState, getContributorSet } from "@/components/manager/managerViewModel";
+import { buildValidationInsight } from "@/components/manager/managerValidationLogic";
+import { captureValidationFollowUp, fetchValidationRecords, fetchValidationSummary, startValidationRecord } from "@/components/manager/managerValidationService";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -176,6 +179,57 @@ const THRESHOLD_GLOSSARY = [
     label: "Distribution cap: 30% of reps",
     definition: "No single capability should be assigned as the capability requiring improvement for more than 30% of reps unless no near-tied alternative exists.",
     source: "Manager View balancing rule",
+  },
+];
+
+const VALIDATION_GLOSSARY = [
+  {
+    label: "Validation Status",
+    definition: "The deterministic outcome assigned to a tracked intervention after baseline and follow-up evidence are compared.",
+    howItIsDetermined: "Set to Pending, Insufficient Data, Positive Validation, Neutral Validation, or Negative Validation using rule-based thresholds for capability movement, engagement, risk, and observation depth.",
+    whyItMatters: "It tells managers whether an intervention is too early to judge, showing positive movement, mixed movement, or signaling deterioration.",
+  },
+  {
+    label: "Baseline Snapshot",
+    definition: "The rep's current canonical capability scores and supporting manager metrics captured when outcome tracking begins.",
+    howItIsDetermined: "Stored from the current Manager View rep state at the moment a manager starts validation.",
+    whyItMatters: "It creates the fixed before-state needed for an auditable intervention review.",
+  },
+  {
+    label: "Follow-up Snapshot",
+    definition: "A later capture of the same canonical capability and supporting manager metrics after additional coaching activity occurs.",
+    howItIsDetermined: "Captured manually from the latest rep state when a manager clicks Capture Follow-up Snapshot.",
+    whyItMatters: "It gives managers explicit after-state evidence without relying on background automation.",
+  },
+  {
+    label: "Evidence Summary",
+    definition: "A compact comparison of the target capability delta plus supporting movement in engagement, risk, conversion proxy, sessions, and modules.",
+    howItIsDetermined: "Calculated by subtracting the baseline values from the most recent follow-up snapshot and preserving the exact deltas on the validation record.",
+    whyItMatters: "It lets managers inspect why a validation status was assigned instead of trusting a black-box label.",
+  },
+  {
+    label: "Observation Window",
+    definition: "The review period in days used to judge whether enough time and activity have passed to interpret an intervention responsibly.",
+    howItIsDetermined: "Stored on each validation record with the expected movement configuration and used by insufficient-data checks.",
+    whyItMatters: "It prevents managers from treating an immediate or low-activity follow-up as proof of impact.",
+  },
+  {
+    label: "Positive Validation",
+    definition: "A tracked intervention where the target capability improved by a meaningful amount and at least one supporting signal also improved.",
+    howItIsDetermined: "Requires a target capability improvement of at least 0.2 points and at least one supporting improvement in engagement, risk, conversion proxy, or fresh activity.",
+    whyItMatters: "It highlights interventions worth repeating because measurable movement was observed.",
+  },
+  {
+    label: "Neutral Validation",
+    definition: "A tracked intervention showing limited or mixed movement versus baseline.",
+    howItIsDetermined: "Assigned when follow-up evidence is sufficient but neither the positive nor negative rule set is met.",
+    whyItMatters: "It signals that managers may need more time, more activity, or a sharper intervention design before drawing a conclusion.",
+  },
+  {
+    label: "Negative Validation",
+    definition: "A tracked intervention where the target capability stayed flat or declined while supporting indicators worsened.",
+    howItIsDetermined: "Assigned when the target capability does not improve and at least one supporting signal deteriorates beyond the conservative rule thresholds.",
+    whyItMatters: "It warns managers that the current intervention may be ineffective or misaligned.",
   },
 ];
 
@@ -444,6 +498,19 @@ function DefinitionsDialog() {
               ))}
             </div>
           </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Validation loop definitions</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {VALIDATION_GLOSSARY.map((item) => (
+                <div key={item.label} className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-700">{item.definition}</p>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-700"><span className="font-semibold uppercase tracking-wide">How it is determined · </span>{item.howItIsDetermined}</p>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-700"><span className="font-semibold uppercase tracking-wide">Why it matters · </span>{item.whyItMatters}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -530,7 +597,7 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
   );
 }
 
-function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, onCollapse }) {
+function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp, onCollapse }) {
   const derived = viewState.derivedByRepId[rep.id];
   const explanations = viewState.explanations.rep[rep.id];
 
@@ -595,10 +662,27 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
       </div>
 
       {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
-        <div className="manager-insights-container">
+        <div className="space-y-3 manager-insights-container">
           <ManagerInsightsPanelExpanded key={`${rep.id}-${viewState.version}`} data={managerMetricsPayload} />
+          {(validationRecords || []).length ? (
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-800">
+              <span className="font-semibold">Validation evidence:</span> {buildValidationInsight(validationRecords[0])}
+            </div>
+          ) : null}
         </div>
       ) : null}
+
+      <InterventionValidationPanel
+        rep={rep}
+        derived={derived}
+        validationRecords={validationRecords}
+        validationLoading={validationLoading}
+        validationError={validationError}
+        startBusy={validationStartBusy}
+        followUpRecordId={validationFollowUpId}
+        onStartValidation={() => onStartValidation(rep)}
+        onCaptureFollowUp={(record) => onCaptureFollowUp(record, rep)}
+      />
 
       <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -665,7 +749,7 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
   );
 }
 
-function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload }) {
+function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp }) {
   return (
     <div
       role="button"
@@ -744,6 +828,13 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
             handleStatusChange={handleStatusChange}
             handleDelete={handleDelete}
             managerMetricsPayload={managerMetricsPayload}
+            validationRecords={validationRecords}
+            validationLoading={validationLoading}
+            validationError={validationError}
+            validationStartBusy={validationStartBusy}
+            validationFollowUpId={validationFollowUpId}
+            onStartValidation={onStartValidation}
+            onCaptureFollowUp={onCaptureFollowUp}
             onCollapse={() => onToggle(rep.id)}
           />
         </div>
@@ -834,6 +925,12 @@ export default function ManagerView() {
   const [feedbackSaving, setFeedbackSaving] = useState({});
   const [feedbackSaved, setFeedbackSaved] = useState({});
   const [curating, setCurating] = useState({});
+  const [validationRecords, setValidationRecords] = useState([]);
+  const [validationSummary, setValidationSummary] = useState({ trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [validationStartBusy, setValidationStartBusy] = useState(false);
+  const [validationFollowUpId, setValidationFollowUpId] = useState(null);
 
   const reps = viewState.reps;
   const selectedRep = useMemo(() => reps.find((rep) => rep.id === selectedRepId) ?? null, [reps, selectedRepId]);
@@ -841,6 +938,7 @@ export default function ManagerView() {
   useEffect(() => {
     loadAssignments();
     loadSnippets();
+    loadValidationSummary();
   }, []);
 
   useEffect(() => {
@@ -848,6 +946,16 @@ export default function ManagerView() {
       setSelectedRepId(null);
     }
   }, [reps, selectedRepId]);
+
+  useEffect(() => {
+    if (!selectedRepId) {
+      setValidationRecords([]);
+      setValidationLoading(false);
+      setValidationError("");
+      return;
+    }
+    loadValidationRecords(selectedRepId);
+  }, [selectedRepId]);
 
   const loadAssignments = async () => {
     try {
@@ -878,6 +986,38 @@ export default function ManagerView() {
     } catch (err) {
       console.error("Load snippets error:", err);
       setSnippets([]);
+    }
+  };
+
+  const loadValidationSummary = async () => {
+    try {
+      const data = await fetchValidationSummary();
+      setValidationSummary(data.summary || { trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+    } catch (err) {
+      console.error("Load validation summary error:", err);
+      setValidationSummary({ trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+    }
+  };
+
+  const loadValidationRecords = async (repId) => {
+    if (!repId) {
+      setValidationRecords([]);
+      setValidationLoading(false);
+      setValidationError("");
+      return;
+    }
+
+    setValidationLoading(true);
+    setValidationError("");
+    try {
+      const data = await fetchValidationRecords(repId);
+      setValidationRecords(Array.isArray(data.records) ? data.records : []);
+    } catch (err) {
+      console.error("Load validation records error:", err);
+      setValidationRecords([]);
+      setValidationError(err.message || "validation_load_failed");
+    } finally {
+      setValidationLoading(false);
     }
   };
 
@@ -928,6 +1068,42 @@ export default function ManagerView() {
     } catch (err) {
       console.error("Delete error:", err);
       loadAssignments();
+    }
+  };
+
+  const handleStartValidation = async (rep) => {
+    if (!rep?.id) return;
+    const derived = viewState.derivedByRepId[rep.id];
+    if (!derived) return;
+
+    setValidationStartBusy(true);
+    try {
+      await startValidationRecord(rep, derived);
+      setValidationError("");
+      await Promise.all([loadValidationRecords(rep.id), loadValidationSummary()]);
+    } catch (err) {
+      console.error("Start validation error:", err);
+      setValidationError(err.message || "validation_start_failed");
+    } finally {
+      setValidationStartBusy(false);
+    }
+  };
+
+  const handleCaptureFollowUp = async (record, rep) => {
+    if (!record?.id || !rep?.id) return;
+    const derived = viewState.derivedByRepId[rep.id];
+    if (!derived) return;
+
+    setValidationFollowUpId(record.id);
+    try {
+      await captureValidationFollowUp(record.id, rep, derived);
+      setValidationError("");
+      await Promise.all([loadValidationRecords(rep.id), loadValidationSummary()]);
+    } catch (err) {
+      console.error("Capture validation follow-up error:", err);
+      setValidationError(err.message || "validation_follow_up_failed");
+    } finally {
+      setValidationFollowUpId(null);
     }
   };
 
@@ -1172,6 +1348,30 @@ export default function ManagerView() {
         })}
       </div>
 
+      <div className="mb-8 rounded-2xl border border-teal-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Validation summary</p>
+            <h3 className="mt-1 text-lg font-bold text-slate-900">Closed-loop intervention tracking</h3>
+            <p className="mt-1 text-sm text-slate-700">Secondary evidence layer showing how many manager interventions are being tracked and how the latest deterministic outcomes are trending.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {[
+              { label: "Tracked", value: validationSummary.trackedInterventions, tone: "bg-teal-50 text-teal-800 border-teal-200" },
+              { label: "Positive", value: validationSummary.positiveValidations, tone: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+              { label: "Neutral", value: validationSummary.neutralValidations, tone: "bg-sky-50 text-sky-800 border-sky-200" },
+              { label: "Negative", value: validationSummary.negativeValidations, tone: "bg-rose-50 text-rose-800 border-rose-200" },
+              { label: "Pending", value: validationSummary.pendingValidations + validationSummary.insufficientData, tone: "bg-slate-50 text-slate-800 border-slate-200" },
+            ].map((item) => (
+              <div key={item.label} className={`min-w-[120px] rounded-xl border px-4 py-3 ${item.tone}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</p>
+                <p className="mt-1 text-2xl font-bold">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="sticky top-[4.75rem] z-20 mb-6 flex h-auto w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
           <TabsTrigger value="reps" className={MANAGER_TAB_TRIGGER_CLASSNAME}><Users className="h-3.5 w-3.5" /> Rep Overview</TabsTrigger>
@@ -1248,6 +1448,13 @@ export default function ManagerView() {
                             handleStatusChange={handleStatusChange}
                             handleDelete={handleDelete}
                             managerMetricsPayload={managerMetricsPayload}
+                            validationRecords={selectedRep?.id === rep.id ? validationRecords : []}
+                            validationLoading={selectedRep?.id === rep.id ? validationLoading : false}
+                            validationError={selectedRep?.id === rep.id ? validationError : ""}
+                            validationStartBusy={validationStartBusy}
+                            validationFollowUpId={validationFollowUpId}
+                            onStartValidation={handleStartValidation}
+                            onCaptureFollowUp={handleCaptureFollowUp}
                             onCollapse={() => setSelectedRepId(null)}
                           />
                         ) : null}
@@ -1272,6 +1479,13 @@ export default function ManagerView() {
                     handleStatusChange={handleStatusChange}
                     handleDelete={handleDelete}
                     managerMetricsPayload={managerMetricsPayload}
+                    validationRecords={selectedRep?.id === rep.id ? validationRecords : []}
+                    validationLoading={selectedRep?.id === rep.id ? validationLoading : false}
+                    validationError={selectedRep?.id === rep.id ? validationError : ""}
+                    validationStartBusy={validationStartBusy}
+                    validationFollowUpId={validationFollowUpId}
+                    onStartValidation={handleStartValidation}
+                    onCaptureFollowUp={handleCaptureFollowUp}
                   />
                 ))}
               </div>
