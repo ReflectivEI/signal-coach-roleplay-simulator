@@ -238,13 +238,14 @@ function formatRefreshTimestamp(isoValue) {
   }).format(new Date(isoValue));
 }
 
-function StatusBadge({ status }) {
-  return <span className={`text-xs font-medium ${status === "active" ? "text-green-700" : status === "inactive" ? "text-red-700" : "text-amber-700"}`}>{formatStatus(status)}</span>;
-}
-
 function TrendBadge({ trend }) {
   const tone = trend === "up" ? "bg-teal-50 text-teal-700" : trend === "down" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>{trend}</span>;
+  const label = trend ? trend.charAt(0).toUpperCase() + trend.slice(1) : "Flat";
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone}`}>{label}</span>;
+}
+
+function StatusBadge({ status }) {
+  return <span className={`text-xs font-medium ${status === "active" ? "text-green-700" : status === "inactive" ? "text-red-700" : "text-amber-700"}`}>{formatStatus(status)}</span>;
 }
 
 function CapabilityPill({ metricKey, tone = "slate" }) {
@@ -261,21 +262,12 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
 }
 
 function BehavioralProfileSummaryCell({ rep }) {
-  const metrics = BEHAVIORAL_METRIC_KEYS.map((metricKey) => rep.behavioralMetrics[metricKey]);
-  const averageScore = (metrics.reduce((sum, metric) => sum + metric.score, 0) / metrics.length).toFixed(1);
-  const belowThresholdCount = metrics.filter((metric) => metric.score < 3.5).length;
-  const strongestMetric = rep.behavioralMetrics[rep.strongestCapability];
-  const weakestMetric = rep.behavioralMetrics[rep.improvementPriority];
-
   return (
-    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="inline-flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+      <div className="flex min-w-0 flex-wrap items-center justify-center gap-2">
         <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
         <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
       </div>
-      <p className="mt-2 truncate text-xs leading-5 text-slate-600">
-        Avg {averageScore}/5 · {belowThresholdCount} below 3.5/5 · strongest {strongestMetric.score}/5 · improvement {weakestMetric.score}/5
-      </p>
     </div>
   );
 }
@@ -286,7 +278,7 @@ function MetricSummaryCard({ labelKey, value, explanation }) {
       <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
-        <MetricPill explanation={explanation} label="Formula" />
+        <MetricPill explanation={explanation} label="Details" />
       </div>
       <p className="mt-2 text-lg font-bold text-slate-900">{value}</p>
       {normalizedExplanation?.derivedFrom?.length ? (
@@ -381,7 +373,6 @@ function MetricPill({ explanation, label = "How calculated" }) {
         type="button"
         className={METRIC_PILL_CLASSNAME}
       >
-        <Info className="h-3 w-3" />
         {label}
       </button>
     </MetricExplanationDialog>
@@ -458,76 +449,207 @@ function DefinitionsDialog() {
   );
 }
 
-function RepRow({ rep, derived, explanations, onToggle, selected }) {
+function RepRow({ rep, derived, explanations, onToggle, selected, expandedContent }) {
   return (
-    <tr onClick={() => onToggle(rep.id)} className={`cursor-pointer border-b border-slate-100 transition-colors ${selected ? "bg-teal-50/70" : "hover:bg-teal-50/35"}`}>
-      <td className="px-4 py-4 align-top">
-        <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: "#1A334D" }}>
-            {rep.name.split(" ").map((word) => word[0]).join("")}
+    <>
+      <tr onClick={() => onToggle(rep.id)} className={`cursor-pointer border-b border-slate-100 transition-colors ${selected ? "bg-teal-50/70" : "hover:bg-teal-50/35"}`}>
+        <td className="px-4 py-3 align-middle">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: "#1A334D" }}>
+              {rep.name.split(" ").map((word) => word[0]).join("")}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900">{rep.name}</p>
+              <p className="mt-0.5 text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
+              <button
+                type="button"
+                aria-expanded={selected}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggle(rep.id);
+                }}
+                className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
+                {selected ? "Collapse details" : "Expand details"}
+              </button>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900">{rep.name}</p>
-            <p className="mt-0.5 text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
-            <button
-              type="button"
-              aria-expanded={selected}
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggle(rep.id);
-              }}
-              className="mt-2 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
-            >
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
-              {selected ? "Collapse details" : "Expand details"}
-            </button>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <div className="flex flex-col items-center gap-1.5">
+            <span className={`text-sm font-bold ${rep.overallScore >= 4 ? "text-teal-600" : rep.overallScore >= 3.3 ? "text-blue-600" : "text-amber-600"}`}>{rep.overallScore}/5</span>
+            <MetricPill explanation={explanations.overallScore} label="Details" />
           </div>
-        </div>
-      </td>
-      <td className="px-4 py-4 align-top">
-        <div className="flex flex-col items-start gap-1">
-          <span className={`text-sm font-bold ${rep.overallScore >= 4 ? "text-teal-600" : rep.overallScore >= 3.3 ? "text-blue-600" : "text-amber-600"}`}>{rep.overallScore}/5</span>
-          <MetricPill explanation={explanations.overallScore} label="Formula" />
-        </div>
-      </td>
-      <td className="px-4 py-4 align-top">
-        <p className="text-sm font-bold text-slate-700">{rep.sessionsCompleted30d}</p>
-        <p className="mt-1 text-[11px] text-slate-500">current 30d</p>
-      </td>
-      <td className="px-4 py-4 align-top">
-        <BehavioralProfileSummaryCell rep={rep} />
-      </td>
-      <td className="px-4 py-4 align-top">
-        <div className="space-y-2">
-          <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
-          <MetricPill explanation={explanations.strongestCapability} label="Source" />
-        </div>
-      </td>
-      <td className="px-4 py-4 align-top">
-        <div className="space-y-2">
-          <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
-          <MetricPill explanation={explanations.improvementPriority} label="Source" />
-        </div>
-      </td>
-      <td className="px-4 py-4 align-top text-left">
-        <TrendBadge trend={rep.salesTrend} />
-      </td>
-      <td className="px-4 py-4 align-top">
-        <StatusBadge status={rep.status} />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <p className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</p>
-          <MetricPill explanation={explanations.salesRiskScore} label="Formula" />
-        </div>
-      </td>
-      <td className="px-4 py-4 align-top">
-        <p className="text-sm font-semibold text-slate-700">{rep.coachingModulesCompleted}</p>
-        <MetricPill explanation={explanations.moduleCompletion} label="Completion %" />
-      </td>
-    </tr>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <p className="text-sm font-bold text-slate-700">{rep.sessionsCompleted30d}</p>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <BehavioralProfileSummaryCell rep={rep} />
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <div className="flex flex-col items-center gap-1.5">
+            <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
+            <MetricPill explanation={explanations.strongestCapability} label="Source" />
+          </div>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <div className="flex flex-col items-center gap-1.5">
+            <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
+            <MetricPill explanation={explanations.improvementPriority} label="Source" />
+          </div>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <TrendBadge trend={rep.salesTrend} />
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <div className="flex flex-col items-center gap-1.5">
+            <p className={`text-sm font-bold ${rep.status === "active" ? "text-green-700" : rep.status === "inactive" ? "text-red-700" : "text-amber-700"}`}>{derived.salesRiskScore}/100</p>
+            <MetricPill explanation={explanations.salesRiskScore} label="Details" />
+          </div>
+        </td>
+        <td className="px-4 py-3 text-center align-middle">
+          <MetricPill explanation={explanations.moduleCompletion} label="Completion Details" />
+        </td>
+      </tr>
+      {selected ? (
+        <tr className="border-b border-slate-200 bg-white">
+          <td colSpan={9} className="px-4 py-4">
+            {expandedContent}
+          </td>
+        </tr>
+      ) : null}
+    </>
   );
 }
 
-function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
+function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload }) {
+  const derived = viewState.derivedByRepId[rep.id];
+  const explanations = viewState.explanations.rep[rep.id];
+
+  return (
+    <div className="space-y-5">
+      <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#1A334D" }}>
+              {rep.name.split(" ").map((word) => word[0]).join("")}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-bold text-gray-900">{rep.name}</h3>
+              <p className="text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <TrendBadge trend={rep.salesTrend} />
+                <span className={`text-sm font-semibold ${rep.status === "active" ? "text-green-700" : rep.status === "inactive" ? "text-red-700" : "text-amber-700"}`}>Sales Risk {derived.salesRiskScore}/100</span>
+                <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {rep.observationDepth}</span>
+              </div>
+            </div>
+          </div>
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:min-w-[420px]">
+            {[
+              { label: "Sessions (30d)", value: rep.sessionsCompleted30d, explanation: null },
+              { label: "Overall Score", value: `${rep.overallScore}/5`, explanation: explanations.overallScore },
+              { label: "Practice Streak", value: rep.practiceStreakDays > 0 ? `${rep.practiceStreakDays} days` : "None", explanation: null },
+              { label: "Modules Done", value: `${rep.coachingModulesCompleted}/8`, explanation: explanations.moduleCompletion, detailLabel: "Completion Details" },
+            ].map(({ label, value, explanation, detailLabel }) => (
+              <div key={label} className={`${ENTERPRISE_SUBCARD} min-w-0 rounded-lg p-3`}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="text-xs text-gray-500">{label}</p>
+                  <MetricPill explanation={explanation} label={detailLabel || "Details"} />
+                </div>
+                <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-teal-800"><CheckCircle className="h-3 w-3" /> Strongest Capability</p>
+                <p className="text-sm font-bold text-teal-900">{getBehavioralMetricLabel(rep.strongestCapability)}</p>
+                <p className="mt-1 text-xs text-teal-700">Score {rep.behavioralMetrics[rep.strongestCapability].score}/5 · Trend {rep.behavioralMetrics[rep.strongestCapability].trend}</p>
+              </div>
+              <MetricPill explanation={explanations.strongestCapability} label="Source" />
+            </div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800"><AlertTriangle className="h-3 w-3" /> Capability Requiring Improvement</p>
+                <p className="text-sm font-bold text-amber-900">{getBehavioralMetricLabel(rep.improvementPriority)}</p>
+                <p className="mt-1 text-xs text-amber-700">Score {rep.behavioralMetrics[rep.improvementPriority].score}/5 · Trend {rep.behavioralMetrics[rep.improvementPriority].trend}</p>
+              </div>
+              <MetricPill explanation={explanations.improvementPriority} label="Source" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
+        <div className="manager-insights-container">
+          <ManagerInsightsPanelExpanded key={`${rep.id}-${viewState.version}`} data={managerMetricsPayload} />
+        </div>
+      ) : null}
+
+      <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
+          <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[rep.id]?.length || 0} active rules</span>
+        </div>
+        <div className="space-y-2">
+          {(viewState.repRiskFlagsByRepId[rep.id] || []).length ? (
+            viewState.repRiskFlagsByRepId[rep.id].map((flag) => (
+              <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm transition-colors duration-200 hover:bg-teal-50/30 ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
+                <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
+              </div>
+            ))
+          ) : (
+            <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
+          )}
+        </div>
+      </div>
+
+      <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
+            <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
+          </div>
+          <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Details · Source · Rule</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+          {[
+            { key: "engagementScore", value: `${derived.engagementScore}/100`, explanation: explanations.engagementScore },
+            { key: "readinessScore", value: `${derived.readinessScore}/100`, explanation: explanations.readinessScore },
+            { key: "engagementStabilityScore", value: `${derived.engagementStabilityScore}/100`, explanation: explanations.engagementStabilityScore },
+            { key: "conversionProxyScore", value: `${derived.conversionProxyScore}/100`, explanation: explanations.conversionProxyScore },
+            { key: "salesRiskScore", value: `${derived.salesRiskScore}/100`, explanation: explanations.salesRiskScore },
+            { key: "dataConfidenceIndex", value: `${Math.round(derived.dataConfidenceIndex * 100)}%`, explanation: explanations.dataConfidenceIndex },
+            { key: "confidenceScore", value: `${Math.round(derived.confidenceScore * 100)}%`, explanation: explanations.confidenceScore },
+          ].map(({ key, value, explanation }) => (
+            <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
+          ))}
+        </div>
+      </div>
+
+      <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+        <AssignmentPanel
+          rep={{ ...rep, weakCapability: getBehavioralMetricLabel(rep.improvementPriority) }}
+          assignments={assignments}
+          onAssigned={loadAssignments}
+          onStatusChange={handleStatusChange}
+          onDelete={handleDelete}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload }) {
   return (
     <div
       role="button"
@@ -554,7 +676,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
               <p className="mt-1 text-xs text-slate-500">{rep.specialty} · {rep.territory}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <TrendBadge trend={rep.salesTrend} />
-                <StatusBadge status={rep.status} />
+                <span className={`text-sm font-semibold ${rep.status === "active" ? "text-green-700" : rep.status === "inactive" ? "text-red-700" : "text-amber-700"}`}>Sales Risk {derived.salesRiskScore}/100</span>
               </div>
             </div>
           </div>
@@ -569,7 +691,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overall score</p>
-            <MetricPill explanation={explanations.overallScore} label="Formula" />
+            <MetricPill explanation={explanations.overallScore} label="Details" />
           </div>
           <p className="mt-2 text-lg font-bold text-slate-900">{rep.overallScore}/5</p>
           <p className="mt-1 text-xs text-slate-500">{rep.sessionsCompleted30d} sessions · {rep.coachingModulesCompleted}/8 modules</p>
@@ -586,7 +708,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</span>
-            <MetricPill explanation={explanations.salesRiskScore} label="Formula" />
+            <MetricPill explanation={explanations.salesRiskScore} label="Details" />
           </div>
         </div>
       </div>
@@ -595,6 +717,20 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Snapshot summary</p>
         <BehavioralProfileSummaryCell rep={rep} />
       </div>
+
+      {selected ? (
+        <div className="mt-4">
+          <RepExpandedContent
+            rep={rep}
+            viewState={viewState}
+            assignments={assignments}
+            loadAssignments={loadAssignments}
+            handleStatusChange={handleStatusChange}
+            handleDelete={handleDelete}
+            managerMetricsPayload={managerMetricsPayload}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -828,13 +964,13 @@ export default function ManagerView() {
     {
       label: "Module completion",
       value: `${viewState.overviewMetrics.moduleCompletion}%`,
-      sub: "current 14-rep team average",
+      sub: "Current 14-rep team average",
       explanation: viewState.explanations.overview.moduleCompletion,
     },
     {
       label: "Intervention queue",
       value: interventionQueue.length,
-      sub: "current reps requiring action",
+      sub: "Current reps requiring action",
       explanation: viewState.explanations.overview.interventionQueue,
     },
     {
@@ -918,12 +1054,14 @@ export default function ManagerView() {
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
                 <div key={card.label} className="flex min-h-[140px] flex-col rounded-2xl border border-teal-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
-                  <div className="flex min-w-0 items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-start gap-2">
                     <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
-                    <div className="shrink-0">{card.explanation ? <MetricPill explanation={card.explanation} label="Formula" /> : null}</div>
                   </div>
                   <p className="mt-4 text-2xl font-bold text-slate-900">{card.value}</p>
-                  <p className="mt-auto pt-3 text-xs leading-relaxed text-slate-500">{card.sub}</p>
+                  <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-3 text-xs leading-relaxed text-slate-500">
+                    <span>{card.sub}</span>
+                    {card.explanation ? <MetricPill explanation={card.explanation} label="Formula" /> : null}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1064,15 +1202,15 @@ export default function ManagerView() {
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-100 bg-gray-50">
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Behavioral Profile (8 Metrics)</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Modules Completed</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-slate-900">Rep</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Overall Score</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Sessions (30d)</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Behavioral Profile (8 Metrics)</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Strongest Capability</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Capability Requiring Improvement</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Sales Trend</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Status</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wide text-slate-900">Modules Completed</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1084,6 +1222,17 @@ export default function ManagerView() {
                         explanations={viewState.explanations.rep[rep.id]}
                         onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
                         selected={selectedRep?.id === rep.id}
+                        expandedContent={selectedRep?.id === rep.id ? (
+                          <RepExpandedContent
+                            rep={rep}
+                            viewState={viewState}
+                            assignments={assignments}
+                            loadAssignments={loadAssignments}
+                            handleStatusChange={handleStatusChange}
+                            handleDelete={handleDelete}
+                            managerMetricsPayload={managerMetricsPayload}
+                          />
+                        ) : null}
                       />
                     ))}
                   </tbody>
@@ -1099,149 +1248,16 @@ export default function ManagerView() {
                     explanations={viewState.explanations.rep[rep.id]}
                     onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
                     selected={selectedRep?.id === rep.id}
+                    viewState={viewState}
+                    assignments={assignments}
+                    loadAssignments={loadAssignments}
+                    handleStatusChange={handleStatusChange}
+                    handleDelete={handleDelete}
+                    managerMetricsPayload={managerMetricsPayload}
                   />
                 ))}
               </div>
             </div>
-
-            {selectedRep ? (
-               <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:items-start">
-                <div className="space-y-6">
-                  {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
-                    <div className="manager-insights-container">
-                      <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
-                    </div>
-                  ) : null}
-
-                    <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
-                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
-                    </div>
-                    <div className="space-y-2">
-                      {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
-                        viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
-                          <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm transition-colors duration-200 hover:bg-teal-50/30 ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
-                            <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
-                            <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
-                        <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
-                      </div>
-                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Formula · Source · Rule</span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                      {[
-                        { key: "engagementScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
-                        { key: "readinessScore", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
-                        { key: "engagementStabilityScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
-                        { key: "conversionProxyScore", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
-                        { key: "salesRiskScore", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
-                        { key: "dataConfidenceIndex", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
-                        { key: "confidenceScore", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
-                      ].map(({ key, value, explanation }) => (
-                        <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                    <AssignmentPanel
-                      rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
-                      assignments={assignments}
-                      onAssigned={loadAssignments}
-                      onStatusChange={handleStatusChange}
-                      onDelete={handleDelete}
-                    />
-                  </div>
-                </div>
-
-                <aside className="space-y-4 self-start 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-7rem)] 2xl:overflow-y-auto 2xl:pr-1">
-                  <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5`}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#1A334D" }}>
-                        {selectedRep.name.split(" ").map((word) => word[0]).join("")}
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
-                        <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
-                        <StatusBadge status={selectedRep.status} />
-                      </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      {[
-                        { label: "Sessions (30d)", value: selectedRep.sessionsCompleted30d, explanation: null },
-                        { label: "Overall Score", value: `${selectedRep.overallScore}/5`, explanation: viewState.explanations.rep[selectedRep.id].overallScore },
-                        { label: "Practice Streak", value: selectedRep.practiceStreakDays > 0 ? `${selectedRep.practiceStreakDays} days` : "None", explanation: null },
-                        { label: "Modules Done", value: `${selectedRep.coachingModulesCompleted}/8`, explanation: viewState.explanations.rep[selectedRep.id].moduleCompletion },
-                      ].map(({ label, value, explanation }) => (
-                        <div key={label} className={`${ENTERPRISE_SUBCARD} min-w-0 rounded-lg p-3`}>
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="text-xs text-gray-500">{label}</p>
-                            <MetricPill explanation={explanation} label="Formula" />
-                          </div>
-                          <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="mt-4 grid gap-3">
-                      <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-teal-800"><CheckCircle className="h-3 w-3" /> Strongest Capability</p>
-                            <p className="text-sm font-bold text-teal-900">{getBehavioralMetricLabel(selectedRep.strongestCapability)}</p>
-                            <p className="mt-1 text-xs text-teal-700">Score {selectedRep.behavioralMetrics[selectedRep.strongestCapability].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.strongestCapability].trend}</p>
-                          </div>
-                          <MetricPill explanation={viewState.explanations.rep[selectedRep.id].strongestCapability} label="Source" />
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800"><AlertTriangle className="h-3 w-3" /> Capability Requiring Improvement</p>
-                            <p className="text-sm font-bold text-amber-900">{getBehavioralMetricLabel(selectedRep.improvementPriority)}</p>
-                            <p className="mt-1 text-xs text-amber-700">Score {selectedRep.behavioralMetrics[selectedRep.improvementPriority].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.improvementPriority].trend}</p>
-                          </div>
-                          <MetricPill explanation={viewState.explanations.rep[selectedRep.id].improvementPriority} label="Source" />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-teal-200 bg-slate-50 p-4 shadow-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Compact metric summary</p>
-                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {selectedRep.observationDepth}</span>
-                      </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
-                        <MetricSummaryCard labelKey="engagementScore" value={`${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].engagementScore} />
-                        <MetricSummaryCard labelKey="readinessScore" value={`${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].readinessScore} />
-                        <MetricSummaryCard labelKey="salesRiskScore" value={`${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].salesRiskScore} />
-                        <MetricSummaryCard labelKey="confidenceScore" value={`${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`} explanation={viewState.explanations.rep[selectedRep.id].confidenceScore} />
-                      </div>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            ) : null}
-
-            {!selectedRep ? (
-              <div className="rounded-xl border border-dashed border-teal-200 bg-white p-8 text-center shadow-sm">
-                <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                <p className="text-sm text-gray-600">Select a rep from the snapshot above to open the full detail workspace below the table.</p>
-                <p className="mt-2 text-xs text-slate-500">Expanded behavioral profile, AI insight blocks, deterministic risk signals, derived metrics, and assignments render here instead of the right rail.</p>
-              </div>
-            ) : null}
           </div>
         </TabsContent>
 
