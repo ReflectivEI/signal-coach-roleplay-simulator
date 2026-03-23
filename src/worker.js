@@ -10,6 +10,7 @@ import {
     createFallbackManagerInsights,
     normalizeManagerInsightsResponse
 } from "./components/manager/managerInsightsShared.js";
+import { appendFollowUpSnapshot, buildValidationSummary, createValidationRecord, listCanonicalCapabilities } from "./components/manager/managerValidationLogic.js";
 const assetManifest = JSON.parse(manifestJSON);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -100,6 +101,7 @@ const sessions = new Map();
 const logs = [];
 const rolePlaySessions = [];
 const customScenarios = [];
+const managerValidationRecords = [];
 
 const users = {
     "user1": {
@@ -811,6 +813,114 @@ async function handleCustomScenarios(request) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
 }
 
+function isObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function validateSnapshot(snapshot) {
+    if (!isObject(snapshot) || !isObject(snapshot.behavioralMetrics)) {
+        return "Snapshot must include behavioralMetrics.";
+    }
+
+    const metrics = listCanonicalCapabilities();
+    const missingCapability = metrics.find(({ canonicalId }) => typeof snapshot.behavioralMetrics[canonicalId] !== "number");
+    if (missingCapability) {
+        return `Snapshot is missing canonical capability ${missingCapability.canonicalId}.`;
+    }
+
+    return null;
+}
+
+function sanitizeValidationRecord(record) {
+    return createValidationRecord(record);
+}
+
+async function handleManagerValidationRep(request, repId) {
+    if (request.method !== "GET") {
+        return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const records = managerValidationRecords
+        .filter((record) => record.repId === repId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .map((record) => sanitizeValidationRecord(record));
+
+    return Response.json({ repId, records });
+}
+
+async function handleManagerValidationStart(request) {
+    const body = await request.json().catch(() => ({}));
+    const snapshotError = validateSnapshot(body.baselineSnapshot);
+    const canonicalCapabilities = new Set(listCanonicalCapabilities().map((item) => item.canonicalId));
+
+    if (!body.repId || !body.repName || !body.territoryName || !body.targetCapability) {
+        return Response.json({ error: "Missing required validation fields." }, { status: 400 });
+    }
+
+    if (!canonicalCapabilities.has(body.targetCapability)) {
+        return Response.json({ error: "targetCapability must be a canonical capability id." }, { status: 400 });
+    }
+
+    if (Array.isArray(body.linkedCapabilities) && body.linkedCapabilities.some((item) => !canonicalCapabilities.has(item))) {
+        return Response.json({ error: "linkedCapabilities must use canonical capability ids only." }, { status: 400 });
+    }
+
+    if (snapshotError) {
+        return Response.json({ error: snapshotError }, { status: 400 });
+    }
+
+    const record = sanitizeValidationRecord({
+        repId: body.repId,
+        repName: body.repName,
+        territoryId: body.territoryId || body.territoryName,
+        territoryName: body.territoryName,
+        createdBy: body.createdBy === "system" ? "system" : "manager",
+        source: body.source === "manager_manual" ? "manager_manual" : "ai_recommendation",
+        recommendationType: body.recommendationType,
+        recommendationTitle: body.recommendationTitle,
+        recommendationSummary: body.recommendationSummary,
+        targetCapability: body.targetCapability,
+        linkedCapabilities: Array.isArray(body.linkedCapabilities) ? body.linkedCapabilities : [],
+        baselineSnapshot: body.baselineSnapshot,
+        expectedMovement: body.expectedMovement,
+        followUpSnapshots: [],
+    });
+
+    managerValidationRecords.push(record);
+    return Response.json({ success: true, record }, { status: 201 });
+}
+
+async function handleManagerValidationFollowUp(request, recordId) {
+    const body = await request.json().catch(() => ({}));
+    const snapshotError = validateSnapshot(body.followUpSnapshot);
+
+    if (snapshotError) {
+        return Response.json({ error: snapshotError }, { status: 400 });
+    }
+
+    const index = managerValidationRecords.findIndex((record) => record.id === recordId);
+    if (index < 0) {
+        return Response.json({ error: "Validation record not found." }, { status: 404 });
+    }
+
+    const existingRecord = managerValidationRecords[index];
+    if (body.repId && body.repId !== existingRecord.repId) {
+        return Response.json({ error: "Validation record rep mismatch." }, { status: 400 });
+    }
+
+    const updatedRecord = appendFollowUpSnapshot(existingRecord, body.followUpSnapshot);
+    managerValidationRecords[index] = updatedRecord;
+    return Response.json({ success: true, record: updatedRecord });
+}
+
+async function handleManagerValidationSummary(request) {
+    if (request.method !== "GET") {
+        return Response.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    return Response.json({ summary: buildValidationSummary(managerValidationRecords.map((record) => sanitizeValidationRecord(record))) });
+}
+
 // Health Check
 async function handleHealth() {
     return Response.json({
@@ -835,6 +945,10 @@ async function handleHealth() {
             "PUT /api/scenarios",
             "DELETE /api/scenarios",
             "POST /manager-insights",
+            "GET /api/manager/validation/rep/:repId",
+            "POST /api/manager/validation/start",
+            "POST /api/manager/validation/:id/follow-up",
+            "GET /api/manager/validation/summary",
             "GET /health"
         ]
     });
@@ -912,6 +1026,25 @@ export default {
 
             if (pathname === "/manager-insights" && request.method === "POST") {
                 return setCorsHeaders(await handleManagerInsights(request, env));
+            }
+
+            if (pathname === "/api/manager/validation/start" && request.method === "POST") {
+                return setCorsHeaders(await handleManagerValidationStart(request));
+            }
+
+            if (pathname === "/api/manager/validation/summary" && request.method === "GET") {
+                return setCorsHeaders(await handleManagerValidationSummary(request));
+            }
+
+            if (pathname.startsWith("/api/manager/validation/rep/") && request.method === "GET") {
+                const repId = pathname.split("/").pop();
+                return setCorsHeaders(await handleManagerValidationRep(request, decodeURIComponent(repId || "")));
+            }
+
+            if (pathname.startsWith("/api/manager/validation/") && pathname.endsWith("/follow-up") && request.method === "POST") {
+                const parts = pathname.split("/").filter(Boolean);
+                const recordId = parts[3];
+                return setCorsHeaders(await handleManagerValidationFollowUp(request, decodeURIComponent(recordId || "")));
             }
 
             // ============ STATIC FILES ============
