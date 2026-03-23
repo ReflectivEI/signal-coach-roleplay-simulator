@@ -34,6 +34,11 @@ function clampNumber(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function clampRatio(value, fallback = 0) {
+  if (!Number.isFinite(Number(value))) return fallback;
+  return Math.max(0, Math.min(1, Number(value)));
+}
+
 function daysBetween(fromIso, toIso) {
   const from = new Date(fromIso).getTime();
   const to = new Date(toIso).getTime();
@@ -64,20 +69,22 @@ export function buildValidationSnapshot(rep, derived) {
   };
 }
 
-export function buildValidationRecommendation(rep, derived) {
-  const targetCapability = CANONICAL_CAPABILITY_ID_BY_KEY[rep?.improvementPriority] || CANONICAL_BEHAVIORAL_METRICS[0]?.canonicalId;
+export function buildValidationRecommendation(rep, derived, analytics = null) {
+  const prioritySelection = selectHistoricalPriorityCapability(rep, analytics);
+  const targetCapability = prioritySelection.targetCapability;
   const linkedCapability = CANONICAL_CAPABILITY_ID_BY_KEY[rep?.strongestCapability];
-  const capabilityLabel = getBehavioralMetricLabel(rep?.improvementPriority);
+  const capabilityLabel = getCapabilityLabelFromCanonicalId(targetCapability);
   const strongestLabel = getBehavioralMetricLabel(rep?.strongestCapability);
   const risk = round(derived?.salesRiskScore, 1);
   const engagement = round(derived?.engagementScore, 1);
+  const capabilityStats = analytics?.capabilitySummaries?.[targetCapability] || null;
 
   return {
     source: "ai_recommendation",
     createdBy: "manager",
     recommendationType: "coaching_session",
     recommendationTitle: `${capabilityLabel} intervention`,
-    recommendationSummary: `${rep?.name} is currently below the manager target in ${capabilityLabel}. Use ${strongestLabel} as the coaching anchor and track whether the next targeted intervention improves the target capability without increasing sales risk.`,
+    recommendationSummary: `${rep?.name} is currently below the manager target in ${capabilityLabel}. Use ${strongestLabel} as the coaching anchor and track whether the next targeted intervention improves the target capability without increasing sales risk.${capabilityStats?.totalInterventions ? ` Historical validation impact for ${capabilityLabel} is ${(capabilityStats.successRate * 100).toFixed(0)}% positive.` : ""}`,
     targetCapability,
     linkedCapabilities: linkedCapability ? [linkedCapability] : [],
     expectedMovement: {
@@ -89,6 +96,7 @@ export function buildValidationRecommendation(rep, derived) {
     managerContext: {
       currentSalesRisk: risk,
       currentLearningEngagement: engagement,
+      prioritizationRationale: prioritySelection.rationale,
     },
   };
 }
@@ -257,7 +265,257 @@ export function buildValidationSummary(records) {
     else summary.pendingValidations += 1;
   });
 
-  return summary;
+  const analytics = buildValidationHistoryAnalytics(records);
+
+  return {
+    ...summary,
+    hasHistory: analytics.hasHistory,
+    aggregateEffectiveness: analytics.aggregateEffectiveness,
+    repSummaries: analytics.repSummaries,
+    capabilitySummaries: analytics.capabilitySummaries,
+    mostResponsiveCapability: analytics.mostResponsiveCapability,
+    lowResponseCapability: analytics.lowResponseCapability,
+  };
+}
+
+function createEmptyRepHistory(repId = "unknown", repName = "") {
+  return {
+    repId,
+    repName,
+    totalInterventions: 0,
+    validatedPositive: 0,
+    validatedNeutral: 0,
+    validatedNegative: 0,
+    interventionEffectivenessScore: 0,
+  };
+}
+
+function createEmptyCapabilityHistory(canonicalId) {
+  return {
+    capabilityId: canonicalId,
+    capabilityLabel: getCapabilityLabelFromCanonicalId(canonicalId),
+    totalInterventions: 0,
+    validatedPositive: 0,
+    validatedNeutral: 0,
+    validatedNegative: 0,
+    averageCapabilityDelta: 0,
+    historicalImprovementCorrelation: 0,
+    successRate: 0,
+    weightedImpactScore: 0,
+  };
+}
+
+function getRankedWeakCapabilities(rep) {
+  return CANONICAL_BEHAVIORAL_METRICS
+    .map(({ canonicalId, key, label }) => ({
+      canonicalId,
+      key,
+      label,
+      score: clampNumber(rep?.behavioralMetrics?.[key]?.score, 5),
+    }))
+    .sort((a, b) => a.score - b.score);
+}
+
+export function buildValidationHistoryAnalytics(records) {
+  const sanitizedRecords = Array.isArray(records)
+    ? records.map((record) => createValidationRecord({
+      ...record,
+      followUpSnapshots: Array.isArray(record?.followUpSnapshots) ? record.followUpSnapshots : [],
+    }))
+    : [];
+  const repHistoryMap = new Map();
+  const capabilityHistoryMap = new Map(
+    CANONICAL_BEHAVIORAL_METRICS.map(({ canonicalId }) => [canonicalId, createEmptyCapabilityHistory(canonicalId)]),
+  );
+
+  sanitizedRecords.forEach((record) => {
+    const repId = record?.repId || "unknown";
+    const repHistory = repHistoryMap.get(repId) || createEmptyRepHistory(repId, record?.repName || "");
+    repHistory.repName = record?.repName || repHistory.repName;
+    repHistory.totalInterventions += 1;
+    if (record.validationStatus === "validated_positive") repHistory.validatedPositive += 1;
+    else if (record.validationStatus === "validated_neutral") repHistory.validatedNeutral += 1;
+    else if (record.validationStatus === "validated_negative") repHistory.validatedNegative += 1;
+    repHistoryMap.set(repId, repHistory);
+
+    const capabilityId = record?.targetCapability;
+    if (!capabilityHistoryMap.has(capabilityId)) return;
+    const capabilityHistory = capabilityHistoryMap.get(capabilityId);
+    capabilityHistory.totalInterventions += 1;
+    if (record.validationStatus === "validated_positive") capabilityHistory.validatedPositive += 1;
+    else if (record.validationStatus === "validated_neutral") capabilityHistory.validatedNeutral += 1;
+    else if (record.validationStatus === "validated_negative") capabilityHistory.validatedNegative += 1;
+    capabilityHistory.averageCapabilityDelta += clampNumber(record?.evidence?.capabilityDelta);
+  });
+
+  const repSummaries = Object.fromEntries(
+    Array.from(repHistoryMap.entries()).map(([repId, repHistory]) => {
+      const total = repHistory.totalInterventions;
+      return [
+        repId,
+        {
+          ...repHistory,
+          interventionEffectivenessScore: total ? round(repHistory.validatedPositive / total, 2) : 0,
+        },
+      ];
+    }),
+  );
+
+  const capabilitySummaries = Object.fromEntries(
+    Array.from(capabilityHistoryMap.entries()).map(([capabilityId, capabilityHistory]) => {
+      const total = capabilityHistory.totalInterventions;
+      const averageCapabilityDelta = total ? round(capabilityHistory.averageCapabilityDelta / total, 2) : 0;
+      const successRate = total ? round(capabilityHistory.validatedPositive / total, 2) : 0;
+      const historicalImprovementCorrelation = total
+        ? round(clampRatio((averageCapabilityDelta + 0.35) / 0.7), 2)
+        : 0;
+      const weightedImpactScore = total
+        ? round((successRate * 0.65) + (historicalImprovementCorrelation * 0.35), 2)
+        : 0;
+
+      return [
+        capabilityId,
+        {
+          ...capabilityHistory,
+          averageCapabilityDelta,
+          historicalImprovementCorrelation,
+          successRate,
+          weightedImpactScore,
+        },
+      ];
+    }),
+  );
+
+  const allCapabilitySummaries = Object.values(capabilitySummaries);
+  const trackedCapabilities = allCapabilitySummaries.filter((item) => item.totalInterventions > 0);
+  const mostResponsiveCapability = trackedCapabilities.length
+    ? trackedCapabilities.slice().sort((a, b) => (
+      b.weightedImpactScore - a.weightedImpactScore
+      || b.successRate - a.successRate
+      || a.capabilityLabel.localeCompare(b.capabilityLabel)
+    ))[0]
+    : null;
+  const lowResponseCapability = trackedCapabilities.length
+    ? trackedCapabilities.slice().sort((a, b) => (
+      a.weightedImpactScore - b.weightedImpactScore
+      || a.successRate - b.successRate
+      || a.capabilityLabel.localeCompare(b.capabilityLabel)
+    ))[0]
+    : null;
+
+  const aggregateEffectiveness = sanitizedRecords.length
+    ? round(Object.values(repSummaries).reduce((sum, repSummary) => sum + repSummary.validatedPositive, 0) / sanitizedRecords.length, 2)
+    : 0;
+
+  return {
+    hasHistory: sanitizedRecords.length > 0,
+    totalRecords: sanitizedRecords.length,
+    repSummaries,
+    capabilitySummaries,
+    aggregateEffectiveness,
+    mostResponsiveCapability,
+    lowResponseCapability,
+  };
+}
+
+export function buildPredictiveCalibration(rep, derived, analytics) {
+  const defaultConfidence = clampRatio(derived?.predictiveConfidence ?? derived?.confidenceScore ?? 0);
+  const fallbackTargetCapability = CANONICAL_CAPABILITY_ID_BY_KEY[rep?.improvementPriority] || CANONICAL_BEHAVIORAL_METRICS[0]?.canonicalId;
+  const repHistory = analytics?.repSummaries?.[rep?.id] || createEmptyRepHistory(rep?.id, rep?.name);
+  const capabilitySummaries = analytics?.capabilitySummaries || {};
+  const targetCapabilityStats = capabilitySummaries[fallbackTargetCapability] || createEmptyCapabilityHistory(fallbackTargetCapability);
+
+  if (!analytics?.hasHistory) {
+    return {
+      hasHistory: false,
+      interventionEffectivenessScore: 0,
+      targetCapabilitySuccessRate: 0,
+      predictiveConfidence: defaultConfidence,
+      coachingEffectivenessLabel: "Deterministic fallback",
+      mostResponsiveCapability: analytics?.mostResponsiveCapability || null,
+      lowResponseCapability: analytics?.lowResponseCapability || null,
+    };
+  }
+
+  if (repHistory.totalInterventions === 0) {
+    const predictiveConfidence = round(
+      clampRatio((defaultConfidence * 0.86) + (targetCapabilityStats.successRate * 0.14)),
+      2,
+    );
+    return {
+      hasHistory: true,
+      interventionEffectivenessScore: 0,
+      targetCapabilitySuccessRate: targetCapabilityStats.successRate,
+      predictiveConfidence,
+      coachingEffectivenessLabel: "Capability-informed",
+      mostResponsiveCapability: analytics?.mostResponsiveCapability || null,
+      lowResponseCapability: analytics?.lowResponseCapability || null,
+    };
+  }
+
+  const predictiveConfidence = round(
+    clampRatio(
+      (defaultConfidence * 0.72)
+      + (repHistory.interventionEffectivenessScore * 0.16)
+      + (targetCapabilityStats.successRate * 0.12),
+    ),
+    2,
+  );
+
+  const coachingEffectivenessLabel = repHistory.interventionEffectivenessScore >= 0.67
+    ? "High"
+    : repHistory.interventionEffectivenessScore >= 0.34
+      ? "Moderate"
+      : "Low";
+
+  return {
+    hasHistory: true,
+    interventionEffectivenessScore: repHistory.interventionEffectivenessScore,
+    targetCapabilitySuccessRate: targetCapabilityStats.successRate,
+    predictiveConfidence,
+    coachingEffectivenessLabel,
+    mostResponsiveCapability: analytics?.mostResponsiveCapability || null,
+    lowResponseCapability: analytics?.lowResponseCapability || null,
+  };
+}
+
+export function selectHistoricalPriorityCapability(rep, analytics) {
+  const rankedWeaknesses = getRankedWeakCapabilities(rep);
+  if (!rankedWeaknesses.length || !analytics?.hasHistory) {
+    return {
+      targetCapability: CANONICAL_CAPABILITY_ID_BY_KEY[rep?.improvementPriority] || CANONICAL_BEHAVIORAL_METRICS[0]?.canonicalId,
+      rationale: "No validation history available; using the current deterministic weakest capability.",
+    };
+  }
+
+  const baselineWeakness = rankedWeaknesses[0]?.score ?? 5;
+  const eligibleWeaknesses = rankedWeaknesses.filter((item) => item.score <= baselineWeakness + 0.45).slice(0, 3);
+  const rankedByImpact = eligibleWeaknesses
+    .map((item) => {
+      const capabilityStats = analytics.capabilitySummaries?.[item.canonicalId] || createEmptyCapabilityHistory(item.canonicalId);
+      const weaknessWeight = round(Math.max(0, 5 - item.score) / 5, 2);
+      const weightedPriorityScore = round((weaknessWeight * 0.58) + (capabilityStats.weightedImpactScore * 0.42), 2);
+      return {
+        ...item,
+        weaknessWeight,
+        capabilityStats,
+        weightedPriorityScore,
+      };
+    })
+    .sort((a, b) => (
+      b.weightedPriorityScore - a.weightedPriorityScore
+      || b.capabilityStats.weightedImpactScore - a.capabilityStats.weightedImpactScore
+      || a.score - b.score
+    ));
+
+  const selected = rankedByImpact[0];
+  return {
+    targetCapability: selected?.canonicalId || (CANONICAL_CAPABILITY_ID_BY_KEY[rep?.improvementPriority] || CANONICAL_BEHAVIORAL_METRICS[0]?.canonicalId),
+    rationale: selected?.capabilityStats?.totalInterventions
+      ? `${selected.label} is among the lowest metrics and carries the strongest historical impact signal from prior validated interventions.`
+      : `${selected?.label || getBehavioralMetricLabel(rep?.improvementPriority)} remains the lowest observed metric and no capability-specific validation advantage exists yet.`,
+    weightedPriorityScore: selected?.weightedPriorityScore || 0,
+  };
 }
 
 export function buildValidationInsight(record) {

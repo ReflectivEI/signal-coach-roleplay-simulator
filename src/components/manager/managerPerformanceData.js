@@ -233,6 +233,15 @@ export const MANAGER_RISK_RULES = {
  *   dataConfidenceIndex: number;
  *   confidenceScore: number;
  *   predictiveConfidence: number;
+ *   calibration?: {
+ *     hasHistory: boolean;
+ *     interventionEffectivenessScore: number;
+ *     targetCapabilitySuccessRate: number;
+ *     predictiveConfidence: number;
+ *     coachingEffectivenessLabel: string;
+ *     mostResponsiveCapability?: { capabilityId: string; capabilityLabel: string } | null;
+ *     lowResponseCapability?: { capabilityId: string; capabilityLabel: string } | null;
+ *   };
  * }} RepDerivedMetrics
  */
 

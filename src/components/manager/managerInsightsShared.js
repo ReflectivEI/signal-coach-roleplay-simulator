@@ -294,6 +294,7 @@ export function createFallbackManagerInsights(payload, derived) {
   const subject = rep ? rep.name : `${territory.territory} territory`;
   const formatScalePercent = (score) => `${score}/5 (${Math.round((score / 5) * 1000) / 10}% of 5-point scale)`;
   const predictiveConfidencePercent = Math.round(derived.confidence * 100);
+  const derivedCalibration = /** @type {any} */ (payload.derivedMetrics)?.calibration;
 
   const summary = rep
     ? `${subject} is evaluated on the canonical Signal Intelligence metrics. Strongest capability is ${strongestCapabilityLabel} and the capability requiring improvement is ${weakestCapabilityLabel}, with deterministic threshold flags ${derived.thresholdFlags.join("; ") || "none"} in ${territory.territory}.`
@@ -356,7 +357,7 @@ export function createFallbackManagerInsights(payload, derived) {
       performanceTrend,
       confidence: derived.confidence,
       reasoning: rep
-        ? `${PREDICTIVE_CONFIDENCE_LABEL}: ${predictiveConfidencePercent}/100. Sales Outcome Score is ${formatScalePercent(rep.salesPerformance)} on the 5-point scale, while prediction reliability is derived from Data Confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}/100, Behavioral Variance ${payload.derivedMetrics?.behavioralVariance}, Engagement Stability ${payload.derivedMetrics?.engagementStabilityScore}/100, and ${formatTrendLabel(rep.salesTrend)} sales directionality.`
+        ? `${PREDICTIVE_CONFIDENCE_LABEL}: ${predictiveConfidencePercent}/100. Sales Outcome Score is ${formatScalePercent(rep.salesPerformance)} on the 5-point scale, while prediction reliability is derived from Data Confidence ${Math.round((payload.derivedMetrics?.dataConfidenceIndex ?? 0) * 100)}/100, Behavioral Variance ${payload.derivedMetrics?.behavioralVariance}, Engagement Stability ${payload.derivedMetrics?.engagementStabilityScore}/100, ${derivedCalibration?.hasHistory ? `intervention effectiveness ${Math.round((derivedCalibration?.interventionEffectivenessScore ?? 0) * 100)}/100, target capability validation success ${Math.round((derivedCalibration?.targetCapabilitySuccessRate ?? 0) * 100)}/100, ` : ""}and ${formatTrendLabel(rep.salesTrend)} sales directionality.`
         : `${PREDICTIVE_CONFIDENCE_LABEL}: ${predictiveConfidencePercent}/100. Territory Sales Outcome Score is ${formatScalePercent(territory.avgPerformance)} on the 5-point scale, while prediction reliability is derived from weighted rep coverage, Territory Volatility ${territory.territoryVolatility}, Learning Engagement Score ${territory.avgEngagement}/100, and contribution-weight variance ${derived.territoryWeightVariance} in ${territory.territory}.`,
     },
   };

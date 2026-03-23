@@ -24,8 +24,8 @@ export async function fetchValidationSummary() {
   return parseJsonResponse(response);
 }
 
-export async function startValidationRecord(rep, derived) {
-  const recommendation = buildValidationRecommendation(rep, derived);
+export async function startValidationRecord(rep, derived, validationAnalytics = null) {
+  const recommendation = buildValidationRecommendation(rep, derived, validationAnalytics);
   const baselineSnapshot = buildValidationSnapshot(rep, derived);
   const response = await fetch("/api/manager/validation/start", {
     method: "POST",
