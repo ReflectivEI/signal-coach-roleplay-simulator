@@ -338,22 +338,21 @@ export default function Layout({ children, currentPageName }) {
                           item.label,
                           <Link
                             to={createPageUrl(item.page)}
-                            className={`group relative flex min-h-11 items-center rounded-xl text-sm transition-all duration-200 ${
-                              desktopSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 py-3 pl-3 pr-2"
-                            } ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
-                            style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
+                            className={`relative flex min-h-11 items-center rounded-xl text-sm transition-all duration-200 ${
+                              desktopSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-3"
+                            } ${isActive ? "font-semibold text-white" : "text-white/60 hover:text-white"}`}
+                            style={isActive ? { background: "#39ACAC" } : { background: "transparent", border: "1px solid transparent" }}
+                            onMouseEnter={(e) => {
+                              if (!isActive) e.currentTarget.style.background = "#39ACAC";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isActive) e.currentTarget.style.background = "transparent";
+                            }}
                             onClick={() => setSidebarOpen(false)}
                             title={desktopSidebarCollapsed ? item.label : undefined}
                           >
                             <item.icon className="h-4 w-4 flex-shrink-0" />
                             {!desktopSidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
-                            {!desktopSidebarCollapsed && !isActive ? (
-                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 scale-95 rounded-full border border-[#79caca] px-2 py-0.5 text-[10px] font-semibold opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100"
-                                style={{ background: "#39ACAC", color: "#ffffff" }}
-                              >
-                                Open
-                              </span>
-                            ) : null}
                           </Link>
                         )}
                       </motion.div>

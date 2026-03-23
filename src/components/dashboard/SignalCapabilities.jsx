@@ -37,17 +37,17 @@ export default function SignalCapabilities() {
             <button
               key={cap.id}
               onClick={() => setOpen(cap.id)}
-              className="flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-3 text-left transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:border-teal-300 hover:bg-teal-50/60 hover:shadow-md"
+              className="flex w-full items-center gap-3 rounded-lg border border-transparent px-3 py-3 text-left transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:border-teal-300 hover:bg-teal-50/60 hover:shadow-md"
             >
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colorDot[cap.color] || "bg-teal-500"}`} />
+              <div className={`h-2 w-2 flex-shrink-0 rounded-full ${colorDot[cap.color] || "bg-teal-500"}`} />
               <span
-                className={`flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm font-medium leading-snug text-[#1A334D] transition-colors hover:text-teal-700 ${
+                className={`min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm font-medium leading-snug text-[#1A334D] transition-colors hover:text-teal-700 ${
                   ["customer_engagement", "conversation_management"].includes(cap.id) ? "text-[0.92em] tracking-[-0.1px]" : ""
                 }`}
               >
                 {cap.label}
               </span>
-              <span className="text-xs text-gray-600 hover:text-teal-700 text-right leading-snug flex-shrink-0 ml-2 transition-colors font-medium" style={{ maxWidth: "110px" }}>{cap.measurement}</span>
+              <span className="ml-3 flex-shrink-0 whitespace-nowrap text-right text-xs font-medium leading-snug text-gray-600 transition-colors hover:text-teal-700">{cap.measurement}</span>
             </button>
           ))}
         </div>
