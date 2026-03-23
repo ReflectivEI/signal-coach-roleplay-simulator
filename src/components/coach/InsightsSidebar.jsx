@@ -119,7 +119,7 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
               )}
               {Array.isArray(insights.patterns) && insights.patterns.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-gray-700 mb-1">Patterns</div>
+                  <div className="mb-1 text-[13px] font-bold text-gray-700 leading-5">Patterns</div>
                   <ul className="list-disc pl-5 text-xs text-gray-800">
                     {insights.patterns.map((p, i) => (
                       <li key={i}><span className="font-semibold">{p.name}:</span> {p.description}</li>
@@ -129,7 +129,7 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
               )}
               {Array.isArray(insights.strengths) && insights.strengths.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-green-700 mb-1">Strengths</div>
+                  <div className="mb-1 text-[13px] font-bold text-green-700 leading-5">Strengths</div>
                   <ul className="list-disc pl-5 text-xs text-green-800">
                     {insights.strengths.map((s, i) => (
                       <li key={i}><span className="font-semibold">{s.strength}:</span> {s.example}</li>
@@ -139,7 +139,7 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
               )}
               {Array.isArray(insights.improvement_areas) && insights.improvement_areas.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-red-700 mb-1">Improvement Areas</div>
+                  <div className="mb-1 text-[13px] font-bold text-red-700 leading-5">Improvement Areas</div>
                   <ul className="list-disc pl-5 text-xs text-red-800">
                     {insights.improvement_areas.map((a, i) => (
                       <li key={i}><span className="font-semibold">{a.area}:</span> {a.suggestion}</li>
@@ -149,7 +149,7 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
               )}
               {Array.isArray(insights.recommended_modules) && insights.recommended_modules.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-purple-700 mb-1">Recommended Modules</div>
+                  <div className="mb-1 text-[13px] font-bold text-purple-700 leading-5">Recommended Modules</div>
                   <ul className="list-disc pl-5 text-xs text-purple-800">
                     {insights.recommended_modules.map((m, i) => (
                       <li key={i}><span className="font-semibold">{m.module}:</span> {m.reason}</li>
@@ -159,7 +159,7 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
               )}
               {Array.isArray(insights.recommended_exercises) && insights.recommended_exercises.length > 0 && (
                 <div>
-                  <div className="text-xs font-bold text-orange-700 mb-1">Recommended Exercises</div>
+                  <div className="mb-1 text-[13px] font-bold text-orange-700 leading-5">Recommended Exercises</div>
                   <ul className="list-disc pl-5 text-xs text-orange-800">
                     {insights.recommended_exercises.map((e, i) => (
                       <li key={i}><span className="font-semibold">{e.topic}:</span> {e.reason}</li>

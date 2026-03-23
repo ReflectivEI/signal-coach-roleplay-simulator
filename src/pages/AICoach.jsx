@@ -462,8 +462,8 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                   <h2 className="text-[44px] leading-[1.02] font-bold">Start a Conversation</h2>
                   <MessageSquare className="w-10 h-10 text-teal-200" />
                 </div>
-                <p className="mb-6 mx-auto max-w-4xl text-[15px] leading-6 text-slate-200 whitespace-nowrap">
-                  Ask me anything about pharma sales, signal intelligence frameworks, objection handling, or clinical evidence communication.
+                <p className="mb-5 text-sm font-medium leading-6 text-slate-200/85">
+                  What would you like to improve today?
                 </p>
                 <div className="w-full max-w-3xl mx-auto grid grid-cols-1 gap-3">
                   {suggestedQuestions.map((q) => (
