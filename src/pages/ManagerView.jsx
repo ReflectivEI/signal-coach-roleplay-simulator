@@ -277,12 +277,12 @@ function MetricSummaryCard({ labelKey, value, explanation }) {
   return (
       <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
+        <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-slate-600">{formatMetricLabel(labelKey)}</p>
         <MetricPill explanation={explanation} label="Details" />
       </div>
       <p className="mt-2 text-lg font-bold text-slate-900">{value}</p>
       {normalizedExplanation?.derivedFrom?.length ? (
-        <p className="mt-2 text-[11px] leading-5 text-slate-500">Derived from: {normalizedExplanation.derivedFrom.join(", ")}</p>
+        <p className="mt-2 text-[11px] leading-5 text-slate-600">Derived from: {normalizedExplanation.derivedFrom.join(", ")}</p>
       ) : null}
     </div>
   );
@@ -305,15 +305,15 @@ function MetricExplanationDialog({ explanation, children }) {
         </DialogHeader>
         <div className="space-y-4 text-sm text-slate-700">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Calculation</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Calculation</p>
             <p className="mt-2 font-mono text-xs leading-6 text-slate-700">{normalizedExplanation.formula}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Inputs</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Inputs</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {Object.entries(normalizedExplanation.inputs || {}).map(([key, value]) => (
                 <div key={key} className="rounded-xl bg-slate-50 px-3 py-2">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-500">{normalizeManagerText(key)}</p>
+                  <p className="text-[11px] uppercase tracking-wide text-slate-600">{normalizeManagerText(key)}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-900">{String(value)}</p>
                 </div>
               ))}
@@ -321,20 +321,20 @@ function MetricExplanationDialog({ explanation, children }) {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Data source</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Data source</p>
               <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.dataSource || "Manager View deterministic dataset"}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Time window</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Time window</p>
               <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.timeWindow || "Last 30 days"}</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Definition</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Definition</p>
               <p className="mt-2 text-xs leading-6 text-slate-600">{normalizedExplanation.definition}</p>
             </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Thresholds and meaning</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Thresholds and meaning</p>
             <div className="mt-2 space-y-2 text-xs leading-6 text-slate-600">
               {(normalizedExplanation.thresholds || []).length ? (
                 normalizedExplanation.thresholds.map((item) => (
@@ -346,7 +346,7 @@ function MetricExplanationDialog({ explanation, children }) {
             </div>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric lineage</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Metric lineage</p>
             <p className="mt-2 text-xs leading-6 text-slate-600">
               {normalizedExplanation.derivedFrom?.length ? `Derived from: ${normalizedExplanation.derivedFrom.join(", ")}` : "Derived from: This metric is canonical or descriptive only."}
             </p>
@@ -395,7 +395,7 @@ function DefinitionsDialog() {
         </DialogHeader>
         <div className="space-y-5">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Manager View foundations</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Manager View foundations</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {MANAGER_VIEW_FOUNDATION.map((item) => (
                 <div key={item.label} className="rounded-2xl border border-teal-200 bg-teal-50/60 p-4">
@@ -408,7 +408,7 @@ function DefinitionsDialog() {
             </div>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Canonical Signal Intelligence capabilities</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Canonical Signal Intelligence capabilities</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {SIGNAL_CAPABILITIES.map((capability) => (
                 <div key={capability.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -419,26 +419,26 @@ function DefinitionsDialog() {
             </div>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Derived metrics</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {DERIVED_METRIC_GLOSSARY.map((metric) => (
                 <div key={metric.label} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-sm font-semibold text-slate-900">{metric.label}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">{metric.definition}</p>
                   <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-700">{metric.formula}</p>
-                  <p className="mt-2 text-[11px] leading-5 text-slate-500">Derived from: {metric.derivedFrom}</p>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-600">Derived from: {metric.derivedFrom}</p>
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Threshold definitions</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Threshold definitions</p>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               {THRESHOLD_GLOSSARY.map((item) => (
                 <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
                   <p className="text-sm font-semibold text-slate-900">{item.label}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-600">{item.definition}</p>
-                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source · {item.source}</p>
+                  <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Source · {item.source}</p>
                 </div>
               ))}
             </div>
@@ -460,7 +460,7 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900">{rep.name}</p>
-              <p className="mt-0.5 text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
+              <p className="mt-0.5 text-xs text-slate-600">{rep.specialty} · {rep.territory}</p>
               <button
                 type="button"
                 aria-expanded={selected}
@@ -501,7 +501,9 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
           </div>
         </td>
         <td className="px-4 py-3 text-center align-middle">
-          <TrendBadge trend={rep.salesTrend} />
+          <div className="flex justify-center">
+            <TrendBadge trend={rep.salesTrend} />
+          </div>
         </td>
         <td className="px-4 py-3 text-center align-middle">
           <div className="flex flex-col items-center gap-1.5">
@@ -510,7 +512,10 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
           </div>
         </td>
         <td className="px-4 py-3 text-center align-middle">
-          <MetricPill explanation={explanations.moduleCompletion} label="Completion Details" />
+          <div className="flex flex-col items-center gap-1.5">
+            <p className="text-sm font-bold text-slate-700">{rep.coachingModulesCompleted}/8</p>
+            <MetricPill explanation={explanations.moduleCompletion} label="Completion Details" />
+          </div>
         </td>
       </tr>
       {selected ? (
@@ -524,7 +529,7 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
   );
 }
 
-function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload }) {
+function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, onCollapse }) {
   const derived = viewState.derivedByRepId[rep.id];
   const explanations = viewState.explanations.rep[rep.id];
 
@@ -538,7 +543,7 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
             </div>
             <div className="min-w-0">
               <h3 className="font-bold text-gray-900">{rep.name}</h3>
-              <p className="text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
+              <p className="text-xs text-slate-600">{rep.specialty} · {rep.territory}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <TrendBadge trend={rep.salesTrend} />
                 <span className={`text-sm font-semibold ${rep.status === "active" ? "text-green-700" : rep.status === "inactive" ? "text-red-700" : "text-amber-700"}`}>Sales Risk {derived.salesRiskScore}/100</span>
@@ -555,7 +560,7 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
             ].map(({ label, value, explanation, detailLabel }) => (
               <div key={label} className={`${ENTERPRISE_SUBCARD} min-w-0 rounded-lg p-3`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <p className="text-xs text-gray-500">{label}</p>
+                  <p className="text-xs text-slate-600">{label}</p>
                   <MetricPill explanation={explanation} label={detailLabel || "Details"} />
                 </div>
                 <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
@@ -596,7 +601,7 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
 
       <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
         <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Deterministic risk signals</p>
           <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[rep.id]?.length || 0} active rules</span>
         </div>
         <div className="space-y-2">
@@ -616,8 +621,8 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
       <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
-            <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Derived metrics</p>
+            <p className="mt-1 text-sm text-slate-600">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
           </div>
           <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Details · Source · Rule</span>
         </div>
@@ -633,6 +638,15 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
           ].map(({ key, value, explanation }) => (
             <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
           ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={onCollapse}
+            className="inline-flex items-center rounded-full border border-[#166534] bg-[#dff5f2] px-4 py-2 text-sm font-bold text-[#166534] transition-colors hover:bg-[#cdeeed]"
+          >
+            Collapse Details
+          </button>
         </div>
       </div>
 
@@ -673,7 +687,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">{rep.name}</p>
-              <p className="mt-1 text-xs text-slate-500">{rep.specialty} · {rep.territory}</p>
+              <p className="mt-1 text-xs text-slate-600">{rep.specialty} · {rep.territory}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <TrendBadge trend={rep.salesTrend} />
                 <span className={`text-sm font-semibold ${rep.status === "active" ? "text-green-700" : rep.status === "inactive" ? "text-red-700" : "text-amber-700"}`}>Sales Risk {derived.salesRiskScore}/100</span>
@@ -690,14 +704,14 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overall score</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Overall score</p>
             <MetricPill explanation={explanations.overallScore} label="Details" />
           </div>
           <p className="mt-2 text-lg font-bold text-slate-900">{rep.overallScore}/5</p>
-          <p className="mt-1 text-xs text-slate-500">{rep.sessionsCompleted30d} sessions · {rep.coachingModulesCompleted}/8 modules</p>
+          <p className="mt-1 text-xs text-slate-600">{rep.sessionsCompleted30d} sessions · {rep.coachingModulesCompleted}/8 modules</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Capability summary</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Capability summary</p>
           <div className="mt-2 flex flex-wrap gap-2">
             <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
             <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
@@ -707,14 +721,14 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
             <MetricPill explanation={explanations.improvementPriority} label="Source" />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</span>
+            <span className="text-[11px] text-slate-600">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</span>
             <MetricPill explanation={explanations.salesRiskScore} label="Details" />
           </div>
         </div>
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Snapshot summary</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Snapshot summary</p>
         <BehavioralProfileSummaryCell rep={rep} />
       </div>
 
@@ -728,6 +742,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
             handleStatusChange={handleStatusChange}
             handleDelete={handleDelete}
             managerMetricsPayload={managerMetricsPayload}
+            onCollapse={() => onToggle(rep.id)}
           />
         </div>
       ) : null}
@@ -784,7 +799,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{item.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{normalizeManagerText(item.metricLabel)}: {item.metricValue} · Weight {Math.round((item.weight || 0) * 100)}%</p>
+                          <p className="mt-1 text-xs text-slate-600">{normalizeManagerText(item.metricLabel)}: {item.metricValue} · Weight {Math.round((item.weight || 0) * 100)}%</p>
                           <p className="mt-2 text-sm leading-6 text-slate-700">{normalizeManagerText(item.why)}</p>
                         </div>
                         <Button size="sm" variant="outline" onClick={() => onSelectRep(item.repId)}>
@@ -795,7 +810,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-slate-500">No contributors are available for this territory pattern.</p>
+                <p className="mt-3 text-sm text-slate-600">No contributors are available for this territory pattern.</p>
               )}
             </div>
           ))}
@@ -1025,7 +1040,7 @@ export default function ManagerView() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Manager View</h1>
         </div>
-        <p className="text-sm text-gray-500">Manager-friendly summaries built on the 8 canonical Signal Intelligence capabilities, auditable derived metrics, and the current 30-day demo dataset.</p>
+        <p className="text-sm text-slate-600">Manager-friendly summaries built on the 8 canonical Signal Intelligence capabilities, auditable derived metrics, and the current 30-day demo dataset.</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
             Data integrity {viewState.validation.isValid ? "verified" : "needs review"} · {viewState.datasetScope.detail} · full 8-metric canonical model
@@ -1047,7 +1062,7 @@ export default function ManagerView() {
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               This layer translates the canonical Signal Intelligence profile into manager actions: who needs support, which capability is weakest, and what to do next without exposing internal-only terms.
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-600">
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">Current scope: {viewState.datasetScope.detail}</span>
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">Last refreshed: {formatRefreshTimestamp(viewState.refreshedAt)}</span>
             </div>
@@ -1055,10 +1070,10 @@ export default function ManagerView() {
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
                 <div key={card.label} className="flex min-h-[140px] flex-col rounded-2xl border border-teal-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
                   <div className="flex min-w-0 items-start gap-2">
-                    <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
+                    <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-600">{card.label}</p>
                   </div>
                   <p className="mt-4 text-2xl font-bold text-slate-900">{card.value}</p>
-                  <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-3 text-xs leading-relaxed text-slate-500">
+                  <div className="mt-auto flex flex-wrap items-baseline gap-2 pt-3 text-xs leading-relaxed text-slate-600">
                     <span>{card.sub}</span>
                     {card.explanation ? <MetricPill explanation={card.explanation} label="Formula" /> : null}
                   </div>
@@ -1099,7 +1114,7 @@ export default function ManagerView() {
         <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Priority queue</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Priority queue</p>
               <h3 className="mt-1 text-lg font-bold text-slate-900">Who managers should coach next</h3>
             </div>
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{interventionQueue.length} active interventions</span>
@@ -1109,7 +1124,7 @@ export default function ManagerView() {
               <button key={rep.id} type="button" onClick={() => { setSelectedRepId(rep.id); setActiveTab("reps"); }} className={`flex w-full items-center justify-between gap-3 rounded-2xl p-4 text-left ${ENTERPRISE_SUBCARD}`}>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{index + 1}. {rep.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} · {rep.sessionsCompleted30d} sessions in 30d</p>
+                  <p className="mt-1 text-xs text-slate-600">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} · {rep.sessionsCompleted30d} sessions in 30d</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-slate-900">{rep.overallScore}/5</p>
@@ -1121,7 +1136,7 @@ export default function ManagerView() {
         </div>
 
         <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Manager operating standard</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Manager operating standard</p>
           <h3 className="mt-1 text-lg font-bold text-slate-900">Intervention guidance</h3>
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <div className={`${ENTERPRISE_SUBCARD} border-teal-100 bg-teal-50 p-4`}>Escalate low-adoption, low-score reps into mandatory remediation sequences within Learning Paths.</div>
@@ -1144,12 +1159,12 @@ export default function ManagerView() {
               <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${selectedTone.icon}`} />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{label}</span>
                 </div>
                 <MetricPill explanation={explanation} label="Formula" />
               </div>
               <p className={`text-2xl font-bold ${selectedTone.value}`}>{value}</p>
-              {sub ? <p className="mt-0.5 text-xs text-gray-500">{sub}</p> : null}
+              {sub ? <p className="mt-0.5 text-xs text-slate-600">{sub}</p> : null}
             </div>
           );
         })}
@@ -1171,9 +1186,9 @@ export default function ManagerView() {
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                   <div>
                     <h2 className="text-sm font-bold text-gray-900">Rep performance snapshot</h2>
-                    <p className="text-xs text-gray-500">Each row keeps a compact 8-metric summary in view. Expand one rep at a time to inspect the full behavioral profile, risk signals, assignments, and AI context below.</p>
+                    <p className="text-xs text-slate-600">Each row keeps a compact 8-metric summary in view. Expand one rep at a time to inspect the full behavioral profile, risk signals, assignments, and AI context below.</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">{viewState.datasetScope.detail}</span>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">Last refreshed {formatRefreshTimestamp(viewState.refreshedAt)}</span>
                     <span className={`rounded-full border px-2.5 py-1 font-semibold ${selectedRep ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-600"}`}>{selectedRep ? `${selectedRep.name} expanded` : "No rep expanded"}</span>
@@ -1231,6 +1246,7 @@ export default function ManagerView() {
                             handleStatusChange={handleStatusChange}
                             handleDelete={handleDelete}
                             managerMetricsPayload={managerMetricsPayload}
+                            onCollapse={() => setSelectedRepId(null)}
                           />
                         ) : null}
                       />
@@ -1267,10 +1283,10 @@ export default function ManagerView() {
               <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Territory analytics workspace</p>
                 <h3 className="mt-1 text-lg font-bold text-slate-900">National Team Aggregate predictive coaching layer</h3>
-                <p className="mt-2 text-sm text-slate-500">Review territory cards first, then use the full AI workspace below for explainable predictive guidance, follow-up questions, and territory-specific coaching actions.</p>
+                <p className="mt-2 text-sm text-slate-600">Review territory cards first, then use the full AI workspace below for explainable predictive guidance, follow-up questions, and territory-specific coaching actions.</p>
               </div>
             ) : (
-              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
+              <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
                 Territory AI insights are hidden until metric validation passes. Deterministic territory aggregates remain available below.
               </div>
             )}
@@ -1296,7 +1312,7 @@ export default function ManagerView() {
                   <div key={territory.territory} className={`${ENTERPRISE_PARENT_CARD} p-5`}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{territory.territory}</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">{territory.territory}</p>
                         <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
                           {territory.riskLevel === "high" ? "Manager attention is required." : territory.riskLevel === "moderate" ? "Manager follow-up is recommended." : "This territory is operating within the current manager guardrails."}
                         </p>
@@ -1312,12 +1328,12 @@ export default function ManagerView() {
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-teal-200 bg-slate-50 p-4 shadow-sm">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Executive summary</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Executive summary</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs uppercase tracking-wide text-slate-500">Risk level</p>
+                              <p className="text-xs uppercase tracking-wide text-slate-600">Risk level</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.riskLevel}</p>
                             </div>
                             <MetricPill explanation={territoryExplanations.riskLevel} label="Rule" />
@@ -1326,7 +1342,7 @@ export default function ManagerView() {
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs uppercase tracking-wide text-slate-500">Primary gap</p>
+                              <p className="text-xs uppercase tracking-wide text-slate-600">Primary gap</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "No dominant gap"}</p>
                             </div>
                             <MetricPill explanation={territoryExplanations.mostCommonCapabilityGap} label="Source" />
@@ -1335,7 +1351,7 @@ export default function ManagerView() {
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs uppercase tracking-wide text-slate-500">Key metrics</p>
+                              <p className="text-xs uppercase tracking-wide text-slate-600">Key metrics</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.avgPerformance}/5 · {territory.avgEngagement}/100</p>
                             </div>
                             <div className="flex flex-col items-start gap-1 sm:items-end">
@@ -1349,7 +1365,7 @@ export default function ManagerView() {
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
                       <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-4`}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What is driving this</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">What is driving this</p>
                         <ul className="mt-3 space-y-2 text-sm text-slate-700">
                           {driverBullets.slice(0, 3).map((item) => (
                             <li key={item} className="flex gap-2">
@@ -1360,7 +1376,7 @@ export default function ManagerView() {
                         </ul>
                       </div>
                       <div className={`${ENTERPRISE_SUBCARD} rounded-2xl p-4`}>
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">What to do</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">What to do</p>
                         <ul className="mt-3 space-y-2 text-sm text-slate-700">
                           {actionBullets.map((item) => (
                             <li key={item} className="flex gap-2">
@@ -1399,7 +1415,7 @@ export default function ManagerView() {
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">Team Signal Intelligence Profile</h3>
-                    <p className="text-xs text-gray-500">National Team Aggregate average vs. benchmark across all 8 capabilities</p>
+                    <p className="text-xs text-slate-600">National Team Aggregate average vs. benchmark across all 8 capabilities</p>
                   </div>
                   <MetricPill explanation={viewState.explanations.overview.territoryAverage} label="Aggregate" />
                 </div>
@@ -1416,7 +1432,7 @@ export default function ManagerView() {
 
               <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5 pt-6`}>
                 <h3 className="mb-1 text-sm font-bold text-gray-900">Sessions per Rep (Last 30 Days)</h3>
-                <p className="mb-4 text-xs text-gray-500">Platform engagement across the current Manager View dataset</p>
+                <p className="mb-4 text-xs text-slate-600">Platform engagement across the current Manager View dataset</p>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={reps.map((rep) => ({ name: rep.name.split(" ")[0], sessions: rep.sessionsCompleted30d, score: rep.overallScore }))} layout="vertical">
                     <XAxis type="number" tick={{ fontSize: 10 }} tickLine={false} />
@@ -1441,7 +1457,7 @@ export default function ManagerView() {
                           <span className="w-10 text-xs font-bold text-gray-700">{rep.overallScore}/5</span>
                         </div>
                       </div>
-                      <span className="w-16 text-right text-xs text-gray-500">{rep.sessionsCompleted30d} sessions</span>
+                      <span className="w-16 text-right text-xs text-slate-600">{rep.sessionsCompleted30d} sessions</span>
                       <StatusBadge status={rep.status} />
                     </button>
                   ))}
@@ -1462,7 +1478,7 @@ export default function ManagerView() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-gray-900">Training Modules by Signal Intelligence Capability</h2>
-                <p className="text-sm text-gray-500">All 8 capabilities with aligned coaching content your reps are evaluated on</p>
+                <p className="text-sm text-slate-600">All 8 capabilities with aligned coaching content your reps are evaluated on</p>
               </div>
               <Select value={selectedCapabilityFilter} onValueChange={setSelectedCapabilityFilter}>
                 <SelectTrigger className="w-56 text-sm">
@@ -1487,10 +1503,10 @@ export default function ManagerView() {
                         <Icon className="h-5 w-5 text-white" />
                       </div>
                       <div className="flex-1">
-                        <h3 className="text-sm font-bold text-gray-900">{capability.label} <span className="text-xs font-normal text-gray-500">{capability.subtitle}</span></h3>
+                        <h3 className="text-sm font-bold text-gray-900">{capability.label} <span className="text-xs font-normal text-slate-600">{capability.subtitle}</span></h3>
                         <div className="mt-1 flex flex-wrap gap-1">
                           {capability.metrics.map((metric) => (
-                            <span key={metric} className="text-xs text-gray-500">{metric}</span>
+                            <span key={metric} className="text-xs text-slate-600">{metric}</span>
                           ))}
                         </div>
                       </div>
@@ -1499,13 +1515,13 @@ export default function ManagerView() {
 
                     <div className="space-y-2 p-4">
                       {capabilityModules.length === 0 ? (
-                        <p className="py-3 text-center text-xs italic text-gray-500">No modules for this capability yet</p>
+                        <p className="py-3 text-center text-xs italic text-slate-600">No modules for this capability yet</p>
                       ) : capabilityModules.map((module) => (
                         <div key={module.id} className="flex cursor-pointer items-center gap-3 rounded-lg border border-transparent bg-gray-50 p-2.5 transition-all hover:border-teal-100 hover:bg-teal-50">
-                          <BookOpen className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                          <BookOpen className="h-4 w-4 flex-shrink-0 text-slate-600" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-semibold text-gray-800">{module.title}</p>
-                            <p className="text-xs text-gray-500">{module.type} · {module.duration}</p>
+                            <p className="text-xs text-slate-600">{module.type} · {module.duration}</p>
                           </div>
                           <span className={`flex-shrink-0 text-xs font-semibold ${module.level === "Advanced" ? "text-rose-600" : module.level === "Intermediate" ? "text-amber-600" : "text-green-600"}`}>{module.level}</span>
                         </div>
@@ -1544,8 +1560,8 @@ export default function ManagerView() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{session.rep_name}</p>
-                      <p className="text-xs text-gray-500">{session.scenario}</p>
-                      <p className="text-xs text-gray-500">{session.date}</p>
+                      <p className="text-xs text-slate-600">{session.scenario}</p>
+                      <p className="text-xs text-slate-600">{session.date}</p>
                     </div>
                   </div>
                   <div className="flex flex-shrink-0 items-center gap-2">
@@ -1598,7 +1614,7 @@ export default function ManagerView() {
               <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 py-16 text-center">
                 <Star className="mx-auto mb-3 h-10 w-10 text-gray-300" />
                 <p className="text-sm font-semibold text-gray-600">No shared snippets yet</p>
-                <p className="mt-1 text-xs text-gray-500">Reps can share snippets via the Knowledge Base → Peer Best Practices tab</p>
+                <p className="mt-1 text-xs text-slate-600">Reps can share snippets via the Knowledge Base → Peer Best Practices tab</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -1612,11 +1628,11 @@ export default function ManagerView() {
                           {snippet.capability ? <span className="text-xs font-medium text-[#1A334D]">{snippet.capability.replace(/_/g, " ")}</span> : null}
                         </div>
                         <p className="rounded-lg border border-gray-100 bg-white p-3 text-sm leading-relaxed text-gray-700">{snippet.content}</p>
-                        {snippet.context ? <p className="text-xs italic text-gray-500">{snippet.context}</p> : null}
+                        {snippet.context ? <p className="text-xs italic text-slate-600">{snippet.context}</p> : null}
                         <div className="flex items-center gap-3">
-                          <span className="text-xs text-gray-500">{snippet.shared_by_role || "Anonymous Rep"}</span>
-                          <span className="text-xs text-gray-500">·</span>
-                          <span className="flex items-center gap-0.5 text-xs text-gray-500"><ThumbsUp className="h-3 w-3" /> {snippet.upvotes || 0} upvotes</span>
+                          <span className="text-xs text-slate-600">{snippet.shared_by_role || "Anonymous Rep"}</span>
+                          <span className="text-xs text-slate-600">·</span>
+                          <span className="flex items-center gap-0.5 text-xs text-slate-600"><ThumbsUp className="h-3 w-3" /> {snippet.upvotes || 0} upvotes</span>
                         </div>
                       </div>
                       <Button
