@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
   BarChart3, FileText, Globe, BookOpen, HelpCircle, Settings, ChevronRight, Link2,
-  ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send, X
+  ChevronDown, Bell, User, PenSquare, TrendingUp, UserCircle, Users, Route, MessageCircle, Send, X, ChevronLeft
 } from "lucide-react";
 
 const navSections = [
@@ -69,6 +69,11 @@ export default function Layout({ children, currentPageName }) {
     navSections.reduce((acc, s) => ({ ...acc, [s.label]: s.defaultOpen }), {})
   );
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("reflectiv-sidebar-collapsed") === "true";
+  });
+  const [isDesktop, setIsDesktop] = useState(() => (typeof window === "undefined" ? true : window.innerWidth >= 768));
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -91,6 +96,7 @@ export default function Layout({ children, currentPageName }) {
 
   useEffect(() => {
     const syncSidebarMode = () => {
+      setIsDesktop(window.innerWidth >= 768);
       if (window.innerWidth >= 768) {
         setSidebarOpen(false);
       }
@@ -100,6 +106,12 @@ export default function Layout({ children, currentPageName }) {
     window.addEventListener("resize", syncSidebarMode);
     return () => window.removeEventListener("resize", syncSidebarMode);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("reflectiv-sidebar-collapsed", String(desktopSidebarCollapsed));
+    }
+  }, [desktopSidebarCollapsed]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -140,6 +152,15 @@ export default function Layout({ children, currentPageName }) {
 
   const toggleSection = (label) => {
     setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const handleNavToggle = () => {
+    if (typeof window !== "undefined" && window.innerWidth >= 768) {
+      setDesktopSidebarCollapsed((value) => !value);
+      return;
+    }
+
+    setSidebarOpen((value) => !value);
   };
 
   const sendAssistantMessage = async () => {
@@ -205,10 +226,10 @@ export default function Layout({ children, currentPageName }) {
       ) : null}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[calc(100vw-1.5rem)] flex-col border-r border-[#22405f] bg-[#1A334D] shadow-2xl transition-transform duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 md:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col border-r border-[#22405f] bg-[#1A334D] shadow-2xl transition-[width,transform] duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 md:shadow-none ${desktopSidebarCollapsed ? "md:w-24" : "w-72 md:w-72"} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         aria-hidden={!sidebarOpen && typeof window !== "undefined" ? window.innerWidth < 768 : undefined}
       >
-        <div className="flex items-center gap-3 border-b border-[#22405f] p-4">
+        <div className={`flex items-center border-b border-[#22405f] p-4 ${desktopSidebarCollapsed ? "justify-center" : "gap-3"}`}>
           <div className="flex-shrink-0">
             <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
               <circle cx="20" cy="20" r="20" fill="#1A334D" />
@@ -217,13 +238,15 @@ export default function Layout({ children, currentPageName }) {
               <path d="M20 10 C24 14 24 22 20 26 C16 22 16 14 20 10Z" fill="white" />
             </svg>
           </div>
-          <div className="min-w-0">
-            <h1 className="font-bold text-lg leading-tight tracking-tight">
-              <span className="text-white">Reflectiv</span>
-              <span className="text-[#39ACAC]">AI</span>
-            </h1>
-            <p className="-mt-0.5 text-[11px] text-white/65">Sales Enablement</p>
-          </div>
+          {!desktopSidebarCollapsed ? (
+            <div className="min-w-0">
+              <h1 className="font-bold text-lg leading-tight tracking-tight">
+                <span className="text-white">Reflectiv</span>
+                <span className="text-[#39ACAC]">AI</span>
+              </h1>
+              <p className="-mt-0.5 text-[11px] text-white/65">Sales Enablement</p>
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
@@ -235,14 +258,16 @@ export default function Layout({ children, currentPageName }) {
         </div>
 
         <div className="border-b border-[#22405f] px-3 py-3">
-          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2" ref={userMenuRef}>
+          <div className={`flex items-center rounded-xl border border-white/10 bg-white/10 ${desktopSidebarCollapsed ? "justify-center px-2 py-3" : "gap-2 px-3 py-2"}`} ref={userMenuRef}>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
               {authUser?.name?.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "DU"}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-xs font-semibold text-white">{authUser?.name || "Demo User"}</div>
-              <div className="truncate text-[11px] text-white/60">{authUser?.email || "demo@example.com"}</div>
-            </div>
+            {!desktopSidebarCollapsed ? (
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-semibold text-white">{authUser?.name || "Demo User"}</div>
+                <div className="truncate text-[11px] text-white/60">{authUser?.email || "demo@example.com"}</div>
+              </div>
+            ) : null}
             <button onClick={() => setUserMenuOpen((v) => !v)} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white/70 transition hover:bg-white/10 hover:text-white" aria-label="Toggle user menu">
               <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
             </button>
@@ -267,19 +292,20 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav className={`flex-1 space-y-1 overflow-y-auto px-3 py-4 ${desktopSidebarCollapsed ? "overflow-x-hidden" : ""}`}>
           {navSections.map((section) => (
             <div key={section.label} className="mb-1">
               <button
                 onClick={() => toggleSection(section.label)}
-                className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 ${openSections[section.label] ? "text-white" : "text-white/50 hover:text-white/80"}`}
+                className={`flex min-h-11 w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 ${desktopSidebarCollapsed ? "justify-center" : "gap-3"} ${openSections[section.label] ? "text-white" : "text-white/50 hover:text-white/80"}`}
+                title={desktopSidebarCollapsed ? section.label : undefined}
               >
                 <section.icon className="h-4 w-4 flex-shrink-0" />
-                <span className="flex-1">{section.label}</span>
-                <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${openSections[section.label] ? "rotate-90" : ""}`} />
+                {!desktopSidebarCollapsed ? <span className="flex-1">{section.label}</span> : null}
+                {!desktopSidebarCollapsed ? <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${openSections[section.label] ? "rotate-90" : ""}`} /> : null}
               </button>
-              {openSections[section.label] && (
-                <div className="ml-3 mt-1 space-y-1">
+              {(openSections[section.label] || desktopSidebarCollapsed) && (
+                <div className={`${desktopSidebarCollapsed ? "mt-2 space-y-2" : "ml-3 mt-1 space-y-1"}`}>
                   {section.items.map((item) => {
                     const isActive = currentPageName === item.page;
                     return (
@@ -290,19 +316,22 @@ export default function Layout({ children, currentPageName }) {
                       >
                         <Link
                           to={createPageUrl(item.page)}
-                          className={`group relative flex min-h-11 items-center gap-3 rounded-xl py-3 pl-3 pr-2 text-sm transition-all duration-200 ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
+                          className={`group relative flex min-h-11 items-center rounded-xl text-sm transition-all duration-200 ${
+                            desktopSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 py-3 pl-3 pr-2"
+                          } ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
                           style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
                           onClick={() => setSidebarOpen(false)}
+                          title={desktopSidebarCollapsed ? item.label : undefined}
                         >
                           <item.icon className="h-4 w-4 flex-shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                          {!isActive && (
+                          {!desktopSidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
+                          {!desktopSidebarCollapsed && !isActive ? (
                             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 scale-95 rounded-full border border-[#79caca] px-2 py-0.5 text-[10px] font-semibold opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100"
                               style={{ background: "#39ACAC", color: "#ffffff" }}
                             >
                               Open
                             </span>
-                          )}
+                          ) : null}
                         </Link>
                       </motion.div>
                     );
@@ -318,13 +347,17 @@ export default function Layout({ children, currentPageName }) {
         <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => setSidebarOpen((value) => !value)}
+              onClick={handleNavToggle}
               className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-              aria-label="Toggle navigation"
+              aria-label={isDesktop ? (desktopSidebarCollapsed ? "Expand navigation" : "Collapse navigation") : "Toggle navigation"}
             >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
+              {isDesktop ? (
+                <ChevronLeft className={`h-5 w-5 transition-transform ${desktopSidebarCollapsed ? "rotate-180" : ""}`} />
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
             </button>
             <div className="flex items-center gap-2">
               <svg width="26" height="26" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">

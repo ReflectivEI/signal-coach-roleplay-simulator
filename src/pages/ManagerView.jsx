@@ -160,10 +160,11 @@ const THRESHOLD_GLOSSARY = [
   },
 ];
 
-const ENTERPRISE_PARENT_CARD = "rounded-2xl border border-teal-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md";
-const ENTERPRISE_SUBCARD = "rounded-xl border border-slate-200 bg-slate-50 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
-const ENTERPRISE_SUBCARD_WHITE = "rounded-xl border border-slate-200 bg-white transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
+const ENTERPRISE_PARENT_CARD = "min-w-0 rounded-2xl border border-teal-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md";
+const ENTERPRISE_SUBCARD = "min-w-0 rounded-xl border border-slate-200 bg-slate-50 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
+const ENTERPRISE_SUBCARD_WHITE = "min-w-0 rounded-xl border border-slate-200 bg-white transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
 const METRIC_PILL_CLASSNAME = "inline-flex max-w-full items-center gap-1 self-start rounded-full border border-[#1A334D] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white";
+const MANAGER_TAB_TRIGGER_CLASSNAME = "flex items-center gap-1.5 rounded-full border border-[#1A334D] bg-white px-4 py-2 text-sm font-semibold text-[#1A334D] transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white";
 
 const MANAGER_VIEW_FOUNDATION = [
   {
@@ -878,8 +879,8 @@ export default function ManagerView() {
   ];
 
   return (
-    <div className="mx-auto max-w-7xl rounded-2xl bg-slate-50/60 p-6 md:p-8">
-      <div className="mb-6">
+    <div className="mx-auto w-full max-w-[1680px] px-4 py-6 sm:px-6 lg:px-8 2xl:px-10">
+      <div className="mb-8">
         <div className="mb-1 flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "#1A334D" }}>
             <Users className="h-4 w-4 text-white" />
@@ -912,7 +913,7 @@ export default function ManagerView() {
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">Current scope: {viewState.datasetScope.detail}</span>
               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 font-semibold text-slate-700">Last refreshed: {formatRefreshTimestamp(viewState.refreshedAt)}</span>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
                 <div key={card.label} className="grid min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-teal-200 bg-white p-4 pt-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -954,7 +955,7 @@ export default function ManagerView() {
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <div className="mb-8 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -990,7 +991,7 @@ export default function ManagerView() {
         </div>
       </div>
 
-      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {kpiCards.filter((card) => card.explanation || card.label === "Active Reps" || card.label === "Team Sessions (30d)").map(({ label, value, sub, icon: Icon, tone, explanation }) => {
           const toneMap = {
             teal: { icon: "text-teal-700", card: "bg-teal-50 border-teal-200", value: "text-teal-800" },
@@ -1015,12 +1016,12 @@ export default function ManagerView() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6 h-auto flex-wrap gap-2 bg-transparent p-0">
-          <TabsTrigger value="reps" className="flex items-center gap-1.5 rounded-full border border-[#1A334D] px-4 py-2 text-sm transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white"><Users className="h-3.5 w-3.5" /> Rep Overview</TabsTrigger>
-          <TabsTrigger value="territory" className="flex items-center gap-1.5 rounded-full border border-[#1A334D] px-4 py-2 text-sm transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white"><BarChart3 className="h-3.5 w-3.5" /> Territory Analytics</TabsTrigger>
-          <TabsTrigger value="modules" className="flex items-center gap-1.5 rounded-full border border-[#1A334D] px-4 py-2 text-sm transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white"><GraduationCap className="h-3.5 w-3.5" /> Training Modules</TabsTrigger>
-          <TabsTrigger value="sessions" className="flex items-center gap-1.5 rounded-full border border-[#1A334D] px-4 py-2 text-sm transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white"><MessageCircle className="h-3.5 w-3.5" /> Session Feedback</TabsTrigger>
-          <TabsTrigger value="snippets" className="flex items-center gap-1.5 rounded-full border border-[#1A334D] px-4 py-2 text-sm transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white"><Star className="h-3.5 w-3.5" /> Curate Snippets</TabsTrigger>
+        <TabsList className="sticky top-[4.75rem] z-20 mb-6 flex h-auto w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+          <TabsTrigger value="reps" className={MANAGER_TAB_TRIGGER_CLASSNAME}><Users className="h-3.5 w-3.5" /> Rep Overview</TabsTrigger>
+          <TabsTrigger value="territory" className={MANAGER_TAB_TRIGGER_CLASSNAME}><BarChart3 className="h-3.5 w-3.5" /> Territory Analytics</TabsTrigger>
+          <TabsTrigger value="modules" className={MANAGER_TAB_TRIGGER_CLASSNAME}><GraduationCap className="h-3.5 w-3.5" /> Training Modules</TabsTrigger>
+          <TabsTrigger value="sessions" className={MANAGER_TAB_TRIGGER_CLASSNAME}><MessageCircle className="h-3.5 w-3.5" /> Session Feedback</TabsTrigger>
+          <TabsTrigger value="snippets" className={MANAGER_TAB_TRIGGER_CLASSNAME}><Star className="h-3.5 w-3.5" /> Curate Snippets</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reps">
@@ -1046,8 +1047,8 @@ export default function ManagerView() {
                 </div>
               </div>
 
-              <div className="hidden overflow-hidden lg:block">
-                <table className="w-full table-fixed text-sm">
+              <div className="hidden overflow-x-auto 2xl:block">
+                <table className="min-w-[1420px] w-full table-fixed text-sm">
                   <colgroup>
                     <col className="w-[190px]" />
                     <col className="w-[90px]" />
@@ -1087,7 +1088,7 @@ export default function ManagerView() {
                 </table>
               </div>
 
-              <div className="space-y-4 p-4 lg:hidden">
+              <div className="space-y-4 p-4 2xl:hidden">
                 {reps.map((rep) => (
                   <RepMobileCard
                     key={rep.id}
@@ -1102,7 +1103,7 @@ export default function ManagerView() {
             </div>
 
             {selectedRep ? (
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+               <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_360px] 2xl:items-start">
                 <div className="space-y-6">
                   {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
                     <div className="manager-insights-container">
@@ -1136,7 +1137,7 @@ export default function ManagerView() {
                       </div>
                       <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Formula · Source · Rule</span>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
                       {[
                         { key: "engagementScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
                         { key: "readinessScore", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
@@ -1162,7 +1163,7 @@ export default function ManagerView() {
                   </div>
                 </div>
 
-                <aside className="space-y-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
+                <aside className="space-y-4 self-start 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-7rem)] 2xl:overflow-y-auto 2xl:pr-1">
                   <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5`}>
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#1A334D" }}>
@@ -1220,7 +1221,7 @@ export default function ManagerView() {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Compact metric summary</p>
                         <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {selectedRep.observationDepth}</span>
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
                         <MetricSummaryCard labelKey="engagementScore" value={`${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].engagementScore} />
                         <MetricSummaryCard labelKey="readinessScore" value={`${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].readinessScore} />
                         <MetricSummaryCard labelKey="salesRiskScore" value={`${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].salesRiskScore} />
@@ -1255,7 +1256,7 @@ export default function ManagerView() {
                 Territory AI insights are hidden until metric validation passes. Deterministic territory aggregates remain available below.
               </div>
             )}
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
               {[viewState.nationalTerritory, ...viewState.territories].map((territory) => {
                 const territoryExplanations = viewState.explanations.territory[territory.territory];
                 const territoryContributors = getContributorSet(viewState.contributors, territory.territory);

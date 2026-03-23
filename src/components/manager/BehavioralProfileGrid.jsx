@@ -75,7 +75,7 @@ export default function BehavioralProfileGrid({
         <span className="inline-flex max-w-full self-start rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Canonical order · 8 capabilities</span>
       </div>
 
-      <div className={`mt-4 grid gap-3 ${compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"}`}>
+      <div className={`mt-4 grid gap-3 ${compact ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-4"}`}>
         {items.map((item) => {
           const isStrongest = item.key === strongestKey;
           const isWeakest = item.key === weakestKey;
