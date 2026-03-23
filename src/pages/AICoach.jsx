@@ -385,7 +385,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-white">
         {/* Header */}
         <div className="w-full border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-sm sm:px-6">
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="enterprise-hero-light mx-auto flex w-full max-w-5xl flex-col gap-3 px-5 py-5 md:flex-row md:items-start md:justify-between sm:px-6">
             <div className="flex w-full min-w-0 items-start gap-3">
               <div className="hidden h-11 w-11 flex-shrink-0 sm:block" aria-hidden="true" />
               <div className="min-w-0 flex-1">
@@ -467,8 +467,8 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                   <h2 className="text-3xl font-bold leading-[1.05] sm:text-[44px]">Start a Conversation</h2>
                   <MessageSquare className="w-10 h-10 text-teal-200" />
                 </div>
-                <p className="mb-5 px-1 text-sm font-medium leading-6 text-slate-200/85">
-                  What would you like to improve today?
+                <p className="mb-5 px-1 text-sm font-bold leading-6 text-slate-200/85">
+                  What would you like to improve or learn about today?
                 </p>
                 <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-3">
                   {suggestedQuestions.map((q) => (

@@ -64,7 +64,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-10">
         {/* Quick Actions */}
-        <div className={`lg:col-span-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm`}>
+        <div className={`lg:col-span-5 h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm`}>
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h2>
@@ -90,25 +90,26 @@ export default function Dashboard() {
               <QuickActionCard key={action.title} {...action} />
             ))}
           </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Platform Quality</p>
+            <div className="space-y-2.5">
+              <div className="flex items-start gap-2 text-sm text-gray-700">
+                <ShieldCheck className="mt-0.5 h-4 w-4 text-teal-600" />
+                Deterministic behavioral scoring engine with explicit rules.
+              </div>
+              <div className="flex items-start gap-2 text-sm text-gray-700">
+                <Workflow className="mt-0.5 h-4 w-4 text-teal-600" />
+                Unified Signal Intelligence™ workflows across coaching tools.
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Signal Intelligence Capabilities */}
-        <div className="lg:col-span-5">
-          <div className="space-y-4 rounded-xl border border-slate-300 bg-slate-50 p-4 shadow-sm">
+        <div className="lg:col-span-5 h-full">
+          <div className="flex h-full flex-col rounded-xl border border-slate-300 bg-slate-50 p-4 shadow-sm">
             <SignalCapabilities />
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">Platform Quality</p>
-              <div className="space-y-2.5">
-                <div className="flex items-start gap-2 text-sm text-gray-700">
-                  <ShieldCheck className="w-4 h-4 mt-0.5 text-teal-600" />
-                  Deterministic behavioral scoring engine with explicit rules.
-                </div>
-                <div className="flex items-start gap-2 text-sm text-gray-700">
-                  <Workflow className="w-4 h-4 mt-0.5 text-teal-600" />
-                  Unified Signal Intelligence™ workflows across coaching tools.
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
