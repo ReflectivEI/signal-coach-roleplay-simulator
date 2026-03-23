@@ -144,7 +144,7 @@ function buildFreeFormMessages(userInput: string, repContext: string) {
   return [
     {
       role: "system",
-      content: "You are an AI coaching assistant. Answer the user’s question directly using the provided rep context. Do NOT repeat structured coaching templates unless explicitly asked.",
+      content: "You are an AI coaching assistant. Answer immediately using the provided rep context. Do NOT restate or quote the user's question. Start with the answer, use concise executive-friendly language, avoid unnecessary repetition of metrics, lead with a clear estimate or recommendation when possible, and do NOT repeat structured coaching templates unless explicitly asked.",
     },
     {
       role: "user",
@@ -156,9 +156,12 @@ Rep Context:
 ${repContext}
 
 Instructions:
-- Answer the question directly
-- Be concise and specific
+- Start with the answer immediately
+- Do NOT restate or quote the question
+- Be concise, specific, and executive-friendly
 - Use rep data where relevant
+- Limit unnecessary repetition of metrics
+- Lead with a clear estimate or recommendation when possible
 - Do NOT restate full coaching framework
 `.trim(),
     },
@@ -175,20 +178,14 @@ function stripStructuredSections(text: string) {
     .trim();
 }
 
-function ensureDirectAnswer(answer: string, question: string) {
-  const trimmedQuestion = question.trim();
+function ensureDirectAnswer(answer: string, _question: string) {
   const cleanedAnswer = stripStructuredSections(answer).trim();
 
   if (!cleanedAnswer) {
-    return `In response to your question, "${trimmedQuestion}," I need a bit more detail to answer precisely, but the available rep context suggests focusing on the current priority metric and recent session trends first.`;
+    return "I need a bit more detail to answer precisely. Based on the available rep context, focus first on the current priority metric and the most recent session trend.";
   }
 
-  const normalizedQuestion = trimmedQuestion.toLowerCase();
-  const referencesQuestion = cleanedAnswer.toLowerCase().includes(normalizedQuestion) || /your question/.test(cleanedAnswer.toLowerCase());
-
-  return referencesQuestion
-    ? cleanedAnswer
-    : `Regarding your question, "${trimmedQuestion}," ${cleanedAnswer}`;
+  return cleanedAnswer;
 }
 
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
