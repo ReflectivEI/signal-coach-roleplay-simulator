@@ -601,6 +601,130 @@ export function buildBehavioralProfileContext(payload) {
   };
 }
 
+function findCapabilityFromQuestion(question) {
+  const normalized = typeof question === "string" ? question.toLowerCase() : "";
+  if (!normalized) return null;
+
+  const capabilityMatchers = [
+    ["signalAwareness", ["signal awareness", "awareness", "discovery", "question timing", "questioning"]],
+    ["signalInterpretation", ["signal interpretation", "interpretation", "read the room", "read signals", "stakeholder"]],
+    ["adaptability", ["adaptive response", "adapt", "adaptability", "pivot", "flexibility"]],
+    ["objectionHandling", ["objection navigation", "objection", "resistance", "pushback"]],
+    ["valueCommunication", ["value connection", "value", "business case", "roi", "impact"]],
+    ["commitmentGeneration", ["commitment generation", "commitment", "close", "next step", "advance"]],
+    ["emotionalAttunement", ["customer engagement monitoring", "engagement", "buying signal", "attention", "motivat", "emotion"]],
+    ["conversationControl", ["conversation management", "conversation", "control", "meeting flow", "agenda"]],
+  ];
+
+  const match = capabilityMatchers.find(([, aliases]) => aliases.some((alias) => normalized.includes(alias)));
+  return match ? match[0] : null;
+}
+
+function buildRepQuestionFocus(rep, derived, question) {
+  const normalized = question.toLowerCase();
+  const explicitCapability = findCapabilityFromQuestion(question);
+  const focusKey = explicitCapability
+    ?? (/motivat|encourage|engage/.test(normalized) ? "emotionalAttunement" : null)
+    ?? (/close|commit|next step/.test(normalized) ? "commitmentGeneration" : null)
+    ?? (/objection|resistance|pushback/.test(normalized) ? "objectionHandling" : null)
+    ?? rep.improvementPriority;
+
+  const focusLabel = getBehavioralMetricLabel(focusKey);
+  const focusMetric = rep.behavioralMetrics[focusKey];
+  const strongestMetric = rep.behavioralMetrics[rep.strongestCapability];
+  const belowThreshold = focusMetric.score < MANAGER_MODEL_THRESHOLDS.repMetricLow;
+  const thresholdGap = round(Math.abs(focusMetric.score - MANAGER_MODEL_THRESHOLDS.repMetricLow), 1);
+  const coachingAnchor = focusKey === rep.strongestCapability ? rep.strongestCapability : rep.strongestCapability;
+  const coachingAnchorLabel = getBehavioralMetricLabel(coachingAnchor);
+  const motivationVector = rep.practiceStreakDays > 0
+    ? `${rep.practiceStreakDays}-day practice streak`
+    : `${rep.coachingModulesCompleted}/8 modules completed`;
+
+  return {
+    focusKey,
+    focusLabel,
+    focusMetric,
+    strongestMetric,
+    strongestLabel: getBehavioralMetricLabel(rep.strongestCapability),
+    coachingAnchorLabel,
+    belowThreshold,
+    thresholdGap,
+    motivationVector,
+    questionTheme: /motivat|encourage|engage/.test(normalized)
+      ? "motivation"
+      : /objection|resistance|pushback/.test(normalized)
+        ? "objection"
+        : /close|commit|next step/.test(normalized)
+          ? "commitment"
+          : "coaching",
+    confidencePercent: Math.round(derived.confidenceScore * 100),
+  };
+}
+
+export function buildInteractiveCoachingResponse(payload, question, selectedContext = []) {
+  const prompt = sanitizeText(question, "Explain the current recommendation.");
+  const contextNote = selectedContext.length ? ` Context chips applied: ${selectedContext.join(", ")}.` : "";
+
+  if (payload.repData && payload.derivedMetrics) {
+    const rep = payload.repData;
+    const derived = payload.derivedMetrics;
+    const focus = buildRepQuestionFocus(rep, derived, prompt);
+    const focusComparison = formatFivePointComparison(focus.focusMetric.score, MANAGER_MODEL_THRESHOLDS.repMetricLow);
+    const strongestComparison = `${focus.strongestLabel} is ${rep.behavioralMetrics[rep.strongestCapability].score}/5 with ${formatTrendLabel(rep.behavioralMetrics[rep.strongestCapability].trend)} directionality`;
+    const questionLead = /\?$/.test(prompt) ? prompt : `${prompt}?`;
+
+    return {
+      primaryFinding: trimSentence(
+        `${questionLead} For ${rep.name}, the direct coaching focus is ${focus.focusLabel} at ${focusComparison} on the 5-point scale, while ${strongestComparison}; Learning Engagement Score is ${derived.engagementScore}/100 and Sales Risk is ${derived.salesRiskScore}/100`,
+        `${rep.name} should focus on ${focus.focusLabel} next.`
+      ),
+      whyItMatters: trimSentence(
+        `${focus.focusLabel} changes live-call behavior first, and in ${rep.name}'s data that behavior link is visible in Conversion Proxy ${derived.conversionProxyScore}/100, Readiness ${derived.readinessScore}/100, and Sales Risk ${derived.salesRiskScore}/100; Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, not a performance score.${contextNote}`,
+        `${focus.focusLabel} is the clearest lever for business outcomes right now.`
+      ),
+      action: trimSentence(
+        focus.questionTheme === "motivation"
+          ? `Use ${focus.coachingAnchorLabel} as the entry point, show ${rep.name} two recent wins, then set one observable behavior target for ${focus.focusLabel} in the next 2 sessions because ${focus.focusLabel} sits ${focus.thresholdGap}/5 ${focus.belowThreshold ? "below" : "above"} the 3.5/5 threshold and ${focus.motivationVector} shows the best current reinforcement path`
+          : focus.questionTheme === "objection"
+            ? `Coach one objection sequence at a time: start with ${focus.coachingAnchorLabel}, script the exact resistance moment, require a clear next-step ask, and review the next 2 sessions until ${focus.focusLabel} moves above 3.5/5 and Sales Risk falls below ${MANAGER_MODEL_THRESHOLDS.salesRiskHigh}/100`
+            : focus.questionTheme === "commitment"
+              ? `Run a next-step coaching drill that connects ${focus.coachingAnchorLabel} to a stronger commitment ask, inspect two recent sessions for missed advance moments, and keep the intervention active until ${focus.focusLabel} clears 3.5/5 and Readiness holds above ${derived.readinessScore}/100`
+              : `Anchor the next manager coaching review in ${focus.coachingAnchorLabel}, then isolate one behavior within ${focus.focusLabel} for deliberate practice in the next 2 sessions so the rep improves the weakest transferable skill without changing the scoring model`,
+        `Coach ${rep.name} on ${focus.focusLabel} in the next two sessions.`
+      ),
+      monitor: [
+        `${focus.focusLabel} is ${focusComparison} on the 5-point scale with ${formatTrendLabel(focus.focusMetric.trend)} directionality.`,
+        `Learning Engagement Score is ${formatHundredPointComparison(derived.engagementScore, MANAGER_MODEL_THRESHOLDS.engagementRisk)} on the 100-point scale with ${rep.sessionsCompleted30d} sessions and ${rep.coachingModulesCompleted}/8 modules completed.`,
+        `Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, derived from Data Confidence ${Math.round(derived.dataConfidenceIndex * 100)}/100, Behavioral Variance ${derived.behavioralVariance}, and Engagement Stability ${derived.engagementStabilityScore}/100.`,
+      ],
+    };
+  }
+
+  const territory = payload.territoryData;
+  const gapKey = findCapabilityFromQuestion(prompt) ?? territory.mostCommonCapabilityGap ?? BEHAVIORAL_METRIC_KEYS[0];
+  const gapLabel = getBehavioralMetricLabel(gapKey);
+  const gapScore = territory.avgBehavioralMetrics[gapKey];
+  return {
+    primaryFinding: trimSentence(
+      `${prompt} In ${territory.territory}, the most relevant territory answer centers on ${gapLabel} at ${formatFivePointComparison(gapScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale, with Learning Engagement Score ${territory.avgEngagement}/100 and Territory Volatility ${territory.territoryVolatility}.`,
+      `${territory.territory} should focus on ${gapLabel}.`
+    ),
+    whyItMatters: trimSentence(
+      `${gapLabel} is the shared territory gap, and that pattern is keeping Sales Outcome Score at ${territory.avgPerformance}/5, Learning Engagement Score at ${territory.avgEngagement}/100, and ${territory.atRiskRepCount} reps in the at-risk set.${contextNote}`,
+      `${gapLabel} is the strongest territory coaching lever right now.`
+    ),
+    action: trimSentence(
+      `Use territory coaching time to benchmark the strongest reps against ${gapLabel}, review contributor reps first, and keep the sprint open until ${gapLabel} closes toward the 3.5/5 threshold and Territory Volatility moves under ${MANAGER_MODEL_THRESHOLDS.volatilityModerate}`,
+      `Run a territory sprint on ${gapLabel}.`
+    ),
+    monitor: [
+      `${gapLabel} is ${formatFivePointComparison(gapScore, MANAGER_MODEL_THRESHOLDS.repMetricLow)} on the 5-point scale with ${formatTrendLabel(territory.trend)} territory directionality.`,
+      `Learning Engagement Score is ${formatHundredPointComparison(territory.avgEngagement, MANAGER_MODEL_THRESHOLDS.territoryEngagementRisk)} on the 100-point scale across ${territory.repIds.length} weighted reps.`,
+      `Territory Volatility is ${territory.territoryVolatility}, which is ${territory.territoryVolatility >= MANAGER_MODEL_THRESHOLDS.volatilityModerate ? "above" : "below"} the ${MANAGER_MODEL_THRESHOLDS.volatilityModerate} watch threshold.`,
+    ],
+  };
+}
+
 export function buildStructuredInsightView(payload) {
   const profileContext = buildBehavioralProfileContext(payload);
 
