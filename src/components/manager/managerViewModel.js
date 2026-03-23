@@ -457,7 +457,7 @@ function buildRepExplanations(rep, derivedByRepId) {
         conversionProxyScore: derived.conversionProxyScore,
       },
       output: `${confidencePercent}%`,
-      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above. Prediction reliability (not a performance score) is a reliability signal, not the percent conversion of a 5-point performance score.`,
+      notes: `High confidence is monitored at ${Math.round(MANAGER_MODEL_THRESHOLDS.confidenceHigh * 100)}% or above. Predictive confidence reflects reliability, not certainty. Prediction reliability (not a performance score) is a reliability signal, not the percent conversion of a 5-point performance score.${derived.calibration?.reliability?.sampleLabel ? ` ${derived.calibration.reliability.sampleLabel}.` : ""}`,
       derivedFrom: ["Data Confidence", "Behavioral Variance", "Engagement Stability"],
     }),
     strongestCapability: buildMetricExplanation({

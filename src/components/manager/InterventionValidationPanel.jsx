@@ -198,6 +198,7 @@ export default function InterventionValidationPanel({
   const coachingEffectiveness = calibration?.hasHistory
     ? `${Math.round((calibration.interventionEffectivenessScore || 0) * 100)}%`
     : "Deterministic fallback";
+  const reliability = calibration?.reliability;
 
   return (
     <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm">
@@ -214,6 +215,9 @@ export default function InterventionValidationPanel({
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">Sales Risk: {Number.isFinite(currentRisk) ? `${currentRisk}/100` : "Insufficient data"}</span>
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">Learning Engagement: {Number.isFinite(currentEngagement) ? `${currentEngagement}/100` : "Insufficient data"}</span>
             <span className="rounded-full bg-teal-50 px-3 py-1 font-semibold text-teal-800">Coaching Effectiveness: {coachingEffectiveness}</span>
+            {reliability?.sampleLabel ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-800">{reliability.sampleLabel}</span>
+            ) : null}
             {validationAnalytics?.mostResponsiveCapability ? (
               <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-800">Most responsive: {validationAnalytics.mostResponsiveCapability.capabilityLabel}</span>
             ) : null}
@@ -251,8 +255,11 @@ export default function InterventionValidationPanel({
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Predictive confidence</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">{Math.round((derived?.predictiveConfidence || 0) * 100)}%</p>
           <p className="mt-1 text-xs text-slate-700">
+            {reliability?.confidenceExplanation || "Predictive confidence reflects reliability, not certainty."}
+          </p>
+          <p className="mt-1 text-xs text-slate-600">
             {calibration?.hasHistory
-              ? `Calibrated with intervention effectiveness ${Math.round((calibration.interventionEffectivenessScore || 0) * 100)}% and target capability success ${Math.round((calibration.targetCapabilitySuccessRate || 0) * 100)}%.`
+              ? `Calibrated with historical effectiveness ${Math.round((calibration.interventionEffectivenessScore || 0) * 100)}% and target capability success ${Math.round((calibration.targetCapabilitySuccessRate || 0) * 100)}%.`
               : "No validation history yet; using the current deterministic confidence model."}
           </p>
         </div>
@@ -281,6 +288,14 @@ export default function InterventionValidationPanel({
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center gap-2 text-slate-600"><Clock3 className="h-4 w-4" /><p className="text-[11px] font-semibold uppercase tracking-wide">Observation guidance</p></div>
                 <p className="mt-2 text-sm text-slate-700">{latestRecord?.nextObservationGuidance}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-3 md:col-span-3">
+                <div className="flex items-center gap-2 text-slate-600"><ShieldAlert className="h-4 w-4" /><p className="text-[11px] font-semibold uppercase tracking-wide">Reliability guidance</p></div>
+                <div className="mt-2 space-y-1 text-sm text-slate-700">
+                  <p>{reliability?.weightingExplanation || "Prioritized based on historical effectiveness in improving outcomes."}</p>
+                  {reliability?.consistencyLabel ? <p>{reliability.consistencyLabel}</p> : null}
+                  {reliability?.crossRepSignal ? <p>{reliability.crossRepSignal}</p> : null}
+                </div>
               </div>
             </div>
           </div>
