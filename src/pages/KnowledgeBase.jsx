@@ -11,7 +11,7 @@ import { Search, Sparkles, Send, Copy, Wand2, Loader2, Zap, BookOpen, MessageCir
 import NavPill from "@/components/ui/NavPill";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 import { Link } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import { createPageUrl, formatStructuredAiText } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES } from "@/lib/enablementHub";
 
 const communicationTemplates = [
@@ -53,6 +53,22 @@ const SUMMARY_LENGTHS = [
   { id: "standard", label: "Standard" },
   { id: "detailed", label: "Detailed" },
 ];
+
+
+const knowledgeMarkdownComponents = {
+  p: ({ children, ...props }) => {
+    const text = String(children ?? "").trim();
+    if (!text) return null;
+    return <p className="whitespace-pre-wrap break-words text-sm leading-7 text-gray-700" {...props}>{children}</p>;
+  },
+  strong: ({ children, ...props }) => <strong className="font-semibold text-slate-900" {...props}>{children}</strong>,
+  ol: ({ children, ...props }) => <ol className="space-y-4 pl-5" {...props}>{children}</ol>,
+  ul: ({ children, ...props }) => <ul className="space-y-2 pl-5" {...props}>{children}</ul>,
+  li: ({ children, ...props }) => <li className="break-words text-sm leading-7 text-gray-700" {...props}>{children}</li>,
+  h1: ({ children, ...props }) => <h1 className="text-base font-bold text-slate-900" {...props}>{children}</h1>,
+  h2: ({ children, ...props }) => <h2 className="text-sm font-bold text-slate-900" {...props}>{children}</h2>,
+  h3: ({ children, ...props }) => <h3 className="text-sm font-semibold text-slate-900" {...props}>{children}</h3>,
+};
 
 export default function KnowledgeBase() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -356,7 +372,7 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
 
       {/* AI Q&A */}
       <Card className="ui-surface-card mb-6 border-teal-100">
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="space-y-4 p-6 pt-7 md:p-7">
           <div className="flex flex-wrap items-center gap-2">
             <Sparkles className="w-4 h-4 text-teal-500" />
             <span className="text-sm font-semibold text-slate-900">AI-Powered Q&A</span>
@@ -377,8 +393,8 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                   {aiSourceArticles.map(t => <span key={t} className="ui-pill ui-pill-active px-2 py-1">{t}</span>)}
                 </div>
               )}
-              <div className="p-5 bg-teal-50 border border-teal-100 rounded-lg">
-                <div className="prose prose-sm max-w-none text-gray-700 leading-relaxed space-y-3"><ReactMarkdown>{aiAnswer}</ReactMarkdown></div>
+              <div className="rounded-lg border border-teal-100 bg-teal-50 p-5 md:p-6">
+                <div className="prose prose-sm max-w-none space-y-4 text-gray-700 leading-relaxed"><ReactMarkdown components={knowledgeMarkdownComponents}>{formatStructuredAiText(aiAnswer)}</ReactMarkdown></div>
               </div>
             </div>
           )}
@@ -511,8 +527,10 @@ Provide a detailed, practical answer relevant to pharmaceutical sales profession
                           </Button>
                         </div>
                         {templateAiAnswer[idx] && (
-                          <div className="bg-teal-50 border border-teal-100 rounded-lg p-3">
-                            <p className="text-xs text-gray-700 leading-relaxed">{templateAiAnswer[idx]}</p>
+                          <div className="rounded-lg border border-teal-100 bg-teal-50 p-4">
+                            <div className="prose prose-sm max-w-none space-y-4 text-gray-700 leading-relaxed">
+                              <ReactMarkdown components={knowledgeMarkdownComponents}>{formatStructuredAiText(templateAiAnswer[idx])}</ReactMarkdown>
+                            </div>
                           </div>
                         )}
                       </div>

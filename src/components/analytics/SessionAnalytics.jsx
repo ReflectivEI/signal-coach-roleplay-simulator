@@ -227,13 +227,13 @@ function StatCard({ icon: Icon, label, value, sub, color = "teal", valueClassNam
     amber: "border-amber-200 bg-amber-50 text-amber-800",
   };
   return (
-    <div className={`flex h-full min-h-[168px] flex-col justify-between rounded-2xl border px-5 py-4 ${styles[color]} transition-all`} tabIndex={0} aria-label={label} role="region">
-      <div>
-        <div className="mb-3 flex items-center gap-2">
+    <div className={`flex h-full min-h-[168px] flex-col rounded-2xl border px-5 py-4 ${styles[color]} transition-all`} tabIndex={0} aria-label={label} role="region">
+      <div className="flex min-h-[5.5rem] flex-col">
+        <div className="mb-3 flex min-h-[1.5rem] items-center gap-2">
           <Icon className="h-4 w-4 opacity-80" aria-hidden="true" />
           <span className="text-[11px] font-semibold uppercase tracking-[0.22em] opacity-70" id={`statcard-label-${label}`}>{label}</span>
         </div>
-        <div className={`text-[clamp(2rem,2.4vw,3rem)] font-bold leading-none ${valueClassName}`} aria-labelledby={`statcard-label-${label}`}>{value}</div>
+        <div className={`flex min-h-[3.5rem] items-end text-[clamp(1.5rem,1.85vw,2.25rem)] font-bold leading-[1.05] ${valueClassName}`} aria-labelledby={`statcard-label-${label}`}>{value}</div>
       </div>
       {sub && <div className="mt-4 text-sm leading-relaxed opacity-75">{sub}</div>}
     </div>
@@ -549,11 +549,11 @@ export default function SessionAnalytics() {
       ) : (
         <>
           {/* Stat Cards */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-[0.82fr_0.92fr_1.18fr_1.18fr]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-[0.88fr_0.96fr_1.08fr_1.08fr]">
             <StatCard icon={Activity} label="Sessions" value={totalSessions} sub="completed" color="teal" />
             <StatCard icon={BarChart3} label="Avg Score" value={overallAvg > 0 ? `${overallAvg}/5` : "—"} sub={vsAvgBenchmark ? `${vsAvgBenchmark > 0 ? "+" : ""}${vsAvgBenchmark} vs. benchmark` : "across all capabilities"} color="neutral" />
-            <StatCard icon={TrendingUp} label="Top Capability" value={topCapability?.score > 0 ? topCapability.capability : "—"} sub={topCapability?.score > 0 ? `${topCapability.score}/5` : ""} color="teal" valueClassName="whitespace-nowrap text-[clamp(1.65rem,1.95vw,2.5rem)]" />
-            <StatCard icon={AlertTriangle} label="Needs Work" value={weakCapability?.score > 0 ? weakCapability.capability : "—"} sub={weakCapability?.score > 0 ? `${weakCapability.score}/5` : ""} color="amber" valueClassName="whitespace-nowrap text-[clamp(1.65rem,1.95vw,2.5rem)]" />
+            <StatCard icon={TrendingUp} label="Top Capability" value={topCapability?.score > 0 ? topCapability.capability : "—"} sub={topCapability?.score > 0 ? `${topCapability.score}/5` : ""} color="teal" valueClassName="whitespace-nowrap text-[clamp(1.25rem,1.45vw,1.9rem)]" />
+            <StatCard icon={AlertTriangle} label="Needs Work" value={weakCapability?.score > 0 ? weakCapability.capability : "—"} sub={weakCapability?.score > 0 ? `${weakCapability.score}/5` : ""} color="amber" valueClassName="whitespace-nowrap text-[clamp(1.25rem,1.45vw,1.9rem)]" />
           </div>
 
           {/* AI Actionable Insights */}

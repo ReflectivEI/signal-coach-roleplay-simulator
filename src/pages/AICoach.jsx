@@ -479,7 +479,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
                 </div>
               </div>
             ) : (
-              <div className="max-w-3xl mx-auto space-y-5">
+              <div className="mx-auto w-full max-w-[58rem] space-y-5">
                 {/* Session context banner */}
                 {sessionContext && (
                   <div className="ui-surface-card space-y-3 p-4">
