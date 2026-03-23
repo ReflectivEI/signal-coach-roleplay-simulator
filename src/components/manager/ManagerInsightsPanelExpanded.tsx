@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
 import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
@@ -81,6 +81,10 @@ function getScopeLabel(request: ManagerInsightsRequest) {
   return "Territory context";
 }
 
+function getWorkspaceTitle(request: ManagerInsightsRequest) {
+  return request.repData ? `${request.repData.name} coaching workspace` : "Territory predictive coaching workspace";
+}
+
 function containsInvalidInsightText(text: string) {
   if (/(signalAwareness|signalInterpretation|valueCommunication|emotionalAttunement|conversationControl|commitmentGeneration|engagementStabilityScore|coachingResponsivenessScore|avgEngagement|territoryVolatility|salesRiskScore|confidenceScore|dataConfidenceIndex)/.test(text)) {
     return true;
@@ -105,6 +109,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<InsightFilter>("All");
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const requestBody = useMemo(() => {
     const parsed = managerInsightsRequestSchema.safeParse(data);
@@ -162,6 +167,11 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
 
   const toggleChip = (chip: string) => {
     setSelectedChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip]);
+  };
+
+  const queueFollowUp = (prompt: string) => {
+    setInput(prompt);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const handleSubmit = async () => {
@@ -224,7 +234,7 @@ Manager Question: ${input}`,
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if ((event.key === "Enter" && !event.shiftKey) || ((event.metaKey || event.ctrlKey) && event.key === "Enter")) {
       event.preventDefault();
       void handleSubmit();
     }
@@ -242,7 +252,7 @@ Manager Question: ${input}`,
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Manager AI Insights</p>
-              <h3 className="text-lg font-bold text-slate-900">Territory predictive coaching layer</h3>
+              <h3 className="text-lg font-bold text-slate-900">{requestBody ? getWorkspaceTitle(requestBody) : "Manager coaching workspace"}</h3>
             </div>
           </div>
           <p className="mt-2 text-sm text-slate-500">Advisory coaching guidance built from canonical rep data, territory aggregation, and deterministic derived metrics.</p>
@@ -315,13 +325,21 @@ Manager Question: ${input}`,
 
           {showStructuredInsight && structuredInsight ? (
             <div className="rounded-2xl border border-teal-200 bg-white p-4 shadow-sm">
-              <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">AI insight</p>
                   <p className="mt-1 text-sm text-slate-500">{getScopeLabel(requestBody as ManagerInsightsRequest)} structured for concise enterprise review.</p>
                 </div>
+                <div className="flex flex-col items-start gap-2 sm:items-end">
+                  <button
+                    type="button"
+                    onClick={() => queueFollowUp(`Explain the AI insight for this ${getScopeLabel(requestBody as ManagerInsightsRequest).toLowerCase()} and tell me what to ask the rep next.`)}
+                    className="inline-flex items-center rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Ask AI a Question
+                  </button>
                 {insights?.predictiveOutlook ? (
-                  <div className="space-y-2 text-right">
+                  <div className="space-y-2 text-left sm:text-right">
                     <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${getOutlookTone(insights.predictiveOutlook.performanceTrend).badge}`}>
                       <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                       {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
@@ -330,23 +348,60 @@ Manager Question: ${input}`,
                     <p className="text-[11px] text-slate-500">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                   </div>
                 ) : null}
+                </div>
               </div>
 
               <div className="space-y-4 text-sm text-slate-700">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
+                    <button
+                      type="button"
+                      onClick={() => queueFollowUp(`Explain this primary finding in more detail: ${normalizeManagerText(structuredInsight.primaryFinding)}`)}
+                      className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.primaryFinding)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+                    <button
+                      type="button"
+                      onClick={() => queueFollowUp(`Why does this matter and what business risk should I watch for? ${normalizeManagerText(structuredInsight.whyItMatters)}`)}
+                      className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
                   <p className="mt-1">{normalizeManagerText(structuredInsight.whyItMatters)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
+                    <button
+                      type="button"
+                      onClick={() => queueFollowUp(`Turn this recommended action into a coaching plan: ${normalizeManagerText(structuredInsight.action)}`)}
+                      className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.action)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
+                    <button
+                      type="button"
+                      onClick={() => queueFollowUp(`Explain what I should monitor next based on these signals: ${structuredInsight.monitor.map((item) => normalizeManagerText(item)).join(" | ")}`)}
+                      className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
                   <ul className="mt-2 space-y-2">
                     {structuredInsight.monitor.map((item) => (
                       <li key={item} className="rounded-xl bg-slate-50 px-3 py-2">{normalizeManagerText(item)}</li>
@@ -357,7 +412,16 @@ Manager Question: ${input}`,
 
               {(filteredKeyDrivers.length || filteredRisks.length) ? (
                 <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting context</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting context</p>
+                    <button
+                      type="button"
+                      onClick={() => queueFollowUp(`Use this supporting context to elaborate on the recommendation: ${[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => normalizeManagerText(item)).join(" | ")}`)}
+                      className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
+                    >
+                      Ask AI
+                    </button>
+                  </div>
                   <ul className="mt-2 space-y-2 text-sm text-slate-700">
                     {[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => (
                       <li key={item} className="rounded-xl bg-white px-3 py-2">{normalizeManagerText(item)}</li>
@@ -376,12 +440,14 @@ Manager Question: ${input}`,
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Interactive AI coaching</p>
             <div className="mt-3 space-y-3">
               <textarea
+                ref={inputRef}
                 value={input}
                 onChange={(event: ChangeEvent<HTMLTextAreaElement>) => setInput(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask a question or request deeper insight..."
                 className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
               />
+              <p className="text-xs text-slate-500">Ask AI to explain or elaborate on the recommendation above. Press Enter to submit, or use Cmd/Ctrl + Enter.</p>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">Selected context: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
                 <button type="button" onClick={handleSubmit} disabled={loading} className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
