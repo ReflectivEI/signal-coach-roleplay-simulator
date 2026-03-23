@@ -1355,13 +1355,14 @@ export default function ManagerView() {
             <h3 className="mt-1 text-lg font-bold text-slate-900">Closed-loop intervention tracking</h3>
             <p className="mt-1 text-sm text-slate-700">Secondary evidence layer showing how many manager interventions are being tracked and how the latest deterministic outcomes are trending.</p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {[
               { label: "Tracked", value: validationSummary.trackedInterventions, tone: "bg-teal-50 text-teal-800 border-teal-200" },
               { label: "Positive", value: validationSummary.positiveValidations, tone: "bg-emerald-50 text-emerald-800 border-emerald-200" },
               { label: "Neutral", value: validationSummary.neutralValidations, tone: "bg-sky-50 text-sky-800 border-sky-200" },
               { label: "Negative", value: validationSummary.negativeValidations, tone: "bg-rose-50 text-rose-800 border-rose-200" },
-              { label: "Pending", value: validationSummary.pendingValidations + validationSummary.insufficientData, tone: "bg-slate-50 text-slate-800 border-slate-200" },
+              { label: "Pending", value: validationSummary.pendingValidations, tone: "bg-slate-50 text-slate-800 border-slate-200" },
+              { label: "Insufficient", value: validationSummary.insufficientData, tone: "bg-amber-50 text-amber-800 border-amber-200" },
             ].map((item) => (
               <div key={item.label} className={`min-w-[120px] rounded-xl border px-4 py-3 ${item.tone}`}>
                 <p className="text-[11px] font-semibold uppercase tracking-wide">{item.label}</p>

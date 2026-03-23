@@ -147,7 +147,9 @@ export function determineValidationOutcome(record, latestSnapshot) {
   const observationReady = clampNumber(latestSnapshot?.observationDepth) >= Math.max(MANAGER_VALIDATION_THRESHOLDS.minimumObservationDepth, clampNumber(record?.baselineSnapshot?.observationDepth));
   const newActivityObserved = evidence.sessionsDelta >= MANAGER_VALIDATION_THRESHOLDS.minimumSessionDelta || evidence.modulesDelta >= MANAGER_VALIDATION_THRESHOLDS.minimumModuleDelta;
 
-  if (!observationReady || (!newActivityObserved && elapsedDays < Math.min(windowDays, 7))) {
+  // Keep validation conservative: a follow-up is only reviewable once we either
+  // observe fresh activity or the full configured observation window has elapsed.
+  if (!observationReady || (!newActivityObserved && elapsedDays < windowDays)) {
     return {
       validationStatus: "insufficient_data",
       validationSummary: `Follow-up data is still too thin to validate impact. Observation depth and fresh activity have not yet met the conservative review threshold.`,
