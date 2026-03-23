@@ -30,10 +30,11 @@ function formatUtcDate(iso) {
   }
 }
 
-function MetricDelta({ label, baseline, current, unit = "", emphasizePositive = true }) {
+function MetricDelta({ label, baseline, current, unit = "", emphasizePositive = true, invertDelta = false }) {
   const safeBaseline = Number.isFinite(Number(baseline)) ? Number(baseline) : null;
   const safeCurrent = Number.isFinite(Number(current)) ? Number(current) : null;
-  const delta = safeBaseline !== null && safeCurrent !== null ? safeCurrent - safeBaseline : null;
+  const rawDelta = safeBaseline !== null && safeCurrent !== null ? safeCurrent - safeBaseline : null;
+  const delta = rawDelta === null ? null : invertDelta ? rawDelta * -1 : rawDelta;
   const tone = delta === null
     ? "text-slate-500"
     : emphasizePositive
@@ -133,7 +134,7 @@ function ValidationRecordCard({ record, rep, onCaptureFollowUp, followUpBusy, de
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <MetricDelta label={targetCapabilityLabel} baseline={baselineCapabilityScore} current={latestCapabilityScore} unit="/5" />
                 <MetricDelta label="Learning Engagement" baseline={record.baselineSnapshot?.learningEngagementScore} current={latestSnapshot?.learningEngagementScore} />
-                <MetricDelta label="Sales Risk" baseline={record.baselineSnapshot?.salesRisk} current={latestSnapshot?.salesRisk} emphasizePositive={false} />
+                <MetricDelta label="Sales Risk" baseline={record.baselineSnapshot?.salesRisk} current={latestSnapshot?.salesRisk} emphasizePositive={true} invertDelta />
                 <MetricDelta label="Conversion Proxy" baseline={record.baselineSnapshot?.conversionProxy} current={latestSnapshot?.conversionProxy} />
               </div>
             </div>
@@ -162,6 +163,8 @@ function ValidationRecordCard({ record, rep, onCaptureFollowUp, followUpBusy, de
                 <li>Engagement delta: {record.evidence?.engagementDelta ?? 0}</li>
                 <li>Sales risk delta: {record.evidence?.salesRiskDelta ?? 0}</li>
                 <li>Conversion proxy delta: {record.evidence?.conversionProxyDelta ?? 0}</li>
+                <li>Sessions delta: {record.evidence?.sessionsDelta ?? 0}</li>
+                <li>Modules delta: {record.evidence?.modulesDelta ?? 0}</li>
               </ul>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -252,7 +255,7 @@ export default function InterventionValidationPanel({
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center gap-2 text-slate-600"><Activity className="h-4 w-4" /><p className="text-[11px] font-semibold uppercase tracking-wide">Evidence summary</p></div>
-                <p className="mt-2 text-sm text-slate-700">Capability Δ {latestRecord?.evidence?.capabilityDelta ?? 0}, engagement Δ {latestRecord?.evidence?.engagementDelta ?? 0}, sales risk Δ {latestRecord?.evidence?.salesRiskDelta ?? 0}.</p>
+                <p className="mt-2 text-sm text-slate-700">Capability Δ {latestRecord?.evidence?.capabilityDelta ?? 0}, engagement Δ {latestRecord?.evidence?.engagementDelta ?? 0}, sales risk Δ {latestRecord?.evidence?.salesRiskDelta ?? 0}, sessions Δ {latestRecord?.evidence?.sessionsDelta ?? 0}, modules Δ {latestRecord?.evidence?.modulesDelta ?? 0}.</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-center gap-2 text-slate-600"><Clock3 className="h-4 w-4" /><p className="text-[11px] font-semibold uppercase tracking-wide">Observation guidance</p></div>
