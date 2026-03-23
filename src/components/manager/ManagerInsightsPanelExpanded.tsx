@@ -44,7 +44,8 @@ const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performa
 
 const ENTERPRISE_PANEL = "rounded-3xl border border-teal-200 bg-white shadow-sm";
 const ENTERPRISE_SUBCARD = "rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
-const ASK_AI_PILL_CLASSNAME = "inline-flex shrink-0 items-center rounded-full border border-[#166534] bg-white px-3 py-1.5 text-xs font-semibold text-[#166534] transition-colors hover:bg-[#dff5f2] hover:text-[#166534]";
+const ASK_AI_PILL_CLASSNAME = "inline-flex min-w-[92px] shrink-0 items-center justify-center rounded-full border border-[#166534] bg-[#1A334D] px-3 py-1.5 text-center text-xs font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-[#39ACAC] hover:bg-[#dff5f2] hover:text-[#166534] hover:shadow-md";
+const SECTION_ACTION_ROW_CLASSNAME = "grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start";
 
 function getOutlookTone(trend: unknown) {
   return outlookTone[(typeof trend === "string" ? trend : "") as keyof typeof outlookTone] ?? outlookTone.stable;
@@ -204,8 +205,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               <h3 className="text-lg font-bold text-slate-900">{requestBody ? getWorkspaceTitle(requestBody) : "Manager coaching workspace"}</h3>
             </div>
           </div>
-          <p className="mt-2 text-sm text-slate-600">Advisory coaching guidance built from canonical rep data, territory aggregation, and deterministic derived metrics.</p>
-          <p className="mt-2 text-xs font-medium text-slate-600">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
+          <p className="mt-2 text-sm text-slate-700">Advisory coaching guidance built from canonical rep data, territory aggregation, and deterministic derived metrics.</p>
+          <p className="mt-2 text-xs font-medium text-slate-700">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
         </div>
 
         {insights?.predictiveOutlook ? (
@@ -214,18 +215,18 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
               {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
             </div>
-            <p className="text-sm font-semibold text-slate-700">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100</p>
-            <p className="text-[11px] text-slate-600">{PREDICTIVE_CONFIDENCE_LABEL}</p>
+            <p className="text-sm font-semibold text-slate-800">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100</p>
+            <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
           </div>
         ) : null}
       </div>
 
       {loadingInsights && !insights ? (
-        <div className="flex min-h-[180px] items-center justify-center text-sm text-slate-600">
+        <div className="flex min-h-[180px] items-center justify-center text-sm text-slate-700">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating explainable coaching insights…
         </div>
       ) : insightsUnavailable && !insights ? (
-        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="mt-5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           Manager AI insights are temporarily unavailable. Rep summaries and assignment actions remain fully usable.
         </div>
       ) : (
@@ -242,13 +243,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
 
           <div className={`${ENTERPRISE_SUBCARD} grid gap-5 xl:grid-cols-2`}>
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Filter insights</p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">Filters refine which dimensions of performance and behavior are displayed. They do not change the underlying dataset.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Filter insights</p>
+              <p className="mt-1 text-xs leading-5 text-slate-700">Filters refine which dimensions of performance and behavior are displayed. They do not change the underlying dataset.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {FILTERS.map((filter) => {
                   const active = activeFilter === filter;
                   return (
-                    <button key={filter} type="button" onClick={() => setActiveFilter(filter)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? "border-teal-600 bg-teal-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-teal-300 hover:text-teal-700"}`}>
+                    <button key={filter} type="button" onClick={() => setActiveFilter(filter)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${active ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-teal-300 hover:text-teal-700"}`}>
                       {filter}
                     </button>
                   );
@@ -257,13 +258,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
             </div>
 
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Context chips</p>
-              <p className="mt-1 text-xs leading-5 text-slate-600">Context chips refine how insights and recommendations are interpreted, based on real-world scenarios such as new reps, inconsistent performance, or territory dynamics.</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Context chips</p>
+              <p className="mt-1 text-xs leading-5 text-slate-700">Context chips refine how insights and recommendations are interpreted, based on real-world scenarios such as new reps, inconsistent performance, or territory dynamics.</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {CONTEXT_CHIPS.map((chip) => {
                   const active = selectedChips.includes(chip);
                   return (
-                    <button key={chip} type="button" onClick={() => toggleChip(chip)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-400 hover:text-slate-900"}`}>
+                    <button key={chip} type="button" onClick={() => toggleChip(chip)} className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:border-slate-400 hover:text-slate-900"}`}>
                       {chip}
                     </button>
                   );
@@ -277,13 +278,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">AI insight</p>
-                  <p className="mt-1 text-sm text-slate-600">{getScopeLabel(requestBody as ManagerInsightsRequest)} structured for concise enterprise review.</p>
+                  <p className="mt-1 text-sm text-slate-700">{getScopeLabel(requestBody as ManagerInsightsRequest)} structured for concise enterprise review.</p>
                 </div>
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <button
                     type="button"
                     onClick={() => queueFollowUp(`Explain the AI insight for this ${getScopeLabel(requestBody as ManagerInsightsRequest).toLowerCase()} and tell me what to ask the rep next.`, "AI insight")}
-                    className="inline-flex items-center rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
+                    className={ASK_AI_PILL_CLASSNAME}
                   >
                     Ask AI a Question
                   </button>
@@ -293,8 +294,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                       <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                       {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
                     </div>
-                    <p className="text-xs font-semibold text-slate-600">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100 scale</p>
-                    <p className="text-[11px] text-slate-600">{PREDICTIVE_CONFIDENCE_LABEL}</p>
+                    <p className="text-xs font-semibold text-slate-700">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100 scale</p>
+                    <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                   </div>
                 ) : null}
                 </div>
@@ -302,8 +303,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
 
               <div className="space-y-4 text-sm text-slate-700">
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Primary finding</p>
+                  <div className={SECTION_ACTION_ROW_CLASSNAME}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Primary finding</p>
                     <button
                       type="button"
                       onClick={() => queueFollowUp(`Explain this primary finding in more detail: ${normalizeManagerText(structuredInsight.primaryFinding)}`, "Primary finding")}
@@ -315,8 +316,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.primaryFinding)}</p>
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Why it matters</p>
+                  <div className={SECTION_ACTION_ROW_CLASSNAME}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Why it matters</p>
                     <button
                       type="button"
                       onClick={() => queueFollowUp(`Why does this matter and what business risk should I watch for? ${normalizeManagerText(structuredInsight.whyItMatters)}`, "Why it matters")}
@@ -328,8 +329,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                   <p className="mt-1">{normalizeManagerText(structuredInsight.whyItMatters)}</p>
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Action</p>
+                  <div className={SECTION_ACTION_ROW_CLASSNAME}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Action</p>
                     <button
                       type="button"
                       onClick={() => queueFollowUp(`Turn this recommended action into a coaching plan: ${normalizeManagerText(structuredInsight.action)}`, "Action")}
@@ -341,8 +342,8 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.action)}</p>
                 </div>
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Monitor</p>
+                  <div className={SECTION_ACTION_ROW_CLASSNAME}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Monitor</p>
                     <button
                       type="button"
                       onClick={() => queueFollowUp(`Explain what I should monitor next based on these signals: ${structuredInsight.monitor.map((item) => normalizeManagerText(item)).join(" | ")}`, "Monitor")}
@@ -353,7 +354,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                   </div>
                   <ul className="mt-2 space-y-1.5">
                     {structuredInsight.monitor.map((item) => (
-                      <li key={item} className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2">
+                      <li key={item} className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2 text-slate-700">
                         <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal-700" />
                         <span>{normalizeManagerText(item)}</span>
                       </li>
@@ -363,9 +364,9 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               </div>
 
               {(filteredKeyDrivers.length || filteredRisks.length) ? (
-                <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Supporting context</p>
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className={SECTION_ACTION_ROW_CLASSNAME}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Supporting context</p>
                     <button
                       type="button"
                       onClick={() => queueFollowUp(`Use this supporting context to elaborate on the recommendation: ${[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => normalizeManagerText(item)).join(" | ")}`, "Supporting context")}
@@ -374,7 +375,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                       Ask AI
                     </button>
                   </div>
-                  <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+                  <ul className="mt-2 space-y-1.5 pl-0 text-sm text-slate-700">
                     {[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => (
                       <li key={item} className="flex items-start gap-2 rounded-xl bg-white px-3 py-2">
                         <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal-700" />
@@ -386,13 +387,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               ) : null}
             </div>
           ) : (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-600">
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-700">
               No AI insight block matches the current filter.
             </div>
           )}
 
           <div ref={coachingSectionRef} className={ENTERPRISE_SUBCARD}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Interactive AI coaching</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Interactive AI coaching</p>
             <div className="mt-3 space-y-3">
               <textarea
                 ref={inputRef}
@@ -402,13 +403,13 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
                 placeholder="Ask a question or request deeper insight..."
                 className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
               />
-              <p className="text-xs text-slate-600">Ask AI to explain or elaborate on the recommendation above. Press Enter to submit, or use Cmd/Ctrl + Enter.</p>
+              <p className="text-xs text-slate-700">Ask AI to explain or elaborate on the recommendation above. Press Enter to submit, or use Cmd/Ctrl + Enter.</p>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <p className="text-xs text-slate-600">Ask AI context: {askAiContext}</p>
-                  <p className="text-xs text-slate-600">Applied chips: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
+                  <p className="text-xs text-slate-700">Ask AI context: {askAiContext}</p>
+                  <p className="text-xs text-slate-700">Applied chips: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
                 </div>
-                <button type="button" onClick={handleSubmit} disabled={loading} className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+                <button type="button" onClick={handleSubmit} disabled={loading} className={`${ASK_AI_PILL_CLASSNAME} px-4 py-2 text-sm disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-white disabled:shadow-none disabled:hover:translate-y-0`}>
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Ask AI
                 </button>
@@ -421,22 +422,22 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold text-slate-900">AI Coaching Response</h4><span className="rounded-full border border-teal-200 bg-white px-3 py-1 text-[11px] font-semibold text-teal-700">{askAiContext}</span></div>
               <div className="mt-3 space-y-4 text-sm text-slate-700">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Primary finding</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Primary finding</p>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.primaryFinding)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Why it matters</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Why it matters</p>
                   <p className="mt-1">{normalizeManagerText(response.whyItMatters)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Action</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Action</p>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(response.action)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Monitor</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Monitor</p>
                   <ul className="mt-2 space-y-2">
                     {response.monitor.slice(0, 3).map((item) => (
-                      <li key={item} className="rounded-xl bg-white px-3 py-2">{normalizeManagerText(item)}</li>
+                      <li key={item} className="rounded-xl bg-white px-3 py-2 text-slate-700">{normalizeManagerText(item)}</li>
                     ))}
                   </ul>
                 </div>

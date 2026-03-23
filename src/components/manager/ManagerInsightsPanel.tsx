@@ -98,8 +98,8 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               <h3 className="text-lg font-bold text-slate-900">{title}</h3>
             </div>
           </div>
-          <p className="mt-2 text-sm text-slate-500">{normalizeManagerText(subtitle)}</p>
-          <p className="mt-2 text-xs font-medium text-slate-500">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
+          <p className="mt-2 text-sm text-slate-700">{normalizeManagerText(subtitle)}</p>
+          <p className="mt-2 text-xs font-medium text-slate-700">{requestBody ? buildManagerExplainabilityNote(requestBody) : "Data Source: Rep + Territory Metrics"}</p>
         </div>
         {data && (
           <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
@@ -110,11 +110,11 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
       </div>
 
       {loading && !data ? (
-        <div className="flex min-h-[160px] items-center justify-center text-sm text-slate-500">
+        <div className="flex min-h-[160px] items-center justify-center text-sm text-slate-700">
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating explainable coaching insights…
         </div>
       ) : unavailable && !data ? (
-        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           Manager insights are temporarily unavailable. The rest of Manager View remains fully usable.
         </div>
       ) : data && requestBody ? (
@@ -134,33 +134,33 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
               <div className="mb-4 flex items-start justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">AI insight</p>
-                  <p className="mt-1 text-sm text-slate-500">One canonical coaching block per context with required thresholds and scales.</p>
+                  <p className="mt-1 text-sm text-slate-700">One canonical coaching block per context with required thresholds and scales.</p>
                 </div>
                 <div className="space-y-2 text-right">
                   <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
                     <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                     {outlookTone[data.predictiveOutlook.performanceTrend].label}
                   </div>
-                  <p className="text-xs font-semibold text-slate-500">Predictive Confidence {Math.round(data.predictiveOutlook.confidence * 100)}/100 scale</p>
-                  <p className="text-[11px] text-slate-500">{PREDICTIVE_CONFIDENCE_LABEL}</p>
+                  <p className="text-xs font-semibold text-slate-700">Predictive Confidence {Math.round(data.predictiveOutlook.confidence * 100)}/100 scale</p>
+                  <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                 </div>
               </div>
 
               <div className="space-y-4 text-sm text-slate-700">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Primary finding</p>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.primaryFinding)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Why it matters</p>
                   <p className="mt-1">{normalizeManagerText(structuredInsight.whyItMatters)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Action</p>
                   <p className="mt-1 font-medium text-slate-900">{normalizeManagerText(structuredInsight.action)}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Monitor</p>
                   <ul className="mt-2 space-y-2">
                     {structuredInsight.monitor.map((item) => (
                       <li key={item} className="rounded-xl bg-slate-50 px-3 py-2">
