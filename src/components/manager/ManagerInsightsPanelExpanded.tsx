@@ -291,8 +291,8 @@ Manager Question: ${input}`,
             />
           ) : null}
 
-          <div className={ENTERPRISE_SUBCARD}>
-            <div>
+          <div className={`${ENTERPRISE_SUBCARD} grid gap-5 xl:grid-cols-2`}>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Filter insights</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Filters refine which dimensions of performance and behavior are displayed. They do not change the underlying dataset.</p>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -307,7 +307,7 @@ Manager Question: ${input}`,
               </div>
             </div>
 
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Context chips</p>
               <p className="mt-1 text-xs leading-5 text-slate-500">Context chips refine how insights and recommendations are interpreted, based on real-world scenarios such as new reps, inconsistent performance, or territory dynamics.</p>
               <div className="mt-3 flex flex-wrap gap-2">
