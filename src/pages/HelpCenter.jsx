@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 
 const FAQ = [
   {
