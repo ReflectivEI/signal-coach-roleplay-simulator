@@ -45,6 +45,7 @@ import {
 } from "@/components/manager/managerPerformanceData";
 import { buildManagerViewState, getContributorSet } from "@/components/manager/managerViewModel";
 import { buildPredictiveCalibration, buildValidationInsight, getCapabilityLabelFromCanonicalId, selectHistoricalPriorityCapability } from "@/components/manager/managerValidationLogic";
+import { hardenPredictiveCalibration } from "@/components/manager/managerReliability";
 import { captureValidationFollowUp, fetchValidationRecords, fetchValidationSummary, startValidationRecord } from "@/components/manager/managerValidationService";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -966,12 +967,13 @@ export default function ManagerView() {
     reps.map((rep) => {
       const derived = viewState.derivedByRepId[rep.id];
       const calibration = buildPredictiveCalibration(rep, derived, validationAnalytics);
+      const hardenedCalibration = hardenPredictiveCalibration(rep, derived, calibration, validationAnalytics);
       return [
         rep.id,
         {
           ...derived,
-          predictiveConfidence: calibration.predictiveConfidence,
-          calibration,
+          predictiveConfidence: hardenedCalibration.predictiveConfidence,
+          calibration: hardenedCalibration,
         },
       ];
     }),

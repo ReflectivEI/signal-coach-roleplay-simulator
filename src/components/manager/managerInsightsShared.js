@@ -680,7 +680,7 @@ export function buildInteractiveCoachingResponse(payload, question, selectedCont
         `${rep.name} should focus on ${focus.focusLabel} next.`
       ),
       whyItMatters: trimSentence(
-        `${focus.focusLabel} changes live-call behavior first, and in ${rep.name}'s data that behavior link is visible in Conversion Proxy ${derived.conversionProxyScore}/100, Readiness ${derived.readinessScore}/100, and Sales Risk ${derived.salesRiskScore}/100; Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, not a performance score.${contextNote}`,
+        `${focus.focusLabel} changes live-call behavior first, and in ${rep.name}'s data that behavior link is visible in Conversion Proxy ${derived.conversionProxyScore}/100, Readiness ${derived.readinessScore}/100, and Sales Risk ${derived.salesRiskScore}/100; Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, not a performance score. Predictive confidence reflects reliability, not certainty.${contextNote}`,
         `${focus.focusLabel} is the clearest lever for business outcomes right now.`
       ),
       action: trimSentence(
@@ -696,7 +696,7 @@ export function buildInteractiveCoachingResponse(payload, question, selectedCont
       monitor: [
         `${focus.focusLabel} is ${focusComparison} on the 5-point scale with ${formatTrendLabel(focus.focusMetric.trend)} directionality.`,
         `Learning Engagement Score is ${formatHundredPointComparison(derived.engagementScore, MANAGER_MODEL_THRESHOLDS.engagementRisk)} on the 100-point scale with ${rep.sessionsCompleted30d} sessions and ${rep.coachingModulesCompleted}/8 modules completed.`,
-        `Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, derived from Data Confidence ${Math.round(derived.dataConfidenceIndex * 100)}/100, Behavioral Variance ${derived.behavioralVariance}, and Engagement Stability ${derived.engagementStabilityScore}/100.`,
+        `Predictive Confidence is prediction reliability at ${focus.confidencePercent}/100, derived from Data Confidence ${Math.round(derived.dataConfidenceIndex * 100)}/100, Behavioral Variance ${derived.behavioralVariance}, and Engagement Stability ${derived.engagementStabilityScore}/100. Predictive confidence reflects reliability, not certainty.`,
       ],
     };
   }

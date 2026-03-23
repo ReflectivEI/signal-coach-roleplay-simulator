@@ -75,6 +75,20 @@ export type RepDerivedMetrics = {
       capabilityId: string;
       capabilityLabel: string;
     } | null;
+    reliability?: {
+      deterministicConfidence: number;
+      originalCalibratedConfidence: number;
+      repSampleSize: number;
+      capabilitySampleSize: number;
+      consistencyScore: number;
+      consistencyLabel: string | null;
+      lowConfidenceSample: boolean;
+      sampleLabel: string | null;
+      confidenceExplanation: string;
+      weightingExplanation: string;
+      crossRepSignal: string | null;
+      targetCapabilityLabel: string | null;
+    };
   };
 };
 
