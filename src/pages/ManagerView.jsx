@@ -25,13 +25,12 @@ import {
   RefreshCw,
   RotateCcw,
   Info,
+  ChevronDown,
   ChevronRight,
   Activity,
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, Radar, Legend } from "recharts";
 import AssignmentPanel from "@/components/manager/AssignmentPanel";
-import BehavioralProfileGrid from "@/components/manager/BehavioralProfileGrid";
-import ManagerInsightsPanel from "@/components/manager/ManagerInsightsPanel";
 import ManagerInsightsPanelExpanded from "@/components/manager/ManagerInsightsPanelExpanded";
 import { ENABLEMENT_HUB_SPOKES, getAdoptionBand } from "@/lib/enablementHub";
 import { ENABLE_MANAGER_INSIGHTS } from "@/components/manager/managerInsightsShared";
@@ -164,7 +163,7 @@ const THRESHOLD_GLOSSARY = [
 const ENTERPRISE_PARENT_CARD = "rounded-2xl border border-teal-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md";
 const ENTERPRISE_SUBCARD = "rounded-xl border border-slate-200 bg-slate-50 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
 const ENTERPRISE_SUBCARD_WHITE = "rounded-xl border border-slate-200 bg-white transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/25";
-const METRIC_PILL_CLASSNAME = "inline-flex items-center gap-1 rounded-full border border-[#1A334D] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white";
+const METRIC_PILL_CLASSNAME = "inline-flex max-w-full items-center gap-1 self-start rounded-full border border-[#1A334D] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white";
 
 const MANAGER_VIEW_FOUNDATION = [
   {
@@ -242,12 +241,49 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
   );
 }
 
+function BehavioralProfileSummaryCell({ rep }) {
+  return (
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+      <div className="grid grid-cols-2 gap-2">
+        {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
+          const metric = rep.behavioralMetrics[metricKey];
+          const isStrongest = metricKey === rep.strongestCapability;
+          const isWeakest = metricKey === rep.improvementPriority;
+
+          return (
+            <div
+              key={`${rep.id}-${metricKey}`}
+              className={`min-w-0 rounded-xl border px-2.5 py-2 ${
+                isStrongest ? "border-teal-200 bg-teal-50" : isWeakest ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-1">
+                <p className="min-w-0 flex-1 text-[11px] font-semibold leading-4 text-slate-700">
+                  {getBehavioralMetricLabel(metricKey)}
+                </p>
+                <span
+                  className={`inline-flex max-w-full shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
+                    isStrongest ? "bg-white text-teal-700" : isWeakest ? "bg-white text-amber-700" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {isStrongest ? "Strongest" : isWeakest ? "Weakest" : metric.trend}
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-bold text-slate-900">{metric.score}/5</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MetricSummaryCard({ labelKey, value, explanation }) {
   const normalizedExplanation = explanation ? normalizeExplanation(explanation) : null;
   return (
-    <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
+      <div className={`${ENTERPRISE_SUBCARD_WHITE} rounded-2xl p-3 shadow-sm`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{formatMetricLabel(labelKey)}</p>
         <MetricPill explanation={explanation} label="Formula" />
       </div>
       <p className="mt-2 text-lg font-bold text-slate-900">{value}</p>
@@ -420,81 +456,143 @@ function DefinitionsDialog() {
   );
 }
 
-function RepRow({ rep, derived, explanations, onSelect, selected }) {
+function RepRow({ rep, derived, explanations, onToggle, selected }) {
   return (
-    <tr onClick={() => onSelect(rep)} className={`cursor-pointer transition-colors ${selected ? "bg-teal-50/70" : "hover:bg-teal-50/35"}`}>
-      <td className="px-4 py-3 align-top">
+    <tr onClick={() => onToggle(rep.id)} className={`cursor-pointer border-b border-slate-100 transition-colors ${selected ? "bg-teal-50/70" : "hover:bg-teal-50/35"}`}>
+      <td className="px-4 py-4 align-top">
         <div className="flex items-start gap-3">
           <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: "#1A334D" }}>
             {rep.name.split(" ").map((word) => word[0]).join("")}
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900">{rep.name}</p>
             <p className="mt-0.5 text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggle(rep.id);
+              }}
+              className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
+              {selected ? "Collapse details" : "Expand details"}
+            </button>
           </div>
         </div>
       </td>
-      <td className="px-4 py-3 align-top text-center">
-        <div className="flex flex-col items-center gap-1">
+      <td className="px-4 py-4 align-top">
+        <div className="flex flex-col items-start gap-1">
           <span className={`text-sm font-bold ${rep.overallScore >= 4 ? "text-teal-600" : rep.overallScore >= 3.3 ? "text-blue-600" : "text-amber-600"}`}>{rep.overallScore}/5</span>
           <MetricPill explanation={explanations.overallScore} label="Formula" />
         </div>
       </td>
-      <td className="px-4 py-3 align-top text-center">
+      <td className="px-4 py-4 align-top">
         <p className="text-sm font-bold text-slate-700">{rep.sessionsCompleted30d}</p>
         <p className="mt-1 text-[11px] text-slate-500">current 30d</p>
       </td>
-      <td className="px-4 py-3 align-top">
-        <div className="grid gap-2 sm:grid-cols-2">
-          {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
-            const metric = rep.behavioralMetrics[metricKey];
-            const isStrongest = metricKey === rep.strongestCapability;
-            const isWeakest = metricKey === rep.improvementPriority;
-
-            return (
-              <div
-                key={`${rep.id}-${metricKey}`}
-                className={`rounded-xl border px-2.5 py-2 ${isStrongest ? "border-teal-200 bg-teal-50" : isWeakest ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] font-semibold leading-4 text-slate-700">{getBehavioralMetricLabel(metricKey)}</p>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${isStrongest ? "bg-white text-teal-700" : isWeakest ? "bg-white text-amber-700" : "bg-slate-100 text-slate-600"}`}>
-                    {isStrongest ? "Strongest" : isWeakest ? "Weakest" : metric.trend}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm font-bold text-slate-900">{metric.score}/5</p>
-              </div>
-            );
-          })}
-        </div>
+      <td className="px-4 py-4 align-top">
+        <BehavioralProfileSummaryCell rep={rep} />
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="px-4 py-4 align-top">
         <div className="space-y-2">
           <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
           <MetricPill explanation={explanations.strongestCapability} label="Source" />
         </div>
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="px-4 py-4 align-top">
         <div className="space-y-2">
           <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
           <MetricPill explanation={explanations.improvementPriority} label="Source" />
         </div>
       </td>
-      <td className="px-4 py-3 align-top text-left">
+      <td className="px-4 py-4 align-top text-left">
         <TrendBadge trend={rep.salesTrend} />
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="px-4 py-4 align-top">
         <StatusBadge status={rep.status} />
-        <div className="mt-2 flex items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <p className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</p>
           <MetricPill explanation={explanations.salesRiskScore} label="Formula" />
         </div>
       </td>
-      <td className="px-4 py-3 align-top text-center">
+      <td className="px-4 py-4 align-top">
         <p className="text-sm font-semibold text-slate-700">{rep.coachingModulesCompleted}</p>
         <MetricPill explanation={explanations.moduleCompletion} label="Completion %" />
       </td>
     </tr>
+  );
+}
+
+function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onToggle(rep.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onToggle(rep.id);
+        }
+      }}
+      className={`w-full rounded-2xl border p-4 text-left shadow-sm transition-all duration-200 ${
+        selected ? "border-teal-300 bg-teal-50/60" : "border-slate-200 bg-white hover:border-teal-200 hover:bg-teal-50/30"
+      }`}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ background: "#1A334D" }}>
+              {rep.name.split(" ").map((word) => word[0]).join("")}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">{rep.name}</p>
+              <p className="mt-1 text-xs text-slate-500">{rep.specialty} · {rep.territory}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <TrendBadge trend={rep.salesTrend} />
+                <StatusBadge status={rep.status} />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
+          {selected ? "Collapse details" : "Expand details"}
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Overall score</p>
+            <MetricPill explanation={explanations.overallScore} label="Formula" />
+          </div>
+          <p className="mt-2 text-lg font-bold text-slate-900">{rep.overallScore}/5</p>
+          <p className="mt-1 text-xs text-slate-500">{rep.sessionsCompleted30d} sessions · {rep.coachingModulesCompleted}/8 modules</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Capability summary</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
+            <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <MetricPill explanation={explanations.strongestCapability} label="Source" />
+            <MetricPill explanation={explanations.improvementPriority} label="Source" />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] text-slate-500">{formatMetricLabel("salesRiskScore")} {derived.salesRiskScore}/100</span>
+            <MetricPill explanation={explanations.salesRiskScore} label="Formula" />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Behavioral profile (8 metrics)</p>
+        <BehavioralProfileSummaryCell rep={rep} />
+      </div>
+    </div>
   );
 }
 
@@ -536,7 +634,7 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
         <div className="space-y-4">
           {sections.map((section) => (
             <div key={section.key} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <h4 className="text-sm font-semibold text-slate-900">{section.title}</h4>
                 <MetricPill explanation={section.explanation} label="Formula" />
               </div>
@@ -817,8 +915,8 @@ export default function ManagerView() {
             <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
                 <div key={card.label} className="grid min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-teal-200 bg-white p-4 pt-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
                     <MetricPill explanation={card.explanation} label="Formula" />
                   </div>
                   <p className="mt-3 self-center text-2xl font-bold text-slate-900">{card.value}</p>
@@ -902,7 +1000,7 @@ export default function ManagerView() {
           const selectedTone = toneMap[tone] || toneMap.navy;
           return (
             <div key={label} className={`rounded-xl border border-teal-200 p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/30 hover:shadow-md ${selectedTone.card}`}>
-              <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${selectedTone.icon}`} />
                   <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</span>
@@ -927,77 +1025,150 @@ export default function ManagerView() {
 
         <TabsContent value="reps">
           <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.8fr)_320px] xl:items-start">
-              <div className={`${ENTERPRISE_PARENT_CARD} overflow-hidden rounded-xl`}>
-                <div className="border-b border-gray-100 px-5 py-4">
-                  <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                    <div>
-                      <h2 className="text-sm font-bold text-gray-900">Rep performance snapshot</h2>
-                      <p className="text-xs text-gray-500">Each row uses the 8 canonical behavioral metrics plus clearly defined derived scores. Click a rep to inspect score lineage and coaching context.</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">{viewState.datasetScope.detail}</span>
-                      <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">Last refreshed {formatRefreshTimestamp(viewState.refreshedAt)}</span>
-                      <span className={`rounded-full border px-2.5 py-1 font-semibold ${selectedRep ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-600"}`}>{selectedRep ? `${selectedRep.name} selected` : "No rep selected"}</span>
-                      <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={handleRefreshDataset}>
-                        <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh
-                      </Button>
-                      <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setSelectedRepId(null)}>
-                        <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset selection
-                      </Button>
-                    </div>
+            <div className={`${ENTERPRISE_PARENT_CARD} overflow-hidden rounded-xl`}>
+              <div className="border-b border-gray-100 px-5 py-4">
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                  <div>
+                    <h2 className="text-sm font-bold text-gray-900">Rep performance snapshot</h2>
+                    <p className="text-xs text-gray-500">Each row keeps a compact 8-metric summary in view. Expand one rep at a time to inspect the full behavioral profile, risk signals, assignments, and AI context below.</p>
                   </div>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1480px] table-fixed text-sm">
-                    <colgroup>
-                      <col className="w-[240px]" />
-                      <col className="w-[120px]" />
-                      <col className="w-[120px]" />
-                      <col className="w-[420px]" />
-                      <col className="w-[180px]" />
-                      <col className="w-[210px]" />
-                      <col className="w-[110px]" />
-                      <col className="w-[170px]" />
-                      <col className="w-[130px]" />
-                    </colgroup>
-                    <thead className="sticky top-0 z-10 bg-gray-50">
-                      <tr className="border-b border-gray-100 bg-gray-50">
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Behavioral Profile (8 Metrics)</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Modules Completed</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {reps.map((rep) => (
-                        <RepRow
-                          key={rep.id}
-                          rep={rep}
-                          derived={viewState.derivedByRepId[rep.id]}
-                          explanations={viewState.explanations.rep[rep.id]}
-                          onSelect={(selected) => setSelectedRepId(selected.id)}
-                          selected={selectedRep?.id === rep.id}
-                        />
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">{viewState.datasetScope.detail}</span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 font-semibold text-slate-700">Last refreshed {formatRefreshTimestamp(viewState.refreshedAt)}</span>
+                    <span className={`rounded-full border px-2.5 py-1 font-semibold ${selectedRep ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-white text-slate-600"}`}>{selectedRep ? `${selectedRep.name} expanded` : "No rep expanded"}</span>
+                    <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={handleRefreshDataset}>
+                      <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-8 rounded-full" onClick={() => setSelectedRepId(null)}>
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" /> Reset selection
+                    </Button>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-4 self-start xl:sticky xl:top-4">
-                {selectedRep ? (
+              <div className="hidden overflow-hidden lg:block">
+                <table className="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[190px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[80px]" />
+                    <col className="w-[260px]" />
+                    <col className="w-[140px]" />
+                    <col className="w-[160px]" />
+                    <col className="w-[85px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[100px]" />
+                  </colgroup>
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Rep</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Overall Score</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sessions (30d)</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Behavioral Profile (8 Metrics)</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Strongest Capability</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Capability Requiring Improvement</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Sales Trend</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Modules Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reps.map((rep) => (
+                      <RepRow
+                        key={rep.id}
+                        rep={rep}
+                        derived={viewState.derivedByRepId[rep.id]}
+                        explanations={viewState.explanations.rep[rep.id]}
+                        onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
+                        selected={selectedRep?.id === rep.id}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="space-y-4 p-4 lg:hidden">
+                {reps.map((rep) => (
+                  <RepMobileCard
+                    key={rep.id}
+                    rep={rep}
+                    derived={viewState.derivedByRepId[rep.id]}
+                    explanations={viewState.explanations.rep[rep.id]}
+                    onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
+                    selected={selectedRep?.id === rep.id}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {selectedRep ? (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+                <div className="space-y-6">
+                  {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
+                    <div className="manager-insights-container">
+                      <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
+                    </div>
+                  ) : null}
+
+                    <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
+                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
+                    </div>
+                    <div className="space-y-2">
+                      {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
+                        viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
+                          <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm transition-colors duration-200 hover:bg-teal-50/30 ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+                            <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
+                            <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
+                        <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
+                      </div>
+                      <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Formula · Source · Rule</span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {[
+                        { key: "engagementScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
+                        { key: "readinessScore", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
+                        { key: "engagementStabilityScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
+                        { key: "conversionProxyScore", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
+                        { key: "salesRiskScore", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
+                        { key: "dataConfidenceIndex", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
+                        { key: "confidenceScore", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
+                      ].map(({ key, value, explanation }) => (
+                        <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
+                    <AssignmentPanel
+                      rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
+                      assignments={assignments}
+                      onAssigned={loadAssignments}
+                      onStatusChange={handleStatusChange}
+                      onDelete={handleDelete}
+                    />
+                  </div>
+                </div>
+
+                <aside className="space-y-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
                   <div className={`${ENTERPRISE_PARENT_CARD} rounded-xl p-5`}>
                     <div className="flex items-center gap-3">
                       <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: "#1A334D" }}>
                         {selectedRep.name.split(" ").map((word) => word[0]).join("")}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="font-bold text-gray-900">{selectedRep.name}</h3>
                         <p className="text-xs text-gray-500">{selectedRep.specialty} · {selectedRep.territory}</p>
                         <StatusBadge status={selectedRep.status} />
@@ -1011,47 +1182,45 @@ export default function ManagerView() {
                         { label: "Practice Streak", value: selectedRep.practiceStreakDays > 0 ? `${selectedRep.practiceStreakDays} days` : "None", explanation: null },
                         { label: "Modules Done", value: `${selectedRep.coachingModulesCompleted}/8`, explanation: viewState.explanations.rep[selectedRep.id].moduleCompletion },
                       ].map(({ label, value, explanation }) => (
-                        <div key={label} className={`${ENTERPRISE_SUBCARD} rounded-lg p-3`}>
-                          <div className="flex items-center justify-between gap-2">
+                        <div key={label} className={`${ENTERPRISE_SUBCARD} min-w-0 rounded-lg p-3`}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
                             <p className="text-xs text-gray-500">{label}</p>
                             <MetricPill explanation={explanation} label="Formula" />
                           </div>
-                          <p className="text-lg font-bold text-gray-900">{value}</p>
+                          <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
                         </div>
                       ))}
                     </div>
 
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <div className="mt-4 grid gap-3">
                       <div className="rounded-lg border border-teal-200 bg-teal-50 p-3">
-                        <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-teal-800"><CheckCircle className="h-3 w-3" /> Strongest Capability</p>
-                        <p className="text-sm font-bold text-teal-900">{getBehavioralMetricLabel(selectedRep.strongestCapability)}</p>
-                        <p className="mt-1 text-xs text-teal-700">Score {selectedRep.behavioralMetrics[selectedRep.strongestCapability].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.strongestCapability].trend}</p>
-                        <div className="mt-2"><MetricPill explanation={viewState.explanations.rep[selectedRep.id].strongestCapability} label="Source" /></div>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-teal-800"><CheckCircle className="h-3 w-3" /> Strongest Capability</p>
+                            <p className="text-sm font-bold text-teal-900">{getBehavioralMetricLabel(selectedRep.strongestCapability)}</p>
+                            <p className="mt-1 text-xs text-teal-700">Score {selectedRep.behavioralMetrics[selectedRep.strongestCapability].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.strongestCapability].trend}</p>
+                          </div>
+                          <MetricPill explanation={viewState.explanations.rep[selectedRep.id].strongestCapability} label="Source" />
+                        </div>
                       </div>
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                        <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800"><AlertTriangle className="h-3 w-3" /> Capability Requiring Improvement</p>
-                        <p className="text-sm font-bold text-amber-900">{getBehavioralMetricLabel(selectedRep.improvementPriority)}</p>
-                        <p className="mt-1 text-xs text-amber-700">Score {selectedRep.behavioralMetrics[selectedRep.improvementPriority].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.improvementPriority].trend}</p>
-                        <div className="mt-2"><MetricPill explanation={viewState.explanations.rep[selectedRep.id].improvementPriority} label="Source" /></div>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-800"><AlertTriangle className="h-3 w-3" /> Capability Requiring Improvement</p>
+                            <p className="text-sm font-bold text-amber-900">{getBehavioralMetricLabel(selectedRep.improvementPriority)}</p>
+                            <p className="mt-1 text-xs text-amber-700">Score {selectedRep.behavioralMetrics[selectedRep.improvementPriority].score}/5 · Trend {selectedRep.behavioralMetrics[selectedRep.improvementPriority].trend}</p>
+                          </div>
+                          <MetricPill explanation={viewState.explanations.rep[selectedRep.id].improvementPriority} label="Source" />
+                        </div>
                       </div>
                     </div>
 
-                    <div className="mt-4">
-                      <BehavioralProfileGrid
-                        metricSource={selectedRep.behavioralMetrics}
-                        strongestKey={selectedRep.strongestCapability}
-                        weakestKey={selectedRep.improvementPriority}
-                        title="Behavioral Profile (8 Metrics)"
-                        subtitle="Consistent canonical ordering across the rep snapshot, rep detail panel, and AI insights context."
-                      />
-                    </div>
-
-                    <div className={`mt-4 rounded-xl border border-teal-200 bg-slate-50 p-4 shadow-sm`}>
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Metric summary cards</p>
+                    <div className="mt-4 rounded-xl border border-teal-200 bg-slate-50 p-4 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Compact metric summary</p>
                         <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">Observation depth {selectedRep.observationDepth}</span>
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                         <MetricSummaryCard labelKey="engagementScore" value={`${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].engagementScore} />
                         <MetricSummaryCard labelKey="readinessScore" value={`${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].readinessScore} />
                         <MetricSummaryCard labelKey="salesRiskScore" value={`${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`} explanation={viewState.explanations.rep[selectedRep.id].salesRiskScore} />
@@ -1059,86 +1228,15 @@ export default function ManagerView() {
                       </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed border-teal-200 bg-gray-50 p-8 text-center shadow-sm">
-                    <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-                    <p className="text-sm text-gray-500">No rep selected. Territory-level insights remain active, and rep-level detail appears only after a manager makes an explicit selection.</p>
-                    <div className="mt-4 flex justify-center">
-                      <Button size="sm" variant="outline" onClick={handleRefreshDataset}>
-                        <RefreshCw className="mr-1 h-3.5 w-3.5" /> Refresh dataset
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </div>
-
-            {selectedRep ? (
-              <div className="space-y-6">
-                {ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
-                  <div className="manager-insights-container">
-                    <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
-                  </div>
-                ) : null}
-
-                  <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Deterministic risk signals</p>
-                    <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">{viewState.repRiskFlagsByRepId[selectedRep.id]?.length || 0} active rules</span>
-                  </div>
-                  <div className="space-y-2">
-                    {(viewState.repRiskFlagsByRepId[selectedRep.id] || []).length ? (
-                      viewState.repRiskFlagsByRepId[selectedRep.id].map((flag) => (
-                        <div key={flag.ruleId} className={`rounded-lg border px-3 py-2 text-sm transition-colors duration-200 hover:bg-teal-50/30 ${flag.severity === "high" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
-                          <p className="font-semibold">{normalizeManagerText(flag.label)}</p>
-                          <p className="mt-1 text-xs leading-5">{normalizeManagerText(flag.explanation)}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">No deterministic risk rules are currently triggered for this rep.</p>
-                    )}
-                  </div>
-                </div>
-
-                <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Derived metrics</p>
-                      <p className="mt-1 text-sm text-slate-500">Consistent display labels, shared explanation patterns, and deterministic calculations preserved.</p>
-                    </div>
-                    <span className="rounded-full bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">Formula · Source · Rule</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {[
-                      { key: "engagementScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementScore },
-                      { key: "readinessScore", value: `${viewState.derivedByRepId[selectedRep.id].readinessScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].readinessScore },
-                      { key: "engagementStabilityScore", value: `${viewState.derivedByRepId[selectedRep.id].engagementStabilityScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].engagementStabilityScore },
-                      { key: "conversionProxyScore", value: `${viewState.derivedByRepId[selectedRep.id].conversionProxyScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].conversionProxyScore },
-                      { key: "salesRiskScore", value: `${viewState.derivedByRepId[selectedRep.id].salesRiskScore}/100`, explanation: viewState.explanations.rep[selectedRep.id].salesRiskScore },
-                      { key: "dataConfidenceIndex", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].dataConfidenceIndex * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].dataConfidenceIndex },
-                      { key: "confidenceScore", value: `${Math.round(viewState.derivedByRepId[selectedRep.id].confidenceScore * 100)}%`, explanation: viewState.explanations.rep[selectedRep.id].confidenceScore },
-                    ].map(({ key, value, explanation }) => (
-                      <MetricSummaryCard key={key} labelKey={key} value={value} explanation={explanation} />
-                    ))}
-                  </div>
-                </div>
-
-                <div className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                  <AssignmentPanel
-                    rep={{ ...selectedRep, weakCapability: getBehavioralMetricLabel(selectedRep.improvementPriority) }}
-                    assignments={assignments}
-                    onAssigned={loadAssignments}
-                    onStatusChange={handleStatusChange}
-                    onDelete={handleDelete}
-                  />
-                </div>
+                </aside>
               </div>
             ) : null}
 
-            {!selectedRep && ENABLE_MANAGER_INSIGHTS && managerMetricsPayload && viewState.validation.isValid ? (
-              <div className="manager-insights-container">
-                <ManagerInsightsPanelExpanded key={`${selectedRep?.id ?? "territory"}-${viewState.version}`} data={managerMetricsPayload} />
+            {!selectedRep ? (
+              <div className="rounded-xl border border-dashed border-teal-200 bg-white p-8 text-center shadow-sm">
+                <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                <p className="text-sm text-gray-600">Select a rep from the snapshot above to open the full detail workspace below the table.</p>
+                <p className="mt-2 text-xs text-slate-500">Expanded behavioral profile, AI insight blocks, deterministic risk signals, derived metrics, and assignments render here instead of the right rail.</p>
               </div>
             ) : null}
           </div>
@@ -1147,12 +1245,11 @@ export default function ManagerView() {
         <TabsContent value="territory">
           <div className="space-y-6">
             {viewState.validation.isValid ? (
-              <ManagerInsightsPanel
-                key={`territory-${viewState.version}`}
-                analyticsData={territoryInsightsData}
-                title="National Team Aggregate predictive coaching layer"
-                subtitle="Advisory outlook built from the current 14-rep Manager View dataset, territory performance, and deterministic canonical behavior signals."
-              />
+              <div className="rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Territory analytics workspace</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900">National Team Aggregate predictive coaching layer</h3>
+                <p className="mt-2 text-sm text-slate-500">Review territory cards first, then use the full AI workspace below for explainable predictive guidance, follow-up questions, and territory-specific coaching actions.</p>
+              </div>
             ) : (
               <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-5 text-sm text-slate-500 shadow-sm">
                 Territory AI insights are hidden until metric validation passes. Deterministic territory aggregates remain available below.
@@ -1178,18 +1275,18 @@ export default function ManagerView() {
                   : ["Continue current coaching coverage and re-check the territory on the next 30-day refresh."];
                 return (
                   <div key={territory.territory} className={`${ENTERPRISE_PARENT_CARD} p-5`}>
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{territory.territory}</p>
                         <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
                           {territory.riskLevel === "high" ? "Manager attention is required." : territory.riskLevel === "moderate" ? "Manager follow-up is recommended." : "This territory is operating within the current manager guardrails."}
                         </p>
                       </div>
-                      <div className="space-y-2 text-right">
+                      <div className="space-y-2 text-left sm:text-right">
                         <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${territory.riskLevel === "high" ? "bg-amber-50 text-amber-700" : territory.riskLevel === "moderate" ? "bg-slate-100 text-slate-700" : "bg-teal-50 text-teal-700"}`}>
                           {territory.riskLevel} risk
                         </span>
-                        <div className="flex justify-end">
+                        <div className="flex justify-start sm:justify-end">
                           <MetricPill explanation={territoryExplanations.riskLevel} label="Rule" />
                         </div>
                       </div>
@@ -1199,8 +1296,8 @@ export default function ManagerView() {
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Executive summary</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs uppercase tracking-wide text-slate-500">Risk level</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.riskLevel}</p>
                             </div>
@@ -1208,8 +1305,8 @@ export default function ManagerView() {
                           </div>
                         </div>
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs uppercase tracking-wide text-slate-500">Primary gap</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.mostCommonCapabilityGap ? getBehavioralMetricLabel(territory.mostCommonCapabilityGap) : "No dominant gap"}</p>
                             </div>
@@ -1217,12 +1314,12 @@ export default function ManagerView() {
                           </div>
                         </div>
                         <div className={`${ENTERPRISE_SUBCARD_WHITE} p-3`}>
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
                               <p className="text-xs uppercase tracking-wide text-slate-500">Key metrics</p>
                               <p className="mt-1 text-sm font-semibold text-slate-900">{territory.avgPerformance}/5 · {territory.avgEngagement}/100</p>
                             </div>
-                            <div className="flex flex-col items-end gap-1">
+                            <div className="flex flex-col items-start gap-1 sm:items-end">
                               <MetricPill explanation={territoryExplanations.avgPerformance} label="Sales outcome" />
                               <MetricPill explanation={territoryExplanations.avgEngagement} label="Engagement" />
                             </div>
@@ -1256,7 +1353,7 @@ export default function ManagerView() {
                       </div>
                     </div>
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
                           <Activity className="h-3 w-3" />
@@ -1332,6 +1429,12 @@ export default function ManagerView() {
                 </div>
               </div>
             </div>
+
+            {viewState.validation.isValid ? (
+              <div className="manager-insights-container">
+                <ManagerInsightsPanelExpanded key={`territory-expanded-${viewState.version}`} data={territoryInsightsData} />
+              </div>
+            ) : null}
           </div>
         </TabsContent>
 
