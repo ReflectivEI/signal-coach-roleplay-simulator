@@ -181,6 +181,7 @@ function ValidationRecordCard({ record, rep, onCaptureFollowUp, followUpBusy, de
 export default function InterventionValidationPanel({
   rep,
   derived,
+  validationAnalytics,
   validationRecords,
   validationLoading,
   validationError,
@@ -193,6 +194,10 @@ export default function InterventionValidationPanel({
   const targetCapability = getBehavioralMetricLabel(rep?.improvementPriority);
   const currentRisk = derived?.salesRiskScore;
   const currentEngagement = derived?.engagementScore;
+  const calibration = derived?.calibration;
+  const coachingEffectiveness = calibration?.hasHistory
+    ? `${Math.round((calibration.interventionEffectivenessScore || 0) * 100)}%`
+    : "Deterministic fallback";
 
   return (
     <section className="rounded-2xl border border-teal-200 bg-white p-5 shadow-sm">
@@ -208,6 +213,13 @@ export default function InterventionValidationPanel({
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">Current target: {targetCapability}</span>
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">Sales Risk: {Number.isFinite(currentRisk) ? `${currentRisk}/100` : "Insufficient data"}</span>
             <span className="rounded-full bg-slate-100 px-3 py-1 font-semibold">Learning Engagement: {Number.isFinite(currentEngagement) ? `${currentEngagement}/100` : "Insufficient data"}</span>
+            <span className="rounded-full bg-teal-50 px-3 py-1 font-semibold text-teal-800">Coaching Effectiveness: {coachingEffectiveness}</span>
+            {validationAnalytics?.mostResponsiveCapability ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-800">Most responsive: {validationAnalytics.mostResponsiveCapability.capabilityLabel}</span>
+            ) : null}
+            {validationAnalytics?.lowResponseCapability ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-800">Low-response watch: {validationAnalytics.lowResponseCapability.capabilityLabel}</span>
+            ) : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -218,7 +230,7 @@ export default function InterventionValidationPanel({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border border-teal-200 bg-teal-50 p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-teal-700">Active tracked intervention(s)</p>
           <p className="mt-2 text-2xl font-bold text-teal-900">{validationRecords?.length || 0}</p>
@@ -234,6 +246,15 @@ export default function InterventionValidationPanel({
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Observation window</p>
           <p className="mt-2 text-sm font-semibold text-slate-900">{latestRecord?.expectedMovement?.observationWindowDays || "—"} days</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">Predictive confidence</p>
+          <p className="mt-2 text-sm font-semibold text-slate-900">{Math.round((derived?.predictiveConfidence || 0) * 100)}%</p>
+          <p className="mt-1 text-xs text-slate-700">
+            {calibration?.hasHistory
+              ? `Calibrated with intervention effectiveness ${Math.round((calibration.interventionEffectivenessScore || 0) * 100)}% and target capability success ${Math.round((calibration.targetCapabilitySuccessRate || 0) * 100)}%.`
+              : "No validation history yet; using the current deterministic confidence model."}
+          </p>
         </div>
       </div>
 

@@ -44,7 +44,7 @@ import {
   getBehavioralMetricLabel,
 } from "@/components/manager/managerPerformanceData";
 import { buildManagerViewState, getContributorSet } from "@/components/manager/managerViewModel";
-import { buildValidationInsight } from "@/components/manager/managerValidationLogic";
+import { buildPredictiveCalibration, buildValidationInsight, getCapabilityLabelFromCanonicalId, selectHistoricalPriorityCapability } from "@/components/manager/managerValidationLogic";
 import { captureValidationFollowUp, fetchValidationRecords, fetchValidationSummary, startValidationRecord } from "@/components/manager/managerValidationService";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -131,8 +131,8 @@ const DERIVED_METRIC_GLOSSARY = [
   {
     label: "Predictive Confidence",
     definition: "Prediction reliability (not a performance score) for the predictive outlook.",
-    formula: "Weighted confidence model using data confidence, variance, stability, coverage, coaching responsiveness, and conversion proxy",
-    derivedFrom: "Data Confidence, Behavioral Variance, Engagement Stability",
+    formula: "Weighted confidence model using data confidence, variance, stability, coverage, coaching responsiveness, conversion proxy, intervention effectiveness, and target-capability validation success",
+    derivedFrom: "Data Confidence, Behavioral Variance, Engagement Stability, Validation History",
   },
   {
     label: "Data Confidence",
@@ -206,6 +206,12 @@ const VALIDATION_GLOSSARY = [
     definition: "A compact comparison of the target capability delta plus supporting movement in engagement, risk, conversion proxy, sessions, and modules.",
     howItIsDetermined: "Calculated by subtracting the baseline values from the most recent follow-up snapshot and preserving the exact deltas on the validation record.",
     whyItMatters: "It lets managers inspect why a validation status was assigned instead of trusting a black-box label.",
+  },
+  {
+    label: "Coaching Effectiveness",
+    definition: "The share of tracked interventions that resulted in positive validation for a rep or the overall team.",
+    howItIsDetermined: "Calculated as validated_positive divided by total tracked interventions, using only the existing closed-loop validation records.",
+    whyItMatters: "It helps managers prioritize capabilities and reps where historical interventions have produced measurable movement.",
   },
   {
     label: "Observation Window",
@@ -597,8 +603,7 @@ function RepRow({ rep, derived, explanations, onToggle, selected, expandedConten
   );
 }
 
-function RepExpandedContent({ rep, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp, onCollapse }) {
-  const derived = viewState.derivedByRepId[rep.id];
+function RepExpandedContent({ rep, derived, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationAnalytics, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp, onCollapse }) {
   const explanations = viewState.explanations.rep[rep.id];
 
   return (
@@ -672,12 +677,13 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
         </div>
       ) : null}
 
-      <InterventionValidationPanel
-        rep={rep}
-        derived={derived}
-        validationRecords={validationRecords}
-        validationLoading={validationLoading}
-        validationError={validationError}
+        <InterventionValidationPanel
+          rep={rep}
+          derived={derived}
+          validationAnalytics={validationAnalytics}
+          validationRecords={validationRecords}
+          validationLoading={validationLoading}
+          validationError={validationError}
         startBusy={validationStartBusy}
         followUpRecordId={validationFollowUpId}
         onStartValidation={() => onStartValidation(rep)}
@@ -749,7 +755,7 @@ function RepExpandedContent({ rep, viewState, assignments, loadAssignments, hand
   );
 }
 
-function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp }) {
+function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewState, assignments, loadAssignments, handleStatusChange, handleDelete, managerMetricsPayload, validationAnalytics, validationRecords, validationLoading, validationError, validationStartBusy, validationFollowUpId, onStartValidation, onCaptureFollowUp }) {
   return (
     <div
       role="button"
@@ -822,12 +828,14 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected, viewSta
         <div className="mt-4">
           <RepExpandedContent
             rep={rep}
+            derived={derived}
             viewState={viewState}
             assignments={assignments}
             loadAssignments={loadAssignments}
             handleStatusChange={handleStatusChange}
             handleDelete={handleDelete}
             managerMetricsPayload={managerMetricsPayload}
+            validationAnalytics={validationAnalytics}
             validationRecords={validationRecords}
             validationLoading={validationLoading}
             validationError={validationError}
@@ -926,7 +934,20 @@ export default function ManagerView() {
   const [feedbackSaved, setFeedbackSaved] = useState({});
   const [curating, setCurating] = useState({});
   const [validationRecords, setValidationRecords] = useState([]);
-  const [validationSummary, setValidationSummary] = useState({ trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+  const [validationSummary, setValidationSummary] = useState({
+    trackedInterventions: 0,
+    positiveValidations: 0,
+    neutralValidations: 0,
+    negativeValidations: 0,
+    pendingValidations: 0,
+    insufficientData: 0,
+    hasHistory: false,
+    aggregateEffectiveness: 0,
+    repSummaries: {},
+    capabilitySummaries: {},
+    mostResponsiveCapability: null,
+    lowResponseCapability: null,
+  });
   const [validationLoading, setValidationLoading] = useState(false);
   const [validationError, setValidationError] = useState("");
   const [validationStartBusy, setValidationStartBusy] = useState(false);
@@ -934,6 +955,27 @@ export default function ManagerView() {
 
   const reps = viewState.reps;
   const selectedRep = useMemo(() => reps.find((rep) => rep.id === selectedRepId) ?? null, [reps, selectedRepId]);
+  const validationAnalytics = useMemo(() => ({
+    hasHistory: Boolean(validationSummary?.hasHistory),
+    repSummaries: validationSummary?.repSummaries || {},
+    capabilitySummaries: validationSummary?.capabilitySummaries || {},
+    mostResponsiveCapability: validationSummary?.mostResponsiveCapability || null,
+    lowResponseCapability: validationSummary?.lowResponseCapability || null,
+  }), [validationSummary]);
+  const calibratedDerivedByRepId = useMemo(() => Object.fromEntries(
+    reps.map((rep) => {
+      const derived = viewState.derivedByRepId[rep.id];
+      const calibration = buildPredictiveCalibration(rep, derived, validationAnalytics);
+      return [
+        rep.id,
+        {
+          ...derived,
+          predictiveConfidence: calibration.predictiveConfidence,
+          calibration,
+        },
+      ];
+    }),
+  ), [reps, validationAnalytics, viewState.derivedByRepId]);
 
   useEffect(() => {
     loadAssignments();
@@ -992,10 +1034,36 @@ export default function ManagerView() {
   const loadValidationSummary = async () => {
     try {
       const data = await fetchValidationSummary();
-      setValidationSummary(data.summary || { trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+      setValidationSummary(data.summary || {
+        trackedInterventions: 0,
+        positiveValidations: 0,
+        neutralValidations: 0,
+        negativeValidations: 0,
+        pendingValidations: 0,
+        insufficientData: 0,
+        hasHistory: false,
+        aggregateEffectiveness: 0,
+        repSummaries: {},
+        capabilitySummaries: {},
+        mostResponsiveCapability: null,
+        lowResponseCapability: null,
+      });
     } catch (err) {
       console.error("Load validation summary error:", err);
-      setValidationSummary({ trackedInterventions: 0, positiveValidations: 0, neutralValidations: 0, negativeValidations: 0, pendingValidations: 0, insufficientData: 0 });
+      setValidationSummary({
+        trackedInterventions: 0,
+        positiveValidations: 0,
+        neutralValidations: 0,
+        negativeValidations: 0,
+        pendingValidations: 0,
+        insufficientData: 0,
+        hasHistory: false,
+        aggregateEffectiveness: 0,
+        repSummaries: {},
+        capabilitySummaries: {},
+        mostResponsiveCapability: null,
+        lowResponseCapability: null,
+      });
     }
   };
 
@@ -1073,12 +1141,12 @@ export default function ManagerView() {
 
   const handleStartValidation = async (rep) => {
     if (!rep?.id) return;
-    const derived = viewState.derivedByRepId[rep.id];
+    const derived = calibratedDerivedByRepId[rep.id];
     if (!derived) return;
 
     setValidationStartBusy(true);
     try {
-      await startValidationRecord(rep, derived);
+      await startValidationRecord(rep, derived, validationAnalytics);
       setValidationError("");
       await Promise.all([loadValidationRecords(rep.id), loadValidationSummary()]);
     } catch (err) {
@@ -1091,7 +1159,7 @@ export default function ManagerView() {
 
   const handleCaptureFollowUp = async (record, rep) => {
     if (!record?.id || !rep?.id) return;
-    const derived = viewState.derivedByRepId[rep.id];
+    const derived = calibratedDerivedByRepId[rep.id];
     if (!derived) return;
 
     setValidationFollowUpId(record.id);
@@ -1135,9 +1203,19 @@ export default function ManagerView() {
 
   const adoptionBand = getAdoptionBand(viewState.overviewMetrics.adoptionHealth);
   const interventionQueue = viewState.overviewMetrics.interventionQueue;
-  const coachingPriority = interventionQueue.slice().sort((a, b) => viewState.derivedByRepId[b.id].salesRiskScore - viewState.derivedByRepId[a.id].salesRiskScore);
+  const coachingPriority = interventionQueue.slice().sort((a, b) => {
+    const aSelection = selectHistoricalPriorityCapability(a, validationAnalytics);
+    const bSelection = selectHistoricalPriorityCapability(b, validationAnalytics);
+    const aWeakness = Math.max(0, 5 - (a.behavioralMetrics[a.improvementPriority]?.score || 5)) / 5;
+    const bWeakness = Math.max(0, 5 - (b.behavioralMetrics[b.improvementPriority]?.score || 5)) / 5;
+    const aRisk = (calibratedDerivedByRepId[a.id]?.salesRiskScore || 0) / 100;
+    const bRisk = (calibratedDerivedByRepId[b.id]?.salesRiskScore || 0) / 100;
+    const aScore = (aWeakness * 0.5) + ((aSelection.weightedPriorityScore || 0) * 0.35) + (aRisk * 0.15);
+    const bScore = (bWeakness * 0.5) + ((bSelection.weightedPriorityScore || 0) * 0.35) + (bRisk * 0.15);
+    return bScore - aScore;
+  });
   const selectedTerritoryData = (selectedRep && viewState.territories.find((territory) => territory.territory === selectedRep.territory)) || viewState.nationalTerritory;
-  const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData, viewState.derivedByRepId[selectedRep.id]) : null;
+  const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData, calibratedDerivedByRepId[selectedRep.id]) : null;
   const territoryInsightsData = buildManagerInsightsRequest(null, viewState.nationalTerritory);
   const managerMetricsPayload = selectedRepInsightsData || territoryInsightsData;
 
@@ -1298,18 +1376,22 @@ export default function ManagerView() {
             <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{interventionQueue.length} active interventions</span>
           </div>
           <div className="mt-4 space-y-3">
-            {coachingPriority.slice(0, 4).map((rep, index) => (
+            {coachingPriority.slice(0, 4).map((rep, index) => {
+              const selectedCapability = selectHistoricalPriorityCapability(rep, validationAnalytics);
+              const priorityLabel = getCapabilityLabelFromCanonicalId(selectedCapability.targetCapability);
+              return (
               <button key={rep.id} type="button" onClick={() => { setSelectedRepId(rep.id); setActiveTab("reps"); }} className={`flex w-full items-center justify-between gap-3 rounded-2xl p-4 text-left ${ENTERPRISE_SUBCARD}`}>
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{index + 1}. {rep.name}</p>
-                  <p className="mt-1 text-xs text-slate-700">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} · {rep.sessionsCompleted30d} sessions in 30d</p>
+                  <p className="mt-1 text-xs text-slate-700">{rep.territory} · {getBehavioralMetricLabel(rep.improvementPriority)} weakness · {rep.sessionsCompleted30d} sessions in 30d</p>
+                  <p className="mt-1 text-xs font-medium text-teal-700">Priority capability: {priorityLabel}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-slate-900">{rep.overallScore}/5</p>
                   <StatusBadge status={rep.status} />
                 </div>
               </button>
-            ))}
+            )})}
           </div>
         </div>
 
@@ -1354,6 +1436,21 @@ export default function ManagerView() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Validation summary</p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">Closed-loop intervention tracking</h3>
             <p className="mt-1 text-sm text-slate-700">Secondary evidence layer showing how many manager interventions are being tracked and how the latest deterministic outcomes are trending.</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 font-semibold text-teal-800">
+                Coaching Effectiveness {validationSummary.hasHistory ? `${Math.round((validationSummary.aggregateEffectiveness || 0) * 100)}%` : "Deterministic fallback"}
+              </span>
+              {validationSummary.mostResponsiveCapability ? (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-800">
+                  Most responsive: {validationSummary.mostResponsiveCapability.capabilityLabel}
+                </span>
+              ) : null}
+              {validationSummary.lowResponseCapability ? (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-800">
+                  Low-response watch: {validationSummary.lowResponseCapability.capabilityLabel}
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {[
@@ -1436,19 +1533,21 @@ export default function ManagerView() {
                       <RepRow
                         key={rep.id}
                         rep={rep}
-                        derived={viewState.derivedByRepId[rep.id]}
+                        derived={calibratedDerivedByRepId[rep.id]}
                         explanations={viewState.explanations.rep[rep.id]}
                         onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
                         selected={selectedRep?.id === rep.id}
                         expandedContent={selectedRep?.id === rep.id ? (
                           <RepExpandedContent
                             rep={rep}
+                            derived={calibratedDerivedByRepId[rep.id]}
                             viewState={viewState}
                             assignments={assignments}
                             loadAssignments={loadAssignments}
                             handleStatusChange={handleStatusChange}
                             handleDelete={handleDelete}
                             managerMetricsPayload={managerMetricsPayload}
+                            validationAnalytics={validationAnalytics}
                             validationRecords={selectedRep?.id === rep.id ? validationRecords : []}
                             validationLoading={selectedRep?.id === rep.id ? validationLoading : false}
                             validationError={selectedRep?.id === rep.id ? validationError : ""}
@@ -1470,7 +1569,7 @@ export default function ManagerView() {
                   <RepMobileCard
                     key={rep.id}
                     rep={rep}
-                    derived={viewState.derivedByRepId[rep.id]}
+                    derived={calibratedDerivedByRepId[rep.id]}
                     explanations={viewState.explanations.rep[rep.id]}
                     onToggle={(repId) => setSelectedRepId((current) => current === repId ? null : repId)}
                     selected={selectedRep?.id === rep.id}
@@ -1480,6 +1579,7 @@ export default function ManagerView() {
                     handleStatusChange={handleStatusChange}
                     handleDelete={handleDelete}
                     managerMetricsPayload={managerMetricsPayload}
+                    validationAnalytics={validationAnalytics}
                     validationRecords={selectedRep?.id === rep.id ? validationRecords : []}
                     validationLoading={selectedRep?.id === rep.id ? validationLoading : false}
                     validationError={selectedRep?.id === rep.id ? validationError : ""}
