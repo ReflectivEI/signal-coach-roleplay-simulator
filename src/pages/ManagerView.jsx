@@ -130,6 +130,24 @@ const DERIVED_METRIC_GLOSSARY = [
     formula: "Weighted confidence model using data confidence, variance, stability, coverage, coaching responsiveness, and conversion proxy",
     derivedFrom: "Data Confidence, Behavioral Variance, Engagement Stability",
   },
+  {
+    label: "Data Confidence",
+    definition: "Reliability score for the observed rep or territory dataset before predictive weighting is applied.",
+    formula: "Observation depth, recent activity coverage, recency, and variance checks normalized to a 0-to-100 equivalent",
+    derivedFrom: "Observation Depth, Sessions, Practice Recency, Behavioral Variance",
+  },
+  {
+    label: "Behavioral Variance",
+    definition: "Spread between stronger and weaker canonical capability scores inside the current profile.",
+    formula: "Standardized variance across the 8 canonical capability scores",
+    derivedFrom: "Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management",
+  },
+  {
+    label: "Conversion Proxy",
+    definition: "Derived 100-point signal estimating whether current capability execution is translating into forward movement.",
+    formula: "Commitment Generation and Value Connection weighted into a 100-point execution proxy",
+    derivedFrom: "Commitment Generation, Value Connection",
+  },
 ];
 
 const THRESHOLD_GLOSSARY = [
@@ -243,38 +261,21 @@ function CapabilityPill({ metricKey, tone = "slate" }) {
 }
 
 function BehavioralProfileSummaryCell({ rep }) {
-  return (
-    <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
-      <div className="grid grid-cols-2 gap-2">
-        {BEHAVIORAL_METRIC_KEYS.map((metricKey) => {
-          const metric = rep.behavioralMetrics[metricKey];
-          const isStrongest = metricKey === rep.strongestCapability;
-          const isWeakest = metricKey === rep.improvementPriority;
+  const metrics = BEHAVIORAL_METRIC_KEYS.map((metricKey) => rep.behavioralMetrics[metricKey]);
+  const averageScore = (metrics.reduce((sum, metric) => sum + metric.score, 0) / metrics.length).toFixed(1);
+  const belowThresholdCount = metrics.filter((metric) => metric.score < 3.5).length;
+  const strongestMetric = rep.behavioralMetrics[rep.strongestCapability];
+  const weakestMetric = rep.behavioralMetrics[rep.improvementPriority];
 
-          return (
-            <div
-              key={`${rep.id}-${metricKey}`}
-              className={`min-w-0 rounded-xl border px-2.5 py-2 ${
-                isStrongest ? "border-teal-200 bg-teal-50" : isWeakest ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"
-              }`}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-1">
-                <p className="min-w-0 flex-1 text-[11px] font-semibold leading-4 text-slate-700">
-                  {getBehavioralMetricLabel(metricKey)}
-                </p>
-                <span
-                  className={`inline-flex max-w-full shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${
-                    isStrongest ? "bg-white text-teal-700" : isWeakest ? "bg-white text-amber-700" : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {isStrongest ? "Strongest" : isWeakest ? "Weakest" : metric.trend}
-                </span>
-              </div>
-              <p className="mt-1 text-sm font-bold text-slate-900">{metric.score}/5</p>
-            </div>
-          );
-        })}
+  return (
+    <div className="min-w-0 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <CapabilityPill metricKey={rep.strongestCapability} tone="teal" />
+        <CapabilityPill metricKey={rep.improvementPriority} tone="amber" />
       </div>
+      <p className="mt-2 truncate text-xs leading-5 text-slate-600">
+        Avg {averageScore}/5 · {belowThresholdCount} below 3.5/5 · strongest {strongestMetric.score}/5 · improvement {weakestMetric.score}/5
+      </p>
     </div>
   );
 }
@@ -470,11 +471,12 @@ function RepRow({ rep, derived, explanations, onToggle, selected }) {
             <p className="mt-0.5 text-xs text-gray-500">{rep.specialty} · {rep.territory}</p>
             <button
               type="button"
+              aria-expanded={selected}
               onClick={(event) => {
                 event.stopPropagation();
                 onToggle(rep.id);
               }}
-              className="mt-3 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
+              className="mt-2 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700"
             >
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
               {selected ? "Collapse details" : "Expand details"}
@@ -557,7 +559,7 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700" aria-expanded={selected}>
           <ChevronDown className={`h-3.5 w-3.5 transition-transform ${selected ? "rotate-180" : ""}`} />
           {selected ? "Collapse details" : "Expand details"}
         </div>
@@ -589,8 +591,8 @@ function RepMobileCard({ rep, derived, explanations, onToggle, selected }) {
         </div>
       </div>
 
-      <div className="mt-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Behavioral profile (8 metrics)</p>
+      <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Snapshot summary</p>
         <BehavioralProfileSummaryCell rep={rep} />
       </div>
     </div>
@@ -915,13 +917,13 @@ export default function ManagerView() {
             </div>
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
               {overviewCards.filter((card) => card.explanation || card.label === "Dataset scope").map((card) => (
-                <div key={card.label} className="grid min-h-[132px] grid-rows-[auto_1fr_auto] rounded-2xl border border-teal-200 bg-white p-4 pt-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
+                <div key={card.label} className="flex min-h-[140px] flex-col rounded-2xl border border-teal-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-teal-50/35 hover:shadow-md">
+                  <div className="flex min-w-0 items-start justify-between gap-2">
                     <p className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wide leading-relaxed text-slate-500">{card.label}</p>
-                    <MetricPill explanation={card.explanation} label="Formula" />
+                    <div className="shrink-0">{card.explanation ? <MetricPill explanation={card.explanation} label="Formula" /> : null}</div>
                   </div>
-                  <p className="mt-3 self-center text-2xl font-bold text-slate-900">{card.value}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-500">{card.sub}</p>
+                  <p className="mt-4 text-2xl font-bold text-slate-900">{card.value}</p>
+                  <p className="mt-auto pt-3 text-xs leading-relaxed text-slate-500">{card.sub}</p>
                 </div>
               ))}
             </div>
@@ -1048,17 +1050,17 @@ export default function ManagerView() {
               </div>
 
               <div className="hidden overflow-x-auto 2xl:block">
-                <table className="min-w-[1420px] w-full table-fixed text-sm">
+                <table className="min-w-[1360px] w-full table-fixed text-sm">
                   <colgroup>
-                    <col className="w-[190px]" />
+                    <col className="w-[220px]" />
+                    <col className="w-[92px]" />
                     <col className="w-[90px]" />
-                    <col className="w-[80px]" />
                     <col className="w-[260px]" />
-                    <col className="w-[140px]" />
-                    <col className="w-[160px]" />
-                    <col className="w-[85px]" />
-                    <col className="w-[130px]" />
-                    <col className="w-[100px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[170px]" />
+                    <col className="w-[90px]" />
+                    <col className="w-[150px]" />
+                    <col className="w-[110px]" />
                   </colgroup>
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-100 bg-gray-50">

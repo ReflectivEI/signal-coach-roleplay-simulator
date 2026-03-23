@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
@@ -45,10 +45,6 @@ const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performa
 const ENTERPRISE_PANEL = "rounded-3xl border border-teal-200 bg-white shadow-sm";
 const ENTERPRISE_SUBCARD = "rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-colors duration-200 hover:border-teal-200 hover:bg-teal-50/40";
 
-function sanitizeResponseContent(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function getOutlookTone(trend: unknown) {
   return outlookTone[(typeof trend === "string" ? trend : "") as keyof typeof outlookTone] ?? outlookTone.stable;
 }
@@ -85,21 +81,6 @@ function getWorkspaceTitle(request: ManagerInsightsRequest) {
   return request.repData ? `${request.repData.name} coaching workspace` : "Territory predictive coaching workspace";
 }
 
-function containsInvalidInsightText(text: string) {
-  if (/(signalAwareness|signalInterpretation|valueCommunication|emotionalAttunement|conversationControl|commitmentGeneration|engagementStabilityScore|coachingResponsivenessScore|avgEngagement|territoryVolatility|salesRiskScore|confidenceScore|dataConfidenceIndex)/.test(text)) {
-    return true;
-  }
-
-  return Array.from(text.matchAll(/(\d+(?:\.\d+)?)\s*\/?\d*\s*(?:is\s*)?(below|under|above|over|at or above|at least)\s+(?:the\s+)?(\d+(?:\.\d+)?)/gi)).some((match) => {
-    const current = Number(match[1]);
-    const operator = match[2].toLowerCase();
-    const threshold = Number(match[3]);
-    if ((operator === "below" || operator === "under") && !(current < threshold)) return true;
-    if ((operator === "above" || operator === "over" || operator === "at or above" || operator === "at least") && !(current >= threshold)) return true;
-    return false;
-  });
-}
-
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
   const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
@@ -109,6 +90,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<InsightFilter>("All");
+  const [askAiContext, setAskAiContext] = useState("Current recommendation");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const requestBody = useMemo(() => {
@@ -169,8 +151,9 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     setSelectedChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip]);
   };
 
-  const queueFollowUp = (prompt: string) => {
+  const queueFollowUp = (prompt: string, contextLabel = "Current recommendation") => {
     setInput(prompt);
+    setAskAiContext(contextLabel);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
@@ -180,48 +163,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     setResponse(null);
 
     try {
-      const res = await fetch("/api/llm/invoke", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: JSON.stringify({
-            messages: [
-              {
-                role: "system",
-                content: "You are a data-grounded sales coaching assistant. Use only the provided rep, territory, canonical metric, threshold, and deterministic risk data. Use only these exact canonical Signal Intelligence capability names: Signal Awareness, Signal Interpretation, Adaptive Response, Objection Navigation, Value Connection, Commitment Generation, Customer Engagement Monitoring, Conversation Management. Reject and regenerate if any non-canonical term, synonym, or alternate label appears. Do not invent thresholds, scores, labels, contributors, or non-canonical metrics. Return exactly four sections in this order: Primary finding, Why it matters, Action, Monitor. Every section must include exact metric values, threshold comparisons, directionality, and the correct 5-point or 100-point scale whenever a metric is referenced. Every insight must make the causal chain explicit as capability → behavior impact → business outcome. Highlight the single most urgent metric in Primary finding or Monitor based on the largest gap or threshold breach severity. Predictive Confidence must always be described as prediction reliability (not a performance score). Primary finding must be one sentence with one strength and one gap. Why it matters must be one sentence. Action must be one sentence. Monitor must contain at most 3 bullet items and every item must include a score, threshold comparison, and scale.",
-              },
-              {
-                role: "user",
-                content: `Rep Data: ${JSON.stringify(data.repData ?? null)}
-Territory Data: ${JSON.stringify(data.territoryData)}
-Derived Metrics: ${JSON.stringify(data.derivedMetrics ?? null)}
-Deterministic Risk Flags: ${JSON.stringify(data.repData?.evidence?.deterministicRiskFlags ?? [])}
-Canonical Metrics: ${JSON.stringify(data.repData?.evidence?.canonicalBehavioralMetrics ?? [])}
-Selected Context: ${JSON.stringify(selectedChips)}
-Manager Question: ${input}`,
-              },
-            ],
-          }),
-          temperature: 0.2,
-          max_tokens: 800,
-        }),
-      });
-
-      if (!res.ok) return;
-      const json = await res.json();
-      const content = sanitizeResponseContent(json?.response) || sanitizeResponseContent(json?.content);
-      if (content) {
-        containsInvalidInsightText(normalizeManagerText(content));
-      }
-      const deterministicResponse = buildStructuredInsightView(requestBody);
-      setResponse({
-        primaryFinding: deterministicResponse.primaryFinding,
-        whyItMatters: deterministicResponse.whyItMatters,
-        action: deterministicResponse.action,
-        monitor: deterministicResponse.monitor,
-      });
-    } catch {
-      const deterministicResponse = buildStructuredInsightView(requestBody);
+      const deterministicResponse = buildInteractiveCoachingResponse(requestBody, input, selectedChips);
       setResponse({
         primaryFinding: deterministicResponse.primaryFinding,
         whyItMatters: deterministicResponse.whyItMatters,
@@ -333,7 +275,7 @@ Manager Question: ${input}`,
                 <div className="flex flex-col items-start gap-2 sm:items-end">
                   <button
                     type="button"
-                    onClick={() => queueFollowUp(`Explain the AI insight for this ${getScopeLabel(requestBody as ManagerInsightsRequest).toLowerCase()} and tell me what to ask the rep next.`)}
+                    onClick={() => queueFollowUp(`Explain the AI insight for this ${getScopeLabel(requestBody as ManagerInsightsRequest).toLowerCase()} and tell me what to ask the rep next.`, "AI insight")}
                     className="inline-flex items-center rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800"
                   >
                     Ask AI a Question
@@ -357,7 +299,7 @@ Manager Question: ${input}`,
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
                     <button
                       type="button"
-                      onClick={() => queueFollowUp(`Explain this primary finding in more detail: ${normalizeManagerText(structuredInsight.primaryFinding)}`)}
+                      onClick={() => queueFollowUp(`Explain this primary finding in more detail: ${normalizeManagerText(structuredInsight.primaryFinding)}`, "Primary finding")}
                       className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
                     >
                       Ask AI
@@ -370,7 +312,7 @@ Manager Question: ${input}`,
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</p>
                     <button
                       type="button"
-                      onClick={() => queueFollowUp(`Why does this matter and what business risk should I watch for? ${normalizeManagerText(structuredInsight.whyItMatters)}`)}
+                      onClick={() => queueFollowUp(`Why does this matter and what business risk should I watch for? ${normalizeManagerText(structuredInsight.whyItMatters)}`, "Why it matters")}
                       className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
                     >
                       Ask AI
@@ -383,7 +325,7 @@ Manager Question: ${input}`,
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Action</p>
                     <button
                       type="button"
-                      onClick={() => queueFollowUp(`Turn this recommended action into a coaching plan: ${normalizeManagerText(structuredInsight.action)}`)}
+                      onClick={() => queueFollowUp(`Turn this recommended action into a coaching plan: ${normalizeManagerText(structuredInsight.action)}`, "Action")}
                       className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
                     >
                       Ask AI
@@ -396,7 +338,7 @@ Manager Question: ${input}`,
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Monitor</p>
                     <button
                       type="button"
-                      onClick={() => queueFollowUp(`Explain what I should monitor next based on these signals: ${structuredInsight.monitor.map((item) => normalizeManagerText(item)).join(" | ")}`)}
+                      onClick={() => queueFollowUp(`Explain what I should monitor next based on these signals: ${structuredInsight.monitor.map((item) => normalizeManagerText(item)).join(" | ")}`, "Monitor")}
                       className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
                     >
                       Ask AI
@@ -416,7 +358,7 @@ Manager Question: ${input}`,
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting context</p>
                     <button
                       type="button"
-                      onClick={() => queueFollowUp(`Use this supporting context to elaborate on the recommendation: ${[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => normalizeManagerText(item)).join(" | ")}`)}
+                      onClick={() => queueFollowUp(`Use this supporting context to elaborate on the recommendation: ${[...filteredKeyDrivers, ...filteredRisks].slice(0, 3).map((item) => normalizeManagerText(item)).join(" | ")}`, "Supporting context")}
                       className="text-xs font-semibold text-teal-700 transition hover:text-teal-800"
                     >
                       Ask AI
@@ -449,7 +391,10 @@ Manager Question: ${input}`,
               />
               <p className="text-xs text-slate-500">Ask AI to explain or elaborate on the recommendation above. Press Enter to submit, or use Cmd/Ctrl + Enter.</p>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">Selected context: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500">Ask AI context: {askAiContext}</p>
+                  <p className="text-xs text-slate-500">Applied chips: {selectedChips.length ? selectedChips.join(", ") : "None"}</p>
+                </div>
                 <button type="button" onClick={handleSubmit} disabled={loading} className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   Ask AI
@@ -460,7 +405,7 @@ Manager Question: ${input}`,
 
           {response ? (
             <div className="ai-followup-response rounded-2xl border border-teal-100 bg-teal-50 p-4">
-              <h4 className="text-sm font-semibold text-slate-900">AI Coaching Response</h4>
+              <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-semibold text-slate-900">AI Coaching Response</h4><span className="rounded-full border border-teal-200 bg-white px-3 py-1 text-[11px] font-semibold text-teal-700">{askAiContext}</span></div>
               <div className="mt-3 space-y-4 text-sm text-slate-700">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Primary finding</p>
