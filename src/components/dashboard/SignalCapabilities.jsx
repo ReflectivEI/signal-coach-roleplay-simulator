@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ChevronRight, X, Radio, TrendingUp, Lightbulb } from "lucide-react";
+import { X, Radio, TrendingUp, Lightbulb } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../../utils";
 import { SIGNAL_CAPABILITIES } from "../roleplay/signalIntelligenceSOT";
@@ -21,8 +21,8 @@ export default function SignalCapabilities() {
 
   return (
     <>
-      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-2 mb-1">
+      <div>
+        <div className="mb-1 flex items-center gap-2">
           <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center">
             <div className="w-3 h-3 border-2 border-teal-500 rounded-full" />
           </div>
@@ -40,9 +40,14 @@ export default function SignalCapabilities() {
               className="flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-3 text-left transition-all duration-150 ease-in-out hover:-translate-y-[1px] hover:border-teal-300 hover:bg-teal-50/60 hover:shadow-md"
             >
               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${colorDot[cap.color] || "bg-teal-500"}`} />
-              <span className="text-sm text-gray-800 hover:text-teal-700 font-semibold flex-1 text-left leading-snug min-w-0 transition-colors">{cap.label}</span>
+              <span
+                className={`flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left text-sm font-medium leading-snug text-[#1A334D] transition-colors hover:text-teal-700 ${
+                  ["customer_engagement", "conversation_management"].includes(cap.id) ? "text-[0.92em] tracking-[-0.1px]" : ""
+                }`}
+              >
+                {cap.label}
+              </span>
               <span className="text-xs text-gray-600 hover:text-teal-700 text-right leading-snug flex-shrink-0 ml-2 transition-colors font-medium" style={{ maxWidth: "110px" }}>{cap.measurement}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-gray-300 flex-shrink-0 ml-1" />
             </button>
           ))}
         </div>

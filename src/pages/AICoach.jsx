@@ -389,7 +389,10 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
             <div className="w-11 h-11 flex-shrink-0" aria-hidden="true" />
             <div>
               <h1 className="text-[28px] leading-none font-bold text-slate-900">AI Coach</h1>
-              <p className="mt-1 text-sm text-slate-600">Your personal pharma sales coaching assistant</p>
+              <div className="mt-1 space-y-1 text-sm text-slate-600">
+                <p>Work through real conversation challenges and refine your messaging with clarity and precision.</p>
+                <p>Improve how you approach complex discussions through structured guidance and coaching.</p>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">

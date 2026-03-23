@@ -17,11 +17,10 @@ import SignalCapabilities from "@/components/dashboard/SignalCapabilities";
 import AIDailyInsights from "@/components/dashboard/AIDailyInsights";
 
 const DASHBOARD_THEME = {
-  light: { pageBg: "#f0f4f8", cardBorder: "border-gray-200", accent: "text-teal-700", text: "text-gray-900", subtext: "text-gray-600" },
+  light: { pageBg: "#f0f4f8", text: "text-gray-900", subtext: "text-gray-600" },
 };
 
 export default function Dashboard() {
-  const notice = "Pipeline forecasting summary updated 2 min ago.";
   const theme = DASHBOARD_THEME.light;
 
   const quickActions = useMemo(() => ([
@@ -51,8 +50,10 @@ export default function Dashboard() {
           <h1 className={`text-2xl md:text-3xl font-bold ${theme.text}`}>
             Welcome to Reflectiv<span className="text-teal-500">AI</span>
           </h1>
-          <p className={`${theme.subtext} mt-1`}>Master signal intelligence and sales excellence in Life Sciences</p>
-          <p className={`text-xs mt-1 ${theme.accent}`}>{notice}</p>
+          <div className={`${theme.subtext} mt-1 space-y-1`}>
+            <p>Identify the moments that shape your conversations.</p>
+            <p>Surface key interaction signals, reflect on decisions, and strengthen how you respond.</p>
+          </div>
         </div>
         {/* Color mode + PDF export intentionally hidden; light mode remains default. */}
       </div>
@@ -61,9 +62,9 @@ export default function Dashboard() {
         <AIDailyInsights />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-10">
         {/* Quick Actions */}
-        <div className={`lg:col-span-3 rounded-xl border border-slate-200 bg-white p-6 shadow-sm`}>
+        <div className={`lg:col-span-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm`}>
           <div className="mb-5 flex items-start justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-gray-900 mb-1">Quick Actions</h2>
@@ -84,7 +85,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2">
             {quickActions.map((action) => (
               <QuickActionCard key={action.title} {...action} />
             ))}
@@ -92,7 +93,7 @@ export default function Dashboard() {
         </div>
 
         {/* Signal Intelligence Capabilities */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-5">
           <div className="space-y-4 rounded-xl border border-slate-300 bg-slate-50 p-4 shadow-sm">
             <SignalCapabilities />
             <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
