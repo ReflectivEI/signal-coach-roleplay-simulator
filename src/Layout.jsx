@@ -1,4 +1,6 @@
+// @ts-nocheck
 import React, { useEffect, useRef, useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuth } from "@/lib/AuthContext";
@@ -151,7 +153,21 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   const toggleSection = (label) => {
+    if (desktopSidebarCollapsed && isDesktop) return;
     setOpenSections((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const shouldShowCollapsedTooltips = desktopSidebarCollapsed && isDesktop;
+
+  const renderCollapsedTooltip = (label, child) => {
+    if (!shouldShowCollapsedTooltips) return child;
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{child}</TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    );
   };
 
   const handleNavToggle = () => {
@@ -225,8 +241,9 @@ export default function Layout({ children, currentPageName }) {
         />
       ) : null}
 
+      <TooltipProvider delayDuration={120}>
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col border-r border-[#22405f] bg-[#1A334D] shadow-2xl transition-[width,transform] duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 md:shadow-none ${desktopSidebarCollapsed ? "md:w-24" : "w-72 md:w-72"} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-50 flex max-w-[calc(100vw-1.5rem)] flex-col border-r border-[#22405f] bg-[#1A334D] shadow-2xl transition-[width,transform] duration-200 ease-out md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 md:shadow-none ${desktopSidebarCollapsed ? "md:w-16" : "w-72 md:w-60"} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}
         aria-hidden={!sidebarOpen && typeof window !== "undefined" ? window.innerWidth < 768 : undefined}
       >
         <div className={`flex items-center border-b border-[#22405f] p-4 ${desktopSidebarCollapsed ? "justify-center" : "gap-3"}`}>
@@ -257,8 +274,8 @@ export default function Layout({ children, currentPageName }) {
           </button>
         </div>
 
-        <div className="border-b border-[#22405f] px-3 py-3">
-          <div className={`flex items-center rounded-xl border border-white/10 bg-white/10 ${desktopSidebarCollapsed ? "justify-center px-2 py-3" : "gap-2 px-3 py-2"}`} ref={userMenuRef}>
+        <div className="border-b border-[#22405f] px-2 py-3 md:px-3">
+          <div className={`flex items-center rounded-xl border border-white/10 bg-white/10 ${desktopSidebarCollapsed ? "justify-center px-1.5 py-3" : "gap-2 px-3 py-2"}`} ref={userMenuRef}>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20 text-xs font-bold text-white">
               {authUser?.name?.split(" ").map((s) => s[0]).join("").slice(0, 2).toUpperCase() || "DU"}
             </div>
@@ -268,7 +285,7 @@ export default function Layout({ children, currentPageName }) {
                 <div className="truncate text-[11px] text-white/60">{authUser?.email || "demo@example.com"}</div>
               </div>
             ) : null}
-            <button onClick={() => setUserMenuOpen((v) => !v)} className="inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white/70 transition hover:bg-white/10 hover:text-white" aria-label="Toggle user menu">
+            <button onClick={() => setUserMenuOpen((v) => !v)} className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white/70 transition hover:bg-white/10 hover:text-white ${desktopSidebarCollapsed ? "hidden" : ""}`} aria-label="Toggle user menu">
               <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? "rotate-180" : ""}`} />
             </button>
 
@@ -292,18 +309,21 @@ export default function Layout({ children, currentPageName }) {
           </div>
         </div>
 
-        <nav className={`flex-1 space-y-1 overflow-y-auto px-3 py-4 ${desktopSidebarCollapsed ? "overflow-x-hidden" : ""}`}>
+        <nav className={`flex-1 space-y-1 overflow-y-auto px-2 py-4 md:px-3 ${desktopSidebarCollapsed ? "overflow-x-hidden" : ""}`}>
           {navSections.map((section) => (
             <div key={section.label} className="mb-1">
-              <button
-                onClick={() => toggleSection(section.label)}
-                className={`flex min-h-11 w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 ${desktopSidebarCollapsed ? "justify-center" : "gap-3"} ${openSections[section.label] ? "text-white" : "text-white/50 hover:text-white/80"}`}
-                title={desktopSidebarCollapsed ? section.label : undefined}
-              >
-                <section.icon className="h-4 w-4 flex-shrink-0" />
-                {!desktopSidebarCollapsed ? <span className="flex-1">{section.label}</span> : null}
-                {!desktopSidebarCollapsed ? <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${openSections[section.label] ? "rotate-90" : ""}`} /> : null}
-              </button>
+              {renderCollapsedTooltip(
+                section.label,
+                <button
+                  onClick={() => toggleSection(section.label)}
+                  className={`flex min-h-11 w-full items-center rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wider transition-all duration-200 ${desktopSidebarCollapsed ? "justify-center" : "gap-3"} ${openSections[section.label] ? "text-white" : "text-white/50 hover:text-white/80"}`}
+                  title={desktopSidebarCollapsed ? section.label : undefined}
+                >
+                  <section.icon className="h-4 w-4 flex-shrink-0" />
+                  {!desktopSidebarCollapsed ? <span className="flex-1">{section.label}</span> : null}
+                  {!desktopSidebarCollapsed ? <ChevronRight className={`h-4 w-4 flex-shrink-0 transition-transform duration-200 ${openSections[section.label] ? "rotate-90" : ""}`} /> : null}
+                </button>
+              )}
               {(openSections[section.label] || desktopSidebarCollapsed) && (
                 <div className={`${desktopSidebarCollapsed ? "mt-2 space-y-2" : "ml-3 mt-1 space-y-1"}`}>
                   {section.items.map((item) => {
@@ -314,25 +334,28 @@ export default function Layout({ children, currentPageName }) {
                         whileHover={{ x: 3 }}
                         transition={{ duration: 0.15 }}
                       >
-                        <Link
-                          to={createPageUrl(item.page)}
-                          className={`group relative flex min-h-11 items-center rounded-xl text-sm transition-all duration-200 ${
-                            desktopSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 py-3 pl-3 pr-2"
-                          } ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
-                          style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
-                          onClick={() => setSidebarOpen(false)}
-                          title={desktopSidebarCollapsed ? item.label : undefined}
-                        >
-                          <item.icon className="h-4 w-4 flex-shrink-0" />
-                          {!desktopSidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
-                          {!desktopSidebarCollapsed && !isActive ? (
-                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 scale-95 rounded-full border border-[#79caca] px-2 py-0.5 text-[10px] font-semibold opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100"
-                              style={{ background: "#39ACAC", color: "#ffffff" }}
-                            >
-                              Open
-                            </span>
-                          ) : null}
-                        </Link>
+                        {renderCollapsedTooltip(
+                          item.label,
+                          <Link
+                            to={createPageUrl(item.page)}
+                            className={`group relative flex min-h-11 items-center rounded-xl text-sm transition-all duration-200 ${
+                              desktopSidebarCollapsed ? "justify-center px-0 py-3" : "gap-3 py-3 pl-3 pr-2"
+                            } ${isActive ? "font-semibold text-white" : "text-white/60 hover:bg-white/10 hover:text-white"}`}
+                            style={isActive ? { background: "#39ACAC" } : { border: "1px solid transparent" }}
+                            onClick={() => setSidebarOpen(false)}
+                            title={desktopSidebarCollapsed ? item.label : undefined}
+                          >
+                            <item.icon className="h-4 w-4 flex-shrink-0" />
+                            {!desktopSidebarCollapsed ? <span className="truncate">{item.label}</span> : null}
+                            {!desktopSidebarCollapsed && !isActive ? (
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 scale-95 rounded-full border border-[#79caca] px-2 py-0.5 text-[10px] font-semibold opacity-0 transition-all duration-200 group-hover:scale-100 group-hover:opacity-100"
+                                style={{ background: "#39ACAC", color: "#ffffff" }}
+                              >
+                                Open
+                              </span>
+                            ) : null}
+                          </Link>
+                        )}
                       </motion.div>
                     );
                   })}
@@ -342,8 +365,9 @@ export default function Layout({ children, currentPageName }) {
           ))}
         </nav>
       </aside>
+      </TooltipProvider>
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-slate-50">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden bg-slate-50">
         <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur">
           <div className="flex items-center gap-3">
             <button
