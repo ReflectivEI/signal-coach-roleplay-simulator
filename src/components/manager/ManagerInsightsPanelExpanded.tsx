@@ -21,7 +21,6 @@ type ManagerInsightsPanelExpandedProps = {
 
 type InsightFilter = (typeof FILTERS)[number];
 type CoachingResponseMode = "structured" | "free_form";
-type ConversationRole = "user" | "assistant";
 type StructuredResponse = {
   mode: CoachingResponseMode;
   primaryFinding: string;
@@ -29,11 +28,6 @@ type StructuredResponse = {
   action: string;
   monitor: string[];
   answer?: string;
-};
-type ConversationTurn = {
-  role: ConversationRole;
-  content: string;
-  mode: CoachingResponseMode;
 };
 
 const outlookTone: Record<ManagerInsightsResponse["predictiveOutlook"]["performanceTrend"], { badge: string; label: string }> = {
@@ -96,10 +90,8 @@ function classifyCoachingInput(text: string): CoachingResponseMode {
   const normalized = text.trim().toLowerCase();
   const wordCount = normalized.split(/\s+/).filter(Boolean).length;
   const hasQuestionIndicator = /\b(how|why|what|when|does|should)\b/.test(normalized);
-  const isShortFollowUp = /^(why|why\?|what should i focus on first|how many sessions(?: should i start with| would you recommend)?|what should i monitor next|explain (?:that|this|it)(?: in simpler terms)?|tell me more|go deeper|simpler)\??$/.test(normalized);
-  const isPronounFollowUp = wordCount <= 7 && /\b(that|this|it|those|them)\b/.test(normalized);
 
-  return (wordCount >= 9 && hasQuestionIndicator) || isShortFollowUp || isPronounFollowUp ? "free_form" : "structured";
+  return wordCount >= 9 && hasQuestionIndicator ? "free_form" : "structured";
 }
 
 function buildRepContext(
@@ -148,53 +140,29 @@ function buildRepContext(
   ].filter(Boolean).join("\n");
 }
 
-function getCurrentContextLabel(requestBody: ManagerInsightsRequest) {
-  return requestBody.repData?.name ?? requestBody.territoryData.territory;
-}
-
-function summarizeConversationTurn(turn: ConversationTurn) {
-  const normalizedContent = stripStructuredSections(turn.content).replace(/\s+/g, " ").trim();
-  return normalizedContent.length > 280 ? `${normalizedContent.slice(0, 277)}…` : normalizedContent;
-}
-
-function buildStructuredConversationSummary(result: StructuredResponse) {
-  return [
-    result.primaryFinding ? `Primary finding: ${normalizeManagerText(result.primaryFinding)}` : "",
-    result.whyItMatters ? `Why it matters: ${normalizeManagerText(result.whyItMatters)}` : "",
-    result.action ? `Action: ${normalizeManagerText(result.action)}` : "",
-    result.monitor.length ? `Monitor: ${result.monitor.slice(0, 2).map((item) => normalizeManagerText(item)).join(" | ")}` : "",
-  ].filter(Boolean).join("\n");
-}
-
-function buildFreeFormMessages(userInput: string, repContext: string, conversationTurns: ConversationTurn[]) {
-  const boundedTurns = conversationTurns.slice(-6);
-
+function buildFreeFormMessages(userInput: string, repContext: string) {
   return [
     {
       role: "system",
-      content: "You are an AI coaching assistant for Manager View. Answer directly and concisely using the current rep or territory data as the source of truth. Use prior conversation turns only to resolve follow-up context such as pronouns or implied references. Do not restate the full prior question unless necessary. Do not regenerate the full structured coaching template unless explicitly requested. When asked a follow-up, continue naturally from the prior answer. Keep language executive-friendly, manager-facing, and aligned to canonical capability names only. Do not invent unsupported history, metrics, or actions.",
+      content: "You are an AI coaching assistant. Answer immediately using the provided rep context. Do NOT restate or quote the user's question. Start with the answer, use concise executive-friendly language, avoid unnecessary repetition of metrics, lead with a clear estimate or recommendation when possible, and do NOT repeat structured coaching templates unless explicitly asked.",
     },
     {
       role: "user",
       content: `
-Current Manager View Context:
-${repContext}
-
-Recent Conversation:
-${boundedTurns.length ? boundedTurns.map((turn) => `${turn.role === "assistant" ? "Assistant" : "Manager"}: ${summarizeConversationTurn(turn)}`).join("\n") : "No prior conversation."}
-
-Latest Manager Question:
+User Question:
 ${userInput}
+
+Rep Context:
+${repContext}
 
 Instructions:
 - Start with the answer immediately
-- Do NOT restate or quote the question unless clarification is required
+- Do NOT restate or quote the question
 - Be concise, specific, and executive-friendly
-- Use current Manager View context as the source of truth
-- Use recent conversation only to resolve follow-up context
-- Limit unnecessary repetition of metrics and prior recommendations
+- Use rep data where relevant
+- Limit unnecessary repetition of metrics
 - Lead with a clear estimate or recommendation when possible
-- Do NOT restate the full coaching framework or structured template unless asked
+- Do NOT restate full coaching framework
 `.trim(),
     },
   ];
@@ -220,11 +188,6 @@ function ensureDirectAnswer(answer: string, _question: string) {
   return cleanedAnswer;
 }
 
-function isVagueFollowUp(text: string) {
-  const normalized = text.trim().toLowerCase();
-  return /^(why|why\?|what should i focus on first|how many sessions(?: should i start with| would you recommend)?|what should i monitor next|explain (?:that|this|it)(?: in simpler terms)?|tell me more|go deeper|simpler)\??$/.test(normalized);
-}
-
 export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
   const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
@@ -235,7 +198,6 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<InsightFilter>("All");
   const [askAiContext, setAskAiContext] = useState("Current recommendation");
-  const [conversationTurns, setConversationTurns] = useState<ConversationTurn[]>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const coachingSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -247,7 +209,6 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
   const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
-  const currentContextLabel = useMemo(() => (requestBody ? getCurrentContextLabel(requestBody) : "Manager context"), [requestBody]);
 
   useEffect(() => {
     if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
@@ -289,13 +250,6 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     return () => controller.abort();
   }, [requestBody, requestSignature]);
 
-  useEffect(() => {
-    setConversationTurns([]);
-    setResponse(null);
-    setInput("");
-    setAskAiContext("Current recommendation");
-  }, [requestSignature]);
-
   const filteredKeyDrivers = useMemo(() => (insights?.keyDrivers ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.keyDrivers]);
   const filteredRisks = useMemo(() => (insights?.risks ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.risks]);
   const insightFilterSeed = useMemo(() => structuredInsight ? `${structuredInsight.primaryFinding} ${structuredInsight.whyItMatters} ${structuredInsight.action} ${structuredInsight.monitor.join(" ")}` : "", [structuredInsight]);
@@ -316,45 +270,17 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     }, 0);
   };
 
-  const resetConversation = () => {
-    setConversationTurns([]);
-    setResponse(null);
-    setInput("");
-    setAskAiContext("Current recommendation");
-    inputRef.current?.focus();
-  };
-
   const handleSubmit = async () => {
     if (!input.trim() || !requestBody) return;
-    const trimmedInput = input.trim();
-    const responseMode = classifyCoachingInput(trimmedInput);
-    const nextUserTurn: ConversationTurn = {
-      role: "user",
-      content: trimmedInput,
-      mode: responseMode,
-    };
-
     setLoading(true);
     setResponse(null);
 
     try {
-      if (responseMode === "free_form") {
-        if (!conversationTurns.length && isVagueFollowUp(trimmedInput)) {
-          const clarification = "I can explain the latest recommendation once a rep or territory insight is selected.";
-          setConversationTurns([nextUserTurn, { role: "assistant", content: clarification, mode: "free_form" }]);
-          setResponse({
-            mode: "free_form",
-            primaryFinding: "",
-            whyItMatters: "",
-            action: "",
-            monitor: [],
-            answer: clarification,
-          });
-          return;
-        }
+      const responseMode = classifyCoachingInput(input);
 
+      if (responseMode === "free_form") {
         const repContext = buildRepContext(requestBody, structuredInsight, selectedChips, insights);
-        const messages = buildFreeFormMessages(trimmedInput, repContext, conversationTurns);
+        const messages = buildFreeFormMessages(input.trim(), repContext);
         const prompt = messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join("\n\n");
         const res = await fetch("/api/llm/invoke", {
           method: "POST",
@@ -375,14 +301,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               ? payload.content
               : "";
 
-        const finalAnswer = ensureDirectAnswer(rawAnswer, trimmedInput);
-        const nextAssistantTurn: ConversationTurn = {
-          role: "assistant",
-          content: finalAnswer,
-          mode: "free_form",
-        };
-
-        setConversationTurns((current) => [...current, nextUserTurn, nextAssistantTurn].slice(-6));
+        const finalAnswer = ensureDirectAnswer(rawAnswer, input.trim());
         setResponse({
           mode: "free_form",
           primaryFinding: "",
@@ -394,52 +313,24 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
         return;
       }
 
-      const deterministicResponse = buildInteractiveCoachingResponse(requestBody, trimmedInput, selectedChips);
-      const nextStructuredResponse = {
+      const deterministicResponse = buildInteractiveCoachingResponse(requestBody, input, selectedChips);
+      setResponse({
         mode: "structured",
         primaryFinding: deterministicResponse.primaryFinding,
         whyItMatters: deterministicResponse.whyItMatters,
         action: deterministicResponse.action,
         monitor: deterministicResponse.monitor,
-      } satisfies StructuredResponse;
-
-      setConversationTurns((current) => [
-        ...current,
-        nextUserTurn,
-        {
-          role: "assistant",
-          content: buildStructuredConversationSummary(nextStructuredResponse),
-          mode: "structured",
-        },
-      ].slice(-6));
-      setResponse(nextStructuredResponse);
+      });
     } catch (error) {
       console.error("Interactive AI coaching failed:", error);
-      const fallbackAnswer = ensureDirectAnswer("", trimmedInput);
-      const fallbackMode = classifyCoachingInput(trimmedInput);
-      const fallbackStructured = fallbackMode === "structured";
-      const fallbackAssistantTurn: ConversationTurn = {
-        role: "assistant",
-        content: fallbackStructured
-          ? buildStructuredConversationSummary({
-            mode: "structured",
-            primaryFinding: fallbackAnswer,
-            whyItMatters: "The interactive response fallback was used because live generation was unavailable.",
-            action: "Retry the question or refine it with a more specific coaching ask.",
-            monitor: ["Watch the current priority metric and recent session evidence while retrying the request."],
-          })
-          : fallbackAnswer,
-        mode: fallbackMode,
-      };
-
-      setConversationTurns((current) => [...current, nextUserTurn, fallbackAssistantTurn].slice(-6));
+      const fallbackAnswer = ensureDirectAnswer("", input.trim());
       setResponse({
-        mode: fallbackMode,
-        primaryFinding: fallbackStructured ? fallbackAnswer : "",
-        whyItMatters: fallbackStructured ? "The interactive response fallback was used because live generation was unavailable." : "",
-        action: fallbackStructured ? "Retry the question or refine it with a more specific coaching ask." : "",
-        monitor: fallbackStructured ? ["Watch the current priority metric and recent session evidence while retrying the request."] : [],
-        answer: fallbackStructured ? undefined : fallbackAnswer,
+        mode: classifyCoachingInput(input),
+        primaryFinding: classifyCoachingInput(input) === "structured" ? fallbackAnswer : "",
+        whyItMatters: classifyCoachingInput(input) === "structured" ? "The interactive response fallback was used because live generation was unavailable." : "",
+        action: classifyCoachingInput(input) === "structured" ? "Retry the question or refine it with a more specific coaching ask." : "",
+        monitor: classifyCoachingInput(input) === "structured" ? ["Watch the current priority metric and recent session evidence while retrying the request."] : [],
+        answer: classifyCoachingInput(input) === "free_form" ? fallbackAnswer : undefined,
       });
     } finally {
       setLoading(false);
@@ -658,22 +549,6 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
           <div ref={coachingSectionRef} className={ENTERPRISE_SUBCARD}>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Interactive AI coaching</p>
             <div className="mt-3 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700">Current AI context</p>
-                  <p className="text-sm font-semibold text-slate-900">{currentContextLabel}</p>
-                  {conversationTurns.length ? (
-                    <p className="text-xs text-slate-700">AI remembers this conversation for the current rep/territory context.</p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={resetConversation}
-                  className="inline-flex items-center rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:text-teal-700"
-                >
-                  Reset AI chat
-                </button>
-              </div>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -695,23 +570,6 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
               </div>
             </div>
           </div>
-
-          {conversationTurns.length ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h4 className="text-sm font-semibold text-slate-900">Recent conversation</h4>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-700">{currentContextLabel}</span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {conversationTurns.slice(-4).map((turn, index) => (
-                  <div key={`${turn.role}-${index}-${turn.content.slice(0, 24)}`} className={`rounded-2xl px-3 py-2 text-sm ${turn.role === "assistant" ? "border border-teal-100 bg-teal-50 text-slate-800" : "border border-slate-200 bg-slate-50 text-slate-700"}`}>
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-700">{turn.role === "assistant" ? "AI" : "Manager"}</p>
-                    <p className="mt-1 whitespace-pre-wrap break-words">{normalizeManagerText(summarizeConversationTurn(turn))}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
 
           {response ? (
             <div className="ai-followup-response rounded-2xl border border-teal-100 bg-teal-50 p-4">
