@@ -338,26 +338,64 @@ function hasExcessiveDialogueReuse({
   candidate = "",
   recentDialogues = [],
   anchorDialogue = "",
+  turnNumber = 0,
 } = {}) {
   const sample = String(candidate || "").trim();
   if (!sample) return false;
   const normalizedSample = normalizeDialogueSignature(sample);
-  const tooSimilarToRecent = (recentDialogues || []).some((prior) => {
+  const recentList = Array.isArray(recentDialogues) ? recentDialogues : [];
+  const tooSimilarToRecent = recentList.some((prior) => {
     const priorText = String(prior || "").trim();
     if (!priorText) return false;
     const normalizedPrior = normalizeDialogueSignature(priorText);
     if (normalizedPrior && normalizedPrior === normalizedSample) return true;
-    return calculateTokenOverlapRatio(sample, priorText) >= 0.74
-      || calculateSemanticSimilarity(sample, priorText) >= 0.68;
+    return calculateTokenOverlapRatio(sample, priorText) >= 0.72
+      || calculateSemanticSimilarity(sample, priorText) >= 0.66;
   });
   if (tooSimilarToRecent) return true;
 
   const anchorText = String(anchorDialogue || "").trim();
   if (!anchorText) return false;
-  return (
-    calculateTokenOverlapRatio(sample, anchorText) >= 0.66
-    || calculateSemanticSimilarity(sample, anchorText) >= 0.62
-  );
+  const earlyTurn = Number(turnNumber || 0) <= 4;
+  const anchorTokenOverlap = calculateTokenOverlapRatio(sample, anchorText);
+  const anchorSemanticOverlap = calculateSemanticSimilarity(sample, anchorText);
+
+  // Hard early-turn echo guard: block opening-context restatements even when wording changes slightly.
+  if (earlyTurn && (anchorTokenOverlap >= 0.58 || anchorSemanticOverlap >= 0.56)) return true;
+
+  return anchorTokenOverlap >= 0.64 || anchorSemanticOverlap >= 0.6;
+}
+
+function resolveDuplicateDialogueBeforeCommit({
+  candidate = "",
+  activeConcern = "workflow",
+  generationKey = "",
+  nextTurnNumber = 0,
+  progressionStage = "burden",
+  recentHcpDialogues = [],
+  firstHcpDialogue = "",
+  previousHcpDialogue = "",
+} = {}) {
+  const anchorForDupGuard = nextTurnNumber <= 4 ? firstHcpDialogue : "";
+  if (!hasExcessiveDialogueReuse({
+    candidate,
+    recentDialogues: recentHcpDialogues.slice(-6),
+    anchorDialogue: anchorForDupGuard,
+    turnNumber: nextTurnNumber,
+  })) {
+    return { dialogue: candidate, usedFallback: false };
+  }
+
+  const deterministicFallback = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+  const rerolledDialogue = enforceDialogueVariety({
+    candidate: deterministicFallback,
+    concern: activeConcern,
+    seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:hard-dup-guard`,
+    recentDialogues: recentHcpDialogues,
+    progressionStage,
+  });
+
+  return { dialogue: rerolledDialogue, usedFallback: true };
 }
 
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
@@ -2519,6 +2557,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         candidate: nextHcpDialogue,
         recentDialogues: recentHcpDialogues.slice(-6),
         anchorDialogue: anchorForDupGuard,
+        turnNumber: nextTurnNumber,
       })
     ) {
       usedDeterministicFallback = true;
@@ -2690,6 +2729,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
       nextHcpState = "disengaged";
       nextHcpDialogue = "Understood. Thanks for the discussion today. Please coordinate a follow-up slot with the front desk if you want to continue.";
+    }
+
+    // Final pre-commit hard duplicate-dialogue constraint:
+    // block exact duplicates, high-overlap near-duplicates, and opening-context echoes before rendering.
+    const finalDialogueGuard = resolveDuplicateDialogueBeforeCommit({
+      candidate: nextHcpDialogue,
+      activeConcern,
+      generationKey,
+      nextTurnNumber,
+      progressionStage,
+      recentHcpDialogues,
+      firstHcpDialogue,
+      previousHcpDialogue,
+    });
+    if (finalDialogueGuard.usedFallback) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = finalDialogueGuard.dialogue;
     }
 
     const nextTurn = {
