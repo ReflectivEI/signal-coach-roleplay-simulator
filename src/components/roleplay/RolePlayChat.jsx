@@ -2872,7 +2872,7 @@ ${actionText}`;
                       )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>{hcpDisplayName}</div>
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>
                           <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
@@ -2884,7 +2884,7 @@ ${actionText}`;
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0" title={hcpDisplayName}>{hcpDisplayName}</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0" title={hcpDisplayName}>HCP</div>
                     <div className="bg-slate-100 rounded-2xl px-4 py-2.5 flex gap-1 items-center">
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0.1s" }} />
