@@ -139,6 +139,97 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
   return scenarioHits > 0 || repHits > 0 || hasClinicalSignal || asksClarifyingQuestion;
 }
 
+const REALISM_CONCERN_PATTERNS = {
+  workflow: /\b(workflow|staff|staffing|nurse|team|throughput|burden|operational|implementation|process|capacity)\b/i,
+  evidence: /\b(evidence|study|trial|endpoint|head-to-head|methodology|duration|confidence interval|data|proof)\b/i,
+  access: /\b(access|prior auth|authorization|coverage|payer|insurance|formular|cost|reimbursement|paperwork)\b/i,
+  time: /\b(time|busy|schedule|clinic|today|quick|minutes|rush|back-to-back)\b/i,
+  policy: /\b(policy|protocol|guideline|committee|pathway|institution|restriction)\b/i,
+  screening: /\b(screening|eligibility|candidacy|contraindication|resistance|monitoring)\b/i,
+};
+
+const CUE_BUCKETS = {
+  timePressure: [
+    "The HCP checks the next patient slot on the schedule and gestures for one concise point.",
+    "The HCP keeps a hand on the chart while answering in short, time-conscious beats.",
+    "The HCP scans the hallway briefly, then returns with a quick nod for you to continue.",
+  ],
+  workflowBurden: [
+    "The HCP slides a stack of prior-auth forms aside and asks what is realistic for this clinic.",
+    "The HCP toggles between notes and your comment, weighing workflow impact before replying.",
+    "The HCP circles a task on the day sheet, then refocuses on practical execution details.",
+  ],
+  clinicalEvaluation: [
+    "The HCP rereads a study detail before responding, focused on applicability to their patients.",
+    "The HCP traces a line on the handout and pauses, checking how the evidence holds up in practice.",
+    "The HCP reviews a chart entry and asks for the most clinically relevant takeaway.",
+  ],
+  guardedInterest: [
+    "The HCP leans in slightly, but keeps the follow-up narrow and implementation-focused.",
+    "The HCP nods once and asks for one concrete step before considering anything broader.",
+    "The HCP keeps a measured tone, inviting one practical clarification.",
+  ],
+  conditionalOpenness: [
+    "The HCP sets down their pen and allows one more point, pending relevance to clinic constraints.",
+    "The HCP acknowledges your point, then asks for a condition-specific example before moving on.",
+    "The HCP gives a brief nod and asks what this changes operationally this week.",
+  ],
+  mildSkepticism: [
+    "The HCP narrows focus on your claim and asks for proof tied to this setting.",
+    "The HCP pauses over a study reference, then asks where this fits in real workflow.",
+    "The HCP keeps eye contact and requests a more specific link to patient selection.",
+  ],
+  practicalDecision: [
+    "The HCP turns to the care-plan notes and asks what decision this supports right now.",
+    "The HCP marks a checkbox on the visit plan, then asks for the simplest next action.",
+    "The HCP folds the handout and asks what can actually be implemented this month.",
+  ],
+  closure: [
+    "The HCP steps toward the door, signaling the conversation needs to wrap.",
+    "The HCP closes the chart and offers a brief, professional nod toward next steps.",
+    "The HCP gathers paperwork and indicates there is only time for one final point.",
+  ],
+};
+
+function detectPrimaryConcern(text = "") {
+  const sample = String(text || "");
+  for (const [key, pattern] of Object.entries(REALISM_CONCERN_PATTERNS)) {
+    if (pattern.test(sample)) return key;
+  }
+  return "workflow";
+}
+
+function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
+  const normalized = hardenTextSurface(dialogue);
+  const trimmed = normalized.replace(/\s+/g, " ").trim();
+  const concernBridges = {
+    workflow: "I still need to see how this fits without adding workflow burden.",
+    evidence: "I still need evidence that feels applicable to the patients I am seeing.",
+    access: "Access and prior-auth realities are still a major barrier here.",
+    time: "I still have limited time, so keep this to what is immediately useful.",
+    policy: "I still need this to fit our current protocol and policy constraints.",
+    screening: "I still need clarity on candidacy and screening before moving ahead.",
+  };
+  const askByConcern = {
+    workflow: "Can you give one concrete step my team could actually use this week?",
+    evidence: "What is the clearest proof point for my practice context?",
+    access: "What would you do first when coverage or prior auth blocks progress?",
+    time: "What is the single most practical point to focus on right now?",
+    policy: "What part of this aligns with our current pathway requirements?",
+    screening: "What is the first candidacy checkpoint you would apply in clinic?",
+  };
+
+  const unresolved = concernBridges[concern] || concernBridges.workflow;
+  const targetedAsk = askByConcern[concern] || askByConcern.workflow;
+  const compact = trimmed.split(/(?<=[.!?])\s+/).slice(0, 2).join(" ").trim();
+
+  if (repWasGeneric) {
+    return `${unresolved} ${targetedAsk}`;
+  }
+
+  return `${compact} ${unresolved} ${targetedAsk}`;
+}
+
 const HCP_STATE_LADDER = [
   "neutral",
   "engaged",
@@ -1353,7 +1444,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
     };
 
-    const buildScenarioAlignedCue = (dialogue, isFirstTurn) => {
+    const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = []) => {
       const value = String(dialogue || "").toLowerCase();
       if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
         return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
@@ -1367,18 +1458,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
       }
-      if (/methodology|duration|study/.test(value)) {
-        return "The HCP leans forward, scanning the details with focused interest while keeping an eye on the clock.";
+
+      const concern = detectPrimaryConcern(`${value} ${scenario?.description || ""}`);
+      const bucketKey = (() => {
+        if (nextHcpState === "boundary-setting" || nextHcpState === "disengaged") return "closure";
+        if (nextHcpState === "resistant" || concern === "evidence") return "mildSkepticism";
+        if (nextHcpState === "engaged" && /\b(if|provided|as long as|depending|once)\b/.test(value)) return "conditionalOpenness";
+        if (nextHcpState === "engaged") return "guardedInterest";
+        if (scenarioPressured || concern === "time") return "timePressure";
+        if (concern === "access") return "workflowBurden";
+        if (concern === "screening") return "clinicalEvaluation";
+        if (/\b(next step|start|implement|apply|decision)\b/.test(value)) return "practicalDecision";
+        return "workflowBurden";
+      })();
+
+      const pool = CUE_BUCKETS[bucketKey] || CUE_BUCKETS.practicalDecision;
+      const cueSeed = `${generationKey}:${nextTurnNumber}:${nextHcpState}:${bucketKey}:${value.slice(0, 120)}`;
+      const startIndex = deterministicIndex(cueSeed, pool.length);
+      const normalizedRecent = recentCues.slice(-12).map((cue) => String(cue || "").trim().toLowerCase());
+
+      for (let i = 0; i < pool.length; i += 1) {
+        const candidate = pool[(startIndex + i) % pool.length];
+        const normalizedCandidate = String(candidate || "").trim().toLowerCase();
+        if (normalizedCandidate && !normalizedRecent.includes(normalizedCandidate)) {
+          return candidate;
+        }
       }
-      if (/materials|jumping through so many hoops|access to prep|access/.test(value)) {
-        return "The HCP sets paperwork aside briefly, concern visible as they focus on practical patient access barriers.";
-      }
-      if (/candidacy|screening|resistance|cabotegravir|long-acting/.test(value)) {
-        return "The HCP scans the screening checklist, then pauses, focused on whether this approach is safe and practical for the right patients.";
-      }
-      return scenarioPressured
-        ? "The HCP glances at the clock, patience thinning as paperwork waits beside them."
-        : "The HCP pauses, clearly expecting something more useful.";
+
+      return pool[startIndex] || "The HCP pauses over the details, waiting for a practical next point.";
     };
 
     let usedDeterministicFallback = false;
@@ -1501,6 +1608,27 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
 
+    const primaryConcern = detectPrimaryConcern(
+      `${scenario?.description || ""} ${scenario?.context || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
+    );
+    const latestRepLower = String(repMessage || "").toLowerCase();
+    const repWasGeneric = latestRepLower.length < 18
+      || /\b(great|sounds good|makes sense|absolutely|totally|we can do that|trust me)\b/.test(latestRepLower);
+    const responseLooksTooIdeal =
+      /\b(great point|absolutely|perfect|that works|sounds good|happy to|let's move forward|we can proceed)\b/i.test(nextHcpDialogue)
+      && !/\b(if|as long as|provided|depends|still|before|until|need|workflow|access|evidence|time|policy|screening)\b/i.test(nextHcpDialogue);
+    const resolvesTooMuch =
+      /\b(you answered everything|no concerns|fully aligned|all set|completely convinced)\b/i.test(nextHcpDialogue);
+    const shouldCalibrateRealism =
+      !isFirstHcpResponse
+      && nextHcpState !== "disengaged"
+      && nextHcpState !== "irritated"
+      && (responseLooksTooIdeal || resolvesTooMuch || (repWasGeneric && /\b(thank you|appreciate|good question)\b/i.test(nextHcpDialogue)));
+
+    if (shouldCalibrateRealism) {
+      nextHcpDialogue = rewriteTooIdealDialogue(nextHcpDialogue, primaryConcern, repWasGeneric);
+    }
+
     if (ENABLE_INFERENCE_LAYER && selectedInfluence.type !== 'none' && nextHcpDialogue !== baseResponse) {
       repInferenceStateRef.current = {
         ...nextInferenceState,
@@ -1539,7 +1667,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
-      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse);
+      const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
+      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText);
 
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
