@@ -430,6 +430,48 @@ function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2
     .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
 }
 
+function polishClinicianConversationalPhrasing({
+  dialogue = "",
+  concern = "workflow",
+  seed = "",
+  recentDialogues = [],
+} = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  let refined = normalized
+    .replace(/^that(?:'|’)s helpful to know,?\s*but\s*/i, "")
+    .replace(/^that(?:'|’)s a good point(?: about [^,.!?]+)?,?\s*/i, "")
+    .replace(/^i appreciate your suggestion to [^,.!?]+,?\s*/i, "")
+    .replace(/\bhow do you envision\b/i, "how would you")
+    .replace(/\bhow do you think we could\b/i, "how should we")
+    .replace(/\bhow would you propose\b/i, "how would you")
+    .replace(/\bgiven the existing staff and resources we have available\b/i, "with our current staff and resources")
+    .replace(/\bgiven the limitations and workflow we currently have in place\b/i, "with our current workflow limits")
+    .replace(/\bthat could potentially help reduce delays\b/i, "that might reduce delays")
+    .replace(/\bit depends on whether it is realistic for our current staffing\b/i, "is this realistic with current staffing")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (refined && !/[.?!]$/.test(refined)) refined += refined.includes("?") ? "" : ".";
+  if (/\?\?$/.test(refined)) refined = refined.replace(/\?\?$/, "?");
+
+  const wordCount = refined.split(/\s+/).filter(Boolean).length;
+  const soundsOverFormal =
+    /\b(potentially|envision|propose|given|therefore|however|accordingly)\b/i.test(refined)
+    || /,\s*(given|which|that)\b/i.test(refined);
+
+  if (wordCount > 26 && refined.includes("?") && soundsOverFormal) {
+    return chooseConcernSpecificVariant({
+      concern,
+      seed: `${seed}:clinician-polish`,
+      recentDialogues,
+    });
+  }
+
+  return refined;
+}
+
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
@@ -2778,6 +2820,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
         maxWords: nextTurnNumber <= 3 ? 32 : 30,
         maxSentences: 2,
+      });
+      nextHcpDialogue = polishClinicianConversationalPhrasing({
+        dialogue: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        recentDialogues: recentHcpDialogues,
       });
     }
 
