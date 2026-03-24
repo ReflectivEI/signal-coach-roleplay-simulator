@@ -430,21 +430,54 @@ function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2
     .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
 }
 
+function polishClinicianConversationalPhrasing({
+  dialogue = "",
+} = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  let refined = normalized
+    .replace(/^that(?:'|’)s helpful to know,?\s*but\s*/i, "")
+    .replace(/^that(?:'|’)s a good point(?: about [^,.!?]+)?,?\s*/i, "")
+    .replace(/^i appreciate your suggestion to [^,.!?]+,?\s*/i, "")
+    .replace(/\bhow do you envision\b/i, "how would you")
+    .replace(/\bhow do you think we could\b/i, "how should we")
+    .replace(/\bhow would you propose\b/i, "how would you")
+    .replace(/\bgiven the existing staff and resources we have available\b/i, "with our current staff and resources")
+    .replace(/\bgiven the limitations and workflow we currently have in place\b/i, "with our current workflow limits")
+    .replace(/\bthat could potentially help reduce delays\b/i, "that might reduce delays")
+    .replace(/\bit depends on whether it is realistic for our current staffing\b/i, "is this realistic with current staffing")
+    .replace(/^where we already have\b/i, "We already have")
+    .replace(/^where we\b/i, "How do we")
+    .replace(/\bwhat specific outcomes are they measuring that you think would be relevant to my\?\s*$/i, "which outcomes are most relevant to my patients?")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (refined && !/[.?!]$/.test(refined)) refined += refined.includes("?") ? "" : ".";
+  if (/\?\?$/.test(refined)) refined = refined.replace(/\?\?$/, "?");
+  refined = refined
+    .replace(/\bis this realistic with current staffing\.\s*$/i, "Is this realistic with current staffing?")
+    .replace(/^we already have ([^?]+)\?\s*$/i, "We already have $1. How would this fit without adding more admin burden?")
+    .replace(/^how do we ([^?]+)\?\s*$/i, "How do we $1?");
+
+  return refined;
+}
+
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
-      "I need one operational step my current team can run with this week.",
-      "Give me one concrete process change we can apply without adding staff burden.",
-      "What is the single workflow adjustment that saves my team time right away?",
-      "If this is actionable, map one step my staff can execute in our current flow.",
-      "Keep it practical: what one change should we implement first in clinic?",
+      "Where does this fit in our current visit flow without adding extra clicks?",
+      "What change would lower rework first for my existing staff?",
+      "Walk me through one step my team could run this week in clinic.",
+      "If this is practical, show me the first handoff in our current process.",
+      "What is the smallest workflow tweak that saves time right away?",
     ],
     access: [
-      "What is one payer-facing step that could reduce prior auth rework for us?",
-      "Give me one practical way to lower prior authorization friction this week.",
-      "What is one concrete action that helps us move access approvals faster?",
-      "Name one process change that cuts access delays without extra admin load.",
-      "I need one specific access tactic my team can run immediately.",
+      "Where do you see the biggest payer friction point we can fix first?",
+      "What prior-auth step would reduce back-and-forth this week?",
+      "What access action would speed approvals without extra admin load?",
+      "What one coverage workflow change can my team actually run now?",
+      "Which access step should we standardize first to cut delays?",
     ],
     evidence: [
       "Point me to the most practice-relevant proof and why it changes my decision now.",
@@ -478,16 +511,38 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
 
   const pool = variants[concern] || variants.workflow;
   const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const recentCadence = recentDialogues
+    .slice(-4)
+    .map((line) => normalizeDialogueSignature(line).split(" ").slice(0, 4).join(" "))
+    .filter(Boolean);
   const startIndex = deterministicIndex(`${seed}:${concern}:dialogue-variant`, pool.length);
+
+  let bestCandidate = pool[startIndex] || pool[0];
+  let bestSimilarityScore = Number.POSITIVE_INFINITY;
 
   for (let i = 0; i < pool.length; i += 1) {
     const candidate = pool[(startIndex + i) % pool.length];
     const candidateNorm = normalizeDialogueSignature(candidate);
     if (!candidateNorm) continue;
-    if (!recentNormalized.includes(candidateNorm)) return candidate;
+    if (recentNormalized.includes(candidateNorm)) continue;
+
+    const cadenceSignature = candidateNorm.split(" ").slice(0, 4).join(" ");
+    if (cadenceSignature && recentCadence.includes(cadenceSignature)) continue;
+
+    let worstSimilarity = 0;
+    for (const prior of recentDialogues) {
+      const semantic = calculateSemanticSimilarity(candidate, prior);
+      const tokenOverlap = calculateTokenOverlapRatio(candidate, prior);
+      worstSimilarity = Math.max(worstSimilarity, semantic, tokenOverlap);
+    }
+    if (worstSimilarity < bestSimilarityScore) {
+      bestSimilarityScore = worstSimilarity;
+      bestCandidate = candidate;
+    }
+    if (worstSimilarity < 0.56) return candidate;
   }
 
-  return pool[startIndex] || pool[0];
+  return bestCandidate;
 }
 
 function enforceDialogueVariety({
@@ -576,10 +631,13 @@ function hasStrongTimeWrapSignal(text = "") {
   const sample = String(text || "").toLowerCase();
   if (!sample) return false;
 
+  const explicitStopPattern = /\b(i(?:'|’)ll (?:stop|pause|wrap)(?: here)?(?: for today)?|let(?:'|’)s (?:pause|close|wrap)(?: here)?(?: for today)?|we should stop here|we can stop here)\b/;
+  if (explicitStopPattern.test(sample)) return true;
+
   const wrapPhrases = [
     /\b(we(?:'|’)re at time|we are at time|we(?:'|’)re out of time|i(?:'|’)ll wrap here|i(?:'|’)ll wrap up here|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here)\b/,
     /\b(i know you(?:'|’)re busy|i know your schedule is tight|don(?:'|’)t want to take more of your time|thanks for your time today|thank you for your time today)\b/,
-    /\b(let(?:'|’)s close here|let(?:'|’)s pause here|i(?:'|’)ll stop here for now|we can reconnect later|happy to follow up)\b/,
+    /\b(let(?:'|’)s close here|let(?:'|’)s pause here|i(?:'|’)ll stop here for now|we can reconnect later|happy to follow up|happy to reconnect)\b/,
   ];
 
   const wrapHitCount = wrapPhrases.reduce((count, pattern) => count + (pattern.test(sample) ? 1 : 0), 0);
@@ -2778,6 +2836,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
         maxWords: nextTurnNumber <= 3 ? 32 : 30,
         maxSentences: 2,
+      });
+      nextHcpDialogue = polishClinicianConversationalPhrasing({
+        dialogue: nextHcpDialogue,
       });
     }
 
