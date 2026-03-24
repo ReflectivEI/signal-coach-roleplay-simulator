@@ -464,6 +464,130 @@ function isTerminalClosureDialogue(text = "") {
   return closurePattern.test(sample) && !asksNewQuestion;
 }
 
+function hasWorkflowOperationalLanguage(text = "") {
+  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load)\b/i.test(String(text || ""));
+}
+
+function hasEvidencePivotLanguage(text = "") {
+  return /\b(jama|study|trial|data|outcomes|efficacy|disease progression|adoption|publication|findings)\b/i.test(String(text || ""));
+}
+
+const SCENARIO_FAMILY_LEXICAL_PACKS = Object.freeze({
+  hiv_prep: [
+    "prep", "prior auth", "coverage", "adherence", "screening", "resistance", "back-and-forth", "resubmission",
+  ],
+  oncology_access: [
+    "regimen", "line of therapy", "biomarker", "pathway", "prior auth", "reimbursement", "denial", "infusion",
+  ],
+  cardiometabolic: [
+    "step therapy", "formulary", "coverage", "adherence", "refill", "prior auth", "care coordination",
+  ],
+  general_access: [
+    "prior auth", "approval", "paperwork", "workflow", "staff burden", "clinic flow", "resubmission",
+  ],
+});
+
+const RECOVERY_TIMING_THRESHOLDS = Object.freeze({
+  immediate_max_misses: 1,
+  partial_max_misses: 2,
+});
+
+const TERMINAL_CLOSE_POLICY_MATRIX = Object.freeze({
+  engaged: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  constrained: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  impatient: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  disengaging: { missed: "close", overpivot: "close", aligned: "probe", neutral: "probe" },
+  disengaged: { missed: "close", overpivot: "close", aligned: "close", neutral: "close" },
+});
+
+function detectScenarioFamily(scenarioText = "") {
+  const value = String(scenarioText || "").toLowerCase();
+  if (/\bprep|hiv|sti|cabotegravir|long-acting\b/.test(value)) return "hiv_prep";
+  if (/\boncology|tumor|metastatic|biomarker|chemo|immunotherapy\b/.test(value)) return "oncology_access";
+  if (/\bcardio|heart|lipid|diabetes|a1c|glp-1|hypertension\b/.test(value)) return "cardiometabolic";
+  return "general_access";
+}
+
+function isOperationalFalsePositiveContext(text = "") {
+  const value = String(text || "").toLowerCase();
+  return /\b(data workflow|workflow analysis of study|publication workflow|research workflow|trial operations)\b/.test(value);
+}
+
+function hasScenarioOperationalLexicalMatch(text = "", scenarioFamily = "general_access") {
+  const value = String(text || "").toLowerCase();
+  const pack = SCENARIO_FAMILY_LEXICAL_PACKS[scenarioFamily] || SCENARIO_FAMILY_LEXICAL_PACKS.general_access;
+  return pack.some((token) => value.includes(token));
+}
+
+function classifyConcernFlowOutcome({
+  activeConcern = "workflow",
+  repMessage = "",
+  priorRepMessage = "",
+  scenarioFamily = "general_access",
+} = {}) {
+  const rep = String(repMessage || "");
+  const prior = String(priorRepMessage || "");
+  const concernIsOperational = activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time";
+  if (!concernIsOperational) return "neutral";
+
+  const repOperational = (
+    hasWorkflowOperationalLanguage(rep)
+    || hasScenarioOperationalLexicalMatch(rep, scenarioFamily)
+  ) && !isOperationalFalsePositiveContext(rep);
+  const repEvidence = hasEvidencePivotLanguage(rep);
+  const priorOperational = (
+    hasWorkflowOperationalLanguage(prior)
+    || hasScenarioOperationalLexicalMatch(prior, scenarioFamily)
+  ) && !isOperationalFalsePositiveContext(prior);
+
+  if (repEvidence && !repOperational && priorOperational) return "overpivot";
+  if (repEvidence && !repOperational) return "missed";
+  if (repOperational) return "aligned";
+  return "neutral";
+}
+
+function classifyRecoveryTiming({ recentMisses = 0 } = {}) {
+  if (recentMisses <= RECOVERY_TIMING_THRESHOLDS.immediate_max_misses) return "immediate";
+  if (recentMisses <= RECOVERY_TIMING_THRESHOLDS.partial_max_misses) return "partial";
+  return "late";
+}
+
+function determineTerminalPolicyAction({
+  hcpState = "engaged",
+  concernFlowOutcome = "neutral",
+  unresolvedConcernTurns = 0,
+  repHasFollowUpCommitment = false,
+  repDefersImmediateAction = false,
+} = {}) {
+  const statePolicy = TERMINAL_CLOSE_POLICY_MATRIX[hcpState] || TERMINAL_CLOSE_POLICY_MATRIX.engaged;
+  let action = statePolicy[concernFlowOutcome] || "continue";
+  if (hcpState === "impatient" && unresolvedConcernTurns >= 5 && (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot")) {
+    action = "close";
+  }
+  if (repHasFollowUpCommitment && !repDefersImmediateAction && action === "close") {
+    action = "probe";
+  }
+  return action;
+}
+
+function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0 } = {}) {
+  if (mode === "aligned") {
+    return unresolvedConcernTurns >= 2
+      ? "That could help, as long as it reduces back-and-forth without adding work for my team."
+      : "That sounds relevant, but it depends on whether it is realistic for our current staffing."
+  }
+
+  if (mode === "overpivot") {
+    return unresolvedConcernTurns >= 2
+      ? "I understand the outcomes point, but approvals are still the bottleneck. Unless this streamlines prior auth, it is hard to act on."
+      : "I get the data, but outcomes are not our blocker right now. Prior auth friction is."
+  }
+
+  return unresolvedConcernTurns >= 2
+    ? "I understand, but data is not the barrier. Approvals and paperwork are what slow us down."
+    : "That is interesting, but my biggest issue is prior auth delays, not outcomes.";
+}
+
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
   const concernPattern = REALISM_CONCERN_PATTERNS[concern] || REALISM_CONCERN_PATTERNS.workflow;
   return concernPattern.test(String(repMessage || ""));
@@ -1824,6 +1948,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : 0;
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
+    const scenarioFamily = detectScenarioFamily(concernSourceText);
     const decayState = deriveEngagementDecay({
       previousTier: previousDecayTier,
       previousPressure: previousPressureScore,
@@ -1836,6 +1961,33 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       [...turns, { repMessage }],
       activeConcern,
     );
+    const priorRepMessage = [...turns]
+      .slice(0, -1)
+      .reverse()
+      .find((t) => t?.repMessage)?.repMessage || "";
+    const concernFlowOutcome = classifyConcernFlowOutcome({
+      activeConcern,
+      repMessage,
+      priorRepMessage,
+      scenarioFamily,
+    });
+    const recentMisses = [...turns]
+      .filter((t) => t?.repMessage)
+      .slice(-3)
+      .reduce((count, t) => {
+        const prior = [...turns]
+          .slice(0, Math.max(0, turns.findIndex((x) => x.turnNumber === t.turnNumber)))
+          .reverse()
+          .find((x) => x?.repMessage)?.repMessage || "";
+        const outcome = classifyConcernFlowOutcome({
+          activeConcern,
+          repMessage: t.repMessage,
+          priorRepMessage: prior,
+          scenarioFamily,
+        });
+        return (outcome === "missed" || outcome === "overpivot") ? count + 1 : count;
+      }, 0);
+    const recoveryTiming = classifyRecoveryTiming({ recentMisses });
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
@@ -2203,6 +2355,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : baseResponse;
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+
+    if (
+      !overrideExit
+      && nextHcpState !== "disengaged"
+      && ["missed", "overpivot", "aligned"].includes(concernFlowOutcome)
+      && (activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time")
+    ) {
+      const needsReanchor = concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot";
+      const shouldNudgeConditional =
+        concernFlowOutcome === "aligned"
+        && !/\b(as long as|depends|without adding|if it reduces|realistic)\b/i.test(nextHcpDialogue);
+
+      if (needsReanchor || shouldNudgeConditional) {
+        nextHcpDialogue = buildOperationalReanchorDialogue({
+          mode: concernFlowOutcome,
+          unresolvedConcernTurns,
+        });
+        if (concernFlowOutcome === "aligned" && recoveryTiming === "late") {
+          nextHcpDialogue = "That may help, but we are still behind on approvals. If you want me to act on this, keep it specific and operational.";
+        }
+        if (needsReanchor && nextHcpState === "engaged") {
+          nextHcpState = "resistant";
+        }
+      }
+    }
     const burdenEstablished = prevTurns
       .map((t) => String(t?.hcpDialogueBefore || "").toLowerCase())
       .slice(-NO_REPEAT_WINDOW_TURNS)
@@ -2412,8 +2589,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       generationKey,
     };
 
+    const terminalPolicyAction = determineTerminalPolicyAction({
+      hcpState: nextHcpState,
+      concernFlowOutcome,
+      unresolvedConcernTurns,
+      repHasFollowUpCommitment,
+      repDefersImmediateAction,
+    });
+
+    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
+    }
+
     const shouldEndSessionAfterTurn = overrideExit || (
-      nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue)
+      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || terminalPolicyAction === "close"
     );
 
     if (shouldEndSessionAfterTurn) {
