@@ -1476,6 +1476,145 @@ export function deriveInteractionMode({
 }
 
 /******************************************************************************************
+SEMANTIC PROGRESSION + TERMINAL REALISM OVERLAY
+- Advances unresolved concerns through realistic stages
+- Prevents repetitive objection loops
+- Enables late-stage terminal posture while preserving professionalism
+******************************************************************************************/
+
+function normalizeLineForPattern(line = '') {
+  return String(line || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function startsWithRepeatedPattern(hcpHistory = []) {
+  const recent = hcpHistory
+    .map((line) => normalizeLineForPattern(line))
+    .filter(Boolean)
+    .slice(-2)
+
+  if (recent.length < 2) {
+    return { repeated: false, pattern: '' }
+  }
+
+  const signatures = recent.map((line) =>
+    line
+      .split(' ')
+      .slice(0, 6)
+      .join(' ')
+      .trim()
+  )
+
+  const repeated = signatures[0] && signatures[0] === signatures[1]
+  return { repeated, pattern: signatures[1] || '' }
+}
+
+function hasOperationalSpecificity(message = '') {
+  const msg = String(message || '').toLowerCase()
+  return /\b(workflow|staff|nurse|ma\b|front desk|prior auth|payer|appeal|ehr|emr|template|order set|protocol|step|steps|tomorrow|this week|same day|follow-up cadence|handoff|checklist|implementation|operational|actionable|minutes|burden)\b/.test(
+    msg
+  )
+}
+
+function isEvidenceDriftWithoutOperationalLink(message = '') {
+  const msg = String(message || '').toLowerCase()
+  const evidenceHeavy =
+    /\b(study|studies|data|evidence|efficacy|endpoint|trial|publication|value|roi|outcome|results|journal)\b/.test(
+      msg
+    )
+
+  return evidenceHeavy && !hasOperationalSpecificity(msg)
+}
+
+function getProgressionStageFromPressure(pressure = 0) {
+  if (pressure >= 6) return 5
+  if (pressure >= 4) return 4
+  if (pressure >= 3) return 3
+  if (pressure >= 2) return 2
+  return 1
+}
+
+export function deriveSemanticProgressionOverlay({
+  history = [],
+  repMessage = '',
+  prevProfile = null,
+  structuralState = 'neutral',
+  interactionMode = 'clarifying',
+  turnNumber = 1,
+}) {
+  const priorPressure = Math.max(
+    0,
+    Number(prevProfile?.memory?.semanticProgression?.pressure || 0)
+  )
+
+  const repHistory = history.map((turn) => turn?.repMessage).filter(Boolean)
+  const hcpHistory = history.map((turn) => turn?.hcpDialogueBefore).filter(Boolean)
+  const recentRepMessages = [...repHistory, repMessage].filter(Boolean).slice(-4)
+  const latestRepMessage = String(repMessage || '').trim()
+  const recentLowValueTurns = recentRepMessages.filter((message) =>
+    detectLowValueRepResponse(message)
+  ).length
+
+  const evidenceDrift = isEvidenceDriftWithoutOperationalLink(latestRepMessage)
+  const operationalRecovery = hasOperationalSpecificity(latestRepMessage)
+  const clearMiss =
+    !!latestRepMessage &&
+    (evidenceDrift || detectLowValueRepResponse(latestRepMessage))
+
+  let pressure = priorPressure
+  if (clearMiss) pressure += 1
+  else if (operationalRecovery) pressure -= 1
+
+  if (recentLowValueTurns >= 2) pressure += 1
+  pressure = Math.max(0, Math.min(8, pressure))
+
+  const stage = getProgressionStageFromPressure(pressure)
+  const terminalBehavior =
+    stage >= 5 ||
+    (stage >= 4 &&
+      (interactionMode === 'closing_decision' ||
+        structuralState === 'disengaged' ||
+        structuralState === 'irritated'))
+
+  const stageLabels = {
+    1: 'Clarify',
+    2: 'Narrow',
+    3: 'Demand Specificity',
+    4: 'Challenge Practicality',
+    5: 'Decide / Close',
+  }
+
+  const focusAngles = [
+    'workflow fit',
+    'staffing load',
+    'time cost',
+    'front-end admin pressure',
+    'payer back-and-forth',
+    'what changes tomorrow for staff',
+    'implementation burden',
+    'actionable now vs later',
+  ]
+  const angleIndex = hashInt(`${turnNumber}:${stage}:${pressure}`) % focusAngles.length
+
+  const patternCheck = startsWithRepeatedPattern(hcpHistory)
+
+  return {
+    stage,
+    stageLabel: stageLabels[stage],
+    pressure,
+    terminalBehavior,
+    evidenceDrift,
+    operationalRecovery,
+    focusAngle: focusAngles[angleIndex],
+    repeatedPattern: patternCheck.repeated ? patternCheck.pattern : '',
+    antiRepetitionLock: patternCheck.repeated,
+  }
+}
+
+/******************************************************************************************
 PUNCTUATION NORMALIZATION
 ******************************************************************************************/
 
@@ -1561,14 +1700,22 @@ export function buildHCPProfile({
   conversationQuality = 0,
   repBehavior = {},
   timeElapsed = 1,
+  semanticOverlay = null,
 }) {
-  const preferShort = structuralState === 'time-pressured' || structuralState === 'disengaged'
+  const preferShort =
+    structuralState === 'time-pressured' ||
+    structuralState === 'disengaged' ||
+    semanticOverlay?.terminalBehavior
   const preferStrongVisuals =
     structuralState === 'irritated' ||
     structuralState === 'resistant' ||
-    structuralState === 'boundary-setting'
+    structuralState === 'boundary-setting' ||
+    semanticOverlay?.stage >= 4
 
-  const avoidDoorCues = structuralState !== 'time-pressured' && structuralState !== 'disengaged'
+  const avoidDoorCues =
+    structuralState !== 'time-pressured' &&
+    structuralState !== 'disengaged' &&
+    !semanticOverlay?.terminalBehavior
 
   const cueSelection = selectCue(sessionId, turnNumber, structuralState, severity, {
     memory,
@@ -1586,8 +1733,16 @@ export function buildHCPProfile({
     cueSelection.cueIndex
   )
 
+  const semanticMemory = {
+    ...(stateMemory || {}),
+    semanticProgression: {
+      pressure: semanticOverlay?.pressure || 0,
+      stage: semanticOverlay?.stage || 1,
+    },
+  }
+
   const nextMemory = setRecentGlobalCueMemory(
-    stateMemory,
+    semanticMemory,
     cueSelection.cue,
     15
   )
@@ -1605,6 +1760,7 @@ export function buildHCPProfile({
     conversationQuality,
     repBehavior,
     timeElapsed,
+    semanticOverlay,
     memory: nextMemory,
   })
 }
@@ -1672,6 +1828,23 @@ export function deriveNextHCPProfile({
     repBehavior
   )
 
+  const recentLowValueTurns = countRecentLowValueRepTurns(history, repMessage)
+  const interactionMode = deriveInteractionMode({
+    structuralState: transitionedState,
+    conversationQuality,
+    repBehavior,
+    recentLowValueTurns,
+  })
+
+  const semanticOverlay = deriveSemanticProgressionOverlay({
+    history,
+    repMessage,
+    prevProfile,
+    structuralState: transitionedState,
+    interactionMode,
+    turnNumber,
+  })
+
   return buildHCPProfile({
     sessionId,
     turnNumber,
@@ -1682,6 +1855,7 @@ export function deriveNextHCPProfile({
     conversationQuality,
     repBehavior,
     timeElapsed,
+    semanticOverlay,
   })
 }
 
@@ -1747,12 +1921,29 @@ export function buildHCPDialoguePrompt({
   const recentLowValueTurns = repHistoryMessages
     .slice(-3)
     .filter((message) => detectLowValueRepResponse(message)).length
-  const interactionMode = deriveInteractionMode({
+  let interactionMode = deriveInteractionMode({
     structuralState,
     conversationQuality: hcpProfile.conversationQuality,
     repBehavior: hcpProfile.repBehavior,
     recentLowValueTurns,
   })
+  const semanticOverlay =
+    hcpProfile.semanticOverlay ||
+    deriveSemanticProgressionOverlay({
+      history: [],
+      repMessage: lastRepMessage,
+      prevProfile: { memory: hcpProfile.memory || {} },
+      structuralState,
+      interactionMode,
+      turnNumber: hcpProfile.turnNumber || 1,
+    })
+
+  if (semanticOverlay.terminalBehavior && interactionMode !== 'closing_decision') {
+    interactionMode = 'closing_decision'
+  } else if (semanticOverlay.stage >= 4 && interactionMode === 'clarifying') {
+    interactionMode = 'directive'
+  }
+
   const interactionModeLabel = {
     exploratory: 'Exploratory',
     clarifying: 'Clarifying',
@@ -1848,6 +2039,7 @@ export function buildHCPDialoguePrompt({
   prompt += '- Maintain professionalism: firm is allowed, but do not become sarcastic, combative, or hostile.\n'
   prompt += '- Preserve your primary concern from this scenario; do not drift into unrelated topics.\n'
   prompt += '- Do not restate the same objection phrasing more than twice; if concern remains unresolved, escalate posture instead of looping wording.\n'
+  prompt += '- Progress unresolved concern semantically across stages instead of reusing near-identical sentence structures.\n'
 
   prompt += '\nINTERACTION MODE SHIFT RULES:\n'
   prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'
@@ -1862,6 +2054,27 @@ export function buildHCPDialoguePrompt({
   prompt += '- Never ask multiple questions in a single turn.\n'
   prompt += '- If you are disengaged, ask no questions at all.\n'
   prompt += '- In closing / decision mode, prefer statements or binary asks over open-ended questions.\n'
+
+  prompt += '\nSEMANTIC PROGRESSION OVERLAY:\n'
+  prompt += '- Current unresolved concern stage: ' + sanitize(semanticOverlay.stageLabel) + ' (Stage ' + sanitize(String(semanticOverlay.stage)) + ').\n'
+  prompt += '- Required operational angle this turn: ' + sanitize(semanticOverlay.focusAngle) + '.\n'
+  prompt += '- If unresolved, advance posture one step toward Decide / Close. If meaningfully addressed, soften by at most one stage (do not fully reset).\n'
+  prompt += '- Stage 1 Clarify: identify the operational concern and ask how the rep point connects.\n'
+  prompt += '- Stage 2 Narrow: constrain to one practical bottleneck and ask for a specific operational answer.\n'
+  prompt += '- Stage 3 Demand Specificity: request one concrete action, workflow change, or immediate operational implication.\n'
+  prompt += '- Stage 4 Challenge Practicality: test feasibility, staffing burden, time cost, workflow fit, or payer friction without generic wording.\n'
+  prompt += '- Stage 5 Decide / Close: stop re-asking as a normal question; use threshold language, binary framing, and wrap-up pressure.\n'
+  prompt += '- Late-stage rule: in Stage 5 (or terminal posture), do not continue helpful clarification loops.\n'
+  prompt += '- Tone guardrail: professional, time-constrained, clinically grounded, never rude or sarcastic.\n'
+  if (semanticOverlay.antiRepetitionLock && semanticOverlay.repeatedPattern) {
+    prompt +=
+      '- Anti-repetition lock: avoid reusing this opening structure: "' +
+      sanitize(semanticOverlay.repeatedPattern) +
+      '".\n'
+  }
+  if (semanticOverlay.terminalBehavior) {
+    prompt += '- Terminal behavior active: prefer short threshold statements and one final binary ask at most.\n'
+  }
 
   prompt += '\nPUNCTUATION RULE:\n'
   prompt += '- Every question must end with a question mark.\n'
