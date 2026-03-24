@@ -1822,7 +1822,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
-      && unresolvedConcernTurns >= 3;
+      && unresolvedConcernTurns >= 3
+      && !repHasConcreteMove
+      && !repHasFollowUpCommitment;
     const continueProbability = 0.65;
     const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
