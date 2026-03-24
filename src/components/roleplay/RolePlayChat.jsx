@@ -456,6 +456,14 @@ function isDeferringWithoutImmediateAction(text = "") {
   return hasDeferralLanguage && !hasImmediateAction;
 }
 
+function isTerminalClosureDialogue(text = "") {
+  const sample = String(text || "").toLowerCase().trim();
+  if (!sample) return false;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const asksNewQuestion = sample.includes("?");
+  return closurePattern.test(sample) && !asksNewQuestion;
+}
+
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
   const concernPattern = REALISM_CONCERN_PATTERNS[concern] || REALISM_CONCERN_PATTERNS.workflow;
   return concernPattern.test(String(repMessage || ""));
@@ -2403,6 +2411,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
+
+    const shouldEndSessionAfterTurn = overrideExit || (
+      nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue)
+    );
+
+    if (shouldEndSessionAfterTurn) {
+      sessionControllerRef.current.state = SessionState.ENDED;
+      sessionControllerRef.current.pendingResponseQueue = [];
+    }
 
     if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {
       return;
