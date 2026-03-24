@@ -266,10 +266,32 @@ function normalizeDialogueSignature(text = "") {
     .trim();
 }
 
+const DIALOGUE_STOPWORDS = new Set([
+  "the", "and", "for", "with", "that", "this", "from", "your", "have", "been", "what", "when", "where", "which",
+  "will", "would", "could", "should", "about", "into", "they", "them", "their", "there", "here", "just", "still",
+  "need", "team", "clinic", "practical", "concrete", "point", "give", "show", "tell", "look", "like", "does",
+  "how", "our", "are", "but", "not", "can", "you", "one", "now", "then",
+]);
+
+function canonicalizeToken(token = "") {
+  const value = String(token || "").toLowerCase();
+  if (!value) return "";
+  if (/^(staff|staffing|workload|burden|overwhelmed|short|capacity|bandwidth)$/.test(value)) return "staff_burden";
+  if (/^(prior|auth|authorization|payer|payers|coverage|appeal|appeals|reimbursement)$/.test(value)) return "access_ops";
+  if (/^(ehr|emr|integrate|integration|interop|system|systems)$/.test(value)) return "integration_ops";
+  if (/^(implement|implementation|rollout|deploy|deployment|onboard|onboarding)$/.test(value)) return "implementation_ops";
+  if (/^(train|training|educate|education|coaching)$/.test(value)) return "training_ops";
+  if (/^(disrupt|disruption|slow|slowdown|friction|interrupt|interruption)$/.test(value)) return "disruption_ops";
+  if (/^(evidence|data|trial|study|feasibility|feasible|proof|outcomes)$/.test(value)) return "evidence_ops";
+  if (/^(next|step|steps|decision|decide|pilot)$/.test(value)) return "next_step_ops";
+  return value;
+}
+
 function tokensFromSignature(text = "") {
   return normalizeDialogueSignature(text)
     .split(" ")
-    .filter((token) => token.length > 2);
+    .map((token) => canonicalizeToken(token))
+    .filter((token) => token.length > 2 && !DIALOGUE_STOPWORDS.has(token));
 }
 
 function calculateTokenOverlapRatio(a = "", b = "") {
@@ -281,6 +303,28 @@ function calculateTokenOverlapRatio(a = "", b = "") {
     if (bTokens.has(token)) overlap += 1;
   });
   return overlap / Math.min(aTokens.size, bTokens.size);
+}
+
+function calculateSemanticSimilarity(a = "", b = "") {
+  const aTokens = new Set(tokensFromSignature(a));
+  const bTokens = new Set(tokensFromSignature(b));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let overlap = 0;
+  aTokens.forEach((token) => {
+    if (bTokens.has(token)) overlap += 1;
+  });
+  return overlap / new Set([...aTokens, ...bTokens]).size;
+}
+
+function classifyDialogueAngle(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (/\b(overwhelmed|short-staffed|staffing|burden|buried|capacity|bandwidth)\b/.test(sample)) return "burden";
+  if (/\b(ehr|emr|integrat|interoperab|existing system)\b/.test(sample)) return "integration";
+  if (/\b(implement|implementation|roll out|rollout|deploy|ownership|owner)\b/.test(sample)) return "implementation";
+  if (/\b(train|training|onboard|education|upskill)\b/.test(sample)) return "training";
+  if (/\b(disrupt|slow|pulling staff|responsibilities|workflow hit|downtime)\b/.test(sample)) return "disruption";
+  if (/\b(evidence|feasibility|next step|pilot|proof|outcome|payer requirements)\b/.test(sample)) return "evidence_next_step";
+  return "general";
 }
 
 function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
@@ -355,19 +399,30 @@ function enforceDialogueVariety({
   concern = "workflow",
   seed = "",
   recentDialogues = [],
+  progressionStage = "burden",
 } = {}) {
   const safeCandidate = hardenTextSurface(candidate);
   if (!safeCandidate) return safeCandidate;
   const candidateNorm = normalizeDialogueSignature(safeCandidate);
   const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
   const duplicateWithinWindow = recentNormalized.includes(candidateNorm);
-  const highlySimilar = recentDialogues.some((prior) => calculateTokenOverlapRatio(safeCandidate, prior) >= 0.9);
+  const highlySimilar = recentDialogues.some((prior) =>
+    calculateTokenOverlapRatio(safeCandidate, prior) >= 0.78
+    || calculateSemanticSimilarity(safeCandidate, prior) >= 0.72
+  );
+  const recentAngles = recentDialogues.slice(-4).map((line) => classifyDialogueAngle(line));
+  const candidateAngle = classifyDialogueAngle(safeCandidate);
+  const angleIsStuck =
+    candidateAngle !== "general"
+    && recentAngles.length >= 2
+    && recentAngles.slice(-2).every((angle) => angle === candidateAngle)
+    && candidateAngle !== progressionStage;
 
-  if (!duplicateWithinWindow && !highlySimilar) return safeCandidate;
+  if (!duplicateWithinWindow && !highlySimilar && !angleIsStuck) return safeCandidate;
 
   return chooseConcernSpecificVariant({
     concern,
-    seed,
+    seed: `${seed}:${progressionStage}`,
     recentDialogues,
   });
 }
@@ -438,6 +493,8 @@ function deriveEngagementDecay({
 function compressHcpDialogueForEngagement(dialogue = "", engagement = {}) {
   const tier = engagement.tier || "engaged";
   const concern = engagement.activeConcern || "workflow";
+  const unresolvedStreak = Number(engagement.unresolvedStreak || 0);
+  const burdenEstablished = Boolean(engagement.burdenEstablished);
   const maxSentences = ENGAGEMENT_TIER_SENTENCE_MAX[tier] || 3;
   const normalized = hardenTextSurface(dialogue);
   const parts = normalized.match(/[^.!?]+[.!?]/g) || [normalized];
@@ -449,15 +506,72 @@ function compressHcpDialogueForEngagement(dialogue = "", engagement = {}) {
 
   const needsRedirect = !engagement.concernAddressed && (tier === "impatient" || tier === "disengaging");
   if (needsRedirect) {
+    const progression = [
+      "burden",
+      "integration",
+      "implementation",
+      "training",
+      "disruption",
+      "evidence_next_step",
+    ];
+    const stageIndex = Math.max(0, Math.min(progression.length - 1, unresolvedStreak));
+    const stage = progression[stageIndex];
     const redirectByConcern = {
-      workflow: "I still need one concrete workflow change for my team.",
-      access: "I still need a direct answer on prior auth or access burden.",
-      evidence: "I need the evidence tied directly to my practice decisions.",
-      time: "I only have a minute, so give me one practical point.",
-      policy: "I need a clear connection to our current protocol constraints.",
-      screening: "I need one concrete screening or candidacy step we can apply now.",
+      workflow: {
+        burden: burdenEstablished
+          ? "What would this look like in practice for us?"
+          : "We're already stretched, so what changes without adding lift?",
+        integration: "How does this plug into our current EHR workflow?",
+        implementation: "Who would own this rollout on our side?",
+        training: "How would you train staff without slowing clinic flow?",
+        disruption: "How do we keep this from pulling people off core responsibilities?",
+        evidence_next_step: "What is the smallest pilot step that proves this is feasible here?",
+      },
+      access: {
+        burden: burdenEstablished
+          ? "Given our existing constraints, where does this reduce friction first?"
+          : "We're already managing heavy admin load, so where does this actually help?",
+        integration: "How does this fit with our current prior-auth workflow?",
+        implementation: "Who handles exceptions when payer rules vary?",
+        training: "What training is needed for staff handling access paperwork?",
+        disruption: "How do we avoid extra back-and-forth with payers?",
+        evidence_next_step: "What would be a realistic first access pilot here?",
+      },
+      evidence: {
+        burden: "I need this tied to actual decisions in a busy clinic day.",
+        integration: "How does that evidence translate into our existing treatment flow?",
+        implementation: "What exact practice change follows from that data?",
+        training: "How would the team be trained to apply that consistently?",
+        disruption: "What happens operationally when real-world patients don't match trial criteria?",
+        evidence_next_step: "What evidence threshold would make this actionable next?",
+      },
+      time: {
+        burden: "Given the pace here, what is the immediate practical takeaway?",
+        integration: "Where does this fit into today's visit workflow?",
+        implementation: "What is the first step we can start this week?",
+        training: "How much staff time would training require up front?",
+        disruption: "How do we roll it out without slowing patient throughput?",
+        evidence_next_step: "What's the quickest way to test if this is worth scaling?",
+      },
+      policy: {
+        burden: "Within our constraints, what is actually actionable?",
+        integration: "How does this align with our current pathway requirements?",
+        implementation: "Who needs to approve this operationally?",
+        training: "What training would compliance require before launch?",
+        disruption: "How do we avoid creating bottlenecks with policy checks?",
+        evidence_next_step: "What next step is both compliant and feasible now?",
+      },
+      screening: {
+        burden: "I need a practical screening step that fits real clinic flow.",
+        integration: "How does this fit with our current intake and charting process?",
+        implementation: "Who owns candidacy checks at each handoff point?",
+        training: "How do we train staff to apply criteria consistently?",
+        disruption: "What happens when screening flags conflict with time pressure?",
+        evidence_next_step: "What is the first measurable checkpoint to validate this approach?",
+      },
     };
-    const redirect = redirectByConcern[concern] || redirectByConcern.workflow;
+    const concernRedirects = redirectByConcern[concern] || redirectByConcern.workflow;
+    const redirect = concernRedirects[stage] || concernRedirects.integration;
     if (!new RegExp(String(redirect).slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(compact)) {
       compact = `${compact} ${redirect}`.trim();
     }
@@ -495,6 +609,37 @@ function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
   }
 
   return `${compact} ${unresolved} ${targetedAsk}`;
+}
+
+function enforceCueVariety(candidateCue = "", recentCues = [], seed = "") {
+  const safeCue = hardenTextSurface(candidateCue);
+  if (!safeCue) return safeCue;
+  const normalizedRecent = recentCues
+    .slice(-NO_REPEAT_WINDOW_TURNS)
+    .map((cue) => String(cue || "").trim())
+    .filter(Boolean);
+  const isTooSimilar = normalizedRecent.some((priorCue) =>
+    calculateTokenOverlapRatio(safeCue, priorCue) >= 0.78
+    || calculateSemanticSimilarity(safeCue, priorCue) >= 0.72
+  );
+  if (!isTooSimilar) return safeCue;
+
+  const cueFallbackPool = [
+    "The HCP keeps their reply concise and waits for a practical operational detail.",
+    "The HCP scans the chart and returns with a tighter, implementation-focused expression.",
+    "The HCP pauses briefly, signaling patience is narrowing around execution details.",
+    "The HCP keeps attention on the handoff steps, expecting one realistic next action.",
+    "The HCP gives a short nod, focused on feasibility rather than broad framing.",
+  ];
+  const startIndex = deterministicIndex(`${seed}:cue-semantic-fallback`, cueFallbackPool.length);
+  for (let i = 0; i < cueFallbackPool.length; i += 1) {
+    const candidate = cueFallbackPool[(startIndex + i) % cueFallbackPool.length];
+    const similarToRecent = normalizedRecent.some((priorCue) =>
+      calculateSemanticSimilarity(candidate, priorCue) >= 0.72
+    );
+    if (!similarToRecent) return candidate;
+  }
+  return cueFallbackPool[startIndex];
 }
 
 function countUnresolvedConcernTurns(turns = [], concern = "workflow") {
@@ -2024,9 +2169,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : baseResponse;
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+    const burdenEstablished = prevTurns
+      .map((t) => String(t?.hcpDialogueBefore || "").toLowerCase())
+      .slice(-NO_REPEAT_WINDOW_TURNS)
+      .some((line) => /\b(overwhelmed|short-staffed|buried|staffing|prior auth burden|admin burden)\b/.test(line));
+    const dialogueProgression = [
+      "burden",
+      "integration",
+      "implementation",
+      "training",
+      "disruption",
+      "evidence_next_step",
+    ];
+    const progressionStage =
+      dialogueProgression[Math.max(0, Math.min(dialogueProgression.length - 1, unresolvedConcernTurns))];
     nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
       ...decayState,
       activeConcern,
+      unresolvedStreak: unresolvedConcernTurns,
+      burdenEstablished,
     });
     const recentHcpDialogues = collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS);
     nextHcpDialogue = enforceDialogueVariety({
@@ -2034,6 +2195,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concern: activeConcern,
       seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
       recentDialogues: recentHcpDialogues,
+      progressionStage,
     });
     if (terminalDecisionMode) {
       nextHcpDialogue = buildTerminalDecisionDialogue({
@@ -2045,6 +2207,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         concern: activeConcern,
         seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
         recentDialogues: recentHcpDialogues,
+        progressionStage,
       });
     }
 
@@ -2057,6 +2220,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         concern: activeConcern,
         seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
         recentDialogues: recentHcpDialogues,
+        progressionStage,
       });
     }
 
@@ -2166,6 +2330,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     contextualCue = hardenTextSurface(contextualCue);
+    contextualCue = enforceCueVariety(
+      contextualCue,
+      prevTurns.map((t) => t.cueBefore).filter(Boolean),
+      `${generationKey}:${nextTurnNumber}:${nextHcpState}`,
+    );
     const recentCueMemory = recentCueHistoryRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
     const contextualCueNormalized = normalizeDialogueSignature(contextualCue);
     if (contextualCueNormalized && recentCueMemory.includes(contextualCueNormalized)) {
