@@ -236,6 +236,19 @@ const TERMINAL_DECISION_CUES = [
   "The HCP shifts posture as if preparing to move on, waiting for one final relevant point.",
 ];
 const NO_REPEAT_WINDOW_TURNS = 20;
+const SessionState = Object.freeze({
+  ACTIVE: "ACTIVE",
+  PROCESSING: "PROCESSING",
+  CLOSING: "CLOSING",
+  ENDED: "ENDED",
+});
+
+function extractDialoguePhrases(text = "") {
+  return String(text || "")
+    .split(/[.!?]/)
+    .map((segment) => normalizeDialogueSignature(segment))
+    .filter((phrase) => phrase && phrase.split(" ").length >= 4);
+}
 
 function detectPrimaryConcern(text = "") {
   const sample = String(text || "");
@@ -1334,10 +1347,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
   const sendInFlightRef = useRef(false);
   const activeRequestIdRef = useRef(0);
+  const sessionControllerRef = useRef({
+    state: SessionState.ACTIVE,
+    isActive: true,
+    isProcessingTurn: false,
+    pendingResponseQueue: [],
+  });
   const lastSubmittedTurnKeyRef = useRef("");
   const loggedTurnKeysRef = useRef(new Set());
   const processedTurnKeysRef = useRef(new Set());
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
+  const recentDialoguePhrasesRef = useRef([]);
+  const recentCueHistoryRef = useRef([]);
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -1410,6 +1431,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── INIT ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    const controller = sessionControllerRef.current;
+    controller.state = SessionState.ACTIVE;
+    controller.isActive = true;
+    controller.isProcessingTurn = false;
+    controller.pendingResponseQueue = [];
     const init = async () => {
       setIsLoading(true);
       try {
@@ -1452,11 +1478,27 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     };
     init();
+
+    return () => {
+      const cleanupController = sessionControllerRef.current;
+      cleanupController.isActive = false;
+      cleanupController.state = SessionState.ENDED;
+      cleanupController.isProcessingTurn = false;
+      cleanupController.pendingResponseQueue = [];
+      activeRequestIdRef.current += 1;
+    };
   }, [scenario]);
 
   // ─── SEND MESSAGE ─────────────────────────────────────────────────────────────
   const sendMessage = async (rawInput = input) => {
-    if (sendInFlightRef.current) return;
+    const controller = sessionControllerRef.current;
+    const normalizedInput = String(rawInput || "").trim();
+    if (!normalizedInput) return;
+    if (!controller.isActive || controller.state === SessionState.ENDED || controller.state === SessionState.CLOSING) return;
+    if (controller.isProcessingTurn || sendInFlightRef.current) {
+      controller.pendingResponseQueue.push(normalizedInput);
+      return;
+    }
 
     // TURN ORDER RULE
     // Rep and HCP messages must alternate.
@@ -1470,7 +1512,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return;
     }
 
-    const normalizedRawInput = String(rawInput || "").trim().toLowerCase();
+    const normalizedRawInput = normalizedInput.toLowerCase();
     const candidateTurnKey = `${lastTurn?.turnNumber ?? -1}::${normalizedRawInput}`;
     if (candidateTurnKey && candidateTurnKey === lastSubmittedTurnKeyRef.current) {
       return;
@@ -1480,9 +1522,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let nextHcpDialogue = '';
     let contextualCue = '';
     // Only trigger a hard close when the rep explicitly says they need to leave now.
-    if (hasExplicitExitIntent(rawInput)) {
+    if (hasExplicitExitIntent(normalizedInput)) {
       let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
       let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
+      controller.state = SessionState.CLOSING;
       setTurns([...turns, {
         turnNumber: turns.length,
         hcpStateBefore: 'disengaging',
@@ -1494,16 +1537,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         alignment: null,
         hcpStateAfter: null,
       }]);
+      controller.state = SessionState.ENDED;
       setIsLoading(false);
       return; // Ensure no further turn creation occurs
     }
-    if (!sanitizeUserMessage(rawInput) || isLoading) return;
+    if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
 
+    controller.isProcessingTurn = true;
+    controller.state = SessionState.PROCESSING;
     sendInFlightRef.current = true;
     const requestId = ++activeRequestIdRef.current;
     lastSubmittedTurnKeyRef.current = candidateTurnKey;
     try {
-      const repMessage = sanitizeUserMessage(rawInput);
+      const repMessage = sanitizeUserMessage(normalizedInput);
       setInput("");
       setIsLoading(true);
 
@@ -2002,6 +2048,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
     }
 
+    const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
+    const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
+    const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
+    if (hasRecentPhraseReuse) {
+      nextHcpDialogue = enforceDialogueVariety({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
+        recentDialogues: recentHcpDialogues,
+      });
+    }
+
     const primaryConcern = detectPrimaryConcern(
       `${scenario?.description || ""} ${scenario?.context || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
     );
@@ -2108,6 +2166,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     contextualCue = hardenTextSurface(contextualCue);
+    const recentCueMemory = recentCueHistoryRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
+    const contextualCueNormalized = normalizeDialogueSignature(contextualCue);
+    if (contextualCueNormalized && recentCueMemory.includes(contextualCueNormalized)) {
+      const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
+      contextualCue = buildScenarioAlignedCue(
+        `${nextHcpDialogue} ${generationKey}`,
+        isFirstHcpResponse,
+        recentCueText,
+        decayState.tier
+      );
+      contextualCue = hardenTextSurface(contextualCue);
+    }
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
@@ -2139,7 +2209,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       generationKey,
     };
 
-    if (requestId !== activeRequestIdRef.current) {
+    if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {
       return;
     }
 
@@ -2180,15 +2250,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return [...replaced, nextTurn];
     });
 
-      setIsLoading(false);
-      if (requestId === activeRequestIdRef.current) {
+      recentDialoguePhrasesRef.current = [
+        ...recentDialoguePhrasesRef.current,
+        ...extractDialoguePhrases(nextHcpDialogue),
+      ].slice(-40);
+      recentCueHistoryRef.current = [
+        ...recentCueHistoryRef.current,
+        normalizeDialogueSignature(contextualCue),
+      ].filter(Boolean).slice(-40);
+
+      if (sessionControllerRef.current.isActive) {
+        setIsLoading(false);
+      }
+      if (requestId === activeRequestIdRef.current && sessionControllerRef.current.isActive) {
         speak(nextHcpDialogue);
       }
 
       // Auto-focus input after HCP responds
       setTimeout(() => inputRef.current?.focus(), 100);
     } finally {
+      if (sessionControllerRef.current.isActive && sessionControllerRef.current.state !== SessionState.ENDED) {
+        sessionControllerRef.current.state = SessionState.ACTIVE;
+      }
+      sessionControllerRef.current.isProcessingTurn = false;
       sendInFlightRef.current = false;
+      const queuedInput = sessionControllerRef.current.pendingResponseQueue.shift();
+      if (queuedInput && sessionControllerRef.current.isActive && sessionControllerRef.current.state === SessionState.ACTIVE) {
+        sendMessage(queuedInput);
+      }
     }
   };
 
