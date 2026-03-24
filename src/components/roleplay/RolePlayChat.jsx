@@ -50,6 +50,14 @@ import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
+import {
+  ENABLE_INFERENCE_LAYER,
+  createInitialRepInferenceState,
+  getRecentRepTurns,
+  updateRepInferenceState,
+  selectInferenceInfluence,
+  applyInferenceBias,
+} from "./behavioralInferenceLayer";
 
 function escapeHTML(text) {
   return String(text)
@@ -880,6 +888,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const lastSubmittedTurnKeyRef = useRef("");
   const loggedTurnKeysRef = useRef(new Set());
   const processedTurnKeysRef = useRef(new Set());
+  const repInferenceStateRef = useRef(createInitialRepInferenceState());
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -953,6 +962,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const initialState = deriveInitialState(scenario);
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
+        repInferenceStateRef.current = createInitialRepInferenceState();
 
         // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
@@ -1469,6 +1479,45 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = terminalCloseFallback;
+    }
+
+    const recentRepTurns = getRecentRepTurns(prevTurns);
+    const previousInferenceState = repInferenceStateRef.current;
+    const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
+    const selectedInfluence = ENABLE_INFERENCE_LAYER
+      ? selectInferenceInfluence(nextInferenceState, scenario, previousInferenceState.lastInfluence)
+      : { type: 'none', strength: 'low' };
+
+    const baseResponse = nextHcpDialogue;
+    const inferenceAdjustedResponse = ENABLE_INFERENCE_LAYER
+      ? applyInferenceBias({
+          baseResponse,
+          influence: selectedInfluence,
+          lastInfluence: previousInferenceState.lastInfluence,
+          turnCount: nextInferenceState.turnCount,
+          lastAppliedTurn: previousInferenceState.lastAppliedTurn,
+        })
+      : baseResponse;
+
+    nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+
+    if (ENABLE_INFERENCE_LAYER && selectedInfluence.type !== 'none' && nextHcpDialogue !== baseResponse) {
+      repInferenceStateRef.current = {
+        ...nextInferenceState,
+        lastInfluence: selectedInfluence.type,
+        lastAppliedTurn: nextInferenceState.turnCount,
+      };
+    } else {
+      repInferenceStateRef.current = {
+        ...nextInferenceState,
+        lastInfluence: previousInferenceState.lastInfluence,
+        lastAppliedTurn: previousInferenceState.lastAppliedTurn,
+      };
+    }
+
+    if (ENABLE_INFERENCE_LAYER && import.meta.env.DEV) {
+      console.log('Inference State:', repInferenceStateRef.current);
+      console.log('Selected Influence:', selectedInfluence);
     }
 
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
