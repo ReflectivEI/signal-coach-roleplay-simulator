@@ -25,7 +25,7 @@ export function normalizeMessage(text) {
 
   // Smooth common grammar artifacts from model generation.
   cleaned = cleaned.replace(AUX_SUBJECT_CAP_FIX_RE, (_, aux, token) => `${aux} you ${token.toLowerCase()}`);
-  cleaned = cleaned.replace(CONNECTOR_MID_SENTENCE_RE, (token, offset, fullText) => {
+  cleaned = cleaned.replace(CONNECTOR_MID_SENTENCE_RE, (token, _connector, offset, fullText) => {
     if (offset === 0) return token;
     const prior = fullText.slice(0, offset);
     if (/[.!?]\s*$/.test(prior)) return token;
