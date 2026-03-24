@@ -446,6 +446,16 @@ function hasSpecificFollowUpCommitment(text = "") {
   return hasDeliverable && hasOwnership && hasTimebox && notJustPromise;
 }
 
+function isDeferringWithoutImmediateAction(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeferralLanguage = /\b(next week|later|we'll talk|we can talk|circle back|follow up|revisit|by next|by end of week|until the end of the week)\b/.test(sample);
+  const hasImmediateAction = /\b(today|tomorrow|this week|start with|first step|one change|implement now|pilot now|begin with|assign)\b/.test(sample);
+
+  return hasDeferralLanguage && !hasImmediateAction;
+}
+
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
   const concernPattern = REALISM_CONCERN_PATTERNS[concern] || REALISM_CONCERN_PATTERNS.workflow;
   return concernPattern.test(String(repMessage || ""));
@@ -1820,19 +1830,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     );
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
+    const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3
-      && !repHasConcreteMove
-      && !repHasFollowUpCommitment;
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
     const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
     const hardLoopBreaker =
-      decayState.tier === "disengaging"
+      (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
-      && !repHasConcreteMove
-      && !repHasFollowUpCommitment;
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
 
     if (hardLoopBreaker) {
       nextHcpState = "disengaged";
