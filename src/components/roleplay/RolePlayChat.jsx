@@ -229,6 +229,13 @@ const DECAY_CUE_BUCKETS = {
   ],
 };
 
+const TERMINAL_DECISION_CUES = [
+  "The HCP glances toward the door, waiting for one final relevant point.",
+  "The HCP gathers the chart and waits for one final relevant point.",
+  "The HCP checks the time, waiting for one final relevant point.",
+  "The HCP shifts posture as if preparing to move on, waiting for one final relevant point.",
+];
+
 function detectPrimaryConcern(text = "") {
   const sample = String(text || "");
   for (const [key, pattern] of Object.entries(REALISM_CONCERN_PATTERNS)) {
@@ -353,6 +360,71 @@ function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
   }
 
   return `${compact} ${unresolved} ${targetedAsk}`;
+}
+
+function countUnresolvedConcernTurns(turns = [], concern = "workflow") {
+  const repTurns = (Array.isArray(turns) ? turns : [])
+    .filter((turn) => !!turn?.repMessage)
+    .slice(-8);
+
+  let unresolvedStreak = 0;
+  for (let i = repTurns.length - 1; i >= 0; i -= 1) {
+    const repText = String(repTurns[i]?.repMessage || "");
+    if (detectConcernAddressed(repText, concern)) break;
+    unresolvedStreak += 1;
+  }
+  return unresolvedStreak;
+}
+
+function buildTerminalDecisionDialogue({ concern = "workflow", seed = "" } = {}) {
+  const byConcern = {
+    workflow: [
+      "I'm not seeing a clear operational path here.",
+      "This isn't addressing the workflow constraint yet.",
+      "I still need something concrete to make this actionable.",
+      "If there's a specific workflow change, I need it directly.",
+      "Otherwise, this may be something to revisit later.",
+    ],
+    access: [
+      "This isn't addressing the workflow constraint yet.",
+      "I still need something concrete to make this actionable.",
+      "If there's a specific workflow change, I need it directly.",
+      "This may not be practical for our team right now.",
+    ],
+    evidence: [
+      "I'm not seeing a clear operational path here.",
+      "This isn't addressing the workflow constraint yet.",
+      "I still need something concrete to make this actionable.",
+      "Otherwise, this may be something to revisit later.",
+    ],
+    time: [
+      "I'm not seeing a clear operational path here.",
+      "I still need something concrete to make this actionable.",
+      "This may not be practical for our team right now.",
+    ],
+    policy: [
+      "This isn't addressing the workflow constraint yet.",
+      "I still need something concrete to make this actionable.",
+      "Otherwise, this may be something to revisit later.",
+    ],
+    screening: [
+      "I'm not seeing a clear operational path here.",
+      "I still need something concrete to make this actionable.",
+      "If there's a specific workflow change, I need it directly.",
+      "This may not be practical for our team right now.",
+    ],
+  };
+  const askOptions = [
+    "Do you have something specific?",
+    "Is there a concrete change you can point to?",
+  ];
+
+  const pool = byConcern[concern] || byConcern.workflow;
+  const baseIndex = deterministicIndex(`${seed}:${concern}:terminal-statement`, pool.length);
+  const askIndex = deterministicIndex(`${seed}:${concern}:terminal-ask`, askOptions.length);
+  const includeAsk = Math.random() < 0.45;
+  const statement = pool[baseIndex];
+  return includeAsk ? `${statement} ${askOptions[askIndex]}` : statement;
 }
 
 const HCP_STATE_LADDER = [
@@ -1424,6 +1496,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernSourceText,
       scenarioKeywords,
     });
+    const unresolvedConcernTurns = countUnresolvedConcernTurns(
+      [...turns, { repMessage }],
+      activeConcern,
+    );
+    const terminalDecisionTriggerActive =
+      ["impatient", "disengaging"].includes(decayState.tier)
+      && unresolvedConcernTurns >= 3;
+    const continueProbability = 0.65;
+    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
+    const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
 
     // 3. Lock rep's response
     const lockedRespondingTurn = {
@@ -1765,6 +1847,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ...decayState,
       activeConcern,
     });
+    if (terminalDecisionMode) {
+      nextHcpDialogue = buildTerminalDecisionDialogue({
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+      });
+    }
 
     const primaryConcern = detectPrimaryConcern(
       `${scenario?.description || ""} ${scenario?.context || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
@@ -1826,7 +1914,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
-      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
+      if (terminalDecisionMode) {
+        const cueIndex = deterministicIndex(
+          `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-cue`,
+          TERMINAL_DECISION_CUES.length,
+        );
+        contextualCue = TERMINAL_DECISION_CUES[cueIndex];
+      } else {
+        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
+      }
 
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
