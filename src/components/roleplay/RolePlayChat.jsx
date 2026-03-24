@@ -422,12 +422,24 @@ function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2
   const trimmedQuestion = interrogativeIndex > 0 ? questionPart.slice(interrogativeIndex).trim() : questionPart.trim();
   if (trimmedQuestion.split(/\s+/).length <= maxWords) return trimmedQuestion;
 
-  return trimmedQuestion
+  const clauses = trimmedQuestion
+    .split(/,\s+|;\s+|\s+and\s+/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const interrogativeClause = clauses.find((part) =>
+    /\b(what|how|where|which|who|can|could|would|should)\b/i.test(part)
+    && part.split(/\s+/).length >= 6
+  ) || clauses[0] || trimmedQuestion;
+
+  const concise = interrogativeClause
     .split(/\s+/)
     .slice(0, maxWords)
     .join(" ")
+    .replace(/\b(that|which|who|you|your|my|our|to|for|with|of|in)\s*$/i, "")
     .replace(/\s+[,.]$/, "")
-    .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
+    .trim();
+  const ending = trimmedQuestion.includes("?") || /\b(what|how|where|which|who|can|could|would|should)\b/i.test(concise) ? "?" : ".";
+  return `${concise}${ending}`;
 }
 
 function polishClinicianConversationalPhrasing({
@@ -449,6 +461,8 @@ function polishClinicianConversationalPhrasing({
     .replace(/\bit depends on whether it is realistic for our current staffing\b/i, "is this realistic with current staffing")
     .replace(/^where we already have\b/i, "We already have")
     .replace(/^where we\b/i, "How do we")
+    .replace(/\bthat you\?\s*$/i, "that are most relevant to my patients?")
+    .replace(/\bbut Is\b/g, "but is")
     .replace(/\bwhat specific outcomes are they measuring that you think would be relevant to my\?\s*$/i, "which outcomes are most relevant to my patients?")
     .replace(/\s+/g, " ")
     .trim();
@@ -609,10 +623,13 @@ function enforceQuestionStatementBalance({
   seed = "",
   recentDialogues = [],
   turnNumber = 1,
+  repMessage = "",
 } = {}) {
   const safeCandidate = hardenTextSurface(candidate);
   if (!safeCandidate) return safeCandidate;
   if (!isQuestionLikeDialogue(safeCandidate)) return safeCandidate;
+  const repAskedQuestion = /\?/.test(String(repMessage || "")) || /^(what|how|why|when|where|who|can|could|would|should|is|are|do|does)\b/i.test(String(repMessage || "").trim());
+  if (repAskedQuestion) return safeCandidate;
 
   const recent = (recentDialogues || []).slice(-4);
   const recentQuestionStreak = recent
@@ -2932,6 +2949,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
         recentDialogues: recentHcpDialogues,
         turnNumber: nextTurnNumber,
+        repMessage,
       });
     }
 
