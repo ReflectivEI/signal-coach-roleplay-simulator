@@ -1678,26 +1678,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
-    // Only trigger a hard close when the rep explicitly says they need to leave now.
-    if (hasExplicitExitIntent(normalizedInput)) {
-      let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
-      let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-      controller.state = SessionState.CLOSING;
-      setTurns([...turns, {
-        turnNumber: turns.length,
-        hcpStateBefore: 'disengaging',
-        temperatureBefore: 'neutral',
-        severityBefore: 0,
-        cueBefore: contextualCue,
-        hcpDialogueBefore: nextHcpDialogue,
-        repMessage: sanitizeUserMessage(rawInput),
-        alignment: null,
-        hcpStateAfter: null,
-      }]);
-      controller.state = SessionState.ENDED;
-      setIsLoading(false);
-      return; // Ensure no further turn creation occurs
-    }
     if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
 
     controller.isProcessingTurn = true;
@@ -1950,7 +1930,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier)) {
-        return "Thanks. Send that workflow analysis by the time you committed, and copy my lead MA so we can review without disrupting clinic flow.";
+        return "Thanks. Please include payer-specific variation handling in that workflow plan and send it by the time you committed.";
       }
 
       if (nextHcpState === "time-pressured") {
@@ -2178,9 +2158,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged") {
-      nextHcpState = "disengaged";
+      nextHcpState = overrideExit ? "disengaged" : "boundary-setting";
       usedDeterministicFallback = true;
-      nextHcpDialogue = "Thanks. Send that workflow analysis by the time you committed, copy my lead MA, and we'll review next steps from there.";
+      nextHcpDialogue = overrideExit
+        ? "Understood. Please coordinate a follow-up time with the front desk and send the workflow plan by your committed deadline."
+        : "Thanks. Include payer-variation handling and owner-level rollout steps in that plan, then send it by your committed deadline.";
     }
 
     const recentRepTurns = getRecentRepTurns(prevTurns);
@@ -2312,7 +2294,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
+      nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
