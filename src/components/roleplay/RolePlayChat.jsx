@@ -430,8 +430,20 @@ function enforceDialogueVariety({
 function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
-  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency)\b/i;
+  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency|goodbye|good bye|bye|have a great day|see you next week|see you next time|talk soon)\b/i;
   return explicitExitPattern.test(normalized);
+}
+
+function hasSpecificFollowUpCommitment(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeliverable = /\b(plan|workflow analysis|implementation plan|rollout plan|training plan|timeline|pilot plan|checklist|proposal)\b/.test(sample);
+  const hasOwnership = /\b(i will|i'll|my team will|we will|i can send|i can deliver|i can share)\b/.test(sample);
+  const hasTimebox = /\b(today|tomorrow|this week|next week|by (monday|tuesday|wednesday|thursday|friday|end of day|eod|end of week)|within \d+\s?(day|days|week|weeks)|on (monday|tuesday|wednesday|thursday|friday))\b/.test(sample);
+  const notJustPromise = !/\b(trust me|i give you my word|it will be smooth|it will streamline)\b/.test(sample);
+
+  return hasDeliverable && hasOwnership && hasTimebox && notJustPromise;
 }
 
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
@@ -1826,12 +1838,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       [...turns, { repMessage }],
       activeConcern,
     );
+    const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
+    const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3;
     const continueProbability = 0.65;
     const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    const hardLoopBreaker =
+      decayState.tier === "disengaging"
+      && unresolvedConcernTurns >= 5
+      && !repHasConcreteMove
+      && !repHasFollowUpCommitment;
+
+    if (hardLoopBreaker) {
+      nextHcpState = "disengaged";
+    }
 
     // 3. Lock rep's response
     const lockedRespondingTurn = {
@@ -1924,6 +1947,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (nextHcpState === "disengaged") {
         return terminalCloseFallback;
+      }
+
+      if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier)) {
+        return "Thanks. Send that workflow analysis by the time you committed, and copy my lead MA so we can review without disrupting clinic flow.";
       }
 
       if (nextHcpState === "time-pressured") {
@@ -2148,6 +2175,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = terminalCloseFallback;
+    }
+
+    if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged") {
+      nextHcpState = "disengaged";
+      usedDeterministicFallback = true;
+      nextHcpDialogue = "Thanks. Send that workflow analysis by the time you committed, copy my lead MA, and we'll review next steps from there.";
     }
 
     const recentRepTurns = getRecentRepTurns(prevTurns);
