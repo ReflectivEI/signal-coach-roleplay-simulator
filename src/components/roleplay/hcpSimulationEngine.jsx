@@ -1950,16 +1950,6 @@ export function buildHCPDialoguePrompt({
     directive: 'Directive',
     closing_decision: 'Closing / Decision',
   }[interactionMode]
-  const isTerminalEngagement =
-    semanticOverlay.terminalBehavior ||
-    structuralState === 'disengaged' ||
-    interactionMode === 'closing_decision'
-  const isLowEngagement =
-    isTerminalEngagement ||
-    structuralState === 'boundary-setting' ||
-    structuralState === 'irritated' ||
-    interactionMode === 'directive' ||
-    semanticOverlay.stage >= 4
 
   let contextHint = ''
   if (lastRepMessage) {
@@ -2064,15 +2054,6 @@ export function buildHCPDialoguePrompt({
   prompt += '- Never ask multiple questions in a single turn.\n'
   prompt += '- If you are disengaged, ask no questions at all.\n'
   prompt += '- In closing / decision mode, prefer statements or binary asks over open-ended questions.\n'
-
-  if (isLowEngagement) {
-    prompt += '\nLOW / TERMINAL ENGAGEMENT CONSTRAINTS:\n'
-    prompt += '- Reduce articulation complexity: avoid multi-part questions, avoid structured or overly specific requests, and do not restate the full problem repeatedly.\n'
-    prompt += '- Shift from helpful clarification to evaluation statements: replace detailed asks with short, direct reactions and prefer statements over questions.\n'
-    prompt += '- Limit guidance to the rep: do not guide them toward the correct answer and do not refine or reframe the problem for them.\n'
-    prompt += '- Compress responses: target 1 sentence (max 2 short sentences) in plain conversational wording.\n'
-    prompt += '- As engagement decreases, your response should become less structured, less helpful, more evaluative, and more final.\n'
-  }
 
   prompt += '\nSEMANTIC PROGRESSION OVERLAY:\n'
   prompt += '- Current unresolved concern stage: ' + sanitize(semanticOverlay.stageLabel) + ' (Stage ' + sanitize(String(semanticOverlay.stage)) + ').\n'
