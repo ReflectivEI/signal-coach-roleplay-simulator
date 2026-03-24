@@ -31,6 +31,8 @@ export function normalizeMessage(text) {
     if (/[.!?]\s*$/.test(prior)) return token;
     return token.toLowerCase();
   });
+  cleaned = cleaned.replace(/\b(the|a)\s+before we go further,\s+time\b/gi, "$1 first time");
+  cleaned = cleaned.replace(/\bbefore we go further,\s+/gi, "");
 
   // Capitalize sentence starts for a polished, readable surface.
   cleaned = cleaned.replace(/(^|[.!?]\s+)([a-z])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`);

@@ -464,6 +464,32 @@ function isTerminalClosureDialogue(text = "") {
   return closurePattern.test(sample) && !asksNewQuestion;
 }
 
+function detectRepCloseIntent(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return { level: "none", score: 0 };
+
+  const hardPattern = /\b(bye|goodbye|i need to leave|i have to go|i must leave|i need to run|time to go|i have another patient|i'm stepping out)\b/;
+  const softPattern = /\b(wrap up|i'll leave it there|appreciate your time|happy to reconnect|follow up later|we can revisit|i don’t want to take more of your time|i know your schedule is tight|let’s reconnect)\b/;
+
+  if (hardPattern.test(sample)) return { level: "hard", score: 1 };
+  if (softPattern.test(sample)) return { level: "soft", score: 0.7 };
+  return { level: "none", score: 0 };
+}
+
+function isPracticalAskSignal(text = "") {
+  return /\b(one (concrete|practical|operational|single) (step|change)|what one change|single workflow adjustment|execute this week)\b/i.test(String(text || ""));
+}
+
+function buildOperationalSignature(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => /^(prior|auth|authorization|checklist|labs|notes|diagnosis|submission|resubmission|payer|workflow|staff|visit|prescribing|pause|seconds?|verify|complete|first|time)$/.test(token))
+    .join(" ");
+}
+
 function hasWorkflowOperationalLanguage(text = "") {
   return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load)\b/i.test(String(text || ""));
 }
@@ -1658,6 +1684,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
+  const closeHandshakeRef = useRef({
+    softCloseCount: 0,
+    lastOperationalSignature: "",
+    repeatedOperationalCount: 0,
+  });
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -1742,6 +1773,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
         repInferenceStateRef.current = createInitialRepInferenceState();
+        closeHandshakeRef.current = {
+          softCloseCount: 0,
+          lastOperationalSignature: "",
+          repeatedOperationalCount: 0,
+        };
 
         // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
@@ -1971,6 +2007,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       priorRepMessage,
       scenarioFamily,
     });
+    const closeIntent = detectRepCloseIntent(repMessage);
+    const operationalSignature = buildOperationalSignature(repMessage);
+    const previousOperationalSignature = closeHandshakeRef.current.lastOperationalSignature || "";
+    const repeatedOperationalStep = Boolean(
+      operationalSignature
+      && previousOperationalSignature
+      && (
+        operationalSignature === previousOperationalSignature
+        || calculateTokenOverlapRatio(operationalSignature, previousOperationalSignature) >= 0.82
+      )
+    );
+    const recentHcpPracticalAskCount = [...turns]
+      .map((t) => String(t?.hcpDialogueBefore || ""))
+      .slice(-4)
+      .filter((line) => isPracticalAskSignal(line))
+      .length;
     const recentMisses = [...turns]
       .filter((t) => t?.repMessage)
       .slice(-3)
@@ -2002,6 +2054,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+
+    if (closeIntent.level === "soft") {
+      closeHandshakeRef.current.softCloseCount += 1;
+    } else if (closeIntent.level === "none") {
+      closeHandshakeRef.current.softCloseCount = 0;
+    }
+    if (repeatedOperationalStep) {
+      closeHandshakeRef.current.repeatedOperationalCount += 1;
+    } else if (operationalSignature) {
+      closeHandshakeRef.current.repeatedOperationalCount = 0;
+    }
+    closeHandshakeRef.current.lastOperationalSignature = operationalSignature || previousOperationalSignature;
 
     if (hardLoopBreaker) {
       nextHcpState = "disengaged";
@@ -2565,6 +2629,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // 8. Lock next turn with contextual cue (matches dialogue + question quality)
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
+    const shouldForceNaturalClose =
+      closeIntent.level === "hard"
+      || (
+        closeIntent.level === "soft"
+        && (
+          repHasConcreteMove
+          || repHasFollowUpCommitment
+          || closeHandshakeRef.current.softCloseCount >= 2
+          || (closeHandshakeRef.current.repeatedOperationalCount >= 1 && recentHcpPracticalAskCount >= 2)
+        )
+      );
+
+    if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = "Understood. Thanks for the discussion today. Please coordinate a follow-up slot with the front desk if you want to continue.";
+    }
+
     const nextTurn = {
       turnNumber: nextTurnNumber,
       hcpStateBefore: nextHcpState,
@@ -2597,11 +2678,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       repDefersImmediateAction,
     });
 
-    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!shouldForceNaturalClose && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
-    const shouldEndSessionAfterTurn = overrideExit || (
+    const shouldEndSessionAfterTurn = overrideExit || shouldForceNaturalClose || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
       || terminalPolicyAction === "close"
     );
