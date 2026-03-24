@@ -191,12 +191,137 @@ const CUE_BUCKETS = {
   ],
 };
 
+const ENGAGEMENT_DECAY_TIERS = ["engaged", "constrained", "impatient", "disengaging"];
+const ENGAGEMENT_TIER_SENTENCE_MAX = {
+  engaged: 4,
+  constrained: 3,
+  impatient: 2,
+  disengaging: 2,
+};
+
+const ENGAGEMENT_TIER_PROMPT_GUIDANCE = {
+  engaged: "Stay open and thoughtful. You can provide context, but keep it clinically grounded and realistic.",
+  constrained: "Be shorter and narrower. Redirect quickly to your active concern with less explanation.",
+  impatient: "Be direct and brief. Apply time pressure and ask for one concrete operational point.",
+  disengaging: "Use minimal effort. Keep it very brief, avoid coaching, and signal that relevance must be immediate.",
+};
+
+const DECAY_CUE_BUCKETS = {
+  engaged: [
+    "The HCP keeps steady eye contact, attentive and professionally receptive.",
+    "The HCP listens with a thoughtful expression, then returns to the chart for a moment.",
+    "The HCP nods once, open to the discussion but mindful of the clinic flow.",
+  ],
+  constrained: [
+    "The HCP checks the clock briefly, then refocuses with a narrower, time-aware expression.",
+    "The HCP scans a chart line and responds with concise, practical focus.",
+    "The HCP keeps one hand on the notes, signaling limited bandwidth but continued cooperation.",
+  ],
+  impatient: [
+    "The HCP glances toward the hallway and waits for one practical point.",
+    "The HCP keeps a clipped posture, clearly trying to keep the conversation moving.",
+    "The HCP taps the chart once, signaling urgency and limited patience for tangents.",
+  ],
+  disengaging: [
+    "The HCP shifts toward the door and waits for immediate relevance.",
+    "The HCP gathers the chart with minimal expression, signaling the exchange is close to ending.",
+    "The HCP keeps attention brief, expecting one concrete point before moving on.",
+  ],
+};
+
 function detectPrimaryConcern(text = "") {
   const sample = String(text || "");
   for (const [key, pattern] of Object.entries(REALISM_CONCERN_PATTERNS)) {
     if (pattern.test(sample)) return key;
   }
   return "workflow";
+}
+
+function detectConcernAddressed(repMessage = "", concern = "workflow") {
+  const concernPattern = REALISM_CONCERN_PATTERNS[concern] || REALISM_CONCERN_PATTERNS.workflow;
+  return concernPattern.test(String(repMessage || ""));
+}
+
+function hasConcreteOperationalMove(repMessage = "") {
+  return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|change for your team|for your staff)\b/i.test(String(repMessage || ""));
+}
+
+function deriveEngagementDecay({
+  previousTier = "engaged",
+  previousPressure = 0,
+  repMessage = "",
+  activeConcern = "workflow",
+  concernSourceText = "",
+  scenarioKeywords = [],
+}) {
+  const repLower = String(repMessage || "").toLowerCase();
+  const concernAddressed = detectConcernAddressed(repLower, activeConcern);
+  const repeatedEvidence = /\b(study|trial|data|endpoint|publication|methodology|efficacy|p-value|hazard ratio)\b/.test(repLower)
+    && !concernAddressed
+    && ["workflow", "access", "time", "policy", "screening"].includes(activeConcern);
+  const contextHits = (scenarioKeywords || []).slice(0, 40).filter((k) => repLower.includes(k)).length;
+  const reusedHcpLanguage = String(concernSourceText || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w && w.length > 4)
+    .slice(0, 14)
+    .some((token) => repLower.includes(token));
+  const genericRep = repLower.length < 18 || /\b(great|sounds good|totally|absolutely|trust me|you know)\b/.test(repLower);
+
+  let missWeight = 0;
+  if (!concernAddressed) missWeight += 1;
+  if (repeatedEvidence) missWeight += 1;
+  if (!reusedHcpLanguage && contextHits === 0) missWeight += 0.5;
+  if (genericRep) missWeight += 0.4;
+
+  const strongRecovery = concernAddressed && (hasConcreteOperationalMove(repLower) || reusedHcpLanguage || contextHits > 0);
+  const recoveryCredit = strongRecovery ? 1.1 : concernAddressed ? 0.5 : 0;
+
+  const smoothedPressure = Math.max(0, Math.min(6, (previousPressure * 0.65) + missWeight - recoveryCredit));
+  const inferredIndex = smoothedPressure > 3.8 ? 3 : smoothedPressure > 2.4 ? 2 : smoothedPressure > 1.2 ? 1 : 0;
+  const previousIndex = Math.max(0, ENGAGEMENT_DECAY_TIERS.indexOf(previousTier));
+  const boundedIndex = Math.max(previousIndex - 1, Math.min(previousIndex + 1, inferredIndex));
+  const tier = ENGAGEMENT_DECAY_TIERS[boundedIndex] || "engaged";
+
+  return {
+    tier,
+    pressureScore: smoothedPressure,
+    concernAddressed,
+    repeatedEvidence,
+    recovered: strongRecovery,
+    missWeight,
+  };
+}
+
+function compressHcpDialogueForEngagement(dialogue = "", engagement = {}) {
+  const tier = engagement.tier || "engaged";
+  const concern = engagement.activeConcern || "workflow";
+  const maxSentences = ENGAGEMENT_TIER_SENTENCE_MAX[tier] || 3;
+  const normalized = hardenTextSurface(dialogue);
+  const parts = normalized.match(/[^.!?]+[.!?]/g) || [normalized];
+  let compact = parts.slice(0, maxSentences).join(" ").trim();
+
+  if (tier === "disengaging") {
+    compact = compact.replace(/\b(let me|happy to|i can walk you through|we can review)\b[^.]*\./gi, "").trim() || compact;
+  }
+
+  const needsRedirect = !engagement.concernAddressed && (tier === "impatient" || tier === "disengaging");
+  if (needsRedirect) {
+    const redirectByConcern = {
+      workflow: "I still need one concrete workflow change for my team.",
+      access: "I still need a direct answer on prior auth or access burden.",
+      evidence: "I need the evidence tied directly to my practice decisions.",
+      time: "I only have a minute, so give me one practical point.",
+      policy: "I need a clear connection to our current protocol constraints.",
+      screening: "I need one concrete screening or candidacy step we can apply now.",
+    };
+    const redirect = redirectByConcern[concern] || redirectByConcern.workflow;
+    if (!new RegExp(String(redirect).slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(compact)) {
+      compact = `${compact} ${redirect}`.trim();
+    }
+  }
+
+  return hardenTextSurface(compact);
 }
 
 function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
@@ -1285,6 +1410,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const prevEngagementScore = respondingToTurn.engagementScore ?? 2;
     const conversationHistory = turns.map(t => ({ repMessage: t.repMessage, hcpDialogue: t.hcpDialogueBefore }));
     const turnState = updateTurnState(prevState, repMessage, prevEngagementScore, conversationHistory);
+    const previousDecayTier = respondingToTurn.engagementDecayTier || "engaged";
+    const previousPressureScore = Number.isFinite(respondingToTurn.engagementPressureScore)
+      ? respondingToTurn.engagementPressureScore
+      : 0;
+    const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
+    const activeConcern = detectPrimaryConcern(concernSourceText);
+    const decayState = deriveEngagementDecay({
+      previousTier: previousDecayTier,
+      previousPressure: previousPressureScore,
+      repMessage,
+      activeConcern,
+      concernSourceText,
+      scenarioKeywords,
+    });
 
     // 3. Lock rep's response
     const lockedRespondingTurn = {
@@ -1300,6 +1439,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      engagementDecayTier: decayState.tier,
+      engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
 
@@ -1444,7 +1585,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
     };
 
-    const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = []) => {
+    const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
       const value = String(dialogue || "").toLowerCase();
       if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
         return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
@@ -1457,6 +1598,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
+      }
+
+      if (engagementTier !== "engaged") {
+        const decayPool = DECAY_CUE_BUCKETS[engagementTier] || DECAY_CUE_BUCKETS.constrained;
+        const cueSeed = `${generationKey}:${nextTurnNumber}:${nextHcpState}:${engagementTier}:${value.slice(0, 80)}`;
+        const startIndex = deterministicIndex(cueSeed, decayPool.length);
+        const normalizedRecent = recentCues.slice(-12).map((cue) => String(cue || "").trim().toLowerCase());
+        for (let i = 0; i < decayPool.length; i += 1) {
+          const candidate = decayPool[(startIndex + i) % decayPool.length];
+          const normalizedCandidate = String(candidate || "").trim().toLowerCase();
+          if (normalizedCandidate && !normalizedRecent.includes(normalizedCandidate)) return candidate;
+        }
+        return decayPool[startIndex];
       }
 
       const concern = detectPrimaryConcern(`${value} ${scenario?.description || ""}`);
@@ -1501,7 +1655,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        });
+        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         const res = await fetch('/api/llm/invoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1607,6 +1761,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : baseResponse;
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+    nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
+      ...decayState,
+      activeConcern,
+    });
 
     const primaryConcern = detectPrimaryConcern(
       `${scenario?.description || ""} ${scenario?.context || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
@@ -1668,7 +1826,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
-      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText);
+      contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
 
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
@@ -1732,6 +1890,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      engagementDecayTier: decayState.tier,
+      engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
 
