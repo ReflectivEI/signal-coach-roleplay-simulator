@@ -692,6 +692,45 @@ function stripRedundantSpecialtyFromStakeholder(stakeholder, specialty) {
   return filteredSegments.length > 0 ? `${name} - ${filteredSegments.join(", ")}` : name;
 }
 
+function toPossessiveName(name = "") {
+  const value = String(name || "").trim();
+  if (!value) return "";
+  return /s$/i.test(value) ? `${value}’` : `${value}’s`;
+}
+
+function deriveHcpDisplayName({ stakeholder, hcp, hcpCategory }) {
+  const source = String(stakeholder || hcp || "").trim();
+  const roleContext = `${source} ${String(hcpCategory || "")}`.toLowerCase();
+  const base = source.split(/\s-\s/, 1)[0].split(",")[0].trim();
+  const normalizedBase = base.replace(/^dr\.?\s+/i, "").trim();
+  const nameTokens = normalizedBase.split(/\s+/).filter(Boolean);
+  const firstName = nameTokens[0] || "";
+  const lastName = nameTokens.length > 1 ? nameTokens[nameTokens.length - 1] : "";
+
+  const isNpPaRn = /\b(np|nurse practitioner|pa-?c?|physician assistant|rn|registered nurse)\b/i.test(roleContext);
+  const isMdDo = /\b(md|do|physician)\b/i.test(roleContext) || /^dr\.?\s/i.test(source);
+
+  if (isMdDo && (lastName || firstName)) {
+    return `Dr. ${lastName || firstName}`;
+  }
+
+  if (isNpPaRn && firstName) {
+    return firstName;
+  }
+
+  return base || "HCP";
+}
+
+function personalizeCueText(cueText, hcpDisplayName) {
+  const cue = String(cueText || "");
+  const name = String(hcpDisplayName || "").trim();
+  if (!cue || !name) return cue;
+
+  return cue
+    .replace(/\b[Tt]he HCP's\b/g, toPossessiveName(name))
+    .replace(/\b[Tt]he HCP\b/g, name);
+}
+
 function buildHcpProfileSummary({ stakeholder, specialty, descriptionText, context, hcpCategory, hcp }) {
   const cleanedStakeholder = stripRedundantSpecialtyFromStakeholder(stakeholder || hcp, specialty);
   const summaryText = hcp || descriptionText || context || stakeholder || "Profile details are not available for this HCP.";
@@ -1225,6 +1264,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     context: scenario.context,
     hcpCategory: scenario.hcp_category,
     hcp: scenario.hcp,
+  });
+  const hcpDisplayName = deriveHcpDisplayName({
+    stakeholder: scenario.stakeholder,
+    hcp: scenario.hcp,
+    hcpCategory: scenario.hcp_category,
   });
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
@@ -2417,13 +2461,13 @@ ${actionText}`;
                       {turn.cueBefore && (
                         <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
                           <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
+                            {sanitizeRenderedMessage(personalizeCueText(turn.cueBefore, hcpDisplayName), "behavioral-cue")}
                           </p>
                         </div>
                       )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>{hcpDisplayName}</div>
                           <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
@@ -2435,7 +2479,7 @@ ${actionText}`;
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0">HCP</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0" title={hcpDisplayName}>{hcpDisplayName}</div>
                     <div className="bg-slate-100 rounded-2xl px-4 py-2.5 flex gap-1 items-center">
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0.1s" }} />
