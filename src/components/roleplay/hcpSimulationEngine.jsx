@@ -819,13 +819,13 @@ function setRecentCueMemory(memory = {}, state, severity, cueIndex, max = 4) {
   }
 }
 
-function getRecentGlobalCueMemory(memory = {}, max = 15) {
+function getRecentGlobalCueMemory(memory = {}, max = 20) {
   const key = '__recent_global_cues__'
   const recent = Array.isArray(memory[key]) ? memory[key] : []
   return recent.slice(-max)
 }
 
-function setRecentGlobalCueMemory(memory = {}, cueSignature, max = 15) {
+function setRecentGlobalCueMemory(memory = {}, cueSignature, max = 20) {
   const key = '__recent_global_cues__'
   const prev = getRecentGlobalCueMemory(memory, max)
   const next = [...prev, cueSignature].slice(-max)
@@ -1292,8 +1292,8 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options
   const bank = CUE_BANK[hcpState] || CUE_BANK.neutral
   const safeSeverity = Math.max(0, Math.min(2, severity))
   const tier = bank[safeSeverity] || bank[0]
-  const nonRepeatWindow = Math.max(10, Math.min(15, options.nonRepeatWindow || 15))
-  const nonRepeatWarmupTurns = Math.max(10, Math.min(15, options.nonRepeatWarmupTurns || 15))
+  const nonRepeatWindow = Math.max(20, options.nonRepeatWindow || 20)
+  const nonRepeatWarmupTurns = Math.max(20, options.nonRepeatWarmupTurns || 20)
 
   const seed = hashInt(`${sessionId}:${turnNumber}:${hcpState}:${safeSeverity}`)
   const recentMemory = getRecentCueMemory(options.memory, hcpState, safeSeverity)
@@ -1313,7 +1313,7 @@ export function selectCue(sessionId, turnNumber, hcpState, severity = 0, options
       weight = 0
     }
 
-    // Hard safeguard: block any recent cue during first 10-15 exchanges.
+    // Hard safeguard: block any recent cue during first 20 exchanges.
     if (turnNumber <= nonRepeatWarmupTurns && recentGlobalCues.includes(cueSignature)) {
       weight = 0
     }
@@ -1722,8 +1722,8 @@ export function buildHCPProfile({
     preferShort,
     preferStrongVisuals,
     avoidDoorCues,
-    nonRepeatWindow: 15,
-    nonRepeatWarmupTurns: 15,
+    nonRepeatWindow: 20,
+    nonRepeatWarmupTurns: 20,
   })
 
   const stateMemory = setRecentCueMemory(
@@ -1744,7 +1744,7 @@ export function buildHCPProfile({
   const nextMemory = setRecentGlobalCueMemory(
     semanticMemory,
     cueSelection.cue,
-    15
+    20
   )
 
   const toneDirectives = getToneDirectives(structuralState, temperature)
@@ -1899,6 +1899,15 @@ export function buildHCPDialoguePrompt({
     .filter((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
     .map((line) => line.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim())
     .filter(Boolean)
+  const hcpHistoryMessages = historyLines
+    .filter((l) => l.startsWith('HCP:'))
+    .map((line) => line.replace(/^HCP:\s*/i, '').trim())
+    .filter(Boolean)
+  const recentHcpOpenings = hcpHistoryMessages
+    .slice(-8)
+    .map((line) => line.match(/^[^,.!?;:]+/))
+    .map((match) => (match ? String(match[0]).trim().toLowerCase() : ''))
+    .filter(Boolean)
   const repLine = [...historyLines]
     .reverse()
     .find((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
@@ -1973,6 +1982,7 @@ export function buildHCPDialoguePrompt({
   prompt += '- Output only spoken dialogue.\n'
   prompt += '- Prefer natural, conversational wording over formulaic phrasing.\n'
   prompt += '- Vary sentence openings naturally across turns while preserving the same core concern.\n'
+  prompt += '- Keep continuity with prior turns; do not restate the full problem after first mention unless the rep explicitly asks for a recap.\n'
 
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
   prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(scenario.description || scenario.context || '')
@@ -2040,6 +2050,7 @@ export function buildHCPDialoguePrompt({
   prompt += '- Preserve your primary concern from this scenario; do not drift into unrelated topics.\n'
   prompt += '- Do not restate the same objection phrasing more than twice; if concern remains unresolved, escalate posture instead of looping wording.\n'
   prompt += '- Progress unresolved concern semantically across stages instead of reusing near-identical sentence structures.\n'
+  prompt += '- Do not reuse the same cue language or opening phrasing used within the previous 20 turns.\n'
 
   prompt += '\nINTERACTION MODE SHIFT RULES:\n'
   prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'
@@ -2081,6 +2092,13 @@ export function buildHCPDialoguePrompt({
   prompt += '- Every statement must end with a period.\n'
 
   prompt += contextHint
+
+  if (recentHcpOpenings.length > 0) {
+    prompt += '\nRECENT HCP OPENINGS TO AVOID REUSING:\n'
+    recentHcpOpenings.slice(-6).forEach((opening) => {
+      prompt += `- ${sanitize(opening)}\n`
+    })
+  }
 
   if (historyText) {
     prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText)
