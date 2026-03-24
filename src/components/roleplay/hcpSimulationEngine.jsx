@@ -1443,6 +1443,38 @@ export function getToneDirectives(state, temperature) {
   }
 }
 
+export function deriveInteractionMode({
+  structuralState = 'neutral',
+  conversationQuality = 0,
+  repBehavior = {},
+  recentLowValueTurns = 0,
+}) {
+  if (structuralState === 'disengaged') {
+    return 'closing_decision'
+  }
+
+  const repeatedMisalignment =
+    recentLowValueTurns >= 2 ||
+    conversationQuality <= -2 ||
+    repBehavior.pushy ||
+    repBehavior.redundant_question ||
+    repBehavior.boundary_violation
+
+  if (structuralState === 'irritated' || structuralState === 'boundary-setting') {
+    return repeatedMisalignment ? 'closing_decision' : 'directive'
+  }
+
+  if (structuralState === 'resistant' || structuralState === 'time-pressured') {
+    return repeatedMisalignment ? 'directive' : 'clarifying'
+  }
+
+  if (conversationQuality <= -1 || recentLowValueTurns >= 1) {
+    return 'clarifying'
+  }
+
+  return 'exploratory'
+}
+
 /******************************************************************************************
 PUNCTUATION NORMALIZATION
 ******************************************************************************************/
@@ -1689,6 +1721,10 @@ export function buildHCPDialoguePrompt({
   }
 
   const historyLines = String(historyText || '').split('\n')
+  const repHistoryMessages = historyLines
+    .filter((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
+    .map((line) => line.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim())
+    .filter(Boolean)
   const repLine = [...historyLines]
     .reverse()
     .find((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
@@ -1708,6 +1744,21 @@ export function buildHCPDialoguePrompt({
     /\bmaybe\b|\bi guess\b|\bprobably\b|\bwe can talk later\b|\bnot now\b|\bdoesn.t matter\b|\bwhatever\b/.test(
       lastRepLower
     )
+  const recentLowValueTurns = repHistoryMessages
+    .slice(-3)
+    .filter((message) => detectLowValueRepResponse(message)).length
+  const interactionMode = deriveInteractionMode({
+    structuralState,
+    conversationQuality: hcpProfile.conversationQuality,
+    repBehavior: hcpProfile.repBehavior,
+    recentLowValueTurns,
+  })
+  const interactionModeLabel = {
+    exploratory: 'Exploratory',
+    clarifying: 'Clarifying',
+    directive: 'Directive',
+    closing_decision: 'Closing / Decision',
+  }[interactionMode]
 
   let contextHint = ''
   if (lastRepMessage) {
@@ -1768,6 +1819,7 @@ export function buildHCPDialoguePrompt({
 
   prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction)
   prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences)
+  prompt += '\nINTERACTION MODE: ' + sanitize(interactionModeLabel || 'Clarifying')
 
   prompt += '\n\nOUTPUT RULES:\n'
   prompt += '- Output only your spoken dialogue as the HCP.\n'
@@ -1794,11 +1846,22 @@ export function buildHCPDialoguePrompt({
   prompt += '- If you are irritated or disengaged, do not rescue the conversation with polished explanations.\n'
   prompt += '- If you are disengaged, end the interaction directly instead of extending it.\n'
   prompt += '- Maintain professionalism: firm is allowed, but do not become sarcastic, combative, or hostile.\n'
+  prompt += '- Preserve your primary concern from this scenario; do not drift into unrelated topics.\n'
+  prompt += '- Do not restate the same objection phrasing more than twice; if concern remains unresolved, escalate posture instead of looping wording.\n'
+
+  prompt += '\nINTERACTION MODE SHIFT RULES:\n'
+  prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'
+  prompt += '- Exploratory mode: ask open, curious, collaborative questions and seek understanding.\n'
+  prompt += '- Clarifying mode: narrow to one specific constraint, ask one focused question, reduce padding.\n'
+  prompt += '- Directive mode: use assertive framing, request concrete operational specificity, and challenge relevance directly but professionally.\n'
+  prompt += '- Closing / Decision mode: stop exploratory questioning; use short decisive statements or binary asks, and signal potential disengagement.\n'
+  prompt += '- Interaction mode must stay congruent with your physical cue: attentive in exploratory, focused/constrained in clarifying, firm/time-aware in directive, visibly wrapping up in closing.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'
   prompt += '- Never ask multiple questions in a single turn.\n'
   prompt += '- If you are disengaged, ask no questions at all.\n'
+  prompt += '- In closing / decision mode, prefer statements or binary asks over open-ended questions.\n'
 
   prompt += '\nPUNCTUATION RULE:\n'
   prompt += '- Every question must end with a question mark.\n'
