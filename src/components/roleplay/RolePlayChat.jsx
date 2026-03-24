@@ -235,6 +235,7 @@ const TERMINAL_DECISION_CUES = [
   "The HCP checks the time, waiting for one final relevant point.",
   "The HCP shifts posture as if preparing to move on, waiting for one final relevant point.",
 ];
+const NO_REPEAT_WINDOW_TURNS = 20;
 
 function detectPrimaryConcern(text = "") {
   const sample = String(text || "");
@@ -242,6 +243,127 @@ function detectPrimaryConcern(text = "") {
     if (pattern.test(sample)) return key;
   }
   return "workflow";
+}
+
+function normalizeDialogueSignature(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokensFromSignature(text = "") {
+  return normalizeDialogueSignature(text)
+    .split(" ")
+    .filter((token) => token.length > 2);
+}
+
+function calculateTokenOverlapRatio(a = "", b = "") {
+  const aTokens = new Set(tokensFromSignature(a));
+  const bTokens = new Set(tokensFromSignature(b));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let overlap = 0;
+  aTokens.forEach((token) => {
+    if (bTokens.has(token)) overlap += 1;
+  });
+  return overlap / Math.min(aTokens.size, bTokens.size);
+}
+
+function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
+  return (Array.isArray(turns) ? turns : [])
+    .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+    .filter(Boolean)
+    .slice(-Math.max(1, limit));
+}
+
+function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
+  const variants = {
+    workflow: [
+      "I need one operational step my current team can run with this week.",
+      "Give me one concrete process change we can apply without adding staff burden.",
+      "What is the single workflow adjustment that saves my team time right away?",
+      "If this is actionable, map one step my staff can execute in our current flow.",
+      "Keep it practical: what one change should we implement first in clinic?",
+    ],
+    access: [
+      "What is one payer-facing step that could reduce prior auth rework for us?",
+      "Give me one practical way to lower prior authorization friction this week.",
+      "What is one concrete action that helps us move access approvals faster?",
+      "Name one process change that cuts access delays without extra admin load.",
+      "I need one specific access tactic my team can run immediately.",
+    ],
+    evidence: [
+      "Point me to the most practice-relevant proof and why it changes my decision now.",
+      "Give me one evidence point that directly applies to patients I am seeing this month.",
+      "What is the strongest data signal I can use in a real treatment decision tomorrow?",
+      "Keep it tight: one proof point and the exact clinical implication for my practice.",
+      "I need one evidence takeaway tied directly to a care choice in clinic.",
+    ],
+    time: [
+      "I have about a minute—what is the one practical action worth doing first?",
+      "Given our schedule pressure, what is your single highest-yield next step?",
+      "Keep this to one immediate step we can start today without extra meetings.",
+      "What is one quick change that helps this week despite limited time?",
+      "I need one concise action item we can execute between patients.",
+    ],
+    policy: [
+      "What is one step that fits our current protocol and can be implemented quickly?",
+      "Show me one adjustment that aligns with our pathway constraints as written.",
+      "I need one protocol-compatible move we can actually use this month.",
+      "Give me one concrete recommendation that stays within institutional policy.",
+      "What is the first compliant step that still improves workflow?",
+    ],
+    screening: [
+      "What is one screening checkpoint we should add first for consistent execution?",
+      "Give me one candidacy step we can standardize without slowing clinic flow.",
+      "What is the first practical screening action your team recommends for our setting?",
+      "I need one clear screening move that my staff can apply consistently.",
+      "Name one immediate candidacy workflow step we can use this week.",
+    ],
+  };
+
+  const pool = variants[concern] || variants.workflow;
+  const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const startIndex = deterministicIndex(`${seed}:${concern}:dialogue-variant`, pool.length);
+
+  for (let i = 0; i < pool.length; i += 1) {
+    const candidate = pool[(startIndex + i) % pool.length];
+    const candidateNorm = normalizeDialogueSignature(candidate);
+    if (!candidateNorm) continue;
+    if (!recentNormalized.includes(candidateNorm)) return candidate;
+  }
+
+  return pool[startIndex] || pool[0];
+}
+
+function enforceDialogueVariety({
+  candidate = "",
+  concern = "workflow",
+  seed = "",
+  recentDialogues = [],
+} = {}) {
+  const safeCandidate = hardenTextSurface(candidate);
+  if (!safeCandidate) return safeCandidate;
+  const candidateNorm = normalizeDialogueSignature(safeCandidate);
+  const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const duplicateWithinWindow = recentNormalized.includes(candidateNorm);
+  const highlySimilar = recentDialogues.some((prior) => calculateTokenOverlapRatio(safeCandidate, prior) >= 0.9);
+
+  if (!duplicateWithinWindow && !highlySimilar) return safeCandidate;
+
+  return chooseConcernSpecificVariant({
+    concern,
+    seed,
+    recentDialogues,
+  });
+}
+
+function hasExplicitExitIntent(text = "") {
+  const normalized = String(text || "").trim().toLowerCase();
+  if (!normalized) return false;
+  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency)\b/i;
+  return explicitExitPattern.test(normalized);
 }
 
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
@@ -1357,53 +1479,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
-    // Only match explicit exit/scheduling phrases, not generic confirmations or product names
-    const repExitIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
-    const repSchedulingIntent = /\b(come back|return|later today|this afternoon|at \d{1,2}(am|pm)?|scheduled|talk this afternoon|3pm|2pm|1pm|noon|morning|evening|night|next week|tomorrow|next time|another time|follow up|catch up)\b/i;
-    let followUpTimeConfirmed = false;
-    let exitOrSchedulingState = false;
-    let exitStateActive = false;
-    let schedulingConfirmed = false;
-    // Check previous turns for exit/scheduling confirmation and rep exit
-    for (let i = turns.length - 1; i >= 0; i--) {
-      const t = turns[i];
-      if ((t.repMessage && repSchedulingIntent.test(t.repMessage)) || (t.hcpDialogueBefore && repSchedulingIntent.test(t.hcpDialogueBefore))) {
-        followUpTimeConfirmed = true;
-        schedulingConfirmed = true;
-        break;
-      }
-      if (t.repMessage && repExitIntent.test(t.repMessage)) {
-        exitStateActive = true;
-      }
-    }
-    if (repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed) {
-      exitOrSchedulingState = repExitIntent.test(String(rawInput).trim()) || followUpTimeConfirmed;
-    }
-    // If scheduling is confirmed, do not generate further HCP turns
-    if (exitStateActive && schedulingConfirmed) {
+    // Only trigger a hard close when the rep explicitly says they need to leave now.
+    if (hasExplicitExitIntent(rawInput)) {
+      let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
+      let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
+      setTurns([...turns, {
+        turnNumber: turns.length,
+        hcpStateBefore: 'disengaging',
+        temperatureBefore: 'neutral',
+        severityBefore: 0,
+        cueBefore: contextualCue,
+        hcpDialogueBefore: nextHcpDialogue,
+        repMessage: sanitizeUserMessage(rawInput),
+        alignment: null,
+        hcpStateAfter: null,
+      }]);
       setIsLoading(false);
-      return;
-    }
-    // In EXIT_OR_SCHEDULING: allowed dialogue patterns only
-    if (exitOrSchedulingState) {
-      // Only end session if rep explicitly signals exit intent
-      if (repExitIntent.test(String(rawInput).trim())) {
-        let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
-        let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-        setTurns([...turns, {
-          turnNumber: turns.length,
-          hcpStateBefore: 'disengaging',
-          temperatureBefore: 'neutral',
-          severityBefore: 0,
-          cueBefore: contextualCue,
-          hcpDialogueBefore: nextHcpDialogue,
-          repMessage: sanitizeUserMessage(rawInput),
-          alignment: null,
-          hcpStateAfter: null,
-        }]);
-        setIsLoading(false);
-        return; // Ensure no further turn creation occurs
-      }
+      return; // Ensure no further turn creation occurs
     }
     if (!sanitizeUserMessage(rawInput) || isLoading) return;
 
@@ -1466,8 +1558,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // 2. Detect rep interruption/leave intent and override HCP state if needed
     let overrideExit = false;
-    const leaveIntent = /\b(emergency|have to go|need to leave|must leave|interrupt|gotta run|schedule conflict|time to go|wrap up|end early|exit|stop here|reschedule|continue later|catch up later|see you later|can we finish|can we continue|let's pick up|pick up later|follow up|another time|next time)\b/i;
-    if (leaveIntent.test(repMessage)) {
+    if (hasExplicitExitIntent(repMessage)) {
       overrideExit = true;
     }
 
@@ -1730,7 +1821,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const decayPool = DECAY_CUE_BUCKETS[engagementTier] || DECAY_CUE_BUCKETS.constrained;
         const cueSeed = `${generationKey}:${nextTurnNumber}:${nextHcpState}:${engagementTier}:${value.slice(0, 80)}`;
         const startIndex = deterministicIndex(cueSeed, decayPool.length);
-        const normalizedRecent = recentCues.slice(-12).map((cue) => String(cue || "").trim().toLowerCase());
+        const normalizedRecent = recentCues.slice(-NO_REPEAT_WINDOW_TURNS).map((cue) => String(cue || "").trim().toLowerCase());
         for (let i = 0; i < decayPool.length; i += 1) {
           const candidate = decayPool[(startIndex + i) % decayPool.length];
           const normalizedCandidate = String(candidate || "").trim().toLowerCase();
@@ -1755,7 +1846,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const pool = CUE_BUCKETS[bucketKey] || CUE_BUCKETS.practicalDecision;
       const cueSeed = `${generationKey}:${nextTurnNumber}:${nextHcpState}:${bucketKey}:${value.slice(0, 120)}`;
       const startIndex = deterministicIndex(cueSeed, pool.length);
-      const normalizedRecent = recentCues.slice(-12).map((cue) => String(cue || "").trim().toLowerCase());
+      const normalizedRecent = recentCues.slice(-NO_REPEAT_WINDOW_TURNS).map((cue) => String(cue || "").trim().toLowerCase());
 
       for (let i = 0; i < pool.length; i += 1) {
         const candidate = pool[(startIndex + i) % pool.length];
@@ -1891,10 +1982,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ...decayState,
       activeConcern,
     });
+    const recentHcpDialogues = collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS);
+    nextHcpDialogue = enforceDialogueVariety({
+      candidate: nextHcpDialogue,
+      concern: activeConcern,
+      seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
+      recentDialogues: recentHcpDialogues,
+    });
     if (terminalDecisionMode) {
       nextHcpDialogue = buildTerminalDecisionDialogue({
         concern: activeConcern,
         seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+      });
+      nextHcpDialogue = enforceDialogueVariety({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+        recentDialogues: recentHcpDialogues,
       });
     }
 
@@ -1971,11 +2075,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
         .filter(Boolean)
-        .slice(-15);
+        .slice(-NO_REPEAT_WINDOW_TURNS);
       const normalizedCue = String(contextualCue || "").trim().toLowerCase();
       const previousCue = recentCues[recentCues.length - 1];
 
-      // Hard safeguard: prevent duplicate cue reuse inside recent 10-15 exchange window.
+      // Hard safeguard: prevent duplicate cue reuse inside the recent no-repeat window.
       if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
         const deterministicFallbackPool = [
           nextProfile.lockedCue,
