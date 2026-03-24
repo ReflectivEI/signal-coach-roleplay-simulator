@@ -430,8 +430,30 @@ function enforceDialogueVariety({
 function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
-  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency)\b/i;
+  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency|goodbye|good bye|bye|have a great day|see you next week|see you next time|talk soon)\b/i;
   return explicitExitPattern.test(normalized);
+}
+
+function hasSpecificFollowUpCommitment(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeliverable = /\b(plan|workflow analysis|implementation plan|rollout plan|training plan|timeline|pilot plan|checklist|proposal)\b/.test(sample);
+  const hasOwnership = /\b(i will|i'll|my team will|we will|i can send|i can deliver|i can share)\b/.test(sample);
+  const hasTimebox = /\b(today|tomorrow|this week|next week|by (monday|tuesday|wednesday|thursday|friday|end of day|eod|end of week)|within \d+\s?(day|days|week|weeks)|on (monday|tuesday|wednesday|thursday|friday))\b/.test(sample);
+  const notJustPromise = !/\b(trust me|i give you my word|it will be smooth|it will streamline)\b/.test(sample);
+
+  return hasDeliverable && hasOwnership && hasTimebox && notJustPromise;
+}
+
+function isDeferringWithoutImmediateAction(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeferralLanguage = /\b(next week|later|we'll talk|we can talk|circle back|follow up|revisit|by next|by end of week|until the end of the week)\b/.test(sample);
+  const hasImmediateAction = /\b(today|tomorrow|this week|start with|first step|one change|implement now|pilot now|begin with|assign)\b/.test(sample);
+
+  return hasDeferralLanguage && !hasImmediateAction;
 }
 
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
@@ -1666,26 +1688,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
-    // Only trigger a hard close when the rep explicitly says they need to leave now.
-    if (hasExplicitExitIntent(normalizedInput)) {
-      let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
-      let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-      controller.state = SessionState.CLOSING;
-      setTurns([...turns, {
-        turnNumber: turns.length,
-        hcpStateBefore: 'disengaging',
-        temperatureBefore: 'neutral',
-        severityBefore: 0,
-        cueBefore: contextualCue,
-        hcpDialogueBefore: nextHcpDialogue,
-        repMessage: sanitizeUserMessage(rawInput),
-        alignment: null,
-        hcpStateAfter: null,
-      }]);
-      controller.state = SessionState.ENDED;
-      setIsLoading(false);
-      return; // Ensure no further turn creation occurs
-    }
     if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
 
     controller.isProcessingTurn = true;
@@ -1826,12 +1828,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       [...turns, { repMessage }],
       activeConcern,
     );
+    const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
+    const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
+    const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
-      && unresolvedConcernTurns >= 3;
+      && unresolvedConcernTurns >= 3
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
     const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    const hardLoopBreaker =
+      (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
+      && unresolvedConcernTurns >= 5
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+
+    if (hardLoopBreaker) {
+      nextHcpState = "disengaged";
+    }
 
     // 3. Lock rep's response
     const lockedRespondingTurn = {
@@ -1924,6 +1938,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (nextHcpState === "disengaged") {
         return terminalCloseFallback;
+      }
+
+      if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier)) {
+        return "Thanks. Please include payer-specific variation handling in that workflow plan and send it by the time you committed.";
       }
 
       if (nextHcpState === "time-pressured") {
@@ -2150,6 +2168,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = terminalCloseFallback;
     }
 
+    if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged") {
+      nextHcpState = overrideExit ? "disengaged" : "boundary-setting";
+      usedDeterministicFallback = true;
+      nextHcpDialogue = overrideExit
+        ? "Understood. Please coordinate a follow-up time with the front desk and send the workflow plan by your committed deadline."
+        : "Thanks. Include payer-variation handling and owner-level rollout steps in that plan, then send it by your committed deadline.";
+    }
+
     const recentRepTurns = getRecentRepTurns(prevTurns);
     const previousInferenceState = repInferenceStateRef.current;
     const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
@@ -2279,7 +2305,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
+      nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
