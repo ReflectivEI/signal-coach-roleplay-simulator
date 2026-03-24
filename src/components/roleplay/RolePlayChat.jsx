@@ -398,6 +398,38 @@ function resolveDuplicateDialogueBeforeCommit({
   return { dialogue: rerolledDialogue, usedFallback: true };
 }
 
+function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2 } = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  const compactLead = normalized
+    .replace(/^(i appreciate (?:your|the) [^.!?]{10,140}[.!?]\s*)/i, "")
+    .replace(/^(that(?:'|’)s (?:a )?(?:good|fair|helpful) point[^.!?]{0,120}[.!?]\s*)/i, "")
+    .replace(/\b(how do you think)\b/i, "How should we")
+    .replace(/\b(would you propose)\b/i, "would you")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const sentences = compactLead.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let compact = sentences.slice(0, Math.max(1, maxSentences)).join(" ").trim();
+  if (!compact) compact = compactLead;
+
+  const words = compact.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return compact;
+
+  const questionPart = compact.split(/(?<=[.!?])\s+/).find((s) => /\?$/.test(s.trim())) || compact;
+  const interrogativeIndex = questionPart.search(/\b(what|how|where|which|who|can|could|would|should)\b/i);
+  const trimmedQuestion = interrogativeIndex > 0 ? questionPart.slice(interrogativeIndex).trim() : questionPart.trim();
+  if (trimmedQuestion.split(/\s+/).length <= maxWords) return trimmedQuestion;
+
+  return trimmedQuestion
+    .split(/\s+/)
+    .slice(0, maxWords)
+    .join(" ")
+    .replace(/\s+[,.]$/, "")
+    .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
+}
+
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
@@ -533,11 +565,25 @@ function detectRepCloseIntent(text = "") {
   if (!sample) return { level: "none", score: 0 };
 
   const hardPattern = /\b(bye|goodbye|i need to leave|i have to go|i must leave|i need to run|time to go|i have another patient|i'm stepping out)\b/;
-  const softPattern = /\b(wrap up|i'll leave it there|appreciate your time|happy to reconnect|follow up later|we can revisit|i don’t want to take more of your time|i know your schedule is tight|let’s reconnect)\b/;
+  const softPattern = /\b(wrap up|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here|leave it there|leave it here|appreciate your time|happy to reconnect|follow up later|we can revisit|i don(?:'|’)t want to take more of your time|i know your schedule is tight|let(?:'|’)s reconnect)\b/;
 
   if (hardPattern.test(sample)) return { level: "hard", score: 1 };
   if (softPattern.test(sample)) return { level: "soft", score: 0.7 };
   return { level: "none", score: 0 };
+}
+
+function hasStrongTimeWrapSignal(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const wrapPhrases = [
+    /\b(we(?:'|’)re at time|we are at time|we(?:'|’)re out of time|i(?:'|’)ll wrap here|i(?:'|’)ll wrap up here|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here)\b/,
+    /\b(i know you(?:'|’)re busy|i know your schedule is tight|don(?:'|’)t want to take more of your time|thanks for your time today|thank you for your time today)\b/,
+    /\b(let(?:'|’)s close here|let(?:'|’)s pause here|i(?:'|’)ll stop here for now|we can reconnect later|happy to follow up)\b/,
+  ];
+
+  const wrapHitCount = wrapPhrases.reduce((count, pattern) => count + (pattern.test(sample) ? 1 : 0), 0);
+  return wrapHitCount >= 2 || (wrapHitCount >= 1 && /\b(thanks|thank you)\b/.test(sample));
 }
 
 function isPracticalAskSignal(text = "") {
@@ -2072,6 +2118,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioFamily,
     });
     const closeIntent = detectRepCloseIntent(repMessage);
+    const strongTimeWrapSignal = hasStrongTimeWrapSignal(repMessage);
     const operationalSignature = buildOperationalSignature(repMessage);
     const previousOperationalSignature = closeHandshakeRef.current.lastOperationalSignature || "";
     const repeatedOperationalStep = Boolean(
@@ -2716,6 +2763,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
     const shouldForceNaturalClose =
       closeIntent.level === "hard"
+      || strongTimeWrapSignal
       || (
         closeIntent.level === "soft"
         && (
@@ -2725,6 +2773,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           || (closeHandshakeRef.current.repeatedOperationalCount >= 1 && recentHcpPracticalAskCount >= 2)
         )
       );
+
+    if (!isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
+        maxWords: nextTurnNumber <= 3 ? 32 : 30,
+        maxSentences: 2,
+      });
+    }
 
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
       nextHcpState = "disengaged";
