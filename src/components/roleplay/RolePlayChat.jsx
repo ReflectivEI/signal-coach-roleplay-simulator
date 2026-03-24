@@ -702,50 +702,6 @@ function buildHcpProfileSummary({ stakeholder, specialty, descriptionText, conte
   );
 }
 
-function deriveHcpDisplayName(scenario = {}) {
-  const rawName = String(
-    scenario?.hcp_name
-    || scenario?.stakeholder
-    || scenario?.hcp
-    || ""
-  ).trim();
-  const hcpCategory = String(scenario?.hcp_category || "").toLowerCase();
-
-  const clinicianTypeHint = `${rawName} ${hcpCategory}`.toLowerCase();
-  const isPhysician = /\b(md|do|physician|doctor|dr\.)\b/.test(clinicianTypeHint);
-  const isAdvancedPractice = /\b(np|pa|rn|nurse practitioner|physician assistant|registered nurse)\b/.test(clinicianTypeHint);
-
-  const cleanedName = rawName
-    .replace(/\s+-\s+.*$/, "")
-    .replace(/\b(md|do|np|pa|rn|pharmd|msn|aprn|fnp-c|dnp)\b\.?/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!cleanedName) return "HCP";
-
-  const noHonorific = cleanedName.replace(/^dr\.?\s+/i, "").trim();
-  const parts = noHonorific.split(/\s+/).filter(Boolean);
-  const firstName = parts[0] || noHonorific;
-  const lastName = parts.length > 1 ? parts[parts.length - 1] : parts[0];
-
-  if (isAdvancedPractice && !isPhysician) return firstName;
-  if (isPhysician || /^dr\.?/i.test(cleanedName)) return `Dr. ${lastName}`;
-  return firstName;
-}
-
-function personalizeHcpReference(text = "", hcpDisplayName = "HCP") {
-  const source = String(text || "");
-  if (!source) return source;
-  const normalizedName = String(hcpDisplayName || "HCP").trim();
-  const possessiveName = normalizedName.endsWith("s") ? `${normalizedName}'` : `${normalizedName}'s`;
-
-  return source
-    .replace(/\bThe HCP's\b/g, possessiveName)
-    .replace(/\bThe HCP\b/g, normalizedName)
-    .replace(/\bHCP's\b/g, possessiveName)
-    .replace(/\bHCP\b/g, normalizedName);
-}
-
 function buildBriefingHeadline(title) {
   const conciseTitle = String(title || "").replace(/\bin\s+/i, ": ").trim();
   return {
@@ -1275,7 +1231,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
   const showScenarioSupportFallback = challengeItems.length === 0 && !openingScene && !objectiveText;
   const scenarioKeywords = extractScenarioKeywords(scenario);
-  const hcpDisplayName = deriveHcpDisplayName(scenario);
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -1972,11 +1927,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const recentCues = prevTurns
         .map((t) => String(t.cueBefore || "").trim().toLowerCase())
         .filter(Boolean)
-        .slice(-20);
+        .slice(-15);
       const normalizedCue = String(contextualCue || "").trim().toLowerCase();
       const previousCue = recentCues[recentCues.length - 1];
 
-      // Hard safeguard: prevent duplicate cue reuse inside recent 20-turn window.
+      // Hard safeguard: prevent duplicate cue reuse inside recent 10-15 exchange window.
       if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
         const deterministicFallbackPool = [
           nextProfile.lockedCue,
@@ -2462,13 +2417,13 @@ ${actionText}`;
                       {turn.cueBefore && (
                         <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
                           <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(personalizeHcpReference(turn.cueBefore, hcpDisplayName), "behavioral-cue")}
+                            {sanitizeRenderedMessage(turn.cueBefore, "behavioral-cue")}
                           </p>
                         </div>
                       )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1">{hcpDisplayName}</div>
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0 mt-1">HCP</div>
                           <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
@@ -2480,7 +2435,7 @@ ${actionText}`;
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0">{hcpDisplayName}</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold mr-2 flex-shrink-0">HCP</div>
                     <div className="bg-slate-100 rounded-2xl px-4 py-2.5 flex gap-1 items-center">
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0.1s" }} />
