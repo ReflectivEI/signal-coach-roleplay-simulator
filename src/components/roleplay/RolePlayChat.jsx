@@ -338,26 +338,138 @@ function hasExcessiveDialogueReuse({
   candidate = "",
   recentDialogues = [],
   anchorDialogue = "",
+  turnNumber = 0,
 } = {}) {
   const sample = String(candidate || "").trim();
   if (!sample) return false;
   const normalizedSample = normalizeDialogueSignature(sample);
-  const tooSimilarToRecent = (recentDialogues || []).some((prior) => {
+  const recentList = Array.isArray(recentDialogues) ? recentDialogues : [];
+  const tooSimilarToRecent = recentList.some((prior) => {
     const priorText = String(prior || "").trim();
     if (!priorText) return false;
     const normalizedPrior = normalizeDialogueSignature(priorText);
     if (normalizedPrior && normalizedPrior === normalizedSample) return true;
-    return calculateTokenOverlapRatio(sample, priorText) >= 0.74
-      || calculateSemanticSimilarity(sample, priorText) >= 0.68;
+    return calculateTokenOverlapRatio(sample, priorText) >= 0.72
+      || calculateSemanticSimilarity(sample, priorText) >= 0.66;
   });
   if (tooSimilarToRecent) return true;
 
   const anchorText = String(anchorDialogue || "").trim();
   if (!anchorText) return false;
-  return (
-    calculateTokenOverlapRatio(sample, anchorText) >= 0.66
-    || calculateSemanticSimilarity(sample, anchorText) >= 0.62
-  );
+  const earlyTurn = Number(turnNumber || 0) <= 4;
+  const anchorTokenOverlap = calculateTokenOverlapRatio(sample, anchorText);
+  const anchorSemanticOverlap = calculateSemanticSimilarity(sample, anchorText);
+
+  // Hard early-turn echo guard: block opening-context restatements even when wording changes slightly.
+  if (earlyTurn && (anchorTokenOverlap >= 0.58 || anchorSemanticOverlap >= 0.56)) return true;
+
+  return anchorTokenOverlap >= 0.64 || anchorSemanticOverlap >= 0.6;
+}
+
+function resolveDuplicateDialogueBeforeCommit({
+  candidate = "",
+  activeConcern = "workflow",
+  generationKey = "",
+  nextTurnNumber = 0,
+  progressionStage = "burden",
+  recentHcpDialogues = [],
+  firstHcpDialogue = "",
+  previousHcpDialogue = "",
+} = {}) {
+  const anchorForDupGuard = nextTurnNumber <= 4 ? firstHcpDialogue : "";
+  if (!hasExcessiveDialogueReuse({
+    candidate,
+    recentDialogues: recentHcpDialogues.slice(-6),
+    anchorDialogue: anchorForDupGuard,
+    turnNumber: nextTurnNumber,
+  })) {
+    return { dialogue: candidate, usedFallback: false };
+  }
+
+  const deterministicFallback = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+  const rerolledDialogue = enforceDialogueVariety({
+    candidate: deterministicFallback,
+    concern: activeConcern,
+    seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:hard-dup-guard`,
+    recentDialogues: recentHcpDialogues,
+    progressionStage,
+  });
+
+  return { dialogue: rerolledDialogue, usedFallback: true };
+}
+
+function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2 } = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  const compactLead = normalized
+    .replace(/^(i appreciate (?:your|the) [^.!?]{10,140}[.!?]\s*)/i, "")
+    .replace(/^(that(?:'|’)s (?:a )?(?:good|fair|helpful) point[^.!?]{0,120}[.!?]\s*)/i, "")
+    .replace(/\b(how do you think)\b/i, "How should we")
+    .replace(/\b(would you propose)\b/i, "would you")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const sentences = compactLead.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let compact = sentences.slice(0, Math.max(1, maxSentences)).join(" ").trim();
+  if (!compact) compact = compactLead;
+
+  const words = compact.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return compact;
+
+  const questionPart = compact.split(/(?<=[.!?])\s+/).find((s) => /\?$/.test(s.trim())) || compact;
+  const interrogativeIndex = questionPart.search(/\b(what|how|where|which|who|can|could|would|should)\b/i);
+  const trimmedQuestion = interrogativeIndex > 0 ? questionPart.slice(interrogativeIndex).trim() : questionPart.trim();
+  if (trimmedQuestion.split(/\s+/).length <= maxWords) return trimmedQuestion;
+
+  return trimmedQuestion
+    .split(/\s+/)
+    .slice(0, maxWords)
+    .join(" ")
+    .replace(/\s+[,.]$/, "")
+    .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
+}
+
+function polishClinicianConversationalPhrasing({
+  dialogue = "",
+  concern = "workflow",
+  seed = "",
+  recentDialogues = [],
+} = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  let refined = normalized
+    .replace(/^that(?:'|’)s helpful to know,?\s*but\s*/i, "")
+    .replace(/^that(?:'|’)s a good point(?: about [^,.!?]+)?,?\s*/i, "")
+    .replace(/^i appreciate your suggestion to [^,.!?]+,?\s*/i, "")
+    .replace(/\bhow do you envision\b/i, "how would you")
+    .replace(/\bhow do you think we could\b/i, "how should we")
+    .replace(/\bhow would you propose\b/i, "how would you")
+    .replace(/\bgiven the existing staff and resources we have available\b/i, "with our current staff and resources")
+    .replace(/\bgiven the limitations and workflow we currently have in place\b/i, "with our current workflow limits")
+    .replace(/\bthat could potentially help reduce delays\b/i, "that might reduce delays")
+    .replace(/\bit depends on whether it is realistic for our current staffing\b/i, "is this realistic with current staffing")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (refined && !/[.?!]$/.test(refined)) refined += refined.includes("?") ? "" : ".";
+  if (/\?\?$/.test(refined)) refined = refined.replace(/\?\?$/, "?");
+
+  const wordCount = refined.split(/\s+/).filter(Boolean).length;
+  const soundsOverFormal =
+    /\b(potentially|envision|propose|given|therefore|however|accordingly)\b/i.test(refined)
+    || /,\s*(given|which|that)\b/i.test(refined);
+
+  if (wordCount > 26 && refined.includes("?") && soundsOverFormal) {
+    return chooseConcernSpecificVariant({
+      concern,
+      seed: `${seed}:clinician-polish`,
+      recentDialogues,
+    });
+  }
+
+  return refined;
 }
 
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
@@ -495,11 +607,25 @@ function detectRepCloseIntent(text = "") {
   if (!sample) return { level: "none", score: 0 };
 
   const hardPattern = /\b(bye|goodbye|i need to leave|i have to go|i must leave|i need to run|time to go|i have another patient|i'm stepping out)\b/;
-  const softPattern = /\b(wrap up|i'll leave it there|appreciate your time|happy to reconnect|follow up later|we can revisit|i don’t want to take more of your time|i know your schedule is tight|let’s reconnect)\b/;
+  const softPattern = /\b(wrap up|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here|leave it there|leave it here|appreciate your time|happy to reconnect|follow up later|we can revisit|i don(?:'|’)t want to take more of your time|i know your schedule is tight|let(?:'|’)s reconnect)\b/;
 
   if (hardPattern.test(sample)) return { level: "hard", score: 1 };
   if (softPattern.test(sample)) return { level: "soft", score: 0.7 };
   return { level: "none", score: 0 };
+}
+
+function hasStrongTimeWrapSignal(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const wrapPhrases = [
+    /\b(we(?:'|’)re at time|we are at time|we(?:'|’)re out of time|i(?:'|’)ll wrap here|i(?:'|’)ll wrap up here|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here)\b/,
+    /\b(i know you(?:'|’)re busy|i know your schedule is tight|don(?:'|’)t want to take more of your time|thanks for your time today|thank you for your time today)\b/,
+    /\b(let(?:'|’)s close here|let(?:'|’)s pause here|i(?:'|’)ll stop here for now|we can reconnect later|happy to follow up)\b/,
+  ];
+
+  const wrapHitCount = wrapPhrases.reduce((count, pattern) => count + (pattern.test(sample) ? 1 : 0), 0);
+  return wrapHitCount >= 2 || (wrapHitCount >= 1 && /\b(thanks|thank you)\b/.test(sample));
 }
 
 function isPracticalAskSignal(text = "") {
@@ -2034,6 +2160,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioFamily,
     });
     const closeIntent = detectRepCloseIntent(repMessage);
+    const strongTimeWrapSignal = hasStrongTimeWrapSignal(repMessage);
     const operationalSignature = buildOperationalSignature(repMessage);
     const previousOperationalSignature = closeHandshakeRef.current.lastOperationalSignature || "";
     const repeatedOperationalStep = Boolean(
@@ -2519,6 +2646,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         candidate: nextHcpDialogue,
         recentDialogues: recentHcpDialogues.slice(-6),
         anchorDialogue: anchorForDupGuard,
+        turnNumber: nextTurnNumber,
       })
     ) {
       usedDeterministicFallback = true;
@@ -2677,6 +2805,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
     const shouldForceNaturalClose =
       closeIntent.level === "hard"
+      || strongTimeWrapSignal
       || (
         closeIntent.level === "soft"
         && (
@@ -2687,9 +2816,39 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         )
       );
 
+    if (!isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
+        maxWords: nextTurnNumber <= 3 ? 32 : 30,
+        maxSentences: 2,
+      });
+      nextHcpDialogue = polishClinicianConversationalPhrasing({
+        dialogue: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        recentDialogues: recentHcpDialogues,
+      });
+    }
+
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
       nextHcpState = "disengaged";
       nextHcpDialogue = "Understood. Thanks for the discussion today. Please coordinate a follow-up slot with the front desk if you want to continue.";
+    }
+
+    // Final pre-commit hard duplicate-dialogue constraint:
+    // block exact duplicates, high-overlap near-duplicates, and opening-context echoes before rendering.
+    const finalDialogueGuard = resolveDuplicateDialogueBeforeCommit({
+      candidate: nextHcpDialogue,
+      activeConcern,
+      generationKey,
+      nextTurnNumber,
+      progressionStage,
+      recentHcpDialogues,
+      firstHcpDialogue,
+      previousHcpDialogue,
+    });
+    if (finalDialogueGuard.usedFallback) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = finalDialogueGuard.dialogue;
     }
 
     const nextTurn = {
