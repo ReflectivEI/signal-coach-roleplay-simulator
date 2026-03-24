@@ -334,6 +334,32 @@ function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
     .slice(-Math.max(1, limit));
 }
 
+function hasExcessiveDialogueReuse({
+  candidate = "",
+  recentDialogues = [],
+  anchorDialogue = "",
+} = {}) {
+  const sample = String(candidate || "").trim();
+  if (!sample) return false;
+  const normalizedSample = normalizeDialogueSignature(sample);
+  const tooSimilarToRecent = (recentDialogues || []).some((prior) => {
+    const priorText = String(prior || "").trim();
+    if (!priorText) return false;
+    const normalizedPrior = normalizeDialogueSignature(priorText);
+    if (normalizedPrior && normalizedPrior === normalizedSample) return true;
+    return calculateTokenOverlapRatio(sample, priorText) >= 0.74
+      || calculateSemanticSimilarity(sample, priorText) >= 0.68;
+  });
+  if (tooSimilarToRecent) return true;
+
+  const anchorText = String(anchorDialogue || "").trim();
+  if (!anchorText) return false;
+  return (
+    calculateTokenOverlapRatio(sample, anchorText) >= 0.66
+    || calculateSemanticSimilarity(sample, anchorText) >= 0.62
+  );
+}
+
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
@@ -2481,6 +2507,26 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         candidate: nextHcpDialogue,
         concern: activeConcern,
         seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+        recentDialogues: recentHcpDialogues,
+        progressionStage,
+      });
+    }
+
+    const firstHcpDialogue = prevTurns.find((t) => t?.hcpDialogueBefore)?.hcpDialogueBefore || "";
+    const anchorForDupGuard = nextTurnNumber <= 3 ? firstHcpDialogue : "";
+    if (
+      hasExcessiveDialogueReuse({
+        candidate: nextHcpDialogue,
+        recentDialogues: recentHcpDialogues.slice(-6),
+        anchorDialogue: anchorForDupGuard,
+      })
+    ) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+      nextHcpDialogue = enforceDialogueVariety({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:hard-dup-guard`,
         recentDialogues: recentHcpDialogues,
         progressionStage,
       });
