@@ -1,4 +1,6 @@
 const QUESTION_STARTER_RE = /^(who|what|when|where|why|how|do|does|did|can|could|would|will|are|is|am|should|may|might|have|has|had)\b/i;
+const AUX_SUBJECT_CAP_FIX_RE = /\b(can|could|would|will|should|do|does|did|is|are|was|were|have|has|had)\s+you\s+([A-Z][a-z]+)\b/g;
+const CONNECTOR_MID_SENTENCE_RE = /\b(Before|After|And|But|Or|So|Then|Because|While|When|If)\b/g;
 
 function capitalizeFirstLetter(text) {
   const index = text.search(/[A-Za-z]/);
@@ -17,6 +19,21 @@ export function normalizeMessage(text) {
 
   // Normalize spacing artifacts from model output.
   cleaned = cleaned.replace(/\s{2,}/g, " ");
+  cleaned = cleaned.replace(/\s+([,.;:!?])/g, "$1");
+  cleaned = cleaned.replace(/([,.;:!?])(?=\S)/g, "$1 ");
+  cleaned = cleaned.replace(/\s{2,}/g, " ");
+
+  // Smooth common grammar artifacts from model generation.
+  cleaned = cleaned.replace(AUX_SUBJECT_CAP_FIX_RE, (_, aux, token) => `${aux} you ${token.toLowerCase()}`);
+  cleaned = cleaned.replace(CONNECTOR_MID_SENTENCE_RE, (token, offset, fullText) => {
+    if (offset === 0) return token;
+    const prior = fullText.slice(0, offset);
+    if (/[.!?]\s*$/.test(prior)) return token;
+    return token.toLowerCase();
+  });
+
+  // Capitalize sentence starts for a polished, readable surface.
+  cleaned = cleaned.replace(/(^|[.!?]\s+)([a-z])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`);
 
   // Start sentence with capital letter for professional UI presentation.
   cleaned = capitalizeFirstLetter(cleaned);

@@ -430,8 +430,162 @@ function enforceDialogueVariety({
 function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
-  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency)\b/i;
+  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency|goodbye|good bye|bye|have a great day|see you next week|see you next time|talk soon)\b/i;
   return explicitExitPattern.test(normalized);
+}
+
+function hasSpecificFollowUpCommitment(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeliverable = /\b(plan|workflow analysis|implementation plan|rollout plan|training plan|timeline|pilot plan|checklist|proposal)\b/.test(sample);
+  const hasOwnership = /\b(i will|i'll|my team will|we will|i can send|i can deliver|i can share)\b/.test(sample);
+  const hasTimebox = /\b(today|tomorrow|this week|next week|by (monday|tuesday|wednesday|thursday|friday|end of day|eod|end of week)|within \d+\s?(day|days|week|weeks)|on (monday|tuesday|wednesday|thursday|friday))\b/.test(sample);
+  const notJustPromise = !/\b(trust me|i give you my word|it will be smooth|it will streamline)\b/.test(sample);
+
+  return hasDeliverable && hasOwnership && hasTimebox && notJustPromise;
+}
+
+function isDeferringWithoutImmediateAction(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const hasDeferralLanguage = /\b(next week|later|we'll talk|we can talk|circle back|follow up|revisit|by next|by end of week|until the end of the week)\b/.test(sample);
+  const hasImmediateAction = /\b(today|tomorrow|this week|start with|first step|one change|implement now|pilot now|begin with|assign)\b/.test(sample);
+
+  return hasDeferralLanguage && !hasImmediateAction;
+}
+
+function isTerminalClosureDialogue(text = "") {
+  const sample = String(text || "").toLowerCase().trim();
+  if (!sample) return false;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const asksNewQuestion = sample.includes("?");
+  return closurePattern.test(sample) && !asksNewQuestion;
+}
+
+function hasWorkflowOperationalLanguage(text = "") {
+  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load)\b/i.test(String(text || ""));
+}
+
+function hasEvidencePivotLanguage(text = "") {
+  return /\b(jama|study|trial|data|outcomes|efficacy|disease progression|adoption|publication|findings)\b/i.test(String(text || ""));
+}
+
+const SCENARIO_FAMILY_LEXICAL_PACKS = Object.freeze({
+  hiv_prep: [
+    "prep", "prior auth", "coverage", "adherence", "screening", "resistance", "back-and-forth", "resubmission",
+  ],
+  oncology_access: [
+    "regimen", "line of therapy", "biomarker", "pathway", "prior auth", "reimbursement", "denial", "infusion",
+  ],
+  cardiometabolic: [
+    "step therapy", "formulary", "coverage", "adherence", "refill", "prior auth", "care coordination",
+  ],
+  general_access: [
+    "prior auth", "approval", "paperwork", "workflow", "staff burden", "clinic flow", "resubmission",
+  ],
+});
+
+const RECOVERY_TIMING_THRESHOLDS = Object.freeze({
+  immediate_max_misses: 1,
+  partial_max_misses: 2,
+});
+
+const TERMINAL_CLOSE_POLICY_MATRIX = Object.freeze({
+  engaged: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  constrained: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  impatient: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  disengaging: { missed: "close", overpivot: "close", aligned: "probe", neutral: "probe" },
+  disengaged: { missed: "close", overpivot: "close", aligned: "close", neutral: "close" },
+});
+
+function detectScenarioFamily(scenarioText = "") {
+  const value = String(scenarioText || "").toLowerCase();
+  if (/\bprep|hiv|sti|cabotegravir|long-acting\b/.test(value)) return "hiv_prep";
+  if (/\boncology|tumor|metastatic|biomarker|chemo|immunotherapy\b/.test(value)) return "oncology_access";
+  if (/\bcardio|heart|lipid|diabetes|a1c|glp-1|hypertension\b/.test(value)) return "cardiometabolic";
+  return "general_access";
+}
+
+function isOperationalFalsePositiveContext(text = "") {
+  const value = String(text || "").toLowerCase();
+  return /\b(data workflow|workflow analysis of study|publication workflow|research workflow|trial operations)\b/.test(value);
+}
+
+function hasScenarioOperationalLexicalMatch(text = "", scenarioFamily = "general_access") {
+  const value = String(text || "").toLowerCase();
+  const pack = SCENARIO_FAMILY_LEXICAL_PACKS[scenarioFamily] || SCENARIO_FAMILY_LEXICAL_PACKS.general_access;
+  return pack.some((token) => value.includes(token));
+}
+
+function classifyConcernFlowOutcome({
+  activeConcern = "workflow",
+  repMessage = "",
+  priorRepMessage = "",
+  scenarioFamily = "general_access",
+} = {}) {
+  const rep = String(repMessage || "");
+  const prior = String(priorRepMessage || "");
+  const concernIsOperational = activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time";
+  if (!concernIsOperational) return "neutral";
+
+  const repOperational = (
+    hasWorkflowOperationalLanguage(rep)
+    || hasScenarioOperationalLexicalMatch(rep, scenarioFamily)
+  ) && !isOperationalFalsePositiveContext(rep);
+  const repEvidence = hasEvidencePivotLanguage(rep);
+  const priorOperational = (
+    hasWorkflowOperationalLanguage(prior)
+    || hasScenarioOperationalLexicalMatch(prior, scenarioFamily)
+  ) && !isOperationalFalsePositiveContext(prior);
+
+  if (repEvidence && !repOperational && priorOperational) return "overpivot";
+  if (repEvidence && !repOperational) return "missed";
+  if (repOperational) return "aligned";
+  return "neutral";
+}
+
+function classifyRecoveryTiming({ recentMisses = 0 } = {}) {
+  if (recentMisses <= RECOVERY_TIMING_THRESHOLDS.immediate_max_misses) return "immediate";
+  if (recentMisses <= RECOVERY_TIMING_THRESHOLDS.partial_max_misses) return "partial";
+  return "late";
+}
+
+function determineTerminalPolicyAction({
+  hcpState = "engaged",
+  concernFlowOutcome = "neutral",
+  unresolvedConcernTurns = 0,
+  repHasFollowUpCommitment = false,
+  repDefersImmediateAction = false,
+} = {}) {
+  const statePolicy = TERMINAL_CLOSE_POLICY_MATRIX[hcpState] || TERMINAL_CLOSE_POLICY_MATRIX.engaged;
+  let action = statePolicy[concernFlowOutcome] || "continue";
+  if (hcpState === "impatient" && unresolvedConcernTurns >= 5 && (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot")) {
+    action = "close";
+  }
+  if (repHasFollowUpCommitment && !repDefersImmediateAction && action === "close") {
+    action = "probe";
+  }
+  return action;
+}
+
+function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0 } = {}) {
+  if (mode === "aligned") {
+    return unresolvedConcernTurns >= 2
+      ? "That could help, as long as it reduces back-and-forth without adding work for my team."
+      : "That sounds relevant, but it depends on whether it is realistic for our current staffing."
+  }
+
+  if (mode === "overpivot") {
+    return unresolvedConcernTurns >= 2
+      ? "I understand the outcomes point, but approvals are still the bottleneck. Unless this streamlines prior auth, it is hard to act on."
+      : "I get the data, but outcomes are not our blocker right now. Prior auth friction is."
+  }
+
+  return unresolvedConcernTurns >= 2
+    ? "I understand, but data is not the barrier. Approvals and paperwork are what slow us down."
+    : "That is interesting, but my biggest issue is prior auth delays, not outcomes.";
 }
 
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
@@ -1666,26 +1820,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Declare all variables at the top
     let nextHcpDialogue = '';
     let contextualCue = '';
-    // Only trigger a hard close when the rep explicitly says they need to leave now.
-    if (hasExplicitExitIntent(normalizedInput)) {
-      let nextHcpDialogue = 'Understood. We can continue speaking later. Schedule an appointment with Tisha in the front';
-      let contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
-      controller.state = SessionState.CLOSING;
-      setTurns([...turns, {
-        turnNumber: turns.length,
-        hcpStateBefore: 'disengaging',
-        temperatureBefore: 'neutral',
-        severityBefore: 0,
-        cueBefore: contextualCue,
-        hcpDialogueBefore: nextHcpDialogue,
-        repMessage: sanitizeUserMessage(rawInput),
-        alignment: null,
-        hcpStateAfter: null,
-      }]);
-      controller.state = SessionState.ENDED;
-      setIsLoading(false);
-      return; // Ensure no further turn creation occurs
-    }
     if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
 
     controller.isProcessingTurn = true;
@@ -1814,6 +1948,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : 0;
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
+    const scenarioFamily = detectScenarioFamily(concernSourceText);
     const decayState = deriveEngagementDecay({
       previousTier: previousDecayTier,
       previousPressure: previousPressureScore,
@@ -1826,12 +1961,51 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       [...turns, { repMessage }],
       activeConcern,
     );
+    const priorRepMessage = [...turns]
+      .slice(0, -1)
+      .reverse()
+      .find((t) => t?.repMessage)?.repMessage || "";
+    const concernFlowOutcome = classifyConcernFlowOutcome({
+      activeConcern,
+      repMessage,
+      priorRepMessage,
+      scenarioFamily,
+    });
+    const recentMisses = [...turns]
+      .filter((t) => t?.repMessage)
+      .slice(-3)
+      .reduce((count, t) => {
+        const prior = [...turns]
+          .slice(0, Math.max(0, turns.findIndex((x) => x.turnNumber === t.turnNumber)))
+          .reverse()
+          .find((x) => x?.repMessage)?.repMessage || "";
+        const outcome = classifyConcernFlowOutcome({
+          activeConcern,
+          repMessage: t.repMessage,
+          priorRepMessage: prior,
+          scenarioFamily,
+        });
+        return (outcome === "missed" || outcome === "overpivot") ? count + 1 : count;
+      }, 0);
+    const recoveryTiming = classifyRecoveryTiming({ recentMisses });
+    const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
+    const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
+    const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
-      && unresolvedConcernTurns >= 3;
+      && unresolvedConcernTurns >= 3
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
     const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    const hardLoopBreaker =
+      (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
+      && unresolvedConcernTurns >= 5
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+
+    if (hardLoopBreaker) {
+      nextHcpState = "disengaged";
+    }
 
     // 3. Lock rep's response
     const lockedRespondingTurn = {
@@ -1924,6 +2098,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (nextHcpState === "disengaged") {
         return terminalCloseFallback;
+      }
+
+      if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier)) {
+        return "Thanks. Please include payer-specific variation handling in that workflow plan and send it by the time you committed.";
       }
 
       if (nextHcpState === "time-pressured") {
@@ -2150,6 +2328,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = terminalCloseFallback;
     }
 
+    if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged") {
+      nextHcpState = overrideExit ? "disengaged" : "boundary-setting";
+      usedDeterministicFallback = true;
+      nextHcpDialogue = overrideExit
+        ? "Understood. Please coordinate a follow-up time with the front desk and send the workflow plan by your committed deadline."
+        : "Thanks. Include payer-variation handling and owner-level rollout steps in that plan, then send it by your committed deadline.";
+    }
+
     const recentRepTurns = getRecentRepTurns(prevTurns);
     const previousInferenceState = repInferenceStateRef.current;
     const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
@@ -2169,6 +2355,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : baseResponse;
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+
+    if (
+      !overrideExit
+      && nextHcpState !== "disengaged"
+      && ["missed", "overpivot", "aligned"].includes(concernFlowOutcome)
+      && (activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time")
+    ) {
+      const needsReanchor = concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot";
+      const shouldNudgeConditional =
+        concernFlowOutcome === "aligned"
+        && !/\b(as long as|depends|without adding|if it reduces|realistic)\b/i.test(nextHcpDialogue);
+
+      if (needsReanchor || shouldNudgeConditional) {
+        nextHcpDialogue = buildOperationalReanchorDialogue({
+          mode: concernFlowOutcome,
+          unresolvedConcernTurns,
+        });
+        if (concernFlowOutcome === "aligned" && recoveryTiming === "late") {
+          nextHcpDialogue = "That may help, but we are still behind on approvals. If you want me to act on this, keep it specific and operational.";
+        }
+        if (needsReanchor && nextHcpState === "engaged") {
+          nextHcpState = "resistant";
+        }
+      }
+    }
     const burdenEstablished = prevTurns
       .map((t) => String(t?.hcpDialogueBefore || "").toLowerCase())
       .slice(-NO_REPEAT_WINDOW_TURNS)
@@ -2279,7 +2490,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     contextualCue = undefined;
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
-      nextHcpDialogue = 'I understand. We can continue speaking later. Schedule an appointment with Tisha in the front';
+      nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
@@ -2377,6 +2588,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
+
+    const terminalPolicyAction = determineTerminalPolicyAction({
+      hcpState: nextHcpState,
+      concernFlowOutcome,
+      unresolvedConcernTurns,
+      repHasFollowUpCommitment,
+      repDefersImmediateAction,
+    });
+
+    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
+    }
+
+    const shouldEndSessionAfterTurn = overrideExit || (
+      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || terminalPolicyAction === "close"
+    );
+
+    if (shouldEndSessionAfterTurn) {
+      sessionControllerRef.current.state = SessionState.ENDED;
+      sessionControllerRef.current.pendingResponseQueue = [];
+    }
 
     if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {
       return;
@@ -2829,7 +3062,7 @@ ${actionText}`;
                       )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
-                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>{hcpDisplayName}</div>
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>
                           <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
@@ -2841,7 +3074,7 @@ ${actionText}`;
 
                 {isLoading && turns.length > 0 && (
                   <div className="flex justify-start">
-                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0" title={hcpDisplayName}>{hcpDisplayName}</div>
+                    <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0" title={hcpDisplayName}>HCP</div>
                     <div className="bg-slate-100 rounded-2xl px-4 py-2.5 flex gap-1 items-center">
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" />
                       <div className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0.1s" }} />
