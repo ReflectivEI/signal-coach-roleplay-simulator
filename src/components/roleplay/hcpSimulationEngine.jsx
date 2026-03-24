@@ -1782,11 +1782,18 @@ export function buildHCPDialoguePrompt({
   prompt += '- Vary your reasoning across turns: clinical, operational, practical, skeptical, or constraint-based.\n'
 
   prompt += '\nREALISM RULES:\n'
+  prompt += '- Stay professionally constrained and selectively engaged, not automatically accommodating.\n'
+  prompt += '- Do not advance neatly through a scripted arc; allow partial agreement, redirection, and unresolved practical constraints.\n'
+  prompt += '- Keep one live concern active (workflow, evidence fit, access, time, policy, or screening) unless the rep directly resolves it.\n'
+  prompt += '- Prefer realistic response shapes: acknowledge + redirect, partial accept + narrow scope, conditional openness, defer commitment, or request one concrete detail.\n'
+  prompt += '- Good rep responses can improve tone and openness, but should not trigger immediate full buy-in.\n'
+  prompt += '- If the rep pivots away from your stated concern, briefly return to that concern before moving forward.\n'
   prompt += '- If the rep provides vague, dismissive, or unhelpful responses, reduce effort, shorten your reply, and stop offering structured guidance.\n'
   prompt += '- If the rep is rude or unprofessional, become curt, controlled, and less cooperative.\n'
   prompt += '- When the rep is weak, you should become less helpful rather than coaching them toward a better answer.\n'
   prompt += '- If you are irritated or disengaged, do not rescue the conversation with polished explanations.\n'
   prompt += '- If you are disengaged, end the interaction directly instead of extending it.\n'
+  prompt += '- Maintain professionalism: firm is allowed, but do not become sarcastic, combative, or hostile.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'
