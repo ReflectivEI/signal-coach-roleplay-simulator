@@ -338,43 +338,146 @@ function hasExcessiveDialogueReuse({
   candidate = "",
   recentDialogues = [],
   anchorDialogue = "",
+  turnNumber = 0,
 } = {}) {
   const sample = String(candidate || "").trim();
   if (!sample) return false;
   const normalizedSample = normalizeDialogueSignature(sample);
-  const tooSimilarToRecent = (recentDialogues || []).some((prior) => {
+  const recentList = Array.isArray(recentDialogues) ? recentDialogues : [];
+  const tooSimilarToRecent = recentList.some((prior) => {
     const priorText = String(prior || "").trim();
     if (!priorText) return false;
     const normalizedPrior = normalizeDialogueSignature(priorText);
     if (normalizedPrior && normalizedPrior === normalizedSample) return true;
-    return calculateTokenOverlapRatio(sample, priorText) >= 0.74
-      || calculateSemanticSimilarity(sample, priorText) >= 0.68;
+    return calculateTokenOverlapRatio(sample, priorText) >= 0.72
+      || calculateSemanticSimilarity(sample, priorText) >= 0.66;
   });
   if (tooSimilarToRecent) return true;
 
   const anchorText = String(anchorDialogue || "").trim();
   if (!anchorText) return false;
-  return (
-    calculateTokenOverlapRatio(sample, anchorText) >= 0.66
-    || calculateSemanticSimilarity(sample, anchorText) >= 0.62
-  );
+  const earlyTurn = Number(turnNumber || 0) <= 4;
+  const anchorTokenOverlap = calculateTokenOverlapRatio(sample, anchorText);
+  const anchorSemanticOverlap = calculateSemanticSimilarity(sample, anchorText);
+
+  // Hard early-turn echo guard: block opening-context restatements even when wording changes slightly.
+  if (earlyTurn && (anchorTokenOverlap >= 0.58 || anchorSemanticOverlap >= 0.56)) return true;
+
+  return anchorTokenOverlap >= 0.64 || anchorSemanticOverlap >= 0.6;
+}
+
+function resolveDuplicateDialogueBeforeCommit({
+  candidate = "",
+  activeConcern = "workflow",
+  generationKey = "",
+  nextTurnNumber = 0,
+  progressionStage = "burden",
+  recentHcpDialogues = [],
+  firstHcpDialogue = "",
+  previousHcpDialogue = "",
+} = {}) {
+  const anchorForDupGuard = nextTurnNumber <= 4 ? firstHcpDialogue : "";
+  if (!hasExcessiveDialogueReuse({
+    candidate,
+    recentDialogues: recentHcpDialogues.slice(-6),
+    anchorDialogue: anchorForDupGuard,
+    turnNumber: nextTurnNumber,
+  })) {
+    return { dialogue: candidate, usedFallback: false };
+  }
+
+  const deterministicFallback = buildNonRepeatingScenarioFallback(previousHcpDialogue);
+  const rerolledDialogue = enforceDialogueVariety({
+    candidate: deterministicFallback,
+    concern: activeConcern,
+    seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:hard-dup-guard`,
+    recentDialogues: recentHcpDialogues,
+    progressionStage,
+  });
+
+  return { dialogue: rerolledDialogue, usedFallback: true };
+}
+
+function enforceClinicalBrevity(dialogue = "", { maxWords = 34, maxSentences = 2 } = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  const compactLead = normalized
+    .replace(/^(i appreciate (?:your|the) [^.!?]{10,140}[.!?]\s*)/i, "")
+    .replace(/^(that(?:'|’)s (?:a )?(?:good|fair|helpful) point[^.!?]{0,120}[.!?]\s*)/i, "")
+    .replace(/\b(how do you think)\b/i, "How should we")
+    .replace(/\b(would you propose)\b/i, "would you")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const sentences = compactLead.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let compact = sentences.slice(0, Math.max(1, maxSentences)).join(" ").trim();
+  if (!compact) compact = compactLead;
+
+  const words = compact.split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return compact;
+
+  const questionPart = compact.split(/(?<=[.!?])\s+/).find((s) => /\?$/.test(s.trim())) || compact;
+  const interrogativeIndex = questionPart.search(/\b(what|how|where|which|who|can|could|would|should)\b/i);
+  const trimmedQuestion = interrogativeIndex > 0 ? questionPart.slice(interrogativeIndex).trim() : questionPart.trim();
+  if (trimmedQuestion.split(/\s+/).length <= maxWords) return trimmedQuestion;
+
+  return trimmedQuestion
+    .split(/\s+/)
+    .slice(0, maxWords)
+    .join(" ")
+    .replace(/\s+[,.]$/, "")
+    .trim() + (trimmedQuestion.includes("?") ? "?" : ".");
+}
+
+function polishClinicianConversationalPhrasing({
+  dialogue = "",
+} = {}) {
+  const normalized = hardenTextSurface(dialogue);
+  if (!normalized) return normalized;
+
+  let refined = normalized
+    .replace(/^that(?:'|’)s helpful to know,?\s*but\s*/i, "")
+    .replace(/^that(?:'|’)s a good point(?: about [^,.!?]+)?,?\s*/i, "")
+    .replace(/^i appreciate your suggestion to [^,.!?]+,?\s*/i, "")
+    .replace(/\bhow do you envision\b/i, "how would you")
+    .replace(/\bhow do you think we could\b/i, "how should we")
+    .replace(/\bhow would you propose\b/i, "how would you")
+    .replace(/\bgiven the existing staff and resources we have available\b/i, "with our current staff and resources")
+    .replace(/\bgiven the limitations and workflow we currently have in place\b/i, "with our current workflow limits")
+    .replace(/\bthat could potentially help reduce delays\b/i, "that might reduce delays")
+    .replace(/\bit depends on whether it is realistic for our current staffing\b/i, "is this realistic with current staffing")
+    .replace(/^where we already have\b/i, "We already have")
+    .replace(/^where we\b/i, "How do we")
+    .replace(/\bwhat specific outcomes are they measuring that you think would be relevant to my\?\s*$/i, "which outcomes are most relevant to my patients?")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (refined && !/[.?!]$/.test(refined)) refined += refined.includes("?") ? "" : ".";
+  if (/\?\?$/.test(refined)) refined = refined.replace(/\?\?$/, "?");
+  refined = refined
+    .replace(/\bis this realistic with current staffing\.\s*$/i, "Is this realistic with current staffing?")
+    .replace(/^we already have ([^?]+)\?\s*$/i, "We already have $1. How would this fit without adding more admin burden?")
+    .replace(/^how do we ([^?]+)\?\s*$/i, "How do we $1?");
+
+  return refined;
 }
 
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
-      "I need one operational step my current team can run with this week.",
-      "Give me one concrete process change we can apply without adding staff burden.",
-      "What is the single workflow adjustment that saves my team time right away?",
-      "If this is actionable, map one step my staff can execute in our current flow.",
-      "Keep it practical: what one change should we implement first in clinic?",
+      "Where does this fit in our current visit flow without adding extra clicks?",
+      "What change would lower rework first for my existing staff?",
+      "Walk me through one step my team could run this week in clinic.",
+      "If this is practical, show me the first handoff in our current process.",
+      "What is the smallest workflow tweak that saves time right away?",
     ],
     access: [
-      "What is one payer-facing step that could reduce prior auth rework for us?",
-      "Give me one practical way to lower prior authorization friction this week.",
-      "What is one concrete action that helps us move access approvals faster?",
-      "Name one process change that cuts access delays without extra admin load.",
-      "I need one specific access tactic my team can run immediately.",
+      "Where do you see the biggest payer friction point we can fix first?",
+      "What prior-auth step would reduce back-and-forth this week?",
+      "What access action would speed approvals without extra admin load?",
+      "What one coverage workflow change can my team actually run now?",
+      "Which access step should we standardize first to cut delays?",
     ],
     evidence: [
       "Point me to the most practice-relevant proof and why it changes my decision now.",
@@ -408,16 +511,124 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
 
   const pool = variants[concern] || variants.workflow;
   const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const recentCadence = recentDialogues
+    .slice(-4)
+    .map((line) => normalizeDialogueSignature(line).split(" ").slice(0, 4).join(" "))
+    .filter(Boolean);
   const startIndex = deterministicIndex(`${seed}:${concern}:dialogue-variant`, pool.length);
+
+  let bestCandidate = pool[startIndex] || pool[0];
+  let bestSimilarityScore = Number.POSITIVE_INFINITY;
 
   for (let i = 0; i < pool.length; i += 1) {
     const candidate = pool[(startIndex + i) % pool.length];
     const candidateNorm = normalizeDialogueSignature(candidate);
     if (!candidateNorm) continue;
-    if (!recentNormalized.includes(candidateNorm)) return candidate;
+    if (recentNormalized.includes(candidateNorm)) continue;
+
+    const cadenceSignature = candidateNorm.split(" ").slice(0, 4).join(" ");
+    if (cadenceSignature && recentCadence.includes(cadenceSignature)) continue;
+
+    let worstSimilarity = 0;
+    for (const prior of recentDialogues) {
+      const semantic = calculateSemanticSimilarity(candidate, prior);
+      const tokenOverlap = calculateTokenOverlapRatio(candidate, prior);
+      worstSimilarity = Math.max(worstSimilarity, semantic, tokenOverlap);
+    }
+    if (worstSimilarity < bestSimilarityScore) {
+      bestSimilarityScore = worstSimilarity;
+      bestCandidate = candidate;
+    }
+    if (worstSimilarity < 0.56) return candidate;
   }
 
+  return bestCandidate;
+}
+
+function isQuestionLikeDialogue(text = "") {
+  const sample = String(text || "").trim();
+  if (!sample) return false;
+  if (sample.includes("?")) return true;
+  return /^(how|what|why|when|where|who|can|could|would|should|is|are|do|does)\b/i.test(sample);
+}
+
+function chooseConcernStatementVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
+  const statements = {
+    workflow: [
+      "I can see the logic, but staffing capacity is still the constraint on my side.",
+      "That direction makes sense if it truly cuts rework for my current team.",
+      "The idea is reasonable, but it has to fit our existing clinic flow as-is.",
+      "I need this to reduce follow-up churn, not create another task for staff.",
+    ],
+    access: [
+      "Access is still our main friction point, especially when payer rules vary by patient.",
+      "This could help if it lowers resubmissions without adding extra admin time.",
+      "Coverage variability is the issue for us, so the process has to stay lean.",
+      "I care less about theory and more about fewer payer callbacks this week.",
+    ],
+    evidence: [
+      "The data is helpful, but I still need to see direct applicability to this clinic.",
+      "I hear the evidence point; practical fit is what decides whether we adopt it.",
+      "The outcomes are interesting, but operational feasibility is still the gate.",
+      "Evidence matters, but I need a path my team can execute reliably.",
+    ],
+    time: [
+      "Time is tight here, so anything we do has to be low lift from day one.",
+      "I can consider this if the first step is quick and realistic this week.",
+      "We move fast in clinic, so this has to fit into existing visit cadence.",
+      "I’m open to this, but only if it saves time immediately.",
+    ],
+    policy: [
+      "We can only move forward if this stays within protocol constraints.",
+      "This seems workable as long as it aligns with our current pathway requirements.",
+      "Compliance is non-negotiable here, so the process has to remain tight.",
+      "I need a practical approach that is both compliant and low friction.",
+    ],
+    screening: [
+      "Screening consistency is the hard part for us in daily clinic flow.",
+      "This can work if candidacy checks are clear and don’t slow intake.",
+      "I need a process that keeps screening reliable without adding steps.",
+      "The approach is reasonable if staff can apply criteria consistently.",
+    ],
+  };
+
+  const pool = statements[concern] || statements.workflow;
+  const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const startIndex = deterministicIndex(`${seed}:${concern}:statement-variant`, pool.length);
+  for (let i = 0; i < pool.length; i += 1) {
+    const candidate = pool[(startIndex + i) % pool.length];
+    const norm = normalizeDialogueSignature(candidate);
+    if (norm && !recentNormalized.includes(norm)) return candidate;
+  }
   return pool[startIndex] || pool[0];
+}
+
+function enforceQuestionStatementBalance({
+  candidate = "",
+  concern = "workflow",
+  seed = "",
+  recentDialogues = [],
+  turnNumber = 1,
+} = {}) {
+  const safeCandidate = hardenTextSurface(candidate);
+  if (!safeCandidate) return safeCandidate;
+  if (!isQuestionLikeDialogue(safeCandidate)) return safeCandidate;
+
+  const recent = (recentDialogues || []).slice(-4);
+  const recentQuestionStreak = recent
+    .slice()
+    .reverse()
+    .findIndex((line) => !isQuestionLikeDialogue(line));
+  const streakCount = recentQuestionStreak === -1 ? recent.length : recentQuestionStreak;
+  const questionHeavyWindow = recent.length >= 3 && recent.filter((line) => isQuestionLikeDialogue(line)).length >= 3;
+  const shouldInjectStatement = turnNumber >= 3 && (streakCount >= 2 || questionHeavyWindow);
+
+  if (!shouldInjectStatement) return safeCandidate;
+  return chooseConcernStatementVariant({
+    concern,
+    seed: `${seed}:question-balance`,
+    recentDialogues,
+  });
 }
 
 function enforceDialogueVariety({
@@ -495,11 +706,28 @@ function detectRepCloseIntent(text = "") {
   if (!sample) return { level: "none", score: 0 };
 
   const hardPattern = /\b(bye|goodbye|i need to leave|i have to go|i must leave|i need to run|time to go|i have another patient|i'm stepping out)\b/;
-  const softPattern = /\b(wrap up|i'll leave it there|appreciate your time|happy to reconnect|follow up later|we can revisit|i don’t want to take more of your time|i know your schedule is tight|let’s reconnect)\b/;
+  const softPattern = /\b(wrap up|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here|leave it there|leave it here|appreciate your time|happy to reconnect|follow up later|we can revisit|i don(?:'|’)t want to take more of your time|i know your schedule is tight|let(?:'|’)s reconnect)\b/;
 
   if (hardPattern.test(sample)) return { level: "hard", score: 1 };
   if (softPattern.test(sample)) return { level: "soft", score: 0.7 };
   return { level: "none", score: 0 };
+}
+
+function hasStrongTimeWrapSignal(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+
+  const explicitStopPattern = /\b(i(?:'|’)ll (?:stop|pause|wrap)(?: here)?(?: for today)?|let(?:'|’)s (?:pause|close|wrap)(?: here)?(?: for today)?|we should stop here|we can stop here)\b/;
+  if (explicitStopPattern.test(sample)) return true;
+
+  const wrapPhrases = [
+    /\b(we(?:'|’)re at time|we are at time|we(?:'|’)re out of time|i(?:'|’)ll wrap here|i(?:'|’)ll wrap up here|i(?:'|’)ll leave it there|i(?:'|’)ll leave it here)\b/,
+    /\b(i know you(?:'|’)re busy|i know your schedule is tight|don(?:'|’)t want to take more of your time|thanks for your time today|thank you for your time today)\b/,
+    /\b(let(?:'|’)s close here|let(?:'|’)s pause here|i(?:'|’)ll stop here for now|we can reconnect later|happy to follow up|happy to reconnect)\b/,
+  ];
+
+  const wrapHitCount = wrapPhrases.reduce((count, pattern) => count + (pattern.test(sample) ? 1 : 0), 0);
+  return wrapHitCount >= 2 || (wrapHitCount >= 1 && /\b(thanks|thank you)\b/.test(sample));
 }
 
 function isPracticalAskSignal(text = "") {
@@ -2034,6 +2262,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioFamily,
     });
     const closeIntent = detectRepCloseIntent(repMessage);
+    const strongTimeWrapSignal = hasStrongTimeWrapSignal(repMessage);
     const operationalSignature = buildOperationalSignature(repMessage);
     const previousOperationalSignature = closeHandshakeRef.current.lastOperationalSignature || "";
     const repeatedOperationalStep = Boolean(
@@ -2519,6 +2748,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         candidate: nextHcpDialogue,
         recentDialogues: recentHcpDialogues.slice(-6),
         anchorDialogue: anchorForDupGuard,
+        turnNumber: nextTurnNumber,
       })
     ) {
       usedDeterministicFallback = true;
@@ -2677,6 +2907,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
     const shouldForceNaturalClose =
       closeIntent.level === "hard"
+      || strongTimeWrapSignal
       || (
         closeIntent.level === "soft"
         && (
@@ -2687,9 +2918,43 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         )
       );
 
+    if (!isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
+        maxWords: nextTurnNumber <= 3 ? 32 : 30,
+        maxSentences: 2,
+      });
+      nextHcpDialogue = polishClinicianConversationalPhrasing({
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = enforceQuestionStatementBalance({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        recentDialogues: recentHcpDialogues,
+        turnNumber: nextTurnNumber,
+      });
+    }
+
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
       nextHcpState = "disengaged";
       nextHcpDialogue = "Understood. Thanks for the discussion today. Please coordinate a follow-up slot with the front desk if you want to continue.";
+    }
+
+    // Final pre-commit hard duplicate-dialogue constraint:
+    // block exact duplicates, high-overlap near-duplicates, and opening-context echoes before rendering.
+    const finalDialogueGuard = resolveDuplicateDialogueBeforeCommit({
+      candidate: nextHcpDialogue,
+      activeConcern,
+      generationKey,
+      nextTurnNumber,
+      progressionStage,
+      recentHcpDialogues,
+      firstHcpDialogue,
+      previousHcpDialogue,
+    });
+    if (finalDialogueGuard.usedFallback) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = finalDialogueGuard.dialogue;
     }
 
     const nextTurn = {
