@@ -545,6 +545,92 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
   return bestCandidate;
 }
 
+function isQuestionLikeDialogue(text = "") {
+  const sample = String(text || "").trim();
+  if (!sample) return false;
+  if (sample.includes("?")) return true;
+  return /^(how|what|why|when|where|who|can|could|would|should|is|are|do|does)\b/i.test(sample);
+}
+
+function chooseConcernStatementVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
+  const statements = {
+    workflow: [
+      "I can see the logic, but staffing capacity is still the constraint on my side.",
+      "That direction makes sense if it truly cuts rework for my current team.",
+      "The idea is reasonable, but it has to fit our existing clinic flow as-is.",
+      "I need this to reduce follow-up churn, not create another task for staff.",
+    ],
+    access: [
+      "Access is still our main friction point, especially when payer rules vary by patient.",
+      "This could help if it lowers resubmissions without adding extra admin time.",
+      "Coverage variability is the issue for us, so the process has to stay lean.",
+      "I care less about theory and more about fewer payer callbacks this week.",
+    ],
+    evidence: [
+      "The data is helpful, but I still need to see direct applicability to this clinic.",
+      "I hear the evidence point; practical fit is what decides whether we adopt it.",
+      "The outcomes are interesting, but operational feasibility is still the gate.",
+      "Evidence matters, but I need a path my team can execute reliably.",
+    ],
+    time: [
+      "Time is tight here, so anything we do has to be low lift from day one.",
+      "I can consider this if the first step is quick and realistic this week.",
+      "We move fast in clinic, so this has to fit into existing visit cadence.",
+      "I’m open to this, but only if it saves time immediately.",
+    ],
+    policy: [
+      "We can only move forward if this stays within protocol constraints.",
+      "This seems workable as long as it aligns with our current pathway requirements.",
+      "Compliance is non-negotiable here, so the process has to remain tight.",
+      "I need a practical approach that is both compliant and low friction.",
+    ],
+    screening: [
+      "Screening consistency is the hard part for us in daily clinic flow.",
+      "This can work if candidacy checks are clear and don’t slow intake.",
+      "I need a process that keeps screening reliable without adding steps.",
+      "The approach is reasonable if staff can apply criteria consistently.",
+    ],
+  };
+
+  const pool = statements[concern] || statements.workflow;
+  const recentNormalized = recentDialogues.map((text) => normalizeDialogueSignature(text));
+  const startIndex = deterministicIndex(`${seed}:${concern}:statement-variant`, pool.length);
+  for (let i = 0; i < pool.length; i += 1) {
+    const candidate = pool[(startIndex + i) % pool.length];
+    const norm = normalizeDialogueSignature(candidate);
+    if (norm && !recentNormalized.includes(norm)) return candidate;
+  }
+  return pool[startIndex] || pool[0];
+}
+
+function enforceQuestionStatementBalance({
+  candidate = "",
+  concern = "workflow",
+  seed = "",
+  recentDialogues = [],
+  turnNumber = 1,
+} = {}) {
+  const safeCandidate = hardenTextSurface(candidate);
+  if (!safeCandidate) return safeCandidate;
+  if (!isQuestionLikeDialogue(safeCandidate)) return safeCandidate;
+
+  const recent = (recentDialogues || []).slice(-4);
+  const recentQuestionStreak = recent
+    .slice()
+    .reverse()
+    .findIndex((line) => !isQuestionLikeDialogue(line));
+  const streakCount = recentQuestionStreak === -1 ? recent.length : recentQuestionStreak;
+  const questionHeavyWindow = recent.length >= 3 && recent.filter((line) => isQuestionLikeDialogue(line)).length >= 3;
+  const shouldInjectStatement = turnNumber >= 3 && (streakCount >= 2 || questionHeavyWindow);
+
+  if (!shouldInjectStatement) return safeCandidate;
+  return chooseConcernStatementVariant({
+    concern,
+    seed: `${seed}:question-balance`,
+    recentDialogues,
+  });
+}
+
 function enforceDialogueVariety({
   candidate = "",
   concern = "workflow",
@@ -2839,6 +2925,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
       nextHcpDialogue = polishClinicianConversationalPhrasing({
         dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = enforceQuestionStatementBalance({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        recentDialogues: recentHcpDialogues,
+        turnNumber: nextTurnNumber,
       });
     }
 
