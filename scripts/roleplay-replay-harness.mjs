@@ -172,13 +172,44 @@ function runMalformedSentenceFixture() {
   });
 }
 
+function runConcernResolutionFixture() {
+  const extractOperationalFocusSlots = (text = "") => {
+    const value = String(text || "").toLowerCase();
+    const slots = new Set();
+    if (/\b(ehr|emr|chart|order set|smart phrase|smartphrase|template|note workflow|system integration)\b/.test(value)) slots.add("integration");
+    if (/\b(train|training|onboard|education|staff capability|role assignment|owner)\b/.test(value)) slots.add("training");
+    if (/\b(time cost|time|seconds|minutes|visit flow|throughput|slow|workload|burden)\b/.test(value)) slots.add("time_cost");
+    if (/\b(handoff|step|process|prescribing|documentation|checklist|prior auth|coverage|reimbursement|payer)\b/.test(value)) slots.add("workflow_step");
+    return slots;
+  };
+  const doesRepResolveLatestOperationalAsk = ({ repMessage = "", lastHcpDialogue = "" } = {}) => {
+    const required = extractOperationalFocusSlots(lastHcpDialogue);
+    if (!required.size) return true;
+    const repSlots = extractOperationalFocusSlots(repMessage);
+    if (!repSlots.size) return false;
+    let matched = 0;
+    required.forEach((slot) => {
+      if (repSlots.has(slot)) matched += 1;
+    });
+    return matched >= Math.max(1, Math.ceil(required.size * 0.5));
+  };
+
+  const hcpAsk = "How would this confirmation process work in our current EHR system, and would it require additional staff training?";
+  const nonAnswer = "From your perspective, does reducing downstream rework feel like it would make a difference day-to-day?";
+  const validAnswer = "We can use an EHR smart phrase at prescribing and give staff a brief 10-minute training huddle.";
+
+  assert(!doesRepResolveLatestOperationalAsk({ repMessage: nonAnswer, lastHcpDialogue: hcpAsk }), "Concern fixture should flag unanswered EHR/training ask.");
+  assert(doesRepResolveLatestOperationalAsk({ repMessage: validAnswer, lastHcpDialogue: hcpAsk }), "Concern fixture should pass when EHR/training ask is addressed.");
+}
+
 function main() {
   runArchetypeFixtures();
   runClosureFixture();
   runNormalizationFixture();
   runMalformedSentenceFixture();
+  runConcernResolutionFixture();
   // eslint-disable-next-line no-console
-  console.log("Roleplay replay harness passed: 3 archetypes + closure + malformed sentence fixtures.");
+  console.log("Roleplay replay harness passed: archetypes + closure + malformed sentence + concern resolution fixtures.");
 }
 
 main();
