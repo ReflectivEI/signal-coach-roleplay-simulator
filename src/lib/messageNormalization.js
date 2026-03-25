@@ -25,14 +25,12 @@ export function normalizeMessage(text) {
 
   // Smooth common grammar artifacts from model generation.
   cleaned = cleaned.replace(AUX_SUBJECT_CAP_FIX_RE, (_, aux, token) => `${aux} you ${token.toLowerCase()}`);
-  cleaned = cleaned.replace(CONNECTOR_MID_SENTENCE_RE, (token, _connector, offset, fullText) => {
+  cleaned = cleaned.replace(CONNECTOR_MID_SENTENCE_RE, (token, offset, fullText) => {
     if (offset === 0) return token;
     const prior = fullText.slice(0, offset);
     if (/[.!?]\s*$/.test(prior)) return token;
     return token.toLowerCase();
   });
-  cleaned = cleaned.replace(/\b(the|a)\s+before we go further,\s+time\b/gi, "$1 first time");
-  cleaned = cleaned.replace(/\bbefore we go further,\s+/gi, "");
 
   // Capitalize sentence starts for a polished, readable surface.
   cleaned = cleaned.replace(/(^|[.!?]\s+)([a-z])/g, (match, prefix, letter) => `${prefix}${letter.toUpperCase()}`);

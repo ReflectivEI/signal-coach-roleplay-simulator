@@ -606,7 +606,6 @@ function findCapabilityFromQuestion(question) {
   const normalized = typeof question === "string" ? question.toLowerCase() : "";
   if (!normalized) return null;
 
-  /** @type {Array<[string, string[]]>} */
   const capabilityMatchers = [
     ["signalAwareness", ["signal awareness", "awareness", "discovery", "question timing", "questioning"]],
     ["signalInterpretation", ["signal interpretation", "interpretation", "read the room", "read signals", "stakeholder"]],
@@ -618,9 +617,7 @@ function findCapabilityFromQuestion(question) {
     ["conversationControl", ["conversation management", "conversation", "control", "meeting flow", "agenda"]],
   ];
 
-  const match = capabilityMatchers.find(([, aliases]) =>
-    (Array.isArray(aliases) ? aliases : [aliases]).some((alias) => normalized.includes(alias))
-  );
+  const match = capabilityMatchers.find(([, aliases]) => aliases.some((alias) => normalized.includes(alias)));
   return match ? match[0] : null;
 }
 
