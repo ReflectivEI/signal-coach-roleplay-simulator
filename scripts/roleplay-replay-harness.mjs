@@ -151,12 +151,34 @@ function runNormalizationFixture() {
   assert(!/before we go further/i.test(normalized), "Normalization should strip malformed 'Before we go further' artifact.");
 }
 
+function runMalformedSentenceFixture() {
+  const hasMalformedQuestionStem = (text = "") =>
+    /\bhow should we (?:the|this|that|these|those)\b/i.test(String(text || "").trim());
+
+  const malformedPatterns = [
+    "How should we the study's findings on faster initiation?",
+    "How should we this approach for our clinic?",
+  ];
+  malformedPatterns.forEach((line) => {
+    assert(hasMalformedQuestionStem(line), "Malformed fixture should detect broken 'How should we …' stems.");
+  });
+
+  const validPatterns = [
+    "How should we apply the study's findings on faster initiation?",
+    "How should we interpret these findings for clinic workflow?",
+  ];
+  validPatterns.forEach((line) => {
+    assert(!hasMalformedQuestionStem(line), "Malformed fixture should not flag valid stems.");
+  });
+}
+
 function main() {
   runArchetypeFixtures();
   runClosureFixture();
   runNormalizationFixture();
+  runMalformedSentenceFixture();
   // eslint-disable-next-line no-console
-  console.log("Roleplay replay harness passed: 3 archetypes + closure fixture.");
+  console.log("Roleplay replay harness passed: 3 archetypes + closure + malformed sentence fixtures.");
 }
 
 main();
