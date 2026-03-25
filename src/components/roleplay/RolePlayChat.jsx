@@ -3049,9 +3049,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
+    const hcpAsksActionableQuestion = isQuestionLikeDialogue(nextHcpDialogue) && !isTerminalClosureDialogue(nextHcpDialogue);
+    if (nextHcpState === "disengaged" && hcpAsksActionableQuestion && !shouldForceNaturalClose) {
+      nextHcpState = "boundary-setting";
+    }
+
     const shouldEndSessionAfterTurn = overrideExit || shouldForceNaturalClose || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalPolicyAction === "close"
+      || (terminalPolicyAction === "close" && !hcpAsksActionableQuestion)
     );
 
     if (shouldEndSessionAfterTurn) {

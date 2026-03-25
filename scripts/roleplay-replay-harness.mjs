@@ -202,14 +202,56 @@ function runConcernResolutionFixture() {
   assert(doesRepResolveLatestOperationalAsk({ repMessage: validAnswer, lastHcpDialogue: hcpAsk }), "Concern fixture should pass when EHR/training ask is addressed.");
 }
 
+function runSessionEndGateFixture() {
+  const isTerminalClosureDialogue = (text = "") =>
+    /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/i.test(
+      String(text || "").toLowerCase().trim()
+    );
+  const isQuestionLikeDialogue = (text = "") => {
+    const sample = String(text || "").trim();
+    return sample.includes("?") || /^(how|what|why|when|where|who|can|could|would|should|is|are|do|does)\b/i.test(sample);
+  };
+  const shouldEndSessionAfterTurn = ({
+    overrideExit = false,
+    shouldForceNaturalClose = false,
+    nextHcpState = "engaged",
+    terminalPolicyAction = "continue",
+    nextHcpDialogue = "",
+  } = {}) => {
+    const hcpAsksActionableQuestion = isQuestionLikeDialogue(nextHcpDialogue) && !isTerminalClosureDialogue(nextHcpDialogue);
+    return overrideExit || shouldForceNaturalClose || (
+      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || (terminalPolicyAction === "close" && !hcpAsksActionableQuestion)
+    );
+  };
+
+  assert(
+    !shouldEndSessionAfterTurn({
+      nextHcpState: "disengaged",
+      terminalPolicyAction: "close",
+      nextHcpDialogue: "What is the smallest pilot step that proves this is feasible here?",
+    }),
+    "Session gate fixture should continue when HCP asks an actionable question."
+  );
+  assert(
+    shouldEndSessionAfterTurn({
+      nextHcpState: "disengaged",
+      terminalPolicyAction: "close",
+      nextHcpDialogue: "Understood. Please coordinate a follow-up slot with the front desk.",
+    }),
+    "Session gate fixture should end on explicit closure dialogue."
+  );
+}
+
 function main() {
   runArchetypeFixtures();
   runClosureFixture();
   runNormalizationFixture();
   runMalformedSentenceFixture();
   runConcernResolutionFixture();
+  runSessionEndGateFixture();
   // eslint-disable-next-line no-console
-  console.log("Roleplay replay harness passed: archetypes + closure + malformed sentence + concern resolution fixtures.");
+  console.log("Roleplay replay harness passed: archetypes + closure + malformed sentence + concern resolution + session-end gate fixtures.");
 }
 
 main();
