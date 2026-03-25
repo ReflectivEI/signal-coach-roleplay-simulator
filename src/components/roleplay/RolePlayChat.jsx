@@ -59,6 +59,12 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 
+// Regression safety switch: keep deterministic duplicate guard on, but hold risky
+// conversational post-processing paths until replay-harness validation passes.
+const ENABLE_HCP_BREVITY_REWRITE = false;
+const ENABLE_HCP_CONVERSATIONAL_POLISH = false;
+const ENABLE_HCP_QUESTION_STATEMENT_BALANCE = false;
+
 function escapeHTML(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -649,11 +655,13 @@ function enforceDialogueVariety({
   );
   const recentAngles = recentDialogues.slice(-4).map((line) => classifyDialogueAngle(line));
   const candidateAngle = classifyDialogueAngle(safeCandidate);
+  const candidateIsContextRich = /\b(ehr|emr|smart phrase|order workflow|prior auth|payer|reimbursement|training|staffing|handoff|checklist|prescribing)\b/i.test(safeCandidate);
   const angleIsStuck =
     candidateAngle !== "general"
     && recentAngles.length >= 2
     && recentAngles.slice(-2).every((angle) => angle === candidateAngle)
-    && candidateAngle !== progressionStage;
+    && candidateAngle !== progressionStage
+    && !candidateIsContextRich;
 
   if (!duplicateWithinWindow && !highlySimilar && !angleIsStuck) return safeCandidate;
 
@@ -873,6 +881,39 @@ function detectConcernAddressed(repMessage = "", concern = "workflow") {
   return concernPattern.test(String(repMessage || ""));
 }
 
+function extractOperationalFocusSlots(text = "") {
+  const value = String(text || "").toLowerCase();
+  if (!value) return new Set();
+  const slots = new Set();
+  if (/\b(ehr|emr|chart|order set|smart phrase|smartphrase|template|note workflow|system integration)\b/.test(value)) slots.add("integration");
+  if (/\b(train|training|onboard|education|staff capability|role assignment|owner)\b/.test(value)) slots.add("training");
+  if (/\b(time cost|time|seconds|minutes|visit flow|throughput|slow|workload|burden)\b/.test(value)) slots.add("time_cost");
+  if (/\b(handoff|step|process|prescribing|documentation|checklist|prior auth|coverage|reimbursement|payer)\b/.test(value)) slots.add("workflow_step");
+  return slots;
+}
+
+function doesRepResolveLatestOperationalAsk({
+  repMessage = "",
+  lastHcpDialogue = "",
+  concern = "workflow",
+} = {}) {
+  const baselineAddressed = detectConcernAddressed(repMessage, concern);
+  if (!["workflow", "access", "time"].includes(concern)) return baselineAddressed;
+  if (!baselineAddressed) return false;
+
+  const requiredSlots = extractOperationalFocusSlots(lastHcpDialogue);
+  if (!requiredSlots.size) return baselineAddressed;
+  const repSlots = extractOperationalFocusSlots(repMessage);
+  if (!repSlots.size) return false;
+
+  let matched = 0;
+  requiredSlots.forEach((slot) => {
+    if (repSlots.has(slot)) matched += 1;
+  });
+  const requiredCoverage = Math.max(1, Math.ceil(requiredSlots.size * 0.5));
+  return matched >= requiredCoverage;
+}
+
 function hasConcreteOperationalMove(repMessage = "") {
   return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|change for your team|for your staff)\b/i.test(String(repMessage || ""));
 }
@@ -882,11 +923,16 @@ function deriveEngagementDecay({
   previousPressure = 0,
   repMessage = "",
   activeConcern = "workflow",
+  lastHcpDialogue = "",
   concernSourceText = "",
   scenarioKeywords = [],
 }) {
   const repLower = String(repMessage || "").toLowerCase();
-  const concernAddressed = detectConcernAddressed(repLower, activeConcern);
+  const concernAddressed = doesRepResolveLatestOperationalAsk({
+    repMessage: repLower,
+    lastHcpDialogue,
+    concern: activeConcern,
+  });
   const repeatedEvidence = /\b(study|trial|data|endpoint|publication|methodology|efficacy|p-value|hazard ratio)\b/.test(repLower)
     && !concernAddressed
     && ["workflow", "access", "time", "policy", "screening"].includes(activeConcern);
@@ -1084,7 +1130,8 @@ function countUnresolvedConcernTurns(turns = [], concern = "workflow") {
   let unresolvedStreak = 0;
   for (let i = repTurns.length - 1; i >= 0; i -= 1) {
     const repText = String(repTurns[i]?.repMessage || "");
-    if (detectConcernAddressed(repText, concern)) break;
+    const latestHcpAsk = String(repTurns[i]?.hcpDialogueBefore || "");
+    if (doesRepResolveLatestOperationalAsk({ repMessage: repText, lastHcpDialogue: latestHcpAsk, concern })) break;
     unresolvedStreak += 1;
   }
   return unresolvedStreak;
@@ -2244,6 +2291,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       previousPressure: previousPressureScore,
       repMessage,
       activeConcern,
+      lastHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
       concernSourceText,
       scenarioKeywords,
     });
@@ -2919,20 +2967,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
     if (!isTerminalClosureDialogue(nextHcpDialogue)) {
-      nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
-        maxWords: nextTurnNumber <= 3 ? 32 : 30,
-        maxSentences: 2,
-      });
-      nextHcpDialogue = polishClinicianConversationalPhrasing({
-        dialogue: nextHcpDialogue,
-      });
-      nextHcpDialogue = enforceQuestionStatementBalance({
-        candidate: nextHcpDialogue,
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
-        recentDialogues: recentHcpDialogues,
-        turnNumber: nextTurnNumber,
-      });
+      if (ENABLE_HCP_BREVITY_REWRITE) {
+        nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
+          maxWords: nextTurnNumber <= 3 ? 32 : 30,
+          maxSentences: 2,
+        });
+      }
+
+      if (ENABLE_HCP_CONVERSATIONAL_POLISH) {
+        nextHcpDialogue = polishClinicianConversationalPhrasing({
+          dialogue: nextHcpDialogue,
+        });
+      }
+
+      if (ENABLE_HCP_QUESTION_STATEMENT_BALANCE) {
+        nextHcpDialogue = enforceQuestionStatementBalance({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+          recentDialogues: recentHcpDialogues,
+          turnNumber: nextTurnNumber,
+        });
+      }
     }
 
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
@@ -2993,9 +3049,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
+    const hcpAsksActionableQuestion = isQuestionLikeDialogue(nextHcpDialogue) && !isTerminalClosureDialogue(nextHcpDialogue);
+    if (nextHcpState === "disengaged" && hcpAsksActionableQuestion && !shouldForceNaturalClose) {
+      nextHcpState = "boundary-setting";
+    }
+
     const shouldEndSessionAfterTurn = overrideExit || shouldForceNaturalClose || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalPolicyAction === "close"
+      || (terminalPolicyAction === "close" && !hcpAsksActionableQuestion)
     );
 
     if (shouldEndSessionAfterTurn) {

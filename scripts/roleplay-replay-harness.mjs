@@ -151,12 +151,107 @@ function runNormalizationFixture() {
   assert(!/before we go further/i.test(normalized), "Normalization should strip malformed 'Before we go further' artifact.");
 }
 
+function runMalformedSentenceFixture() {
+  const hasMalformedQuestionStem = (text = "") =>
+    /\bhow should we (?:the|this|that|these|those)\b/i.test(String(text || "").trim());
+
+  const malformedPatterns = [
+    "How should we the study's findings on faster initiation?",
+    "How should we this approach for our clinic?",
+  ];
+  malformedPatterns.forEach((line) => {
+    assert(hasMalformedQuestionStem(line), "Malformed fixture should detect broken 'How should we …' stems.");
+  });
+
+  const validPatterns = [
+    "How should we apply the study's findings on faster initiation?",
+    "How should we interpret these findings for clinic workflow?",
+  ];
+  validPatterns.forEach((line) => {
+    assert(!hasMalformedQuestionStem(line), "Malformed fixture should not flag valid stems.");
+  });
+}
+
+function runConcernResolutionFixture() {
+  const extractOperationalFocusSlots = (text = "") => {
+    const value = String(text || "").toLowerCase();
+    const slots = new Set();
+    if (/\b(ehr|emr|chart|order set|smart phrase|smartphrase|template|note workflow|system integration)\b/.test(value)) slots.add("integration");
+    if (/\b(train|training|onboard|education|staff capability|role assignment|owner)\b/.test(value)) slots.add("training");
+    if (/\b(time cost|time|seconds|minutes|visit flow|throughput|slow|workload|burden)\b/.test(value)) slots.add("time_cost");
+    if (/\b(handoff|step|process|prescribing|documentation|checklist|prior auth|coverage|reimbursement|payer)\b/.test(value)) slots.add("workflow_step");
+    return slots;
+  };
+  const doesRepResolveLatestOperationalAsk = ({ repMessage = "", lastHcpDialogue = "" } = {}) => {
+    const required = extractOperationalFocusSlots(lastHcpDialogue);
+    if (!required.size) return true;
+    const repSlots = extractOperationalFocusSlots(repMessage);
+    if (!repSlots.size) return false;
+    let matched = 0;
+    required.forEach((slot) => {
+      if (repSlots.has(slot)) matched += 1;
+    });
+    return matched >= Math.max(1, Math.ceil(required.size * 0.5));
+  };
+
+  const hcpAsk = "How would this confirmation process work in our current EHR system, and would it require additional staff training?";
+  const nonAnswer = "From your perspective, does reducing downstream rework feel like it would make a difference day-to-day?";
+  const validAnswer = "We can use an EHR smart phrase at prescribing and give staff a brief 10-minute training huddle.";
+
+  assert(!doesRepResolveLatestOperationalAsk({ repMessage: nonAnswer, lastHcpDialogue: hcpAsk }), "Concern fixture should flag unanswered EHR/training ask.");
+  assert(doesRepResolveLatestOperationalAsk({ repMessage: validAnswer, lastHcpDialogue: hcpAsk }), "Concern fixture should pass when EHR/training ask is addressed.");
+}
+
+function runSessionEndGateFixture() {
+  const isTerminalClosureDialogue = (text = "") =>
+    /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/i.test(
+      String(text || "").toLowerCase().trim()
+    );
+  const isQuestionLikeDialogue = (text = "") => {
+    const sample = String(text || "").trim();
+    return sample.includes("?") || /^(how|what|why|when|where|who|can|could|would|should|is|are|do|does)\b/i.test(sample);
+  };
+  const shouldEndSessionAfterTurn = ({
+    overrideExit = false,
+    shouldForceNaturalClose = false,
+    nextHcpState = "engaged",
+    terminalPolicyAction = "continue",
+    nextHcpDialogue = "",
+  } = {}) => {
+    const hcpAsksActionableQuestion = isQuestionLikeDialogue(nextHcpDialogue) && !isTerminalClosureDialogue(nextHcpDialogue);
+    return overrideExit || shouldForceNaturalClose || (
+      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || (terminalPolicyAction === "close" && !hcpAsksActionableQuestion)
+    );
+  };
+
+  assert(
+    !shouldEndSessionAfterTurn({
+      nextHcpState: "disengaged",
+      terminalPolicyAction: "close",
+      nextHcpDialogue: "What is the smallest pilot step that proves this is feasible here?",
+    }),
+    "Session gate fixture should continue when HCP asks an actionable question."
+  );
+  assert(
+    shouldEndSessionAfterTurn({
+      nextHcpState: "disengaged",
+      terminalPolicyAction: "close",
+      nextHcpDialogue: "Understood. Please coordinate a follow-up slot with the front desk.",
+    }),
+    "Session gate fixture should end on explicit closure dialogue."
+  );
+}
+
 function main() {
   runArchetypeFixtures();
   runClosureFixture();
   runNormalizationFixture();
+  runMalformedSentenceFixture();
+  runConcernResolutionFixture();
+  runSessionEndGateFixture();
   // eslint-disable-next-line no-console
-  console.log("Roleplay replay harness passed: 3 archetypes + closure fixture.");
+  console.log("Roleplay replay harness passed: archetypes + closure + malformed sentence + concern resolution + session-end gate fixtures.");
 }
 
 main();
