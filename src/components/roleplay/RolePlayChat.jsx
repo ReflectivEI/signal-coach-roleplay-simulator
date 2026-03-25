@@ -59,6 +59,12 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 
+// Regression safety switch: keep deterministic duplicate guard on, but hold risky
+// conversational post-processing paths until replay-harness validation passes.
+const ENABLE_HCP_BREVITY_REWRITE = false;
+const ENABLE_HCP_CONVERSATIONAL_POLISH = false;
+const ENABLE_HCP_QUESTION_STATEMENT_BALANCE = false;
+
 function escapeHTML(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -2919,20 +2925,28 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
     if (!isTerminalClosureDialogue(nextHcpDialogue)) {
-      nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
-        maxWords: nextTurnNumber <= 3 ? 32 : 30,
-        maxSentences: 2,
-      });
-      nextHcpDialogue = polishClinicianConversationalPhrasing({
-        dialogue: nextHcpDialogue,
-      });
-      nextHcpDialogue = enforceQuestionStatementBalance({
-        candidate: nextHcpDialogue,
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
-        recentDialogues: recentHcpDialogues,
-        turnNumber: nextTurnNumber,
-      });
+      if (ENABLE_HCP_BREVITY_REWRITE) {
+        nextHcpDialogue = enforceClinicalBrevity(nextHcpDialogue, {
+          maxWords: nextTurnNumber <= 3 ? 32 : 30,
+          maxSentences: 2,
+        });
+      }
+
+      if (ENABLE_HCP_CONVERSATIONAL_POLISH) {
+        nextHcpDialogue = polishClinicianConversationalPhrasing({
+          dialogue: nextHcpDialogue,
+        });
+      }
+
+      if (ENABLE_HCP_QUESTION_STATEMENT_BALANCE) {
+        nextHcpDialogue = enforceQuestionStatementBalance({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+          recentDialogues: recentHcpDialogues,
+          turnNumber: nextTurnNumber,
+        });
+      }
     }
 
     if (shouldForceNaturalClose && nextHcpState !== "disengaged") {
