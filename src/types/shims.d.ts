@@ -44,3 +44,8 @@ declare module '@/components/ui/badge' {
 declare module 'file-saver' {
   export const saveAs: (...args: any[]) => void;
 }
+
+declare module "__STATIC_CONTENT_MANIFEST" {
+  const manifest: string;
+  export default manifest;
+}
