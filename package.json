@@ -10,7 +10,6 @@
     "worker:dev:prod": "wrangler dev",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
-    "test:roleplay-harness": "node ./scripts/roleplay-replay-harness.mjs",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
