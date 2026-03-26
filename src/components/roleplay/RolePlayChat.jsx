@@ -742,8 +742,21 @@ function compressHcpDialogueForEngagement(dialogue = "", engagement = {}) {
 function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
   const normalized = hardenTextSurface(dialogue);
   const trimmed = normalized.replace(/\s+/g, " ").trim();
+  const workflowBridgeVariants = [
+    "I still need to see how this fits without adding workflow burden.",
+    "I still need to understand how this fits into workflow without adding burden.",
+    "I still need clarity on how this fits our workflow without creating extra burden.",
+  ];
+  const workflowAskVariants = [
+    "Can you give one concrete step my team could actually use this week?",
+    "Can you share one concrete step my team could put into practice this week?",
+    "Can you give one practical step my team can apply this week?",
+  ];
+  const variantSeed = `${concern}:${trimmed}:${repWasGeneric ? "generic" : "specific"}`;
+  const workflowBridge = workflowBridgeVariants[deterministicIndex(`${variantSeed}:workflow-bridge`, workflowBridgeVariants.length)];
+  const workflowAsk = workflowAskVariants[deterministicIndex(`${variantSeed}:workflow-ask`, workflowAskVariants.length)];
   const concernBridges = {
-    workflow: "I still need to see how this fits without adding workflow burden.",
+    workflow: workflowBridge,
     evidence: "I still need evidence that feels applicable to the patients I am seeing.",
     access: "Access and prior-auth realities are still a major barrier here.",
     time: "I still have limited time, so keep this to what is immediately useful.",
@@ -751,7 +764,7 @@ function rewriteTooIdealDialogue(dialogue, concern, repWasGeneric) {
     screening: "I still need clarity on candidacy and screening before moving ahead.",
   };
   const askByConcern = {
-    workflow: "Can you give one concrete step my team could actually use this week?",
+    workflow: workflowAsk,
     evidence: "What is the clearest proof point for my practice context?",
     access: "What would you do first when coverage or prior auth blocks progress?",
     time: "What is the single most practical point to focus on right now?",
