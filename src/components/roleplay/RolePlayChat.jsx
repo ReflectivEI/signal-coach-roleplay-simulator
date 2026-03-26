@@ -435,8 +435,15 @@ function enforceDialogueVariety({
 function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
-  const explicitExitPattern = /\b(i have to go|i need to leave|i must leave|gotta run|i need to run|time to go|i have to jump|i need to jump|need to hop|end early|stop here|let's stop here|let's wrap|wrap up|can we continue later|can we finish later|let's pick this up later|i have another patient|emergency|goodbye|good bye|bye|have a great day|see you next week|see you next time|talk soon)\b/i;
-  return explicitExitPattern.test(normalized);
+
+  const explicitClosePattern = /\b(i (have|need|must) to (go|leave|head out|jump|run)|i'm (heading out|signing off)|gotta (run|go)|time to go|need to hop off|let's (stop|wrap) here|we should wrap (this )?up|can we (continue|finish) later|let's (pick this up|reconnect) later|we can pick this up (later|another time)|i have (another|my next) patient|i need to get to (my )?next patient|i have an emergency|i need to jump to another room|i need to get back to clinic)\b/i;
+  if (explicitClosePattern.test(normalized)) return true;
+
+  const hasSignoff = /\b(goodbye|good bye|bye|have a great day|see you (next week|next time)|talk soon)\b/i.test(normalized);
+  if (!hasSignoff) return false;
+
+  const signoffContext = /\b(thanks|thank you|for your time|for stopping by|for coming in|we'll reconnect|let's reconnect|let's follow up|follow up later|speak soon)\b/i;
+  return signoffContext.test(normalized) || normalized.length <= 40;
 }
 
 function hasSpecificFollowUpCommitment(text = "") {
@@ -563,16 +570,17 @@ function determineTerminalPolicyAction({
   unresolvedConcernTurns = 0,
   repHasFollowUpCommitment = false,
   repDefersImmediateAction = false,
+  explicitExitOverride = false,
 } = {}) {
   const statePolicy = TERMINAL_CLOSE_POLICY_MATRIX[hcpState] || TERMINAL_CLOSE_POLICY_MATRIX.engaged;
   let action = statePolicy[concernFlowOutcome] || "continue";
   if (hcpState === "impatient" && unresolvedConcernTurns >= 5 && (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot")) {
     action = "close";
   }
-  if (repHasFollowUpCommitment && !repDefersImmediateAction && action === "close") {
+  if (!explicitExitOverride && repHasFollowUpCommitment && !repDefersImmediateAction && action === "close") {
     action = "probe";
   }
-  return action;
+  return explicitExitOverride ? "close" : action;
 }
 
 function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0 } = {}) {
@@ -2628,6 +2636,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       unresolvedConcernTurns,
       repHasFollowUpCommitment,
       repDefersImmediateAction,
+      explicitExitOverride: overrideExit,
     });
 
     if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
