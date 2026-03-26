@@ -477,7 +477,7 @@ function isTerminalClosureDialogue(text = "") {
 }
 
 function hasWorkflowOperationalLanguage(text = "") {
-  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load)\b/i.test(String(text || ""));
+  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load|epa|front desk|check-?in|order[\s-]?set|routing rule|staffing model|nurse script|ma submit|ma routing|queue|huddle script)\b/i.test(String(text || ""));
 }
 
 function hasEvidencePivotLanguage(text = "") {
