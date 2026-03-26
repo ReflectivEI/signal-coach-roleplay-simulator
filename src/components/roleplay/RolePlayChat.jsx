@@ -2088,13 +2088,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ].join(" ").trim();
     const scenarioLower = scenarioContext.toLowerCase();
     const scenarioPressured = /\b(busy|behind|limited time|short on time|time pressure|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow friction|backlog)\b/.test(scenarioLower);
-    const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
+    const scenarioPrepFocus = /\b(prep|pre-?exposure prophylaxis|sti)\b/.test(scenarioLower);
     const scenarioCabFocus = /\bcab|cabotegravir|injectable|long-acting\b/.test(scenarioLower);
     const scenarioScreeningFocus = /\bscreening|resistance|adherence|candidacy|criteria\b/.test(scenarioLower);
-    const scenarioMonitoringFocus = /\bmonitoring|follow-up|durability|protocol|renal|labs?\b/.test(scenarioLower);
+    const scenarioMonitoringFocus = (
+      /\b(monitoring|follow-up|protocol|renal|labs?)\b/.test(scenarioLower)
+      && /\b(workflow|clinic flow|operations?|operational|staffing|cadence|quarterly|nurse-led|follow-up protocol|implementation|prior auth|paperwork|backlog)\b/.test(scenarioLower)
+    );
     const scenarioPayerFocus = /\b(payer|medical director|health plan|utilization management|coverage policy|reimbursement)\b/.test(scenarioLower);
     const scenarioCommitteeFocus = /\b(committee|formulary|p&t|pharmacy and therapeutics|value analysis)\b/.test(scenarioLower);
-    const scenarioPathwayWorkflowFocus = /\b(pathway|workflow|operational|operations|staffing|implementation|throughput|clinic flow)\b/.test(scenarioLower);
+    const scenarioPathwayWorkflowFocus = (
+      /\b(pathway|workflow|operational|operations|staffing|implementation|throughput|clinic flow)\b/.test(scenarioLower)
+      && /\b(staffing|operations?|implementation|throughput|clinic flow|handoff|prior auth|paperwork|backlog|batching|onboarding|discharge|transition|updates?)\b/.test(scenarioLower)
+      && !/\b(diagnostic pathway|diagnosis pathway|diagnostic workup)\b/.test(scenarioLower)
+    );
     const scenarioOncologyKOLFocus = /\b(kol|key opinion leader|high-scrutiny|high scrutiny|peer-to-peer|peer review|tumor board)\b/.test(scenarioLower);
     const scenarioOralOncOnboardingFocus = /\b(oral oncolytic|oncolytic onboarding|tminus7|t-?minus-?7|refill gap|start form|onboarding)\b/.test(scenarioLower);
     const scenarioPostMiTransitionsFocus = /\b(post-?mi|post mi|myocardial infarction|heart failure|hf transitions|readmission|discharge|transition of care|toc)\b/.test(scenarioLower);
