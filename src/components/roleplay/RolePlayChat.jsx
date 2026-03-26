@@ -2085,6 +2085,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const scenarioCabFocus = /\bcab|cabotegravir|injectable|long-acting\b/.test(scenarioLower);
     const scenarioScreeningFocus = /\bscreening|resistance|adherence|candidacy|criteria\b/.test(scenarioLower);
     const scenarioMonitoringFocus = /\bmonitoring|follow-up|durability|protocol|renal|labs?\b/.test(scenarioLower);
+    const scenarioPayerFocus = /\b(payer|medical director|health plan|utilization management|coverage policy|reimbursement)\b/.test(scenarioLower);
+    const scenarioCommitteeFocus = /\b(committee|formulary|p&t|pharmacy and therapeutics|value analysis)\b/.test(scenarioLower);
+    const scenarioPathwayWorkflowFocus = /\b(pathway|workflow|operational|operations|staffing|implementation|throughput|clinic flow)\b/.test(scenarioLower);
 
     const buildFirstTurnScenarioFallback = () => {
       const warmGreeting = inPleasantryGracePeriod
@@ -2097,6 +2100,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
         return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
+      }
+
+      if (scenarioCommitteeFocus) {
+        return `${warmGreeting} We're reviewing formulary and P&T considerations this week, so let's keep this focused. What's the key update you wanted to share?`;
+      }
+
+      if (scenarioPayerFocus) {
+        return `${warmGreeting} I've been focused on payer coverage and utilization criteria, so I can give you a couple minutes. What's most relevant for medical director review?`;
+      }
+
+      if (scenarioPathwayWorkflowFocus) {
+        return `${warmGreeting} We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?`;
       }
 
       if (scenarioMonitoringFocus) {
