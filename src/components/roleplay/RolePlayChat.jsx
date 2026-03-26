@@ -2631,7 +2631,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
 
     const terminalPolicyAction = determineTerminalPolicyAction({
-      hcpState: nextHcpState,
+      hcpState: decayState.tier,
       concernFlowOutcome,
       unresolvedConcernTurns,
       repHasFollowUpCommitment,
