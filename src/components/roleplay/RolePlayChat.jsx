@@ -554,7 +554,6 @@ function classifyConcernFlowOutcome({
 
   if (repEvidence && !repOperational && priorOperational) return "overpivot";
   if (repEvidence && !repOperational) return "missed";
-  if (repEvidence && repOperational && priorOperational) return "overpivot";
   if (repOperational) return "aligned";
   return "neutral";
 }
