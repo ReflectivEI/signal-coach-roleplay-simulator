@@ -2078,7 +2078,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && priorHcpDialogueTurns === 0
     );
 
-    const scenarioContext = `${String(scenario.opening_scene || scenario.openingScene || "")} ${String(scenario.description || scenario.context || "")}`.trim();
+    const scenarioContext = [
+      String(scenario.id || ""),
+      String(scenario.title || ""),
+      String(scenario.opening_scene || scenario.openingScene || ""),
+      String(scenario.description || scenario.context || ""),
+      String(scenario.objective || ""),
+      Array.isArray(scenario.challenges) ? scenario.challenges.join(" ") : String(scenario.challenges || ""),
+    ].join(" ").trim();
     const scenarioLower = scenarioContext.toLowerCase();
     const scenarioPressured = /\b(busy|behind|limited time|short on time|time pressure|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow friction|backlog)\b/.test(scenarioLower);
     const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
@@ -2088,11 +2095,26 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const scenarioPayerFocus = /\b(payer|medical director|health plan|utilization management|coverage policy|reimbursement)\b/.test(scenarioLower);
     const scenarioCommitteeFocus = /\b(committee|formulary|p&t|pharmacy and therapeutics|value analysis)\b/.test(scenarioLower);
     const scenarioPathwayWorkflowFocus = /\b(pathway|workflow|operational|operations|staffing|implementation|throughput|clinic flow)\b/.test(scenarioLower);
+    const scenarioOncologyKOLFocus = /\b(kol|key opinion leader|high-scrutiny|high scrutiny|peer-to-peer|peer review|tumor board)\b/.test(scenarioLower);
+    const scenarioOralOncOnboardingFocus = /\b(oral oncolytic|oncolytic onboarding|tminus7|t-?minus-?7|refill gap|start form|onboarding)\b/.test(scenarioLower);
+    const scenarioPostMiTransitionsFocus = /\b(post-?mi|post mi|myocardial infarction|heart failure|hf transitions|readmission|discharge|transition of care|toc)\b/.test(scenarioLower);
 
     const buildFirstTurnScenarioFallback = () => {
       const warmGreeting = inPleasantryGracePeriod
         ? "I'm doing well, thanks for asking."
         : "Thanks for checking in.";
+      const strictKolEvidenceContext = (
+        /\bonc-kol\b|\bkey opinion leader\b|\bkol\b/.test(scenarioLower)
+        && /\b(skeptic|skeptical|peer-reviewed|phase 3|overall survival|long-term data|published)\b/.test(scenarioLower)
+      );
+      const strictOralOncOnboardingContext = (
+        /\bonc_pa_gu_oral_onc_tminus7\b|\boral oncolytic\b/.test(scenarioLower)
+        && /\b(refill gap|day-25|day 25|day-30|day 30|hub enrollment|t-?7|onboarding)\b/.test(scenarioLower)
+      );
+      const strictPostDischargeTransitionsContext = (
+        /\bcv_pa_postmi_transitions\b|\bpost-?mi\b|\bmyocardial infarction\b|\bheart failure\b/.test(scenarioLower)
+        && /\b(discharge|transition|readmission|day-7|day 7|handoff|gdmt)\b/.test(scenarioLower)
+      );
 
       if (scenarioPrepFocus && scenarioPressured) {
         return `${warmGreeting} I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?`;
@@ -2100,6 +2122,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
         return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
+      }
+
+      if (strictKolEvidenceContext) {
+        return `${warmGreeting} I have a tight window, and for KOL discussions I need evidence I can defend with peer-reviewed rigor. What's your strongest decision-level data point?`;
+      }
+
+      if (strictOralOncOnboardingContext) {
+        return `${warmGreeting} Our oral oncolytic starts are still hitting refill gaps around day 25 to 30, so I need a concrete onboarding workflow fix. Where do you want us to intervene first?`;
+      }
+
+      if (strictPostDischargeTransitionsContext) {
+        return `${warmGreeting} Our post-discharge MI/HF handoffs are where readmission risk shows up, so keep this tied to transition workflow. What's the first operational step you'd recommend?`;
       }
 
       if (scenarioCommitteeFocus) {
@@ -2114,6 +2148,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return `${warmGreeting} We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?`;
       }
 
+      if (scenarioOncologyKOLFocus) {
+        return `${warmGreeting} Before we go further, I need evidence we can defend in front of our KOL group, not broad claims. What's the most decision-relevant data point?`;
+      }
+
+      if (scenarioOralOncOnboardingFocus) {
+        return `${warmGreeting} Our oral oncolytic starts are losing momentum between onboarding and first refill, so I need an operational fix, not a concept. Where should we intervene first?`;
+      }
+
+      if (scenarioPostMiTransitionsFocus) {
+        return `${warmGreeting} Our post-MI and heart failure discharge transitions are where readmissions creep in, so keep this tightly tied to handoffs and follow-up execution. What is your first-step recommendation?`;
+      }
+
       if (scenarioMonitoringFocus) {
         return `${warmGreeting} I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?`;
       }
@@ -2123,8 +2169,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       return scenarioPrepFocus
-        ? `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today regarding PrEP access for my patients?`
-        : `${warmGreeting} I can give you a few focused minutes before my next patient. What brings you in today?`;
+        ? `${warmGreeting} I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.`
+        : `${warmGreeting} I can spare a focused minute or two. Give me the one practical issue you're here to solve today.`;
     };
 
     const buildFollowUpScenarioFallback = () => {
