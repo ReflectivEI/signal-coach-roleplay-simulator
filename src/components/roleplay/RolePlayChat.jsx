@@ -73,20 +73,28 @@ function sanitizeUserMessage(text) {
 
 function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
-  const normalizedText = normalizeMessage(originalText);
-  const toneNormalizedText = normalizeTone(normalizedText);
-  const hardenedText = hardenTextSurface(toneNormalizedText);
-  const renderedText = escapeHTML(hardenedText);
 
-  if (
-    import.meta.env.DEV
-    && originalText.includes("?")
-    && !renderedText.includes("?")
-  ) {
-    console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source });
+  try {
+    const normalizedText = normalizeMessage(originalText);
+    const toneNormalizedText = normalizeTone(normalizedText);
+    const hardenedText = hardenTextSurface(toneNormalizedText);
+    const renderedText = escapeHTML(hardenedText);
+
+    if (
+      import.meta.env.DEV
+      && originalText.includes("?")
+      && !renderedText.includes("?")
+    ) {
+      console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source });
+    }
+
+    return renderedText;
+  } catch (error) {
+    if (import.meta.env.DEV) {
+      console.error("ROLEPLAY_MESSAGE_SANITIZE_FAILED", { source, error, text: originalText });
+    }
+    return escapeHTML(originalText);
   }
-
-  return renderedText;
 }
 
 function hardenTextSurface(text) {
