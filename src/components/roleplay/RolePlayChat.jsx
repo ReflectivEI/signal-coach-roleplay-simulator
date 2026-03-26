@@ -58,6 +58,7 @@ import {
   selectInferenceInfluence,
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
+import { applyTransformSafetyHarness } from "./transformSafetyHarness";
 
 function escapeHTML(text) {
   return String(text)
@@ -228,6 +229,10 @@ const DECAY_CUE_BUCKETS = {
     "The HCP keeps attention brief, expecting one concrete point before moving on.",
   ],
 };
+
+// Feature flags (default OFF): safety harness for optional dialogue realism transforms.
+const ENABLE_REALISM_TRANSFORM_HARNESS = import.meta.env.VITE_ENABLE_REALISM_TRANSFORM_HARNESS === "true";
+const ENABLE_REALISM_REPLAY_METRICS = import.meta.env.VITE_ENABLE_REALISM_REPLAY_METRICS === "true";
 
 const TERMINAL_DECISION_CUES = [
   "The HCP glances toward the door, waiting for one final relevant point.",
@@ -2453,7 +2458,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && (responseLooksTooIdeal || resolvesTooMuch || (repWasGeneric && /\b(thank you|appreciate|good question)\b/i.test(nextHcpDialogue)));
 
     if (shouldCalibrateRealism) {
-      nextHcpDialogue = rewriteTooIdealDialogue(nextHcpDialogue, primaryConcern, repWasGeneric);
+      const transformedDialogue = rewriteTooIdealDialogue(nextHcpDialogue, primaryConcern, repWasGeneric);
+      if (ENABLE_REALISM_TRANSFORM_HARNESS) {
+        const harnessResult = applyTransformSafetyHarness({
+          originalDialogue: nextHcpDialogue,
+          transformedDialogue,
+          activeConcern: primaryConcern,
+          scenarioKeywords,
+        });
+        nextHcpDialogue = harnessResult.dialogue;
+
+        if (ENABLE_REALISM_REPLAY_METRICS && import.meta.env.DEV) {
+          console.debug("REALISM_REPLAY_HARNESS_METRICS", harnessResult.metrics);
+        }
+      } else {
+        nextHcpDialogue = transformedDialogue;
+      }
     }
 
     if (ENABLE_INFERENCE_LAYER && selectedInfluence.type !== 'none' && nextHcpDialogue !== baseResponse) {

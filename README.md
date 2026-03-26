@@ -44,3 +44,12 @@ env -u npm_config_http_proxy -u npm_config_https_proxy -u HTTP_PROXY -u HTTPS_PR
 ```
 
 Use the same `env -u ...` prefix for `npm run build`, `npm run ci:build`, and `npm run lint` when needed.
+
+## Roleplay realism harness flags (default OFF)
+
+These optional Vite flags add a no-default-impact safety harness for future realism transforms:
+
+- `VITE_ENABLE_REALISM_TRANSFORM_HARNESS=true` enables a transform guard that can reject transformed dialogue and fall back to the original dialogue when integrity checks fail.
+- `VITE_ENABLE_REALISM_REPLAY_METRICS=true` enables developer-console replay metrics for transform analysis (repetition ratio, question continuity, concern anchoring persistence, context carryover accuracy).
+
+When both flags are unset (default), runtime behavior is unchanged.
