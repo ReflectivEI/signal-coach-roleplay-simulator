@@ -74,9 +74,9 @@ function detectPatterns(msg) {
 
     // ── Signal Interpretation patterns ──────────────────────────────────────
     paraphrasesHcp:
-      /\b(so what you('re| are) saying|if i('m| am) hearing you|it sounds like|what i('m| am) hearing|you('re| are) indicating|you've expressed|your concern is|what you need)\b/.test(lc),
+      /\b(so what you('re| are) saying|if i('m| am) hearing you|it sounds like|it sounds (frustrating|challenging|difficult) to|what i('m| am) hearing|you('re| are) indicating|you've expressed|your concern is|what you need)\b/.test(lc),
     acknowledgesConcern:
-      /\b(i understand|i hear|fair point|makes sense|i see where|you('re| are) right|valid concern|i appreciate|your concern|i respect that|thank you for|that('s| is) a fair|i take that point|i recognize|i hear the concern)\b/.test(lc),
+      /\b(i understand|i can understand why|i hear|fair point|makes sense|i see where|you('re| are) right|valid concern|i appreciate|your concern|i respect that|thank you for|that('s| is) a fair|i take that point|i recognize|i hear the concern|you('re| are|’re) raising a legitimate (implementation )?risk|that('s| is) (a|an) (real )?(workflow|administrative|admin) burden|that('s| is) creating (delay|access friction))\b/.test(lc),
     respondsToState:
       /\b(given that|because you|since you|addressing your|in response to|that's why|to address|for that reason|with that in mind)\b/.test(lc),
 
