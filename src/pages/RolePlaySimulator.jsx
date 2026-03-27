@@ -471,7 +471,7 @@ export default function RolePlaySimulator() {
   }, [customScenario]);
 
   const filteredScenarios = useMemo(() => {
-    return scenariosForShowcase.filter(s => {
+    return scenariosForShowcase.filter((s) => {
       const catMatch = activeCategory === "All" || s.category === activeCategory;
       const diffMatch = activeDifficulty === "All Levels" || s.difficulty === activeDifficulty;
       const q = search.toLowerCase();
@@ -483,6 +483,12 @@ export default function RolePlaySimulator() {
       return catMatch && diffMatch && searchMatch && dsMatch && specMatch && hcpMatch && infMatch;
     });
   }, [activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter, scenariosForShowcase]);
+
+  const visibleScenarios = useMemo(() => {
+    if (!customScenario) return filteredScenarios;
+    const customId = customScenario.id || "custom";
+    return filteredScenarios.filter((scenario) => (scenario.id || "custom") !== customId);
+  }, [customScenario, filteredScenarios]);
 
   const counts = useMemo(() => {
     const c = {};
@@ -636,16 +642,10 @@ export default function RolePlaySimulator() {
           </div>
         )}
         {/* Scenario Grid */}
-        {customScenario ? (
+        {filteredScenarios.length > 0 ? (
           <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
-            <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />
-            {filteredScenarios.map(s => (
-              <EnterpriseScenarioCard key={s.id} scenario={s} />
-            ))}
-          </div>
-        ) : filteredScenarios.length > 0 ? (
-          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {filteredScenarios.map(s => (
+            {customScenario && <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />}
+            {visibleScenarios.map((s) => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
