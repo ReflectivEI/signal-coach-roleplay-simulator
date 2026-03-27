@@ -896,9 +896,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive
-    ? 1
-    : Math.max(1, Math.min(5, Math.round((rawAvg + universalPenalty) * 10) / 10));
+  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
