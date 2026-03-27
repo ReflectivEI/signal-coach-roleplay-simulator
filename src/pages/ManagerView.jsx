@@ -1599,19 +1599,19 @@ export default function ManagerView() {
         </div>
       </div>
 
-      <div className="mb-8 rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Select who/when/what to analyze</p>
+      <div className="mb-8 rounded-3xl border border-cyan-300/30 bg-gradient-to-r from-[#0D1B3D] via-[#12365C] to-[#0F7C7C] p-5 text-slate-100 shadow-[0_18px_48px_-24px_rgba(6,182,212,0.65)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">Select who/when/what to analyze</p>
         <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-5">
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Rep Name</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Rep Name</p>
             <Select value={repFilterId} onValueChange={setRepFilterId}>
-              <SelectTrigger className="h-10 rounded-full text-sm">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue placeholder="All Reps" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Reps</SelectItem>
+              <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
+                <SelectItem value="all" className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">All Reps</SelectItem>
                 {reps.map((rep) => (
-                  <SelectItem key={rep.id} value={rep.id}>
+                  <SelectItem key={rep.id} value={rep.id} className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">
                     {rep.name} · {rep.territory}
                   </SelectItem>
                 ))}
@@ -1619,79 +1619,79 @@ export default function ManagerView() {
             </Select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Time Range</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Time Range</p>
             <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
-              <SelectTrigger className="h-10 rounded-full text-sm">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {TIME_RANGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
+                {TIME_RANGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value} className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Insight Focus</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Insight Focus</p>
             <Select value={insightFocusFilter} onValueChange={setInsightFocusFilter}>
-              <SelectTrigger className="h-10 rounded-full text-sm">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/60 bg-gradient-to-r from-[#24457B] to-[#2A7C95] text-sm text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.35)] transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {INSIGHT_FOCUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
+                {INSIGHT_FOCUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value} className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Detail Level</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Detail Level</p>
             <Select value={detailLevelFilter} onValueChange={setDetailLevelFilter}>
-              <SelectTrigger className="h-10 rounded-full text-sm">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {DETAIL_LEVEL_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
+                {DETAIL_LEVEL_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value} className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Segment / Context</p>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Segment / Context</p>
             <Select value={segmentFilter} onValueChange={setSegmentFilter}>
-              <SelectTrigger className="h-10 rounded-full text-sm">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {SEGMENT_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
+                {SEGMENT_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value} className="text-slate-100 focus:bg-cyan-500/20 focus:text-cyan-100">{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
         </div>
-        <p className="mt-3 text-xs text-slate-600">
+        <p className="mt-3 text-xs text-cyan-100/75">
           Manager View remains deterministic-first; this filter bar scopes what is displayed without changing underlying risk, mapping, and predictive logic.
         </p>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-        <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-white to-teal-50 p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Manager Recap</p>
-          <p className="mt-2 text-sm text-slate-700">
+        <div className="rounded-3xl border border-cyan-300/30 bg-gradient-to-br from-[#10234A] via-[#112F57] to-[#0E5D70] p-5 text-slate-100 shadow-[0_18px_48px_-24px_rgba(6,182,212,0.65)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">Manager Recap</p>
+          <p className="mt-2 text-sm text-cyan-50/90">
             Based on {repFilterId === "all" ? "All Reps" : selectedRep?.name || "selected rep"} · {selectedTimeRangeLabel} · {selectedInsightFocusLabel}
           </p>
           <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Predictive highlights</p>
-              <ul className="mt-2 space-y-2 text-sm text-slate-700">
+            <div className="rounded-2xl border border-cyan-200/25 bg-slate-900/35 p-4 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-100">Predictive highlights</p>
+              <ul className="mt-2 space-y-2 text-sm text-cyan-50/95">
                 {managerRecap.highlights.slice(0, 6).map((item) => (
                   <li key={item} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-300" />
                     <span>{item}</span>
                   </li>
                 ))}
               </ul>
             </div>
-            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Do this next</p>
-              <ul className="mt-2 space-y-2 text-sm text-teal-900">
+            <div className="rounded-2xl border border-cyan-300/40 bg-cyan-500/10 p-4 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-cyan-100">Do this next</p>
+              <ul className="mt-2 space-y-2 text-sm text-cyan-50">
                 {managerRecap.actions.slice(0, 2).map((item) => (
                   <li key={item} className="flex gap-2">
-                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-teal-700" />
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-200" />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -1700,9 +1700,9 @@ export default function ManagerView() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Ask AI</p>
-          <p className="mt-1 text-sm text-slate-700">High-level explanation and next-best actions.</p>
+        <div className="rounded-3xl border border-cyan-300/30 bg-gradient-to-br from-[#0F1F43] via-[#13294D] to-[#101D38] p-5 text-slate-100 shadow-[0_18px_48px_-24px_rgba(6,182,212,0.55)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-200">Ask AI</p>
+          <p className="mt-1 text-sm text-cyan-50/90">High-level explanation and next-best actions.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             {quickPrompts.map((prompt) => (
               <button
@@ -1713,13 +1713,13 @@ export default function ManagerView() {
                   text: prompt.text,
                   contextLabel: `${selectedInsightFocusLabel} · ${selectedTimeRangeLabel}`,
                 })}
-                className="rounded-full border border-[#1A334D] bg-white px-3 py-1.5 text-xs font-semibold text-[#1A334D] transition-colors hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700"
+                className="rounded-full border border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] px-3 py-1.5 text-xs font-semibold text-cyan-50 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]"
               >
                 {prompt.label}
               </button>
             ))}
           </div>
-          <p className="mt-3 text-xs text-slate-600">
+          <p className="mt-3 text-xs text-cyan-100/75">
             Current context: {selectedDetailLevelLabel} view · {selectedSegmentLabel} segment.
           </p>
         </div>
