@@ -83,3 +83,30 @@ test("deriveInitialState/deriveInitialTemperature remain stable for same scenari
   const tempB = deriveInitialTemperature(stateB);
   assert.equal(tempA, tempB);
 });
+
+test("direct HCP metric/threshold question is penalized when rep answer is non-specific", () => {
+  const vagueAnswer = computeAlignment(
+    "time-pressured",
+    "Side effect profile.",
+    { hcpUtterance: "What's the specific viral load threshold that would indicate this treatment is effective and worth scaling?" },
+    "neutral",
+    "time-pressured",
+  );
+
+  const concreteAnswer = computeAlignment(
+    "time-pressured",
+    "Track viral load at week 4 and consider scaling if patients stay suppressed under 200 copies/mL without new tolerability issues.",
+    { hcpUtterance: "What's the specific viral load threshold that would indicate this treatment is effective and worth scaling?" },
+    "neutral",
+    "time-pressured",
+  );
+
+  assert.ok(
+    vagueAnswer.metrics.signal_interpretation.score < concreteAnswer.metrics.signal_interpretation.score,
+    "non-specific reply should score lower on signal interpretation than a concrete answer"
+  );
+  assert.ok(
+    vagueAnswer.metrics.conversation_management.score < concreteAnswer.metrics.conversation_management.score,
+    "threshold question without numeric anchor should reduce conversation management score"
+  );
+});
