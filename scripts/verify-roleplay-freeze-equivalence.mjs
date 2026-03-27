@@ -50,8 +50,8 @@ recordCheck(
 
 recordCheck(
   "operational constraint extraction binds HCP blockers and rep echoes",
-  roleplayChat.includes("const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || \"\")")
-    && roleplayChat.includes("const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage)")
+  /const currentUserConstraintCandidates = extractConstraintCandidatesFromText\(respondingToTurn\?\.hcpDialogueBefore \|\| ""(?:, \{ scenarioFamily \})?\)/.test(roleplayChat)
+    && /const repEchoConstraintCandidates = extractConstraintCandidatesFromText\(repMessage(?:, \{ scenarioFamily \})?\)/.test(roleplayChat)
     && roleplayChat.includes("latestUserTurn: respondingToTurn?.hcpDialogueBefore || \"\""),
   "Constraint state anchors on HCP-stated blockers while still ingesting rep restatements",
 );

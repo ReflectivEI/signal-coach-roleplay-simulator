@@ -30,6 +30,7 @@ import {
   detectLowValueRepResponse,
   countRecentLowValueRepTurns,
   getDeterministicTerminalClose,
+  extractMeaningfulRepTokens,
   shouldForceTerminalDisengagement,
   shouldReplaceWithTerminalDisengagement,
 } from "./hcpSimulationEngine";
@@ -51,6 +52,11 @@ import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
 import {
+  classifyScenarioFamily,
+  getScenarioPolicyOverrides,
+  getScenarioPolicyProfile,
+} from "./scenarioPolicyProfiles";
+import {
   ENABLE_INFERENCE_LAYER,
   createInitialRepInferenceState,
   getRecentRepTurns,
@@ -62,8 +68,10 @@ import { applyTransformSafetyHarness } from "./transformSafetyHarness";
 import {
   extractConstraintCandidatesFromText,
   buildConstraintGrounding,
-  detectConstraintDraftViolations,
   buildConstraintSafeRegeneratedResponse,
+  buildConstraintViolationFallback,
+  shouldEnforceConstraintGuardrails,
+  evaluateConstraintDraft,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
 
@@ -103,6 +111,31 @@ function isLowSubstanceAck(text = "") {
 
   if (shortAcks.has(normalized)) return true;
   return normalized.split(" ").length <= 2 && /^(ok|okay|sure|yep|yeah|k)\b/.test(normalized);
+}
+
+function buildMinimumSubstanceSuggestion({
+  hcpPrompt = "",
+  concern = "workflow",
+} = {}) {
+  const prompt = String(hcpPrompt || "").replace(/\s+/g, " ").trim();
+  const shortPrompt = prompt ? `HCP asked: "${prompt.slice(0, 140)}${prompt.length > 140 ? "…" : ""}"` : "";
+
+  const suggestionByConcern = {
+    workflow: "Acknowledge their workflow pressure, give one specific process step, and ask one practical follow-up question.",
+    access: "Address payer/access directly, cite one concrete patient impact, and propose one actionable next step.",
+    evidence: "State one concrete study takeaway (endpoint or outcome), then connect it to this HCP's decision point.",
+    screening: "Name one clear patient-selection criterion, then ask if that fits their current screening flow.",
+    time: "Lead with one sentence tied to time pressure, then give one immediate action they can test this week.",
+    policy: "Anchor to protocol constraints, then offer one policy-compatible action they can evaluate quickly.",
+  };
+
+  const base = suggestionByConcern[concern] || suggestionByConcern.workflow;
+  return shortPrompt ? `${base} ${shortPrompt}` : base;
+}
+
+function hasEvidenceDetailSignal(text = "") {
+  const value = String(text || "").toLowerCase();
+  return /\b(week|month|year|percent|%|copies\/ml|copies per ml|hazard ratio|ci|confidence interval|n=|endpoint|suppressed|reduction|increase|decrease|threshold)\b/.test(value);
 }
 
 function sanitizeRenderedMessage(text, source = "unknown") {
@@ -253,19 +286,19 @@ function logPunctuationDelta({ stage = "unknown", source = "unknown", before = "
   });
 }
 
-function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
+function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3, { scenarioFamily = "general_access" } = {}) {
   if (!Array.isArray(turns) || turns.length === 0) return [];
   return turns
     .slice(-Math.max(1, recentWindow))
     .flatMap((turn) => {
       const sourceTurnNumber = Number.isFinite(turn?.turnNumber) ? turn.turnNumber : 0;
       return [
-        ...extractConstraintCandidatesFromText(turn?.repMessage || "").map((candidate) => ({
+        ...extractConstraintCandidatesFromText(turn?.repMessage || "", { scenarioFamily }).map((candidate) => ({
           ...candidate,
           constraintSourceTurn: sourceTurnNumber,
           speaker: "rep",
         })),
-        ...extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || "").map((candidate) => ({
+        ...extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || "", { scenarioFamily }).map((candidate) => ({
           ...candidate,
           constraintSourceTurn: sourceTurnNumber,
           speaker: "hcp",
@@ -785,42 +818,6 @@ function hasEvidencePivotLanguage(text = "") {
   return /\b(jama|study|trial|data|outcomes|efficacy|disease progression|adoption|publication|findings)\b/i.test(String(text || ""));
 }
 
-const SCENARIO_FAMILY_LEXICAL_PACKS = Object.freeze({
-  hiv_prep: [
-    "prep", "prior auth", "coverage", "adherence", "screening", "resistance", "back-and-forth", "resubmission",
-  ],
-  oncology_access: [
-    "regimen", "line of therapy", "biomarker", "pathway", "prior auth", "reimbursement", "denial", "infusion",
-  ],
-  cardiometabolic: [
-    "step therapy", "formulary", "coverage", "adherence", "refill", "prior auth", "care coordination",
-  ],
-  general_access: [
-    "prior auth", "approval", "paperwork", "workflow", "staff burden", "clinic flow", "resubmission",
-  ],
-});
-
-const RECOVERY_TIMING_THRESHOLDS = Object.freeze({
-  immediate_max_misses: 1,
-  partial_max_misses: 2,
-});
-
-const TERMINAL_CLOSE_POLICY_MATRIX = Object.freeze({
-  engaged: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
-  constrained: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
-  impatient: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
-  disengaging: { missed: "close", overpivot: "close", aligned: "probe", neutral: "probe" },
-  disengaged: { missed: "close", overpivot: "close", aligned: "close", neutral: "close" },
-});
-
-function detectScenarioFamily(scenarioText = "") {
-  const value = String(scenarioText || "").toLowerCase();
-  if (/\bprep|hiv|sti|cabotegravir|long-acting\b/.test(value)) return "hiv_prep";
-  if (/\boncology|tumor|metastatic|biomarker|chemo|immunotherapy\b/.test(value)) return "oncology_access";
-  if (/\bcardio|heart|lipid|diabetes|a1c|glp-1|hypertension\b/.test(value)) return "cardiometabolic";
-  return "general_access";
-}
-
 function isOperationalFalsePositiveContext(text = "") {
   const value = String(text || "").toLowerCase();
   return /\b(data workflow|workflow analysis of study|publication workflow|research workflow|trial operations)\b/.test(value);
@@ -828,8 +825,9 @@ function isOperationalFalsePositiveContext(text = "") {
 
 function hasScenarioOperationalLexicalMatch(text = "", scenarioFamily = "general_access") {
   const value = String(text || "").toLowerCase();
-  const pack = SCENARIO_FAMILY_LEXICAL_PACKS[scenarioFamily] || SCENARIO_FAMILY_LEXICAL_PACKS.general_access;
-  return pack.some((token) => value.includes(token));
+  const profile = getScenarioPolicyProfile(scenarioFamily);
+  const pack = Array.isArray(profile?.operationalLexicon) ? profile.operationalLexicon : [];
+  return pack.some((token) => value.includes(String(token).toLowerCase()));
 }
 
 function classifyConcernFlowOutcome({
@@ -2256,6 +2254,39 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
       return;
     }
+    const currentPrompt = String(lastTurn?.hcpDialogueBefore || "");
+    const policySeed = `${currentPrompt} ${scenario?.title || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
+    const scenarioFamilyForGate = classifyScenarioFamily(policySeed);
+    const scenarioPolicyOverrides = getScenarioPolicyOverrides({
+      scenarioFamily: scenarioFamilyForGate,
+      scenarioTitle: scenario?.title || "",
+      scenarioDescription: `${scenario?.description || ""} ${scenario?.context || ""}`.trim(),
+    });
+    const requiredMeaningfulTokens = Number.isFinite(scenarioPolicyOverrides?.minMeaningfulRepTokens)
+      ? scenarioPolicyOverrides.minMeaningfulRepTokens
+      : 2;
+    const meaningfulTokenCount = extractMeaningfulRepTokens(normalizedInput).length;
+    const lowValueInput = detectLowValueRepResponse(normalizedInput)
+      || meaningfulTokenCount < requiredMeaningfulTokens;
+    const evidenceRequired = Boolean(scenarioPolicyOverrides?.evidenceDetailRequired);
+    const evidenceConstraintActive = evidenceRequired && detectPrimaryConcern(policySeed) === "evidence";
+    const missingEvidenceDetail = evidenceConstraintActive && !hasEvidenceDetailSignal(normalizedInput);
+
+    if (awaitingHcpResponse && (lowValueInput || missingEvidenceDetail)) {
+      const concernSeed = `${currentPrompt} ${scenario?.description || ""} ${scenario?.context || ""}`;
+      const inferredConcern = detectPrimaryConcern(concernSeed);
+      setCoachingTip({
+        tip: "⚠ Response blocked: add more substance before sending.",
+        label: "Coaching",
+        suggestion: `${buildMinimumSubstanceSuggestion({
+          hcpPrompt: currentPrompt,
+          concern: inferredConcern,
+        })}${missingEvidenceDetail ? " Include one concrete evidence detail (endpoint, threshold, %, or timeframe)." : ""}`,
+        severity: "warning",
+        escalationLabel: "Minimum-substance gate",
+      });
+      return;
+    }
 
     controller.isProcessingTurn = true;
     controller.state = SessionState.PROCESSING;
@@ -2389,13 +2420,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : 0;
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
-    const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
-    const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "").map((candidate) => ({
+    const scenarioFamily = classifyScenarioFamily(concernSourceText);
+    const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3, { scenarioFamily });
+    const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "", { scenarioFamily }).map((candidate) => ({
       ...candidate,
       constraintSourceTurn: nextTurnNumber,
       speaker: "hcp",
     }));
-    const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage).map((candidate) => ({
+    const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage, { scenarioFamily }).map((candidate) => ({
       ...candidate,
       constraintSourceTurn: nextTurnNumber,
       speaker: "rep",
@@ -2421,12 +2453,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const groundingState = buildConstraintGrounding({
       scenarioText: scenarioGroundingText,
       dialogueTurns: dialogueGroundingTurns,
+      scenarioFamily,
     });
     const groundedConstraintTypes = [...groundingState.groundedTypes];
     const newConstraintTypesThisTurn = [
       ...new Set([
-        ...detectOperationalConstraintTypes(respondingToTurn?.hcpDialogueBefore || ""),
-        ...detectOperationalConstraintTypes(repMessage),
+        ...detectOperationalConstraintTypes(respondingToTurn?.hcpDialogueBefore || "", { scenarioFamily }),
+        ...detectOperationalConstraintTypes(repMessage, { scenarioFamily }),
       ]),
     ];
     const priorOperationalConstraints = respondingToTurn?.plannerStateSnapshot?.activeOperationalConstraints
@@ -2454,7 +2487,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       normalizedActiveConstraints,
       transcriptConstraintPresent,
     });
-    const scenarioFamily = detectScenarioFamily(concernSourceText);
     const decayState = deriveEngagementDecay({
       previousTier: previousDecayTier,
       previousPressure: previousPressureScore,
@@ -2467,6 +2499,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       [...turns, { repMessage }],
       activeConcern,
     );
+    const loopBreakerBudget = Number.isFinite(scenarioPolicyOverrides?.loopBreakerBudget)
+      ? scenarioPolicyOverrides.loopBreakerBudget
+      : 2;
     const priorRepMessage = [...turns]
       .slice(0, -1)
       .reverse()
@@ -2499,12 +2534,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
-      && unresolvedConcernTurns >= 3
+      && unresolvedConcernTurns >= Math.max(2, loopBreakerBudget)
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const terminalDecisionMode = terminalDecisionTriggerActive;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
-      && unresolvedConcernTurns >= 5
+      && unresolvedConcernTurns >= loopBreakerBudget + 2
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const objectiveRanking = rankResponseObjective({
       overrideExit,
@@ -2530,6 +2565,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernFlowOutcome,
       engagementTier: decayState.tier,
       unresolvedConcernTurns,
+      loopBreakerBudget,
       chosenResponseObjective,
       objectiveRanking,
     };
@@ -2542,6 +2578,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint: objectiveRanking.selectedObjectiveAccountsForConstraint,
       rankedObjectives: objectiveRanking.rankedObjectives,
       concernFlowOutcome,
+      loopBreakerBudget,
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
@@ -3265,7 +3302,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       generationKey,
     };
 
-    const terminalPolicyAction = determineTerminalPolicyAction({
+    let terminalPolicyAction = determineTerminalPolicyAction({
       hcpState: decayState.tier,
       concernFlowOutcome,
       unresolvedConcernTurns,
@@ -3273,6 +3310,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       repDefersImmediateAction,
       explicitExitOverride: overrideExit,
     });
+    if (unresolvedConcernTurns >= loopBreakerBudget + 1) {
+      terminalPolicyAction = "close";
+    } else if (unresolvedConcernTurns >= loopBreakerBudget) {
+      terminalPolicyAction = "probe";
+    }
 
     if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
@@ -3282,7 +3324,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const initialViolation = detectConstraintDraftViolations({
+    const enforceConstraintGuardrails = shouldEnforceConstraintGuardrails({
+      transcriptConstraintPresent,
+      normalizedActiveConstraints,
+    });
+
+    const initialViolation = evaluateConstraintDraft({
+      enforceGuardrails: enforceConstraintGuardrails,
       draftText: nextHcpDialogue,
       groundedTypes: groundedConstraintTypes,
       alreadySurfacedTypes: previouslySurfacedConstraintTypes,
@@ -3290,7 +3338,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       revisitRequested,
       changedConstraint,
       clarificationNeeded,
+      scenarioFamily,
     });
+
     const draftRejectedForConstraintRule = !initialViolation.valid;
     if (draftRejectedForConstraintRule) {
       usedDeterministicFallback = true;
@@ -3299,7 +3349,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         concern: activeConcern,
       });
     }
-    const finalViolationCheck = detectConstraintDraftViolations({
+
+    const finalViolationCheck = evaluateConstraintDraft({
+      enforceGuardrails: enforceConstraintGuardrails,
       draftText: nextHcpDialogue,
       groundedTypes: groundedConstraintTypes,
       alreadySurfacedTypes: previouslySurfacedConstraintTypes,
@@ -3307,7 +3359,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       revisitRequested,
       changedConstraint,
       clarificationNeeded,
+      scenarioFamily,
     });
+
     if (!finalViolationCheck.valid) {
       nextHcpDialogue = buildConstraintViolationFallback({
         concern: activeConcern,
@@ -3339,6 +3393,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint,
       finalAnswerReflectsConstraint,
       draftRejectedForConstraintRule,
+      enforceConstraintGuardrails,
       draftConstraintRejectionReason: initialViolation.rejectionReason,
       draftUngroundedTypes: initialViolation.ungroundedTypes,
       draftDuplicateTypes: initialViolation.duplicateTypes,
@@ -3354,6 +3409,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       primaryConstraint: objectiveRanking.primaryConstraint,
       directOperationalQuestion: objectiveRanking.directOperationalQuestion,
       selectedObjectiveAccountsForConstraint,
+      enforceConstraintGuardrails,
       draftResponseSource,
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       openingBeforeGuardrail,
@@ -3366,12 +3422,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
     });
-    const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
+    const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue, { scenarioFamily });
     const previouslyVerbalizedOperationalConstraintTypes = [
       ...new Set(
         prevTurns.flatMap((turn) => Array.isArray(turn?.verbalizedOperationalConstraintTypes)
           ? turn.verbalizedOperationalConstraintTypes
-          : detectOperationalConstraintTypes(turn?.hcpDialogueBefore || ""))
+          : detectOperationalConstraintTypes(turn?.hcpDialogueBefore || "", { scenarioFamily }))
       ),
     ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
