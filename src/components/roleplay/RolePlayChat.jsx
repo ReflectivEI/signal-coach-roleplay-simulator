@@ -3175,6 +3175,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
     });
+    const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
+    const previouslyVerbalizedOperationalConstraintTypes = [
+      ...new Set(
+        prevTurns.flatMap((turn) => Array.isArray(turn?.verbalizedOperationalConstraintTypes)
+          ? turn.verbalizedOperationalConstraintTypes
+          : detectOperationalConstraintTypes(turn?.hcpDialogueBefore || ""))
+      ),
+    ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
