@@ -157,6 +157,117 @@ const REALISM_CONCERN_PATTERNS = {
   screening: /\b(screening|eligibility|candidacy|contraindication|resistance|monitoring)\b/i,
 };
 
+const PLANNER_TRACE_FLAG_KEY = "roleplay.debug.planner_trace";
+const CONSTRAINT_OPENING_GUARDRAIL_FLAG_KEY = "roleplay.debug.constraint_opening_guardrail";
+
+function readDebugFlag(flagKey) {
+  if (typeof window === "undefined") return false;
+  try {
+    const value = window.localStorage?.getItem(flagKey);
+    return value === "1" || value === "true";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function isPlannerTraceEnabled() {
+  return readDebugFlag(PLANNER_TRACE_FLAG_KEY);
+}
+
+function isConstraintOpeningGuardrailEnabled() {
+  return readDebugFlag(CONSTRAINT_OPENING_GUARDRAIL_FLAG_KEY);
+}
+
+function extractConstraintCandidatesFromText(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return [];
+
+  const sentences = value
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  const candidates = [];
+  sentences.forEach((sentence) => {
+    Object.entries(REALISM_CONCERN_PATTERNS).forEach(([type, pattern]) => {
+      if (pattern.test(sentence)) {
+        candidates.push({
+          type,
+          snippet: sentence.slice(0, 180),
+        });
+      }
+    });
+  });
+
+  return candidates;
+}
+
+function buildNormalizedActiveConstraints({ activeConcern = "workflow", rawCandidates = [] } = {}) {
+  const normalized = new Set();
+  if (activeConcern) normalized.add(activeConcern);
+  rawCandidates.forEach((candidate) => {
+    if (candidate?.type) normalized.add(candidate.type);
+  });
+  return [...normalized];
+}
+
+function getOpeningSentence(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  const firstSentence = value.match(/[^.!?]+[.!?]?/);
+  return firstSentence ? firstSentence[0].trim() : value;
+}
+
+function openingAcknowledgesAnyConstraint(openingSentence = "", constraints = []) {
+  const opening = String(openingSentence || "");
+  if (!opening || !Array.isArray(constraints) || constraints.length === 0) return false;
+  return constraints.some((constraint) => {
+    const pattern = REALISM_CONCERN_PATTERNS[constraint];
+    return pattern ? pattern.test(opening) : false;
+  });
+}
+
+function buildConstraintAcknowledgementClause(constraint = "workflow") {
+  const clauses = {
+    workflow: "Given your current workflow constraints, ",
+    access: "Given the access and administrative friction you raised, ",
+    time: "Given your time pressure in clinic, ",
+    policy: "Given your protocol and policy constraints, ",
+    screening: "Given your screening and eligibility constraints, ",
+    evidence: "Given your evidence threshold for change, ",
+  };
+  return clauses[constraint] || "Given the operational constraints you raised, ";
+}
+
+function prependConstraintAcknowledgementIfMissing({
+  draftResponse = "",
+  activeConstraints = [],
+  shouldApply = false,
+} = {}) {
+  const response = String(draftResponse || "").trim();
+  if (!response) return response;
+
+  const opening = getOpeningSentence(response);
+  if (!shouldApply || openingAcknowledgesAnyConstraint(opening, activeConstraints)) {
+    return response;
+  }
+
+  const preferredConstraint = activeConstraints.find((constraint) =>
+    ["workflow", "access", "time", "policy", "screening", "evidence"].includes(constraint)
+  ) || "workflow";
+
+  return `${buildConstraintAcknowledgementClause(preferredConstraint)}${response}`.trim();
+}
+
+function emitPlannerTrace(stage, payload) {
+  if (!isPlannerTraceEnabled()) return;
+  console.debug("[ROLEPLAY_PLANNER_TRACE]", {
+    stage,
+    timestamp: new Date().toISOString(),
+    ...payload,
+  });
+}
+
 const CUE_BUCKETS = {
   timePressure: [
     "The HCP checks the next patient slot on the schedule and gestures for one concise point.",
@@ -590,6 +701,85 @@ function determineTerminalPolicyAction({
     action = "probe";
   }
   return explicitExitOverride ? "close" : action;
+}
+
+function isDirectUserQuestion(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  if (value.includes("?")) return true;
+  return /^(what|how|why|when|where|which|who|can|could|would|will|should|is|are|do|does|did)\b/i.test(value);
+}
+
+function rankResponseObjective({
+  overrideExit = false,
+  terminalDecisionMode = false,
+  hardLoopBreaker = false,
+  concernFlowOutcome = "neutral",
+  activeConstraints = [],
+  latestUserTurn = "",
+} = {}) {
+  const hasActiveConstraint = Array.isArray(activeConstraints) && activeConstraints.length > 0;
+  const primaryConstraint = hasActiveConstraint ? activeConstraints[0] : "none";
+  const directOperationalQuestion = hasActiveConstraint && isDirectUserQuestion(latestUserTurn);
+
+  const candidates = [
+    {
+      id: "close_or_limit_scope",
+      score: (overrideExit || terminalDecisionMode || hardLoopBreaker) ? 100 : 10,
+      referencesConstraint: false,
+    },
+    {
+      id: "answer_direct_constraint_question",
+      score: directOperationalQuestion ? 90 : 20,
+      referencesConstraint: true,
+    },
+    {
+      id: "reanchor_to_constraint",
+      score: (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot") ? 80 : 25,
+      referencesConstraint: true,
+    },
+    {
+      id: "advance_with_constraint",
+      score: concernFlowOutcome === "aligned" ? 70 : 30,
+      referencesConstraint: true,
+    },
+    {
+      id: "continue_dialogue",
+      score: 40,
+      referencesConstraint: false,
+    },
+  ];
+
+  // Constraint-priority rule: active user constraints override generic agenda.
+  if (hasActiveConstraint) {
+    candidates.forEach((candidate) => {
+      if (candidate.referencesConstraint) candidate.score += 30;
+      else candidate.score -= 25;
+    });
+  }
+
+  // Direct-question rule: answering immediate operational question takes precedence.
+  if (directOperationalQuestion) {
+    const directAnswerObjective = candidates.find((c) => c.id === "answer_direct_constraint_question");
+    if (directAnswerObjective) directAnswerObjective.score += 25;
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  let selected = candidates[0];
+
+  // Enforcement: if constraint exists and selected objective ignores it, downgrade and pick best constraint-aware option.
+  if (hasActiveConstraint && !selected.referencesConstraint) {
+    const constraintAware = candidates.find((candidate) => candidate.referencesConstraint);
+    if (constraintAware) selected = constraintAware;
+  }
+
+  return {
+    selectedObjective: `${selected.id}[${primaryConstraint}]`,
+    primaryConstraint,
+    hasActiveConstraint,
+    directOperationalQuestion,
+    rankedObjectives: candidates.map(({ id, score, referencesConstraint }) => ({ id, score, referencesConstraint })),
+  };
 }
 
 function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0 } = {}) {
@@ -1983,6 +2173,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : 0;
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
+    const rawUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
+    const normalizedActiveConstraints = buildNormalizedActiveConstraints({
+      activeConcern,
+      rawCandidates: rawUserConstraintCandidates,
+    });
+    const transcriptConstraintPresent = rawUserConstraintCandidates.length > 0;
+    emitPlannerTrace("constraints_extracted", {
+      turnNumber: nextTurnNumber,
+      rawUserConstraintCandidates,
+      normalizedActiveConstraints,
+      transcriptConstraintPresent,
+    });
     const scenarioFamily = detectScenarioFamily(concernSourceText);
     const decayState = deriveEngagementDecay({
       previousTier: previousDecayTier,
@@ -2037,6 +2239,36 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+    const objectiveRanking = rankResponseObjective({
+      overrideExit,
+      terminalDecisionMode,
+      hardLoopBreaker,
+      concernFlowOutcome,
+      activeConstraints: normalizedActiveConstraints,
+      latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
+    });
+    const chosenResponseObjective = objectiveRanking.selectedObjective;
+    const plannerStateSnapshot = {
+      activeConcern,
+      normalizedActiveConstraints,
+      concernFlowOutcome,
+      engagementTier: decayState.tier,
+      unresolvedConcernTurns,
+      chosenResponseObjective,
+      objectiveRanking,
+    };
+    emitPlannerTrace("response_objective_selected", {
+      turnNumber: nextTurnNumber,
+      chosenResponseObjective,
+      primaryConstraint: objectiveRanking.primaryConstraint,
+      hasActiveConstraint: objectiveRanking.hasActiveConstraint,
+      directOperationalQuestion: objectiveRanking.directOperationalQuestion,
+      rankedObjectives: objectiveRanking.rankedObjectives,
+      concernFlowOutcome,
+      terminalDecisionMode,
+      hardLoopBreaker,
+      overrideExit,
+    });
 
     if (hardLoopBreaker) {
       nextHcpState = "disengaged";
@@ -2056,10 +2288,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      activeConcern,
+      activeConstraints: normalizedActiveConstraints,
+      plannerStateSnapshot,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
+    emitPlannerTrace("constraints_written_to_state", {
+      turnNumber: nextTurnNumber,
+      plannerStateSnapshot,
+      plannerStateConstraintPresent: normalizedActiveConstraints.length > 0,
+    });
 
     // 4. Build locked HCP profile for the NEXT turn — SINGLE SOURCE OF TRUTH
     // This guarantees cue and dialogue ALWAYS match the same state
@@ -2326,10 +2566,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     let usedDeterministicFallback = false;
     nextHcpDialogue = "";
+    let draftResponseBeforePostProcessing = "";
+    let draftResponseSource = "llm";
 
     try {
       if (forceTerminalDisengagement) {
         usedDeterministicFallback = true;
+        draftResponseSource = "terminal_forced";
         nextHcpDialogue = terminalCloseFallback;
       } else {
         const systemPrompt = buildHCPDialoguePrompt({
@@ -2338,6 +2581,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           historyText,
           isOpening: isFirstHcpResponse,
         }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
+        emitPlannerTrace("planner_input_assembled", {
+          turnNumber: nextTurnNumber,
+          plannerVisibleConstraints: normalizedActiveConstraints,
+          plannerVisibleConcern: activeConcern,
+          concernFlowOutcome,
+          promptPreview: {
+            activeConcern,
+            engagementTier: decayState.tier,
+            concernAddressed: decayState.concernAddressed,
+          },
+        });
         const res = await fetch('/api/llm/invoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2363,6 +2617,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           }
 
           nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
+          draftResponseBeforePostProcessing = nextHcpDialogue;
 
           if (
             import.meta.env.DEV
@@ -2373,18 +2628,32 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           }
         } else {
           usedDeterministicFallback = true;
+          draftResponseSource = "fetch_non_ok_fallback";
           nextHcpDialogue = isFirstHcpResponse
             ? buildFirstTurnScenarioFallback()
             : buildFollowUpScenarioFallback();
+          draftResponseBeforePostProcessing = nextHcpDialogue;
         }
       }
     } catch (err) {
       console.error('HCP dialogue generation error:', err);
       usedDeterministicFallback = true;
+      draftResponseSource = "exception_fallback";
       nextHcpDialogue = isFirstHcpResponse
         ? buildFirstTurnScenarioFallback()
         : buildFollowUpScenarioFallback();
+      draftResponseBeforePostProcessing = nextHcpDialogue;
     }
+    if (!draftResponseBeforePostProcessing) {
+      draftResponseBeforePostProcessing = nextHcpDialogue;
+    }
+    emitPlannerTrace("draft_response_generated", {
+      turnNumber: nextTurnNumber,
+      draftResponseSource,
+      usedDeterministicFallback,
+      draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
+      draftResponse: draftResponseBeforePostProcessing,
+    });
 
     const previousHcpDialogue = String(
       respondingToTurn?.hcpDialogueBefore
@@ -2695,6 +2964,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       reactionTrigger: turnState.reactionTrigger,
       conversationalMomentum: turnState.conversationalMomentum,
       timePressure: turnState.timePressure,
+      activeConcern,
+      activeConstraints: normalizedActiveConstraints,
+      chosenResponseObjective,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
       generationKey,
@@ -2712,6 +2984,55 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
+
+    const openingBeforeGuardrail = getOpeningSentence(nextHcpDialogue);
+    const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
+      openingBeforeGuardrail,
+      normalizedActiveConstraints
+    );
+    const guardrailShouldApply =
+      isConstraintOpeningGuardrailEnabled()
+      && transcriptConstraintPresent
+      && normalizedActiveConstraints.length > 0;
+    nextHcpDialogue = prependConstraintAcknowledgementIfMissing({
+      draftResponse: nextHcpDialogue,
+      activeConstraints: normalizedActiveConstraints,
+      shouldApply: guardrailShouldApply,
+    });
+
+    const finalOpening = getOpeningSentence(nextHcpDialogue);
+    const openingAcknowledgesConstraint = openingAcknowledgesAnyConstraint(
+      finalOpening,
+      normalizedActiveConstraints
+    );
+    const plannerGapComparison = {
+      transcriptConstraintPresent,
+      plannerStateConstraintPresent: normalizedActiveConstraints.length > 0,
+      finalAnswerConstraintReflected: openingAcknowledgesConstraint,
+    };
+    emitPlannerTrace("final_response_generated", {
+      turnNumber: nextTurnNumber,
+      rawUserConstraintCandidates,
+      normalizedActiveConstraints,
+      plannerVisibleConstraints: normalizedActiveConstraints,
+      chosenResponseObjective,
+      primaryConstraint: objectiveRanking.primaryConstraint,
+      directOperationalQuestion: objectiveRanking.directOperationalQuestion,
+      draftResponseSource,
+      draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
+      openingBeforeGuardrail,
+      openingAcknowledgesConstraintBeforeGuardrail,
+      finalOpening,
+      openingAcknowledgesConstraint,
+      postProcessingChangedOpening:
+        getOpeningSentence(draftResponseBeforePostProcessing) !== finalOpening,
+      guardrailApplied:
+        guardrailShouldApply && !openingAcknowledgesConstraintBeforeGuardrail && openingAcknowledgesConstraint,
+      plannerGapComparison,
+      finalResponse: nextHcpDialogue,
+    });
+    nextTurn.hcpDialogueBefore = nextHcpDialogue;
+    nextTurn.plannerGapComparison = plannerGapComparison;
 
     const shouldEndSessionAfterTurn = overrideExit || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
@@ -2757,6 +3078,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           dialogue: nextHcpDialogue,
           repMessage,
           alignment,
+          plannerStateSnapshot,
+          plannerGapComparison: nextTurn.plannerGapComparison,
+          chosenResponseObjective,
           feedback: coachingResult,
         });
       }
