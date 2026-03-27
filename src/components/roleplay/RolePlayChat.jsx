@@ -2494,7 +2494,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     if (governanceTermination.shouldBoundarySet && nextHcpState !== "disengaged") {
       nextHcpState = escalateHcpState(nextHcpState, 1);
-      if (nextHcpState !== "disengaged" && HCP_STATES.indexOf(nextHcpState) < HCP_STATES.indexOf("boundary-setting")) {
+      if (
+        nextHcpState !== "disengaged"
+        && HCP_STATE_LADDER.indexOf(nextHcpState) < HCP_STATE_LADDER.indexOf("boundary-setting")
+      ) {
         nextHcpState = "boundary-setting";
       }
     }
