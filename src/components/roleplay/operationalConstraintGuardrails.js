@@ -151,29 +151,24 @@ export function buildConstraintViolationFallback({
   const fallbackByConcern = {
     evidence: [
       "Help me understand the most clinically relevant takeaway for my patients.",
-      "Give me the one clinical takeaway that changes treatment decisions for stable patients.",
-      "What is the single patient-relevant outcome signal I should use in practice right now?",
-      "Keep this clinical: what one outcome difference matters most for my stable patients?",
+      "I still need clinically meaningful evidence before I would change practice.",
+      "Give me one concrete clinical outcome that would change treatment decisions for stable patients.",
     ],
     screening: [
-      "Give me one clear patient-selection takeaway I can apply this week.",
-      "What is the single screening implication that should change my next decision?",
-      "Keep this practical: what one candidacy takeaway matters most for my patients?",
+      "I need one clear patient-selection takeaway I can apply in practice.",
+      "What single screening implication should change my next decision?",
     ],
     access: [
       "Give me one patient-impact takeaway that justifies discussing access changes.",
       "What is the one access-relevant clinical implication I should prioritize first?",
-      "Keep this specific: what patient benefit best supports any access conversation?",
     ],
     time: [
       "I only need one clinical takeaway I can act on immediately.",
       "In one line, what patient-level outcome matters most right now?",
-      "Give me one practical clinical point worth acting on this week.",
     ],
     policy: [
       "Give me one clinically relevant point that could fit our current protocol.",
       "What single patient-outcome takeaway should I evaluate against our protocol?",
-      "Keep it concise: what one clinical implication is protocol-relevant right now?",
     ],
   };
 
