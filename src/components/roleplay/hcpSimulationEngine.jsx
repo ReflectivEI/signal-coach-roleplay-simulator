@@ -1,3 +1,4 @@
+// @ts-nocheck
 /******************************************************************************************
 HCP Simulation Engine
 Enterprise-grade deterministic behavioral simulation for Reflectiv Role Play
@@ -151,6 +152,38 @@ export const TEMP_INDEX = Object.fromEntries(
   TEMPERATURES.map((t, i) => [t, i])
 )
 
+const LOW_VALUE_STOP_WORDS = new Set([
+  'the',
+  'and',
+  'for',
+  'with',
+  'that',
+  'this',
+  'your',
+  'have',
+  'from',
+  'what',
+  'about',
+  'today',
+  'patient',
+  'patients',
+  'just',
+  'really',
+  'maybe',
+  'okay',
+  'ok',
+  'well',
+  'then',
+  'like',
+  'right',
+  'there',
+])
+
+export const TERMINAL_DISENGAGEMENT_LINES = [
+  'I have patients waiting, and this is not worth more time. Take care.',
+  "I need to get back to patients, and this isn't productive. Take care.",
+]
+
 /******************************************************************************************
 HASH UTILITY
 No Math.random(). Deterministic selection only.
@@ -162,6 +195,246 @@ function hashInt(str) {
     h = ((h * 33) ^ str.charCodeAt(i)) >>> 0
   }
   return h
+}
+
+export function extractMeaningfulRepTokens(message = '') {
+  return String(message)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word && !LOW_VALUE_STOP_WORDS.has(word))
+}
+
+export function detectLowValueRepResponse(message = '') {
+  const normalized = String(message).trim().toLowerCase()
+  const meaningfulTokens = extractMeaningfulRepTokens(normalized)
+
+  return (
+    normalized.length < 8 ||
+    /\b(idk|nothing|never|whatever|not sure|fine|sure|nope|nah)\b/.test(
+      normalized
+    ) ||
+    meaningfulTokens.length < 2
+  )
+}
+
+export function countRecentLowValueRepTurns(history = [], candidateMessage = '') {
+  const recentRepMessages = [
+    ...history.map((turn) => turn?.repMessage).filter(Boolean),
+    candidateMessage,
+  ]
+    .slice(-3)
+
+  return recentRepMessages.filter((message) => detectLowValueRepResponse(message))
+    .length
+}
+
+export function getDeterministicTerminalClose(seedKey = '') {
+  const safeSeed = String(seedKey || 'terminal-close')
+  return (
+    TERMINAL_DISENGAGEMENT_LINES[
+      hashInt(safeSeed) % TERMINAL_DISENGAGEMENT_LINES.length
+    ] || TERMINAL_DISENGAGEMENT_LINES[0]
+  )
+}
+
+export function shouldForceTerminalDisengagement({
+  nextHcpState,
+  poorTurns = 0,
+  priorRepTurns = 0,
+}) {
+  return nextHcpState === 'disengaged' && poorTurns >= 2 && priorRepTurns >= 2
+}
+
+export function shouldReplaceWithTerminalDisengagement(dialogue = '') {
+  const normalized = String(dialogue || '').trim()
+  if (!normalized) return true
+
+  const sentenceCount = (normalized.match(/[.!?]+/g) || []).length
+  return normalized.includes('?') || sentenceCount > 1 || normalized.split(/\s+/).length > 16
+}
+
+const REP_DISRESPECT_PATTERNS = [
+  /\b(make up your mind|you are not answering|you're not answering|again[,]?\s*you|stop avoiding|you keep dodging|this is useless|wasting my time)\b/i,
+  /\b(you are avoiding the topic|you're avoiding the topic|avoiding the topic)\b/i,
+  /\b(get serious|be serious|figure it out|that's ridiculous|this is nonsense|you don't get it)\b/i,
+]
+
+const REP_CONTRADICTION_PATTERNS = [
+  /\b(what (staffing|staff|constraints?|limitations?)\??)\b/i,
+  /\b(there (is|are) no (staffing|workflow|capacity|operational) (constraint|constraints|issue|issues|limitations?))\b/i,
+  /\b((staff|staffing|workflow|admin burden|administrative burden|time pressure) (has|have) nothing to do with)\b/i,
+]
+
+export function detectRepDisrespectSignal(message = '') {
+  const text = String(message || '')
+  return REP_DISRESPECT_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export function detectRepConstraintContradiction(message = '', activeConstraintTypes = []) {
+  const text = String(message || '')
+  if (!text.trim() || !Array.isArray(activeConstraintTypes) || activeConstraintTypes.length === 0) {
+    return false
+  }
+  return REP_CONTRADICTION_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export function evaluateHcpTerminationPolicy({
+  repMessage = '',
+  repHistoryMessages = [],
+  activeConstraintTypes = [],
+  unresolvedConcernTurns = 0,
+  concernFlowOutcome = 'neutral',
+  decayTier = 'engaged',
+  explicitNarrowingPrompted = false,
+  isTimePressured = false,
+  timePressureActive = false,
+  unansweredDirectQuestionStreak = 0,
+  lowValueTurnStreak = 0,
+  unansweredDirectQuestionCount = 0,
+  repeatedDeflectionCount = 0,
+  prematureClosePushCount = 0,
+  valueDeliveredRecently = true,
+  repRespectViolationCount = 0,
+} = {}) {
+  const history = [
+    ...(Array.isArray(repHistoryMessages) ? repHistoryMessages : []),
+    repMessage,
+  ].filter(Boolean)
+
+  const signalCounts = history.slice(-6).reduce((acc, message) => {
+    if (detectRepDisrespectSignal(message)) acc.disrespect += 1
+    if (detectRepConstraintContradiction(message, activeConstraintTypes)) acc.contradiction += 1
+    return acc
+  }, { disrespect: 0, contradiction: 0 })
+
+  const unansweredBudgetExceeded =
+    unresolvedConcernTurns >= 3
+    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+  const repeatedDisrespect = signalCounts.disrespect >= 2
+  const repeatedContradiction = signalCounts.contradiction >= 2
+  const effectiveTimePressure = Boolean(isTimePressured || timePressureActive)
+  const unresolvedFailure = concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot'
+  const unresolvedSoftFailure = unresolvedFailure || concernFlowOutcome === 'neutral'
+  const unansweredCount = Math.max(unansweredDirectQuestionStreak, unansweredDirectQuestionCount)
+  const deflectionCount = Math.max(repeatedDeflectionCount, lowValueTurnStreak)
+  const pressureAdjustedSkepticalThreshold = effectiveTimePressure ? 1 : 2
+  const pressureAdjustedDisengagingThreshold = effectiveTimePressure ? 2 : 3
+  const pressureAdjustedTerminateThreshold = effectiveTimePressure ? 3 : 4
+  const narrowingFailure =
+    explicitNarrowingPrompted
+    && unresolvedConcernTurns >= 4
+    && unresolvedFailure
+  const timePressureNoProgress =
+    effectiveTimePressure
+    && unresolvedConcernTurns >= 3
+    && unresolvedFailure
+  const terminalByDecay =
+    decayTier === 'disengaging'
+    && unansweredBudgetExceeded
+    && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1)
+  const repeatedPoliteNonAnswerLoop =
+    unansweredCount >= 3
+    && explicitNarrowingPrompted
+    && (effectiveTimePressure || decayTier === 'impatient' || decayTier === 'disengaging')
+    && unresolvedSoftFailure
+  const severeLowValueStall =
+    deflectionCount >= 3
+    && unresolvedConcernTurns >= 4
+    && (decayTier === 'impatient' || decayTier === 'disengaging')
+    && explicitNarrowingPrompted
+  const repeatedPrematureCloseBeforeAnswer =
+    prematureClosePushCount >= 2
+    && unansweredCount >= 2
+    && unresolvedSoftFailure
+  const hardStopRepeatedCoreQuestionMiss =
+    unansweredCount >= pressureAdjustedTerminateThreshold
+    && unresolvedSoftFailure
+    && !valueDeliveredRecently
+  const fastTerminateByRespectViolation = repRespectViolationCount >= 2 || repeatedDisrespect
+
+  let hcpPatienceState = 'engaged'
+  if (
+    unansweredCount >= pressureAdjustedSkepticalThreshold
+    || deflectionCount >= pressureAdjustedSkepticalThreshold
+    || !valueDeliveredRecently
+  ) {
+    hcpPatienceState = 'skeptical'
+  }
+  if (
+    unansweredCount >= pressureAdjustedDisengagingThreshold
+    || deflectionCount >= pressureAdjustedDisengagingThreshold
+    || repeatedPrematureCloseBeforeAnswer
+    || decayTier === 'impatient'
+    || decayTier === 'disengaging'
+  ) {
+    hcpPatienceState = 'disengaging'
+  }
+
+  const reasonCodes = []
+  if (unansweredBudgetExceeded) reasonCodes.push('repeated_unanswered_direct_question')
+  if (repeatedContradiction) reasonCodes.push('repeated_contradiction_of_known_facts')
+  if (repeatedDisrespect) reasonCodes.push('repeated_disrespect_or_argumentative_tone')
+  if (narrowingFailure) reasonCodes.push('failure_after_explicit_narrowing_prompt')
+  if (timePressureNoProgress) reasonCodes.push('time_pressure_with_no_progress')
+  if (repeatedPoliteNonAnswerLoop) reasonCodes.push('termination_boundary_reached_after_repeated_non_answer')
+  if (severeLowValueStall) reasonCodes.push('low_value_stall_after_narrowing')
+  if (repeatedPrematureCloseBeforeAnswer) reasonCodes.push('repeated_premature_close_before_answer')
+  if (hardStopRepeatedCoreQuestionMiss) reasonCodes.push('hard_stop_repeated_core_question_unanswered')
+  if (fastTerminateByRespectViolation) reasonCodes.push('respect_violation_accelerates_termination')
+
+  const severeNoProgress =
+    unresolvedConcernTurns >= 5
+    && unresolvedFailure
+    && (decayTier === 'disengaging' || decayTier === 'impatient')
+    && explicitNarrowingPrompted
+
+  const shouldTerminate = Boolean(
+    fastTerminateByRespectViolation
+    || repeatedContradiction
+    || terminalByDecay
+    || (narrowingFailure && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
+    || (timePressureNoProgress && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
+    || severeNoProgress
+    || repeatedPoliteNonAnswerLoop
+    || severeLowValueStall
+    || repeatedPrematureCloseBeforeAnswer
+    || hardStopRepeatedCoreQuestionMiss
+  )
+
+  if (shouldTerminate) {
+    hcpPatienceState = 'terminate'
+  }
+
+  const shouldBoundarySet = !shouldTerminate && Boolean(
+    unansweredBudgetExceeded
+    || signalCounts.disrespect >= 1
+    || signalCounts.contradiction >= 1
+    || unansweredCount >= 2
+    || deflectionCount >= 2
+    || hcpPatienceState === 'disengaging'
+  )
+
+  const terminationTriggered = shouldTerminate
+  const terminationReason = shouldTerminate
+    ? reasonCodes[0] || 'termination_boundary_reached'
+    : null
+
+  return {
+    shouldTerminate,
+    shouldBoundarySet,
+    terminationTriggered,
+    terminationReason,
+    hcpPatienceState,
+    reasonCodes,
+    signalCounts,
+    unansweredBudgetExceeded,
+    unansweredDirectQuestionCount: unansweredCount,
+    repeatedDeflectionCount: deflectionCount,
+    valueDeliveredRecently,
+    timePressureActive: effectiveTimePressure,
+    repRespectViolationCount: Math.max(repRespectViolationCount, signalCounts.disrespect),
+  }
 }
 
 /******************************************************************************************
@@ -1327,13 +1600,13 @@ export function getToneDirectives(state, temperature) {
     irritated: {
       maxSentences: 1,
       instruction:
-        'One sentence only. Be sharp, curt, visibly impatient, and controlled.',
+        'One sentence only. Be sharp, minimal, controlled, and offer no extra explanation.',
     },
 
     disengaged: {
       maxSentences: 1,
       instruction:
-        'Signal that you are leaving. Reference a patient, a meeting, or movement toward the next task. One sentence only.',
+        'One sentence only. Sound like you are closing the interaction, not continuing it. No engagement and no follow-up questions.',
     },
   }
 
@@ -1350,6 +1623,177 @@ export function getToneDirectives(state, temperature) {
   return {
     ...directive,
     instruction: directive.instruction + tempMod,
+  }
+}
+
+export function deriveInteractionMode({
+  structuralState = 'neutral',
+  conversationQuality = 0,
+  repBehavior = {},
+  recentLowValueTurns = 0,
+}) {
+  if (structuralState === 'disengaged') {
+    return 'closing_decision'
+  }
+
+  const repeatedMisalignment =
+    recentLowValueTurns >= 2 ||
+    conversationQuality <= -2 ||
+    repBehavior.pushy ||
+    repBehavior.redundant_question ||
+    repBehavior.boundary_violation
+
+  if (structuralState === 'irritated' || structuralState === 'boundary-setting') {
+    return repeatedMisalignment ? 'closing_decision' : 'directive'
+  }
+
+  if (structuralState === 'resistant' || structuralState === 'time-pressured') {
+    return repeatedMisalignment ? 'directive' : 'clarifying'
+  }
+
+  if (conversationQuality <= -1 || recentLowValueTurns >= 1) {
+    return 'clarifying'
+  }
+
+  return 'exploratory'
+}
+
+/******************************************************************************************
+SEMANTIC PROGRESSION + TERMINAL REALISM OVERLAY
+- Advances unresolved concerns through realistic stages
+- Prevents repetitive objection loops
+- Enables late-stage terminal posture while preserving professionalism
+******************************************************************************************/
+
+function normalizeLineForPattern(line = '') {
+  return String(line || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function startsWithRepeatedPattern(hcpHistory = []) {
+  const recent = hcpHistory
+    .map((line) => normalizeLineForPattern(line))
+    .filter(Boolean)
+    .slice(-2)
+
+  if (recent.length < 2) {
+    return { repeated: false, pattern: '' }
+  }
+
+  const signatures = recent.map((line) =>
+    line
+      .split(' ')
+      .slice(0, 6)
+      .join(' ')
+      .trim()
+  )
+
+  const repeated = signatures[0] && signatures[0] === signatures[1]
+  return { repeated, pattern: signatures[1] || '' }
+}
+
+function hasOperationalSpecificity(message = '') {
+  const msg = String(message || '').toLowerCase()
+  return /\b(workflow|staff|nurse|ma\b|front desk|prior auth|payer|appeal|ehr|emr|template|order set|protocol|step|steps|tomorrow|this week|same day|follow-up cadence|handoff|checklist|implementation|operational|actionable|minutes|burden)\b/.test(
+    msg
+  )
+}
+
+function isEvidenceDriftWithoutOperationalLink(message = '') {
+  const msg = String(message || '').toLowerCase()
+  const evidenceHeavy =
+    /\b(study|studies|data|evidence|efficacy|endpoint|trial|publication|value|roi|outcome|results|journal)\b/.test(
+      msg
+    )
+
+  return evidenceHeavy && !hasOperationalSpecificity(msg)
+}
+
+function getProgressionStageFromPressure(pressure = 0) {
+  if (pressure >= 6) return 5
+  if (pressure >= 4) return 4
+  if (pressure >= 3) return 3
+  if (pressure >= 2) return 2
+  return 1
+}
+
+export function deriveSemanticProgressionOverlay({
+  history = [],
+  repMessage = '',
+  prevProfile = null,
+  structuralState = 'neutral',
+  interactionMode = 'clarifying',
+  turnNumber = 1,
+}) {
+  const priorPressure = Math.max(
+    0,
+    Number(prevProfile?.memory?.semanticProgression?.pressure || 0)
+  )
+
+  const repHistory = history.map((turn) => turn?.repMessage).filter(Boolean)
+  const hcpHistory = history.map((turn) => turn?.hcpDialogueBefore).filter(Boolean)
+  const recentRepMessages = [...repHistory, repMessage].filter(Boolean).slice(-4)
+  const latestRepMessage = String(repMessage || '').trim()
+  const recentLowValueTurns = recentRepMessages.filter((message) =>
+    detectLowValueRepResponse(message)
+  ).length
+
+  const evidenceDrift = isEvidenceDriftWithoutOperationalLink(latestRepMessage)
+  const operationalRecovery = hasOperationalSpecificity(latestRepMessage)
+  const clearMiss =
+    !!latestRepMessage &&
+    (evidenceDrift || detectLowValueRepResponse(latestRepMessage))
+
+  let pressure = priorPressure
+  if (clearMiss) pressure += 1
+  else if (operationalRecovery) pressure -= 1
+
+  if (recentLowValueTurns >= 2) pressure += 1
+  pressure = Math.max(0, Math.min(8, pressure))
+
+  const stage = getProgressionStageFromPressure(pressure)
+  const terminalBehavior =
+    stage >= 5 ||
+    (stage >= 4 &&
+      (interactionMode === 'closing_decision' ||
+        structuralState === 'disengaged' ||
+        structuralState === 'irritated'))
+
+  const stageLabels = {
+    1: 'Clarify',
+    2: 'Narrow',
+    3: 'Demand Specificity',
+    4: 'Challenge Practicality',
+    5: 'Decide / Close',
+  }
+
+  const focusAngles = [
+    'clinical applicability',
+    'evidence confidence',
+    'patient selection clarity',
+    'risk-benefit practicality',
+    'care pathway fit when explicitly raised',
+    'implementation detail when explicitly raised',
+    'time-to-decision clarity',
+    'next best action',
+  ]
+  const angleIndex = hashInt(`${turnNumber}:${stage}:${pressure}`) % focusAngles.length
+
+  const patternCheck = startsWithRepeatedPattern(hcpHistory)
+
+  return {
+    stage,
+    stageLabel: stageLabels[stage],
+    pressure,
+    terminalBehavior,
+    evidenceDrift,
+    operationalRecovery,
+    focusAngle: focusAngles[angleIndex],
+    repeatedPattern: patternCheck.repeated ? patternCheck.pattern : '',
+    antiRepetitionLock: patternCheck.repeated,
   }
 }
 
@@ -1439,14 +1883,22 @@ export function buildHCPProfile({
   conversationQuality = 0,
   repBehavior = {},
   timeElapsed = 1,
+  semanticOverlay = null,
 }) {
-  const preferShort = structuralState === 'time-pressured' || structuralState === 'disengaged'
+  const preferShort =
+    structuralState === 'time-pressured' ||
+    structuralState === 'disengaged' ||
+    semanticOverlay?.terminalBehavior
   const preferStrongVisuals =
     structuralState === 'irritated' ||
     structuralState === 'resistant' ||
-    structuralState === 'boundary-setting'
+    structuralState === 'boundary-setting' ||
+    semanticOverlay?.stage >= 4
 
-  const avoidDoorCues = structuralState !== 'time-pressured' && structuralState !== 'disengaged'
+  const avoidDoorCues =
+    structuralState !== 'time-pressured' &&
+    structuralState !== 'disengaged' &&
+    !semanticOverlay?.terminalBehavior
 
   const cueSelection = selectCue(sessionId, turnNumber, structuralState, severity, {
     memory,
@@ -1464,8 +1916,16 @@ export function buildHCPProfile({
     cueSelection.cueIndex
   )
 
+  const semanticMemory = {
+    ...(stateMemory || {}),
+    semanticProgression: {
+      pressure: semanticOverlay?.pressure || 0,
+      stage: semanticOverlay?.stage || 1,
+    },
+  }
+
   const nextMemory = setRecentGlobalCueMemory(
-    stateMemory,
+    semanticMemory,
     cueSelection.cue,
     15
   )
@@ -1483,6 +1943,7 @@ export function buildHCPProfile({
     conversationQuality,
     repBehavior,
     timeElapsed,
+    semanticOverlay,
     memory: nextMemory,
   })
 }
@@ -1550,6 +2011,23 @@ export function deriveNextHCPProfile({
     repBehavior
   )
 
+  const recentLowValueTurns = countRecentLowValueRepTurns(history, repMessage)
+  const interactionMode = deriveInteractionMode({
+    structuralState: transitionedState,
+    conversationQuality,
+    repBehavior,
+    recentLowValueTurns,
+  })
+
+  const semanticOverlay = deriveSemanticProgressionOverlay({
+    history,
+    repMessage,
+    prevProfile,
+    structuralState: transitionedState,
+    interactionMode,
+    turnNumber,
+  })
+
   return buildHCPProfile({
     sessionId,
     turnNumber,
@@ -1560,6 +2038,7 @@ export function deriveNextHCPProfile({
     conversationQuality,
     repBehavior,
     timeElapsed,
+    semanticOverlay,
   })
 }
 
@@ -1599,12 +2078,61 @@ export function buildHCPDialoguePrompt({
   }
 
   const historyLines = String(historyText || '').split('\n')
+  const repHistoryMessages = historyLines
+    .filter((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
+    .map((line) => line.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim())
+    .filter(Boolean)
   const repLine = [...historyLines]
     .reverse()
     .find((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
   const lastRepMessage = repLine
     ? repLine.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim()
     : ''
+  const lastRepLower = lastRepMessage.toLowerCase()
+  const repWasLowValue =
+    lastRepLower.length < 8 ||
+    /\b(idk|nothing|never|whatever|not sure)\b/.test(lastRepLower)
+  const repWasRude =
+    /\bf\*+\b|f\*ck|fuck|shit|ass\b|\bstupid\b|\bidiot\b|\bincompetent\b|\byou don.t know\b|\bare you the doctor or am i\b|\bcome on\b/.test(
+      lastRepLower
+    )
+  const repWasVagueOrDismissive =
+    repWasLowValue ||
+    /\bmaybe\b|\bi guess\b|\bprobably\b|\bwe can talk later\b|\bnot now\b|\bdoesn.t matter\b|\bwhatever\b/.test(
+      lastRepLower
+    )
+  const recentLowValueTurns = repHistoryMessages
+    .slice(-3)
+    .filter((message) => detectLowValueRepResponse(message)).length
+  let interactionMode = deriveInteractionMode({
+    structuralState,
+    conversationQuality: hcpProfile.conversationQuality,
+    repBehavior: hcpProfile.repBehavior,
+    recentLowValueTurns,
+  })
+  const semanticOverlay =
+    hcpProfile.semanticOverlay ||
+    deriveSemanticProgressionOverlay({
+      history: [],
+      repMessage: lastRepMessage,
+      prevProfile: { memory: hcpProfile.memory || {} },
+      structuralState,
+      interactionMode,
+      turnNumber: hcpProfile.turnNumber || 1,
+    })
+
+  if (semanticOverlay.terminalBehavior && interactionMode !== 'closing_decision') {
+    interactionMode = 'closing_decision'
+  } else if (semanticOverlay.stage >= 4 && interactionMode === 'clarifying') {
+    interactionMode = 'directive'
+  }
+
+  const interactionModeLabel = {
+    exploratory: 'Exploratory',
+    clarifying: 'Clarifying',
+    directive: 'Directive',
+    closing_decision: 'Closing / Decision',
+  }[interactionMode]
 
   let contextHint = ''
   if (lastRepMessage) {
@@ -1612,6 +2140,9 @@ export function buildHCPDialoguePrompt({
       '\nCONTEXTUAL REFERENCE:\n- The rep just said: "' +
       sanitize(lastRepMessage) +
       '"\n- Respond directly to that input, adapting your focus and tone to your locked state.'
+      + (repWasLowValue ? '\n- The rep response was low-value or minimally useful.' : '')
+      + (repWasVagueOrDismissive ? '\n- The rep response was vague, dismissive, or unhelpful.' : '')
+      + (repWasRude ? '\n- The rep response was rude or unprofessional.' : '')
   }
 
   let prompt = ''
@@ -1662,6 +2193,7 @@ export function buildHCPDialoguePrompt({
 
   prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction)
   prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences)
+  prompt += '\nINTERACTION MODE: ' + sanitize(interactionModeLabel || 'Clarifying')
 
   prompt += '\n\nOUTPUT RULES:\n'
   prompt += '- Output only your spoken dialogue as the HCP.\n'
@@ -1669,11 +2201,65 @@ export function buildHCPDialoguePrompt({
   prompt += '- Your words must be congruent with the physical context.\n'
   prompt += '- Stay in character completely.\n'
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
-  prompt += '- Keep responses specific and practice-worthy, including at least one concrete operational or clinical concern when relevant.\n'
+  prompt += '- Keep responses specific and practice-worthy, grounded in scenario details and dialogue context.\n'
+  prompt += '- Hard rule: do not introduce staffing, workflow, operational, or resource constraints unless explicitly present in scenario details or prior dialogue.\n'
+  prompt += '- If a constraint was already stated, avoid repeating it unless the rep asks to revisit it, it changed, or clarification is required.\n'
+  prompt += '- Do not sound like a consultant, educator, or training script.\n'
+  prompt += '- Do not over-explain.\n'
+  prompt += '- Speak like a real clinician under time pressure.\n'
+  prompt += '- Vary your reasoning across turns: clinical, practical, skeptical, or evidence-based without inventing barriers.\n'
+
+  prompt += '\nREALISM RULES:\n'
+  prompt += '- Stay professionally constrained and selectively engaged, not automatically accommodating.\n'
+  prompt += '- Do not advance neatly through a scripted arc; allow partial agreement and realistic unresolved questions grounded in context.\n'
+  prompt += '- Keep one live concern active only when it is explicitly grounded in scenario details or prior dialogue.\n'
+  prompt += '- Prefer realistic response shapes: acknowledge + redirect, partial accept + narrow scope, conditional openness, defer commitment, or request one concrete detail.\n'
+  prompt += '- Good rep responses can improve tone and openness, but should not trigger immediate full buy-in.\n'
+  prompt += '- If the rep pivots away from your stated concern, briefly return to that concern before moving forward.\n'
+  prompt += '- If the rep provides vague, dismissive, or unhelpful responses, reduce effort, shorten your reply, and stop offering structured guidance.\n'
+  prompt += '- If the rep is rude or unprofessional, become curt, controlled, and less cooperative.\n'
+  prompt += '- When the rep is weak, you should become less helpful rather than coaching them toward a better answer.\n'
+  prompt += '- If you are irritated or disengaged, do not rescue the conversation with polished explanations.\n'
+  prompt += '- If you are disengaged, end the interaction directly instead of extending it.\n'
+  prompt += '- Maintain professionalism: firm is allowed, but do not become sarcastic, combative, or hostile.\n'
+  prompt += '- Preserve your primary concern from this scenario; do not drift into unrelated topics.\n'
+  prompt += '- Do not restate the same objection phrasing more than twice; if concern remains unresolved, escalate posture instead of looping wording.\n'
+  prompt += '- Progress unresolved concern semantically across stages instead of reusing near-identical sentence structures.\n'
+
+  prompt += '\nINTERACTION MODE SHIFT RULES:\n'
+  prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'
+  prompt += '- Exploratory mode: ask open, curious, collaborative questions and seek understanding.\n'
+  prompt += '- Clarifying mode: narrow to one specific grounded concern, ask one focused question, reduce padding.\n'
+  prompt += '- Directive mode: use assertive framing, request concrete specificity tied to grounded concerns, and challenge relevance directly but professionally.\n'
+  prompt += '- Closing / Decision mode: stop exploratory questioning; use short decisive statements or binary asks, and signal potential disengagement.\n'
+  prompt += '- Interaction mode must stay congruent with your physical cue: attentive in exploratory, focused/constrained in clarifying, firm/time-aware in directive, visibly wrapping up in closing.\n'
 
   prompt += '\nQUESTION RULE:\n'
   prompt += '- Ask only one question per turn, if any.\n'
   prompt += '- Never ask multiple questions in a single turn.\n'
+  prompt += '- If you are disengaged, ask no questions at all.\n'
+  prompt += '- In closing / decision mode, prefer statements or binary asks over open-ended questions.\n'
+
+  prompt += '\nSEMANTIC PROGRESSION OVERLAY:\n'
+  prompt += '- Current unresolved concern stage: ' + sanitize(semanticOverlay.stageLabel) + ' (Stage ' + sanitize(String(semanticOverlay.stage)) + ').\n'
+  prompt += '- Required focus angle this turn: ' + sanitize(semanticOverlay.focusAngle) + '.\n'
+  prompt += '- If unresolved, advance posture one step toward Decide / Close. If meaningfully addressed, soften by at most one stage (do not fully reset).\n'
+  prompt += '- Stage 1 Clarify: identify one grounded concern and ask how the rep point connects.\n'
+  prompt += '- Stage 2 Narrow: constrain to one practical bottleneck and ask for a specific answer.\n'
+  prompt += '- Stage 3 Demand Specificity: request one concrete action or immediate implication.\n'
+  prompt += '- Stage 4 Challenge Practicality: test feasibility only through concerns explicitly raised in scenario or dialogue.\n'
+  prompt += '- Stage 5 Decide / Close: stop re-asking as a normal question; use threshold language, binary framing, and wrap-up pressure.\n'
+  prompt += '- Late-stage rule: in Stage 5 (or terminal posture), do not continue helpful clarification loops.\n'
+  prompt += '- Tone guardrail: professional, time-constrained, clinically grounded, never rude or sarcastic.\n'
+  if (semanticOverlay.antiRepetitionLock && semanticOverlay.repeatedPattern) {
+    prompt +=
+      '- Anti-repetition lock: avoid reusing this opening structure: "' +
+      sanitize(semanticOverlay.repeatedPattern) +
+      '".\n'
+  }
+  if (semanticOverlay.terminalBehavior) {
+    prompt += '- Terminal behavior active: prefer short threshold statements and one final binary ask at most.\n'
+  }
 
   prompt += '\nPUNCTUATION RULE:\n'
   prompt += '- Every question must end with a question mark.\n'

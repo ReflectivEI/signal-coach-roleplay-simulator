@@ -45,6 +45,9 @@ export const METRIC_DEFINITIONS = SIGNAL_CAPABILITIES.map(c => ({
 // ─── HELPERS ───────────────────────────────────────────────────────────────────
 function wordCount(text) { return text.trim().split(/\s+/).filter(Boolean).length; }
 function questionCount(text) { return (text.match(/\?/g) || []).length; }
+function isDisengagingState(hcpState) {
+  return hcpState === 'disengaging' || hcpState === 'disengaged';
+}
 
 /**
  * Detect observable behavioral patterns in rep message.
@@ -71,9 +74,9 @@ function detectPatterns(msg) {
 
     // ── Signal Interpretation patterns ──────────────────────────────────────
     paraphrasesHcp:
-      /\b(so what you('re| are) saying|if i('m| am) hearing you|it sounds like|what i('m| am) hearing|you('re| are) indicating|you've expressed|your concern is|what you need)\b/.test(lc),
+      /\b(so what you('re| are) saying|if i('m| am) hearing you|it sounds like|it sounds (frustrating|challenging|difficult) to|what i('m| am) hearing|you('re| are) indicating|you've expressed|your concern is|what you need)\b/.test(lc),
     acknowledgesConcern:
-      /\b(i understand|i hear|fair point|makes sense|i see where|you('re| are) right|valid concern|i appreciate|your concern|i respect that|thank you for|that('s| is) a fair|i take that point|i recognize|i hear the concern)\b/.test(lc),
+      /\b(i understand|i can understand why|i hear|fair point|makes sense|i see where|you('re| are) right|valid concern|i appreciate|your concern|i respect that|thank you for|that('s| is) a fair|i take that point|i recognize|i hear the concern|you('re| are|’re) raising a legitimate (implementation )?risk|that('s| is) (a|an) (real )?(workflow|administrative|admin) burden|that('s| is) creating (delay|access friction))\b/.test(lc),
     respondsToState:
       /\b(given that|because you|since you|addressing your|in response to|that's why|to address|for that reason|with that in mind)\b/.test(lc),
 
@@ -134,6 +137,8 @@ function detectPatterns(msg) {
       /\bf\*+\b|f\*ck|fuck|shit|ass\b|\bstupid\b|\bidiot\b|\bincompetent\b|\byou don('t| not) know\b|\bbad doctor\b|\bi demand\b|\bcancel all\b|\bwhy are you being\b/.test(lc),
     isDismissive:
       /\b(whatever|not important|move on|doesn('t| 't) matter|i don('t| 't) know the.*findings|not a real study)\b/.test(lc),
+    admitsNoAnswer:
+      /\b(i don('t|’t) know|not sure|no idea|can('t|’t) say|don('t|’t) have that|i'm not sure|i am not sure)\b/.test(lc),
 
     // Length indicators
     wc,
@@ -153,6 +158,50 @@ function avg(...scores) {
 }
 function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v))); }
 
+function collectContentTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !["what", "when", "where", "which", "would", "could", "should", "their", "there", "this", "that", "with", "from", "into", "about", "your", "patients", "patient"].includes(token));
+}
+
+function detectQuestionDemand(hcpText = "") {
+  const text = String(hcpText || "").toLowerCase();
+  if (!text) {
+    return { isDirectQuestion: false, requiresMetric: false, requiresThreshold: false, keyTokens: [] };
+  }
+
+  const isDirectQuestion = text.includes("?") || /^(what|how|which|when|where|can|could|would|should|is|are)\b/.test(text.trim());
+  const requiresMetric = /\b(metric|monitor|specific|concrete|actionable|quickest way|test|justify|scaling|scale|worth scaling)\b/.test(text);
+  const requiresThreshold = /\b(threshold|target|cutoff|cut-off|4 weeks|4-6|weeks|months|percent|%)\b/.test(text);
+
+  return {
+    isDirectQuestion,
+    requiresMetric,
+    requiresThreshold,
+    keyTokens: collectContentTokens(text).slice(0, 12),
+  };
+}
+
+function repAddressesQuestionDemand(repMessage = "", demand = {}) {
+  const rep = String(repMessage || "").toLowerCase();
+  const repTokens = new Set(collectContentTokens(rep));
+  const lexicalOverlap = (demand.keyTokens || []).filter((token) => repTokens.has(token)).length;
+  const hasNumericAnchor = /\b\d+(\.\d+)?\b|%|copies\/?ml|weeks?|months?|<|>|≤|≥/.test(rep);
+  const hasMetricAnchor = /\b(metric|monitor|threshold|target|baseline|follow-?up|endpoint|measure|measurable|rate|trend)\b/.test(rep);
+
+  return {
+    lexicalOverlap,
+    hasNumericAnchor,
+    hasMetricAnchor,
+    directlyAddresses:
+      (!demand.requiresMetric || hasMetricAnchor || lexicalOverlap >= 1)
+      && (!demand.requiresThreshold || hasNumericAnchor),
+  };
+}
+
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
 function scoreSignalAwareness(hcpState, temperature, p) {
   const positives = [];
@@ -167,7 +216,7 @@ function scoreSignalAwareness(hcpState, temperature, p) {
     contextualRelevance = Math.min(contextualRelevance + 1, 5);
     positives.push('Question built directly on HCP signal (Contextual Relevance ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.asksDiscovery && !p.deEscalates) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.asksDiscovery && !p.deEscalates) {
     contextualRelevance = 2;
     misalignments.push('Discovery question used when HCP was withdrawing — not contextually appropriate');
   }
@@ -221,9 +270,13 @@ function scoreSignalInterpretation(hcpState, temperature, p) {
     accuracy = 2;
     misalignments.push('Resistance signal not reflected in response — concern not acknowledged');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && !p.deEscalates && !p.acknowledgesConcern) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && !p.deEscalates && !p.acknowledgesConcern) {
     accuracy = Math.max(accuracy - 1, 1);
     misalignments.push('Disengagement/irritation signal not accurately interpreted');
+  }
+  if (p.admitsNoAnswer) {
+    accuracy = Math.min(accuracy, 2);
+    misalignments.push('Rep explicitly lacked the requested information, weakening interpretation accuracy');
   }
   if (p.isDismissive) {
     accuracy = 1;
@@ -245,6 +298,10 @@ function scoreSignalInterpretation(hcpState, temperature, p) {
   if (p.repeatedClaim) {
     responsiveness = Math.max(responsiveness - 1, 1);
     misalignments.push('Repeated earlier claim without adapting to what HCP said');
+  }
+  if (p.admitsNoAnswer) {
+    responsiveness = Math.min(responsiveness, 1);
+    misalignments.push('Rep did not answer the HCP request with usable information');
   }
   if (hcpState === 'engaged' && p.buildsOnHcp) {
     responsiveness = Math.min(responsiveness + 1, 5);
@@ -278,7 +335,7 @@ function scoreValueConnection(hcpState, temperature, p) {
     relevanceAlignment = 1;
     misalignments.push('Value asserted before HCP priorities were established — generic framing');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.providesEvidence && !p.deEscalates) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.providesEvidence && !p.deEscalates) {
     relevanceAlignment = 2;
     misalignments.push('Value messaging deployed when HCP was withdrawing — wrong context');
   }
@@ -289,6 +346,10 @@ function scoreValueConnection(hcpState, temperature, p) {
   if (p.pressureLanguage) {
     relevanceAlignment = Math.max(relevanceAlignment - 1, 1);
     misalignments.push('Pressure language undermines value relevance');
+  }
+  if (p.admitsNoAnswer) {
+    relevanceAlignment = Math.min(relevanceAlignment, 1);
+    misalignments.push('No customer-relevant value was provided in response to the HCP question');
   }
 
   let outcomeTranslation = 3;
@@ -308,6 +369,10 @@ function scoreValueConnection(hcpState, temperature, p) {
     outcomeTranslation = 1;
     misalignments.push('No outcome explained — information pushed without impact framing');
   }
+  if (p.admitsNoAnswer) {
+    outcomeTranslation = Math.min(outcomeTranslation, 1);
+    misalignments.push('Rep offered no usable explanation of why the study matters');
+  }
 
   const score = clamp(avg(relevanceAlignment, outcomeTranslation));
   return {
@@ -325,7 +390,7 @@ function scoreCustomerEngagement(hcpState, temperature, p) {
 
   const participationByState = {
     'neutral': 3, 'engaged': 4, 'time-pressured': 2,
-    'resistant': 2, 'boundary-setting': 1, 'irritated': 1, 'disengaging': 1,
+    'resistant': 2, 'boundary-setting': 1, 'irritated': 1, 'disengaging': 1, 'disengaged': 1,
   };
   const customerParticipation = participationByState[hcpState] ?? 3;
 
@@ -340,15 +405,15 @@ function scoreCustomerEngagement(hcpState, temperature, p) {
     responsivenessToCues = 2;
     misalignments.push('HCP engaged but rep did not build on signal — cue missed');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.continues_after_disengagement) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.continues_after_disengagement) {
     responsivenessToCues = 1;
     misalignments.push('Engagement drop ignored — continued content after disengagement signal');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.deEscalates) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.deEscalates) {
     responsivenessToCues = 4;
     positives.push('Adapted promptly to disengagement signal (Cues ↑)');
   }
-  if (hcpState === 'disengaging' && p.deEscalates && p.offersNextStep) {
+  if (isDisengagingState(hcpState) && p.deEscalates && p.offersNextStep) {
     responsivenessToCues = 5;
     positives.push('Anticipated disengagement and pivoted to clean close (Cues ↑)');
   }
@@ -379,13 +444,17 @@ function scoreCustomerEngagement(hcpState, temperature, p) {
     signalAmplification = 4;
     positives.push('Built on HCP input to deepen engagement (Amplification ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.continuesMonologue) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.continuesMonologue) {
     signalAmplification = 1;
     misalignments.push('Customer input ignored or redirected — no signal amplification');
   }
   if (p.isDismissive) {
     signalAmplification = 1;
     misalignments.push('Dismissive language blocked signal amplification');
+  }
+  if (p.admitsNoAnswer) {
+    signalAmplification = Math.min(signalAmplification, 1);
+    misalignments.push('HCP signal was not developed into a useful next exchange');
   }
 
   const score = clamp(avg(customerParticipation, responsivenessToCues, momentumContinuity, signalAmplification));
@@ -506,17 +575,21 @@ function scoreConversationManagement(hcpState, temperature, p) {
       positives.push('Seamlessly balanced structure and adaptability under time pressure (Adaptive Steering ↑)');
     }
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.isVeryBrief) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.isVeryBrief && !p.admitsNoAnswer) {
     adaptiveSteering = 4;
     positives.push('Structure flexed appropriately to disengagement — brevity maintained coherence (Adaptive Steering ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.isLong) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.isLong) {
     adaptiveSteering = 1;
     misalignments.push('Long response when structure required brevity — rigidity under disengagement');
   }
-  if (p.continues_after_disengagement && (hcpState === 'disengaging' || hcpState === 'irritated')) {
+  if (p.continues_after_disengagement && (isDisengagingState(hcpState) || hcpState === 'irritated')) {
     adaptiveSteering = 1;
     misalignments.push('Continued introducing content when conversation needed to close — no adaptive steering');
+  }
+  if (p.admitsNoAnswer) {
+    adaptiveSteering = Math.min(adaptiveSteering, 1);
+    misalignments.push('Very brief but non-responsive reply did not provide usable conversational structure');
   }
   if (hcpState === 'resistant' && p.acknowledgesConcern && p.reducedAsk) {
     adaptiveSteering = 4;
@@ -552,11 +625,11 @@ function scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState) {
     situationalResponsiveness = 1;
     misalignments.push('Did not adjust despite clear time-pressure signal — continued at same length');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.deEscalates) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.deEscalates) {
     situationalResponsiveness = 5;
     positives.push('Adapted to disengagement/irritation with de-escalation behavior (Situational ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && !p.deEscalates && !p.isBrief) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && !p.deEscalates && !p.isBrief) {
     situationalResponsiveness = 1;
     misalignments.push('Did not adapt to disengagement/irritation — continued unchanged');
   }
@@ -581,16 +654,21 @@ function scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState) {
     adjustmentQuality = 4;
     positives.push('Adjustment clearly improved interaction — brevity and focus matched context (Quality ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.deEscalates && p.offersNextStep) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.deEscalates && p.offersNextStep) {
     adjustmentQuality = 5;
     positives.push('Adjustment maximally effective — de-escalated and offered clean exit (Quality ↑)');
-  } else if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.deEscalates) {
+  } else if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.deEscalates) {
     adjustmentQuality = 4;
     positives.push('Adjustment effective — de-escalation matched disengagement signal (Quality ↑)');
   }
-  if ((hcpState === 'irritated' || hcpState === 'disengaging') && p.continues_after_disengagement) {
+  if ((hcpState === 'irritated' || isDisengagingState(hcpState)) && p.continues_after_disengagement) {
     adjustmentQuality = 1;
     misalignments.push('Adjustment inappropriate — escalated when de-escalation was required');
+  }
+  if (p.admitsNoAnswer) {
+    situationalResponsiveness = Math.min(situationalResponsiveness, 2);
+    adjustmentQuality = Math.min(adjustmentQuality, 1);
+    misalignments.push('Low-information reply did not meaningfully adjust to the HCP need');
   }
   if (p.defends && (hcpState === 'resistant' || hcpState === 'boundary-setting')) {
     adjustmentQuality = 1;
@@ -619,7 +697,7 @@ function scoreCommitmentGeneration(hcpState, temperature, p) {
   const misalignments = [];
 
   const receptiveState = hcpState === 'engaged' || hcpState === 'neutral';
-  const closingState = hcpState === 'disengaging' || hcpState === 'time-pressured';
+  const closingState = isDisengagingState(hcpState) || hcpState === 'time-pressured';
   const blockedState = hcpState === 'irritated' || hcpState === 'boundary-setting';
 
   let nextStepClarity = 3;
@@ -682,7 +760,7 @@ function computeAlignmentRubric(hcpState, p) {
       'The objection was addressed before it was explored, which may limit credibility.'
     );
   }
-  const engagementDrop = hcpState === 'disengaging' || hcpState === 'irritated';
+  const engagementDrop = isDisengagingState(hcpState) || hcpState === 'irritated';
   if (engagementDrop && !p.deEscalates && !p.isBrief && p.continuesMonologue) {
     rubricMisalignments.push(
       'Engagement decreased after your response, but the approach did not adjust. This may affect access.'
@@ -715,8 +793,11 @@ function computeAlignmentRubric(hcpState, p) {
  * @param {string} prevHcpState - Previous turn's state (for adaptive scoring)
  * @returns alignment object
  */
-export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
+export function computeAlignment(hcpState, repMessage, context = null, temperature = 'neutral', prevHcpState = null) {
   const p = detectPatterns(repMessage);
+  const promptContext = typeof context === "string" ? context : (context?.hcpUtterance || context?.latestHcpUtterance || "");
+  const questionDemand = detectQuestionDemand(promptContext);
+  const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
   let repeatedMisalignment = false;
@@ -737,6 +818,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     'boundary-setting': 'Firm Boundary',
     'irritated': 'Irritated / Negative',
     'disengaging': 'Disengaging',
+    'disengaged': 'Disengaged',
   };
 
   const STATE_DESCRIPTIONS = {
@@ -747,6 +829,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     'boundary-setting': 'HCP has set a firm limit. Honor it explicitly, reduce scope, do not push.',
     'irritated': 'HCP is irritated. De-escalate and minimize ask immediately.',
     'disengaging': 'HCP is leaving. Close cleanly with one concrete next step or graceful release.',
+    'disengaged': 'HCP is done with the interaction. Close cleanly or release without re-engaging.',
   };
 
   const metricResults = {
@@ -760,22 +843,45 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
   };
 
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 2);
+    metricResults.signal_interpretation.subScores.responsiveness_of_action = clamp(
+      metricResults.signal_interpretation.subScores.responsiveness_of_action - 2
+    );
+    metricResults.signal_interpretation.misalignments.push('Direct HCP question was not answered in the response.');
+
+    metricResults.value_connection.score = clamp(metricResults.value_connection.score - 1);
+    metricResults.value_connection.subScores.outcome_translation = clamp(
+      metricResults.value_connection.subScores.outcome_translation - 1
+    );
+    metricResults.value_connection.misalignments.push('Response did not translate to the specific decision signal the HCP asked for.');
+
+    if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
+      metricResults.conversation_management.score = clamp(metricResults.conversation_management.score - 1);
+      metricResults.conversation_management.subScores.directional_clarity = clamp(
+        metricResults.conversation_management.subScores.directional_clarity - 1
+      );
+      metricResults.conversation_management.misalignments.push('Threshold-oriented question lacked a concrete threshold in the reply.');
+    }
+  }
+
   const globalMisalignments = [];
-  let universalPenalty = 0;
   if (p.isAggressive) {
-    universalPenalty = -99; // Force minimum score
     globalMisalignments.push('Aggressive or profane language used — damages all capability scores');
     if (repeatedAggressive) {
-      universalPenalty -= 2;
       globalMisalignments.push('Repeated aggressive language — session at risk of termination.');
     }
   }
   if (p.isDismissive) {
-    universalPenalty -= 1;
     globalMisalignments.push('Dismissive language used — ignores HCP signal across all dimensions');
   }
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    globalMisalignments.push('Rep did not directly answer the HCP question prompt.');
+    if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
+      globalMisalignments.push('HCP requested a threshold/metric and the reply lacked concrete measurable criteria.');
+    }
+  }
   if (repeatedMisalignment) {
-    universalPenalty -= 2;
     globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
@@ -783,7 +889,9 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
+  const overallScore = p.isAggressive || repeatedAggressive
+    ? 1
+    : Math.max(1, Math.min(5, Math.round(rawAvg * 10) / 10));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
