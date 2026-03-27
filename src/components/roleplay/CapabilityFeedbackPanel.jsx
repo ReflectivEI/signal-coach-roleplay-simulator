@@ -175,13 +175,6 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     .join("\n");
 
   const scoredTurns = turns.filter((t) => t.alignment?.metrics);
-  const latestScoredTurn = scoredTurns.length > 0 ? scoredTurns[scoredTurns.length - 1] : null;
-  const scoredOverallValues = scoredTurns
-    .map((t) => t.alignment?.score)
-    .filter((score) => typeof score === "number");
-  const overallScoreRange = scoredOverallValues.length > 0
-    ? { min: Math.min(...scoredOverallValues), max: Math.max(...scoredOverallValues) }
-    : null;
   const getCapabilityAverage = (capId) => {
     const scores = scoredTurns
       .map((t) => t.alignment?.metrics?.[capId]?.score)
@@ -287,14 +280,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
-          <div>
-            <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric — click any metric below to analyze.</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">
-              Deterministic scoring wired • turns scored: {scoredTurns.length}
-              {latestScoredTurn?.alignment?.score ? ` • latest turn: ${latestScoredTurn.alignment.score}/5` : ""}
-              {overallScoreRange ? ` • range: ${overallScoreRange.min}-${overallScoreRange.max}` : ""}
-            </p>
-          </div>
+          <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric — click any metric below to analyze.</p>
           <div className="flex items-center justify-center gap-1">
             {overallFeedback.length === 0 && !overallLoading && (
               <Button
