@@ -1605,7 +1605,7 @@ export default function ManagerView() {
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Rep Name</p>
             <Select value={repFilterId} onValueChange={setRepFilterId}>
-              <SelectTrigger className="h-10 rounded-full border-cyan-200/25 bg-slate-900/30 text-sm text-slate-100 shadow-inner shadow-cyan-900/40 transition-colors hover:border-cyan-200/50 hover:bg-slate-900/45">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue placeholder="All Reps" />
               </SelectTrigger>
               <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
@@ -1621,7 +1621,7 @@ export default function ManagerView() {
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Time Range</p>
             <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
-              <SelectTrigger className="h-10 rounded-full border-cyan-200/25 bg-slate-900/30 text-sm text-slate-100 shadow-inner shadow-cyan-900/40 transition-colors hover:border-cyan-200/50 hover:bg-slate-900/45">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
@@ -1632,7 +1632,7 @@ export default function ManagerView() {
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Insight Focus</p>
             <Select value={insightFocusFilter} onValueChange={setInsightFocusFilter}>
-              <SelectTrigger className="h-10 rounded-full border-cyan-300/60 bg-[#14264A] text-sm text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.25)] transition-colors hover:border-cyan-200/80 hover:bg-[#173059]">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/60 bg-gradient-to-r from-[#24457B] to-[#2A7C95] text-sm text-cyan-50 shadow-[0_0_0_1px_rgba(34,211,238,0.35)] transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
@@ -1643,7 +1643,7 @@ export default function ManagerView() {
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Detail Level</p>
             <Select value={detailLevelFilter} onValueChange={setDetailLevelFilter}>
-              <SelectTrigger className="h-10 rounded-full border-cyan-200/25 bg-slate-900/30 text-sm text-slate-100 shadow-inner shadow-cyan-900/40 transition-colors hover:border-cyan-200/50 hover:bg-slate-900/45">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
@@ -1654,7 +1654,7 @@ export default function ManagerView() {
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-cyan-100/90">Segment / Context</p>
             <Select value={segmentFilter} onValueChange={setSegmentFilter}>
-              <SelectTrigger className="h-10 rounded-full border-cyan-200/25 bg-slate-900/30 text-sm text-slate-100 shadow-inner shadow-cyan-900/40 transition-colors hover:border-cyan-200/50 hover:bg-slate-900/45">
+              <SelectTrigger className="h-10 rounded-full border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] text-sm text-slate-50 shadow-inner shadow-cyan-950/40 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="border border-cyan-300/20 bg-[#0E1C3C] text-slate-100">
@@ -1713,7 +1713,7 @@ export default function ManagerView() {
                   text: prompt.text,
                   contextLabel: `${selectedInsightFocusLabel} · ${selectedTimeRangeLabel}`,
                 })}
-                className="rounded-full border border-cyan-200/35 bg-slate-900/35 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition-colors hover:border-cyan-200/70 hover:bg-cyan-400/15 hover:text-cyan-50"
+                className="rounded-full border border-cyan-200/40 bg-gradient-to-r from-[#1B3C6B] to-[#206A86] px-3 py-1.5 text-xs font-semibold text-cyan-50 transition-all hover:border-cyan-100 hover:from-cyan-300 hover:to-cyan-400 hover:text-[#0B1F3A]"
               >
                 {prompt.label}
               </button>
