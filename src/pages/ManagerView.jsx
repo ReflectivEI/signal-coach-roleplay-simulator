@@ -1604,25 +1604,19 @@ export default function ManagerView() {
         <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-5">
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Rep Name</p>
-            <input
-              list="manager-rep-options"
-              value={repFilterId === "all" ? "All Reps" : reps.find((rep) => rep.id === repFilterId)?.name || "All Reps"}
-              onChange={(event) => {
-                const value = event.target.value.trim();
-                if (!value || value.toLowerCase() === "all reps") {
-                  setRepFilterId("all");
-                  return;
-                }
-                const matchedRep = reps.find((rep) => rep.name.toLowerCase() === value.toLowerCase());
-                if (matchedRep) setRepFilterId(matchedRep.id);
-              }}
-              className="h-10 w-full rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-teal-400 focus:outline-none"
-              placeholder="Search rep"
-            />
-            <datalist id="manager-rep-options">
-              <option value="All Reps" />
-              {reps.map((rep) => <option key={rep.id} value={rep.name} />)}
-            </datalist>
+            <Select value={repFilterId} onValueChange={setRepFilterId}>
+              <SelectTrigger className="h-10 rounded-full text-sm">
+                <SelectValue placeholder="All Reps" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reps</SelectItem>
+                {reps.map((rep) => (
+                  <SelectItem key={rep.id} value={rep.id}>
+                    {rep.name} · {rep.territory}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Time Range</p>
