@@ -175,6 +175,102 @@ const OPERATIONAL_CONSTRAINT_PATTERNS = {
   screening: REALISM_CONCERN_PATTERNS.screening,
   evidence: REALISM_CONCERN_PATTERNS.evidence,
 };
+const CONSTRAINT_REVISIT_SIGNAL = /\b(still|again|revisit|changed|change|clarify|clarification|update|until|before|unless|if|as long as|provided|depends)\b/i;
+
+function detectOperationalConstraintTypes(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return [];
+  return Object.entries(OPERATIONAL_CONSTRAINT_PATTERNS)
+    .filter(([, pattern]) => pattern.test(value))
+    .map(([type]) => type);
+}
+
+function buildConstraintGroundingMap({ scenario = {}, prevTurns = [], repMessage = "", hcpDraft = "" } = {}) {
+  const scenarioText = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.opening_scene,
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.goal,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+  ].join(" ");
+  const priorDialogueText = (Array.isArray(prevTurns) ? prevTurns : [])
+    .flatMap((turn) => [turn?.repMessage, turn?.hcpDialogueBefore])
+    .filter(Boolean)
+    .join(" ");
+  const groundingCorpus = `${scenarioText} ${priorDialogueText} ${repMessage}`.trim();
+  const mentionCorpus = `${priorDialogueText} ${hcpDraft}`.trim();
+
+  const map = {};
+  Object.entries(OPERATIONAL_CONSTRAINT_PATTERNS).forEach(([type, pattern]) => {
+    map[type] = {
+      grounded: pattern.test(groundingCorpus),
+      mentionedPreviously: pattern.test(mentionCorpus),
+    };
+  });
+  return map;
+}
+
+function enforceGlobalConstraintGuardrail({
+  draft = "",
+  scenario,
+  prevTurns = [],
+  repMessage = "",
+} = {}) {
+  const original = String(draft || "").trim();
+  if (!original) {
+    return { draft: original, invalid: false, reasons: [], regenerated: false };
+  }
+
+  const mentionedTypes = detectOperationalConstraintTypes(original);
+  if (mentionedTypes.length === 0) {
+    return { draft: original, invalid: false, reasons: [], regenerated: false };
+  }
+
+  const groundingMap = buildConstraintGroundingMap({
+    scenario,
+    prevTurns,
+    repMessage,
+    hcpDraft: "",
+  });
+  const hasRevisitSignal = CONSTRAINT_REVISIT_SIGNAL.test(original);
+  const violations = [];
+
+  mentionedTypes.forEach((type) => {
+    const groundState = groundingMap[type] || { grounded: false, mentionedPreviously: false };
+    if (!groundState.grounded) {
+      violations.push(`ungrounded:${type}`);
+      return;
+    }
+    if (groundState.mentionedPreviously && !hasRevisitSignal) {
+      violations.push(`duplicate:${type}`);
+    }
+  });
+
+  if (violations.length === 0) {
+    return { draft: original, invalid: false, reasons: [], regenerated: false };
+  }
+
+  let rewritten = original;
+  const opening = getOpeningSentence(rewritten);
+  if (opening && /\bgiven\b/i.test(opening)) {
+    rewritten = rewritten.replace(opening, "").trim();
+  }
+  rewritten = rewritten
+    .replace(/\b(workflow|operational|staffing|capacity|prior auth|authorization|time pressure|policy|protocol|screening|evidence threshold)\b/gi, "this")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  rewritten = hardenTextSurface(rewritten || "Can you connect this directly to one practical next step for this setting?");
+
+  return {
+    draft: rewritten,
+    invalid: true,
+    reasons: violations,
+    regenerated: rewritten !== original,
+  };
+}
 
 function readDebugFlag(flagKey) {
   if (typeof window === "undefined") return false;
@@ -3195,11 +3291,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         normalizedActiveConstraints,
       );
     }
+
+    const hardConstraintResult = enforceGlobalConstraintGuardrail({
+      draft: nextHcpDialogue,
+      scenario,
+      prevTurns,
+      repMessage,
+    });
+    if (hardConstraintResult.invalid) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = hardConstraintResult.draft;
+    }
+
     const plannerGapComparison = {
       transcriptConstraintPresent,
       plannerStateConstraintPresent: normalizedActiveConstraints.length > 0,
       selectedObjectiveAccountsForConstraint,
       finalAnswerReflectsConstraint,
+      hardConstraintInvalidDraft: hardConstraintResult.invalid,
+      hardConstraintRejectionReasons: hardConstraintResult.reasons,
     };
     emitPlannerTrace("final_response_generated", {
       turnNumber: nextTurnNumber,
@@ -3222,10 +3332,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         getOpeningSentence(draftResponseBeforePostProcessing) !== finalOpening,
       guardrailApplied:
         guardrailShouldApply && !openingAcknowledgesConstraintBeforeGuardrail && openingAcknowledgesConstraint,
+      hardConstraintResult,
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
     });
+    const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
+    const previouslyVerbalizedOperationalConstraintTypes = [
+      ...new Set(
+        prevTurns.flatMap((turn) => Array.isArray(turn?.verbalizedOperationalConstraintTypes)
+          ? turn.verbalizedOperationalConstraintTypes
+          : detectOperationalConstraintTypes(turn?.hcpDialogueBefore || ""))
+      ),
+    ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
+    nextTurn.verbalizedOperationalConstraintTypes = verbalizedOperationalConstraintTypes;
+    nextTurn.previouslyVerbalizedOperationalConstraintTypes = previouslyVerbalizedOperationalConstraintTypes;
     nextTurn.plannerGapComparison = plannerGapComparison;
 
     const shouldEndSessionAfterTurn = overrideExit || (
