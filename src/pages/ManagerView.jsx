@@ -246,6 +246,36 @@ const ENTERPRISE_SUBCARD_WHITE = "min-w-0 rounded-xl border border-slate-200 bg-
 const METRIC_PILL_CLASSNAME = "mx-auto inline-flex max-w-full items-center justify-center gap-1 rounded-full border border-[#1A334D] bg-white px-2.5 py-1 text-center text-[11px] font-semibold text-[#1A334D] transition-colors hover:border-[#39ACAC] hover:bg-[#39ACAC] hover:text-white";
 const MANAGER_TAB_TRIGGER_CLASSNAME = "flex items-center gap-1.5 rounded-full border border-[#1A334D] bg-white px-4 py-2 text-sm font-semibold text-[#1A334D] transition-all hover:border-[#39ACAC] hover:bg-[#e6f7f7] hover:text-[#39ACAC] data-[state=active]:border-[#1A334D] data-[state=active]:bg-[#39ACAC] data-[state=active]:text-white";
 
+const TIME_RANGE_OPTIONS = [
+  { value: "this_week", label: "This Week" },
+  { value: "last_2_weeks", label: "Last 2 Weeks" },
+  { value: "this_month", label: "This Month" },
+  { value: "quarter_to_date", label: "Quarter to Date" },
+  { value: "custom", label: "Custom" },
+];
+
+const INSIGHT_FOCUS_OPTIONS = [
+  { value: "performance", label: "Performance" },
+  { value: "pipeline_health", label: "Pipeline Health" },
+  { value: "risk_signals", label: "Risk Signals" },
+  { value: "forecast_confidence", label: "Forecast Confidence" },
+  { value: "coaching_priorities", label: "Coaching Priorities" },
+];
+
+const DETAIL_LEVEL_OPTIONS = [
+  { value: "quick_summary", label: "Quick Summary" },
+  { value: "balanced", label: "Balanced" },
+  { value: "deep_dive", label: "Deep Dive" },
+];
+
+const SEGMENT_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "territory", label: "Territory" },
+  { value: "deal_stage", label: "Deal Stage" },
+  { value: "lead_source", label: "Lead Source" },
+  { value: "product_line", label: "Product Line" },
+];
+
 const MANAGER_VIEW_FOUNDATION = [
   {
     label: "Canonical Signal Intelligence capabilities",
@@ -918,6 +948,63 @@ function ContributorDialog({ territory, contributors, territoryExplanations, onS
   );
 }
 
+function formatFilterLabel(options, value, fallback = "All") {
+  return options.find((option) => option.value === value)?.label || fallback;
+}
+
+function buildManagerRecap({ selectedRep, filteredReps, calibratedDerivedByRepId, viewState, insightFocus }) {
+  const focusReps = filteredReps.length ? filteredReps : viewState.reps;
+  if (!focusReps.length) {
+    return {
+      highlights: ["No reps currently match the selected filters."],
+      actions: ["Adjust filters or select All Reps to restore the deterministic recap."],
+    };
+  }
+
+  const avgScore = (focusReps.reduce((sum, rep) => sum + rep.overallScore, 0) / focusReps.length).toFixed(2);
+  const needsAttention = focusReps.filter((rep) => rep.status !== "active").length;
+  const topRep = [...focusReps].sort((a, b) => b.overallScore - a.overallScore)[0];
+  const riskOrdered = [...focusReps]
+    .sort((a, b) => (calibratedDerivedByRepId[b.id]?.salesRiskScore || 0) - (calibratedDerivedByRepId[a.id]?.salesRiskScore || 0))
+    .slice(0, 2);
+  const primaryGap = viewState.nationalTerritory?.mostCommonCapabilityGap
+    ? getBehavioralMetricLabel(viewState.nationalTerritory.mostCommonCapabilityGap)
+    : "No dominant capability gap";
+
+  if (selectedRep) {
+    const derived = calibratedDerivedByRepId[selectedRep.id] || {};
+    const strongest = selectedRep.behavioralMetrics[selectedRep.strongestCapability];
+    const weakest = selectedRep.behavioralMetrics[selectedRep.improvementPriority];
+    return {
+      highlights: [
+        `${selectedRep.name} is currently ${selectedRep.overallScore}/5 overall with ${selectedRep.sessionsCompleted30d} sessions in the last 30 days.`,
+        `Strongest capability is ${getBehavioralMetricLabel(selectedRep.strongestCapability)} (${strongest?.score || "N/A"}/5, ${strongest?.trend || "flat"} trend).`,
+        `Primary risk signal is ${getBehavioralMetricLabel(selectedRep.improvementPriority)} (${weakest?.score || "N/A"}/5, ${weakest?.trend || "flat"} trend).`,
+        `Sales risk is ${derived.salesRiskScore || 0}/100 with predictive confidence ${derived.predictiveConfidence || 0}/100.`,
+        `Readiness is ${derived.readinessScore || 0}/100 and conversion proxy is ${derived.conversionProxyScore || 0}/100.`,
+      ],
+      actions: [
+        `Prioritize a coaching sequence for ${getBehavioralMetricLabel(selectedRep.improvementPriority)} and re-check deterministic deltas next cycle.`,
+        `Use Ask AI to pressure-test a one-week intervention plan focused on ${insightFocus}.`,
+      ],
+    };
+  }
+
+  return {
+    highlights: [
+      `${focusReps.length} reps are in scope with a team average of ${avgScore}/5 for the selected view.`,
+      `${needsAttention} reps are currently flagged as needs-attention or inactive by deterministic status rules.`,
+      `${topRep.name} is the strongest current performer at ${topRep.overallScore}/5.`,
+      `Highest risk reps are ${riskOrdered.map((rep) => `${rep.name} (${calibratedDerivedByRepId[rep.id]?.salesRiskScore || 0}/100 risk)`).join(" and ")}.`,
+      `Most common capability gap across the current deterministic aggregate is ${primaryGap}.`,
+    ],
+    actions: [
+      `Coach the top two risk reps first, then monitor movement on ${primaryGap} before reassigning priorities.`,
+      `Use Ask AI for a 30-second recap and a targeted weekly plan based on ${insightFocus}.`,
+    ],
+  };
+}
+
 export default function ManagerView() {
   const [activeTab, setActiveTab] = useState("reps");
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
@@ -949,6 +1036,12 @@ export default function ManagerView() {
   const [validationError, setValidationError] = useState("");
   const [validationStartBusy, setValidationStartBusy] = useState(false);
   const [validationFollowUpId, setValidationFollowUpId] = useState(null);
+  const [repFilterId, setRepFilterId] = useState("all");
+  const [timeRangeFilter, setTimeRangeFilter] = useState("this_month");
+  const [insightFocusFilter, setInsightFocusFilter] = useState("coaching_priorities");
+  const [detailLevelFilter, setDetailLevelFilter] = useState("quick_summary");
+  const [segmentFilter, setSegmentFilter] = useState("all");
+  const [quickAskPrompt, setQuickAskPrompt] = useState(null);
 
   const reps = viewState.reps;
   const selectedRep = useMemo(() => reps.find((rep) => rep.id === selectedRepId) ?? null, [reps, selectedRepId]);
@@ -986,6 +1079,17 @@ export default function ManagerView() {
       setSelectedRepId(null);
     }
   }, [reps, selectedRepId]);
+
+  useEffect(() => {
+    if (repFilterId === "all") {
+      setSelectedRepId(null);
+      return;
+    }
+    if (reps.some((rep) => rep.id === repFilterId)) {
+      setSelectedRepId(repFilterId);
+      if (activeTab !== "reps") setActiveTab("reps");
+    }
+  }, [activeTab, repFilterId, reps]);
 
   useEffect(() => {
     if (!selectedRepId) {
@@ -1216,6 +1320,33 @@ export default function ManagerView() {
   const selectedRepInsightsData = selectedRep ? buildManagerInsightsRequest(selectedRep, selectedTerritoryData, calibratedDerivedByRepId[selectedRep.id]) : null;
   const territoryInsightsData = buildManagerInsightsRequest(null, viewState.nationalTerritory);
   const managerMetricsPayload = selectedRepInsightsData || territoryInsightsData;
+  const selectedInsightFocusLabel = formatFilterLabel(INSIGHT_FOCUS_OPTIONS, insightFocusFilter, "Coaching Priorities");
+  const selectedTimeRangeLabel = formatFilterLabel(TIME_RANGE_OPTIONS, timeRangeFilter, "This Month");
+  const selectedDetailLevelLabel = formatFilterLabel(DETAIL_LEVEL_OPTIONS, detailLevelFilter, "Quick Summary");
+  const selectedSegmentLabel = formatFilterLabel(SEGMENT_OPTIONS, segmentFilter, "All");
+  const filteredReps = useMemo(
+    () => (repFilterId === "all" ? reps : reps.filter((rep) => rep.id === repFilterId)),
+    [repFilterId, reps],
+  );
+  const managerRecap = useMemo(
+    () => buildManagerRecap({
+      selectedRep,
+      filteredReps,
+      calibratedDerivedByRepId,
+      viewState,
+      insightFocus: selectedInsightFocusLabel,
+    }),
+    [selectedRep, filteredReps, calibratedDerivedByRepId, viewState, selectedInsightFocusLabel],
+  );
+  const quickPrompts = useMemo(() => {
+    const repLabel = selectedRep?.name || "this team";
+    return [
+      { label: "Give me the 30-second recap", text: `Give me a 30-second recap for ${repLabel} focused on ${selectedInsightFocusLabel}.` },
+      { label: "Why are these the top risks?", text: `Why are these the top deterministic risks for ${repLabel} in ${selectedTimeRangeLabel}?` },
+      { label: "What should I do this week?", text: `What should I do this week for ${repLabel} based on the current manager recap?` },
+      { label: "Show coaching plan for this rep", text: `Show a practical coaching plan for ${repLabel} with next steps and what to monitor.` },
+    ];
+  }, [selectedRep?.name, selectedInsightFocusLabel, selectedTimeRangeLabel]);
 
   const territoryRadarData = BEHAVIORAL_METRIC_KEYS.map((key) => ({
     capability: getBehavioralMetricLabel(key),
@@ -1468,6 +1599,138 @@ export default function ManagerView() {
         </div>
       </div>
 
+      <div className="mb-8 rounded-3xl border border-teal-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Select who/when/what to analyze</p>
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-5">
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Rep Name</p>
+            <input
+              list="manager-rep-options"
+              value={repFilterId === "all" ? "All Reps" : reps.find((rep) => rep.id === repFilterId)?.name || "All Reps"}
+              onChange={(event) => {
+                const value = event.target.value.trim();
+                if (!value || value.toLowerCase() === "all reps") {
+                  setRepFilterId("all");
+                  return;
+                }
+                const matchedRep = reps.find((rep) => rep.name.toLowerCase() === value.toLowerCase());
+                if (matchedRep) setRepFilterId(matchedRep.id);
+              }}
+              className="h-10 w-full rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-800 focus:border-teal-400 focus:outline-none"
+              placeholder="Search rep"
+            />
+            <datalist id="manager-rep-options">
+              <option value="All Reps" />
+              {reps.map((rep) => <option key={rep.id} value={rep.name} />)}
+            </datalist>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Time Range</p>
+            <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
+              <SelectTrigger className="h-10 rounded-full text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_RANGE_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Insight Focus</p>
+            <Select value={insightFocusFilter} onValueChange={setInsightFocusFilter}>
+              <SelectTrigger className="h-10 rounded-full text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INSIGHT_FOCUS_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Detail Level</p>
+            <Select value={detailLevelFilter} onValueChange={setDetailLevelFilter}>
+              <SelectTrigger className="h-10 rounded-full text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DETAIL_LEVEL_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-700">Segment / Context</p>
+            <Select value={segmentFilter} onValueChange={setSegmentFilter}>
+              <SelectTrigger className="h-10 rounded-full text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SEGMENT_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-600">
+          Manager View remains deterministic-first; this filter bar scopes what is displayed without changing underlying risk, mapping, and predictive logic.
+        </p>
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <div className="rounded-3xl border border-teal-200 bg-gradient-to-br from-white to-teal-50 p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-700">Manager Recap</p>
+          <p className="mt-2 text-sm text-slate-700">
+            Based on {repFilterId === "all" ? "All Reps" : selectedRep?.name || "selected rep"} · {selectedTimeRangeLabel} · {selectedInsightFocusLabel}
+          </p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Predictive highlights</p>
+              <ul className="mt-2 space-y-2 text-sm text-slate-700">
+                {managerRecap.highlights.slice(0, 6).map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-teal-500" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Do this next</p>
+              <ul className="mt-2 space-y-2 text-sm text-teal-900">
+                {managerRecap.actions.slice(0, 2).map((item) => (
+                  <li key={item} className="flex gap-2">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-teal-700" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-700">Ask AI</p>
+          <p className="mt-1 text-sm text-slate-700">High-level explanation and next-best actions.</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {quickPrompts.map((prompt) => (
+              <button
+                key={prompt.label}
+                type="button"
+                onClick={() => setQuickAskPrompt({
+                  id: Date.now(),
+                  text: prompt.text,
+                  contextLabel: `${selectedInsightFocusLabel} · ${selectedTimeRangeLabel}`,
+                })}
+                className="rounded-full border border-[#1A334D] bg-white px-3 py-1.5 text-xs font-semibold text-[#1A334D] transition-colors hover:border-teal-500 hover:bg-teal-50 hover:text-teal-700"
+              >
+                {prompt.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-600">
+            Current context: {selectedDetailLevelLabel} view · {selectedSegmentLabel} segment.
+          </p>
+        </div>
+      </div>
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="sticky top-[4.75rem] z-20 mb-6 flex h-auto w-full flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
           <TabsTrigger value="reps" className={MANAGER_TAB_TRIGGER_CLASSNAME}><Users className="h-3.5 w-3.5" /> Rep Overview</TabsTrigger>
@@ -1479,6 +1742,28 @@ export default function ManagerView() {
 
         <TabsContent value="reps">
           <div className="space-y-6">
+            {detailLevelFilter === "balanced" ? (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Filtered reps</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">{filteredReps.length}</p>
+                  <p className="text-xs text-slate-600">In current scope</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Average score</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">
+                    {(filteredReps.length ? (filteredReps.reduce((sum, rep) => sum + rep.overallScore, 0) / filteredReps.length) : 0).toFixed(2)}/5
+                  </p>
+                  <p className="text-xs text-slate-600">Deterministic aggregate</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-700">Needs attention</p>
+                  <p className="mt-2 text-2xl font-bold text-slate-900">{filteredReps.filter((rep) => rep.status !== "active").length}</p>
+                  <p className="text-xs text-slate-600">Status-based flags</p>
+                </div>
+              </div>
+            ) : null}
+
             <div className={`${ENTERPRISE_PARENT_CARD} overflow-hidden rounded-xl`}>
               <div className="border-b border-gray-100 px-5 py-4">
                 <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
@@ -1500,6 +1785,15 @@ export default function ManagerView() {
                 </div>
               </div>
 
+              {detailLevelFilter === "quick_summary" ? (
+                <div className="p-5">
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+                    Quick Summary mode is active. Use <span className="font-semibold">Balanced</span> or <span className="font-semibold">Deep Dive</span> to open supporting tables and rep-level diagnostic detail.
+                  </div>
+                </div>
+              ) : null}
+
+              {detailLevelFilter !== "quick_summary" ? (
               <div className="hidden overflow-x-auto 2xl:block">
                 <table className="min-w-[1360px] w-full table-fixed text-sm">
                   <colgroup>
@@ -1527,7 +1821,7 @@ export default function ManagerView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reps.map((rep) => (
+                    {filteredReps.map((rep) => (
                       <RepRow
                         key={rep.id}
                         rep={rep}
@@ -1561,9 +1855,11 @@ export default function ManagerView() {
                   </tbody>
                 </table>
               </div>
+              ) : null}
 
+              {detailLevelFilter !== "quick_summary" ? (
               <div className="space-y-4 p-4 2xl:hidden">
-                {reps.map((rep) => (
+                {filteredReps.map((rep) => (
                   <RepMobileCard
                     key={rep.id}
                     rep={rep}
@@ -1588,6 +1884,15 @@ export default function ManagerView() {
                   />
                 ))}
               </div>
+              ) : null}
+            </div>
+
+            <div className="manager-insights-container">
+              <ManagerInsightsPanelExpanded
+                key={`guided-panel-${selectedRep?.id || "team"}-${timeRangeFilter}-${insightFocusFilter}-${detailLevelFilter}-${segmentFilter}`}
+                data={managerMetricsPayload}
+                queuedPrompt={quickAskPrompt}
+              />
             </div>
           </div>
         </TabsContent>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
 import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
@@ -17,6 +17,11 @@ const CONTEXT_CHIPS = [
 
 type ManagerInsightsPanelExpandedProps = {
   data: ManagerInsightsRequest;
+  queuedPrompt?: {
+    text: string;
+    contextLabel?: string;
+    id: number;
+  } | null;
 };
 
 type InsightFilter = (typeof FILTERS)[number];
@@ -188,7 +193,7 @@ function ensureDirectAnswer(answer: string, _question: string) {
   return cleanedAnswer;
 }
 
-export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPanelExpandedProps) {
+export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null }: ManagerInsightsPanelExpandedProps) {
   const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsUnavailable, setInsightsUnavailable] = useState(false);
@@ -259,7 +264,7 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
     setSelectedChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip]);
   };
 
-  const queueFollowUp = (prompt: string, contextLabel = "Current recommendation") => {
+  const queueFollowUp = useCallback((prompt: string, contextLabel = "Current recommendation") => {
     setInput(prompt);
     setAskAiContext(contextLabel);
     setTimeout(() => {
@@ -268,7 +273,12 @@ export default function ManagerInsightsPanelExpanded({ data }: ManagerInsightsPa
       const valueLength = inputRef.current?.value.length ?? 0;
       inputRef.current?.setSelectionRange(valueLength, valueLength);
     }, 0);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!queuedPrompt?.text) return;
+    queueFollowUp(queuedPrompt.text, queuedPrompt.contextLabel || "Current recommendation");
+  }, [queueFollowUp, queuedPrompt?.id, queuedPrompt?.text, queuedPrompt?.contextLabel]);
 
   const handleSubmit = async () => {
     if (!input.trim() || !requestBody) return;
