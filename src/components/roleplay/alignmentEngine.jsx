@@ -749,7 +749,7 @@ function computeAlignmentRubric(hcpState, p) {
  * @param {string} prevHcpState - Previous turn's state (for adaptive scoring)
  * @returns alignment object
  */
-export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
+export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null, obligationContext = null) {
   const p = detectPatterns(repMessage);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
@@ -829,6 +829,15 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   });
   allMisalignments.push(...rubricMisalignments);
 
+  const hardObligationFields = {
+    direct_question_satisfied: obligationContext?.direct_question_satisfied ?? null,
+    objection_resolved_this_turn: obligationContext?.objection_resolved_this_turn ?? null,
+    closure_correctness: obligationContext?.closure_correctness ?? null,
+    mode_match: obligationContext?.mode_match ?? null,
+    asked_before_answering: obligationContext?.asked_before_answering ?? p.hasQuestion,
+    unresolved_high_priority_obligation_remaining: obligationContext?.unresolved_high_priority_obligation_remaining ?? null,
+  };
+
   return {
     score: overallScore,
     metrics: metricResults,
@@ -837,6 +846,7 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     positives: [...new Set(allPositives)],
     misalignments: [...new Set(allMisalignments)],
     rubricAlignmentFlags: rubricMisalignments,
+    hardObligationFields,
     guardrail: 'Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, emotion, or personality.',
   };
 }
