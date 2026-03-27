@@ -16,7 +16,7 @@ const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidenc
 
 // ...existing code...
 
-const ALL_SCENARIOS = [
+export const ALL_SCENARIOS = [
   // ── HIV / PrEP ─────────────────────────────────────────────────────────────
   {
     id: "hiv_im_prep_lowshare",
@@ -413,7 +413,7 @@ const ALL_SCENARIOS = [
  * library available in-system for broader validation and expansion.
  * Grouping key: HCP profile, challenge, disease state, HCP type, influence driver.
  */
-const DEMO_SCENARIO_GROUPS = [
+export const DEMO_SCENARIO_GROUPS = [
   { scenarioId: "hiv_im_prep_lowshare", hcpProfile: "Time-pressed IM prescriber", challenge: "PrEP under-identification", diseaseState: "HIV / PrEP", hcpType: "Prescriber / Treater", influenceDriver: "Patient-Centered" },
   { scenarioId: "hiv_pa_treat_switch_slowdown", hcpProfile: "Academic HIV KOL", challenge: "Optimization inertia", diseaseState: "HIV / PrEP", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
   { scenarioId: "onc_md_io_adc_pathways", hcpProfile: "Pathway-governed tumor center lead", challenge: "Cost and operational scrutiny", diseaseState: "Oncology", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
@@ -426,9 +426,9 @@ const DEMO_SCENARIO_GROUPS = [
   { scenarioId: "rare-diagnosis", hcpProfile: "Academic diagnostics specialist", challenge: "Rare disease under-recognition", diseaseState: "Rare Disease", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
 ];
 
-const DEMO_SCENARIO_ORDER = DEMO_SCENARIO_GROUPS.map((group) => group.scenarioId);
+export const DEMO_SCENARIO_ORDER = DEMO_SCENARIO_GROUPS.map((group) => group.scenarioId);
 const DEMO_SCENARIO_SET = new Set(DEMO_SCENARIO_ORDER);
-const DEMO_SCENARIOS = DEMO_SCENARIO_ORDER
+export const DEMO_SCENARIOS = DEMO_SCENARIO_ORDER
   .map((id) => ALL_SCENARIOS.find((scenario) => scenario.id === id))
   .filter(Boolean);
 
