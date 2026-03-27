@@ -158,6 +158,50 @@ function avg(...scores) {
 }
 function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v))); }
 
+function collectContentTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !["what", "when", "where", "which", "would", "could", "should", "their", "there", "this", "that", "with", "from", "into", "about", "your", "patients", "patient"].includes(token));
+}
+
+function detectQuestionDemand(hcpText = "") {
+  const text = String(hcpText || "").toLowerCase();
+  if (!text) {
+    return { isDirectQuestion: false, requiresMetric: false, requiresThreshold: false, keyTokens: [] };
+  }
+
+  const isDirectQuestion = text.includes("?") || /^(what|how|which|when|where|can|could|would|should|is|are)\b/.test(text.trim());
+  const requiresMetric = /\b(metric|monitor|specific|concrete|actionable|quickest way|test|justify|scaling|scale|worth scaling)\b/.test(text);
+  const requiresThreshold = /\b(threshold|target|cutoff|cut-off|4 weeks|4-6|weeks|months|percent|%)\b/.test(text);
+
+  return {
+    isDirectQuestion,
+    requiresMetric,
+    requiresThreshold,
+    keyTokens: collectContentTokens(text).slice(0, 12),
+  };
+}
+
+function repAddressesQuestionDemand(repMessage = "", demand = {}) {
+  const rep = String(repMessage || "").toLowerCase();
+  const repTokens = new Set(collectContentTokens(rep));
+  const lexicalOverlap = (demand.keyTokens || []).filter((token) => repTokens.has(token)).length;
+  const hasNumericAnchor = /\b\d+(\.\d+)?\b|%|copies\/?ml|weeks?|months?|<|>|≤|≥/.test(rep);
+  const hasMetricAnchor = /\b(metric|monitor|threshold|target|baseline|follow-?up|endpoint|measure|measurable|rate|trend)\b/.test(rep);
+
+  return {
+    lexicalOverlap,
+    hasNumericAnchor,
+    hasMetricAnchor,
+    directlyAddresses:
+      (!demand.requiresMetric || hasMetricAnchor || lexicalOverlap >= 1)
+      && (!demand.requiresThreshold || hasNumericAnchor),
+  };
+}
+
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
 function scoreSignalAwareness(hcpState, temperature, p) {
   const positives = [];
@@ -749,8 +793,11 @@ function computeAlignmentRubric(hcpState, p) {
  * @param {string} prevHcpState - Previous turn's state (for adaptive scoring)
  * @returns alignment object
  */
-export function computeAlignment(hcpState, repMessage, _unused, temperature = 'neutral', prevHcpState = null) {
+export function computeAlignment(hcpState, repMessage, context = null, temperature = 'neutral', prevHcpState = null) {
   const p = detectPatterns(repMessage);
+  const promptContext = typeof context === "string" ? context : (context?.hcpUtterance || context?.latestHcpUtterance || "");
+  const questionDemand = detectQuestionDemand(promptContext);
+  const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
   let repeatedMisalignment = false;
@@ -796,6 +843,28 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
     commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
   };
 
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 2);
+    metricResults.signal_interpretation.subScores.responsiveness_of_action = clamp(
+      metricResults.signal_interpretation.subScores.responsiveness_of_action - 2
+    );
+    metricResults.signal_interpretation.misalignments.push('Direct HCP question was not answered in the response.');
+
+    metricResults.value_connection.score = clamp(metricResults.value_connection.score - 1);
+    metricResults.value_connection.subScores.outcome_translation = clamp(
+      metricResults.value_connection.subScores.outcome_translation - 1
+    );
+    metricResults.value_connection.misalignments.push('Response did not translate to the specific decision signal the HCP asked for.');
+
+    if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
+      metricResults.conversation_management.score = clamp(metricResults.conversation_management.score - 1);
+      metricResults.conversation_management.subScores.directional_clarity = clamp(
+        metricResults.conversation_management.subScores.directional_clarity - 1
+      );
+      metricResults.conversation_management.misalignments.push('Threshold-oriented question lacked a concrete threshold in the reply.');
+    }
+  }
+
   const globalMisalignments = [];
   let universalPenalty = 0;
   if (p.isAggressive) {
@@ -809,6 +878,14 @@ export function computeAlignment(hcpState, repMessage, _unused, temperature = 'n
   if (p.isDismissive) {
     universalPenalty -= 1;
     globalMisalignments.push('Dismissive language used — ignores HCP signal across all dimensions');
+  }
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Rep did not directly answer the HCP question prompt.');
+    if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
+      universalPenalty -= 1;
+      globalMisalignments.push('HCP requested a threshold/metric and the reply lacked concrete measurable criteria.');
+    }
   }
   if (repeatedMisalignment) {
     universalPenalty -= 2;

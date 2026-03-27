@@ -185,7 +185,13 @@ function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
   if (!Array.isArray(turns) || turns.length === 0) return [];
   return turns
     .slice(-Math.max(1, recentWindow))
-    .flatMap((turn) => extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || ""));
+    .flatMap((turn) => {
+      const sourceTurnNumber = Number.isFinite(turn?.turnNumber) ? turn.turnNumber : 0;
+      return extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || "").map((candidate) => ({
+        ...candidate,
+        constraintSourceTurn: sourceTurnNumber,
+      }));
+    });
 }
 
 function normalizeConstraintPriority(type = "") {
@@ -218,6 +224,38 @@ function inferConstraintResolvedInTurn(text = "") {
   const resolvedSignal = /\b(resolved|fixed|handled|already covered|no longer an issue|not a blocker anymore|closed out|we addressed)\b/.test(value);
   if (!resolvedSignal) return [];
   return detectOperationalConstraintTypes(value);
+}
+
+function normalizeConstraintSnippet(snippet = "") {
+  return String(snippet || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeConstraintCandidates(candidates = []) {
+  const merged = [];
+  const seen = new Set();
+  (Array.isArray(candidates) ? candidates : []).forEach((candidate) => {
+    const type = candidate?.constraintType || candidate?.type;
+    if (!type) return;
+    const snippet = normalizeConstraintSnippet(candidate?.snippet || "");
+    const sourceTurnNumber = Number.isFinite(candidate?.constraintSourceTurn)
+      ? candidate.constraintSourceTurn
+      : Number.isFinite(candidate?.sourceTurnNumber)
+        ? candidate.sourceTurnNumber
+        : 0;
+    const key = `${type}::${sourceTurnNumber}::${snippet}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push({
+      ...candidate,
+      constraintType: type,
+      snippet: candidate?.snippet || "",
+      constraintSourceTurn: sourceTurnNumber,
+    });
+  });
+  return merged;
 }
 
 function buildOperationalConstraintState({
@@ -254,14 +292,29 @@ function buildOperationalConstraintState({
   rawCandidates.forEach((candidate) => {
     const type = candidate?.constraintType || candidate?.type;
     if (!type) return;
+    const candidateSnippet = normalizeConstraintSnippet(candidate?.snippet || "");
+    const candidateSourceTurn = Number.isFinite(candidate?.constraintSourceTurn)
+      ? candidate.constraintSourceTurn
+      : Number.isFinite(candidate?.sourceTurnNumber)
+        ? candidate.sourceTurnNumber
+        : sourceTurnNumber;
     const priorConstraint = stateByType.get(type);
+    const priorSnippet = normalizeConstraintSnippet(priorConstraint?.snippet || "");
+    if (
+      priorConstraint
+      && priorConstraint.constraintStatus === "active"
+      && priorSnippet
+      && priorSnippet === candidateSnippet
+    ) {
+      return;
+    }
     if (priorConstraint && priorConstraint.constraintStatus === "active") {
       stateByType.set(type, { ...priorConstraint, constraintStatus: "superseded" });
     }
     stateByType.set(type, {
       constraintType: type,
       constraintStatus: "active",
-      constraintSourceTurn: sourceTurnNumber,
+      constraintSourceTurn: candidateSourceTurn,
       snippet: candidate?.snippet || "",
     });
   });
@@ -2137,7 +2190,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const isPleasantryOnly = greetingSignals.test(repLower) && !businessSignals.test(repLower);
     const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
 
-    let alignment = computeAlignment(prevState, repMessage, null, prevTemp, prevHcpState);
+    let alignment = computeAlignment(
+      prevState,
+      repMessage,
+      { hcpUtterance: respondingToTurn?.hcpDialogueBefore || "" },
+      prevTemp,
+      prevHcpState
+    );
     if (inPleasantryGracePeriod) {
       const normalizedMetrics = Object.fromEntries(
         Object.entries(alignment?.metrics || {}).map(([cap, val]) => [
@@ -2225,10 +2284,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const activeConcern = detectPrimaryConcern(concernSourceText);
     const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
     const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
-    const rawUserConstraintCandidates = [
+    const rawUserConstraintCandidates = mergeConstraintCandidates([
       ...recentUserConstraintCandidates,
       ...currentUserConstraintCandidates,
-    ];
+    ]);
     const scenarioGroundingText = [
       scenario?.title,
       scenario?.description,
