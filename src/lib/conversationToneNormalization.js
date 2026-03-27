@@ -1,24 +1,13 @@
 export function normalizeTone(text) {
   if (text == null) return text;
 
-  let cleaned = String(text);
+  let cleaned = String(text).trim();
+  if (!cleaned) return cleaned;
 
-  cleaned = cleaned.replace(
-    /will give you confidence/gi,
-    "examines prescribing confidence"
-  );
-
-  cleaned = cleaned.replace(
-    /\babsolutely\b[,\s]*/gi,
-    ""
-  );
-
-  cleaned = cleaned.replace(
-    /\bfirst\b[,\s]*/gi,
-    "Before we go further, "
-  );
-
+  // High-fidelity mode: no lexical rewrites; punctuation/casing only.
+  cleaned = cleaned.replace(/\s+([,.;:!?])/g, "$1");
   cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+  cleaned = cleaned.replace(/^([a-z])/, (match, char) => char.toUpperCase());
 
   return cleaned;
 }
