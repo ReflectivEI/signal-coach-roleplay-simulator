@@ -59,14 +59,6 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 import { applyTransformSafetyHarness } from "./transformSafetyHarness";
-import {
-  RESPONSE_MODES,
-  createInitialObligationLedger,
-  updateObligationLedger,
-  buildTurnContractBlock,
-  shouldSuppressCoachingForMode,
-} from "./turnContractController";
-import { runObligationAwareGeneration } from "./roleplayTurnOrchestrator";
 
 function escapeHTML(text) {
   return String(text)
@@ -1701,10 +1693,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
-  const obligationLedgerRef = useRef(createInitialObligationLedger());
-  const obligationDebugEnabledRef = useRef(
-    import.meta.env.DEV || import.meta.env.VITE_ROLEPLAY_OBLIGATION_DEBUG === "true"
-  );
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -1789,7 +1777,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
         repInferenceStateRef.current = createInitialRepInferenceState();
-        obligationLedgerRef.current = createInitialObligationLedger();
 
         // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
@@ -2071,11 +2058,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
-      obligationLedger: obligationLedgerRef.current,
-      activeResponseMode: selectedResponseMode,
-      lastObligationDecision: obligationLedgerRef.current.last_obligation_decision,
-      obligationSatisfactionStatus: obligationLedgerRef.current.obligation_satisfaction_status,
-      obligationValidation,
       generationKey,
     };
 
@@ -2094,32 +2076,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const historyText = flattenTurns(prevTurns)
       .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
       .join("\n");
-
-    const latestCounterpartIntent = detectPrimaryConcern(
-      `${repMessage} ${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""}`
-    );
-    const obligationLedgerBeforeGeneration = updateObligationLedger(
-      obligationLedgerRef.current,
-      repMessage,
-    );
-    obligationLedgerRef.current = obligationLedgerBeforeGeneration;
-    const selectedResponseMode = obligationLedgerBeforeGeneration.active_response_mode || RESPONSE_MODES.PROBE;
-    const suppressCoachingHints = shouldSuppressCoachingForMode(selectedResponseMode);
-    const turnContractBlock = buildTurnContractBlock({
-      ledger: obligationLedgerBeforeGeneration,
-      latestCounterpartIntent,
-      selectedMode: selectedResponseMode,
-      strictness: "base",
-    });
-
-    if (obligationDebugEnabledRef.current) {
-      console.debug("ROLEPLAY_OBLIGATION_LEDGER_BEFORE", {
-        selectedResponseMode,
-        ledger: obligationLedgerBeforeGeneration,
-        coachingSuppressed: suppressCoachingHints,
-      });
-      console.debug("ROLEPLAY_TURN_CONTRACT_BLOCK", turnContractBlock);
-    }
 
     // 6. Generate next HCP dialogue using buildHCPDialoguePrompt — ensures cue/state/dialogue alignment
     const priorHcpDialogueTurns = turns.filter((t) => !!t.hcpDialogueBefore).length;
@@ -2369,64 +2325,65 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
 
     let usedDeterministicFallback = false;
-    let obligationValidation = null;
+    nextHcpDialogue = "";
 
-    const generationResult = await runObligationAwareGeneration({
-      scenario,
-      nextProfile,
-      historyText,
-      isFirstHcpResponse,
-      decayState,
-      activeConcern,
-      suppressCoachingHints,
-      tierGuidance: ENGAGEMENT_TIER_PROMPT_GUIDANCE,
-      tierSentenceMax: ENGAGEMENT_TIER_SENTENCE_MAX,
-      turnContractBlock,
-      selectedResponseMode,
-      obligationLedgerBeforeGeneration,
-      repMessage,
-      forceTerminalDisengagement,
-      terminalCloseFallback,
-      buildFirstTurnScenarioFallback: buildFirstTurnScenarioFallback,
-      buildFollowUpScenarioFallback: buildFollowUpScenarioFallback,
-      latestCounterpartIntent,
-      buildPrompt: buildHCPDialoguePrompt,
-      normalizeGeneratedDialogue: (text) => normalizeHcpDialoguePunctuation(String(text || "").trim()),
-      invokeRoleplayModel: async (prompt) => {
+    try {
+      if (forceTerminalDisengagement) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = terminalCloseFallback;
+      } else {
+        const systemPrompt = buildHCPDialoguePrompt({
+          scenario,
+          hcpProfile: nextProfile,
+          historyText,
+          isOpening: isFirstHcpResponse,
+        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         const res = await fetch('/api/llm/invoke', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            prompt,
+            prompt: systemPrompt,
             max_tokens: 220,
             temperature: 0,
             roleplay: true,
           })
         });
+        if (res.ok) {
+          const data = await res.json();
+          const raw = (data.response || data.text || data.content || '');
+          const rawStr = typeof raw === 'string' ? raw : String(raw);
+          nextHcpDialogue = rawStr.trim().split('\n')[0];
 
-        if (!res.ok) {
-          throw new Error(`Roleplay invoke failed with status ${res.status}`);
+          if (
+            import.meta.env.DEV
+            && rawStr.includes("?")
+            && !nextHcpDialogue.includes("?")
+          ) {
+            console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
+          }
+
+          nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
+
+          if (
+            import.meta.env.DEV
+            && rawStr.includes("?")
+            && !nextHcpDialogue.includes("?")
+          ) {
+            console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
+          }
+        } else {
+          usedDeterministicFallback = true;
+          nextHcpDialogue = isFirstHcpResponse
+            ? buildFirstTurnScenarioFallback()
+            : buildFollowUpScenarioFallback();
         }
-
-        const data = await res.json();
-        return data.response || data.text || data.content || '';
-      },
-      debugEnabled: obligationDebugEnabledRef.current,
-      logger: console,
-    });
-
-    nextHcpDialogue = generationResult.nextHcpDialogue;
-    obligationValidation = generationResult.obligationValidation;
-    obligationLedgerRef.current = generationResult.obligationLedgerAfter;
-    usedDeterministicFallback = generationResult.usedDeterministicFallback;
-
-    if (obligationDebugEnabledRef.current) {
-      console.debug("ROLEPLAY_OBLIGATION_VALIDATION_RESULT", obligationValidation);
-      console.debug("ROLEPLAY_OBLIGATION_LEDGER_AFTER", obligationLedgerRef.current);
-      console.debug("ROLEPLAY_OBLIGATION_RETRY_TRACE", {
-        retryTriggered: generationResult.retryTriggered,
-        attemptCount: generationResult.attemptCount,
-      });
+      }
+    } catch (err) {
+      console.error('HCP dialogue generation error:', err);
+      usedDeterministicFallback = true;
+      nextHcpDialogue = isFirstHcpResponse
+        ? buildFirstTurnScenarioFallback()
+        : buildFollowUpScenarioFallback();
     }
 
     const previousHcpDialogue = String(
@@ -2714,9 +2671,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     // 7. Coaching overlay — driven by alignment rubric flags
-    const coachingResult = suppressCoachingHints
-      ? { shouldShow: false, suppressedByObligationMode: selectedResponseMode }
-      : shouldTriggerCoaching(alignment, prevState, nextHcpState);
+    const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
     if (coachingResult.shouldShow) setCoachingTip(coachingResult);
 
     // 8. Lock next turn with contextual cue (matches dialogue + question quality)
@@ -2742,11 +2697,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
-      obligationLedger: obligationLedgerRef.current,
-      activeResponseMode: selectedResponseMode,
-      lastObligationDecision: obligationLedgerRef.current.last_obligation_decision,
-      obligationSatisfactionStatus: obligationLedgerRef.current.obligation_satisfaction_status,
-      obligationValidation,
       generationKey,
     };
 
@@ -2808,8 +2758,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           repMessage,
           alignment,
           feedback: coachingResult,
-          activeResponseMode: selectedResponseMode,
-          obligationValidation,
         });
       }
 
