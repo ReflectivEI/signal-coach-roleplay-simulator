@@ -110,3 +110,20 @@ test("direct HCP metric/threshold question is penalized when rep answer is non-s
     "threshold question without numeric anchor should reduce conversation management score"
   );
 });
+
+test("overall alignment score stays mathematically aligned to the 8 metric scores", () => {
+  const alignment = computeAlignment(
+    "time-pressured",
+    "Given your time pressure, one practical next step is a 4-week pilot with week-4 viral load check under 200 copies/mL and tolerability review.",
+    { hcpUtterance: "Help me understand the most clinically relevant takeaway for my stable patients." },
+    "neutral",
+    "time-pressured",
+  );
+
+  const metricAverage = Object.values(alignment.metrics)
+    .map((metric) => metric.score)
+    .reduce((sum, score) => sum + score, 0) / EXPECTED_METRIC_KEYS.length;
+  const expected = Math.max(1, Math.min(5, Math.round(metricAverage * 10) / 10));
+
+  assert.equal(alignment.score, expected);
+});
