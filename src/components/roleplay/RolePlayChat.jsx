@@ -689,9 +689,19 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i have patients waiting|this isn't productive|otherwise this may be something to revisit later|i need to get back to patients|one final relevant point)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
+}
+
+function hasStrongTerminalSignal({ dialogue = "", cue = "" } = {}) {
+  const sample = `${dialogue} ${cue}`.toLowerCase();
+  if (!sample.trim()) return false;
+
+  const terminalBodyLanguage = /\b(reaches for the door|turns back toward the patient room|turns fully toward the exit|gathers the chart|checks the time, waiting for one final|waiting for one final relevant point|exchange is over|conversation is over|conversation is ending)\b/;
+  const terminalLanguage = /\b(revisit later|not worth more time|this isn't productive|i need to get back to patients|do you have something specific|otherwise this may be something to revisit later|one final relevant point)\b/;
+
+  return terminalBodyLanguage.test(sample) || terminalLanguage.test(sample);
 }
 
 function hasWorkflowOperationalLanguage(text = "") {
@@ -2380,9 +2390,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
-    const continueProbability = 0.65;
-    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
-    const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    // Deterministic loop-breaker: avoid probabilistic continuation once unresolved concern pressure is high.
+    // Random continuation can create shared "conversation loop" defects across scenarios.
+    const terminalDecisionMode = terminalDecisionTriggerActive;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
@@ -3148,7 +3158,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       explicitExitOverride: overrideExit,
     });
 
-    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+    const terminalSignalDetected = hasStrongTerminalSignal({
+      dialogue: nextHcpDialogue,
+      cue: contextualCue,
+    });
+
+    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue) && !terminalSignalDetected) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
@@ -3256,6 +3271,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ),
     ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
+    nextTurn.terminalSignalDetected = terminalSignalDetected;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
       ...nextTurn.plannerStateSnapshot,
@@ -3266,6 +3282,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const shouldEndSessionAfterTurn = overrideExit || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || terminalSignalDetected
       || terminalPolicyAction === "close"
     );
 
