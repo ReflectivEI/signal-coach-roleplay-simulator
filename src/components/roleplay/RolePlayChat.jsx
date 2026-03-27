@@ -3283,16 +3283,30 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const initialViolation = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    const draftRejectedForConstraintRule = !initialViolation.valid;
+    const enforceConstraintGuardrails = transcriptConstraintPresent || normalizedActiveConstraints.length > 0;
+
+    let initialViolation = {
+      valid: true,
+      ungroundedTypes: [],
+      duplicateTypes: [],
+      draftCandidates: [],
+      draftTypes: [],
+      rejectionReason: null,
+    };
+
+    if (enforceConstraintGuardrails) {
+      initialViolation = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
+      });
+    }
+
+    const draftRejectedForConstraintRule = enforceConstraintGuardrails && !initialViolation.valid;
     if (draftRejectedForConstraintRule) {
       usedDeterministicFallback = true;
       nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
@@ -3300,16 +3314,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         concern: activeConcern,
       });
     }
-    const finalViolationCheck = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    if (!finalViolationCheck.valid) {
+
+    let finalViolationCheck = {
+      valid: true,
+      ungroundedTypes: [],
+      duplicateTypes: [],
+      draftCandidates: [],
+      draftTypes: [],
+      rejectionReason: null,
+    };
+
+    if (enforceConstraintGuardrails) {
+      finalViolationCheck = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
+      });
+    }
+
+    if (enforceConstraintGuardrails && !finalViolationCheck.valid) {
       nextHcpDialogue = buildConstraintViolationFallback({
         concern: activeConcern,
         recentDialogues: collectRecentHcpDialogues(turns, 4),
@@ -3340,6 +3367,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint,
       finalAnswerReflectsConstraint,
       draftRejectedForConstraintRule,
+      enforceConstraintGuardrails,
       draftConstraintRejectionReason: initialViolation.rejectionReason,
       draftUngroundedTypes: initialViolation.ungroundedTypes,
       draftDuplicateTypes: initialViolation.duplicateTypes,
@@ -3355,6 +3383,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       primaryConstraint: objectiveRanking.primaryConstraint,
       directOperationalQuestion: objectiveRanking.directOperationalQuestion,
       selectedObjectiveAccountsForConstraint,
+      enforceConstraintGuardrails,
       draftResponseSource,
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       openingBeforeGuardrail,
