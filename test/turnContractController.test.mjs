@@ -84,5 +84,5 @@ test("validateGeneratedTurnContract catches answer-mode question-only output and
   assert.equal(validation.valid, false);
 
   const repair = buildContractRepairResponse({ responseMode: "answer", activeConcern: "workflow" });
-  assert.match(repair, /pilot step this week/i);
+  assert.match(repair, /practical answer/i);
 });
