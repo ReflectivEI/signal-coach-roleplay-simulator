@@ -1273,7 +1273,7 @@ function buildTerminalDecisionDialogue({ concern = "workflow", seed = "" } = {})
   const pool = byConcern[concern] || byConcern.workflow;
   const baseIndex = deterministicIndex(`${seed}:${concern}:terminal-statement`, pool.length);
   const askIndex = deterministicIndex(`${seed}:${concern}:terminal-ask`, askOptions.length);
-  const includeAsk = Math.random() < 0.45;
+  const includeAsk = (deterministicIndex(`${seed}:${concern}:terminal-include-ask`, 100) + 1) <= 45;
   const statement = pool[baseIndex];
   return includeAsk ? `${statement} ${askOptions[askIndex]}` : statement;
 }
@@ -2057,7 +2057,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   // Stable session ID for deterministic cue selection
-  const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  const sessionIdRef = useRef(`session_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
@@ -2478,9 +2478,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
-    const continueProbability = 0.65;
-    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
-    const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    const terminalDecisionMode = terminalDecisionTriggerActive;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
