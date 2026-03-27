@@ -259,10 +259,18 @@ function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
     .slice(-Math.max(1, recentWindow))
     .flatMap((turn) => {
       const sourceTurnNumber = Number.isFinite(turn?.turnNumber) ? turn.turnNumber : 0;
-      return extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || "").map((candidate) => ({
-        ...candidate,
-        constraintSourceTurn: sourceTurnNumber,
-      }));
+      return [
+        ...extractConstraintCandidatesFromText(turn?.repMessage || "").map((candidate) => ({
+          ...candidate,
+          constraintSourceTurn: sourceTurnNumber,
+          speaker: "rep",
+        })),
+        ...extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || "").map((candidate) => ({
+          ...candidate,
+          constraintSourceTurn: sourceTurnNumber,
+          speaker: "hcp",
+        })),
+      ];
     });
 }
 
@@ -2382,10 +2390,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
     const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
-    const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
+    const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "").map((candidate) => ({
+      ...candidate,
+      constraintSourceTurn: nextTurnNumber,
+      speaker: "hcp",
+    }));
+    const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage).map((candidate) => ({
+      ...candidate,
+      constraintSourceTurn: nextTurnNumber,
+      speaker: "rep",
+    }));
     const rawUserConstraintCandidates = mergeConstraintCandidates([
       ...recentUserConstraintCandidates,
       ...currentUserConstraintCandidates,
+      ...repEchoConstraintCandidates,
     ]);
     const scenarioGroundingText = [
       scenario?.title,
@@ -2397,15 +2415,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : "",
     ].join(" ");
     const dialogueGroundingTurns = [
-      ...turns.map((turn) => turn?.hcpDialogueBefore || ""),
-      respondingToTurn?.hcpDialogueBefore || "",
+      ...turns.flatMap((turn) => [turn?.repMessage || "", turn?.hcpDialogueBefore || ""]),
+      repMessage,
     ].filter(Boolean);
     const groundingState = buildConstraintGrounding({
       scenarioText: scenarioGroundingText,
       dialogueTurns: dialogueGroundingTurns,
     });
     const groundedConstraintTypes = [...groundingState.groundedTypes];
-    const newConstraintTypesThisTurn = detectOperationalConstraintTypes(respondingToTurn?.hcpDialogueBefore || "");
+    const newConstraintTypesThisTurn = [
+      ...new Set([
+        ...detectOperationalConstraintTypes(respondingToTurn?.hcpDialogueBefore || ""),
+        ...detectOperationalConstraintTypes(repMessage),
+      ]),
+    ];
     const priorOperationalConstraints = respondingToTurn?.plannerStateSnapshot?.activeOperationalConstraints
       || respondingToTurn?.activeOperationalConstraints
       || [];
