@@ -606,6 +606,7 @@ function findCapabilityFromQuestion(question) {
   const normalized = typeof question === "string" ? question.toLowerCase() : "";
   if (!normalized) return null;
 
+  /** @type {Array<[string, string[]]>} */
   const capabilityMatchers = [
     ["signalAwareness", ["signal awareness", "awareness", "discovery", "question timing", "questioning"]],
     ["signalInterpretation", ["signal interpretation", "interpretation", "read the room", "read signals", "stakeholder"]],
