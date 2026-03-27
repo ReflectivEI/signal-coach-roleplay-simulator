@@ -1868,6 +1868,7 @@ export function buildHCPDialoguePrompt({
   hcpProfile,
   historyText = null,
   isOpening = false,
+  turnContractBlock = null,
 }) {
   const {
     structuralState,
@@ -2082,6 +2083,11 @@ export function buildHCPDialoguePrompt({
 
   prompt += contextHint
 
+
+  if (turnContractBlock) {
+    prompt += '\n\n' + sanitize(turnContractBlock)
+  }
+
   if (historyText) {
     prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText)
     prompt +=
@@ -2109,6 +2115,7 @@ export function buildTurnSimulationBundle({
   alignment = null,
   historyText = null,
   isOpening = false,
+  turnContractBlock = null,
 }) {
   const profile = deriveNextHCPProfile({
     sessionId,
@@ -2125,6 +2132,7 @@ export function buildTurnSimulationBundle({
     hcpProfile: profile,
     historyText,
     isOpening,
+    turnContractBlock,
   })
 
   return {
