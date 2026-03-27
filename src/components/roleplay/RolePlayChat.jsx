@@ -33,6 +33,7 @@ import {
   shouldForceTerminalDisengagement,
   shouldReplaceWithTerminalDisengagement,
   evaluateHcpTerminationPolicy,
+  detectRepDisrespectSignal,
 } from "./hcpSimulationEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -834,6 +835,100 @@ function detectRecentExplicitNarrowingPrompt(turns = [], respondingToTurn = null
     .filter(Boolean)
     .slice(-4);
   return recentHcpDialogues.some((dialogue) => hasExplicitNarrowingPrompt(dialogue));
+}
+
+function countUnansweredDirectQuestionStreak(turns = [], currentHcpPrompt = "", currentRepMessage = "") {
+  const historyPairs = (Array.isArray(turns) ? turns : [])
+    .filter((turn) => typeof turn?.repMessage === "string")
+    .map((turn) => ({ hcp: turn?.hcpDialogueBefore || "", rep: turn?.repMessage || "" }));
+  const pairs = [...historyPairs, { hcp: currentHcpPrompt || "", rep: currentRepMessage || "" }];
+  const recentPairs = pairs.slice(-6).reverse();
+
+  let streak = 0;
+  for (const pair of recentPairs) {
+    const hcpAskedDirect = isDirectUserQuestion(pair.hcp) || hasExplicitNarrowingPrompt(pair.hcp);
+    if (!hcpAskedDirect) break;
+
+    const repLower = String(pair.rep || "").toLowerCase();
+    const repNonAnswer =
+      detectLowValueRepResponse(repLower)
+      || isDeferringWithoutImmediateAction(repLower)
+      || (!hasConcreteOperationalMove(repLower) && !hasSpecificFollowUpCommitment(repLower));
+
+    if (!repNonAnswer) break;
+    streak += 1;
+  }
+  return streak;
+}
+
+function isGenericDeflectionMessage(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+  const deferralSignals = /\b(circle back|follow up|revisit|later|next week|book time|schedule|send materials|let me get back|connect offline)\b/;
+  return deferralSignals.test(sample) && !hasConcreteOperationalMove(sample) && !hasSpecificFollowUpCommitment(sample);
+}
+
+function isPrematureClosePush(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+  const closePushSignals = /\b(schedule|book|set up|follow[- ]?up|appointment|next step|close this out|move forward)\b/;
+  return closePushSignals.test(sample) && !hasConcreteOperationalMove(sample);
+}
+
+function buildHcpGovernanceState(turns = [], currentHcpPrompt = "", currentRepMessage = "", { timePressureActive = false } = {}) {
+  const historyPairs = (Array.isArray(turns) ? turns : [])
+    .filter((turn) => typeof turn?.repMessage === "string")
+    .map((turn) => ({ hcp: turn?.hcpDialogueBefore || "", rep: turn?.repMessage || "" }));
+  const pairs = [...historyPairs, { hcp: currentHcpPrompt || "", rep: currentRepMessage || "" }].slice(-8);
+
+  let unansweredDirectQuestionCount = 0;
+  let repeatedDeflectionCount = 0;
+  let prematureClosePushCount = 0;
+  let repRespectViolationCount = 0;
+  let valueDeliveredRecently = false;
+
+  for (const pair of pairs) {
+    const hcpAskedDirect = isDirectUserQuestion(pair.hcp) || hasExplicitNarrowingPrompt(pair.hcp);
+    const repLower = String(pair.rep || "").toLowerCase();
+    const repAnsweredWithValue = hasConcreteOperationalMove(repLower) || hasSpecificFollowUpCommitment(repLower);
+    const repDeflected = detectLowValueRepResponse(repLower) || isDeferringWithoutImmediateAction(repLower) || isGenericDeflectionMessage(repLower);
+
+    if (hcpAskedDirect && !repAnsweredWithValue) unansweredDirectQuestionCount += 1;
+    if (repDeflected || (!repAnsweredWithValue && !repLower.includes("?"))) repeatedDeflectionCount += 1;
+    if (isPrematureClosePush(repLower) && !repAnsweredWithValue) prematureClosePushCount += 1;
+    if (detectRepDisrespectSignal(repLower)) repRespectViolationCount += 1;
+  }
+
+  const recentPairs = pairs.slice(-2);
+  valueDeliveredRecently = recentPairs.some((pair) => {
+    const repLower = String(pair.rep || "").toLowerCase();
+    return hasConcreteOperationalMove(repLower) || hasSpecificFollowUpCommitment(repLower);
+  });
+
+  let hcpPatienceState = "engaged";
+  const skepticalCutoff = timePressureActive ? 1 : 2;
+  const disengagingCutoff = timePressureActive ? 2 : 3;
+  const terminateCutoff = timePressureActive ? 3 : 4;
+
+  if (unansweredDirectQuestionCount >= skepticalCutoff || repeatedDeflectionCount >= skepticalCutoff || !valueDeliveredRecently) {
+    hcpPatienceState = "skeptical";
+  }
+  if (unansweredDirectQuestionCount >= disengagingCutoff || repeatedDeflectionCount >= disengagingCutoff || prematureClosePushCount >= 2) {
+    hcpPatienceState = "disengaging";
+  }
+  if (unansweredDirectQuestionCount >= terminateCutoff || repRespectViolationCount >= 2) {
+    hcpPatienceState = "terminate";
+  }
+
+  return {
+    unansweredDirectQuestionCount,
+    repeatedDeflectionCount,
+    valueDeliveredRecently,
+    hcpPatienceState,
+    timePressureActive,
+    repRespectViolationCount,
+    prematureClosePushCount,
+  };
 }
 
 async function invokeRoleplayLlm(payload, { timeoutMs = 18000, retries = 1 } = {}) {
@@ -2428,6 +2523,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
     const explicitNarrowingPrompted = detectRecentExplicitNarrowingPrompt(turns, respondingToTurn);
+    const timePressureActive = prevState === "time-pressured" || nextHcpState === "time-pressured";
+    const governanceState = buildHcpGovernanceState(
+      turns,
+      respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+      { timePressureActive }
+    );
+    const unansweredDirectQuestionStreak = countUnansweredDirectQuestionStreak(
+      turns,
+      respondingToTurn?.hcpDialogueBefore || "",
+      repMessage
+    );
+    const lowValueTurnStreak = countRecentLowValueRepTurns(turns, repMessage);
     const governanceTermination = evaluateHcpTerminationPolicy({
       repMessage,
       repHistoryMessages: turns.filter((t) => t?.repMessage).map((t) => t.repMessage),
@@ -2436,7 +2544,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernFlowOutcome,
       decayTier: decayState.tier,
       explicitNarrowingPrompted,
-      isTimePressured: prevState === "time-pressured" || nextHcpState === "time-pressured",
+      isTimePressured: timePressureActive,
+      timePressureActive: governanceState.timePressureActive,
+      unansweredDirectQuestionStreak,
+      lowValueTurnStreak,
+      unansweredDirectQuestionCount: governanceState.unansweredDirectQuestionCount,
+      repeatedDeflectionCount: governanceState.repeatedDeflectionCount,
+      valueDeliveredRecently: governanceState.valueDeliveredRecently,
+      repRespectViolationCount: governanceState.repRespectViolationCount,
+      prematureClosePushCount: governanceState.prematureClosePushCount,
     });
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
@@ -2473,6 +2589,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernFlowOutcome,
       engagementTier: decayState.tier,
       unresolvedConcernTurns,
+      governanceState,
       governanceTermination,
       chosenResponseObjective,
       objectiveRanking,
@@ -2486,11 +2603,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint: objectiveRanking.selectedObjectiveAccountsForConstraint,
       rankedObjectives: objectiveRanking.rankedObjectives,
       concernFlowOutcome,
+      governanceState,
       governanceTermination,
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
     });
+
+    if (governanceTermination.hcpPatienceState === "skeptical" && nextHcpState === "engaged") {
+      nextHcpState = "resistant";
+    }
+    if (governanceTermination.hcpPatienceState === "disengaging" && nextHcpState !== "disengaged") {
+      if (HCP_STATE_LADDER.indexOf(nextHcpState) < HCP_STATE_LADDER.indexOf("boundary-setting")) {
+        nextHcpState = "boundary-setting";
+      }
+    }
+    if (governanceTermination.hcpPatienceState === "terminate") {
+      nextHcpState = "disengaged";
+    }
 
     if (governanceTermination.shouldBoundarySet && nextHcpState !== "disengaged") {
       nextHcpState = escalateHcpState(nextHcpState, 1);
@@ -2532,6 +2662,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       plannerStateSnapshot,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
+      hcpPatienceState: governanceTermination.hcpPatienceState,
+      unansweredDirectQuestionCount: governanceTermination.unansweredDirectQuestionCount,
+      repeatedDeflectionCount: governanceTermination.repeatedDeflectionCount,
+      valueDeliveredRecently: governanceTermination.valueDeliveredRecently,
+      terminationTriggered: governanceTermination.terminationTriggered,
+      terminationReason: governanceTermination.terminationReason,
       generationKey,
     };
     emitPlannerTrace("constraints_written_to_state", {
@@ -2942,6 +3078,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       usedDeterministicFallback = true;
     }
 
+    if (!terminalDialogueLocked) {
+      if (governanceTermination.hcpPatienceState === "skeptical") {
+        nextHcpDialogue = "Please be specific. What exact change should I apply this week?";
+      } else if (governanceTermination.hcpPatienceState === "disengaging") {
+        nextHcpDialogue = "I need one concrete answer now. If you can't provide that, we'll stop here.";
+      } else if (governanceTermination.hcpPatienceState === "terminate") {
+        nextHcpDialogue = terminalCloseFallback;
+      }
+    }
+
     const recentRepTurns = getRecentRepTurns(prevTurns);
     const previousInferenceState = repInferenceStateRef.current;
     const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
@@ -3218,6 +3364,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       chosenResponseObjective,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
+      hcpPatienceState: governanceTermination.hcpPatienceState,
+      unansweredDirectQuestionCount: governanceTermination.unansweredDirectQuestionCount,
+      repeatedDeflectionCount: governanceTermination.repeatedDeflectionCount,
+      valueDeliveredRecently: governanceTermination.valueDeliveredRecently,
+      terminationTriggered: governanceTermination.terminationTriggered,
+      terminationReason: governanceTermination.terminationReason,
       generationKey,
     };
 
@@ -3283,12 +3435,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         nextHcpDialogue = buildConstraintViolationFallback({
           concern: activeConcern,
           recentDialogues: collectRecentHcpDialogues(turns, 4),
-          seed: `${sessionId}:${nextTurnNumber}:constraint-violation`,
+          seed: `${sid}:${nextTurnNumber}:constraint-violation`,
         });
         nextHcpDialogue = enforceDialogueVariety({
           candidate: nextHcpDialogue,
           concern: activeConcern,
-          seed: `${sessionId}:${nextTurnNumber}:constraint-violation-variety`,
+          seed: `${sid}:${nextTurnNumber}:constraint-violation-variety`,
           recentDialogues: collectRecentHcpDialogues(turns, 4),
           progressionStage: activeConcern,
         });

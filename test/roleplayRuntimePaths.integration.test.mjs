@@ -190,3 +190,113 @@ test("governance policy does not terminate solely for time pressure without host
   assert.equal(policy.shouldBoundarySet, true);
   assert.ok(policy.reasonCodes.includes("time_pressure_with_no_progress"));
 });
+
+test("governance policy terminates polite non-answer loops after repeated direct asks under pressure", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "Let's schedule a follow-up next week and keep discussing this then.",
+    repHistoryMessages: [
+      "I can send materials later.",
+      "Let's reconnect after I gather more details.",
+      "I hear you; we can circle back next week.",
+    ],
+    activeConstraintTypes: ["workflow", "time"],
+    unresolvedConcernTurns: 4,
+    concernFlowOutcome: "missed",
+    decayTier: "impatient",
+    explicitNarrowingPrompted: true,
+    isTimePressured: true,
+    unansweredDirectQuestionStreak: 3,
+    lowValueTurnStreak: 3,
+  });
+
+  assert.equal(policy.shouldTerminate, true);
+  assert.ok(policy.reasonCodes.includes("termination_boundary_reached_after_repeated_non_answer"));
+});
+
+test("governance policy terminates repeated scheduling push before answering", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "Let's schedule a follow-up and I can share specifics later.",
+    repHistoryMessages: [
+      "We should book a separate meeting for details.",
+      "I'll send something later; let's set a calendar hold.",
+    ],
+    unresolvedConcernTurns: 4,
+    concernFlowOutcome: "missed",
+    explicitNarrowingPrompted: true,
+    unansweredDirectQuestionCount: 3,
+    repeatedDeflectionCount: 3,
+    prematureClosePushCount: 2,
+    valueDeliveredRecently: false,
+  });
+
+  assert.equal(policy.shouldTerminate, true);
+  assert.ok(policy.reasonCodes.includes("repeated_premature_close_before_answer"));
+});
+
+test("time pressure accelerates patience decay", () => {
+  const baseline = evaluateHcpTerminationPolicy({
+    unresolvedConcernTurns: 2,
+    concernFlowOutcome: "missed",
+    unansweredDirectQuestionCount: 2,
+    repeatedDeflectionCount: 2,
+    valueDeliveredRecently: false,
+    explicitNarrowingPrompted: true,
+    timePressureActive: false,
+  });
+  const pressured = evaluateHcpTerminationPolicy({
+    unresolvedConcernTurns: 2,
+    concernFlowOutcome: "missed",
+    unansweredDirectQuestionCount: 2,
+    repeatedDeflectionCount: 2,
+    valueDeliveredRecently: false,
+    explicitNarrowingPrompted: true,
+    timePressureActive: true,
+  });
+
+  assert.equal(baseline.hcpPatienceState === "disengaging" || baseline.hcpPatienceState === "terminate", false);
+  assert.equal(pressured.hcpPatienceState, "disengaging");
+});
+
+test("good concrete recovery keeps HCP from terminating", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    unresolvedConcernTurns: 1,
+    concernFlowOutcome: "aligned",
+    unansweredDirectQuestionCount: 1,
+    repeatedDeflectionCount: 0,
+    valueDeliveredRecently: true,
+    explicitNarrowingPrompted: false,
+    timePressureActive: false,
+  });
+
+  assert.equal(policy.shouldTerminate, false);
+  assert.equal(policy.hcpPatienceState, "engaged");
+});
+
+test("normal conversation with no repeated failure continues", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    unresolvedConcernTurns: 0,
+    concernFlowOutcome: "aligned",
+    unansweredDirectQuestionCount: 0,
+    repeatedDeflectionCount: 0,
+    valueDeliveredRecently: true,
+    timePressureActive: false,
+  });
+
+  assert.equal(policy.shouldTerminate, false);
+  assert.equal(policy.shouldBoundarySet, false);
+  assert.equal(policy.hcpPatienceState, "engaged");
+});
+
+test("argumentative/disrespectful rep accelerates disengagement", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "You are dodging again. Make up your mind.",
+    repHistoryMessages: ["Stop avoiding this."],
+    unresolvedConcernTurns: 1,
+    concernFlowOutcome: "neutral",
+    repRespectViolationCount: 2,
+    valueDeliveredRecently: false,
+  });
+
+  assert.equal(policy.shouldTerminate, true);
+  assert.ok(policy.reasonCodes.includes("respect_violation_accelerates_termination"));
+});
