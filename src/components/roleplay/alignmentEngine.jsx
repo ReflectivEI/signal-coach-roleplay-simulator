@@ -788,7 +788,7 @@ function computeAlignmentRubric(hcpState, p) {
  *
  * @param {string} hcpState     - Structural state visible to rep BEFORE speaking
  * @param {string} repMessage   - The rep's submitted message
- * @param {*}      context      - Optional context object/string (legacy-compatible)
+ * @param {*}      _unused      - Legacy param (ignored)
  * @param {string} temperature  - Emotional temperature at that moment
  * @param {string} prevHcpState - Previous turn's state (for adaptive scoring)
  * @returns alignment object
