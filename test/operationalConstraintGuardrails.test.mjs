@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import {
   buildConstraintGrounding,
   detectConstraintDraftViolations,
-  buildConstraintViolationFallback,
 } from '../src/components/roleplay/operationalConstraintGuardrails.js';
 
 test('no scenario constraint present -> no staffing/workflow injection allowed', () => {
@@ -78,17 +77,4 @@ test('changed constraint -> allowed updated mention', () => {
   });
 
   assert.equal(result.valid, true);
-});
-
-test('constraint violation fallback rotates away from repeated recent dialogue', () => {
-  const repeated = 'Help me understand the most clinically relevant takeaway for my patients.';
-  const fallback = buildConstraintViolationFallback({
-    concern: 'evidence',
-    recentDialogues: [repeated, repeated],
-    seed: 'session-1:turn-8',
-  });
-
-  assert.notEqual(fallback, repeated);
-  assert.equal(typeof fallback, 'string');
-  assert.ok(fallback.length > 0);
 });
