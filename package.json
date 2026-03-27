@@ -13,8 +13,9 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "test:constraints": "node --test test/operationalConstraintGuardrails.test.mjs",
     "test:annotations": "node --test test/annotationUtils.test.mjs",
+    "test:roleplay:contracts": "node --test test/turnContractController.test.mjs",
     "test:roleplay:runtime": "node --loader ./test/jsx-loader.mjs --test test/roleplayRuntimePaths.integration.test.mjs",
-    "test:stabilization": "npm run test:constraints && npm run test:annotations && npm run test:roleplay:runtime && node ./scripts/verify-roleplay-freeze-equivalence.mjs",
+    "test:stabilization": "npm run test:constraints && npm run test:annotations && npm run test:roleplay:contracts && npm run test:roleplay:runtime && node ./scripts/verify-roleplay-freeze-equivalence.mjs",
     "preview": "vite preview",
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
     "ci:build": "npm run build && npm run verify:build-output"

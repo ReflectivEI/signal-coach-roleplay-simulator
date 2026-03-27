@@ -74,6 +74,13 @@ import {
   evaluateConstraintDraft,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
+import {
+  deriveTurnContractState,
+  selectDeterministicResponseMode,
+  mapResponseModeToObjective,
+  validateGeneratedTurnContract,
+  buildContractRepairResponse,
+} from "./turnContractController";
 
 function escapeHTML(text) {
   return String(text)
@@ -2570,7 +2577,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
     });
-    const chosenResponseObjective = objectiveRanking.selectedObjective;
+    const turnContractState = deriveTurnContractState({
+      previousSnapshot: respondingToTurn?.plannerStateSnapshot || {},
+      latestHcpTurn: respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+      normalizedActiveConstraints,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      activeConcern,
+      concernFlowOutcome,
+      unresolvedConcernTurns,
+      loopBreakerBudget,
+      overrideExit,
+      terminalDecisionMode,
+      hardLoopBreaker,
+    });
+    const fallbackResponseMode = (
+      objectiveRanking.selectedObjective?.startsWith("close_or_limit_scope") ? "close"
+        : objectiveRanking.selectedObjective?.startsWith("answer_direct_constraint_question") ? "answer"
+          : objectiveRanking.selectedObjective?.startsWith("reanchor_to_constraint") ? "reanchor"
+            : objectiveRanking.selectedObjective?.startsWith("advance_with_constraint") ? "advance"
+              : "probe"
+    );
+    const selectedResponseMode = selectDeterministicResponseMode({
+      turnContractState,
+      concernFlowOutcome,
+      fallbackMode: fallbackResponseMode,
+    });
+    const contractObjectiveId = mapResponseModeToObjective(selectedResponseMode);
+    const chosenResponseObjective = `${contractObjectiveId}[${objectiveRanking.primaryConstraint}]`;
     const plannerStateSnapshot = {
       activeConcern,
       normalizedActiveConstraints,
@@ -2588,10 +2622,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       loopBreakerBudget,
       chosenResponseObjective,
       objectiveRanking,
+      selectedResponseMode,
+      unansweredDirectQuestions: turnContractState.unansweredDirectQuestions,
+      unresolvedObjections: turnContractState.unresolvedObjections,
+      acceptedOperationalConstraints: turnContractState.acceptedOperationalConstraints,
+      closureEligibility: turnContractState.closureEligibility,
     };
     emitPlannerTrace("response_objective_selected", {
       turnNumber: nextTurnNumber,
       chosenResponseObjective,
+      selectedResponseMode,
       primaryConstraint: objectiveRanking.primaryConstraint,
       hasActiveConstraint: objectiveRanking.hasActiveConstraint,
       directOperationalQuestion: objectiveRanking.directOperationalQuestion,
@@ -2602,6 +2642,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
+      turnContractState,
     });
 
     if (hardLoopBreaker) {
@@ -2917,7 +2958,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
+        }) + `\n\nTURN CONTRACT CONTROLLER:\n- Selected response mode: ${selectedResponseMode}.\n- Unanswered direct questions from prior turn: ${(turnContractState.unansweredDirectQuestions || []).map((q) => q.question).join(" || ") || "none"}.\n- Unresolved objections: ${(turnContractState.unresolvedObjections || []).join(", ") || "none"}.\n- Accepted operational constraints: ${(turnContractState.acceptedOperationalConstraints || []).join(", ") || "none"}.\n- Closure eligibility: ${turnContractState.closureEligibility?.eligible ? "eligible" : "not eligible"}.\n- Hard rule: if selected response mode is answer, answer directly before asking anything else.\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         emitPlannerTrace("planner_input_assembled", {
           turnNumber: nextTurnNumber,
           plannerVisibleConstraints: normalizedActiveConstraints,
@@ -2998,6 +3039,26 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       draftResponse: draftResponseBeforePostProcessing,
     });
+    const initialTurnContractValidation = validateGeneratedTurnContract({
+      responseMode: selectedResponseMode,
+      draftText: nextHcpDialogue,
+      turnContractState,
+    });
+    if (!initialTurnContractValidation.valid) {
+      usedDeterministicFallback = true;
+      const repairedResponse = buildContractRepairResponse({
+        responseMode: selectedResponseMode,
+        activeConcern,
+      });
+      nextHcpDialogue = repairedResponse;
+      draftResponseBeforePostProcessing = repairedResponse;
+      emitPlannerTrace("turn_contract_repair_applied", {
+        turnNumber: nextTurnNumber,
+        selectedResponseMode,
+        repairReason: initialTurnContractValidation.reason,
+        repairedResponse,
+      });
+    }
 
     const previousHcpDialogue = String(
       respondingToTurn?.hcpDialogueBefore
@@ -3330,6 +3391,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       repDefersImmediateAction,
       explicitExitOverride: overrideExit,
     });
+    if (selectedResponseMode === "close") {
+      terminalPolicyAction = "close";
+    }
+    if (selectedResponseMode === "answer" && terminalPolicyAction === "close" && !overrideExit) {
+      terminalPolicyAction = "probe";
+    }
     if (unresolvedConcernTurns >= loopBreakerBudget + 1) {
       terminalPolicyAction = "close";
     } else if (unresolvedConcernTurns >= loopBreakerBudget) {
@@ -3390,6 +3457,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
     }
 
+    const finalTurnContractValidation = validateGeneratedTurnContract({
+      responseMode: selectedResponseMode,
+      draftText: nextHcpDialogue,
+      turnContractState,
+    });
+    if (!finalTurnContractValidation.valid) {
+      nextHcpDialogue = buildContractRepairResponse({
+        responseMode: selectedResponseMode,
+        activeConcern,
+      });
+    }
+
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
@@ -3440,6 +3519,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         getOpeningSentence(draftResponseBeforePostProcessing) !== finalOpening,
       guardrailApplied: false,
       plannerGapComparison,
+      selectedResponseMode,
+      turnContractState,
+      finalTurnContractValidation,
       finalResponse: nextHcpDialogue,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue, { scenarioFamily });
