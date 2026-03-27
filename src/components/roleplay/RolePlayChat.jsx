@@ -3435,12 +3435,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         nextHcpDialogue = buildConstraintViolationFallback({
           concern: activeConcern,
           recentDialogues: collectRecentHcpDialogues(turns, 4),
-          seed: `${sessionId}:${nextTurnNumber}:constraint-violation`,
+          seed: `${sid}:${nextTurnNumber}:constraint-violation`,
         });
         nextHcpDialogue = enforceDialogueVariety({
           candidate: nextHcpDialogue,
           concern: activeConcern,
-          seed: `${sessionId}:${nextTurnNumber}:constraint-violation-variety`,
+          seed: `${sid}:${nextTurnNumber}:constraint-violation-variety`,
           recentDialogues: collectRecentHcpDialogues(turns, 4),
           progressionStage: activeConcern,
         });
