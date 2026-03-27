@@ -32,8 +32,6 @@ import {
   getDeterministicTerminalClose,
   shouldForceTerminalDisengagement,
   shouldReplaceWithTerminalDisengagement,
-  evaluateHcpTerminationPolicy,
-  detectRepDisrespectSignal,
 } from "./hcpSimulationEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -66,7 +64,6 @@ import {
   buildConstraintGrounding,
   detectConstraintDraftViolations,
   buildConstraintSafeRegeneratedResponse,
-  buildConstraintViolationFallback,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
 
@@ -691,19 +688,9 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i have patients waiting|this isn't productive|otherwise this may be something to revisit later|i need to get back to patients|one final relevant point)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
-}
-
-function hasStrongTerminalSignal({ dialogue = "", cue = "" } = {}) {
-  const sample = `${dialogue} ${cue}`.toLowerCase();
-  if (!sample.trim()) return false;
-
-  const terminalBodyLanguage = /\b(reaches for the door|turns back toward the patient room|turns fully toward the exit|gathers the chart|checks the time, waiting for one final|waiting for one final relevant point|exchange is over|conversation is over|conversation is ending)\b/;
-  const terminalLanguage = /\b(revisit later|not worth more time|this isn't productive|i need to get back to patients|do you have something specific|otherwise this may be something to revisit later|one final relevant point)\b/;
-
-  return terminalBodyLanguage.test(sample) || terminalLanguage.test(sample);
 }
 
 function hasWorkflowOperationalLanguage(text = "") {
@@ -819,140 +806,6 @@ function isDirectUserQuestion(text = "") {
   if (!value) return false;
   if (value.includes("?")) return true;
   return /^(what|how|why|when|where|which|who|can|could|would|will|should|is|are|do|does|did)\b/i.test(value);
-}
-
-function hasExplicitNarrowingPrompt(text = "") {
-  const sample = String(text || "").toLowerCase();
-  if (!sample) return false;
-  return /\b(one concrete|one practical|one step|single step|this week|keep it practical|be specific|what should we implement|what changes operationally|how does this address)\b/.test(sample);
-}
-
-function detectRecentExplicitNarrowingPrompt(turns = [], respondingToTurn = null) {
-  const recentHcpDialogues = [
-    ...(Array.isArray(turns) ? turns : []).map((turn) => turn?.hcpDialogueBefore),
-    respondingToTurn?.hcpDialogueBefore,
-  ]
-    .filter(Boolean)
-    .slice(-4);
-  return recentHcpDialogues.some((dialogue) => hasExplicitNarrowingPrompt(dialogue));
-}
-
-function countUnansweredDirectQuestionStreak(turns = [], currentHcpPrompt = "", currentRepMessage = "") {
-  const historyPairs = (Array.isArray(turns) ? turns : [])
-    .filter((turn) => typeof turn?.repMessage === "string")
-    .map((turn) => ({ hcp: turn?.hcpDialogueBefore || "", rep: turn?.repMessage || "" }));
-  const pairs = [...historyPairs, { hcp: currentHcpPrompt || "", rep: currentRepMessage || "" }];
-  const recentPairs = pairs.slice(-6).reverse();
-
-  let streak = 0;
-  for (const pair of recentPairs) {
-    const hcpAskedDirect = isDirectUserQuestion(pair.hcp) || hasExplicitNarrowingPrompt(pair.hcp);
-    if (!hcpAskedDirect) break;
-
-    const repLower = String(pair.rep || "").toLowerCase();
-    const repNonAnswer =
-      detectLowValueRepResponse(repLower)
-      || isDeferringWithoutImmediateAction(repLower)
-      || (!hasConcreteOperationalMove(repLower) && !hasSpecificFollowUpCommitment(repLower));
-
-    if (!repNonAnswer) break;
-    streak += 1;
-  }
-  return streak;
-}
-
-function isGenericDeflectionMessage(text = "") {
-  const sample = String(text || "").toLowerCase();
-  if (!sample) return false;
-  const deferralSignals = /\b(circle back|follow up|revisit|later|next week|book time|schedule|send materials|let me get back|connect offline)\b/;
-  return deferralSignals.test(sample) && !hasConcreteOperationalMove(sample) && !hasSpecificFollowUpCommitment(sample);
-}
-
-function isPrematureClosePush(text = "") {
-  const sample = String(text || "").toLowerCase();
-  if (!sample) return false;
-  const closePushSignals = /\b(schedule|book|set up|follow[- ]?up|appointment|next step|close this out|move forward)\b/;
-  return closePushSignals.test(sample) && !hasConcreteOperationalMove(sample);
-}
-
-function buildHcpGovernanceState(turns = [], currentHcpPrompt = "", currentRepMessage = "", { timePressureActive = false } = {}) {
-  const historyPairs = (Array.isArray(turns) ? turns : [])
-    .filter((turn) => typeof turn?.repMessage === "string")
-    .map((turn) => ({ hcp: turn?.hcpDialogueBefore || "", rep: turn?.repMessage || "" }));
-  const pairs = [...historyPairs, { hcp: currentHcpPrompt || "", rep: currentRepMessage || "" }].slice(-8);
-
-  let unansweredDirectQuestionCount = 0;
-  let repeatedDeflectionCount = 0;
-  let prematureClosePushCount = 0;
-  let repRespectViolationCount = 0;
-  let valueDeliveredRecently = false;
-
-  for (const pair of pairs) {
-    const hcpAskedDirect = isDirectUserQuestion(pair.hcp) || hasExplicitNarrowingPrompt(pair.hcp);
-    const repLower = String(pair.rep || "").toLowerCase();
-    const repAnsweredWithValue = hasConcreteOperationalMove(repLower) || hasSpecificFollowUpCommitment(repLower);
-    const repDeflected = detectLowValueRepResponse(repLower) || isDeferringWithoutImmediateAction(repLower) || isGenericDeflectionMessage(repLower);
-
-    if (hcpAskedDirect && !repAnsweredWithValue) unansweredDirectQuestionCount += 1;
-    if (repDeflected || (!repAnsweredWithValue && !repLower.includes("?"))) repeatedDeflectionCount += 1;
-    if (isPrematureClosePush(repLower) && !repAnsweredWithValue) prematureClosePushCount += 1;
-    if (detectRepDisrespectSignal(repLower)) repRespectViolationCount += 1;
-  }
-
-  const recentPairs = pairs.slice(-2);
-  valueDeliveredRecently = recentPairs.some((pair) => {
-    const repLower = String(pair.rep || "").toLowerCase();
-    return hasConcreteOperationalMove(repLower) || hasSpecificFollowUpCommitment(repLower);
-  });
-
-  let hcpPatienceState = "engaged";
-  const skepticalCutoff = timePressureActive ? 1 : 2;
-  const disengagingCutoff = timePressureActive ? 2 : 3;
-  const terminateCutoff = timePressureActive ? 3 : 4;
-
-  if (unansweredDirectQuestionCount >= skepticalCutoff || repeatedDeflectionCount >= skepticalCutoff || !valueDeliveredRecently) {
-    hcpPatienceState = "skeptical";
-  }
-  if (unansweredDirectQuestionCount >= disengagingCutoff || repeatedDeflectionCount >= disengagingCutoff || prematureClosePushCount >= 2) {
-    hcpPatienceState = "disengaging";
-  }
-  if (unansweredDirectQuestionCount >= terminateCutoff || repRespectViolationCount >= 2) {
-    hcpPatienceState = "terminate";
-  }
-
-  return {
-    unansweredDirectQuestionCount,
-    repeatedDeflectionCount,
-    valueDeliveredRecently,
-    hcpPatienceState,
-    timePressureActive,
-    repRespectViolationCount,
-    prematureClosePushCount,
-  };
-}
-
-async function invokeRoleplayLlm(payload, { timeoutMs = 18000, retries = 1 } = {}) {
-  let lastError = null;
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      return response;
-    } catch (error) {
-      lastError = error;
-      const isTimeoutLike = error?.name === 'AbortError' || /timed?\s*out|failed to fetch/i.test(String(error?.message || ""));
-      if (!isTimeoutLike || attempt === retries) throw error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-  throw lastError || new Error("Failed to call roleplay LLM endpoint");
 }
 
 function rankResponseObjective({
@@ -2522,45 +2375,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
-    const explicitNarrowingPrompted = detectRecentExplicitNarrowingPrompt(turns, respondingToTurn);
-    const timePressureActive = prevState === "time-pressured" || nextHcpState === "time-pressured";
-    const governanceState = buildHcpGovernanceState(
-      turns,
-      respondingToTurn?.hcpDialogueBefore || "",
-      repMessage,
-      { timePressureActive }
-    );
-    const unansweredDirectQuestionStreak = countUnansweredDirectQuestionStreak(
-      turns,
-      respondingToTurn?.hcpDialogueBefore || "",
-      repMessage
-    );
-    const lowValueTurnStreak = countRecentLowValueRepTurns(turns, repMessage);
-    const governanceTermination = evaluateHcpTerminationPolicy({
-      repMessage,
-      repHistoryMessages: turns.filter((t) => t?.repMessage).map((t) => t.repMessage),
-      activeConstraintTypes: normalizedActiveConstraints,
-      unresolvedConcernTurns,
-      concernFlowOutcome,
-      decayTier: decayState.tier,
-      explicitNarrowingPrompted,
-      isTimePressured: timePressureActive,
-      timePressureActive: governanceState.timePressureActive,
-      unansweredDirectQuestionStreak,
-      lowValueTurnStreak,
-      unansweredDirectQuestionCount: governanceState.unansweredDirectQuestionCount,
-      repeatedDeflectionCount: governanceState.repeatedDeflectionCount,
-      valueDeliveredRecently: governanceState.valueDeliveredRecently,
-      repRespectViolationCount: governanceState.repRespectViolationCount,
-      prematureClosePushCount: governanceState.prematureClosePushCount,
-    });
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
-    // Deterministic loop-breaker: avoid probabilistic continuation once unresolved concern pressure is high.
-    // Random continuation can create shared "conversation loop" defects across scenarios.
-    const terminalDecisionMode = terminalDecisionTriggerActive;
+    const continueProbability = 0.65;
+    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
+    const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
@@ -2589,8 +2410,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernFlowOutcome,
       engagementTier: decayState.tier,
       unresolvedConcernTurns,
-      governanceState,
-      governanceTermination,
       chosenResponseObjective,
       objectiveRanking,
     };
@@ -2603,38 +2422,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint: objectiveRanking.selectedObjectiveAccountsForConstraint,
       rankedObjectives: objectiveRanking.rankedObjectives,
       concernFlowOutcome,
-      governanceState,
-      governanceTermination,
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
     });
-
-    if (governanceTermination.hcpPatienceState === "skeptical" && nextHcpState === "engaged") {
-      nextHcpState = "resistant";
-    }
-    if (governanceTermination.hcpPatienceState === "disengaging" && nextHcpState !== "disengaged") {
-      if (HCP_STATE_LADDER.indexOf(nextHcpState) < HCP_STATE_LADDER.indexOf("boundary-setting")) {
-        nextHcpState = "boundary-setting";
-      }
-    }
-    if (governanceTermination.hcpPatienceState === "terminate") {
-      nextHcpState = "disengaged";
-    }
-
-    if (governanceTermination.shouldBoundarySet && nextHcpState !== "disengaged") {
-      nextHcpState = escalateHcpState(nextHcpState, 1);
-      if (
-        nextHcpState !== "disengaged"
-        && HCP_STATE_LADDER.indexOf(nextHcpState) < HCP_STATE_LADDER.indexOf("boundary-setting")
-      ) {
-        nextHcpState = "boundary-setting";
-      }
-    }
-
-    if (governanceTermination.shouldTerminate) {
-      nextHcpState = "disengaged";
-    }
 
     if (hardLoopBreaker) {
       nextHcpState = "disengaged";
@@ -2662,12 +2453,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       plannerStateSnapshot,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
-      hcpPatienceState: governanceTermination.hcpPatienceState,
-      unansweredDirectQuestionCount: governanceTermination.unansweredDirectQuestionCount,
-      repeatedDeflectionCount: governanceTermination.repeatedDeflectionCount,
-      valueDeliveredRecently: governanceTermination.valueDeliveredRecently,
-      terminationTriggered: governanceTermination.terminationTriggered,
-      terminationReason: governanceTermination.terminationReason,
       generationKey,
     };
     emitPlannerTrace("constraints_written_to_state", {
@@ -2967,11 +2752,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             concernAddressed: decayState.concernAddressed,
           },
         });
-        const res = await invokeRoleplayLlm({
-          prompt: systemPrompt,
-          max_tokens: 220,
-          temperature: 0,
-          roleplay: true,
+        const res = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: systemPrompt,
+            max_tokens: 220,
+            temperature: 0,
+            roleplay: true,
+          })
         });
         if (res.ok) {
           const data = await res.json();
@@ -3072,22 +2861,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "Thanks. Include payer-variation handling and owner-level rollout steps in that plan, then send it by your committed deadline.";
     }
 
-    const terminalDialogueLocked = overrideExit || nextHcpState === "disengaged";
-    if (terminalDialogueLocked && shouldReplaceWithTerminalDisengagement(nextHcpDialogue)) {
-      nextHcpDialogue = terminalCloseFallback;
-      usedDeterministicFallback = true;
-    }
-
-    if (!terminalDialogueLocked) {
-      if (governanceTermination.hcpPatienceState === "skeptical") {
-        nextHcpDialogue = "Please be specific. What exact change should I apply this week?";
-      } else if (governanceTermination.hcpPatienceState === "disengaging") {
-        nextHcpDialogue = "I need one concrete answer now. If you can't provide that, we'll stop here.";
-      } else if (governanceTermination.hcpPatienceState === "terminate") {
-        nextHcpDialogue = terminalCloseFallback;
-      }
-    }
-
     const recentRepTurns = getRecentRepTurns(prevTurns);
     const previousInferenceState = repInferenceStateRef.current;
     const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
@@ -3146,47 +2919,45 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ];
     const progressionStage =
       dialogueProgression[Math.max(0, Math.min(dialogueProgression.length - 1, unresolvedConcernTurns))];
+    nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
+      ...decayState,
+      activeConcern,
+      unresolvedStreak: unresolvedConcernTurns,
+      burdenEstablished,
+    });
     const recentHcpDialogues = collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS);
-    if (!terminalDialogueLocked) {
-      nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
-        ...decayState,
-        activeConcern,
-        unresolvedStreak: unresolvedConcernTurns,
-        burdenEstablished,
+    nextHcpDialogue = enforceDialogueVariety({
+      candidate: nextHcpDialogue,
+      concern: activeConcern,
+      seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
+      recentDialogues: recentHcpDialogues,
+      progressionStage,
+    });
+    if (terminalDecisionMode) {
+      nextHcpDialogue = buildTerminalDecisionDialogue({
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
       });
       nextHcpDialogue = enforceDialogueVariety({
         candidate: nextHcpDialogue,
         concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
         recentDialogues: recentHcpDialogues,
         progressionStage,
       });
-      if (terminalDecisionMode) {
-        nextHcpDialogue = buildTerminalDecisionDialogue({
-          concern: activeConcern,
-          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
-        });
-        nextHcpDialogue = enforceDialogueVariety({
-          candidate: nextHcpDialogue,
-          concern: activeConcern,
-          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
-          recentDialogues: recentHcpDialogues,
-          progressionStage,
-        });
-      }
+    }
 
-      const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
-      const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
-      const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
-      if (hasRecentPhraseReuse) {
-        nextHcpDialogue = enforceDialogueVariety({
-          candidate: nextHcpDialogue,
-          concern: activeConcern,
-          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
-          recentDialogues: recentHcpDialogues,
-          progressionStage,
-        });
-      }
+    const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
+    const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
+    const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
+    if (hasRecentPhraseReuse) {
+      nextHcpDialogue = enforceDialogueVariety({
+        candidate: nextHcpDialogue,
+        concern: activeConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
+        recentDialogues: recentHcpDialogues,
+        progressionStage,
+      });
     }
 
     const primaryConcern = detectPrimaryConcern(
@@ -3364,12 +3135,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       chosenResponseObjective,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
-      hcpPatienceState: governanceTermination.hcpPatienceState,
-      unansweredDirectQuestionCount: governanceTermination.unansweredDirectQuestionCount,
-      repeatedDeflectionCount: governanceTermination.repeatedDeflectionCount,
-      valueDeliveredRecently: governanceTermination.valueDeliveredRecently,
-      terminationTriggered: governanceTermination.terminationTriggered,
-      terminationReason: governanceTermination.terminationReason,
       generationKey,
     };
 
@@ -3382,12 +3147,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       explicitExitOverride: overrideExit,
     });
 
-    const terminalSignalDetected = hasStrongTerminalSignal({
-      dialogue: nextHcpDialogue,
-      cue: contextualCue,
-    });
-
-    if (!terminalDialogueLocked && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue) && !terminalSignalDetected) {
+    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
@@ -3395,56 +3155,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    let initialViolation = {
-      valid: true,
-      rejectionReason: null,
-      ungroundedTypes: [],
-      duplicateTypes: [],
-      draftTypes: [],
-    };
-    let finalViolationCheck = initialViolation;
-    let draftRejectedForConstraintRule = false;
-    if (!terminalDialogueLocked) {
-      initialViolation = detectConstraintDraftViolations({
-        draftText: nextHcpDialogue,
-        groundedTypes: groundedConstraintTypes,
-        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-        newlyRaisedTypes: newConstraintTypesThisTurn,
-        revisitRequested,
-        changedConstraint,
-        clarificationNeeded,
+    const initialViolation = detectConstraintDraftViolations({
+      draftText: nextHcpDialogue,
+      groundedTypes: groundedConstraintTypes,
+      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+      newlyRaisedTypes: newConstraintTypesThisTurn,
+      revisitRequested,
+      changedConstraint,
+      clarificationNeeded,
+    });
+    const draftRejectedForConstraintRule = !initialViolation.valid;
+    if (draftRejectedForConstraintRule) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+        fallbackResponse: groundedFallback,
+        concern: activeConcern,
       });
-      draftRejectedForConstraintRule = !initialViolation.valid;
-      if (draftRejectedForConstraintRule) {
-        usedDeterministicFallback = true;
-        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
-          fallbackResponse: groundedFallback,
-          concern: activeConcern,
-        });
-      }
-      finalViolationCheck = detectConstraintDraftViolations({
-        draftText: nextHcpDialogue,
-        groundedTypes: groundedConstraintTypes,
-        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-        newlyRaisedTypes: newConstraintTypesThisTurn,
-        revisitRequested,
-        changedConstraint,
-        clarificationNeeded,
-      });
-      if (!finalViolationCheck.valid) {
-        nextHcpDialogue = buildConstraintViolationFallback({
-          concern: activeConcern,
-          recentDialogues: collectRecentHcpDialogues(turns, 4),
-          seed: `${sid}:${nextTurnNumber}:constraint-violation`,
-        });
-        nextHcpDialogue = enforceDialogueVariety({
-          candidate: nextHcpDialogue,
-          concern: activeConcern,
-          seed: `${sid}:${nextTurnNumber}:constraint-violation-variety`,
-          recentDialogues: collectRecentHcpDialogues(turns, 4),
-          progressionStage: activeConcern,
-        });
-      }
+    }
+    const finalViolationCheck = detectConstraintDraftViolations({
+      draftText: nextHcpDialogue,
+      groundedTypes: groundedConstraintTypes,
+      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+      newlyRaisedTypes: newConstraintTypesThisTurn,
+      revisitRequested,
+      changedConstraint,
+      clarificationNeeded,
+    });
+    if (!finalViolationCheck.valid) {
+      nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
     }
 
     const finalOpening = getOpeningSentence(nextHcpDialogue);
@@ -3506,7 +3244,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ),
     ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
-    nextTurn.terminalSignalDetected = terminalSignalDetected;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
       ...nextTurn.plannerStateSnapshot,
@@ -3517,7 +3254,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const shouldEndSessionAfterTurn = overrideExit || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalSignalDetected
       || terminalPolicyAction === "close"
     );
 

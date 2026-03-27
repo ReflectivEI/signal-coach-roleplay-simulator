@@ -866,22 +866,29 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   }
 
   const globalMisalignments = [];
+  let universalPenalty = 0;
   if (p.isAggressive) {
+    universalPenalty = -99; // Force minimum score
     globalMisalignments.push('Aggressive or profane language used — damages all capability scores');
     if (repeatedAggressive) {
+      universalPenalty -= 2;
       globalMisalignments.push('Repeated aggressive language — session at risk of termination.');
     }
   }
   if (p.isDismissive) {
+    universalPenalty -= 1;
     globalMisalignments.push('Dismissive language used — ignores HCP signal across all dimensions');
   }
   if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    universalPenalty -= 1;
     globalMisalignments.push('Rep did not directly answer the HCP question prompt.');
     if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
+      universalPenalty -= 1;
       globalMisalignments.push('HCP requested a threshold/metric and the reply lacked concrete measurable criteria.');
     }
   }
   if (repeatedMisalignment) {
+    universalPenalty -= 2;
     globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
@@ -889,9 +896,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive
-    ? 1
-    : Math.max(1, Math.min(5, Math.round(rawAvg * 10) / 10));
+  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];
