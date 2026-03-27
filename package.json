@@ -11,6 +11,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "test:constraints": "node --test test/operationalConstraintGuardrails.test.mjs",
     "preview": "vite preview",
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
     "ci:build": "npm run build && npm run verify:build-output"
