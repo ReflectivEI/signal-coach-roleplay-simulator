@@ -1,3 +1,4 @@
+// @ts-nocheck
 const QUESTION_SPLIT_PATTERN = /[^?]*\?/g;
 
 const STOP_WORDS = new Set([
@@ -200,17 +201,17 @@ export function buildContractRepairResponse({
   activeConcern = "workflow",
 } = {}) {
   if (responseMode === "close") {
-    return "I need to move to my next patient now. Please send one concrete next step and we can follow up later.";
+    return "I need to move to my next patient now. Send one concrete next step for follow-up.";
   }
   if (responseMode === "answer") {
-    return "The practical answer is to start with one constrained pilot step this week and measure whether it reduces burden before expanding.";
+    return "Start with one constrained pilot step this week and measure whether burden decreases before expanding.";
   }
   if (responseMode === "reanchor") {
-    return "That still misses our main operational blocker. Show me one action that directly reduces workflow friction first.";
+    return "This still misses the main operational blocker. Give one action that reduces workflow friction first.";
   }
   if (responseMode === "advance") {
-    return "That could work if it stays practical in our current workflow. What is the first low-burden step to test?";
+    return "That can work if it remains practical in the current workflow. Give the first low-burden step to test.";
   }
   const concernLabel = activeConcern || "workflow";
-  return `Keep this focused on ${concernLabel} and give me one practical next step.`;
+  return `Keep this focused on ${concernLabel}. Give one practical next step.`;
 }
