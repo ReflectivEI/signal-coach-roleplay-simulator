@@ -64,6 +64,7 @@ import {
   buildConstraintGrounding,
   detectConstraintDraftViolations,
   buildConstraintSafeRegeneratedResponse,
+  detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
 
 function escapeHTML(text) {
@@ -216,7 +217,7 @@ function inferConstraintResolvedInTurn(text = "") {
   if (!value) return [];
   const resolvedSignal = /\b(resolved|fixed|handled|already covered|no longer an issue|not a blocker anymore|closed out|we addressed)\b/.test(value);
   if (!resolvedSignal) return [];
-  return [...new Set(extractConstraintCandidatesFromText(value).map((item) => item.constraintType))];
+  return detectOperationalConstraintTypes(value);
 }
 
 function buildOperationalConstraintState({
@@ -2246,7 +2247,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       dialogueTurns: dialogueGroundingTurns,
     });
     const groundedConstraintTypes = [...groundingState.groundedTypes];
-    const newConstraintTypesThisTurn = [...new Set(currentUserConstraintCandidates.map((item) => item.constraintType))];
+    const newConstraintTypesThisTurn = detectOperationalConstraintTypes(respondingToTurn?.hcpDialogueBefore || "");
     const priorOperationalConstraints = respondingToTurn?.plannerStateSnapshot?.activeOperationalConstraints
       || respondingToTurn?.activeOperationalConstraints
       || [];
