@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Highlighter } from "lucide-react";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
+import { buildAnnotationMap, getCapabilityStyle } from "./annotationUtils";
 
 /**
  * @typedef {{ role: string, content: string, hidden?: boolean }} TranscriptMessage
@@ -49,7 +50,6 @@ export default function AnnotatedTranscript({ messages, scenario }) {
 
       if (!res.ok) throw new Error('Failed to annotate');
       const result = await res.json();
-      const map = {};
       const rawText = result.response || result.text || result.content || '';
       let parsed = [];
       try {
@@ -57,15 +57,7 @@ export default function AnnotatedTranscript({ messages, scenario }) {
         const match = jsonStr.match(/\[[\s\S]*\]/);
         if (match) parsed = JSON.parse(match[0]);
       } catch { parsed = []; }
-      (parsed || []).forEach((a) => { if (a?.index !== undefined) map[a.index] = a; });
-      // Deduplicate repeated notes for same capability/type
-      const deduped = {};
-      Object.values(map).forEach((ann) => {
-        const key = `${ann.capability}-${ann.type}-${ann.note}`;
-        if (!Object.values(deduped).some(d => `${d.capability}-${d.type}-${d.note}` === key)) {
-          deduped[ann.index] = ann;
-        }
-      });
+      const deduped = buildAnnotationMap(parsed, SIGNAL_CAPABILITIES.map((c) => c.id));
       setAnnotations(deduped);
     } catch (err) {
       console.error('Annotation error:', err);
@@ -112,7 +104,7 @@ export default function AnnotatedTranscript({ messages, scenario }) {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
         {messages.map((msg, i) => {
           const annotation = annotations?.[i];
-          const capStyle = annotation ? CAP_COLORS[annotation.capability] : null;
+          const capStyle = annotation ? getCapabilityStyle(annotation.capability, CAP_COLORS) : null;
 
           return (
             <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>

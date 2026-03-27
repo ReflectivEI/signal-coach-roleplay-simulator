@@ -1,0 +1,26 @@
+[
+  {
+    "name": "time pressure acknowledgment should not hard-escalate",
+    "prevState": "time-pressured",
+    "prevTemp": "stressed",
+    "prevSeverity": 1,
+    "prevHcpState": "neutral",
+    "repMessage": "I know you are short on time, so I will keep this to one practical next step."
+  },
+  {
+    "name": "aggressive pressure should degrade alignment",
+    "prevState": "resistant",
+    "prevTemp": "stressed",
+    "prevSeverity": 1,
+    "prevHcpState": "resistant",
+    "repMessage": "You need to do this now. Stop pushing back and just commit."
+  },
+  {
+    "name": "engaged progression should keep determinism",
+    "prevState": "engaged",
+    "prevTemp": "positive",
+    "prevSeverity": 0,
+    "prevHcpState": "engaged",
+    "repMessage": "Given your interest, what one checkpoint would confirm this fits your workflow?"
+  }
+]
