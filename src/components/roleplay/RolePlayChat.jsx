@@ -3182,7 +3182,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       clarificationNeeded,
     });
     if (!finalViolationCheck.valid) {
-      nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
+      nextHcpDialogue = buildConstraintViolationFallback({
+        concern: activeConcern,
+        recentDialogues: collectRecentHcpDialogues(turns, 4),
+        seed: `${sid}:${nextTurnNumber}:constraint-violation`,
+      });
     }
 
     const finalOpening = getOpeningSentence(nextHcpDialogue);
