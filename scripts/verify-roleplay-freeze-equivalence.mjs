@@ -49,6 +49,14 @@ recordCheck(
 );
 
 recordCheck(
+  "operational constraint extraction binds HCP blockers and rep echoes",
+  roleplayChat.includes("const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || \"\")")
+    && roleplayChat.includes("const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage)")
+    && roleplayChat.includes("latestUserTurn: respondingToTurn?.hcpDialogueBefore || \"\""),
+  "Constraint state anchors on HCP-stated blockers while still ingesting rep restatements",
+);
+
+recordCheck(
   "core roleplay engines avoid Math.random",
   !stripComments(alignmentEngine).includes("Math.random(")
     && !stripComments(hcpEngine).includes("Math.random("),
