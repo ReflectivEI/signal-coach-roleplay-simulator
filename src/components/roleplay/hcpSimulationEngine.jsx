@@ -1588,14 +1588,14 @@ export function deriveSemanticProgressionOverlay({
   }
 
   const focusAngles = [
-    'workflow fit',
-    'staffing load',
-    'time cost',
-    'front-end admin pressure',
-    'payer back-and-forth',
-    'what changes tomorrow for staff',
-    'implementation burden',
-    'actionable now vs later',
+    'clinical applicability',
+    'evidence confidence',
+    'patient selection clarity',
+    'risk-benefit practicality',
+    'care pathway fit when explicitly raised',
+    'implementation detail when explicitly raised',
+    'time-to-decision clarity',
+    'next best action',
   ]
   const angleIndex = hashInt(`${turnNumber}:${stage}:${pressure}`) % focusAngles.length
 
@@ -2018,16 +2018,18 @@ export function buildHCPDialoguePrompt({
   prompt += '- Your words must be congruent with the physical context.\n'
   prompt += '- Stay in character completely.\n'
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
-  prompt += '- Keep responses specific and practice-worthy, including at least one concrete operational or clinical concern when relevant.\n'
+  prompt += '- Keep responses specific and practice-worthy, grounded in scenario details and dialogue context.\n'
+  prompt += '- Hard rule: do not introduce staffing, workflow, operational, or resource constraints unless explicitly present in scenario details or prior dialogue.\n'
+  prompt += '- If a constraint was already stated, avoid repeating it unless the rep asks to revisit it, it changed, or clarification is required.\n'
   prompt += '- Do not sound like a consultant, educator, or training script.\n'
   prompt += '- Do not over-explain.\n'
   prompt += '- Speak like a real clinician under time pressure.\n'
-  prompt += '- Vary your reasoning across turns: clinical, operational, practical, skeptical, or constraint-based.\n'
+  prompt += '- Vary your reasoning across turns: clinical, practical, skeptical, or evidence-based without inventing barriers.\n'
 
   prompt += '\nREALISM RULES:\n'
   prompt += '- Stay professionally constrained and selectively engaged, not automatically accommodating.\n'
-  prompt += '- Do not advance neatly through a scripted arc; allow partial agreement, redirection, and unresolved practical constraints.\n'
-  prompt += '- Keep one live concern active (workflow, evidence fit, access, time, policy, or screening) unless the rep directly resolves it.\n'
+  prompt += '- Do not advance neatly through a scripted arc; allow partial agreement and realistic unresolved questions grounded in context.\n'
+  prompt += '- Keep one live concern active only when it is explicitly grounded in scenario details or prior dialogue.\n'
   prompt += '- Prefer realistic response shapes: acknowledge + redirect, partial accept + narrow scope, conditional openness, defer commitment, or request one concrete detail.\n'
   prompt += '- Good rep responses can improve tone and openness, but should not trigger immediate full buy-in.\n'
   prompt += '- If the rep pivots away from your stated concern, briefly return to that concern before moving forward.\n'
@@ -2044,8 +2046,8 @@ export function buildHCPDialoguePrompt({
   prompt += '\nINTERACTION MODE SHIFT RULES:\n'
   prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'
   prompt += '- Exploratory mode: ask open, curious, collaborative questions and seek understanding.\n'
-  prompt += '- Clarifying mode: narrow to one specific constraint, ask one focused question, reduce padding.\n'
-  prompt += '- Directive mode: use assertive framing, request concrete operational specificity, and challenge relevance directly but professionally.\n'
+  prompt += '- Clarifying mode: narrow to one specific grounded concern, ask one focused question, reduce padding.\n'
+  prompt += '- Directive mode: use assertive framing, request concrete specificity tied to grounded concerns, and challenge relevance directly but professionally.\n'
   prompt += '- Closing / Decision mode: stop exploratory questioning; use short decisive statements or binary asks, and signal potential disengagement.\n'
   prompt += '- Interaction mode must stay congruent with your physical cue: attentive in exploratory, focused/constrained in clarifying, firm/time-aware in directive, visibly wrapping up in closing.\n'
 
@@ -2057,12 +2059,12 @@ export function buildHCPDialoguePrompt({
 
   prompt += '\nSEMANTIC PROGRESSION OVERLAY:\n'
   prompt += '- Current unresolved concern stage: ' + sanitize(semanticOverlay.stageLabel) + ' (Stage ' + sanitize(String(semanticOverlay.stage)) + ').\n'
-  prompt += '- Required operational angle this turn: ' + sanitize(semanticOverlay.focusAngle) + '.\n'
+  prompt += '- Required focus angle this turn: ' + sanitize(semanticOverlay.focusAngle) + '.\n'
   prompt += '- If unresolved, advance posture one step toward Decide / Close. If meaningfully addressed, soften by at most one stage (do not fully reset).\n'
-  prompt += '- Stage 1 Clarify: identify the operational concern and ask how the rep point connects.\n'
-  prompt += '- Stage 2 Narrow: constrain to one practical bottleneck and ask for a specific operational answer.\n'
-  prompt += '- Stage 3 Demand Specificity: request one concrete action, workflow change, or immediate operational implication.\n'
-  prompt += '- Stage 4 Challenge Practicality: test feasibility, staffing burden, time cost, workflow fit, or payer friction without generic wording.\n'
+  prompt += '- Stage 1 Clarify: identify one grounded concern and ask how the rep point connects.\n'
+  prompt += '- Stage 2 Narrow: constrain to one practical bottleneck and ask for a specific answer.\n'
+  prompt += '- Stage 3 Demand Specificity: request one concrete action or immediate implication.\n'
+  prompt += '- Stage 4 Challenge Practicality: test feasibility only through concerns explicitly raised in scenario or dialogue.\n'
   prompt += '- Stage 5 Decide / Close: stop re-asking as a normal question; use threshold language, binary framing, and wrap-up pressure.\n'
   prompt += '- Late-stage rule: in Stage 5 (or terminal posture), do not continue helpful clarification loops.\n'
   prompt += '- Tone guardrail: professional, time-constrained, clinically grounded, never rude or sarcastic.\n'
