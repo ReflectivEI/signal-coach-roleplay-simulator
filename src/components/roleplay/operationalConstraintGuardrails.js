@@ -40,11 +40,6 @@ export function extractConstraintCandidatesFromText(text = "") {
   return candidates;
 }
 
-// Backward-compatible alias used by existing runtime bundles/helpers.
-export function detectOperationalConstraintTypes(text = "") {
-  return [...new Set(extractConstraintCandidatesFromText(text).map((item) => item.constraintType))];
-}
-
 export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = [] } = {}) {
   const scenarioCandidates = extractConstraintCandidatesFromText(scenarioText);
   const dialogueCandidates = (Array.isArray(dialogueTurns) ? dialogueTurns : [])
