@@ -78,6 +78,33 @@ function sanitizeUserMessage(text) {
   return escapeHTML(String(text || "").trim());
 }
 
+function isLowSubstanceAck(text = "") {
+  const normalized = String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return false;
+
+  const shortAcks = new Set([
+    "ok",
+    "okay",
+    "sure",
+    "yep",
+    "yeah",
+    "ya",
+    "k",
+    "kk",
+    "got it",
+    "sounds good",
+    "understood",
+    "fine",
+  ]);
+
+  if (shortAcks.has(normalized)) return true;
+  return normalized.split(" ").length <= 2 && /^(ok|okay|sure|yep|yeah|k)\b/.test(normalized);
+}
+
 function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
 
@@ -688,9 +715,13 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|take care|i have patients waiting|i need to get back to patients|this (isn't|is not) productive|not worth more time)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
+}
+
+function hasHcpSignoffCue(text = "") {
+  return /\b(take care|i have patients waiting|i need to get back to patients|this (isn't|is not) productive|not worth more time|need to move on|wrapp?ing this up|we can continue later)\b/i.test(String(text || ""));
 }
 
 function hasWorkflowOperationalLanguage(text = "") {
@@ -973,7 +1004,20 @@ function compressHcpDialogueForEngagement(dialogue = "", engagement = {}) {
     compact = compact.replace(/\b(let me|happy to|i can walk you through|we can review)\b[^.]*\./gi, "").trim() || compact;
   }
 
-  const needsRedirect = !engagement.concernAddressed && (tier === "impatient" || tier === "disengaging");
+  const closureSentenceIndex = compact
+    .split(/(?<=[.!?])\s+/)
+    .findIndex((sentence) => hasHcpSignoffCue(sentence));
+  const hasSignoffCue = closureSentenceIndex >= 0 || hasHcpSignoffCue(compact);
+  if (hasSignoffCue) {
+    const compactSentences = compact.split(/(?<=[.!?])\s+/).filter(Boolean);
+    if (closureSentenceIndex >= 0) {
+      compact = compactSentences.slice(0, closureSentenceIndex + 1).join(" ").trim();
+    } else {
+      compact = compactSentences[0] || compact;
+    }
+  }
+
+  const needsRedirect = !hasSignoffCue && !engagement.concernAddressed && (tier === "impatient" || tier === "disengaging");
   if (needsRedirect) {
     const progression = [
       "burden",
@@ -2149,6 +2193,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let nextHcpDialogue = '';
     let contextualCue = '';
     if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
+    if (turns.filter((t) => t.repMessage).length > 0 && isLowSubstanceAck(normalizedInput)) {
+      setCoachingTip({
+        tip: "⚠ Add one concrete detail before sending.",
+        label: "Coaching",
+        suggestion: "Name the operational barrier you heard, then ask one practical follow-up.",
+        severity: "warning",
+        escalationLabel: "Low-substance reply blocked",
+      });
+      return;
+    }
 
     controller.isProcessingTurn = true;
     controller.state = SessionState.PROCESSING;
@@ -3379,6 +3433,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   });
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
+  const sanitizedInput = sanitizeUserMessage(input);
+  const shouldBlockLowSubstanceSubmit = Boolean(sanitizedInput) && repTurnsCount > 0 && isLowSubstanceAck(sanitizedInput);
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = false;
 
@@ -3801,7 +3857,7 @@ ${actionText}`;
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
+                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim) || shouldBlockLowSubstanceSubmit} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
