@@ -830,6 +830,19 @@ function hasScenarioOperationalLexicalMatch(text = "", scenarioFamily = "general
   return pack.some((token) => value.includes(String(token).toLowerCase()));
 }
 
+const RECOVERY_TIMING_THRESHOLDS = Object.freeze({
+  immediate_max_misses: 1,
+  partial_max_misses: 2,
+});
+
+const TERMINAL_CLOSE_POLICY_MATRIX = Object.freeze({
+  engaged: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  constrained: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  impatient: { missed: "probe", overpivot: "probe", aligned: "continue", neutral: "continue" },
+  disengaging: { missed: "close", overpivot: "close", aligned: "probe", neutral: "probe" },
+  disengaged: { missed: "close", overpivot: "close", aligned: "close", neutral: "close" },
+});
+
 function classifyConcernFlowOutcome({
   activeConcern = "workflow",
   repMessage = "",
