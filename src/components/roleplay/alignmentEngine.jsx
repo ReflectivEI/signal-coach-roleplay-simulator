@@ -893,6 +893,20 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   }
 
   const rubricMisalignments = computeAlignmentRubric(hcpState, p);
+  if (rubricMisalignments.length >= 2) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Multiple alignment-rubric misses in one turn reduced overall score separation.');
+  }
+  const concernState = hcpState === 'resistant' || hcpState === 'boundary-setting';
+  if (concernState && !p.acknowledgesConcern && !p.paraphrasesHcp) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Concern-state reply lacked acknowledgment/paraphrase, reducing trust calibration.');
+  }
+  const shortOperationalReply = wordCount(repMessage) <= 8;
+  if (shortOperationalReply && (concernState || hcpState === 'time-pressured') && !p.specifiesNextStep && !p.hasQuestion) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Low-substance operational reply in a high-pressure moment reduced score calibration.');
+  }
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;

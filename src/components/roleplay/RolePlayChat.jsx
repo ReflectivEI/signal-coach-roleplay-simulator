@@ -2091,6 +2091,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const lastSubmittedTurnKeyRef = useRef("");
   const loggedTurnKeysRef = useRef(new Set());
   const processedTurnKeysRef = useRef(new Set());
+  const weakReplyWarningKeysRef = useRef(new Set());
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
@@ -2257,13 +2258,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let nextHcpDialogue = '';
     let contextualCue = '';
     if (!sanitizeUserMessage(normalizedInput) || isLoading) return;
-    if (turns.filter((t) => t.repMessage).length > 0 && isLowSubstanceAck(normalizedInput)) {
+    const repTurnsCount = turns.filter((t) => t.repMessage).length;
+    const lowSubstanceAck = repTurnsCount > 0 && isLowSubstanceAck(normalizedInput);
+    const lowSubstanceAckWarningKey = `${candidateTurnKey}::low-substance-ack`;
+    if (lowSubstanceAck && !weakReplyWarningKeysRef.current.has(lowSubstanceAckWarningKey)) {
+      weakReplyWarningKeysRef.current.add(lowSubstanceAckWarningKey);
       setCoachingTip({
-        tip: "⚠ Add one concrete detail before sending.",
+        tip: "⚠ Weak response detected. Add one concrete detail before sending if possible.",
         label: "Coaching",
         suggestion: "Name the operational barrier you heard, then ask one practical follow-up.",
         severity: "warning",
-        escalationLabel: "Low-substance reply blocked",
+        escalationLabel: "Low-substance reply flagged",
       });
       return;
     }
@@ -2285,18 +2290,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const evidenceConstraintActive = evidenceRequired && detectPrimaryConcern(policySeed) === "evidence";
     const missingEvidenceDetail = evidenceConstraintActive && !hasEvidenceDetailSignal(normalizedInput);
 
-    if (awaitingHcpResponse && (lowValueInput || missingEvidenceDetail)) {
+    const weakResponseWarningKey = `${candidateTurnKey}::minimum-substance`;
+    if (awaitingHcpResponse && (lowValueInput || missingEvidenceDetail) && !weakReplyWarningKeysRef.current.has(weakResponseWarningKey)) {
+      weakReplyWarningKeysRef.current.add(weakResponseWarningKey);
       const concernSeed = `${currentPrompt} ${scenario?.description || ""} ${scenario?.context || ""}`;
       const inferredConcern = detectPrimaryConcern(concernSeed);
       setCoachingTip({
-        tip: "⚠ Response blocked: add more substance before sending.",
+        tip: "⚠ Weak response detected. Consider strengthening it before sending.",
         label: "Coaching",
         suggestion: `${buildMinimumSubstanceSuggestion({
           hcpPrompt: currentPrompt,
           concern: inferredConcern,
         })}${missingEvidenceDetail ? " Include one concrete evidence detail (endpoint, threshold, %, or timeframe)." : ""}`,
         severity: "warning",
-        escalationLabel: "Minimum-substance gate",
+        escalationLabel: "Minimum-substance flag",
       });
       return;
     }
@@ -3576,7 +3583,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   const sanitizedInput = sanitizeUserMessage(input);
-  const shouldBlockLowSubstanceSubmit = Boolean(sanitizedInput) && repTurnsCount > 0 && isLowSubstanceAck(sanitizedInput);
+  const shouldBlockLowSubstanceSubmit = false;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = false;
 
