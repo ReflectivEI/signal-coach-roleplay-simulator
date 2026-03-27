@@ -800,7 +800,7 @@ Always respond with actionable, behavior-specific feedback.${response_json_schem
 
         // Add 25 second timeout for LLM API calls
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000);
+        const timeout = setTimeout(() => controller.abort(), Number(env?.LLM_TIMEOUT_MS || 25000));
 
         const openaiResponse = await fetch(llmUrl, {
             method: "POST",
