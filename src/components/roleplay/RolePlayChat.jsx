@@ -820,6 +820,46 @@ function isDirectUserQuestion(text = "") {
   return /^(what|how|why|when|where|which|who|can|could|would|will|should|is|are|do|does|did)\b/i.test(value);
 }
 
+function hasExplicitNarrowingPrompt(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return false;
+  return /\b(one concrete|one practical|one step|single step|this week|keep it practical|be specific|what should we implement|what changes operationally|how does this address)\b/.test(sample);
+}
+
+function detectRecentExplicitNarrowingPrompt(turns = [], respondingToTurn = null) {
+  const recentHcpDialogues = [
+    ...(Array.isArray(turns) ? turns : []).map((turn) => turn?.hcpDialogueBefore),
+    respondingToTurn?.hcpDialogueBefore,
+  ]
+    .filter(Boolean)
+    .slice(-4);
+  return recentHcpDialogues.some((dialogue) => hasExplicitNarrowingPrompt(dialogue));
+}
+
+async function invokeRoleplayLlm(payload, { timeoutMs = 18000, retries = 1 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch('/api/llm/invoke', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      return response;
+    } catch (error) {
+      lastError = error;
+      const isTimeoutLike = error?.name === 'AbortError' || /timed?\s*out|failed to fetch/i.test(String(error?.message || ""));
+      if (!isTimeoutLike || attempt === retries) throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  throw lastError || new Error("Failed to call roleplay LLM endpoint");
+}
+
 function rankResponseObjective({
   overrideExit = false,
   terminalDecisionMode = false,
@@ -2387,6 +2427,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
+    const explicitNarrowingPrompted = detectRecentExplicitNarrowingPrompt(turns, respondingToTurn);
     const governanceTermination = evaluateHcpTerminationPolicy({
       repMessage,
       repHistoryMessages: turns.filter((t) => t?.repMessage).map((t) => t.repMessage),
@@ -2394,7 +2435,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       unresolvedConcernTurns,
       concernFlowOutcome,
       decayTier: decayState.tier,
-      explicitNarrowingPrompted: unresolvedConcernTurns >= 1,
+      explicitNarrowingPrompted,
       isTimePressured: prevState === "time-pressured" || nextHcpState === "time-pressured",
     });
     const terminalDecisionTriggerActive =
@@ -2787,15 +2828,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             concernAddressed: decayState.concernAddressed,
           },
         });
-        const res = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: systemPrompt,
-            max_tokens: 220,
-            temperature: 0,
-            roleplay: true,
-          })
+        const res = await invokeRoleplayLlm({
+          prompt: systemPrompt,
+          max_tokens: 220,
+          temperature: 0,
+          roleplay: true,
         });
         if (res.ok) {
           const data = await res.json();

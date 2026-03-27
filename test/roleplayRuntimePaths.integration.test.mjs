@@ -170,3 +170,23 @@ test("governance policy sets boundary before termination when budget first excee
   assert.equal(policy.shouldBoundarySet, true);
   assert.ok(policy.reasonCodes.includes("repeated_unanswered_direct_question"));
 });
+
+test("governance policy does not terminate solely for time pressure without hostility", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "How about implementing this with reminders and standing orders in LTC.",
+    repHistoryMessages: [
+      "I can help improve outreach with SMS reminders.",
+      "We can tailor this for high-risk adults.",
+    ],
+    activeConstraintTypes: ["workflow", "time"],
+    unresolvedConcernTurns: 3,
+    concernFlowOutcome: "missed",
+    decayTier: "disengaging",
+    explicitNarrowingPrompted: false,
+    isTimePressured: true,
+  });
+
+  assert.equal(policy.shouldTerminate, false);
+  assert.equal(policy.shouldBoundarySet, true);
+  assert.ok(policy.reasonCodes.includes("time_pressure_with_no_progress"));
+});

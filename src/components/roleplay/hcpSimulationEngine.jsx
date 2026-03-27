@@ -325,13 +325,19 @@ export function evaluateHcpTerminationPolicy({
   if (narrowingFailure) reasonCodes.push('failure_after_explicit_narrowing_prompt')
   if (timePressureNoProgress) reasonCodes.push('time_pressure_with_no_progress')
 
+  const severeNoProgress =
+    unresolvedConcernTurns >= 5
+    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+    && (decayTier === 'disengaging' || decayTier === 'impatient')
+    && explicitNarrowingPrompted
+
   const shouldTerminate = Boolean(
     repeatedDisrespect
     || repeatedContradiction
-    || narrowingFailure
-    || timePressureNoProgress
     || terminalByDecay
-    || unresolvedConcernTurns >= 5
+    || (narrowingFailure && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
+    || (timePressureNoProgress && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
+    || severeNoProgress
   )
 
   const shouldBoundarySet = !shouldTerminate && Boolean(
