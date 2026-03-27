@@ -23,6 +23,7 @@ import {
   deriveInitialState, deriveInitialTemperature,
   transitionState, transitionTemperature, transitionSeverity,
   buildHCPProfile, buildHCPDialoguePrompt,
+  normalizeHcpDialoguePunctuation,
   detectHcpDisagreement, escalateForDisagreement,
   TEMPERATURES,
   updateTurnState,
@@ -48,6 +49,8 @@ import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
 import { getDifficultyVisuals } from "./difficultyStyles";
+import { normalizeMessage } from "@/lib/messageNormalization";
+import { normalizeTone } from "@/lib/conversationToneNormalization";
 import {
   classifyScenarioFamily,
   getScenarioPolicyOverrides,
@@ -146,7 +149,9 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
 
   try {
-    const hardenedText = hardenTextSurface(originalText);
+    const normalizedText = normalizeMessage(originalText);
+    const toneNormalizedText = normalizeTone(normalizedText);
+    const hardenedText = hardenTextSurface(toneNormalizedText);
     logPunctuationDelta({
       stage: "render_pipeline",
       source,
@@ -2989,7 +2994,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
           }
 
-          nextHcpDialogue = nextHcpDialogue.trim();
+          const prePunctuationNormalization = nextHcpDialogue;
+          nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
+          logPunctuationDelta({
+            stage: "hcp_dialogue_postprocess",
+            source: "normalizeHcpDialoguePunctuation",
+            before: prePunctuationNormalization,
+            after: nextHcpDialogue,
+          });
           draftResponseBeforePostProcessing = nextHcpDialogue;
 
           if (
@@ -3112,8 +3124,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         })
       : baseResponse;
 
-    // Single authority surface-finalizer stage for HCP dialogue text.
-    nextHcpDialogue = hardenTextSurface(inferenceAdjustedResponse);
+    nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
 
     if (
       !overrideExit
