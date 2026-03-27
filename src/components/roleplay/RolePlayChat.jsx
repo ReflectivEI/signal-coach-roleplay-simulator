@@ -2933,6 +2933,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "Thanks. Include payer-variation handling and owner-level rollout steps in that plan, then send it by your committed deadline.";
     }
 
+    const terminalDialogueLocked = overrideExit || nextHcpState === "disengaged";
+    if (terminalDialogueLocked && shouldReplaceWithTerminalDisengagement(nextHcpDialogue)) {
+      nextHcpDialogue = terminalCloseFallback;
+      usedDeterministicFallback = true;
+    }
+
     const recentRepTurns = getRecentRepTurns(prevTurns);
     const previousInferenceState = repInferenceStateRef.current;
     const nextInferenceState = updateRepInferenceState(previousInferenceState, recentRepTurns);
@@ -2991,45 +2997,47 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ];
     const progressionStage =
       dialogueProgression[Math.max(0, Math.min(dialogueProgression.length - 1, unresolvedConcernTurns))];
-    nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
-      ...decayState,
-      activeConcern,
-      unresolvedStreak: unresolvedConcernTurns,
-      burdenEstablished,
-    });
     const recentHcpDialogues = collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS);
-    nextHcpDialogue = enforceDialogueVariety({
-      candidate: nextHcpDialogue,
-      concern: activeConcern,
-      seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
-      recentDialogues: recentHcpDialogues,
-      progressionStage,
-    });
-    if (terminalDecisionMode) {
-      nextHcpDialogue = buildTerminalDecisionDialogue({
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+    if (!terminalDialogueLocked) {
+      nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
+        ...decayState,
+        activeConcern,
+        unresolvedStreak: unresolvedConcernTurns,
+        burdenEstablished,
       });
       nextHcpDialogue = enforceDialogueVariety({
         candidate: nextHcpDialogue,
         concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
         recentDialogues: recentHcpDialogues,
         progressionStage,
       });
-    }
+      if (terminalDecisionMode) {
+        nextHcpDialogue = buildTerminalDecisionDialogue({
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        });
+        nextHcpDialogue = enforceDialogueVariety({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+          recentDialogues: recentHcpDialogues,
+          progressionStage,
+        });
+      }
 
-    const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
-    const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
-    const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
-    if (hasRecentPhraseReuse) {
-      nextHcpDialogue = enforceDialogueVariety({
-        candidate: nextHcpDialogue,
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
-        recentDialogues: recentHcpDialogues,
-        progressionStage,
-      });
+      const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
+      const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
+      const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
+      if (hasRecentPhraseReuse) {
+        nextHcpDialogue = enforceDialogueVariety({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
+          recentDialogues: recentHcpDialogues,
+          progressionStage,
+        });
+      }
     }
 
     const primaryConcern = detectPrimaryConcern(
@@ -3224,7 +3232,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       cue: contextualCue,
     });
 
-    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue) && !terminalSignalDetected) {
+    if (!terminalDialogueLocked && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue) && !terminalSignalDetected) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
@@ -3232,45 +3240,56 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const initialViolation = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    const draftRejectedForConstraintRule = !initialViolation.valid;
-    if (draftRejectedForConstraintRule) {
-      usedDeterministicFallback = true;
-      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
-        fallbackResponse: groundedFallback,
-        concern: activeConcern,
+    let initialViolation = {
+      valid: true,
+      rejectionReason: null,
+      ungroundedTypes: [],
+      duplicateTypes: [],
+      draftTypes: [],
+    };
+    let finalViolationCheck = initialViolation;
+    let draftRejectedForConstraintRule = false;
+    if (!terminalDialogueLocked) {
+      initialViolation = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
       });
-    }
-    const finalViolationCheck = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    if (!finalViolationCheck.valid) {
-      nextHcpDialogue = buildConstraintViolationFallback({
-        concern: activeConcern,
-        recentDialogues: collectRecentHcpDialogues(turns, 4),
-        seed: `${sessionId}:${nextTurnNumber}:constraint-violation`,
+      draftRejectedForConstraintRule = !initialViolation.valid;
+      if (draftRejectedForConstraintRule) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+          fallbackResponse: groundedFallback,
+          concern: activeConcern,
+        });
+      }
+      finalViolationCheck = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
       });
-      nextHcpDialogue = enforceDialogueVariety({
-        candidate: nextHcpDialogue,
-        concern: activeConcern,
-        seed: `${sessionId}:${nextTurnNumber}:constraint-violation-variety`,
-        recentDialogues: collectRecentHcpDialogues(turns, 4),
-        progressionStage: activeConcern,
-      });
+      if (!finalViolationCheck.valid) {
+        nextHcpDialogue = buildConstraintViolationFallback({
+          concern: activeConcern,
+          recentDialogues: collectRecentHcpDialogues(turns, 4),
+          seed: `${sessionId}:${nextTurnNumber}:constraint-violation`,
+        });
+        nextHcpDialogue = enforceDialogueVariety({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${sessionId}:${nextTurnNumber}:constraint-violation-variety`,
+          recentDialogues: collectRecentHcpDialogues(turns, 4),
+          progressionStage: activeConcern,
+        });
+      }
     }
 
     const finalOpening = getOpeningSentence(nextHcpDialogue);
