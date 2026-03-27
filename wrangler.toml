@@ -14,7 +14,7 @@ routes = [
 ]
 
 [vars]
-DEBUG = "false"
+DEBUG = "true"
 LLM_TIMEOUT_MS = "25000"
 
 # Upload static files - this creates the __STATIC_CONTENT binding
