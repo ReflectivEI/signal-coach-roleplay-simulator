@@ -85,6 +85,12 @@ function sanitizeRenderedMessage(text, source = "unknown") {
     const normalizedText = normalizeMessage(originalText);
     const toneNormalizedText = normalizeTone(normalizedText);
     const hardenedText = hardenTextSurface(toneNormalizedText);
+    logPunctuationDelta({
+      stage: "render_pipeline",
+      source,
+      before: originalText,
+      after: hardenedText,
+    });
     const renderedText = escapeHTML(hardenedText);
 
     if (
@@ -117,7 +123,7 @@ function hardenTextSurface(text) {
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());
 
   if (!/[.!?]$/.test(value)) {
-    const looksLikeQuestion = /\b(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
+    const looksLikeQuestion = /^(what|how|why|when|where|who|which|do|does|did|can|could|would|will|is|are|am|should|have|has|had)\b/i.test(value);
     value += looksLikeQuestion ? "?" : ".";
   }
 
@@ -165,6 +171,7 @@ const REALISM_CONCERN_PATTERNS = {
 };
 
 const PLANNER_TRACE_FLAG_KEY = "roleplay.debug.planner_trace";
+const TEXT_SURFACE_CANARY_FLAG_KEY = "roleplay.debug.text_surface_canary";
 const OPERATIONAL_CONSTRAINT_PRIORITY = ["staffing", "capacity", "workflow", "prior_auth", "scheduling", "handoff", "callback", "throughput", "time", "access", "policy", "screening", "evidence"];
 
 function readDebugFlag(flagKey) {
@@ -179,6 +186,44 @@ function readDebugFlag(flagKey) {
 
 function isPlannerTraceEnabled() {
   return readDebugFlag(PLANNER_TRACE_FLAG_KEY);
+}
+
+function isTextSurfaceCanaryEnabled() {
+  return import.meta.env.DEV && (isPlannerTraceEnabled() || readDebugFlag(TEXT_SURFACE_CANARY_FLAG_KEY));
+}
+
+function punctuationProfile(text = "") {
+  const value = String(text || "");
+  return {
+    length: value.length,
+    questionMarks: (value.match(/\?/g) || []).length,
+    periods: (value.match(/\./g) || []).length,
+    exclamations: (value.match(/!/g) || []).length,
+    commas: (value.match(/,/g) || []).length,
+  };
+}
+
+function logPunctuationDelta({ stage = "unknown", source = "unknown", before = "", after = "" } = {}) {
+  if (!isTextSurfaceCanaryEnabled()) return;
+  const beforeProfile = punctuationProfile(before);
+  const afterProfile = punctuationProfile(after);
+  const delta = {
+    questionMarks: afterProfile.questionMarks - beforeProfile.questionMarks,
+    periods: afterProfile.periods - beforeProfile.periods,
+    exclamations: afterProfile.exclamations - beforeProfile.exclamations,
+    commas: afterProfile.commas - beforeProfile.commas,
+    length: afterProfile.length - beforeProfile.length,
+  };
+  const changed = Object.values(delta).some((value) => value !== 0);
+  if (!changed) return;
+
+  console.info("ROLEPLAY_PUNCTUATION_CANARY", {
+    stage,
+    source,
+    delta,
+    before: String(before || "").slice(0, 240),
+    after: String(after || "").slice(0, 240),
+  });
 }
 
 function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
@@ -2776,7 +2821,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-processing" });
           }
 
+          const prePunctuationNormalization = nextHcpDialogue;
           nextHcpDialogue = normalizeHcpDialoguePunctuation(nextHcpDialogue).trim();
+          logPunctuationDelta({
+            stage: "hcp_dialogue_postprocess",
+            source: "normalizeHcpDialoguePunctuation",
+            before: prePunctuationNormalization,
+            after: nextHcpDialogue,
+          });
           draftResponseBeforePostProcessing = nextHcpDialogue;
 
           if (
@@ -3461,15 +3513,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const data = await res.json();
         const rawContent = (data.response || data.text || data.content || '').trim();
 
-        console.log('=== RAW FEEDBACK CONTENT ===');
-        console.log(rawContent.substring(0, 300));
+        if (isPlannerTraceEnabled()) {
+          console.log('=== RAW FEEDBACK CONTENT ===');
+          console.log(rawContent.substring(0, 300));
+        }
 
         // Strategy 1: Try delimiter-based parsing
         let sections = rawContent.split('[SECTION_END]').map(s => s.trim()).filter(Boolean);
 
         // If delimiter parsing didn't work well, try regex-based extraction
         if (sections.length < 4 || sections.some(s => s.length < 20)) {
-          console.log('Delimiter parsing failed, trying regex approach...');
+          if (isPlannerTraceEnabled()) {
+            console.log('Delimiter parsing failed, trying regex approach...');
+          }
 
           // Try to extract by section headers/keywords
           const strengthsMatch = rawContent.match(/(?:STRENGTHS?|Done Well|Strong|Positive)[:\s]*\n+([\s\S]*?)(?=(?:IMPROVE|Develop|Weakness|Gap|SECTION)|$)/i);
@@ -3483,12 +3539,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             patternsMatch?.[1] || '',
             actionsMatch?.[1] || ''
           ];
-          console.log('Regex extraction produced', sections.length, 'sections');
+          if (isPlannerTraceEnabled()) {
+            console.log('Regex extraction produced', sections.length, 'sections');
+          }
         }
 
         // Fallback: if still not enough content, split by double newlines and distribute
         if (sections.length < 4 || sections.every(s => !s || s.length < 15)) {
-          console.log('Regex also failed, using raw content directly');
+          if (isPlannerTraceEnabled()) {
+            console.log('Regex also failed, using raw content directly');
+          }
           sections = [rawContent, '', '', ''];
         }
 

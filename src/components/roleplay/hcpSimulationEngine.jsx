@@ -1659,6 +1659,7 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
 
   const questionStarterPattern =
     /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
+  const declarativeWhPattern = /^(what|how)\s+(we|i|this|that|it|they)\b/i
 
   const sentences = text.match(/[^?.!]+[?.!]?/g) || [text]
 
@@ -1668,11 +1669,12 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
       if (!sentence) return ''
 
       const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
-      const isQuestion = questionStarterPattern.test(withoutEndPunct)
+      const normalizedSentenceBody = withoutEndPunct.replace(/^([a-z])/, (_, char) => char.toUpperCase())
+      const isQuestion = questionStarterPattern.test(withoutEndPunct) && !declarativeWhPattern.test(withoutEndPunct)
 
-      if (isQuestion) return `${withoutEndPunct}?`
+      if (isQuestion) return `${normalizedSentenceBody}?`
       if (/[?.!]$/.test(sentence)) return sentence
-      return `${withoutEndPunct}.`
+      return `${normalizedSentenceBody}.`
     })
     .filter(Boolean)
     .join(' ')
