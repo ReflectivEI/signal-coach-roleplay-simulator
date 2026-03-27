@@ -32,6 +32,7 @@ import {
   getDeterministicTerminalClose,
   shouldForceTerminalDisengagement,
   shouldReplaceWithTerminalDisengagement,
+  evaluateHcpTerminationPolicy,
 } from "./hcpSimulationEngine";
 import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
@@ -2386,6 +2387,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
+    const governanceTermination = evaluateHcpTerminationPolicy({
+      repMessage,
+      repHistoryMessages: turns.filter((t) => t?.repMessage).map((t) => t.repMessage),
+      activeConstraintTypes: normalizedActiveConstraints,
+      unresolvedConcernTurns,
+      concernFlowOutcome,
+      decayTier: decayState.tier,
+      explicitNarrowingPrompted: unresolvedConcernTurns >= 1,
+      isTimePressured: prevState === "time-pressured" || nextHcpState === "time-pressured",
+    });
     const terminalDecisionTriggerActive =
       ["impatient", "disengaging"].includes(decayState.tier)
       && unresolvedConcernTurns >= 3
@@ -2421,6 +2432,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       concernFlowOutcome,
       engagementTier: decayState.tier,
       unresolvedConcernTurns,
+      governanceTermination,
       chosenResponseObjective,
       objectiveRanking,
     };
@@ -2433,10 +2445,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedObjectiveAccountsForConstraint: objectiveRanking.selectedObjectiveAccountsForConstraint,
       rankedObjectives: objectiveRanking.rankedObjectives,
       concernFlowOutcome,
+      governanceTermination,
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
     });
+
+    if (governanceTermination.shouldBoundarySet && nextHcpState !== "disengaged") {
+      nextHcpState = escalateHcpState(nextHcpState, 1);
+      if (nextHcpState !== "disengaged" && HCP_STATES.indexOf(nextHcpState) < HCP_STATES.indexOf("boundary-setting")) {
+        nextHcpState = "boundary-setting";
+      }
+    }
+
+    if (governanceTermination.shouldTerminate) {
+      nextHcpState = "disengaged";
+    }
 
     if (hardLoopBreaker) {
       nextHcpState = "disengaged";

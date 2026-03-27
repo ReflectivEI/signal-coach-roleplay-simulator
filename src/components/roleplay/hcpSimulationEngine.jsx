@@ -254,6 +254,101 @@ export function shouldReplaceWithTerminalDisengagement(dialogue = '') {
   return normalized.includes('?') || sentenceCount > 1 || normalized.split(/\s+/).length > 16
 }
 
+const REP_DISRESPECT_PATTERNS = [
+  /\b(make up your mind|you are not answering|you're not answering|again[,]?\s*you|stop avoiding|you keep dodging|this is useless|wasting my time)\b/i,
+  /\b(you are avoiding the topic|you're avoiding the topic|avoiding the topic)\b/i,
+  /\b(get serious|be serious|figure it out|that's ridiculous|this is nonsense|you don't get it)\b/i,
+]
+
+const REP_CONTRADICTION_PATTERNS = [
+  /\b(what (staffing|staff|constraints?|limitations?)\??)\b/i,
+  /\b(there (is|are) no (staffing|workflow|capacity|operational) (constraint|constraints|issue|issues|limitations?))\b/i,
+  /\b((staff|staffing|workflow|admin burden|administrative burden|time pressure) (has|have) nothing to do with)\b/i,
+]
+
+export function detectRepDisrespectSignal(message = '') {
+  const text = String(message || '')
+  return REP_DISRESPECT_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export function detectRepConstraintContradiction(message = '', activeConstraintTypes = []) {
+  const text = String(message || '')
+  if (!text.trim() || !Array.isArray(activeConstraintTypes) || activeConstraintTypes.length === 0) {
+    return false
+  }
+  return REP_CONTRADICTION_PATTERNS.some((pattern) => pattern.test(text))
+}
+
+export function evaluateHcpTerminationPolicy({
+  repMessage = '',
+  repHistoryMessages = [],
+  activeConstraintTypes = [],
+  unresolvedConcernTurns = 0,
+  concernFlowOutcome = 'neutral',
+  decayTier = 'engaged',
+  explicitNarrowingPrompted = false,
+  isTimePressured = false,
+} = {}) {
+  const history = [
+    ...(Array.isArray(repHistoryMessages) ? repHistoryMessages : []),
+    repMessage,
+  ].filter(Boolean)
+
+  const signalCounts = history.slice(-6).reduce((acc, message) => {
+    if (detectRepDisrespectSignal(message)) acc.disrespect += 1
+    if (detectRepConstraintContradiction(message, activeConstraintTypes)) acc.contradiction += 1
+    return acc
+  }, { disrespect: 0, contradiction: 0 })
+
+  const unansweredBudgetExceeded =
+    unresolvedConcernTurns >= 3
+    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+  const repeatedDisrespect = signalCounts.disrespect >= 2
+  const repeatedContradiction = signalCounts.contradiction >= 2
+  const narrowingFailure =
+    explicitNarrowingPrompted
+    && unresolvedConcernTurns >= 4
+    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+  const timePressureNoProgress =
+    isTimePressured
+    && unresolvedConcernTurns >= 3
+    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+  const terminalByDecay =
+    decayTier === 'disengaging'
+    && unansweredBudgetExceeded
+    && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1)
+
+  const reasonCodes = []
+  if (unansweredBudgetExceeded) reasonCodes.push('repeated_unanswered_direct_question')
+  if (repeatedContradiction) reasonCodes.push('repeated_contradiction_of_known_facts')
+  if (repeatedDisrespect) reasonCodes.push('repeated_disrespect_or_argumentative_tone')
+  if (narrowingFailure) reasonCodes.push('failure_after_explicit_narrowing_prompt')
+  if (timePressureNoProgress) reasonCodes.push('time_pressure_with_no_progress')
+
+  const shouldTerminate = Boolean(
+    repeatedDisrespect
+    || repeatedContradiction
+    || narrowingFailure
+    || timePressureNoProgress
+    || terminalByDecay
+    || unresolvedConcernTurns >= 5
+  )
+
+  const shouldBoundarySet = !shouldTerminate && Boolean(
+    unansweredBudgetExceeded
+    || signalCounts.disrespect >= 1
+    || signalCounts.contradiction >= 1
+  )
+
+  return {
+    shouldTerminate,
+    shouldBoundarySet,
+    reasonCodes,
+    signalCounts,
+    unansweredBudgetExceeded,
+  }
+}
+
 /******************************************************************************************
 CONVERSATION QUALITY
 Normalized signal used by cue entropy rotation
