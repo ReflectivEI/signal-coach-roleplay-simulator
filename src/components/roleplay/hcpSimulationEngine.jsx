@@ -288,6 +288,14 @@ export function evaluateHcpTerminationPolicy({
   decayTier = 'engaged',
   explicitNarrowingPrompted = false,
   isTimePressured = false,
+  timePressureActive = false,
+  unansweredDirectQuestionStreak = 0,
+  lowValueTurnStreak = 0,
+  unansweredDirectQuestionCount = 0,
+  repeatedDeflectionCount = 0,
+  prematureClosePushCount = 0,
+  valueDeliveredRecently = true,
+  repRespectViolationCount = 0,
 } = {}) {
   const history = [
     ...(Array.isArray(repHistoryMessages) ? repHistoryMessages : []),
@@ -305,18 +313,63 @@ export function evaluateHcpTerminationPolicy({
     && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
   const repeatedDisrespect = signalCounts.disrespect >= 2
   const repeatedContradiction = signalCounts.contradiction >= 2
+  const effectiveTimePressure = Boolean(isTimePressured || timePressureActive)
+  const unresolvedFailure = concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot'
+  const unresolvedSoftFailure = unresolvedFailure || concernFlowOutcome === 'neutral'
+  const unansweredCount = Math.max(unansweredDirectQuestionStreak, unansweredDirectQuestionCount)
+  const deflectionCount = Math.max(repeatedDeflectionCount, lowValueTurnStreak)
+  const pressureAdjustedSkepticalThreshold = effectiveTimePressure ? 1 : 2
+  const pressureAdjustedDisengagingThreshold = effectiveTimePressure ? 2 : 3
+  const pressureAdjustedTerminateThreshold = effectiveTimePressure ? 3 : 4
   const narrowingFailure =
     explicitNarrowingPrompted
     && unresolvedConcernTurns >= 4
-    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+    && unresolvedFailure
   const timePressureNoProgress =
-    isTimePressured
+    effectiveTimePressure
     && unresolvedConcernTurns >= 3
-    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+    && unresolvedFailure
   const terminalByDecay =
     decayTier === 'disengaging'
     && unansweredBudgetExceeded
     && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1)
+  const repeatedPoliteNonAnswerLoop =
+    unansweredCount >= 3
+    && explicitNarrowingPrompted
+    && (effectiveTimePressure || decayTier === 'impatient' || decayTier === 'disengaging')
+    && unresolvedSoftFailure
+  const severeLowValueStall =
+    deflectionCount >= 3
+    && unresolvedConcernTurns >= 4
+    && (decayTier === 'impatient' || decayTier === 'disengaging')
+    && explicitNarrowingPrompted
+  const repeatedPrematureCloseBeforeAnswer =
+    prematureClosePushCount >= 2
+    && unansweredCount >= 2
+    && unresolvedSoftFailure
+  const hardStopRepeatedCoreQuestionMiss =
+    unansweredCount >= pressureAdjustedTerminateThreshold
+    && unresolvedSoftFailure
+    && !valueDeliveredRecently
+  const fastTerminateByRespectViolation = repRespectViolationCount >= 2 || repeatedDisrespect
+
+  let hcpPatienceState = 'engaged'
+  if (
+    unansweredCount >= pressureAdjustedSkepticalThreshold
+    || deflectionCount >= pressureAdjustedSkepticalThreshold
+    || !valueDeliveredRecently
+  ) {
+    hcpPatienceState = 'skeptical'
+  }
+  if (
+    unansweredCount >= pressureAdjustedDisengagingThreshold
+    || deflectionCount >= pressureAdjustedDisengagingThreshold
+    || repeatedPrematureCloseBeforeAnswer
+    || decayTier === 'impatient'
+    || decayTier === 'disengaging'
+  ) {
+    hcpPatienceState = 'disengaging'
+  }
 
   const reasonCodes = []
   if (unansweredBudgetExceeded) reasonCodes.push('repeated_unanswered_direct_question')
@@ -324,34 +377,63 @@ export function evaluateHcpTerminationPolicy({
   if (repeatedDisrespect) reasonCodes.push('repeated_disrespect_or_argumentative_tone')
   if (narrowingFailure) reasonCodes.push('failure_after_explicit_narrowing_prompt')
   if (timePressureNoProgress) reasonCodes.push('time_pressure_with_no_progress')
+  if (repeatedPoliteNonAnswerLoop) reasonCodes.push('termination_boundary_reached_after_repeated_non_answer')
+  if (severeLowValueStall) reasonCodes.push('low_value_stall_after_narrowing')
+  if (repeatedPrematureCloseBeforeAnswer) reasonCodes.push('repeated_premature_close_before_answer')
+  if (hardStopRepeatedCoreQuestionMiss) reasonCodes.push('hard_stop_repeated_core_question_unanswered')
+  if (fastTerminateByRespectViolation) reasonCodes.push('respect_violation_accelerates_termination')
 
   const severeNoProgress =
     unresolvedConcernTurns >= 5
-    && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')
+    && unresolvedFailure
     && (decayTier === 'disengaging' || decayTier === 'impatient')
     && explicitNarrowingPrompted
 
   const shouldTerminate = Boolean(
-    repeatedDisrespect
+    fastTerminateByRespectViolation
     || repeatedContradiction
     || terminalByDecay
     || (narrowingFailure && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
     || (timePressureNoProgress && (signalCounts.disrespect >= 1 || signalCounts.contradiction >= 1))
     || severeNoProgress
+    || repeatedPoliteNonAnswerLoop
+    || severeLowValueStall
+    || repeatedPrematureCloseBeforeAnswer
+    || hardStopRepeatedCoreQuestionMiss
   )
+
+  if (shouldTerminate) {
+    hcpPatienceState = 'terminate'
+  }
 
   const shouldBoundarySet = !shouldTerminate && Boolean(
     unansweredBudgetExceeded
     || signalCounts.disrespect >= 1
     || signalCounts.contradiction >= 1
+    || unansweredCount >= 2
+    || deflectionCount >= 2
+    || hcpPatienceState === 'disengaging'
   )
+
+  const terminationTriggered = shouldTerminate
+  const terminationReason = shouldTerminate
+    ? reasonCodes[0] || 'termination_boundary_reached'
+    : null
 
   return {
     shouldTerminate,
     shouldBoundarySet,
+    terminationTriggered,
+    terminationReason,
+    hcpPatienceState,
     reasonCodes,
     signalCounts,
     unansweredBudgetExceeded,
+    unansweredDirectQuestionCount: unansweredCount,
+    repeatedDeflectionCount: deflectionCount,
+    valueDeliveredRecently,
+    timePressureActive: effectiveTimePressure,
+    repRespectViolationCount: Math.max(repRespectViolationCount, signalCounts.disrespect),
   }
 }
 
