@@ -175,7 +175,14 @@ function isPlannerTraceEnabled() {
 }
 
 function isConstraintOpeningGuardrailEnabled() {
-  return readDebugFlag(CONSTRAINT_OPENING_GUARDRAIL_FLAG_KEY);
+  if (typeof window === "undefined") return true;
+  try {
+    const value = window.localStorage?.getItem(CONSTRAINT_OPENING_GUARDRAIL_FLAG_KEY);
+    if (value === "0" || value === "false") return false;
+    return true;
+  } catch (_error) {
+    return true;
+  }
 }
 
 function extractConstraintCandidatesFromText(text = "") {
@@ -202,13 +209,36 @@ function extractConstraintCandidatesFromText(text = "") {
   return candidates;
 }
 
+function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
+  if (!Array.isArray(turns) || turns.length === 0) return [];
+  return turns
+    .slice(-Math.max(1, recentWindow))
+    .flatMap((turn) => extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || ""));
+}
+
 function buildNormalizedActiveConstraints({ activeConcern = "workflow", rawCandidates = [] } = {}) {
-  const normalized = new Set();
-  if (activeConcern) normalized.add(activeConcern);
-  rawCandidates.forEach((candidate) => {
-    if (candidate?.type) normalized.add(candidate.type);
+  const byType = new Map();
+  rawCandidates.forEach((candidate, index) => {
+    const type = candidate?.type;
+    if (!type) return;
+    const existing = byType.get(type) || { type, hits: 0, latestIndex: -1 };
+    existing.hits += 1;
+    existing.latestIndex = index;
+    byType.set(type, existing);
   });
-  return [...normalized];
+
+  const prioritized = [...byType.values()]
+    .sort((a, b) => {
+      if (b.hits !== a.hits) return b.hits - a.hits;
+      return b.latestIndex - a.latestIndex;
+    })
+    .map((entry) => entry.type);
+
+  if (activeConcern && !prioritized.includes(activeConcern)) {
+    prioritized.push(activeConcern);
+  }
+
+  return prioritized;
 }
 
 function getOpeningSentence(text = "") {
@@ -2173,12 +2203,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : 0;
     const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
     const activeConcern = detectPrimaryConcern(concernSourceText);
-    const rawUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
+    const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
+    const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
+    const rawUserConstraintCandidates = [
+      ...recentUserConstraintCandidates,
+      ...currentUserConstraintCandidates,
+    ];
     const normalizedActiveConstraints = buildNormalizedActiveConstraints({
       activeConcern,
       rawCandidates: rawUserConstraintCandidates,
     });
-    const transcriptConstraintPresent = rawUserConstraintCandidates.length > 0;
+    const transcriptConstraintPresent = currentUserConstraintCandidates.length > 0 || recentUserConstraintCandidates.length > 0;
     emitPlannerTrace("constraints_extracted", {
       turnNumber: nextTurnNumber,
       rawUserConstraintCandidates,
