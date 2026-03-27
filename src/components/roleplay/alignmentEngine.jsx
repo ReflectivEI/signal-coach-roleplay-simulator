@@ -151,12 +151,14 @@ function detectPatterns(msg) {
 }
 
 // ─── SCORING HELPERS ───────────────────────────────────────────────────────────
-function roundHalfUp(n) { return Math.floor(n + 0.5); }
 function avg(...scores) {
   const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
   return Math.floor(mean * 10 + 0.5) / 10;
 }
-function clamp(v) { return Math.max(1, Math.min(5, roundHalfUp(v))); }
+function clamp(v) {
+  const bounded = Math.max(1, Math.min(5, Number(v)));
+  return Math.round(bounded * 10) / 10;
+}
 
 function collectContentTokens(text = "") {
   return String(text || "")
@@ -893,10 +895,27 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   }
 
   const rubricMisalignments = computeAlignmentRubric(hcpState, p);
+  if (rubricMisalignments.length >= 2) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Multiple alignment-rubric misses in one turn reduced overall score separation.');
+  }
+  const concernState = hcpState === 'resistant' || hcpState === 'boundary-setting';
+  if (concernState && !p.acknowledgesConcern && !p.paraphrasesHcp) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Concern-state reply lacked acknowledgment/paraphrase, reducing trust calibration.');
+  }
+  const shortOperationalReply = wordCount(repMessage) <= 8;
+  if (shortOperationalReply && (concernState || hcpState === 'time-pressured') && !p.specifiesNextStep && !p.hasQuestion) {
+    universalPenalty -= 1;
+    globalMisalignments.push('Low-substance operational reply in a high-pressure moment reduced score calibration.');
+  }
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
-  const overallScore = p.isAggressive || repeatedAggressive ? 1 : Math.max(1, Math.min(5, Math.round(rawAvg + universalPenalty)));
+  const overallRaw = p.isAggressive || repeatedAggressive
+    ? 1
+    : Math.max(1, Math.min(5, rawAvg + universalPenalty));
+  const overallScore = Math.round(overallRaw * 10) / 10;
 
   const allPositives = [];
   const allMisalignments = [...globalMisalignments];

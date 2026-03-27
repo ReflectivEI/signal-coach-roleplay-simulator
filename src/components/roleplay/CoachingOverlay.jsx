@@ -133,6 +133,12 @@ const COACHING_TIPS = {
   },
 };
 
+const REPEAT_VARIATION_SUFFIXES = [
+  "Use the HCP's exact wording in your first sentence.",
+  "Keep your next reply to one operational point plus one follow-up question.",
+  "Acknowledge first, then give one concrete clinic-level action.",
+];
+
 /**
  * Determine if a coaching overlay should trigger based on alignment + state transition.
  * Returns { shouldShow, tip, label, suggestion, severity } — fully deterministic.
@@ -162,11 +168,24 @@ export function shouldTriggerCoaching(alignment, prevState, nextState) {
   if (!selected) selected = stateBank.default;
 
   const severity = criticalEscalation ? 'critical' : alignment.score <= 2 ? 'warning' : 'info';
+  const tipSignature = `${nextState}::${selected.label}::${selected.tip}`;
+  let repeatCount = 0;
+  if (typeof window !== 'undefined' && window.sessionStorage) {
+    const previousSignature = window.sessionStorage.getItem('lastCoachingTipSignature') || '';
+    const priorRepeatCount = Number(window.sessionStorage.getItem('lastCoachingTipRepeatCount') || 0);
+    repeatCount = previousSignature === tipSignature ? priorRepeatCount + 1 : 0;
+    window.sessionStorage.setItem('lastCoachingTipSignature', tipSignature);
+    window.sessionStorage.setItem('lastCoachingTipRepeatCount', String(repeatCount));
+  }
+  const variationSuffix = repeatCount > 0
+    ? REPEAT_VARIATION_SUFFIXES[(repeatCount - 1) % REPEAT_VARIATION_SUFFIXES.length]
+    : null;
+  const tipWithVariation = variationSuffix ? `${selected.tip} ${variationSuffix}` : selected.tip;
 
   return {
     shouldShow: true,
     label: selected.label,
-    tip: selected.tip,
+    tip: tipWithVariation,
     suggestion: selected.suggestion,
     escalationLabel: criticalEscalation ? nextState.replace(/-/g, ' ') : null,
     severity,
