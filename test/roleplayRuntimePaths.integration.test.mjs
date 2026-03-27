@@ -6,6 +6,7 @@ import { computeAlignment } from "../src/components/roleplay/alignmentEngine.jsx
 import {
   deriveInitialState,
   deriveInitialTemperature,
+  evaluateHcpTerminationPolicy,
   transitionSeverity,
   transitionState,
   transitionTemperature,
@@ -126,4 +127,46 @@ test("overall alignment score stays mathematically aligned to the 8 metric score
   const expected = Math.max(1, Math.min(5, Math.round(metricAverage * 10) / 10));
 
   assert.equal(alignment.score, expected);
+});
+
+test("governance termination policy closes after repeated unanswered prompts with disrespect", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "Again, you are not answering my question. Make up your mind.",
+    repHistoryMessages: [
+      "Treatment options have nothing to do with staff limitations.",
+      "You are avoiding the topic.",
+      "What staffing limitations?",
+    ],
+    activeConstraintTypes: ["workflow", "staffing", "capacity"],
+    unresolvedConcernTurns: 4,
+    concernFlowOutcome: "missed",
+    decayTier: "disengaging",
+    explicitNarrowingPrompted: true,
+    isTimePressured: true,
+  });
+
+  assert.equal(policy.shouldTerminate, true);
+  assert.ok(policy.reasonCodes.includes("repeated_unanswered_direct_question"));
+  assert.ok(policy.reasonCodes.includes("repeated_disrespect_or_argumentative_tone"));
+  assert.ok(policy.reasonCodes.includes("time_pressure_with_no_progress"));
+});
+
+test("governance policy sets boundary before termination when budget first exceeded", () => {
+  const policy = evaluateHcpTerminationPolicy({
+    repMessage: "I hear you, but I am still focused on efficacy outcomes.",
+    repHistoryMessages: [
+      "We should keep talking about trial endpoints.",
+      "Let's revisit patient outcomes.",
+    ],
+    activeConstraintTypes: ["workflow"],
+    unresolvedConcernTurns: 3,
+    concernFlowOutcome: "overpivot",
+    decayTier: "impatient",
+    explicitNarrowingPrompted: true,
+    isTimePressured: false,
+  });
+
+  assert.equal(policy.shouldTerminate, false);
+  assert.equal(policy.shouldBoundarySet, true);
+  assert.ok(policy.reasonCodes.includes("repeated_unanswered_direct_question"));
 });
