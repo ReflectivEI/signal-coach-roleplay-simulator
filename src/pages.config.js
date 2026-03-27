@@ -67,6 +67,7 @@ import PreCallPlanning from './pages/PreCallPlanning';
 import ProfileSettings from './pages/ProfileSettings';
 import RolePlaySimulator from './pages/RolePlaySimulator';
 import RolePlaySimulatorSafe from './pages/RolePlaySimulatorSafe';
+import RolePlaySimulatorFlawless from './pages/RolePlaySimulatorFlawless';
 import ScenarioBuilder from './pages/ScenarioBuilder';
 import __Layout from './Layout.jsx';
 
@@ -92,6 +93,7 @@ export const PAGES = {
     "ProfileSettings": ProfileSettings,
     "RolePlaySimulator": RolePlaySimulator,
     "RolePlaySimulatorSafe": RolePlaySimulatorSafe,
+    "RolePlaySimulatorFlawless": RolePlaySimulatorFlawless,
     "ScenarioBuilder": ScenarioBuilder,
 }
 
