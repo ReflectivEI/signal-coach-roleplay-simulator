@@ -10,6 +10,10 @@ import {
   transitionState,
   transitionTemperature,
 } from "../src/components/roleplay/hcpSimulationEngine.jsx";
+import {
+  classifyScenarioFamily,
+  getScenarioPolicyOverrides,
+} from "../src/components/roleplay/scenarioPolicyProfiles.js";
 
 const EXPECTED_METRIC_KEYS = [
   "signal_awareness",
@@ -109,4 +113,74 @@ test("direct HCP metric/threshold question is penalized when rep answer is non-s
     vagueAnswer.metrics.conversation_management.score < concreteAnswer.metrics.conversation_management.score,
     "threshold question without numeric anchor should reduce conversation management score"
   );
+});
+
+test("family policy fixtures keep deterministic scoring and stronger replies outperform weak replies", () => {
+  const familyFixtures = [
+    {
+      family: "hiv_prep",
+      scenarioTitle: "HIV Prevention Gap : High-Risk Population",
+      scenarioDescription: "Urban clinic managing PrEP adherence and payer barriers.",
+      hcpUtterance: "What specific evidence should change my current PrEP approach?",
+      weakReply: "To share data.",
+      strongReply: "In high-risk patients, week-12 retention improved by 18%, and we can pilot one eligibility checklist this week.",
+    },
+    {
+      family: "oncology_access",
+      scenarioTitle: "Biomarker Access Delay in Metastatic Care",
+      scenarioDescription: "Tumor board debating pathway fit and reimbursement denials.",
+      hcpUtterance: "What practical change improves biomarker turnaround without delaying treatment starts?",
+      weakReply: "We can follow up.",
+      strongReply: "Use same-day reflex ordering; centers cut biomarker turnaround by 4 days and reduced treatment-start delays.",
+    },
+    {
+      family: "cardiometabolic",
+      scenarioTitle: "Cardiometabolic Adherence Bottleneck",
+      scenarioDescription: "Formulary restrictions and refill gaps in diabetes clinic.",
+      hcpUtterance: "How do we reduce refill drop-off in the next month?",
+      weakReply: "Schedule time.",
+      strongReply: "Start a refill-outreach queue: one nurse call at day 21 reduced 30-day refill gaps by 12% in a similar clinic.",
+    },
+    {
+      family: "general_access",
+      scenarioTitle: "Workflow Integration Pilot",
+      scenarioDescription: "Staff burden and operational bottlenecks in a general clinic.",
+      hcpUtterance: "What first workflow step can we test this week?",
+      weakReply: "We should discuss.",
+      strongReply: "Pilot a front-desk routing checklist for one week and track same-day completion rate.",
+    },
+  ];
+
+  for (const fixture of familyFixtures) {
+    const detected = classifyScenarioFamily(`${fixture.scenarioTitle} ${fixture.scenarioDescription}`);
+    assert.equal(detected, fixture.family, `${fixture.family}: should classify into expected family`);
+
+    const overrides = getScenarioPolicyOverrides({
+      scenarioFamily: detected,
+      scenarioTitle: fixture.scenarioTitle,
+      scenarioDescription: fixture.scenarioDescription,
+    });
+    assert.ok(overrides.loopBreakerBudget >= 1, `${fixture.family}: loop breaker budget should exist`);
+    assert.ok(overrides.minMeaningfulRepTokens >= 2, `${fixture.family}: minimum token threshold should exist`);
+
+    const weak = computeAlignment(
+      "time-pressured",
+      fixture.weakReply,
+      { hcpUtterance: fixture.hcpUtterance },
+      "neutral",
+      "time-pressured",
+    );
+    const strong = computeAlignment(
+      "time-pressured",
+      fixture.strongReply,
+      { hcpUtterance: fixture.hcpUtterance },
+      "neutral",
+      "time-pressured",
+    );
+
+    assert.ok(
+      strong.score >= weak.score,
+      `${fixture.family}: stronger response should not score lower than weak response`,
+    );
+  }
 });

@@ -1,3 +1,5 @@
+import { getScenarioPolicyProfile } from "./scenarioPolicyProfiles.js";
+
 const OPERATIONAL_CONSTRAINT_PATTERNS = {
   staffing: /\b(staffing|short-staffed|staff shortage|understaffed|team capacity|nurse shortage|ma shortage|coverage gap)\b/i,
   workflow: /\b(workflow|operational|implementation|process|steps|clinic flow|handoff process)\b/i,
@@ -16,7 +18,7 @@ const OPERATIONAL_CONSTRAINT_PATTERNS = {
 
 export const OPERATIONAL_CONSTRAINT_TYPES = Object.freeze(Object.keys(OPERATIONAL_CONSTRAINT_PATTERNS));
 
-export function extractConstraintCandidatesFromText(text = "") {
+export function extractConstraintCandidatesFromText(text = "", { scenarioFamily = "general_access" } = {}) {
   const value = String(text || "").trim();
   if (!value) return [];
 
@@ -25,10 +27,16 @@ export function extractConstraintCandidatesFromText(text = "") {
     .map((sentence) => sentence.trim())
     .filter(Boolean);
 
+  const profile = getScenarioPolicyProfile(scenarioFamily);
+  const familyAliases = profile?.constraintAliases || {};
+
   const candidates = [];
   sentences.forEach((sentence) => {
+    const normalized = sentence.toLowerCase();
     OPERATIONAL_CONSTRAINT_TYPES.forEach((type) => {
-      if (OPERATIONAL_CONSTRAINT_PATTERNS[type].test(sentence)) {
+      const aliasTokens = Array.isArray(familyAliases[type]) ? familyAliases[type] : [];
+      const aliasMatch = aliasTokens.some((token) => normalized.includes(String(token).toLowerCase()));
+      if (OPERATIONAL_CONSTRAINT_PATTERNS[type].test(sentence) || aliasMatch) {
         candidates.push({
           constraintType: type,
           snippet: sentence.slice(0, 180),
@@ -41,14 +49,14 @@ export function extractConstraintCandidatesFromText(text = "") {
 }
 
 // Backward-compatible alias used by existing runtime bundles/helpers.
-export function detectOperationalConstraintTypes(text = "") {
-  return [...new Set(extractConstraintCandidatesFromText(text).map((item) => item.constraintType))];
+export function detectOperationalConstraintTypes(text = "", { scenarioFamily = "general_access" } = {}) {
+  return [...new Set(extractConstraintCandidatesFromText(text, { scenarioFamily }).map((item) => item.constraintType))];
 }
 
-export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = [] } = {}) {
-  const scenarioCandidates = extractConstraintCandidatesFromText(scenarioText);
+export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = [], scenarioFamily = "general_access" } = {}) {
+  const scenarioCandidates = extractConstraintCandidatesFromText(scenarioText, { scenarioFamily });
   const dialogueCandidates = (Array.isArray(dialogueTurns) ? dialogueTurns : [])
-    .flatMap((turnText) => extractConstraintCandidatesFromText(turnText));
+    .flatMap((turnText) => extractConstraintCandidatesFromText(turnText, { scenarioFamily }));
 
   const scenarioTypes = new Set(scenarioCandidates.map((item) => item.constraintType));
   const dialogueTypes = new Set(dialogueCandidates.map((item) => item.constraintType));
@@ -63,6 +71,61 @@ export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = []
   };
 }
 
+
+const EMPTY_CONSTRAINT_VIOLATION = Object.freeze({
+  valid: true,
+  ungroundedTypes: [],
+  duplicateTypes: [],
+  draftCandidates: [],
+  draftTypes: [],
+  rejectionReason: null,
+});
+
+export function createDefaultConstraintViolation() {
+  return {
+    ...EMPTY_CONSTRAINT_VIOLATION,
+    ungroundedTypes: [],
+    duplicateTypes: [],
+    draftCandidates: [],
+    draftTypes: [],
+  };
+}
+
+export function shouldEnforceConstraintGuardrails({
+  transcriptConstraintPresent = false,
+  normalizedActiveConstraints = [],
+} = {}) {
+  return Boolean(
+    transcriptConstraintPresent
+    || (Array.isArray(normalizedActiveConstraints) && normalizedActiveConstraints.length > 0)
+  );
+}
+
+export function evaluateConstraintDraft({
+  enforceGuardrails = false,
+  draftText = "",
+  groundedTypes = [],
+  alreadySurfacedTypes = [],
+  newlyRaisedTypes = [],
+  revisitRequested = false,
+  changedConstraint = false,
+  clarificationNeeded = false,
+  scenarioFamily = "general_access",
+} = {}) {
+  if (!enforceGuardrails) return createDefaultConstraintViolation();
+
+  return detectConstraintDraftViolations({
+    draftText,
+    groundedTypes,
+    alreadySurfacedTypes,
+    newlyRaisedTypes,
+    revisitRequested,
+    changedConstraint,
+    clarificationNeeded,
+    scenarioFamily,
+  });
+}
+
 function normalizeTypeSet(value = []) {
   return new Set(Array.isArray(value) ? value.filter(Boolean) : []);
 }
@@ -75,8 +138,9 @@ export function detectConstraintDraftViolations({
   revisitRequested = false,
   changedConstraint = false,
   clarificationNeeded = false,
+  scenarioFamily = "general_access",
 } = {}) {
-  const draftCandidates = extractConstraintCandidatesFromText(draftText);
+  const draftCandidates = extractConstraintCandidatesFromText(draftText, { scenarioFamily });
   const draftTypes = [...new Set(draftCandidates.map((item) => item.constraintType))];
   const grounded = normalizeTypeSet(groundedTypes);
   const surfaced = normalizeTypeSet(alreadySurfacedTypes);
