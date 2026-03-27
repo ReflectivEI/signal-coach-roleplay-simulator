@@ -189,6 +189,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     if (scores.length === 0) return null;
     return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
   })();
+  const formattedOverallScore = overallScore !== null ? overallScore.toFixed(1) : null;
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
@@ -277,7 +278,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-1.5 mb-0.5">
           <Zap className="w-3.5 h-3.5 text-teal-500" />
-          <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
+          <span className="font-bold text-sm text-gray-900">Overall: {formattedOverallScore !== null ? `${formattedOverallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
           <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric — click any metric below to analyze.</p>
