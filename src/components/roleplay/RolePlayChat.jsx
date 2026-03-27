@@ -159,6 +159,22 @@ const REALISM_CONCERN_PATTERNS = {
 
 const PLANNER_TRACE_FLAG_KEY = "roleplay.debug.planner_trace";
 const CONSTRAINT_OPENING_GUARDRAIL_FLAG_KEY = "roleplay.debug.constraint_opening_guardrail";
+const OPERATIONAL_CONSTRAINT_PRIORITY = ["staffing", "capacity", "workflow", "prior_auth", "scheduling", "handoff", "callback", "throughput", "time", "access", "policy", "screening", "evidence"];
+const OPERATIONAL_CONSTRAINT_PATTERNS = {
+  staffing: /\b(staffing|short-staffed|staff shortage|understaffed|team capacity|nurse shortage|ma shortage|coverage gap)\b/i,
+  workflow: /\b(workflow|operational|implementation|process|steps|clinic flow|handoff process)\b/i,
+  capacity: /\b(capacity|bandwidth|burden|workload|overwhelmed|buried|limited resources)\b/i,
+  prior_auth: /\b(prior auth|prior authorization|authorization|pa denial|appeal|payer paperwork)\b/i,
+  scheduling: /\b(schedule|scheduling|calendar|slot|appointment|booked|back-to-back|time window)\b/i,
+  handoff: /\b(handoff|hand-off|transition of care|care transition|routing step|ownership handoff)\b/i,
+  callback: /\b(callback|call back|follow-up call|follow up call|return call)\b/i,
+  throughput: /\b(throughput|volume|patient flow|queue|backlog|turnaround|wait time)\b/i,
+  time: /\b(time|minutes|today|this week|deadline|urgent|rush|limited time)\b/i,
+  access: REALISM_CONCERN_PATTERNS.access,
+  policy: REALISM_CONCERN_PATTERNS.policy,
+  screening: REALISM_CONCERN_PATTERNS.screening,
+  evidence: REALISM_CONCERN_PATTERNS.evidence,
+};
 
 function readDebugFlag(flagKey) {
   if (typeof window === "undefined") return false;
@@ -196,10 +212,12 @@ function extractConstraintCandidatesFromText(text = "") {
 
   const candidates = [];
   sentences.forEach((sentence) => {
-    Object.entries(REALISM_CONCERN_PATTERNS).forEach(([type, pattern]) => {
+    Object.entries(OPERATIONAL_CONSTRAINT_PATTERNS).forEach(([type, pattern]) => {
       if (pattern.test(sentence)) {
         candidates.push({
           type,
+          constraintType: type,
+          constraintStatus: "active",
           snippet: sentence.slice(0, 180),
         });
       }
@@ -216,29 +234,116 @@ function extractConstraintCandidatesFromTurns(turns = [], recentWindow = 3) {
     .flatMap((turn) => extractConstraintCandidatesFromText(turn?.hcpDialogueBefore || ""));
 }
 
-function buildNormalizedActiveConstraints({ activeConcern = "workflow", rawCandidates = [] } = {}) {
-  const byType = new Map();
-  rawCandidates.forEach((candidate, index) => {
-    const type = candidate?.type;
-    if (!type) return;
-    const existing = byType.get(type) || { type, hits: 0, latestIndex: -1 };
-    existing.hits += 1;
-    existing.latestIndex = index;
-    byType.set(type, existing);
+function normalizeConstraintPriority(type = "") {
+  const idx = OPERATIONAL_CONSTRAINT_PRIORITY.indexOf(type);
+  return idx === -1 ? OPERATIONAL_CONSTRAINT_PRIORITY.length + 1 : idx;
+}
+
+function resolveConstraintTypeToConcern(type = "") {
+  const map = {
+    staffing: "workflow",
+    workflow: "workflow",
+    capacity: "workflow",
+    prior_auth: "access",
+    scheduling: "time",
+    handoff: "workflow",
+    callback: "time",
+    throughput: "workflow",
+    time: "time",
+    access: "access",
+    policy: "policy",
+    screening: "screening",
+    evidence: "evidence",
+  };
+  return map[type] || "workflow";
+}
+
+function inferConstraintResolvedInTurn(text = "") {
+  const value = String(text || "").toLowerCase();
+  if (!value) return [];
+  const resolvedSignal = /\b(resolved|fixed|handled|already covered|no longer an issue|not a blocker anymore|closed out|we addressed)\b/.test(value);
+  if (!resolvedSignal) return [];
+  return Object.entries(OPERATIONAL_CONSTRAINT_PATTERNS)
+    .filter(([, pattern]) => pattern.test(value))
+    .map(([type]) => type);
+}
+
+function buildOperationalConstraintState({
+  previousConstraints = [],
+  rawCandidates = [],
+  fallbackConcern = "workflow",
+  sourceTurnNumber = 0,
+  latestUserTurn = "",
+  latestRepTurn = "",
+} = {}) {
+  const prior = Array.isArray(previousConstraints) ? previousConstraints : [];
+  const stateByType = new Map(
+    prior.map((constraint, idx) => [
+      constraint?.constraintType || constraint?.type || `legacy_${idx}`,
+      {
+        ...constraint,
+        constraintType: constraint?.constraintType || constraint?.type || "workflow",
+        constraintStatus: constraint?.constraintStatus || "active",
+      },
+    ])
+  );
+
+  const resolvedTypes = new Set([
+    ...inferConstraintResolvedInTurn(latestUserTurn),
+    ...inferConstraintResolvedInTurn(latestRepTurn),
+  ]);
+  resolvedTypes.forEach((type) => {
+    const existing = stateByType.get(type);
+    if (existing && existing.constraintStatus === "active") {
+      stateByType.set(type, { ...existing, constraintStatus: "resolved" });
+    }
   });
 
-  const prioritized = [...byType.values()]
-    .sort((a, b) => {
-      if (b.hits !== a.hits) return b.hits - a.hits;
-      return b.latestIndex - a.latestIndex;
-    })
-    .map((entry) => entry.type);
+  rawCandidates.forEach((candidate) => {
+    const type = candidate?.constraintType || candidate?.type;
+    if (!type) return;
+    const priorConstraint = stateByType.get(type);
+    if (priorConstraint && priorConstraint.constraintStatus === "active") {
+      stateByType.set(type, { ...priorConstraint, constraintStatus: "superseded" });
+    }
+    stateByType.set(type, {
+      constraintType: type,
+      constraintStatus: "active",
+      constraintSourceTurn: sourceTurnNumber,
+      snippet: candidate?.snippet || "",
+    });
+  });
 
-  if (activeConcern && !prioritized.includes(activeConcern)) {
-    prioritized.push(activeConcern);
+  if (![...stateByType.values()].some((item) => item.constraintStatus === "active") && fallbackConcern) {
+    const fallbackType = resolveConstraintTypeToConcern(fallbackConcern) === "access" ? "access" : fallbackConcern;
+    stateByType.set(fallbackType, {
+      constraintType: fallbackType,
+      constraintStatus: "active",
+      constraintSourceTurn: sourceTurnNumber,
+      snippet: "",
+    });
   }
 
-  return prioritized;
+  const activeOperationalConstraints = [...stateByType.values()]
+    .filter((constraint) => constraint.constraintStatus === "active")
+    .sort((a, b) => {
+      if ((b.constraintSourceTurn || 0) !== (a.constraintSourceTurn || 0)) {
+        return (b.constraintSourceTurn || 0) - (a.constraintSourceTurn || 0);
+      }
+      return normalizeConstraintPriority(a.constraintType) - normalizeConstraintPriority(b.constraintType);
+    });
+
+  const primaryOperationalConstraint = activeOperationalConstraints[0] || null;
+  const normalizedActiveConstraints = activeOperationalConstraints.map((constraint) =>
+    resolveConstraintTypeToConcern(constraint.constraintType)
+  );
+
+  return {
+    activeOperationalConstraints,
+    primaryOperationalConstraint,
+    normalizedActiveConstraints: [...new Set(normalizedActiveConstraints)],
+    allOperationalConstraints: [...stateByType.values()],
+  };
 }
 
 function getOpeningSentence(text = "") {
@@ -746,9 +851,11 @@ function rankResponseObjective({
   hardLoopBreaker = false,
   concernFlowOutcome = "neutral",
   activeConstraints = [],
+  activeOperationalConstraints = [],
   latestUserTurn = "",
 } = {}) {
-  const hasActiveConstraint = Array.isArray(activeConstraints) && activeConstraints.length > 0;
+  const hasActiveConstraint = (Array.isArray(activeConstraints) && activeConstraints.length > 0)
+    || (Array.isArray(activeOperationalConstraints) && activeOperationalConstraints.length > 0);
   const primaryConstraint = hasActiveConstraint ? activeConstraints[0] : "none";
   const directOperationalQuestion = hasActiveConstraint && isDirectUserQuestion(latestUserTurn);
 
@@ -803,11 +910,14 @@ function rankResponseObjective({
     if (constraintAware) selected = constraintAware;
   }
 
+  const selectedObjectiveAccountsForConstraint = !hasActiveConstraint || Boolean(selected.referencesConstraint);
+
   return {
     selectedObjective: `${selected.id}[${primaryConstraint}]`,
     primaryConstraint,
     hasActiveConstraint,
     directOperationalQuestion,
+    selectedObjectiveAccountsForConstraint,
     rankedObjectives: candidates.map(({ id, score, referencesConstraint }) => ({ id, score, referencesConstraint })),
   };
 }
@@ -2209,14 +2319,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ...recentUserConstraintCandidates,
       ...currentUserConstraintCandidates,
     ];
-    const normalizedActiveConstraints = buildNormalizedActiveConstraints({
-      activeConcern,
+    const priorOperationalConstraints = respondingToTurn?.plannerStateSnapshot?.activeOperationalConstraints
+      || respondingToTurn?.activeOperationalConstraints
+      || [];
+    const operationalConstraintState = buildOperationalConstraintState({
+      previousConstraints: priorOperationalConstraints,
       rawCandidates: rawUserConstraintCandidates,
+      fallbackConcern: activeConcern,
+      sourceTurnNumber: nextTurnNumber,
+      latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
+      latestRepTurn: repMessage,
     });
+    const normalizedActiveConstraints = operationalConstraintState.normalizedActiveConstraints;
     const transcriptConstraintPresent = currentUserConstraintCandidates.length > 0 || recentUserConstraintCandidates.length > 0;
     emitPlannerTrace("constraints_extracted", {
       turnNumber: nextTurnNumber,
       rawUserConstraintCandidates,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      operationalConstraintLedger: operationalConstraintState.allOperationalConstraints,
+      primaryOperationalConstraint: operationalConstraintState.primaryOperationalConstraint,
       normalizedActiveConstraints,
       transcriptConstraintPresent,
     });
@@ -2280,12 +2401,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hardLoopBreaker,
       concernFlowOutcome,
       activeConstraints: normalizedActiveConstraints,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
     });
     const chosenResponseObjective = objectiveRanking.selectedObjective;
     const plannerStateSnapshot = {
       activeConcern,
       normalizedActiveConstraints,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      operationalConstraintLedger: operationalConstraintState.allOperationalConstraints,
+      primaryOperationalConstraint: operationalConstraintState.primaryOperationalConstraint,
+      constraintSourceTurn: operationalConstraintState.primaryOperationalConstraint?.constraintSourceTurn ?? null,
+      constraintStatus: operationalConstraintState.primaryOperationalConstraint?.constraintStatus ?? null,
+      constraintType: operationalConstraintState.primaryOperationalConstraint?.constraintType ?? null,
       concernFlowOutcome,
       engagementTier: decayState.tier,
       unresolvedConcernTurns,
@@ -2298,6 +2426,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       primaryConstraint: objectiveRanking.primaryConstraint,
       hasActiveConstraint: objectiveRanking.hasActiveConstraint,
       directOperationalQuestion: objectiveRanking.directOperationalQuestion,
+      selectedObjectiveAccountsForConstraint: objectiveRanking.selectedObjectiveAccountsForConstraint,
       rankedObjectives: objectiveRanking.rankedObjectives,
       concernFlowOutcome,
       terminalDecisionMode,
@@ -2325,6 +2454,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
       activeConcern,
       activeConstraints: normalizedActiveConstraints,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      operationalConstraintLedger: operationalConstraintState.allOperationalConstraints,
+      primaryOperationalConstraint: operationalConstraintState.primaryOperationalConstraint,
       plannerStateSnapshot,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
@@ -3001,6 +3133,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       timePressure: turnState.timePressure,
       activeConcern,
       activeConstraints: normalizedActiveConstraints,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      operationalConstraintLedger: operationalConstraintState.allOperationalConstraints,
+      primaryOperationalConstraint: operationalConstraintState.primaryOperationalConstraint,
+      constraintSourceTurn: operationalConstraintState.primaryOperationalConstraint?.constraintSourceTurn ?? null,
+      constraintStatus: operationalConstraintState.primaryOperationalConstraint?.constraintStatus ?? null,
+      constraintType: operationalConstraintState.primaryOperationalConstraint?.constraintType ?? null,
       chosenResponseObjective,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
@@ -3040,19 +3178,40 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       finalOpening,
       normalizedActiveConstraints
     );
+    const selectedObjectiveAccountsForConstraint = Boolean(objectiveRanking.selectedObjectiveAccountsForConstraint);
+    let finalAnswerReflectsConstraint = openingAcknowledgesConstraint;
+    if (
+      normalizedActiveConstraints.length > 0
+      && objectiveRanking.directOperationalQuestion
+      && !finalAnswerReflectsConstraint
+    ) {
+      nextHcpDialogue = prependConstraintAcknowledgementIfMissing({
+        draftResponse: nextHcpDialogue,
+        activeConstraints: normalizedActiveConstraints,
+        shouldApply: true,
+      });
+      finalAnswerReflectsConstraint = openingAcknowledgesAnyConstraint(
+        getOpeningSentence(nextHcpDialogue),
+        normalizedActiveConstraints,
+      );
+    }
     const plannerGapComparison = {
       transcriptConstraintPresent,
       plannerStateConstraintPresent: normalizedActiveConstraints.length > 0,
-      finalAnswerConstraintReflected: openingAcknowledgesConstraint,
+      selectedObjectiveAccountsForConstraint,
+      finalAnswerReflectsConstraint,
     };
     emitPlannerTrace("final_response_generated", {
       turnNumber: nextTurnNumber,
       rawUserConstraintCandidates,
+      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
+      primaryOperationalConstraint: operationalConstraintState.primaryOperationalConstraint,
       normalizedActiveConstraints,
       plannerVisibleConstraints: normalizedActiveConstraints,
       chosenResponseObjective,
       primaryConstraint: objectiveRanking.primaryConstraint,
       directOperationalQuestion: objectiveRanking.directOperationalQuestion,
+      selectedObjectiveAccountsForConstraint,
       draftResponseSource,
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       openingBeforeGuardrail,
