@@ -10,10 +10,6 @@ import {
   transitionState,
   transitionTemperature,
 } from "../src/components/roleplay/hcpSimulationEngine.jsx";
-import {
-  classifyScenarioFamily,
-  getScenarioPolicyOverrides,
-} from "../src/components/roleplay/scenarioPolicyProfiles.js";
 
 const EXPECTED_METRIC_KEYS = [
   "signal_awareness",
@@ -115,10 +111,10 @@ test("direct HCP metric/threshold question is penalized when rep answer is non-s
   );
 });
 
-test("family policy fixtures keep deterministic scoring and stronger replies outperform weak replies", () => {
-  const familyFixtures = [
+test("multi-scenario fixtures keep deterministic scoring and stronger replies outperform weak replies", () => {
+  const scenarioFixtures = [
     {
-      family: "hiv_prep",
+      scenarioId: "hiv_prep_like",
       scenarioTitle: "HIV Prevention Gap : High-Risk Population",
       scenarioDescription: "Urban clinic managing PrEP adherence and payer barriers.",
       hcpUtterance: "What specific evidence should change my current PrEP approach?",
@@ -126,7 +122,7 @@ test("family policy fixtures keep deterministic scoring and stronger replies out
       strongReply: "In high-risk patients, week-12 retention improved by 18%, and we can pilot one eligibility checklist this week.",
     },
     {
-      family: "oncology_access",
+      scenarioId: "oncology_access_like",
       scenarioTitle: "Biomarker Access Delay in Metastatic Care",
       scenarioDescription: "Tumor board debating pathway fit and reimbursement denials.",
       hcpUtterance: "What practical change improves biomarker turnaround without delaying treatment starts?",
@@ -134,7 +130,7 @@ test("family policy fixtures keep deterministic scoring and stronger replies out
       strongReply: "Use same-day reflex ordering; centers cut biomarker turnaround by 4 days and reduced treatment-start delays.",
     },
     {
-      family: "cardiometabolic",
+      scenarioId: "cardiometabolic_like",
       scenarioTitle: "Cardiometabolic Adherence Bottleneck",
       scenarioDescription: "Formulary restrictions and refill gaps in diabetes clinic.",
       hcpUtterance: "How do we reduce refill drop-off in the next month?",
@@ -142,7 +138,7 @@ test("family policy fixtures keep deterministic scoring and stronger replies out
       strongReply: "Start a refill-outreach queue: one nurse call at day 21 reduced 30-day refill gaps by 12% in a similar clinic.",
     },
     {
-      family: "general_access",
+      scenarioId: "general_access_like",
       scenarioTitle: "Workflow Integration Pilot",
       scenarioDescription: "Staff burden and operational bottlenecks in a general clinic.",
       hcpUtterance: "What first workflow step can we test this week?",
@@ -151,18 +147,7 @@ test("family policy fixtures keep deterministic scoring and stronger replies out
     },
   ];
 
-  for (const fixture of familyFixtures) {
-    const detected = classifyScenarioFamily(`${fixture.scenarioTitle} ${fixture.scenarioDescription}`);
-    assert.equal(detected, fixture.family, `${fixture.family}: should classify into expected family`);
-
-    const overrides = getScenarioPolicyOverrides({
-      scenarioFamily: detected,
-      scenarioTitle: fixture.scenarioTitle,
-      scenarioDescription: fixture.scenarioDescription,
-    });
-    assert.ok(overrides.loopBreakerBudget >= 1, `${fixture.family}: loop breaker budget should exist`);
-    assert.ok(overrides.minMeaningfulRepTokens >= 2, `${fixture.family}: minimum token threshold should exist`);
-
+  for (const fixture of scenarioFixtures) {
     const weak = computeAlignment(
       "time-pressured",
       fixture.weakReply,
@@ -180,7 +165,22 @@ test("family policy fixtures keep deterministic scoring and stronger replies out
 
     assert.ok(
       strong.score >= weak.score,
-      `${fixture.family}: stronger response should not score lower than weak response`,
+      `${fixture.scenarioId}: stronger response should not score lower than weak response`,
+    );
+
+    const weakState = transitionState("time-pressured", fixture.weakReply, "neutral");
+    const strongState = transitionState("time-pressured", fixture.strongReply, "neutral");
+    assert.ok(
+      EXPECTED_METRIC_KEYS.every((metricKey) => typeof strong.metrics?.[metricKey]?.score === "number"),
+      `${fixture.scenarioId}: strong reply should produce complete metric snapshot`,
+    );
+    assert.ok(
+      EXPECTED_METRIC_KEYS.every((metricKey) => typeof weak.metrics?.[metricKey]?.score === "number"),
+      `${fixture.scenarioId}: weak reply should produce complete metric snapshot`,
+    );
+    assert.ok(
+      [weakState, strongState].every((state) => typeof state === "string" && state.length > 0),
+      `${fixture.scenarioId}: transition state should resolve for weak and strong turns`,
     );
   }
 });
