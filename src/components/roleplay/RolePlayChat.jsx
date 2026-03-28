@@ -2468,8 +2468,9 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
     const previousPressureScore = Number.isFinite(respondingToTurn.engagementPressureScore)
       ? respondingToTurn.engagementPressureScore
       : 0;
-    const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
-    const activeConcern = detectPrimaryConcern(concernSourceText);
+    const latestHcpSignalText = String(respondingToTurn?.hcpDialogueBefore || "");
+    const concernSourceText = `${latestHcpSignalText} ${scenario?.description || ""} ${scenario?.context || ""}`;
+    let activeConcern = detectPrimaryConcern(latestHcpSignalText || concernSourceText);
     const scenarioFamily = classifyScenarioFamily(concernSourceText);
     const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3, { scenarioFamily });
     const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "", { scenarioFamily }).map((candidate) => ({
@@ -2527,6 +2528,9 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       latestRepTurn: repMessage,
     });
     const normalizedActiveConstraints = operationalConstraintState.normalizedActiveConstraints;
+    if (normalizedActiveConstraints.length > 0) {
+      activeConcern = normalizedActiveConstraints[0];
+    }
     const transcriptConstraintPresent = currentUserConstraintCandidates.length > 0 || recentUserConstraintCandidates.length > 0;
     emitPlannerTrace("constraints_extracted", {
       turnNumber: nextTurnNumber,
