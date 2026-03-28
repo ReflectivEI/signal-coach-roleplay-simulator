@@ -62,7 +62,7 @@ class FlawlessSimulatorBoundary extends React.Component {
       );
     }
 
-    return <RolePlaySimulator key={`flawless-session-${this.state.retryCount}`} />;
+    return <RolePlaySimulator key={`flawless-session-${this.state.retryCount}`} flawlessMode />;
   }
 }
 
