@@ -163,6 +163,40 @@ export function selectDeterministicResponseMode({
   return fallbackMode;
 }
 
+export function buildTurnContractController({
+  turnContractState = {},
+  concernFlowOutcome = "neutral",
+  fallbackMode = "probe",
+} = {}) {
+  const responseMode = selectDeterministicResponseMode({
+    turnContractState,
+    concernFlowOutcome,
+    fallbackMode,
+  });
+
+  const obligations = [];
+  if (responseMode === "answer") {
+    obligations.push("answer_unanswered_questions_first");
+    obligations.push("do_not_lead_with_new_question");
+  }
+  if (responseMode === "reanchor") {
+    obligations.push("reanchor_to_active_constraint");
+  }
+  if (responseMode === "advance") {
+    obligations.push("propose_one_low_burden_next_step");
+  }
+  if (responseMode === "close") {
+    obligations.push("issue_closure_statement");
+    obligations.push("no_new_open_questions");
+  }
+
+  return {
+    responseMode,
+    objective: mapResponseModeToObjective(responseMode),
+    obligations,
+  };
+}
+
 export function mapResponseModeToObjective(responseMode = "probe") {
   if (responseMode === "answer") return "answer_direct_constraint_question";
   if (responseMode === "reanchor") return "reanchor_to_constraint";

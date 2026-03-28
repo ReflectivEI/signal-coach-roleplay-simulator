@@ -33,6 +33,7 @@ function toLines(value, fallback = []) {
 
 export default function EnterpriseScenarioCard({
   scenario,
+  flawlessMode = false,
   footerAction,
   footerSecondary,
   allowStart = true,
@@ -175,6 +176,7 @@ export default function EnterpriseScenarioCard({
         {footerAction || (allowStart ? (
           <ScenarioCard
             scenario={scenario}
+            flawlessMode={flawlessMode}
             renderAs="button-only"
             buttonClassName="inline-flex w-auto self-center items-center justify-center rounded-full px-6 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
           />

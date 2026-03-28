@@ -78,9 +78,15 @@ import {
   deriveTurnContractState,
   selectDeterministicResponseMode,
   mapResponseModeToObjective,
+  buildTurnContractController,
   validateGeneratedTurnContract,
   buildContractRepairResponse,
 } from "./turnContractController";
+import {
+  selectContextualCue,
+  enforceNoRecentCueRepeat,
+} from "./cueSelector";
+import { validateTurnWithRetry } from "./turnValidator";
 
 function escapeHTML(text) {
   return String(text)
@@ -2067,7 +2073,7 @@ function buildRepGuidance(turn, allTurns = []) {
   return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
 }
 
-export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
+export default function RolePlayChat({ scenario, flawlessMode = false, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
@@ -2085,6 +2091,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // Stable session ID for deterministic cue selection
   const sessionIdRef = useRef(`session_${Date.now()}`);
   const sid = sessionIdRef.current;
+  const useFlawlessEngine = Boolean(flawlessMode);
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
   const sendInFlightRef = useRef(false);
@@ -2598,12 +2605,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             : objectiveRanking.selectedObjective?.startsWith("advance_with_constraint") ? "advance"
               : "probe"
     );
-    const selectedResponseMode = selectDeterministicResponseMode({
-      turnContractState,
-      concernFlowOutcome,
-      fallbackMode: fallbackResponseMode,
-    });
-    const contractObjectiveId = mapResponseModeToObjective(selectedResponseMode);
+    const contractDecision = useFlawlessEngine
+      ? buildTurnContractController({
+          turnContractState,
+          concernFlowOutcome,
+          fallbackMode: fallbackResponseMode,
+        })
+      : {
+          responseMode: selectDeterministicResponseMode({
+            turnContractState,
+            concernFlowOutcome,
+            fallbackMode: fallbackResponseMode,
+          }),
+          obligations: [],
+          objective: null,
+        };
+    const selectedResponseMode = contractDecision.responseMode;
+    const contractObjectiveId = useFlawlessEngine
+      ? contractDecision.objective
+      : mapResponseModeToObjective(selectedResponseMode);
     const chosenResponseObjective = `${contractObjectiveId}[${objectiveRanking.primaryConstraint}]`;
     const plannerStateSnapshot = {
       activeConcern,
@@ -2627,6 +2647,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       unresolvedObjections: turnContractState.unresolvedObjections,
       acceptedOperationalConstraints: turnContractState.acceptedOperationalConstraints,
       closureEligibility: turnContractState.closureEligibility,
+      turnContractObligations: useFlawlessEngine ? contractDecision.obligations : [],
     };
     emitPlannerTrace("response_objective_selected", {
       turnNumber: nextTurnNumber,
@@ -2958,7 +2979,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        }) + `\n\nTURN CONTRACT CONTROLLER:\n- Selected response mode: ${selectedResponseMode}.\n- Unanswered direct questions from prior turn: ${(turnContractState.unansweredDirectQuestions || []).map((q) => q.question).join(" || ") || "none"}.\n- Unresolved objections: ${(turnContractState.unresolvedObjections || []).join(", ") || "none"}.\n- Accepted operational constraints: ${(turnContractState.acceptedOperationalConstraints || []).join(", ") || "none"}.\n- Closure eligibility: ${turnContractState.closureEligibility?.eligible ? "eligible" : "not eligible"}.\n- Hard rule: if selected response mode is answer, answer directly before asking anything else.\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
+        }) + (useFlawlessEngine
+          ? `\n\nRUNTIME ENFORCEMENT CONTEXT (already computed deterministically in code):\n- Response mode: ${selectedResponseMode}.\n- Objective: ${contractObjectiveId}.\n- Obligations: ${(contractDecision.obligations || []).join(", ") || "none"}.\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`
+          : `\n\nTURN CONTRACT CONTROLLER:\n- Selected response mode: ${selectedResponseMode}.\n- Unanswered direct questions from prior turn: ${(turnContractState.unansweredDirectQuestions || []).map((q) => q.question).join(" || ") || "none"}.\n- Unresolved objections: ${(turnContractState.unresolvedObjections || []).join(", ") || "none"}.\n- Accepted operational constraints: ${(turnContractState.acceptedOperationalConstraints || []).join(", ") || "none"}.\n- Closure eligibility: ${turnContractState.closureEligibility?.eligible ? "eligible" : "not eligible"}.\n- Hard rule: if selected response mode is answer, answer directly before asking anything else.\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`);
         emitPlannerTrace("planner_input_assembled", {
           turnNumber: nextTurnNumber,
           plannerVisibleConstraints: normalizedActiveConstraints,
@@ -3039,25 +3062,55 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       draftResponse: draftResponseBeforePostProcessing,
     });
-    const initialTurnContractValidation = validateGeneratedTurnContract({
-      responseMode: selectedResponseMode,
-      draftText: nextHcpDialogue,
-      turnContractState,
-    });
-    if (!initialTurnContractValidation.valid) {
-      usedDeterministicFallback = true;
-      const repairedResponse = buildContractRepairResponse({
+    if (useFlawlessEngine) {
+      const initialTurnContractValidation = await validateTurnWithRetry({
+        initialDraft: nextHcpDialogue,
         responseMode: selectedResponseMode,
+        turnContractState,
         activeConcern,
+        maxRetries: 1,
+        validateTurnContract: validateGeneratedTurnContract,
+        buildContractRepairResponse,
+        regenerate: async () => buildContractRepairResponse({
+          responseMode: selectedResponseMode,
+          activeConcern,
+        }),
       });
-      nextHcpDialogue = repairedResponse;
-      draftResponseBeforePostProcessing = repairedResponse;
-      emitPlannerTrace("turn_contract_repair_applied", {
-        turnNumber: nextTurnNumber,
-        selectedResponseMode,
-        repairReason: initialTurnContractValidation.reason,
-        repairedResponse,
+      if (!initialTurnContractValidation.valid) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = initialTurnContractValidation.draftText;
+        draftResponseBeforePostProcessing = nextHcpDialogue;
+        emitPlannerTrace("turn_contract_repair_applied", {
+          turnNumber: nextTurnNumber,
+          selectedResponseMode,
+          repairReason: initialTurnContractValidation.reason,
+          repairedResponse: nextHcpDialogue,
+        });
+      } else if (initialTurnContractValidation.repaired) {
+        nextHcpDialogue = initialTurnContractValidation.draftText;
+        draftResponseBeforePostProcessing = nextHcpDialogue;
+      }
+    } else {
+      const initialTurnContractValidation = validateGeneratedTurnContract({
+        responseMode: selectedResponseMode,
+        draftText: nextHcpDialogue,
+        turnContractState,
       });
+      if (!initialTurnContractValidation.valid) {
+        usedDeterministicFallback = true;
+        const repairedResponse = buildContractRepairResponse({
+          responseMode: selectedResponseMode,
+          activeConcern,
+        });
+        nextHcpDialogue = repairedResponse;
+        draftResponseBeforePostProcessing = repairedResponse;
+        emitPlannerTrace("turn_contract_repair_applied", {
+          turnNumber: nextTurnNumber,
+          selectedResponseMode,
+          repairReason: initialTurnContractValidation.reason,
+          repairedResponse,
+        });
+      }
     }
 
     const previousHcpDialogue = String(
@@ -3278,50 +3331,82 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
     } else {
-      // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
-      if (terminalDecisionMode) {
-        const cueIndex = deterministicIndex(
-          `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-cue`,
-          TERMINAL_DECISION_CUES.length,
-        );
-        contextualCue = TERMINAL_DECISION_CUES[cueIndex];
+      if (useFlawlessEngine) {
+        contextualCue = selectContextualCue({
+          terminalDecisionMode,
+          generationKey,
+          nextTurnNumber,
+          nextHcpState,
+          activeConcern,
+          nextProfileLockedCue: nextProfile.lockedCue,
+          recentCueText,
+          responseText: nextHcpDialogue,
+          engagementTier: decayState.tier,
+          noRepeatWindowTurns: NO_REPEAT_WINDOW_TURNS,
+          terminalDecisionCues: TERMINAL_DECISION_CUES,
+          decayCueBuckets: DECAY_CUE_BUCKETS,
+          cueFactory: ({ responseText, engagementTier, recentCueText: recentCues }) => (
+            buildScenarioAlignedCue(responseText, isFirstHcpResponse, recentCues, engagementTier)
+          ),
+        });
+
+        contextualCue = enforceNoRecentCueRepeat({
+          candidateCue: contextualCue,
+          recentCueText,
+          noRepeatWindowTurns: NO_REPEAT_WINDOW_TURNS,
+          fallbackPool: [
+            nextProfile.lockedCue,
+            "The HCP pauses, clearly expecting something more useful.",
+            "The HCP glances at the clock, patience thinning.",
+            "The HCP shifts posture slightly, less engaged.",
+            "The HCP waits with clipped attention for one practical answer.",
+          ],
+          seed: `${generationKey}:${nextTurnNumber}:${nextHcpState}:cue-fallback`,
+        });
       } else {
-        contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
-      }
-
-      const recentCues = prevTurns
-        .map((t) => String(t.cueBefore || "").trim().toLowerCase())
-        .filter(Boolean)
-        .slice(-NO_REPEAT_WINDOW_TURNS);
-      const normalizedCue = String(contextualCue || "").trim().toLowerCase();
-      const previousCue = recentCues[recentCues.length - 1];
-
-      // Hard safeguard: prevent duplicate cue reuse inside the recent no-repeat window.
-      if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
-        const deterministicFallbackPool = [
-          nextProfile.lockedCue,
-          "The HCP pauses, clearly expecting something more useful.",
-          "The HCP glances at the clock, patience thinning.",
-          "The HCP shifts posture slightly, less engaged.",
-          "The HCP waits with clipped attention for one practical answer.",
-        ]
-          .map((cue) => String(cue || "").trim())
-          .filter(Boolean);
-
-        const startIndex = deterministicIndex(`${generationKey}:${nextTurnNumber}:${nextHcpState}:cue-fallback`, deterministicFallbackPool.length);
-        let replacement = deterministicFallbackPool[startIndex] || nextProfile.lockedCue;
-
-        for (let i = 0; i < deterministicFallbackPool.length; i += 1) {
-          const candidate = deterministicFallbackPool[(startIndex + i) % deterministicFallbackPool.length];
-          const normalizedCandidate = String(candidate || "").trim().toLowerCase();
-          if (normalizedCandidate && !recentCues.includes(normalizedCandidate)) {
-            replacement = candidate;
-            break;
-          }
+        if (terminalDecisionMode) {
+          const cueIndex = deterministicIndex(
+            `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-cue`,
+            TERMINAL_DECISION_CUES.length,
+          );
+          contextualCue = TERMINAL_DECISION_CUES[cueIndex];
+        } else {
+          contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
         }
 
-        contextualCue = replacement;
+        const recentCues = prevTurns
+          .map((t) => String(t.cueBefore || "").trim().toLowerCase())
+          .filter(Boolean)
+          .slice(-NO_REPEAT_WINDOW_TURNS);
+        const normalizedCue = String(contextualCue || "").trim().toLowerCase();
+        const previousCue = recentCues[recentCues.length - 1];
+
+        if (normalizedCue && (recentCues.includes(normalizedCue) || normalizedCue === previousCue)) {
+          const deterministicFallbackPool = [
+            nextProfile.lockedCue,
+            "The HCP pauses, clearly expecting something more useful.",
+            "The HCP glances at the clock, patience thinning.",
+            "The HCP shifts posture slightly, less engaged.",
+            "The HCP waits with clipped attention for one practical answer.",
+          ]
+            .map((cue) => String(cue || "").trim())
+            .filter(Boolean);
+
+          const startIndex = deterministicIndex(`${generationKey}:${nextTurnNumber}:${nextHcpState}:cue-fallback`, deterministicFallbackPool.length);
+          let replacement = deterministicFallbackPool[startIndex] || nextProfile.lockedCue;
+
+          for (let i = 0; i < deterministicFallbackPool.length; i += 1) {
+            const candidate = deterministicFallbackPool[(startIndex + i) % deterministicFallbackPool.length];
+            const normalizedCandidate = String(candidate || "").trim().toLowerCase();
+            if (normalizedCandidate && !recentCues.includes(normalizedCandidate)) {
+              replacement = candidate;
+              break;
+            }
+          }
+
+          contextualCue = replacement;
+        }
       }
     }
 
