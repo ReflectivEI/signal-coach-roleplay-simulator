@@ -434,7 +434,7 @@ export const DEMO_SCENARIOS = DEMO_SCENARIO_ORDER
 
 const BUILDER_TO_SIMULATOR_KEY = "reflectivai:builderScenario";
 
-export default function RolePlaySimulator({ flawlessMode = false }) {
+export default function RolePlaySimulator() {
   const [customScenario, setCustomScenario] = useState(null);
 
   useEffect(() => {
@@ -644,9 +644,9 @@ export default function RolePlaySimulator({ flawlessMode = false }) {
         {/* Scenario Grid */}
         {filteredScenarios.length > 0 ? (
           <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {customScenario && <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} flawlessMode={flawlessMode} />}
+            {customScenario && <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />}
             {visibleScenarios.map((s) => (
-              <EnterpriseScenarioCard key={s.id} scenario={s} flawlessMode={flawlessMode} />
+              <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
         ) : (

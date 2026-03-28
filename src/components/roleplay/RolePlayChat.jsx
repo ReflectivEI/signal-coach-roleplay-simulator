@@ -75,18 +75,12 @@ import {
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
 import {
-  deriveTurnContractState,
-  selectDeterministicResponseMode,
   mapResponseModeToObjective,
-  buildTurnContractController,
-  validateGeneratedTurnContract,
-  buildContractRepairResponse,
 } from "./turnContractController";
 import {
   selectContextualCue,
   enforceNoRecentCueRepeat,
 } from "./cueSelector";
-import { validateTurnWithRetry } from "./turnValidator";
 
 function escapeHTML(text) {
   return String(text)
@@ -243,7 +237,7 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
 }
 
 const REALISM_CONCERN_PATTERNS = {
-  workflow: /\b(workflow|staff|staffing|nurse|team|throughput|burden|operational|implementation|process|capacity)\b/i,
+  workflow: /\b(workflow|staff|staffing|nurse|team|throughput|burden|operational|implementation|process|capacity|prior auth|prior authorization|authorization|paperwork|payer)\b/i,
   evidence: /\b(evidence|study|trial|endpoint|head-to-head|methodology|duration|confidence interval|data|proof)\b/i,
   access: /\b(access|prior auth|authorization|coverage|payer|insurance|formular|cost|reimbursement|paperwork)\b/i,
   time: /\b(time|busy|schedule|clinic|today|quick|minutes|rush|back-to-back)\b/i,
@@ -253,7 +247,7 @@ const REALISM_CONCERN_PATTERNS = {
 
 const PLANNER_TRACE_FLAG_KEY = "roleplay.debug.planner_trace";
 const TEXT_SURFACE_CANARY_FLAG_KEY = "roleplay.debug.text_surface_canary";
-const OPERATIONAL_CONSTRAINT_PRIORITY = ["staffing", "capacity", "workflow", "prior_auth", "scheduling", "handoff", "callback", "throughput", "time", "access", "policy", "screening", "evidence"];
+const OPERATIONAL_CONSTRAINT_PRIORITY = ["prior_auth", "staffing", "capacity", "workflow", "scheduling", "handoff", "callback", "throughput", "time", "access", "policy", "screening", "evidence"];
 
 function readDebugFlag(flagKey) {
   if (typeof window === "undefined") return false;
@@ -2081,7 +2075,7 @@ function buildRepGuidance(turn, allTurns = []) {
   return pickNonRepeatingGuidance(fallbackSet, `${turn.turnNumber}:${category}:${issueSignal}`);
 }
 
-export default function RolePlayChat({ scenario, flawlessMode = false, onClose, _onSessionSaved }) {
+export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
@@ -2099,7 +2093,7 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
   // Stable session ID for deterministic cue selection
   const sessionIdRef = useRef(`session_${Date.now()}`);
   const sid = sessionIdRef.current;
-  const useFlawlessEngine = Boolean(flawlessMode);
+  const useFlawlessEngine = false;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
   const sendInFlightRef = useRef(false);
@@ -2604,20 +2598,6 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
     });
-    const turnContractState = deriveTurnContractState({
-      previousSnapshot: respondingToTurn?.plannerStateSnapshot || {},
-      latestHcpTurn: respondingToTurn?.hcpDialogueBefore || "",
-      repMessage,
-      normalizedActiveConstraints,
-      activeOperationalConstraints: operationalConstraintState.activeOperationalConstraints,
-      activeConcern,
-      concernFlowOutcome,
-      unresolvedConcernTurns,
-      loopBreakerBudget,
-      overrideExit,
-      terminalDecisionMode,
-      hardLoopBreaker,
-    });
     const fallbackResponseMode = (
       objectiveRanking.selectedObjective?.startsWith("close_or_limit_scope") ? "close"
         : objectiveRanking.selectedObjective?.startsWith("answer_direct_constraint_question") ? "answer"
@@ -2625,25 +2605,8 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
             : objectiveRanking.selectedObjective?.startsWith("advance_with_constraint") ? "advance"
               : "probe"
     );
-    const contractDecision = useFlawlessEngine
-      ? buildTurnContractController({
-          turnContractState,
-          concernFlowOutcome,
-          fallbackMode: fallbackResponseMode,
-        })
-      : {
-          responseMode: selectDeterministicResponseMode({
-            turnContractState,
-            concernFlowOutcome,
-            fallbackMode: fallbackResponseMode,
-          }),
-          obligations: [],
-          objective: null,
-        };
-    const selectedResponseMode = contractDecision.responseMode;
-    const contractObjectiveId = useFlawlessEngine
-      ? contractDecision.objective
-      : mapResponseModeToObjective(selectedResponseMode);
+    const selectedResponseMode = fallbackResponseMode;
+    const contractObjectiveId = mapResponseModeToObjective(selectedResponseMode);
     const chosenResponseObjective = `${contractObjectiveId}[${objectiveRanking.primaryConstraint}]`;
     const plannerStateSnapshot = {
       activeConcern,
@@ -2663,11 +2626,11 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       chosenResponseObjective,
       objectiveRanking,
       selectedResponseMode,
-      unansweredDirectQuestions: turnContractState.unansweredDirectQuestions,
-      unresolvedObjections: turnContractState.unresolvedObjections,
-      acceptedOperationalConstraints: turnContractState.acceptedOperationalConstraints,
-      closureEligibility: turnContractState.closureEligibility,
-      turnContractObligations: useFlawlessEngine ? contractDecision.obligations : [],
+      unansweredDirectQuestions: [],
+      unresolvedObjections: [],
+      acceptedOperationalConstraints: [],
+      closureEligibility: { eligible: false, reasons: [] },
+      turnContractObligations: [],
     };
     emitPlannerTrace("response_objective_selected", {
       turnNumber: nextTurnNumber,
@@ -2683,7 +2646,7 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       terminalDecisionMode,
       hardLoopBreaker,
       overrideExit,
-      turnContractState,
+      turnContractState: null,
     });
 
     if (hardLoopBreaker) {
@@ -2999,9 +2962,16 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        }) + (useFlawlessEngine
-          ? `\n\nRUNTIME ENFORCEMENT CONTEXT (already computed deterministically in code):\n- Response mode: ${selectedResponseMode}.\n- Objective: ${contractObjectiveId}.\n- Obligations: ${(contractDecision.obligations || []).join(", ") || "none"}.\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`
-          : `\n\nTURN CONTRACT CONTROLLER:\n- Selected response mode: ${selectedResponseMode}.\n- Unanswered direct questions from prior turn: ${(turnContractState.unansweredDirectQuestions || []).map((q) => q.question).join(" || ") || "none"}.\n- Unresolved objections: ${(turnContractState.unresolvedObjections || []).join(", ") || "none"}.\n- Accepted operational constraints: ${(turnContractState.acceptedOperationalConstraints || []).join(", ") || "none"}.\n- Closure eligibility: ${turnContractState.closureEligibility?.eligible ? "eligible" : "not eligible"}.\n- Hard rule: if selected response mode is answer, answer directly before asking anything else.\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`);
+        }) + `
+
+ENGAGEMENT DECAY LAYER:
+- Current engagement tier: ${decayState.tier}.
+- Active concern to protect: ${activeConcern}.
+- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.
+- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.
+- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}
+- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.
+- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         emitPlannerTrace("planner_input_assembled", {
           turnNumber: nextTurnNumber,
           plannerVisibleConstraints: normalizedActiveConstraints,
@@ -3082,56 +3052,6 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       draftOpening: getOpeningSentence(draftResponseBeforePostProcessing),
       draftResponse: draftResponseBeforePostProcessing,
     });
-    if (useFlawlessEngine) {
-      const initialTurnContractValidation = await validateTurnWithRetry({
-        initialDraft: nextHcpDialogue,
-        responseMode: selectedResponseMode,
-        turnContractState,
-        activeConcern,
-        maxRetries: 1,
-        validateTurnContract: validateGeneratedTurnContract,
-        buildContractRepairResponse,
-        regenerate: async () => buildContractRepairResponse({
-          responseMode: selectedResponseMode,
-          activeConcern,
-        }),
-      });
-      if (!initialTurnContractValidation.valid) {
-        usedDeterministicFallback = true;
-        nextHcpDialogue = initialTurnContractValidation.draftText;
-        draftResponseBeforePostProcessing = nextHcpDialogue;
-        emitPlannerTrace("turn_contract_repair_applied", {
-          turnNumber: nextTurnNumber,
-          selectedResponseMode,
-          repairReason: initialTurnContractValidation.reason,
-          repairedResponse: nextHcpDialogue,
-        });
-      } else if (initialTurnContractValidation.repaired) {
-        nextHcpDialogue = initialTurnContractValidation.draftText;
-        draftResponseBeforePostProcessing = nextHcpDialogue;
-      }
-    } else {
-      const initialTurnContractValidation = validateGeneratedTurnContract({
-        responseMode: selectedResponseMode,
-        draftText: nextHcpDialogue,
-        turnContractState,
-      });
-      if (!initialTurnContractValidation.valid) {
-        usedDeterministicFallback = true;
-        const repairedResponse = buildContractRepairResponse({
-          responseMode: selectedResponseMode,
-          activeConcern,
-        });
-        nextHcpDialogue = repairedResponse;
-        draftResponseBeforePostProcessing = repairedResponse;
-        emitPlannerTrace("turn_contract_repair_applied", {
-          turnNumber: nextTurnNumber,
-          selectedResponseMode,
-          repairReason: initialTurnContractValidation.reason,
-          repairedResponse,
-        });
-      }
-    }
 
     const previousHcpDialogue = String(
       respondingToTurn?.hcpDialogueBefore
@@ -3562,17 +3482,7 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       });
     }
 
-    const finalTurnContractValidation = validateGeneratedTurnContract({
-      responseMode: selectedResponseMode,
-      draftText: nextHcpDialogue,
-      turnContractState,
-    });
-    if (!finalTurnContractValidation.valid) {
-      nextHcpDialogue = buildContractRepairResponse({
-        responseMode: selectedResponseMode,
-        activeConcern,
-      });
-    }
+    const finalTurnContractValidation = { valid: true, reason: null, disabled: true };
 
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
@@ -3625,8 +3535,8 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       guardrailApplied: false,
       plannerGapComparison,
       selectedResponseMode,
-      turnContractState,
-      finalTurnContractValidation,
+      turnContractState: null,
+      finalTurnContractValidation: { valid: true, reason: null, disabled: true },
       finalResponse: nextHcpDialogue,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue, { scenarioFamily });

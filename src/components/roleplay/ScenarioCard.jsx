@@ -37,7 +37,7 @@ function getOpeningScene(scenario) {
   return scenario.opening_scene || scenario.openingScene || `The HCP is available for a brief conversation. This is your opportunity to open with purpose and read the room carefully.`;
 }
 
-export default function ScenarioCard({ scenario, flawlessMode = false, renderAs, onStart, buttonClassName = "" }) {
+export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassName = "" }) {
   const [expanded, setExpanded] = useState(false);
   const [playing, setPlaying] = useState(false);
   const dc = getDifficultyVisuals(scenario.difficulty).style;
@@ -68,7 +68,7 @@ export default function ScenarioCard({ scenario, flawlessMode = false, renderAs,
           Start Scenario →
         </button>
         {!onStart && playing && typeof document !== "undefined"
-          ? createPortal(<RolePlayChat scenario={scenario} flawlessMode={flawlessMode} onClose={() => setPlaying(false)} />, document.body)
+          ? createPortal(<RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />, document.body)
           : null}
       </>
     );
@@ -182,7 +182,7 @@ export default function ScenarioCard({ scenario, flawlessMode = false, renderAs,
       </motion.div>
 
       {playing && (
-        <RolePlayChat scenario={scenario} flawlessMode={flawlessMode} onClose={() => setPlaying(false)} />
+        <RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />
       )}
     </>
   );

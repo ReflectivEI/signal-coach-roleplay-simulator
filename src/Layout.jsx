@@ -20,7 +20,6 @@ const navSections = [
     items: [
       { label: "Dashboard", page: "Dashboard", icon: LayoutDashboard },
       { label: "Role Play Simulator", page: "RolePlaySimulator", icon: Play },
-      { label: "Role Play Simulator (Flawless)", page: "RolePlaySimulatorFlawless", icon: Play },
       { label: "Scenario Builder", page: "ScenarioBuilder", icon: PenSquare },
       { label: "AI Coach", page: "AICoach", icon: Bot },
       { label: "Pre-Call Planning", page: "PreCallPlanning", icon: ClipboardList },
