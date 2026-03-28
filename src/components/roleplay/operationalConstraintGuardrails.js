@@ -124,3 +124,91 @@ export function buildConstraintSafeRegeneratedResponse({
 
   return neutralByConcern[concern] || "Help me understand the most clinically relevant takeaway for my patients.";
 }
+
+const LATE_TURN_REQUIREMENT_BY_CONCERN = {
+  workflow: "a concrete workflow step that is practical this week",
+  access: "a practical access step that works with prior-auth realities",
+  evidence: "clinically meaningful evidence relevant to my practice",
+  time: "one concise point that is immediately useful",
+  policy: "a pathway-aligned next step that fits current policy",
+  screening: "clear candidacy criteria I can apply in clinic",
+};
+
+export function selectLateTurnConstraintResponseMode({
+  hasActiveConstraint = false,
+  hasActiveRequirement = false,
+  inLateTurnState = false,
+  requirementAddressed = true,
+  boundaryLevel = "normal",
+  requirementRestatedCount = 0,
+} = {}) {
+  const level = boundaryLevel === "closing" ? "closing" : boundaryLevel === "constrained" ? "constrained" : "normal";
+  const restatedCount = Number.isFinite(requirementRestatedCount)
+    ? Math.max(0, requirementRestatedCount)
+    : 0;
+  const hasAnchors = Boolean(hasActiveConstraint || hasActiveRequirement);
+
+  if (!hasAnchors || !inLateTurnState || requirementAddressed) {
+    return {
+      forced: false,
+      mode: null,
+      nextBoundaryLevel: level,
+      nextRequirementRestatedCount: restatedCount,
+    };
+  }
+
+  if (level === "closing") {
+    return {
+      forced: true,
+      mode: "close",
+      nextBoundaryLevel: "closing",
+      nextRequirementRestatedCount: restatedCount,
+    };
+  }
+
+  if (restatedCount < 1) {
+    return {
+      forced: true,
+      mode: "restate_once",
+      nextBoundaryLevel: level === "normal" ? "constrained" : level,
+      nextRequirementRestatedCount: restatedCount + 1,
+    };
+  }
+
+  if (level === "normal") {
+    return {
+      forced: true,
+      mode: "boundary",
+      nextBoundaryLevel: "constrained",
+      nextRequirementRestatedCount: restatedCount,
+    };
+  }
+
+  return {
+    forced: true,
+    mode: "close",
+    nextBoundaryLevel: "closing",
+    nextRequirementRestatedCount: restatedCount,
+  };
+}
+
+export function buildLateTurnConstraintResponse({
+  concern = "workflow",
+  mode = "restate_once",
+  includeConstraintSignal = false,
+} = {}) {
+  const unmetRequirement = LATE_TURN_REQUIREMENT_BY_CONCERN[concern] || LATE_TURN_REQUIREMENT_BY_CONCERN.workflow;
+  const intro = includeConstraintSignal
+    ? "Given the time constraint,"
+    : "To stay focused,";
+
+  if (mode === "close") {
+    return `${intro} I need ${unmetRequirement}. If that is not available now, we can pause here.`;
+  }
+
+  if (mode === "boundary") {
+    return `${intro} please stick to ${unmetRequirement} before we continue.`;
+  }
+
+  return `${intro} I still need ${unmetRequirement}.`;
+}

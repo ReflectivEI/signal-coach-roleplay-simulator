@@ -64,6 +64,8 @@ import {
   buildConstraintGrounding,
   detectConstraintDraftViolations,
   buildConstraintSafeRegeneratedResponse,
+  selectLateTurnConstraintResponseMode,
+  buildLateTurnConstraintResponse,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
 
@@ -1986,6 +1988,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
+  const lateTurnConstraintStateRef = useRef({
+    activeConstraint: null,
+    activeRequirement: null,
+    boundaryLevel: "normal",
+    requirementRestatedCount: 0,
+  });
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -2070,6 +2078,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
         repInferenceStateRef.current = createInitialRepInferenceState();
+        lateTurnConstraintStateRef.current = {
+          activeConstraint: null,
+          activeRequirement: null,
+          boundaryLevel: "normal",
+          requirementRestatedCount: 0,
+        };
 
         // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
@@ -2386,6 +2400,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+    const priorLateTurnConstraintState = lateTurnConstraintStateRef.current || {
+      activeConstraint: null,
+      activeRequirement: null,
+      boundaryLevel: "normal",
+      requirementRestatedCount: 0,
+    };
+    const activeConstraintForTurn =
+      normalizedActiveConstraints[0]
+      || priorLateTurnConstraintState.activeConstraint
+      || activeConcern;
+    const activeRequirementForTurn = activeConcern || priorLateTurnConstraintState.activeRequirement || "workflow";
+    const inLateTurnConstraintState =
+      nextTurnNumber >= 4
+      || unresolvedConcernTurns >= 2
+      || ["impatient", "disengaging"].includes(decayState.tier)
+      || terminalDecisionMode
+      || hardLoopBreaker;
+    const lateTurnConstraintDecision = selectLateTurnConstraintResponseMode({
+      hasActiveConstraint: normalizedActiveConstraints.length > 0 || Boolean(priorLateTurnConstraintState.activeConstraint),
+      hasActiveRequirement: Boolean(activeRequirementForTurn),
+      inLateTurnState: inLateTurnConstraintState,
+      requirementAddressed: decayState.concernAddressed,
+      boundaryLevel: priorLateTurnConstraintState.boundaryLevel,
+      requirementRestatedCount: priorLateTurnConstraintState.requirementRestatedCount,
+    });
     const objectiveRanking = rankResponseObjective({
       overrideExit,
       terminalDecisionMode,
@@ -2412,6 +2451,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       unresolvedConcernTurns,
       chosenResponseObjective,
       objectiveRanking,
+      lateTurnConstraintDecision,
     };
     emitPlannerTrace("response_objective_selected", {
       turnNumber: nextTurnNumber,
@@ -2453,6 +2493,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       plannerStateSnapshot,
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
+      lateTurnConstraintBoundaryLevel: lateTurnConstraintDecision.nextBoundaryLevel,
+      lateTurnConstraintRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
       generationKey,
     };
     emitPlannerTrace("constraints_written_to_state", {
@@ -3151,6 +3193,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
+    if (!overrideExit && lateTurnConstraintDecision.forced) {
+      nextHcpDialogue = buildLateTurnConstraintResponse({
+        concern: activeRequirementForTurn,
+        mode: lateTurnConstraintDecision.mode,
+        includeConstraintSignal: Boolean(
+          normalizedActiveConstraints.includes("time")
+          || activeConstraintForTurn === "time"
+        ),
+      });
+    }
+
     const openingBeforeGuardrail = getOpeningSentence(nextHcpDialogue);
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
@@ -3184,6 +3237,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (!finalViolationCheck.valid) {
       nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
     }
+
+    const nextLateTurnConstraintState = {
+      activeConstraint: activeConstraintForTurn,
+      activeRequirement: activeRequirementForTurn,
+      boundaryLevel: lateTurnConstraintDecision.nextBoundaryLevel,
+      requirementRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
+    };
 
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
@@ -3265,6 +3325,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {
       return;
     }
+
+    lateTurnConstraintStateRef.current = nextLateTurnConstraintState;
 
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
     setTurns((prevTurnsState) => {
