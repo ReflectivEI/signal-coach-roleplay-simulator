@@ -99,6 +99,14 @@ function sanitizeUserMessage(text) {
   return escapeHTML(String(text || "").trim());
 }
 
+function countWords(text = "") {
+  const normalized = String(text || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!normalized) return 0;
+  return normalized.split(" ").length;
+}
+
 function isLowSubstanceAck(text = "") {
   const normalized = String(text || "")
     .toLowerCase()
@@ -2298,21 +2306,29 @@ export default function RolePlayChat({ scenario, flawlessMode = false, onClose, 
       ? scenarioPolicyOverrides.minMeaningfulRepTokens
       : 2;
     const meaningfulTokenCount = extractMeaningfulRepTokens(normalizedInput).length;
+    const wordCount = countWords(normalizedInput);
+    const minimumWordThreshold = 7;
+    const meetsMinimumLength = wordCount >= minimumWordThreshold;
+    const includesQuestion = /\?/.test(normalizedInput);
     const lowValueInput = detectLowValueRepResponse(normalizedInput)
       || meaningfulTokenCount < requiredMeaningfulTokens;
     const evidenceRequired = Boolean(scenarioPolicyOverrides?.evidenceDetailRequired);
     const evidenceConstraintActive = evidenceRequired && detectPrimaryConcern(policySeed) === "evidence";
     const missingEvidenceDetail = evidenceConstraintActive && !hasEvidenceDetailSignal(normalizedInput);
+    const shouldAllowLongQuestion = includesQuestion && meetsMinimumLength;
+    const shouldTriggerMinimumSubstanceBlock =
+      !shouldAllowLongQuestion && (!meetsMinimumLength || lowValueInput || missingEvidenceDetail);
 
     const weakResponseWarningKey = `${candidateTurnKey}::minimum-substance`;
-    if (awaitingHcpResponse && (lowValueInput || missingEvidenceDetail) && !weakReplyWarningKeysRef.current.has(weakResponseWarningKey)) {
+    if (awaitingHcpResponse && shouldTriggerMinimumSubstanceBlock && !weakReplyWarningKeysRef.current.has(weakResponseWarningKey)) {
       weakReplyWarningKeysRef.current.add(weakResponseWarningKey);
       const concernSeed = `${currentPrompt} ${scenario?.description || ""} ${scenario?.context || ""}`;
       const inferredConcern = detectPrimaryConcern(concernSeed);
+      const lengthSuggestion = `Aim for at least ${minimumWordThreshold}-${minimumWordThreshold + 3} words so your response has enough context.`;
       setCoachingTip({
         tip: "⚠ Weak response detected. Consider strengthening it before sending.",
         label: "Coaching",
-        suggestion: `${buildMinimumSubstanceSuggestion({
+        suggestion: `${lengthSuggestion} ${buildMinimumSubstanceSuggestion({
           hcpPrompt: currentPrompt,
           concern: inferredConcern,
         })}${missingEvidenceDetail ? " Include one concrete evidence detail (endpoint, threshold, %, or timeframe)." : ""}`,
