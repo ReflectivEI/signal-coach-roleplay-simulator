@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
+import { computeSessionOverallScoreFromTurns } from "./sessionScoreAggregation";
 
 const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
   id: c.id,
@@ -183,12 +184,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     return Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10;
   };
 
-  const overallScore = (() => {
-    const capIds = CAPABILITIES.map(c => c.id);
-    const scores = capIds.map(id => getCapabilityAverage(id)).filter(s => typeof s === "number");
-    if (scores.length === 0) return null;
-    return Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 10) / 10;
-  })();
+  const overallScore = computeSessionOverallScoreFromTurns(
+    scoredTurns,
+    CAPABILITIES.map((capability) => capability.id),
+  );
 
   const requestCapabilityFeedback = async (cap) => {
     setLoading((prev) => ({ ...prev, [cap.id]: true }));
