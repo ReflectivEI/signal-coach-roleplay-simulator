@@ -16,7 +16,7 @@ const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidenc
 
 // ...existing code...
 
-export const ALL_SCENARIOS = [
+const ALL_SCENARIOS = [
   // ── HIV / PrEP ─────────────────────────────────────────────────────────────
   {
     id: "hiv_im_prep_lowshare",
@@ -407,31 +407,6 @@ export const ALL_SCENARIOS = [
   },
 ];
 
-/**
- * Demo showcase is intentionally constrained to 10 scenarios to improve
- * roleplay consistency and reduce drift, while keeping the full 19-scenario
- * library available in-system for broader validation and expansion.
- * Grouping key: HCP profile, challenge, disease state, HCP type, influence driver.
- */
-export const DEMO_SCENARIO_GROUPS = [
-  { scenarioId: "hiv_im_prep_lowshare", hcpProfile: "Time-pressed IM prescriber", challenge: "PrEP under-identification", diseaseState: "HIV / PrEP", hcpType: "Prescriber / Treater", influenceDriver: "Patient-Centered" },
-  { scenarioId: "hiv_pa_treat_switch_slowdown", hcpProfile: "Academic HIV KOL", challenge: "Optimization inertia", diseaseState: "HIV / PrEP", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
-  { scenarioId: "onc_md_io_adc_pathways", hcpProfile: "Pathway-governed tumor center lead", challenge: "Cost and operational scrutiny", diseaseState: "Oncology", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
-  { scenarioId: "onc_np_pathway_ops", hcpProfile: "Short-staffed infusion NP", challenge: "Workflow overload", diseaseState: "Oncology", hcpType: "Prescriber / Treater", influenceDriver: "Patient-Centered" },
-  { scenarioId: "cv_card_md_hf_gdmt_uptake", hcpProfile: "Academic HF cardiologist", challenge: "Guideline execution gap", diseaseState: "Cardiology", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
-  { scenarioId: "cv_np_ckd_sglt2_calendar", hcpProfile: "Rural HF NP", challenge: "Renal safety hesitation", diseaseState: "Cardiology", hcpType: "Prescriber / Treater", influenceDriver: "Risk-Averse" },
-  { scenarioId: "vac_id_adult_flu_playbook", hcpProfile: "ID vaccine program lead", challenge: "Seasonal workflow inconsistency", diseaseState: "Vaccines", hcpType: "KOL / Thought Leader", influenceDriver: "Guideline-Anchored" },
-  { scenarioId: "covid_pulm_md_antiviral_ddi_path", hcpProfile: "Pulmonary high-risk care physician", challenge: "DDI complexity bottleneck", diseaseState: "COVID-19", hcpType: "Prescriber / Treater", influenceDriver: "Risk-Averse" },
-  { scenarioId: "neuro-access", hcpProfile: "Regional plan medical director", challenge: "PA and access friction", diseaseState: "Neurology", hcpType: "Non-Prescribing Influencer", influenceDriver: "Risk-Averse" },
-  { scenarioId: "rare-diagnosis", hcpProfile: "Academic diagnostics specialist", challenge: "Rare disease under-recognition", diseaseState: "Rare Disease", hcpType: "KOL / Thought Leader", influenceDriver: "Evidence-Based" },
-];
-
-export const DEMO_SCENARIO_ORDER = DEMO_SCENARIO_GROUPS.map((group) => group.scenarioId);
-const DEMO_SCENARIO_SET = new Set(DEMO_SCENARIO_ORDER);
-export const DEMO_SCENARIOS = DEMO_SCENARIO_ORDER
-  .map((id) => ALL_SCENARIOS.find((scenario) => scenario.id === id))
-  .filter(Boolean);
-
 const BUILDER_TO_SIMULATOR_KEY = "reflectivai:builderScenario";
 
 export default function RolePlaySimulator() {
@@ -464,14 +439,9 @@ export default function RolePlaySimulator() {
   const [specialtyFilter, setSpecialtyFilter] = useState("All Specialties");
   const [hcpCategoryFilter, setHcpCategoryFilter] = useState("All HCP Types");
   const [influenceDriverFilter, setInfluenceDriverFilter] = useState("All Influence Drivers");
-  const scenariosForShowcase = useMemo(() => {
-    if (!customScenario) return DEMO_SCENARIOS;
-    const alreadyIncluded = DEMO_SCENARIO_SET.has(customScenario.id);
-    return alreadyIncluded ? DEMO_SCENARIOS : [customScenario, ...DEMO_SCENARIOS];
-  }, [customScenario]);
 
   const filteredScenarios = useMemo(() => {
-    return scenariosForShowcase.filter((s) => {
+    return ALL_SCENARIOS.filter(s => {
       const catMatch = activeCategory === "All" || s.category === activeCategory;
       const diffMatch = activeDifficulty === "All Levels" || s.difficulty === activeDifficulty;
       const q = search.toLowerCase();
@@ -482,21 +452,15 @@ export default function RolePlaySimulator() {
       const infMatch = influenceDriverFilter === "All Influence Drivers" || s.influence_driver === influenceDriverFilter;
       return catMatch && diffMatch && searchMatch && dsMatch && specMatch && hcpMatch && infMatch;
     });
-  }, [activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter, scenariosForShowcase]);
-
-  const visibleScenarios = useMemo(() => {
-    if (!customScenario) return filteredScenarios;
-    const customId = customScenario.id || "custom";
-    return filteredScenarios.filter((scenario) => (scenario.id || "custom") !== customId);
-  }, [customScenario, filteredScenarios]);
+  }, [activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter]);
 
   const counts = useMemo(() => {
     const c = {};
     CATEGORIES.forEach(cat => {
-      c[cat] = cat === "All" ? scenariosForShowcase.length : scenariosForShowcase.filter(s => s.category === cat).length;
+      c[cat] = cat === "All" ? ALL_SCENARIOS.length : ALL_SCENARIOS.filter(s => s.category === cat).length;
     });
     return c;
-  }, [scenariosForShowcase]);
+  }, []);
 
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
@@ -520,7 +484,7 @@ export default function RolePlaySimulator() {
                 + New Scenario
               </button>
               <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
-                <span className="text-3xl font-bold text-white">{DEMO_SCENARIOS.length}</span>
+                <span className="text-3xl font-bold text-white">{ALL_SCENARIOS.length}</span>
                 <span className="mt-1 text-xs uppercase tracking-[0.16em] text-teal-100">Scenarios</span>
               </div>
               <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
@@ -528,9 +492,6 @@ export default function RolePlaySimulator() {
                 <span className="mt-1 text-xs uppercase tracking-[0.16em] text-teal-100">Disease Areas</span>
               </div>
             </div>
-            <p className="mt-4 text-xs text-teal-100/90">
-              Demo mode shows a structured 10-scenario set; the full 19-scenario library remains available in-system.
-            </p>
           </div>
           </div>
         </div>
@@ -642,10 +603,16 @@ export default function RolePlaySimulator() {
           </div>
         )}
         {/* Scenario Grid */}
-        {filteredScenarios.length > 0 ? (
+        {customScenario ? (
           <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {customScenario && <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />}
-            {visibleScenarios.map((s) => (
+            <EnterpriseScenarioCard key={customScenario.id || 'custom'} scenario={customScenario} />
+            {filteredScenarios.map(s => (
+              <EnterpriseScenarioCard key={s.id} scenario={s} />
+            ))}
+          </div>
+        ) : filteredScenarios.length > 0 ? (
+          <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {filteredScenarios.map(s => (
               <EnterpriseScenarioCard key={s.id} scenario={s} />
             ))}
           </div>
