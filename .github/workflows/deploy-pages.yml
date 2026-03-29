@@ -18,16 +18,15 @@ jobs:
   build:
     runs-on: ubuntu-latest
     name: Build application
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,11 +39,12 @@ jobs:
     runs-on: ubuntu-latest
     name: Deploy to Cloudflare Pages
     needs: build
+
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
       CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
       CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
       CLOUDFLARE_PAGES_OUTPUT_DIR: dist/client
+
     steps:
       - name: Check deploy secret availability
         id: cf_token
@@ -53,33 +53,29 @@ jobs:
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN is not configured; deploy job will be skipped."
+            echo "::error::CLOUDFLARE_API_TOKEN is missing"
+            exit 1
           else
             echo "available=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout code
-        if: steps.cf_token.outputs.available == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        if: steps.cf_token.outputs.available == 'true'
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
-        if: steps.cf_token.outputs.available == 'true'
         run: npm ci
 
       - name: Build application
-        if: steps.cf_token.outputs.available == 'true'
         run: npm run ci:build
 
       - name: Deploy to Cloudflare Pages
         id: deploy_pages
-        if: steps.cf_token.outputs.available == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -87,7 +83,7 @@ jobs:
           command: pages deploy ${{ env.CLOUDFLARE_PAGES_OUTPUT_DIR }} --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT }}
 
       - name: Create GitHub Deployment
-        if: steps.cf_token.outputs.available == 'true' && steps.deploy_pages.outcome == 'success'
+        if: steps.deploy_pages.outcome == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -106,5 +102,5 @@ jobs:
               deployment_id: deployment.data.id,
               state: 'success',
               environment_url: 'https://reflectiv-ai.com',
-              description: 'Deployment to Cloudflare Pages completed successfully'
+              description: 'Deployment successful'
             });
