@@ -12,6 +12,7 @@ export const HCP_STATES = [
   'boundary-setting',
   'irritated',
   'disengaging',
+  'disengaged',
 ];
 
 export const STATE_INDEX = Object.fromEntries(HCP_STATES.map((s, i) => [s, i]));
@@ -49,6 +50,12 @@ export function deriveInitialState(scenario) {
  */
 export function transitionState(currentState, repMessage) {
   const msg = repMessage.toLowerCase();
+  if (currentState === 'disengaged') {
+    const repairSignal = /i hear you|i understand|briefly|one concrete|one specific|quickly|if helpful|i can send|i'll send|threshold|metric|clinically meaningful/.test(msg);
+    const pushySignal = /you should|you must|you need to|just do it|immediately/.test(msg);
+    if (repairSignal && !pushySignal) return 'boundary-setting';
+    return 'disengaged';
+  }
   const idx = STATE_INDEX[currentState] ?? 0;
 
   // Escalate +2 for insults / competence attacks
@@ -125,6 +132,13 @@ export function getToneDirectives(state) {
       warmth: 'none',
       pacing: 'terminal',
       instruction: 'Signal that the conversation is ending. Reference needing to go see a patient, another meeting, or just turn and begin to leave. Make it clear you are done.',
+    },
+    'disengaged': {
+      maxSentences: 1,
+      tone: 'terminated and non-receptive',
+      warmth: 'none',
+      pacing: 'terminal',
+      instruction: 'Conversation is effectively over. Keep reply short and final. Only reopen if rep acknowledges constraints and offers one concrete, low-friction next step.',
     },
   };
   return directives[state] || directives['neutral'];
@@ -350,6 +364,12 @@ const CUE_BANK = {
     'The HCP offers a handshake, then leaves promptly.',
     'The HCP glances at the door, then signals the conversation is ending.',
   ],
+  'disengaged': [
+    'The HCP turns toward the patient room and signals the interaction is over.',
+    'The HCP keeps one hand on the door and gives a final, non-receptive glance.',
+    'The HCP resumes walking and indicates they cannot continue this discussion now.',
+    'The HCP points to a waiting patient list and closes the conversation.',
+  ],
 };
 
 /**
@@ -443,7 +463,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
       }
     }
   }
-  if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
+  if (/frustrat|annoy|impatient|pushy|demand|interrupt|skeptic|resist|challenge|refus|declin|dismiss/.test(repSentiment)) {
     if (hcpState === 'resistant' || hcpState === 'irritated') {
       const irritatedCues = CUE_BANK['irritated'] || [];
       if (irritatedCues.length > 0) {
