@@ -121,31 +121,45 @@ test('late-turn missed requirement -> constrained restate then escalation withou
 });
 
 
-test('late-turn guardrails rotate close phrasing to avoid robotic repetition', () => {
-  const recent = [
-    'Given the time constraint, I need clinically meaningful evidence relevant to my practice. If that is not available now, we can pause here.',
-  ];
-
+test('late-turn guardrails vary by deterministic progression stage', () => {
   const closeA = buildLateTurnConstraintResponse({
     concern: 'evidence',
     mode: 'close',
     includeConstraintSignal: true,
-    seed: 'turn-1',
-    recentResponses: recent,
+    seed: 'turn-sequence',
+    progressionStage: 1,
   });
 
   const closeB = buildLateTurnConstraintResponse({
     concern: 'evidence',
     mode: 'close',
     includeConstraintSignal: true,
-    seed: 'turn-2',
-    recentResponses: [closeA],
+    seed: 'turn-sequence',
+    progressionStage: 2,
   });
 
-  assert.notEqual(closeA, recent[0]);
   assert.notEqual(closeA, closeB);
   assert.match(closeA, /evidence relevant to my practice/i);
   assert.match(closeB, /pause|revisit/i);
+});
+
+test('late-turn close output is deterministic for identical seed + stage', () => {
+  const closeA = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'deterministic-check',
+    progressionStage: 2,
+  });
+  const closeB = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'deterministic-check',
+    progressionStage: 2,
+  });
+
+  assert.equal(closeA, closeB);
 });
 
 test('late-turn addressed requirement concisely -> no forced closure path', () => {
@@ -255,6 +269,17 @@ test('opening fallback only says "thanks for asking" when rep asked wellbeing', 
     /repAskedWellbeing \? "I'm doing well, thanks for asking\." : ""/,
     'expected opening fallback to avoid social-assumption text when wellbeing was not asked',
   );
+});
+
+test('late-turn close loop breaker forces terminal disengage in sustained closing boundary', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /lateTurnConstraintDecision\.mode === "close"/);
+  assert.match(rolePlayChatSource, /priorLateTurnConstraintState\.boundaryLevel === "closing"/);
+  assert.match(rolePlayChatSource, /nextHcpState = "disengaged";/);
 });
 
 test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {

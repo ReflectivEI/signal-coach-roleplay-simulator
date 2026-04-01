@@ -222,7 +222,7 @@ export function buildLateTurnConstraintResponse({
   mode = "restate_once",
   includeConstraintSignal = false,
   seed = "",
-  recentResponses = [],
+  progressionStage = 0,
 } = {}) {
   const unmetRequirement = LATE_TURN_REQUIREMENT_BY_CONCERN[concern] || LATE_TURN_REQUIREMENT_BY_CONCERN.workflow;
   const introPool = includeConstraintSignal
@@ -256,33 +256,23 @@ export function buildLateTurnConstraintResponse({
   ];
 
   const pickVariant = (pool, modeLabel) => {
-    const normalizedRecent = (Array.isArray(recentResponses) ? recentResponses : [])
-      .map((item) => String(item || "").trim().toLowerCase())
-      .filter(Boolean)
-      .slice(-3);
+    const stageOffset = Number.isFinite(progressionStage) ? Math.max(0, Math.trunc(progressionStage)) : 0;
     const startIndex = Math.abs(
-      [...`${seed}:${concern}:${modeLabel}:${includeConstraintSignal ? "time" : "focus"}`]
+      [...`${seed}:${concern}:${modeLabel}:${includeConstraintSignal ? "time" : "focus"}:${stageOffset}`]
         .reduce((acc, char) => acc + char.charCodeAt(0), 0),
     ) % pool.length;
-
-    for (let i = 0; i < pool.length; i += 1) {
-      const candidate = pool[(startIndex + i) % pool.length].replace("{{requirement}}", unmetRequirement);
-      const normalized = candidate.toLowerCase();
-      if (!normalizedRecent.includes(normalized)) return candidate;
-    }
-
     return pool[startIndex].replace("{{requirement}}", unmetRequirement);
   };
 
   const intro = pickVariant(introPool, "intro");
 
   if (mode === "close") {
-    return `${intro} ${pickVariant(closePool, "close")}`;
+    return `${intro} ${pickVariant(closePool, "close")}`.trim();
   }
 
   if (mode === "boundary") {
-    return `${intro} ${pickVariant(boundaryPool, "boundary")}`;
+    return `${intro} ${pickVariant(boundaryPool, "boundary")}`.trim();
   }
 
-  return `${intro} ${pickVariant(restatePool, "restate")}`;
+  return `${intro} ${pickVariant(restatePool, "restate")}`.trim();
 }

@@ -3745,11 +3745,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           || activeConstraintForTurn === "time"
         ),
         seed: `${generationKey}:${nextTurnNumber}:late-turn`,
-        recentResponses: prevTurns
-          .map((turn) => turn?.hcpDialogueBefore)
-          .filter(Boolean)
-          .slice(-3),
+        progressionStage: lateTurnConstraintDecision.nextRequirementRestatedCount,
       });
+
+      if (
+        lateTurnConstraintDecision.mode === "close"
+        && priorLateTurnConstraintState.boundaryLevel === "closing"
+      ) {
+        nextHcpState = "disengaged";
+        nextHcpDialogue = terminalCloseFallback;
+      }
     }
 
     const openingBeforeGuardrail = getOpeningSentence(nextHcpDialogue);
