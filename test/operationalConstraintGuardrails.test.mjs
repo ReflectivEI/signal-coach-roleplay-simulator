@@ -265,3 +265,15 @@ test('global context-aware coverage: every operational constraint type resolves 
     assert.notEqual(result, genericLegacyLine, `should not collapse to legacy generic line for constraint ${concern}`);
   });
 });
+
+test('opening turn does not get overridden by late-turn constraint draft guardrail', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /const shouldApplyConstraintDraftGuardrail = respondingToTurn\?\.turnNumber > 0;/,
+  );
+});

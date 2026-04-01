@@ -3679,36 +3679,39 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const initialViolation = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    const draftRejectedForConstraintRule = !initialViolation.valid;
-    if (draftRejectedForConstraintRule) {
-      usedDeterministicFallback = true;
-      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
-        fallbackResponse: groundedFallback,
-        concern: activeConcern,
-        includeWarmth: respondingToTurn?.turnNumber === 0,
-        scenarioContext: scenarioGroundingText,
+    const shouldApplyConstraintDraftGuardrail = respondingToTurn?.turnNumber > 0;
+    if (shouldApplyConstraintDraftGuardrail) {
+      const initialViolation = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
       });
-    }
-    const finalViolationCheck = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    if (!finalViolationCheck.valid) {
-      nextHcpDialogue = buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || "");
+      const draftRejectedForConstraintRule = !initialViolation.valid;
+      if (draftRejectedForConstraintRule) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+          fallbackResponse: groundedFallback,
+          concern: activeConcern,
+          includeWarmth: false,
+          scenarioContext: scenarioGroundingText,
+        });
+      }
+      const finalViolationCheck = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
+      });
+      if (!finalViolationCheck.valid) {
+        nextHcpDialogue = buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || "");
+      }
     }
 
     const nextLateTurnConstraintState = {
