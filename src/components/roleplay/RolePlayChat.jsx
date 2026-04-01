@@ -2178,6 +2178,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
+  const lastSafeDialogueRef = useRef("I need one practical next step that fits our current workflow.");
+  const lastValidConstraintsRef = useRef([]);
   const lateTurnConstraintStateRef = useRef({
     activeConstraint: null,
     activeRequirement: null,
@@ -2531,7 +2533,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const normalizedActiveConstraints = operationalConstraintState.normalizedActiveConstraints;
+    const constraintValidation = validateConstraintState(
+      operationalConstraintState.normalizedActiveConstraints,
+      {
+        previousValid: lastValidConstraintsRef.current,
+        recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
+      }
+    );
+    const normalizedActiveConstraints = constraintValidation.constraints;
+    if (normalizedActiveConstraints.length > 0) {
+      lastValidConstraintsRef.current = normalizedActiveConstraints;
+    }
+    if (import.meta.env.DEV && constraintValidation.issues.length > 0) {
+      console.warn("ROLEPLAY_CONSTRAINT_VALIDATION_GUARD", {
+        turnNumber: nextTurnNumber,
+        issues: constraintValidation.issues,
+        inputConstraints: operationalConstraintState.normalizedActiveConstraints,
+        resolvedConstraints: normalizedActiveConstraints,
+      });
+    }
     const transcriptConstraintPresent = currentUserConstraintCandidates.length > 0 || recentUserConstraintCandidates.length > 0;
     emitPlannerTrace("constraints_extracted", {
       turnNumber: nextTurnNumber,
@@ -3054,6 +3074,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? buildFirstTurnScenarioFallback()
         : buildFollowUpScenarioFallback();
       draftResponseBeforePostProcessing = nextHcpDialogue;
+    }
+    if (!String(nextHcpDialogue || "").trim()) {
+      const deterministicFallback = isFirstHcpResponse
+        ? buildFirstTurnScenarioFallback()
+        : buildFollowUpScenarioFallback();
+      if (deterministicFallback) {
+        usedDeterministicFallback = true;
+        draftResponseSource = `${draftResponseSource}_deterministic_guard`;
+        nextHcpDialogue = deterministicFallback;
+      } else {
+        draftResponseSource = `${draftResponseSource}_last_safe_guard`;
+        nextHcpDialogue = lastSafeDialogueRef.current;
+      }
     }
     if (!draftResponseBeforePostProcessing) {
       draftResponseBeforePostProcessing = nextHcpDialogue;
