@@ -265,10 +265,23 @@ function mergeActiveConstraints(previous = [], detected = []) {
   return merged;
 }
 
-function validateConstraintState(constraints = []) {
-  if (!Array.isArray(constraints)) return [];
-  return constraints
-    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+function validateConstraintState(constraints = [], options = {}) {
+  const detailed = options?.detailed === true;
+  const issues = [];
+
+  if (!Array.isArray(constraints)) {
+    issues.push("constraints_not_array");
+    return detailed ? { constraints: [], issues } : [];
+  }
+
+  const normalized = constraints
+    .filter((constraint, index) => {
+      const valid = constraint && typeof constraint === "object" && constraint.type;
+      if (!valid) {
+        issues.push(`invalid_constraint_at_${index}`);
+      }
+      return valid;
+    })
     .map((constraint) => ({
       ...constraint,
       priority: constraint.priority === "soft" ? "soft" : "blocking",
@@ -276,6 +289,17 @@ function validateConstraintState(constraints = []) {
       confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
       satisfaction: constraint.satisfaction || "not_satisfied",
     }));
+
+  return detailed ? { constraints: normalized, issues } : normalized;
+}
+
+function normalizeConstraintValidationResult(result) {
+  if (Array.isArray(result)) {
+    return { constraints: result, issues: ["legacy_array_shape"] };
+  }
+  const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  return { constraints, issues };
 }
 
 function computeSimilarity(a = "", b = "") {
@@ -2159,8 +2183,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  // Stable session ID for deterministic cue selection
-  const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  // Stable, non-random session seed for deterministic cue selection.
+  const scenarioSeed = String(scenario?.id || scenario?.title || "scenario")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "scenario";
+  const sessionIdRef = useRef(`session_${scenarioSeed}_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
@@ -2533,13 +2562,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const constraintValidation = validateConstraintState(
+    const rawConstraintValidation = validateConstraintState(
       operationalConstraintState.normalizedActiveConstraints,
       {
+        detailed: true,
         previousValid: lastValidConstraintsRef.current,
         recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
       }
     );
+    const constraintValidation = normalizeConstraintValidationResult(rawConstraintValidation);
     const normalizedActiveConstraints = constraintValidation.constraints;
     if (normalizedActiveConstraints.length > 0) {
       lastValidConstraintsRef.current = normalizedActiveConstraints;
@@ -2928,14 +2959,70 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
       const value = String(dialogue || "").toLowerCase();
-      if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
-        return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
-      }
-      if (isFirstTurn && scenarioCabFocus && scenarioScreeningFocus) {
-        return "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.";
-      }
-      if (isFirstTurn && scenarioMonitoringFocus) {
-        return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
+      if (isFirstTurn) {
+        const firstTurnCueSeed = `${scenario?.id || scenario?.title || "scenario"}:${nextTurnNumber}:${activeConcern}`;
+        const scenarioFirstTurnConcern = detectPrimaryConcern([
+          scenario?.title,
+          scenario?.description,
+          scenario?.context,
+          scenario?.opening_scene || scenario?.openingScene || "",
+          scenario?.objective,
+          Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
+        ].join(" "));
+        if (scenarioPrepFocus && scenarioPressured) {
+          const prepPressureCues = [
+            "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.",
+            "The HCP checks a clinic schedule board, then turns back with focused, time-aware attention.",
+            "The HCP sets a chart beside pending prior-auth packets and motions for a concise point.",
+          ];
+          return prepPressureCues[deterministicIndex(firstTurnCueSeed, prepPressureCues.length)];
+        }
+        if (scenarioCabFocus && scenarioScreeningFocus) {
+          const cabScreeningCues = [
+            "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.",
+            "The HCP pauses over candidacy criteria in the chart and nods for a specific recommendation.",
+            "The HCP highlights screening fields on a form, then asks with careful, practical focus.",
+          ];
+          return cabScreeningCues[deterministicIndex(firstTurnCueSeed, cabScreeningCues.length)];
+        }
+        if (scenarioMonitoringFocus) {
+          const monitoringCues = [
+            "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.",
+            "The HCP checks upcoming follow-up slots and signals for one implementable monitoring step.",
+            "The HCP scans a monitoring tracker, then looks up expecting a concrete, workflow-fit action.",
+          ];
+          return monitoringCues[deterministicIndex(firstTurnCueSeed, monitoringCues.length)];
+        }
+
+        const firstTurnCuePools = {
+          access: [
+            "The HCP glances at coverage notes and asks for one practical access step that can work in this setting.",
+            "The HCP sets a payer policy printout on the desk and signals for a realistic access recommendation.",
+            "The HCP checks prior-auth paperwork, then looks up expecting a practical access-first suggestion.",
+          ],
+          workflow: [
+            "The HCP points to a clinic workflow map and asks for one concrete step that will not add burden.",
+            "The HCP reviews handoff notes and signals for a process-level recommendation that is realistic this week.",
+            "The HCP checks staffing assignments and asks for a workflow-fit action they can actually run now.",
+          ],
+          evidence: [
+            "The HCP turns to outcome notes and asks for the single most practice-relevant evidence point.",
+            "The HCP highlights a study summary and signals for one evidence-backed takeaway they can trust.",
+            "The HCP scans trial notes and asks for a concise, clinically meaningful data point.",
+          ],
+          screening: [
+            "The HCP reviews candidacy criteria and asks for one clear selection rule they can apply immediately.",
+            "The HCP marks screening checkpoints and asks for a practical criteria-first recommendation.",
+            "The HCP checks patient-selection notes and signals for one implementable screening decision rule.",
+          ],
+          time: [
+            "The HCP checks the schedule and asks for one concise, high-yield point before moving on.",
+            "The HCP glances at the clock and signals for a brief, immediately actionable takeaway.",
+            "The HCP keeps one hand on the chart and asks for a single practical point in under a minute.",
+          ],
+        };
+        const resolvedPool = firstTurnCuePools[scenarioFirstTurnConcern] || firstTurnCuePools.workflow;
+        return resolvedPool[deterministicIndex(firstTurnCueSeed, resolvedPool.length)];
       }
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
@@ -3607,6 +3694,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
         fallbackResponse: groundedFallback,
         concern: activeConcern,
+        includeWarmth: respondingToTurn?.turnNumber === 0,
+        scenarioContext: scenarioGroundingText,
       });
     }
     const finalViolationCheck = detectConstraintDraftViolations({
@@ -3619,7 +3708,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       clarificationNeeded,
     });
     if (!finalViolationCheck.valid) {
-      nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
+      nextHcpDialogue = buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || "");
     }
 
     const nextLateTurnConstraintState = {
