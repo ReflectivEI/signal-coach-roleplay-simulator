@@ -772,7 +772,7 @@ function scoreCommitmentGeneration(hcpState, temperature, p) {
 }
 
 // ─── SIGNAL–RESPONSE ALIGNMENT RUBRIC (5 derived checks) ──────────────────────
-function computeAlignmentRubric(hcpState, p) {
+function computeAlignmentRubric(hcpState, p, questionDemand = {}, questionResponseFit = {}) {
   const rubricMisalignments = [];
 
   const concernDetected = hcpState === 'resistant' || hcpState === 'boundary-setting';
@@ -798,10 +798,20 @@ function computeAlignmentRubric(hcpState, p) {
       'Value was introduced before customer priorities were established, which may feel misaligned.'
     );
   }
-  const readinessSignal = hcpState === 'engaged' && !p.invitesCommitment && !p.offersNextStep && !p.specifiesNextStep;
+  const readinessSignal =
+    hcpState === 'engaged'
+    && !questionDemand.isDirectQuestion
+    && !p.invitesCommitment
+    && !p.offersNextStep
+    && !p.specifiesNextStep;
   if (readinessSignal && !p.hasQuestion) {
     rubricMisalignments.push(
       'A readiness signal appeared, but next steps were not aligned, which may slow momentum.'
+    );
+  }
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    rubricMisalignments.push(
+      'The HCP asked a direct question, but the reply did not provide the requested concrete answer.'
     );
   }
 
@@ -923,6 +933,20 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
       );
       metricResults.conversation_management.misalignments.push('Threshold-oriented question lacked a concrete threshold in the reply.');
     }
+  } else if (questionDemand.isDirectQuestion && questionResponseFit.directlyAddresses) {
+    metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score + 1);
+    metricResults.signal_interpretation.subScores.responsiveness_of_action = clamp(
+      metricResults.signal_interpretation.subScores.responsiveness_of_action + 1
+    );
+    metricResults.signal_interpretation.positives.push('Direct HCP question was answered with concrete specificity.');
+
+    if (questionDemand.requiresThreshold && questionResponseFit.hasNumericAnchor) {
+      metricResults.value_connection.score = clamp(metricResults.value_connection.score + 1);
+      metricResults.value_connection.subScores.outcome_translation = clamp(
+        metricResults.value_connection.subScores.outcome_translation + 1
+      );
+      metricResults.value_connection.positives.push('Threshold-oriented question received a concrete measurable answer.');
+    }
   }
 
   const globalMisalignments = [];
@@ -952,7 +976,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
-  const rubricMisalignments = computeAlignmentRubric(normalizedState, p);
+  const rubricMisalignments = computeAlignmentRubric(normalizedState, p, questionDemand, questionResponseFit);
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;

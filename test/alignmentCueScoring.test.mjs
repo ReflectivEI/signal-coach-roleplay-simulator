@@ -38,3 +38,25 @@ test('engagement cue with contextual follow-up improves cue responsiveness', () 
     'expected cue-linked engagement positive'
   );
 });
+
+test('direct evidence question answered with threshold should not trigger readiness-signal misalignment', () => {
+  const result = computeAlignment(
+    'engaged',
+    '42 weeks.',
+    {
+      cueText: 'HCP narrows focus and asks for proof tied to this setting.',
+      hcpUtterance: "I'd like to know more about the study methodology. What was the duration of the study?"
+    },
+    'neutral',
+    'engaged'
+  );
+
+  assert.ok(
+    !result.rubricAlignmentFlags.some((flag) => flag.includes('A readiness signal appeared')),
+    'readiness-signal misalignment should not fire for direct answered evidence question'
+  );
+  assert.ok(
+    result.metrics.signal_interpretation.positives.some((p) => p.includes('Direct HCP question was answered')),
+    'expected direct-question answered positive'
+  );
+});
