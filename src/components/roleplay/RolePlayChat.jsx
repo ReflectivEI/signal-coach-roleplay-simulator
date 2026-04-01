@@ -3724,18 +3724,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
     }
 
-    const recentHcpUtterances = prevTurns
-      .map((turn) => turn?.hcpDialogueBefore)
-      .filter(Boolean)
-      .slice(-2);
-    const isRepetitiveHcpLine = recentHcpUtterances.some((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.82);
-    if (!overrideExit && isRepetitiveHcpLine) {
-      const repetitionFallback = hasPartialProgress
-        ? "You are getting closer—now make it specific to our staffing and workflow constraints."
-        : "You are repeating the theme. Give me one specific, practice-level action with evidence and workflow fit.";
-      nextHcpDialogue = repetitionFallback;
-    }
-
     if (!overrideExit && lateTurnConstraintDecision.forced) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
@@ -3754,6 +3742,71 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ) {
         nextHcpState = "disengaged";
         nextHcpDialogue = terminalCloseFallback;
+      }
+    }
+
+    const recentHcpUtterances = prevTurns
+      .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+      .filter(Boolean)
+      .slice(-2);
+    const repetitiveCandidate = recentHcpUtterances.find((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.84);
+    if (!overrideExit && repetitiveCandidate && nextHcpState !== "disengaged") {
+      let regenerated = "";
+      try {
+        const antiRepeatPrompt = [
+          "Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent.",
+          `Scenario context: ${scenarioGroundingText}`,
+          `HCP state: ${nextHcpState}`,
+          `Active concern: ${activeConcern}`,
+          `Previous repeated HCP line: ${repetitiveCandidate}`,
+          `Current draft line: ${nextHcpDialogue}`,
+          "Rules:",
+          "- Keep one sentence only.",
+          "- Preserve the same constraint/request and pressure level.",
+          "- Do not add new topics.",
+          "- Use different wording from both previous and current lines.",
+        ].join("\n");
+
+        const antiRepeatRes = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: antiRepeatPrompt,
+            max_tokens: 120,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (antiRepeatRes.ok) {
+          const antiRepeatData = await antiRepeatRes.json();
+          regenerated = normalizeLlmInvokeText(antiRepeatData).split('\n')[0].trim();
+        }
+      } catch (antiRepeatError) {
+        if (import.meta.env.DEV) {
+          console.warn("ROLEPLAY_ANTI_REPEAT_REGEN_FAILED", { antiRepeatError });
+        }
+      }
+
+      if (regenerated && computeSimilarity(regenerated, repetitiveCandidate) < 0.8) {
+        nextHcpDialogue = regenerated;
+      } else if (lateTurnConstraintDecision.forced) {
+        nextHcpDialogue = buildLateTurnConstraintResponse({
+          concern: activeRequirementForTurn,
+          mode: lateTurnConstraintDecision.mode,
+          includeConstraintSignal: Boolean(
+            normalizedActiveConstraints.includes("time")
+            || activeConstraintForTurn === "time"
+          ),
+          seed: `${generationKey}:${nextTurnNumber}:late-turn:anti-repeat`,
+          progressionStage: lateTurnConstraintDecision.nextRequirementRestatedCount + 1,
+        });
+      } else {
+        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+          fallbackResponse: groundedFallback,
+          concern: activeConcern,
+          includeWarmth: false,
+          scenarioContext: scenarioGroundingText,
+        });
       }
     }
 

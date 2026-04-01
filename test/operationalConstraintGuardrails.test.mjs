@@ -282,6 +282,17 @@ test('late-turn close loop breaker forces terminal disengage in sustained closin
   assert.match(rolePlayChatSource, /nextHcpState = "disengaged";/);
 });
 
+test('global anti-repeat path uses AI regeneration before deterministic fallback', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent/);
+  assert.ok(rolePlayChatSource.includes("fetch('/api/llm/invoke'"));
+  assert.match(rolePlayChatSource, /ROLEPLAY_ANTI_REPEAT_REGEN_FAILED/);
+});
+
 test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {
   const fixtures = [
     { scenarioId: 'hiv_prevention_gap', concern: 'access' },
