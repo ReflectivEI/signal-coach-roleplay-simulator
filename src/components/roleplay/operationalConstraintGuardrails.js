@@ -109,6 +109,8 @@ export function detectConstraintDraftViolations({
 export function buildConstraintSafeRegeneratedResponse({
   fallbackResponse = "",
   concern = "evidence",
+  includeWarmth = false,
+  scenarioContext = "",
 } = {}) {
   const fallback = String(fallbackResponse || "").trim();
   const containsConstraint = extractConstraintCandidatesFromText(fallback).length > 0;
@@ -118,11 +120,34 @@ export function buildConstraintSafeRegeneratedResponse({
     evidence: "I still need clinically meaningful evidence before I would change practice.",
     screening: "I need clearer patient-selection criteria before I can move forward.",
     access: "I need to understand the patient access implications more clearly before deciding.",
+    prior_auth: "I need one practical step that works within our prior-authorization burden before deciding.",
+    workflow: "I need one concrete workflow step we can run this week without adding burden.",
+    staffing: "I need a recommendation that fits our current staffing limits before we proceed.",
+    capacity: "I need a step that reduces capacity strain, not one that adds workload.",
+    scheduling: "I need this translated into a scheduling-safe step we can actually execute.",
+    handoff: "I need a clear handoff step so ownership is unambiguous in our clinic flow.",
+    throughput: "I need an action that improves throughput without disrupting care flow.",
+    callback: "I need a realistic follow-up callback step we can sustain operationally.",
+    monitoring: "I need a monitoring step we can implement without creating extra burden.",
     time: "I can only process one concrete clinical takeaway right now.",
     policy: "I need this aligned with our current protocol before I can proceed.",
   };
 
-  return neutralByConcern[concern] || "Help me understand the most clinically relevant takeaway for my patients.";
+  const context = String(scenarioContext || "").toLowerCase();
+  const inferContextFallback = () => {
+    if (/\b(screening|candidacy|eligibility|criteria|resistance|cab)\b/.test(context)) return neutralByConcern.screening;
+    if (/\b(monitoring|follow-up|durability|methodology|study duration)\b/.test(context)) return neutralByConcern.monitoring;
+    if (/\b(prior auth|authorization|coverage|payer|access)\b/.test(context)) return neutralByConcern.access;
+    if (/\b(staffing|short-staffed|capacity|throughput|pathway|workflow)\b/.test(context)) return neutralByConcern.staffing;
+    return neutralByConcern.workflow;
+  };
+
+  const baseResponse = neutralByConcern[concern] || inferContextFallback();
+  if (!includeWarmth) return baseResponse;
+
+  const warmPrefix = "Good to see you. ";
+
+  return `${warmPrefix}${baseResponse}`;
 }
 
 const LATE_TURN_REQUIREMENT_BY_CONCERN = {
@@ -196,19 +221,58 @@ export function buildLateTurnConstraintResponse({
   concern = "workflow",
   mode = "restate_once",
   includeConstraintSignal = false,
+  seed = "",
+  progressionStage = 0,
 } = {}) {
   const unmetRequirement = LATE_TURN_REQUIREMENT_BY_CONCERN[concern] || LATE_TURN_REQUIREMENT_BY_CONCERN.workflow;
-  const intro = includeConstraintSignal
-    ? "Given the time constraint,"
-    : "To stay focused,";
+  const introPool = includeConstraintSignal
+    ? [
+      "Given the time constraint,",
+      "Given the limited time window,",
+      "Because time is limited,",
+    ]
+    : [
+      "To stay focused,",
+      "So we keep this practical,",
+      "To keep this productive,",
+    ];
+
+  const closePool = [
+    "I need {{requirement}}. If that is not available now, we can pause here.",
+    "I need {{requirement}} before we continue; otherwise let's pause here for now.",
+    "I need {{requirement}}. If we cannot do that now, we'll pause and revisit later.",
+  ];
+
+  const boundaryPool = [
+    "please stick to {{requirement}} before we continue.",
+    "let's stay on {{requirement}} so we can move this forward.",
+    "please anchor on {{requirement}} before adding anything else.",
+  ];
+
+  const restatePool = [
+    "I still need {{requirement}}.",
+    "I still need {{requirement}} before we move on.",
+    "I still need {{requirement}} to keep this actionable.",
+  ];
+
+  const pickVariant = (pool, modeLabel) => {
+    const stageOffset = Number.isFinite(progressionStage) ? Math.max(0, Math.trunc(progressionStage)) : 0;
+    const startIndex = Math.abs(
+      [...`${seed}:${concern}:${modeLabel}:${includeConstraintSignal ? "time" : "focus"}:${stageOffset}`]
+        .reduce((acc, char) => acc + char.charCodeAt(0), 0),
+    ) % pool.length;
+    return pool[startIndex].replace("{{requirement}}", unmetRequirement);
+  };
+
+  const intro = pickVariant(introPool, "intro");
 
   if (mode === "close") {
-    return `${intro} I need ${unmetRequirement}. If that is not available now, we can pause here.`;
+    return `${intro} ${pickVariant(closePool, "close")}`.trim();
   }
 
   if (mode === "boundary") {
-    return `${intro} please stick to ${unmetRequirement} before we continue.`;
+    return `${intro} ${pickVariant(boundaryPool, "boundary")}`.trim();
   }
 
-  return `${intro} I still need ${unmetRequirement}.`;
+  return `${intro} ${pickVariant(restatePool, "restate")}`.trim();
 }
