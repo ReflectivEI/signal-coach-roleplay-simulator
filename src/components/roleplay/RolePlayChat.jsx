@@ -2961,6 +2961,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const value = String(dialogue || "").toLowerCase();
       if (isFirstTurn) {
         const firstTurnCueSeed = `${scenario?.id || scenario?.title || "scenario"}:${nextTurnNumber}:${activeConcern}`;
+        const scenarioFirstTurnConcern = detectPrimaryConcern([
+          scenario?.title,
+          scenario?.description,
+          scenario?.context,
+          scenario?.opening_scene || scenario?.openingScene || "",
+          scenario?.objective,
+          Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
+        ].join(" "));
         if (scenarioPrepFocus && scenarioPressured) {
           const prepPressureCues = [
             "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.",
@@ -2985,6 +2993,36 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           ];
           return monitoringCues[deterministicIndex(firstTurnCueSeed, monitoringCues.length)];
         }
+
+        const firstTurnCuePools = {
+          access: [
+            "The HCP glances at coverage notes and asks for one practical access step that can work in this setting.",
+            "The HCP sets a payer policy printout on the desk and signals for a realistic access recommendation.",
+            "The HCP checks prior-auth paperwork, then looks up expecting a practical access-first suggestion.",
+          ],
+          workflow: [
+            "The HCP points to a clinic workflow map and asks for one concrete step that will not add burden.",
+            "The HCP reviews handoff notes and signals for a process-level recommendation that is realistic this week.",
+            "The HCP checks staffing assignments and asks for a workflow-fit action they can actually run now.",
+          ],
+          evidence: [
+            "The HCP turns to outcome notes and asks for the single most practice-relevant evidence point.",
+            "The HCP highlights a study summary and signals for one evidence-backed takeaway they can trust.",
+            "The HCP scans trial notes and asks for a concise, clinically meaningful data point.",
+          ],
+          screening: [
+            "The HCP reviews candidacy criteria and asks for one clear selection rule they can apply immediately.",
+            "The HCP marks screening checkpoints and asks for a practical criteria-first recommendation.",
+            "The HCP checks patient-selection notes and signals for one implementable screening decision rule.",
+          ],
+          time: [
+            "The HCP checks the schedule and asks for one concise, high-yield point before moving on.",
+            "The HCP glances at the clock and signals for a brief, immediately actionable takeaway.",
+            "The HCP keeps one hand on the chart and asks for a single practical point in under a minute.",
+          ],
+        };
+        const resolvedPool = firstTurnCuePools[scenarioFirstTurnConcern] || firstTurnCuePools.workflow;
+        return resolvedPool[deterministicIndex(firstTurnCueSeed, resolvedPool.length)];
       }
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
@@ -3656,6 +3694,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
         fallbackResponse: groundedFallback,
         concern: activeConcern,
+        includeWarmth: respondingToTurn?.turnNumber === 0,
+        scenarioContext: scenarioGroundingText,
       });
     }
     const finalViolationCheck = detectConstraintDraftViolations({
