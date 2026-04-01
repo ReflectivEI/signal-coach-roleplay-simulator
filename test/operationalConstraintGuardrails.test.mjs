@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import {
+  OPERATIONAL_CONSTRAINT_TYPES,
   buildConstraintGrounding,
   detectConstraintDraftViolations,
   selectLateTurnConstraintResponseMode,
   buildLateTurnConstraintResponse,
+  buildConstraintSafeRegeneratedResponse,
 } from '../src/components/roleplay/operationalConstraintGuardrails.js';
 
 test('no scenario constraint present -> no staffing/workflow injection allowed', () => {
@@ -102,7 +104,7 @@ test('late-turn missed requirement -> constrained restate then escalation withou
   });
   const firstSentenceCount = (firstReply.match(/[.!?]+/g) || []).length;
   assert.ok(firstSentenceCount >= 1 && firstSentenceCount <= 2);
-  assert.match(firstReply, /time constraint|stay focused/i);
+  assert.match(firstReply, /time constraint|limited time window|time is limited|stay focused/i);
   assert.match(firstReply, /clinically meaningful evidence/i);
   assert.doesNotMatch(firstReply, /new concern|different issue|let.?s debate/i);
 
@@ -116,6 +118,48 @@ test('late-turn missed requirement -> constrained restate then escalation withou
   });
   assert.equal(secondDecision.forced, true);
   assert.ok(secondDecision.mode === 'boundary' || secondDecision.mode === 'close');
+});
+
+
+test('late-turn guardrails vary by deterministic progression stage', () => {
+  const closeA = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'turn-sequence',
+    progressionStage: 1,
+  });
+
+  const closeB = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'turn-sequence',
+    progressionStage: 2,
+  });
+
+  assert.notEqual(closeA, closeB);
+  assert.match(closeA, /evidence relevant to my practice/i);
+  assert.match(closeB, /pause|revisit/i);
+});
+
+test('late-turn close output is deterministic for identical seed + stage', () => {
+  const closeA = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'deterministic-check',
+    progressionStage: 2,
+  });
+  const closeB = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'deterministic-check',
+    progressionStage: 2,
+  });
+
+  assert.equal(closeA, closeB);
 });
 
 test('late-turn addressed requirement concisely -> no forced closure path', () => {
@@ -206,4 +250,113 @@ test('stale-request guard prevents late-turn state mutation from older request',
     currentState: lateTurnState,
   });
   assert.deepEqual(lateTurnState, stateFromTurnB);
+});
+
+test('opening fallback only says "thanks for asking" when rep asked wellbeing', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /const wellbeingCheckSignals = .*how are you.*how was your weekend/s,
+    'expected explicit wellbeing-check detector for opening turns',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /repAskedWellbeing \? "I'm doing well, thanks for asking\." : ""/,
+    'expected opening fallback to avoid social-assumption text when wellbeing was not asked',
+  );
+});
+
+test('late-turn close loop breaker forces terminal disengage in sustained closing boundary', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /lateTurnConstraintDecision\.mode === "close"/);
+  assert.match(rolePlayChatSource, /priorLateTurnConstraintState\.boundaryLevel === "closing"/);
+  assert.match(rolePlayChatSource, /nextHcpState = "disengaged";/);
+});
+
+test('global anti-repeat path uses AI regeneration before deterministic fallback', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent/);
+  assert.ok(rolePlayChatSource.includes("fetch('/api/llm/invoke'"));
+  assert.match(rolePlayChatSource, /ROLEPLAY_ANTI_REPEAT_REGEN_FAILED/);
+});
+
+test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {
+  const fixtures = [
+    { scenarioId: 'hiv_prevention_gap', concern: 'access' },
+    { scenarioId: 'prep_access_barriers', concern: 'prior_auth' },
+    { scenarioId: 'treatment_optimization_stable_hiv', concern: 'monitoring' },
+    { scenarioId: 'cabotegravir_interest_without_screening', concern: 'screening' },
+    { scenarioId: 'adc_integration_io_backbone', concern: 'access' },
+    { scenarioId: 'pathway_driven_staffing_constraints', concern: 'staffing' },
+    { scenarioId: 'oral_oncolytic_onboarding', concern: 'workflow' },
+  ];
+
+  const genericLegacyLine = 'Help me understand the most clinically relevant takeaway for my patients.';
+  const outputs = fixtures.map((fixture) => {
+    const result = buildConstraintSafeRegeneratedResponse({
+      fallbackResponse: 'workflow and staffing constraints remain unresolved.',
+      concern: fixture.concern,
+    });
+    return { ...fixture, result };
+  });
+
+  outputs.forEach(({ scenarioId, result }) => {
+    assert.ok(result && result.length > 12, `expected non-empty fallback for ${scenarioId}`);
+    assert.notEqual(result, genericLegacyLine, `should not collapse to legacy generic line for ${scenarioId}`);
+  });
+
+  const uniqueOutputs = new Set(outputs.map((item) => item.result));
+  assert.ok(uniqueOutputs.size >= 5, 'expected diverse concern-aware fallback outputs across 7 fixtures');
+});
+
+test('warmth option prepends HCP-side warm opener while preserving scenario-context pivot', () => {
+  const result = buildConstraintSafeRegeneratedResponse({
+    concern: 'unknown_concern',
+    includeWarmth: true,
+    scenarioContext: 'CAB screening and candidacy criteria remain unclear.',
+  });
+
+  assert.match(result, /^Good to see you\./);
+  assert.match(result, /patient-selection criteria/i);
+});
+
+test('global context-aware coverage: every operational constraint type resolves via scenario context without generic collapse', () => {
+  const genericLegacyLine = 'Help me understand the most clinically relevant takeaway for my patients.';
+  const outputs = OPERATIONAL_CONSTRAINT_TYPES.map((concern) => ({
+    concern,
+    result: buildConstraintSafeRegeneratedResponse({
+      concern,
+      scenarioContext: `Scenario context mentions ${concern} constraints in clinic operations.`,
+    }),
+  }));
+
+  outputs.forEach(({ concern, result }) => {
+    assert.ok(result && result.length > 12, `expected non-empty context-aware fallback for constraint ${concern}`);
+    assert.notEqual(result, genericLegacyLine, `should not collapse to legacy generic line for constraint ${concern}`);
+  });
+});
+
+test('opening turn does not get overridden by late-turn constraint draft guardrail', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /const shouldApplyConstraintDraftGuardrail = respondingToTurn\?\.turnNumber > 0;/,
+  );
 });

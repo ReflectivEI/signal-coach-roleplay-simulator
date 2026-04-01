@@ -19,7 +19,9 @@
     "test:stabilization": "npm run test:constraints && npm run test:annotations && npm run test:roleplay:contracts && npm run test:roleplay:runtime && node ./scripts/verify-roleplay-freeze-equivalence.mjs",
     "preview": "vite preview",
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
-    "ci:build": "npm run build && npm run verify:build-output"
+    "ci:build": "npm run build && npm run verify:build-output",
+    "testenv:start": "node ./scripts/start-test-env.mjs",
+    "testenv:check": "node --test test/constraintLoopPolicy.test.mjs test/scenarioTaxonomy.test.mjs test/turnPlanContract.test.mjs test/roleplayV2BackendAdapter.test.mjs test/roleplayV2ScenarioCanonicalContract.test.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.4.2",
