@@ -156,6 +156,19 @@ function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpStat
   return { cueIntent, dialogueIntent, contradiction };
 }
 
+function validateCueAlignment(dialogue, cue, hcpState = "neutral") {
+  const alignment = validateCueDialogueAlignment({
+    cueText: cue,
+    dialogueText: dialogue,
+    hcpState,
+  });
+  return {
+    contradiction: alignment.contradiction,
+    cueIntent: alignment.cueIntent,
+    dialogueIntent: alignment.dialogueIntent,
+  };
+}
+
 function hasTurnIntegrityIssues(turn) {
   const issues = [];
   if (!Number.isFinite(turn?.turnNumber)) issues.push("missing_turn_number");
@@ -163,6 +176,51 @@ function hasTurnIntegrityIssues(turn) {
   if (typeof turn?.hcpDialogueBefore !== "string" || !turn.hcpDialogueBefore.trim()) issues.push("missing_hcp_dialogue");
   if (!turn?.generationKey) issues.push("missing_generation_key");
   return issues;
+}
+
+function validateTurnState(turn, previousTurn = null) {
+  const issues = hasTurnIntegrityIssues(turn);
+  if (previousTurn) {
+    const sameDialogue = String(turn?.hcpDialogueBefore || "").trim().toLowerCase() === String(previousTurn?.hcpDialogueBefore || "").trim().toLowerCase();
+    const sameCue = String(turn?.cueBefore || "").trim().toLowerCase() === String(previousTurn?.cueBefore || "").trim().toLowerCase();
+    if (sameDialogue && sameCue) issues.push("duplicate_turn_output");
+  }
+  const cueAlignment = validateCueAlignment(turn?.hcpDialogueBefore, turn?.cueBefore, turn?.hcpStateBefore);
+  if (cueAlignment.contradiction) issues.push("cue_dialogue_mismatch");
+  return { valid: issues.length === 0, issues, cueAlignment };
+}
+
+function validateConstraintState(activeConstraints, { previousValid = [], maxConstraints = 6, recentTurnConstraints = [] } = {}) {
+  const issues = [];
+  const source = Array.isArray(activeConstraints) ? activeConstraints : [];
+  if (!Array.isArray(activeConstraints)) issues.push("invalid_constraints_array");
+
+  const normalized = [];
+  const seen = new Set();
+  for (const constraint of source) {
+    const normalizedConstraint = String(constraint || "").trim().toLowerCase();
+    if (!normalizedConstraint) continue;
+    if (seen.has(normalizedConstraint)) {
+      issues.push("duplicate_constraint");
+      continue;
+    }
+    seen.add(normalizedConstraint);
+    normalized.push(normalizedConstraint);
+  }
+  if (normalized.length > maxConstraints) issues.push("constraint_growth_guard");
+  const recentConstraintTrail = recentTurnConstraints
+    .slice(-8)
+    .flatMap((constraints) => Array.isArray(constraints) ? constraints : [])
+    .map((constraint) => String(constraint || "").trim().toLowerCase())
+    .filter(Boolean);
+  if (recentConstraintTrail.length > 0 && normalized.every((constraint) => recentConstraintTrail.includes(constraint))) {
+    issues.push("stale_constraint_set");
+  }
+
+  const bounded = normalized.slice(0, maxConstraints);
+  const nextConstraints = bounded.length > 0 ? bounded : previousValid;
+  if (nextConstraints === previousValid && source.length > 0) issues.push("reverted_to_last_valid_constraints");
+  return { valid: issues.length === 0, issues, constraints: nextConstraints };
 }
 
 function hardenTextSurface(text) {
@@ -2053,6 +2111,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const repInferenceStateRef = useRef(createInitialRepInferenceState());
   const recentDialoguePhrasesRef = useRef([]);
   const recentCueHistoryRef = useRef([]);
+  const lastSafeDialogueRef = useRef("I need one practical next step that fits our current workflow.");
+  const lastValidConstraintsRef = useRef([]);
   const lateTurnConstraintStateRef = useRef({
     activeConstraint: null,
     activeRequirement: null,
@@ -2400,7 +2460,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const normalizedActiveConstraints = operationalConstraintState.normalizedActiveConstraints;
+    const constraintValidation = validateConstraintState(
+      operationalConstraintState.normalizedActiveConstraints,
+      {
+        previousValid: lastValidConstraintsRef.current,
+        recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
+      }
+    );
+    const normalizedActiveConstraints = constraintValidation.constraints;
+    if (normalizedActiveConstraints.length > 0) {
+      lastValidConstraintsRef.current = normalizedActiveConstraints;
+    }
+    if (import.meta.env.DEV && constraintValidation.issues.length > 0) {
+      console.warn("ROLEPLAY_CONSTRAINT_VALIDATION_GUARD", {
+        turnNumber: nextTurnNumber,
+        issues: constraintValidation.issues,
+        inputConstraints: operationalConstraintState.normalizedActiveConstraints,
+        resolvedConstraints: normalizedActiveConstraints,
+      });
+    }
     const transcriptConstraintPresent = currentUserConstraintCandidates.length > 0 || recentUserConstraintCandidates.length > 0;
     emitPlannerTrace("constraints_extracted", {
       turnNumber: nextTurnNumber,
@@ -2873,8 +2951,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         if (res.ok) {
           const data = await res.json();
           const rawStr = normalizeLlmInvokeText(data);
-          nextHcpDialogue = rawStr.trim().split('\n')[0];
-          if (!nextHcpDialogue) {
+          const normalizedText = rawStr.trim().split('\n')[0];
+          nextHcpDialogue = normalizedText;
+          if (normalizedText !== null && String(normalizedText).trim().length === 0) {
             if (import.meta.env.DEV) {
               console.warn("ROLEPLAY_DIALOGUE_PRESENCE_GUARD", {
                 turnNumber: nextTurnNumber,
@@ -2923,6 +3002,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? buildFirstTurnScenarioFallback()
         : buildFollowUpScenarioFallback();
       draftResponseBeforePostProcessing = nextHcpDialogue;
+    }
+    if (!String(nextHcpDialogue || "").trim()) {
+      const deterministicFallback = isFirstHcpResponse
+        ? buildFirstTurnScenarioFallback()
+        : buildFollowUpScenarioFallback();
+      if (deterministicFallback) {
+        usedDeterministicFallback = true;
+        draftResponseSource = `${draftResponseSource}_deterministic_guard`;
+        nextHcpDialogue = deterministicFallback;
+      } else {
+        draftResponseSource = `${draftResponseSource}_last_safe_guard`;
+        nextHcpDialogue = lastSafeDialogueRef.current;
+      }
     }
     if (!draftResponseBeforePostProcessing) {
       draftResponseBeforePostProcessing = nextHcpDialogue;
@@ -3226,11 +3318,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedCueLayers.push("safeguard_recent_memory");
     }
 
-    const cueAlignmentCheck = validateCueDialogueAlignment({
-      cueText: contextualCue,
-      dialogueText: nextHcpDialogue,
-      hcpState: nextHcpState,
-    });
+    const cueAlignmentCheck = validateCueAlignment(nextHcpDialogue, contextualCue, nextHcpState);
     if (cueAlignmentCheck.contradiction) {
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
       const alignedCue = buildScenarioAlignedCue(
@@ -3262,6 +3350,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           layers: uniqueLayers,
         });
       }
+    }
+
+    if (!String(nextHcpDialogue || "").trim()) {
+      nextHcpDialogue = lastSafeDialogueRef.current;
+    }
+    if (String(nextHcpDialogue || "").trim()) {
+      lastSafeDialogueRef.current = String(nextHcpDialogue).trim();
+    }
+    if (!String(contextualCue || "").trim()) {
+      contextualCue = hardenTextSurface(nextProfile.lockedCue || "The HCP waits for a practical next step.");
     }
 
     // 7. Coaching overlay — driven by alignment rubric flags
@@ -3303,11 +3401,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       generationKey,
     };
 
-    const turnIntegrityIssues = hasTurnIntegrityIssues(nextTurn);
-    if (import.meta.env.DEV && turnIntegrityIssues.length > 0) {
+    const previousTurn = prevTurns[prevTurns.length - 1] || null;
+    const turnIntegrityValidation = validateTurnState(nextTurn, previousTurn);
+    if (import.meta.env.DEV && turnIntegrityValidation.issues.length > 0) {
       console.warn("ROLEPLAY_TURN_INTEGRITY_GUARD", {
         turnNumber: nextTurnNumber,
-        issues: turnIntegrityIssues,
+        issues: turnIntegrityValidation.issues,
       });
     }
 
