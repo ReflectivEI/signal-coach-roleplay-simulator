@@ -1,5 +1,3 @@
-import { validateScenarioMetricIdsMapped } from './metricIdAdapter.js';
-
 const TOP_LEVEL_ORDER = [
   'scenarioIdentity',
   'trainingIntent',
@@ -86,18 +84,6 @@ export function validateCanonicalScenarioSpec(spec = {}) {
     if (!METRIC_APPLICABILITY_ENUM.includes(status)) {
       issues.push(`invalid metric applicability for ${metric}: ${status}`);
     }
-  }
-
-
-  const allowedMetrics = Array.isArray(spec.trainingIntent?.allowedEvaluatedMetrics)
-    ? spec.trainingIntent.allowedEvaluatedMetrics
-    : [];
-  const excludedMetrics = Array.isArray(spec.trainingIntent?.excludedMetrics)
-    ? spec.trainingIntent.excludedMetrics
-    : [];
-  const mappingCheck = validateScenarioMetricIdsMapped([...allowedMetrics, ...excludedMetrics]);
-  if (!mappingCheck.valid) {
-    mappingCheck.unmapped.forEach((metricId) => issues.push(`unmapped scenario metric id: ${metricId}`));
   }
 
   const evidenceMap = spec.metricEvidenceMap || {};
