@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "deploy": "npx wrangler deploy",
     "worker:dev": "set -a && . ./.env.local && set +a && wrangler dev --local",
     "worker:dev:prod": "wrangler dev",
     "lint": "eslint . --quiet",
