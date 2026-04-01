@@ -374,6 +374,10 @@ function hardenTextSurface(text) {
   return value;
 }
 
+function applyDeterministicPunctuationContract(text) {
+  return normalizeHcpDialoguePunctuation(String(text || "").trim()).trim();
+}
+
 function extractScenarioKeywords(scenario) {
   const combined = [
     scenario?.title,
@@ -3874,7 +3878,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .filter(Boolean)
       .slice(-2);
     const repetitiveCandidate = recentHcpUtterances.find((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.84);
-    if (!overrideExit && repetitiveCandidate && nextHcpState !== "disengaged") {
+    const continuity = (!overrideExit && nextHcpState !== "disengaged")
+      ? evaluateRepToHcpContinuity({
+        repMessage,
+        hcpDialogue: nextHcpDialogue,
+        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      })
+      : { needsRepair: false };
+    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged")
+      ? (repetitiveCandidate ? "anti_repeat" : continuity.needsRepair ? "continuity_repair" : "none")
+      : "none";
+
+    if (rewriteAuthority === "anti_repeat") {
       let regenerated = "";
       try {
         const antiRepeatPrompt = [
@@ -3932,51 +3948,40 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           scenarioContext: scenarioGroundingText,
         });
       }
-    }
+    } else if (rewriteAuthority === "continuity_repair") {
+      try {
+        const continuityPrompt = [
+          "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
+          `Scenario grounding: ${scenarioGroundingText}`,
+          `Active concern: ${activeConcern}`,
+          `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+          `Rep message: ${repMessage}`,
+          `Current HCP draft: ${nextHcpDialogue}`,
+          "Rules:",
+          "- Keep one sentence only.",
+          "- Preserve professional tone and current pressure level.",
+          "- Keep the same concern family; do not introduce unrelated topics.",
+          "- If rep addressed an evidence/study question, react to that directly before redirecting.",
+        ].join('\n');
 
-    if (!overrideExit && nextHcpState !== "disengaged") {
-      const continuity = evaluateRepToHcpContinuity({
-        repMessage,
-        hcpDialogue: nextHcpDialogue,
-        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
-        activeConcern,
-      });
-
-      if (continuity.needsRepair) {
-        try {
-          const continuityPrompt = [
-            "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
-            `Scenario grounding: ${scenarioGroundingText}`,
-            `Active concern: ${activeConcern}`,
-            `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
-            `Rep message: ${repMessage}`,
-            `Current HCP draft: ${nextHcpDialogue}`,
-            "Rules:",
-            "- Keep one sentence only.",
-            "- Preserve professional tone and current pressure level.",
-            "- Keep the same concern family; do not introduce unrelated topics.",
-            "- If rep addressed an evidence/study question, react to that directly before redirecting.",
-          ].join('\n');
-
-          const continuityRes = await fetch('/api/llm/invoke', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: continuityPrompt,
-              max_tokens: 120,
-              temperature: 0,
-              roleplay: true,
-            })
-          });
-          if (continuityRes.ok) {
-            const continuityData = await continuityRes.json();
-            const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
-            if (revisedLine) nextHcpDialogue = revisedLine;
-          }
-        } catch (continuityError) {
-          if (import.meta.env.DEV) {
-            console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
-          }
+        const continuityRes = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: continuityPrompt,
+            max_tokens: 120,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (continuityRes.ok) {
+          const continuityData = await continuityRes.json();
+          const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
+          if (revisedLine) nextHcpDialogue = revisedLine;
+        }
+      } catch (continuityError) {
+        if (import.meta.env.DEV) {
+          console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
         }
       }
     }
@@ -4038,6 +4043,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requirementRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
     };
 
+    const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
+    nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
