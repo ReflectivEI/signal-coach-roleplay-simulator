@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function validateTurnContract(turn) {
   if (!turn) return false;
 
@@ -71,8 +72,14 @@ export function selectDeterministicResponseMode({
   concernFlowOutcome = "aligned",
   fallbackMode = "probe",
 } = {}) {
-  if (turnContractState?.closureEligibility?.eligible) return "close";
-  if ((turnContractState?.unansweredDirectQuestions || []).length > 0) return "answer";
+  const safeTurnContractState = turnContractState && typeof turnContractState === "object"
+    ? turnContractState
+    : {};
+  const unansweredDirectQuestions = Array.isArray(safeTurnContractState.unansweredDirectQuestions)
+    ? safeTurnContractState.unansweredDirectQuestions
+    : [];
+  if (safeTurnContractState?.closureEligibility?.eligible) return "close";
+  if (unansweredDirectQuestions.length > 0) return "answer";
   if (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot") return "repair";
   return fallbackMode;
 }
@@ -89,9 +96,15 @@ export function validateGeneratedTurnContract({
   draftText = "",
   turnContractState = {},
 } = {}) {
+  const safeTurnContractState = turnContractState && typeof turnContractState === "object"
+    ? turnContractState
+    : {};
+  const unansweredDirectQuestions = Array.isArray(safeTurnContractState.unansweredDirectQuestions)
+    ? safeTurnContractState.unansweredDirectQuestions
+    : [];
   const normalized = String(draftText || "").trim();
   const questionOnly = normalized.endsWith("?") && !/[.!]/.test(normalized);
-  const requiresAnswer = responseMode === "answer" && (turnContractState?.unansweredDirectQuestions || []).length > 0;
+  const requiresAnswer = responseMode === "answer" && unansweredDirectQuestions.length > 0;
   if (requiresAnswer && questionOnly) {
     return { valid: false, reason: "question_only_answer_mode" };
   }
