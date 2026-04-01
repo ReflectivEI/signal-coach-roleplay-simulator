@@ -265,10 +265,23 @@ function mergeActiveConstraints(previous = [], detected = []) {
   return merged;
 }
 
-function validateConstraintState(constraints = []) {
-  if (!Array.isArray(constraints)) return [];
-  return constraints
-    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+function validateConstraintState(constraints = [], options = {}) {
+  const detailed = options?.detailed === true;
+  const issues = [];
+
+  if (!Array.isArray(constraints)) {
+    issues.push("constraints_not_array");
+    return detailed ? { constraints: [], issues } : [];
+  }
+
+  const normalized = constraints
+    .filter((constraint, index) => {
+      const valid = constraint && typeof constraint === "object" && constraint.type;
+      if (!valid) {
+        issues.push(`invalid_constraint_at_${index}`);
+      }
+      return valid;
+    })
     .map((constraint) => ({
       ...constraint,
       priority: constraint.priority === "soft" ? "soft" : "blocking",
@@ -276,6 +289,17 @@ function validateConstraintState(constraints = []) {
       confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
       satisfaction: constraint.satisfaction || "not_satisfied",
     }));
+
+  return detailed ? { constraints: normalized, issues } : normalized;
+}
+
+function normalizeConstraintValidationResult(result) {
+  if (Array.isArray(result)) {
+    return { constraints: result, issues: ["legacy_array_shape"] };
+  }
+  const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  return { constraints, issues };
 }
 
 function computeSimilarity(a = "", b = "") {
@@ -2533,13 +2557,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const constraintValidation = validateConstraintState(
+    const rawConstraintValidation = validateConstraintState(
       operationalConstraintState.normalizedActiveConstraints,
       {
+        detailed: true,
         previousValid: lastValidConstraintsRef.current,
         recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
       }
     );
+    const constraintValidation = normalizeConstraintValidationResult(rawConstraintValidation);
     const normalizedActiveConstraints = constraintValidation.constraints;
     if (normalizedActiveConstraints.length > 0) {
       lastValidConstraintsRef.current = normalizedActiveConstraints;
