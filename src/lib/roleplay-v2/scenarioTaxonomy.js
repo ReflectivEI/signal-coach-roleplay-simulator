@@ -35,6 +35,32 @@ export const COMPLIANCE_MODES = Object.freeze([
   'virtual_hybrid_constraints',
 ]);
 
+/**
+ * Global deterministic taxonomy mapping keyed by scenario id.
+ * This avoids brittle keyword-only inference for core browsing filters.
+ */
+export const SCENARIO_TAXONOMY_OVERRIDES = Object.freeze({
+  hiv_im_prep_lowshare: { journeyStage: 'initial_access_prospecting', interactionPressure: 'resistant_skeptical' },
+  hiv_np_highshare_access: { journeyStage: 'adoption_implementation', interactionPressure: 'access_prior_auth_barrier' },
+  hiv_pa_treat_switch_slowdown: { journeyStage: 'clinical_value_detailing', interactionPressure: 'resistant_skeptical' },
+  hiv_np_cab_growth: { journeyStage: 'discovery_needs_assessment', interactionPressure: 'curious_uncertain' },
+  onc_md_io_adc_pathways: { journeyStage: 'clinical_value_detailing', interactionPressure: 'competitive_threat' },
+  onc_np_pathway_ops: { journeyStage: 'adoption_implementation', interactionPressure: 'operationally_blocked' },
+  onc_pa_gu_oral_onc_tminus7: { journeyStage: 'adoption_implementation', interactionPressure: 'operationally_blocked' },
+  'onc-kol': { journeyStage: 'initial_access_prospecting', interactionPressure: 'time_pressured' },
+  cv_card_md_hf_gdmt_uptake: { journeyStage: 'adoption_implementation', interactionPressure: 'access_prior_auth_barrier' },
+  cv_np_ckd_sglt2_calendar: { journeyStage: 'objection_handling', interactionPressure: 'safety_concern' },
+  cv_pa_postmi_transitions: { journeyStage: 'adoption_implementation', interactionPressure: 'operationally_blocked' },
+  'card-formulary': { journeyStage: 'clinical_value_detailing', interactionPressure: 'competitive_threat' },
+  vac_id_adult_flu_playbook: { journeyStage: 'adoption_implementation', interactionPressure: 'operationally_blocked' },
+  vac_np_primary_care_capture: { journeyStage: 'discovery_needs_assessment', interactionPressure: 'curious_uncertain' },
+  covid_pulm_md_antiviral_ddi_path: { journeyStage: 'objection_handling', interactionPressure: 'safety_concern' },
+  covid_pulm_np_postcovid_adherence: { journeyStage: 'adoption_implementation', interactionPressure: 'operationally_blocked' },
+  'neuro-access': { journeyStage: 'objection_handling', interactionPressure: 'access_prior_auth_barrier' },
+  'immuno-launch': { journeyStage: 'clinical_value_detailing', interactionPressure: 'competitive_threat' },
+  'rare-diagnosis': { journeyStage: 'discovery_needs_assessment', interactionPressure: 'curious_uncertain' },
+});
+
 function normalizeText(scenario = {}) {
   return [
     scenario.title,
@@ -52,6 +78,7 @@ function normalizeText(scenario = {}) {
 
 export function classifyScenarioTaxonomy(scenario = {}) {
   const text = normalizeText(scenario);
+  const globalOverride = SCENARIO_TAXONOMY_OVERRIDES[scenario.id] || {};
 
   const journeyStage = (() => {
     if (/close|next step|commit|follow[- ]?up|schedule/.test(text)) return 'commitment_next_step_close';
@@ -89,9 +116,9 @@ export function classifyScenarioTaxonomy(scenario = {}) {
   })();
 
   return {
-    journeyStage,
+    journeyStage: globalOverride.journeyStage || journeyStage,
     hcpPersona,
-    interactionPressure,
+    interactionPressure: globalOverride.interactionPressure || interactionPressure,
     difficultyTier: String(scenario.difficulty || 'foundational').toLowerCase(),
     complianceMode,
   };

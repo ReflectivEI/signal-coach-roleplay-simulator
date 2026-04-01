@@ -620,7 +620,7 @@ export default function RolePlaySimulator() {
         </div>
 
         {/* Filter actions */}
-        {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
+        {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers" || journeyStageFilter !== "All Journey Stages" || interactionPressureFilter !== "All Interaction Pressures") && (
           <div className="mb-3 flex items-center gap-2">
             <button
               onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); setJourneyStageFilter("All Journey Stages"); setInteractionPressureFilter("All Interaction Pressures"); }}
