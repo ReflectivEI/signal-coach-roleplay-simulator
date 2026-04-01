@@ -627,7 +627,7 @@ export function deriveInitialState(scenario) {
   }
 
   if (
-    /resist|skeptic|doubt|not interested|disagree|pushback|challenge|unconvinced/.test(
+    /\b(resist\w*|skeptic\w*|not interested|disagree|pushback|unconvinced|declin\w*|refus\w*|won.t)\b/.test(
       text
     )
   ) {
