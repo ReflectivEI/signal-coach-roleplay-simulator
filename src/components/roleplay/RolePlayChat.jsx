@@ -2959,14 +2959,32 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
       const value = String(dialogue || "").toLowerCase();
-      if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
-        return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
-      }
-      if (isFirstTurn && scenarioCabFocus && scenarioScreeningFocus) {
-        return "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.";
-      }
-      if (isFirstTurn && scenarioMonitoringFocus) {
-        return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
+      if (isFirstTurn) {
+        const firstTurnCueSeed = `${scenario?.id || scenario?.title || "scenario"}:${nextTurnNumber}:${activeConcern}`;
+        if (scenarioPrepFocus && scenarioPressured) {
+          const prepPressureCues = [
+            "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.",
+            "The HCP checks a clinic schedule board, then turns back with focused, time-aware attention.",
+            "The HCP sets a chart beside pending prior-auth packets and motions for a concise point.",
+          ];
+          return prepPressureCues[deterministicIndex(firstTurnCueSeed, prepPressureCues.length)];
+        }
+        if (scenarioCabFocus && scenarioScreeningFocus) {
+          const cabScreeningCues = [
+            "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.",
+            "The HCP pauses over candidacy criteria in the chart and nods for a specific recommendation.",
+            "The HCP highlights screening fields on a form, then asks with careful, practical focus.",
+          ];
+          return cabScreeningCues[deterministicIndex(firstTurnCueSeed, cabScreeningCues.length)];
+        }
+        if (scenarioMonitoringFocus) {
+          const monitoringCues = [
+            "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.",
+            "The HCP checks upcoming follow-up slots and signals for one implementable monitoring step.",
+            "The HCP scans a monitoring tracker, then looks up expecting a concrete, workflow-fit action.",
+          ];
+          return monitoringCues[deterministicIndex(firstTurnCueSeed, monitoringCues.length)];
+        }
       }
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
@@ -3650,7 +3668,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       clarificationNeeded,
     });
     if (!finalViolationCheck.valid) {
-      nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
+      nextHcpDialogue = buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || "");
     }
 
     const nextLateTurnConstraintState = {
