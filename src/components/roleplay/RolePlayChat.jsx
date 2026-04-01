@@ -2570,9 +2570,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const activeConcern = detectPrimaryConcern(concernSourceText);
     const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
     const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
+    const repEchoConstraintCandidates = extractConstraintCandidatesFromText(repMessage);
     const rawUserConstraintCandidates = mergeConstraintCandidates([
       ...recentUserConstraintCandidates,
       ...currentUserConstraintCandidates,
+      ...repEchoConstraintCandidates,
     ]);
     const scenarioGroundingText = [
       scenario?.title,
