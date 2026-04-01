@@ -293,6 +293,15 @@ function validateConstraintState(constraints = [], options = {}) {
   return detailed ? { constraints: normalized, issues } : normalized;
 }
 
+function normalizeConstraintValidationResult(result) {
+  if (Array.isArray(result)) {
+    return { constraints: result, issues: ["legacy_array_shape"] };
+  }
+  const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  return { constraints, issues };
+}
+
 function computeSimilarity(a = "", b = "") {
   const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   const tokensA = new Set(normalize(a).split(" ").filter((token) => token.length > 2));
@@ -2548,7 +2557,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const constraintValidation = validateConstraintState(
+    const rawConstraintValidation = validateConstraintState(
       operationalConstraintState.normalizedActiveConstraints,
       {
         detailed: true,
@@ -2556,6 +2565,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
       }
     );
+    const constraintValidation = normalizeConstraintValidationResult(rawConstraintValidation);
     const normalizedActiveConstraints = constraintValidation.constraints;
     if (normalizedActiveConstraints.length > 0) {
       lastValidConstraintsRef.current = normalizedActiveConstraints;
