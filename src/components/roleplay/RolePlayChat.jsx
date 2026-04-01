@@ -69,6 +69,7 @@ import {
   buildLateTurnConstraintResponse,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
+import { buildDeterministicGenerationKey } from "./generationKey";
 
 function escapeHTML(text) {
   return String(text)
@@ -2456,7 +2457,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
-    const generationKey = `${respondingToTurn.turnNumber}::${repMessage.toLowerCase()}`;
+    const generationKey = buildDeterministicGenerationKey({
+      sessionId: sid,
+      turnNumber: respondingToTurn.turnNumber,
+      repMessage,
+    });
     if (processedTurnKeysRef.current.has(generationKey)) {
       setIsLoading(false);
       return;

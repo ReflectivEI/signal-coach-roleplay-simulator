@@ -84,6 +84,27 @@ function deterministicCue(sessionId, turnNumber, state, severity, cues) {
   return cues[seed % cues.length];
 }
 
+function buildDeterministicCueSeed({ scenario, sessionId, turnNumber = 0, question = "" }) {
+  const scenarioAnchor = String(
+    scenario?.id
+    || scenario?.title
+    || scenario?.hcp?.name
+    || "scenario"
+  ).trim().toLowerCase();
+  const sessionAnchor = String(sessionId || "").trim().toLowerCase();
+
+  if (sessionAnchor) {
+    return `${scenarioAnchor}:${sessionAnchor}:${turnNumber}`;
+  }
+
+  const questionAnchor = String(question || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .slice(0, 120);
+  return `${scenarioAnchor}:${questionAnchor}:${turnNumber}`;
+}
+
 // Advanced topic/mood detection
 function detectTopic(question) {
   const q = question.toLowerCase();
@@ -158,13 +179,12 @@ export function recalibrateHcpDialogueAndCue({
 
   // Deterministic cue selection
   const cueList = cueBank[mood] || cueBank.neutral;
-  const resolvedSessionSeed = String(
-    sessionId
-    || scenario?.id
-    || scenario?.title
-    || scenario?.hcp?.name
-    || "scenario-seed"
-  );
+  const resolvedSessionSeed = buildDeterministicCueSeed({
+    scenario,
+    sessionId,
+    turnNumber,
+    question,
+  });
   const cueBefore = deterministicCue(resolvedSessionSeed, turnNumber, state, severity, cueList);
 
   // Dialogue generation
