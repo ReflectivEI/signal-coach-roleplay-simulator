@@ -2842,6 +2842,47 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const scenarioOralOncOnboardingFocus = /\b(oral oncolytic|oncolytic onboarding|tminus7|t-?minus-?7|refill gap|start form|onboarding)\b/.test(scenarioLower);
     const scenarioPostMiTransitionsFocus = /\b(post-?mi|post mi|myocardial infarction|heart failure|hf transitions|readmission|discharge|transition of care|toc)\b/.test(scenarioLower);
 
+    const extractQuotedOpeningBeat = (openingText) => {
+      const text = String(openingText || "");
+      if (!text.trim()) return "";
+      const quoteMatches = [...text.matchAll(/['"]([^'"]{12,})['"]/g)];
+      if (!quoteMatches.length) return "";
+      const longest = quoteMatches
+        .map((m) => String(m?.[1] || "").trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length)[0];
+      return longest || "";
+    };
+
+    const normalizeOpeningBeatToPrompt = (openingText) => {
+      const raw = String(openingText || "").trim();
+      if (!raw) return "";
+      const quoted = extractQuotedOpeningBeat(raw);
+      const candidate = quoted || raw;
+      return candidate
+        .replace(/\s+/g, " ")
+        .replace(/\b(she|he)\s+(says|asks|replies)\b[:]?/gi, "")
+        .replace(/[“”]/g, "\"")
+        .trim();
+    };
+
+    const buildGlobalOpeningPrompt = () => {
+      const openingBeat = normalizeOpeningBeatToPrompt(scenario?.opening_scene || scenario?.openingScene || "");
+      if (openingBeat) return openingBeat;
+
+      if (scenarioMonitoringFocus) {
+        return "I want to make sure our follow-up approach is practical. What should we prioritize first?";
+      }
+      if (scenarioPathwayWorkflowFocus) {
+        return "We need a workflow-fit recommendation we can actually apply this week. What's your first step?";
+      }
+      if (scenarioPayerFocus) {
+        return "Please keep this focused on coverage and practical implementation. What's most relevant right now?";
+      }
+
+      return "Let's focus on one practical issue we can solve today. What's your recommendation?";
+    };
+
     const buildFirstTurnScenarioFallback = () => {
       const warmGreeting = inPleasantryGracePeriod
         ? (repAskedWellbeing ? "I'm doing well, thanks for asking." : "")
@@ -2863,11 +2904,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
       if (scenarioPrepFocus && scenarioPressured) {
-        return withOptionalGreeting("I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?");
+        return withOptionalGreeting(buildGlobalOpeningPrompt());
       }
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return withOptionalGreeting("I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?");
+        return withOptionalGreeting(buildGlobalOpeningPrompt());
       }
 
       if (strictKolEvidenceContext) {
@@ -2907,16 +2948,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       if (scenarioMonitoringFocus) {
-        return withOptionalGreeting("I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?");
+        return withOptionalGreeting(buildGlobalOpeningPrompt());
       }
 
       if (scenarioPressured) {
-        return withOptionalGreeting("I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?");
+        return withOptionalGreeting(buildGlobalOpeningPrompt());
       }
 
-      return scenarioPrepFocus
-        ? withOptionalGreeting("I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.")
-        : withOptionalGreeting("I can spare a focused minute or two. Give me the one practical issue you're here to solve today.");
+      return withOptionalGreeting(buildGlobalOpeningPrompt());
     };
 
     const buildFollowUpScenarioFallback = () => {
