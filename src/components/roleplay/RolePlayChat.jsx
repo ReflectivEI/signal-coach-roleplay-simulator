@@ -106,6 +106,65 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   }
 }
 
+function normalizeLlmInvokeText(payload) {
+  const source = payload && typeof payload === "object"
+    ? (payload.response ?? payload.text ?? payload.content ?? "")
+    : "";
+
+  if (typeof source === "string") return source.trim();
+  if (Array.isArray(source)) return source.map((item) => String(item || "")).join(" ").trim();
+  if (source && typeof source === "object") {
+    if (typeof source.text === "string") return source.text.trim();
+    try {
+      return JSON.stringify(source).trim();
+    } catch {
+      return String(source).trim();
+    }
+  }
+  return String(source || "").trim();
+}
+
+function classifyDialogueCueIntent(text = "") {
+  const value = String(text || "").toLowerCase();
+  if (!value) return "neutral";
+  if (/\b(understood|front desk|follow-up slot|conversation is ending|wrap this up|need to move on)\b/.test(value)) return "closing";
+  if (/\b(not interested|not convinced|we are done|stop here|can't recommend|won't|decline|refuse|skeptical|doubt)\b/.test(value)) return "resistant";
+  if (/\b(happy to|that helps|that works|makes sense|good point|let's do that)\b/.test(value)) return "engaged";
+  if (/\b(running late|short on time|quickly|briefly|patient waiting|pager|clock|schedule)\b/.test(value)) return "time";
+  return "neutral";
+}
+
+function classifyCueTextIntent(cueText = "") {
+  const value = String(cueText || "").toLowerCase();
+  if (!value) return "neutral";
+  if (/\b(ending|leave|front desk|threshold|wrap|closing)\b/.test(value)) return "closing";
+  if (/\b(clipped|less engaged|skeptic|defensive|patience thinning|frustrat|impatient|irritat)\b/.test(value)) return "resistant";
+  if (/\b(engagement|leans forward|acknowledgment|relaxed|engaged)\b/.test(value)) return "engaged";
+  if (/\b(clock|watch|pager|time|hurry|quick)\b/.test(value)) return "time";
+  return "neutral";
+}
+
+function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpState = "neutral" } = {}) {
+  const cueIntent = classifyCueTextIntent(cueText);
+  const dialogueIntent = classifyDialogueCueIntent(dialogueText);
+  const state = String(hcpState || "neutral");
+  const contradiction = (
+    (cueIntent === "engaged" && (dialogueIntent === "resistant" || state === "resistant" || state === "disengaged" || state === "irritated"))
+    || (cueIntent === "resistant" && (dialogueIntent === "engaged" || state === "engaged"))
+    || (cueIntent === "closing" && dialogueIntent === "engaged")
+  );
+  return { cueIntent, dialogueIntent, contradiction };
+}
+
+function hasTurnIntegrityIssues(turn) {
+  const issues = [];
+  if (!Number.isFinite(turn?.turnNumber)) issues.push("missing_turn_number");
+  if (typeof turn?.cueBefore !== "string" || !turn.cueBefore.trim()) issues.push("missing_cue");
+  if (typeof turn?.hcpDialogueBefore !== "string" || !turn.hcpDialogueBefore.trim()) issues.push("missing_hcp_dialogue");
+  if (!turn?.generationKey) issues.push("missing_generation_key");
+  return issues;
+}
+
 function hardenTextSurface(text) {
   let value = String(text || "")
     .replace(/\s+/g, " ")
@@ -174,7 +233,7 @@ function readDebugFlag(flagKey) {
   try {
     const value = window.localStorage?.getItem(flagKey);
     return value === "1" || value === "true";
-  } catch (_error) {
+  } catch {
     return false;
   }
 }
@@ -1186,7 +1245,7 @@ function buildTerminalDecisionDialogue({ concern = "workflow", seed = "" } = {})
   const pool = byConcern[concern] || byConcern.workflow;
   const baseIndex = deterministicIndex(`${seed}:${concern}:terminal-statement`, pool.length);
   const askIndex = deterministicIndex(`${seed}:${concern}:terminal-ask`, askOptions.length);
-  const includeAsk = Math.random() < 0.45;
+  const includeAsk = deterministicBoolean(`${seed}:${concern}:include-ask`, 0.45);
   const statement = pool[baseIndex];
   return includeAsk ? `${statement} ${askOptions[askIndex]}` : statement;
 }
@@ -1876,6 +1935,12 @@ function deterministicIndex(seedText, total) {
   return hash % total;
 }
 
+function deterministicBoolean(seedText, threshold = 0.5) {
+  const bounded = Math.max(0, Math.min(1, Number(threshold) || 0));
+  const scale = 1000;
+  return deterministicIndex(`${seedText}:bool`, scale) < Math.floor(bounded * scale);
+}
+
 function mapIssueCategory(alignment) {
   const firstFlag = String(alignment?.rubricAlignmentFlags?.[0] || "").toLowerCase();
   const firstMisalignment = String(alignment?.misalignments?.[0] || "").toLowerCase();
@@ -2394,7 +2459,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
-    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
+    const continueCurrentBehavior = !terminalDecisionTriggerActive
+      || deterministicBoolean(`${sid}:${scenario?.id || "scenario"}:${nextTurnNumber}:${activeConcern}:${decayState.tier}`, continueProbability);
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
@@ -2806,9 +2872,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         });
         if (res.ok) {
           const data = await res.json();
-          const raw = (data.response || data.text || data.content || '');
-          const rawStr = typeof raw === 'string' ? raw : String(raw);
+          const rawStr = normalizeLlmInvokeText(data);
           nextHcpDialogue = rawStr.trim().split('\n')[0];
+          if (!nextHcpDialogue) {
+            if (import.meta.env.DEV) {
+              console.warn("ROLEPLAY_DIALOGUE_PRESENCE_GUARD", {
+                turnNumber: nextTurnNumber,
+                source: "llm_normalized_empty",
+              });
+            }
+            usedDeterministicFallback = true;
+            draftResponseSource = "empty_normalized_fallback";
+            nextHcpDialogue = isFirstHcpResponse
+              ? buildFirstTurnScenarioFallback()
+              : buildFollowUpScenarioFallback();
+          }
 
           if (
             import.meta.env.DEV
@@ -3070,11 +3148,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Always match cue to the same state/context as the generated HCP dialogue
     // Alignment check: ensure cues, emotional state, dialogue, and context are logically consistent
     contextualCue = undefined;
+    const selectedCueLayers = [];
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
       nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
+      selectedCueLayers.push("safeguard_override");
     } else {
+      selectedCueLayers.push("locked_base");
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
       if (terminalDecisionMode) {
@@ -3083,8 +3164,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           TERMINAL_DECISION_CUES.length,
         );
         contextualCue = TERMINAL_DECISION_CUES[cueIndex];
+        selectedCueLayers.push("contextual_terminal");
       } else {
         contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
+        selectedCueLayers.push("contextual_dialogue_aligned");
       }
 
       const recentCues = prevTurns
@@ -3119,6 +3202,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         }
 
         contextualCue = replacement;
+        selectedCueLayers.push("safeguard_no_repeat");
       }
     }
 
@@ -3139,6 +3223,45 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         decayState.tier
       );
       contextualCue = hardenTextSurface(contextualCue);
+      selectedCueLayers.push("safeguard_recent_memory");
+    }
+
+    const cueAlignmentCheck = validateCueDialogueAlignment({
+      cueText: contextualCue,
+      dialogueText: nextHcpDialogue,
+      hcpState: nextHcpState,
+    });
+    if (cueAlignmentCheck.contradiction) {
+      const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
+      const alignedCue = buildScenarioAlignedCue(
+        `${nextHcpDialogue} ${nextHcpState}`,
+        isFirstHcpResponse,
+        recentCueText,
+        decayState.tier
+      );
+      const hardenedAlignedCue = hardenTextSurface(alignedCue);
+      if (hardenedAlignedCue) {
+        contextualCue = hardenedAlignedCue;
+        selectedCueLayers.push("safeguard_alignment");
+      }
+      if (import.meta.env.DEV) {
+        console.warn("ROLEPLAY_CUE_ALIGNMENT_MISMATCH", {
+          turnNumber: nextTurnNumber,
+          hcpState: nextHcpState,
+          cueIntent: cueAlignmentCheck.cueIntent,
+          dialogueIntent: cueAlignmentCheck.dialogueIntent,
+        });
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      const uniqueLayers = [...new Set(selectedCueLayers)];
+      if (uniqueLayers.length > 3) {
+        console.warn("ROLEPLAY_CUE_THRASHING_GUARD", {
+          turnNumber: nextTurnNumber,
+          layers: uniqueLayers,
+        });
+      }
     }
 
     // 7. Coaching overlay — driven by alignment rubric flags
@@ -3179,6 +3302,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       engagementPressureScore: decayState.pressureScore,
       generationKey,
     };
+
+    const turnIntegrityIssues = hasTurnIntegrityIssues(nextTurn);
+    if (import.meta.env.DEV && turnIntegrityIssues.length > 0) {
+      console.warn("ROLEPLAY_TURN_INTEGRITY_GUARD", {
+        turnNumber: nextTurnNumber,
+        issues: turnIntegrityIssues,
+      });
+    }
 
     const terminalPolicyAction = determineTerminalPolicyAction({
       hcpState: decayState.tier,
@@ -3517,7 +3648,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (res.ok) {
         const data = await res.json();
-        const rawContent = (data.response || data.text || data.content || '').trim();
+        const rawContent = normalizeLlmInvokeText(data);
 
         console.log('=== RAW FEEDBACK CONTENT ===');
         console.log(rawContent.substring(0, 300));
