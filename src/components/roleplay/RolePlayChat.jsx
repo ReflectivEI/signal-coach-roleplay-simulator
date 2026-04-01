@@ -3646,14 +3646,61 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     if (!overrideExit && blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
       const primaryBlockingConstraint = blockingUnresolvedConstraints[0]?.type || "request_for_specificity";
-      const persistentPromptMap = {
-        request_for_evidence: "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
-        request_for_specificity: "I still need one concrete, specific step we can execute this week. Be exact.",
-        request_for_applicability: "I still need this translated to our exact setting and patient mix before we move on.",
-        request_for_operational_fit: "I still need to hear exactly how this fits our workflow and staffing constraints.",
-        request_for_clarification: "I still need one clear clarification in operational terms before we proceed.",
+      const constraintPromptGroups = {
+        request_for_evidence: [
+          "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
+          "Give me one concrete data point that applies to this patient mix—no broad summary.",
+          "Name one clinically meaningful evidence detail I can use in this exact setting this week.",
+        ],
+        request_for_specificity: [
+          "I still need one concrete, specific step we can execute this week. Be exact.",
+          "Give me one operational step with clear ownership and timing for this clinic.",
+          "Name a single implementable action we can run now without adding process burden.",
+        ],
+        request_for_applicability: [
+          "I still need this translated to our exact setting and patient mix before we move on.",
+          "Show me how this applies to our real workflow, not a generic scenario.",
+          "Tie this directly to our patient selection and visit constraints in this clinic.",
+        ],
+        request_for_operational_fit: [
+          "I still need to hear exactly how this fits our workflow and staffing constraints.",
+          "Map this to a practical clinic workflow step with minimal staffing disruption.",
+          "Explain the operational handoff so this can run without adding administrative friction.",
+        ],
+        request_for_clarification: [
+          "I still need one clear clarification in operational terms before we proceed.",
+          "Clarify the key point in one concrete sentence I can act on today.",
+          "Resolve the ambiguity with one precise, practical explanation for this setting.",
+        ],
       };
-      nextHcpDialogue = persistentPromptMap[primaryBlockingConstraint] || persistentPromptMap.request_for_specificity;
+      const constraintPool = constraintPromptGroups[primaryBlockingConstraint] || constraintPromptGroups.request_for_specificity;
+      const selectedIndex = deterministicIndex(
+        `${generationKey}:${nextTurnNumber}:${primaryBlockingConstraint}:constraint-prompt`,
+        constraintPool.length
+      );
+      nextHcpDialogue = constraintPool[selectedIndex];
+
+      const recentRepMsgs = prevTurns
+        .map((turn) => String(turn?.repMessage || "").trim())
+        .filter(Boolean)
+        .slice(-2);
+      const repeatedRepPattern = recentRepMsgs.length >= 2
+        && computeSimilarity(recentRepMsgs[0], recentRepMsgs[1]) >= 0.9
+        && computeSimilarity(recentRepMsgs[1], repMessage) >= 0.9;
+      const similarConstraintPrompts = prevTurns
+        .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+        .filter(Boolean)
+        .slice(-4)
+        .filter((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.7).length;
+
+      if (repeatedRepPattern && similarConstraintPrompts >= 2) {
+        nextHcpState = "boundary-setting";
+        nextHcpDialogue = "We are looping. Give one practice-ready step with one supporting evidence point, or we should pause here.";
+      }
+      if (repeatedRepPattern && similarConstraintPrompts >= 3) {
+        nextHcpState = "disengaged";
+        nextHcpDialogue = terminalCloseFallback;
+      }
     }
 
     if (!overrideExit && !blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
