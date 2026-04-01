@@ -3680,8 +3680,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
     const shouldApplyConstraintDraftGuardrail = respondingToTurn?.turnNumber > 0;
+    let initialViolation = {
+      valid: true,
+      rejectionReason: null,
+      ungroundedTypes: [],
+      duplicateTypes: [],
+    };
+    let draftRejectedForConstraintRule = false;
+    let finalViolationCheck = {
+      valid: true,
+      draftTypes: [],
+    };
     if (shouldApplyConstraintDraftGuardrail) {
-      const initialViolation = detectConstraintDraftViolations({
+      initialViolation = detectConstraintDraftViolations({
         draftText: nextHcpDialogue,
         groundedTypes: groundedConstraintTypes,
         alreadySurfacedTypes: previouslySurfacedConstraintTypes,
@@ -3690,7 +3701,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         changedConstraint,
         clarificationNeeded,
       });
-      const draftRejectedForConstraintRule = !initialViolation.valid;
+      draftRejectedForConstraintRule = !initialViolation.valid;
       if (draftRejectedForConstraintRule) {
         usedDeterministicFallback = true;
         nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
@@ -3700,7 +3711,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           scenarioContext: scenarioGroundingText,
         });
       }
-      const finalViolationCheck = detectConstraintDraftViolations({
+      finalViolationCheck = detectConstraintDraftViolations({
         draftText: nextHcpDialogue,
         groundedTypes: groundedConstraintTypes,
         alreadySurfacedTypes: previouslySurfacedConstraintTypes,
