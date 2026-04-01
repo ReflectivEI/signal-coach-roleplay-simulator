@@ -2434,7 +2434,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let alignment = computeAlignment(
       prevState,
       repMessage,
-      { hcpUtterance: respondingToTurn?.hcpDialogueBefore || "" },
+      {
+        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+        cueText: respondingToTurn?.cueBefore || "",
+      },
       prevTemp,
       prevHcpState
     );
