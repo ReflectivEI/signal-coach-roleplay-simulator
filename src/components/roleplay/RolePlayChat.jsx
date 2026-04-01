@@ -2183,8 +2183,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  // Stable session ID for deterministic cue selection
-  const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  // Stable, non-random session seed for deterministic cue selection.
+  const scenarioSeed = String(scenario?.id || scenario?.title || "scenario")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "scenario";
+  const sessionIdRef = useRef(`session_${scenarioSeed}_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
