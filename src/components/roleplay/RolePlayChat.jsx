@@ -265,10 +265,23 @@ function mergeActiveConstraints(previous = [], detected = []) {
   return merged;
 }
 
-function validateConstraintState(constraints = []) {
-  if (!Array.isArray(constraints)) return [];
-  return constraints
-    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+function validateConstraintState(constraints = [], options = {}) {
+  const detailed = options?.detailed === true;
+  const issues = [];
+
+  if (!Array.isArray(constraints)) {
+    issues.push("constraints_not_array");
+    return detailed ? { constraints: [], issues } : [];
+  }
+
+  const normalized = constraints
+    .filter((constraint, index) => {
+      const valid = constraint && typeof constraint === "object" && constraint.type;
+      if (!valid) {
+        issues.push(`invalid_constraint_at_${index}`);
+      }
+      return valid;
+    })
     .map((constraint) => ({
       ...constraint,
       priority: constraint.priority === "soft" ? "soft" : "blocking",
@@ -276,6 +289,17 @@ function validateConstraintState(constraints = []) {
       confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
       satisfaction: constraint.satisfaction || "not_satisfied",
     }));
+
+  return detailed ? { constraints: normalized, issues } : normalized;
+}
+
+function normalizeConstraintValidationResult(result) {
+  if (Array.isArray(result)) {
+    return { constraints: result, issues: ["legacy_array_shape"] };
+  }
+  const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  return { constraints, issues };
 }
 
 function computeSimilarity(a = "", b = "") {
@@ -2159,8 +2183,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  // Stable session ID for deterministic cue selection
-  const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  // Stable, non-random session seed for deterministic cue selection.
+  const scenarioSeed = String(scenario?.id || scenario?.title || "scenario")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "scenario";
+  const sessionIdRef = useRef(`session_${scenarioSeed}_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
@@ -2533,13 +2562,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const constraintValidation = validateConstraintState(
+    const rawConstraintValidation = validateConstraintState(
       operationalConstraintState.normalizedActiveConstraints,
       {
+        detailed: true,
         previousValid: lastValidConstraintsRef.current,
         recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
       }
     );
+    const constraintValidation = normalizeConstraintValidationResult(rawConstraintValidation);
     const normalizedActiveConstraints = constraintValidation.constraints;
     if (normalizedActiveConstraints.length > 0) {
       lastValidConstraintsRef.current = normalizedActiveConstraints;
