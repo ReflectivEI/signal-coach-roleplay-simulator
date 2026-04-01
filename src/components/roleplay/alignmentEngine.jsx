@@ -49,6 +49,15 @@ function isDisengagingState(hcpState) {
   return hcpState === 'disengaging' || hcpState === 'disengaged';
 }
 
+function normalizeHcpState(rawState = 'neutral') {
+  const state = String(rawState || 'neutral').trim().toLowerCase().replace(/[_\s]+/g, '-');
+  if (state === 'time-pressed' || state === 'time-pressured') return 'time-pressured';
+  if (state === 'boundary-setting' || state === 'boundary') return 'boundary-setting';
+  if (state === 'disengaged' || state === 'disengaging') return state;
+  if (state === 'resistant' || state === 'engaged' || state === 'neutral' || state === 'irritated') return state;
+  return state || 'neutral';
+}
+
 /**
  * Detect observable behavioral patterns in rep message.
  * Each key corresponds to a specific, observable behavioral signal.
@@ -199,6 +208,23 @@ function repAddressesQuestionDemand(repMessage = "", demand = {}) {
     directlyAddresses:
       (!demand.requiresMetric || hasMetricAnchor || lexicalOverlap >= 1)
       && (!demand.requiresThreshold || hasNumericAnchor),
+  };
+}
+
+function detectCueDemand(context = {}) {
+  const cue = String(context?.cueText || '').toLowerCase();
+  const hcp = String(context?.hcpUtterance || context?.latestHcpUtterance || '').toLowerCase();
+  const combined = `${cue} ${hcp}`;
+  return {
+    hasCueSignal: Boolean(cue.trim()),
+    timeConstraint:
+      /\b(time|schedule|quick|brief|middle of|get to the point|patients waiting|don't have a lot of time|not worth more time)\b/.test(combined),
+    explicitResistance:
+      /\b(concern|skeptic|not convinced|still trying to understand|objection|doesn't apply|does not apply)\b/.test(combined),
+    closingSignal:
+      /\b(door|leave|take care|patients waiting|exchange is over|not worth more time)\b/.test(combined),
+    engagementSignal:
+      /\b(interesting|help me understand|connect the dots|curious|can you clarify)\b/.test(combined),
   };
 }
 
@@ -794,8 +820,11 @@ function computeAlignmentRubric(hcpState, p) {
  * @returns alignment object
  */
 export function computeAlignment(hcpState, repMessage, context = null, temperature = 'neutral', prevHcpState = null) {
+  const normalizedState = normalizeHcpState(hcpState);
+  const normalizedPrevState = normalizeHcpState(prevHcpState);
   const p = detectPatterns(repMessage);
   const promptContext = typeof context === "string" ? context : (context?.hcpUtterance || context?.latestHcpUtterance || "");
+  const cueDemand = detectCueDemand(typeof context === 'object' && context ? context : {});
   const questionDemand = detectQuestionDemand(promptContext);
   const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
   // Robust misalignment: track repeated/aggressive responses
@@ -833,15 +862,46 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   };
 
   const metricResults = {
-    signal_awareness:         scoreSignalAwareness(hcpState, temperature, p),
-    signal_interpretation:    scoreSignalInterpretation(hcpState, temperature, p),
-    value_connection:         scoreValueConnection(hcpState, temperature, p),
-    customer_engagement:      scoreCustomerEngagement(hcpState, temperature, p),
-    objection_navigation:     scoreObjectionNavigation(hcpState, temperature, p),
-    conversation_management:  scoreConversationManagement(hcpState, temperature, p),
-    adaptive_response:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
-    commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
+    signal_awareness:         scoreSignalAwareness(normalizedState, temperature, p),
+    signal_interpretation:    scoreSignalInterpretation(normalizedState, temperature, p),
+    value_connection:         scoreValueConnection(normalizedState, temperature, p),
+    customer_engagement:      scoreCustomerEngagement(normalizedState, temperature, p),
+    objection_navigation:     scoreObjectionNavigation(normalizedState, temperature, p),
+    conversation_management:  scoreConversationManagement(normalizedState, temperature, p),
+    adaptive_response:        scoreAdaptiveResponse(normalizedState, temperature, p, normalizedPrevState),
+    commitment_generation:    scoreCommitmentGeneration(normalizedState, temperature, p),
   };
+
+  if (cueDemand.hasCueSignal) {
+    if (cueDemand.timeConstraint && !p.acknowledguesTime) {
+      metricResults.adaptive_response.score = clamp(metricResults.adaptive_response.score - 1);
+      metricResults.adaptive_response.subScores.situational_responsiveness = clamp(
+        metricResults.adaptive_response.subScores.situational_responsiveness - 1
+      );
+      metricResults.adaptive_response.misalignments.push('Time-pressure cue was present but not acknowledged in the rep response.');
+    }
+    if (cueDemand.explicitResistance && !p.acknowledgesConcern && !p.paraphrasesHcp) {
+      metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 1);
+      metricResults.signal_interpretation.subScores.accuracy_of_interpretation = clamp(
+        metricResults.signal_interpretation.subScores.accuracy_of_interpretation - 1
+      );
+      metricResults.signal_interpretation.misalignments.push('HCP resistance cue/dialogue was not reflected before moving forward.');
+    }
+    if (cueDemand.closingSignal && !p.gracefulClose && !p.offersNextStep && !p.specifiesNextStep) {
+      metricResults.conversation_management.score = clamp(metricResults.conversation_management.score - 1);
+      metricResults.conversation_management.subScores.adaptive_steering = clamp(
+        metricResults.conversation_management.subScores.adaptive_steering - 1
+      );
+      metricResults.conversation_management.misalignments.push('Closing cue was detected, but response did not close or release gracefully.');
+    }
+    if (cueDemand.engagementSignal && (p.buildsOnHcp || p.asksContextualQuestion)) {
+      metricResults.customer_engagement.score = clamp(metricResults.customer_engagement.score + 1);
+      metricResults.customer_engagement.subScores.responsiveness_to_cues = clamp(
+        metricResults.customer_engagement.subScores.responsiveness_to_cues + 1
+      );
+      metricResults.customer_engagement.positives.push('Rep leveraged an engagement cue with contextual follow-through.');
+    }
+  }
 
   if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
     metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 2);
@@ -892,7 +952,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
-  const rubricMisalignments = computeAlignmentRubric(hcpState, p);
+  const rubricMisalignments = computeAlignmentRubric(normalizedState, p);
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
@@ -909,8 +969,8 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   return {
     score: overallScore,
     metrics: metricResults,
-    ruleLabel: STATE_LABELS[hcpState] || 'Unknown State',
-    ruleDescription: STATE_DESCRIPTIONS[hcpState] || '',
+    ruleLabel: STATE_LABELS[normalizedState] || 'Unknown State',
+    ruleDescription: STATE_DESCRIPTIONS[normalizedState] || '',
     positives: [...new Set(allPositives)],
     misalignments: [...new Set(allMisalignments)],
     rubricAlignmentFlags: rubricMisalignments,
