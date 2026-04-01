@@ -221,19 +221,68 @@ export function buildLateTurnConstraintResponse({
   concern = "workflow",
   mode = "restate_once",
   includeConstraintSignal = false,
+  seed = "",
+  recentResponses = [],
 } = {}) {
   const unmetRequirement = LATE_TURN_REQUIREMENT_BY_CONCERN[concern] || LATE_TURN_REQUIREMENT_BY_CONCERN.workflow;
-  const intro = includeConstraintSignal
-    ? "Given the time constraint,"
-    : "To stay focused,";
+  const introPool = includeConstraintSignal
+    ? [
+      "Given the time constraint,",
+      "Given the limited time window,",
+      "Because time is limited,",
+    ]
+    : [
+      "To stay focused,",
+      "So we keep this practical,",
+      "To keep this productive,",
+    ];
+
+  const closePool = [
+    "I need {{requirement}}. If that is not available now, we can pause here.",
+    "I need {{requirement}} before we continue; otherwise let's pause here for now.",
+    "I need {{requirement}}. If we cannot do that now, we'll pause and revisit later.",
+  ];
+
+  const boundaryPool = [
+    "please stick to {{requirement}} before we continue.",
+    "let's stay on {{requirement}} so we can move this forward.",
+    "please anchor on {{requirement}} before adding anything else.",
+  ];
+
+  const restatePool = [
+    "I still need {{requirement}}.",
+    "I still need {{requirement}} before we move on.",
+    "I still need {{requirement}} to keep this actionable.",
+  ];
+
+  const pickVariant = (pool, modeLabel) => {
+    const normalizedRecent = (Array.isArray(recentResponses) ? recentResponses : [])
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter(Boolean)
+      .slice(-3);
+    const startIndex = Math.abs(
+      [...`${seed}:${concern}:${modeLabel}:${includeConstraintSignal ? "time" : "focus"}`]
+        .reduce((acc, char) => acc + char.charCodeAt(0), 0),
+    ) % pool.length;
+
+    for (let i = 0; i < pool.length; i += 1) {
+      const candidate = pool[(startIndex + i) % pool.length].replace("{{requirement}}", unmetRequirement);
+      const normalized = candidate.toLowerCase();
+      if (!normalizedRecent.includes(normalized)) return candidate;
+    }
+
+    return pool[startIndex].replace("{{requirement}}", unmetRequirement);
+  };
+
+  const intro = pickVariant(introPool, "intro");
 
   if (mode === "close") {
-    return `${intro} I need ${unmetRequirement}. If that is not available now, we can pause here.`;
+    return `${intro} ${pickVariant(closePool, "close")}`;
   }
 
   if (mode === "boundary") {
-    return `${intro} please stick to ${unmetRequirement} before we continue.`;
+    return `${intro} ${pickVariant(boundaryPool, "boundary")}`;
   }
 
-  return `${intro} I still need ${unmetRequirement}.`;
+  return `${intro} ${pickVariant(restatePool, "restate")}`;
 }

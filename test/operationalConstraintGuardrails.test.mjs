@@ -104,7 +104,7 @@ test('late-turn missed requirement -> constrained restate then escalation withou
   });
   const firstSentenceCount = (firstReply.match(/[.!?]+/g) || []).length;
   assert.ok(firstSentenceCount >= 1 && firstSentenceCount <= 2);
-  assert.match(firstReply, /time constraint|stay focused/i);
+  assert.match(firstReply, /time constraint|limited time window|time is limited|stay focused/i);
   assert.match(firstReply, /clinically meaningful evidence/i);
   assert.doesNotMatch(firstReply, /new concern|different issue|let.?s debate/i);
 
@@ -118,6 +118,34 @@ test('late-turn missed requirement -> constrained restate then escalation withou
   });
   assert.equal(secondDecision.forced, true);
   assert.ok(secondDecision.mode === 'boundary' || secondDecision.mode === 'close');
+});
+
+
+test('late-turn guardrails rotate close phrasing to avoid robotic repetition', () => {
+  const recent = [
+    'Given the time constraint, I need clinically meaningful evidence relevant to my practice. If that is not available now, we can pause here.',
+  ];
+
+  const closeA = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'turn-1',
+    recentResponses: recent,
+  });
+
+  const closeB = buildLateTurnConstraintResponse({
+    concern: 'evidence',
+    mode: 'close',
+    includeConstraintSignal: true,
+    seed: 'turn-2',
+    recentResponses: [closeA],
+  });
+
+  assert.notEqual(closeA, recent[0]);
+  assert.notEqual(closeA, closeB);
+  assert.match(closeA, /evidence relevant to my practice/i);
+  assert.match(closeB, /pause|revisit/i);
 });
 
 test('late-turn addressed requirement concisely -> no forced closure path', () => {
@@ -208,6 +236,25 @@ test('stale-request guard prevents late-turn state mutation from older request',
     currentState: lateTurnState,
   });
   assert.deepEqual(lateTurnState, stateFromTurnB);
+});
+
+test('opening fallback only says "thanks for asking" when rep asked wellbeing', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /const wellbeingCheckSignals = .*how are you.*how was your weekend/s,
+    'expected explicit wellbeing-check detector for opening turns',
+  );
+
+  assert.match(
+    rolePlayChatSource,
+    /repAskedWellbeing \? "I'm doing well, thanks for asking\." : ""/,
+    'expected opening fallback to avoid social-assumption text when wellbeing was not asked',
+  );
 });
 
 test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {

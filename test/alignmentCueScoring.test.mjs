@@ -60,3 +60,21 @@ test('direct evidence question answered with threshold should not trigger readin
     'expected direct-question answered positive'
   );
 });
+
+test('greeting-only opener is penalized when cue/dialogue demand immediate context-aware response', () => {
+  const result = computeAlignment(
+    'time-pressured',
+    'Hi Lisa.',
+    {
+      cueText: 'HCP taps the chart and signals urgency due to limited time.',
+      hcpUtterance: 'Given our workflow constraints, what is the first operational step you recommend?'
+    },
+    'neutral',
+    'engaged'
+  );
+
+  assert.ok(
+    result.metrics.signal_awareness.misalignments.some((m) => m.includes('Greeting-only opener ignored')),
+    'expected greeting-only misalignment when direct demand is present'
+  );
+});

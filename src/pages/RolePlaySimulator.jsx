@@ -5,6 +5,7 @@ import EnterpriseScenarioCard from "@/components/roleplay/EnterpriseScenarioCard
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, X } from "lucide-react";
+import { enrichScenarioWithTaxonomy } from "@/lib/roleplay-v2/scenarioTaxonomy";
 
 const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
 const DIFFICULTIES = ["All Levels", "beginner", "intermediate", "advanced"];
@@ -13,6 +14,8 @@ const DISEASE_STATES = ["All Disease States", "HIV / PrEP", "Oncology", "Cardiol
 const SPECIALTIES = ["All Specialties", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Family Medicine", "Neurology", "Pulmonology"];
 const HCP_CATEGORIES = ["All HCP Types", "Prescriber / Treater", "KOL / Thought Leader", "Non-Prescribing Influencer"];
 const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidence-Based", "Risk-Averse", "Guideline-Anchored"];
+const JOURNEY_STAGES = ["All Journey Stages", "initial_access_prospecting", "discovery_needs_assessment", "clinical_value_detailing", "objection_handling", "adoption_implementation", "commitment_next_step_close"];
+const INTERACTION_PRESSURES = ["All Interaction Pressures", "time_pressured", "resistant_skeptical", "curious_uncertain", "operationally_blocked", "competitive_threat", "safety_concern", "access_prior_auth_barrier"];
 
 // ...existing code...
 
@@ -439,9 +442,16 @@ export default function RolePlaySimulator() {
   const [specialtyFilter, setSpecialtyFilter] = useState("All Specialties");
   const [hcpCategoryFilter, setHcpCategoryFilter] = useState("All HCP Types");
   const [influenceDriverFilter, setInfluenceDriverFilter] = useState("All Influence Drivers");
+  const [journeyStageFilter, setJourneyStageFilter] = useState("All Journey Stages");
+  const [interactionPressureFilter, setInteractionPressureFilter] = useState("All Interaction Pressures");
+
+  const scenarioCatalog = useMemo(
+    () => ALL_SCENARIOS.map((scenario) => enrichScenarioWithTaxonomy(scenario)),
+    []
+  );
 
   const filteredScenarios = useMemo(() => {
-    return ALL_SCENARIOS.filter(s => {
+    return scenarioCatalog.filter(s => {
       const catMatch = activeCategory === "All" || s.category === activeCategory;
       const diffMatch = activeDifficulty === "All Levels" || s.difficulty === activeDifficulty;
       const q = search.toLowerCase();
@@ -450,17 +460,19 @@ export default function RolePlaySimulator() {
       const specMatch = specialtyFilter === "All Specialties" || s.specialty === specialtyFilter;
       const hcpMatch = hcpCategoryFilter === "All HCP Types" || s.hcp_category === hcpCategoryFilter;
       const infMatch = influenceDriverFilter === "All Influence Drivers" || s.influence_driver === influenceDriverFilter;
-      return catMatch && diffMatch && searchMatch && dsMatch && specMatch && hcpMatch && infMatch;
+      const stageMatch = journeyStageFilter === "All Journey Stages" || s.taxonomy?.journeyStage === journeyStageFilter;
+      const pressureMatch = interactionPressureFilter === "All Interaction Pressures" || s.taxonomy?.interactionPressure === interactionPressureFilter;
+      return catMatch && diffMatch && searchMatch && dsMatch && specMatch && hcpMatch && infMatch && stageMatch && pressureMatch;
     });
-  }, [activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter]);
+  }, [scenarioCatalog, activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter, journeyStageFilter, interactionPressureFilter]);
 
   const counts = useMemo(() => {
     const c = {};
     CATEGORIES.forEach(cat => {
-      c[cat] = cat === "All" ? ALL_SCENARIOS.length : ALL_SCENARIOS.filter(s => s.category === cat).length;
+      c[cat] = cat === "All" ? scenarioCatalog.length : scenarioCatalog.filter(s => s.category === cat).length;
     });
     return c;
-  }, []);
+  }, [scenarioCatalog]);
 
   return (
     <div className="min-h-screen" style={{ background: "#f0f4f8" }}>
@@ -484,7 +496,7 @@ export default function RolePlaySimulator() {
                 + New Scenario
               </button>
               <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
-                <span className="text-3xl font-bold text-white">{ALL_SCENARIOS.length}</span>
+                <span className="text-3xl font-bold text-white">{scenarioCatalog.length}</span>
                 <span className="mt-1 text-xs uppercase tracking-[0.16em] text-teal-100">Scenarios</span>
               </div>
               <div className="flex min-h-[104px] min-w-[150px] flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-5 py-3 backdrop-blur-sm">
@@ -498,9 +510,9 @@ export default function RolePlaySimulator() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 md:px-10 py-10">
-        {/* 4 Dropdown Filters — matches screenshot exactly */}
+        {/* Taxonomy + profile filters */}
         <div className="mb-7 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             <Select value={diseaseStateFilter} onValueChange={setDiseaseStateFilter}>
               <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC] focus:ring-teal-400" style={diseaseStateFilter !== "All Disease States" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
                 <SelectValue placeholder="Disease State" />
@@ -531,6 +543,22 @@ export default function RolePlaySimulator() {
               </SelectTrigger>
               <SelectContent>
                 {INFLUENCE_DRIVERS.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={journeyStageFilter} onValueChange={setJourneyStageFilter}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={journeyStageFilter !== "All Journey Stages" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
+                <SelectValue placeholder="Journey Stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {JOURNEY_STAGES.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={interactionPressureFilter} onValueChange={setInteractionPressureFilter}>
+              <SelectTrigger className="text-sm h-10 border-[#1A334D] text-[#1A334D] transition-colors duration-200 hover:border-[#39ACAC]" style={interactionPressureFilter !== "All Interaction Pressures" ? { borderColor: "#39ACAC", color: "#1A334D", fontWeight: 600 } : {}}>
+                <SelectValue placeholder="Interaction Pressure" />
+              </SelectTrigger>
+              <SelectContent>
+                {INTERACTION_PRESSURES.map((pressure) => <SelectItem key={pressure} value={pressure}>{pressure}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -595,7 +623,7 @@ export default function RolePlaySimulator() {
         {(activeCategory !== "All" || activeDifficulty !== "All Levels" || search || diseaseStateFilter !== "All Disease States" || specialtyFilter !== "All Specialties" || hcpCategoryFilter !== "All HCP Types" || influenceDriverFilter !== "All Influence Drivers") && (
           <div className="mb-3 flex items-center gap-2">
             <button
-              onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); }}
+              onClick={() => { setActiveCategory("All"); setActiveDifficulty("All Levels"); setSearch(""); setDiseaseStateFilter("All Disease States"); setSpecialtyFilter("All Specialties"); setHcpCategoryFilter("All HCP Types"); setInfluenceDriverFilter("All Influence Drivers"); setJourneyStageFilter("All Journey Stages"); setInteractionPressureFilter("All Interaction Pressures"); }}
               className="text-xs text-teal-600 hover:text-teal-800 flex items-center gap-1"
             >
               <X className="w-3 h-3" /> Clear all filters

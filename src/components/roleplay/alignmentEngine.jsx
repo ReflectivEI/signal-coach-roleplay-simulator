@@ -66,6 +66,10 @@ function detectPatterns(msg) {
   const lc = msg.toLowerCase();
   const wc = wordCount(msg);
   const qc = questionCount(msg);
+  const greetingOnly =
+    /\b(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(lc)
+    && !/\b(prep|hiv|sti|cab|screening|study|trial|data|workflow|patient|practice|evidence|recommend|step|clinic|operational|pathway)\b/.test(lc)
+    && wc <= 7;
 
   return {
     // ── Signal Awareness patterns ──────────────────────────────────────────
@@ -156,6 +160,7 @@ function detectPatterns(msg) {
     isLong: wc > 60,
     isVeryLong: wc > 100,
     singleAsk: qc <= 1,
+    isGreetingOnly: greetingOnly,
   };
 }
 
@@ -226,6 +231,52 @@ function detectCueDemand(context = {}) {
     engagementSignal:
       /\b(interesting|help me understand|connect the dots|curious|can you clarify)\b/.test(combined),
   };
+}
+
+const TOPIC_STOPWORDS = new Set([
+  "what", "when", "where", "which", "would", "could", "should", "their", "there", "this", "that",
+  "with", "from", "into", "about", "your", "patients", "patient", "please", "thanks", "thank",
+]);
+
+function extractTopicTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !TOPIC_STOPWORDS.has(token));
+}
+
+function evaluateTopicTraceability(repMessage = "", context = {}) {
+  const repTokens = new Set(extractTopicTokens(repMessage));
+  const sourceTokens = new Set([
+    ...extractTopicTokens(context?.cueText || ""),
+    ...extractTopicTokens(context?.hcpUtterance || context?.latestHcpUtterance || ""),
+  ]);
+
+  if (repTokens.size === 0 || sourceTokens.size === 0) {
+    return { hasTraceabilityRisk: false, overlapCount: 0, repTopicCount: repTokens.size };
+  }
+
+  const overlapCount = [...repTokens].filter((token) => sourceTokens.has(token)).length;
+  const repTopicCount = repTokens.size;
+  const overlapRatio = overlapCount / Math.max(1, Math.min(repTopicCount, 6));
+  const hasTraceabilityRisk = repTopicCount >= 3 && overlapRatio < 0.2;
+
+  return { hasTraceabilityRisk, overlapCount, repTopicCount };
+}
+
+function classifyAlignmentOutcome({
+  totalMisalignments = 0,
+  hasTraceabilityRisk = false,
+  directQuestionMiss = false,
+  overallScore = 3,
+}) {
+  if (hasTraceabilityRisk && totalMisalignments >= 3) return "over_pivot";
+  if (directQuestionMiss && totalMisalignments >= 2) return "missed_signal";
+  if (totalMisalignments >= 3 || overallScore <= 2) return "misaligned";
+  if (totalMisalignments > 0 || overallScore === 3) return "partially_aligned";
+  return "aligned";
 }
 
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
@@ -835,6 +886,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   const p = detectPatterns(repMessage);
   const promptContext = typeof context === "string" ? context : (context?.hcpUtterance || context?.latestHcpUtterance || "");
   const cueDemand = detectCueDemand(typeof context === 'object' && context ? context : {});
+  const traceability = evaluateTopicTraceability(repMessage, typeof context === 'object' && context ? context : {});
   const questionDemand = detectQuestionDemand(promptContext);
   const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
   // Robust misalignment: track repeated/aggressive responses
@@ -883,6 +935,20 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   };
 
   if (cueDemand.hasCueSignal) {
+    if (traceability.hasTraceabilityRisk) {
+      metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 1);
+      metricResults.signal_interpretation.subScores.accuracy_of_interpretation = clamp(
+        metricResults.signal_interpretation.subScores.accuracy_of_interpretation - 1
+      );
+      metricResults.signal_interpretation.misalignments.push('Rep introduced a topic not traceable to active HCP cue/dialogue signals.');
+    }
+    if ((cueDemand.timeConstraint || questionDemand.isDirectQuestion) && p.isGreetingOnly) {
+      metricResults.signal_awareness.score = clamp(metricResults.signal_awareness.score - 2);
+      metricResults.signal_awareness.subScores.contextual_relevance = clamp(
+        metricResults.signal_awareness.subScores.contextual_relevance - 2
+      );
+      metricResults.signal_awareness.misalignments.push('Greeting-only opener ignored the active cue/dialogue demand.');
+    }
     if (cueDemand.timeConstraint && !p.acknowledguesTime) {
       metricResults.adaptive_response.score = clamp(metricResults.adaptive_response.score - 1);
       metricResults.adaptive_response.subScores.situational_responsiveness = clamp(
@@ -989,6 +1055,12 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     allMisalignments.push(...m.misalignments);
   });
   allMisalignments.push(...rubricMisalignments);
+  const alignmentClassification = classifyAlignmentOutcome({
+    totalMisalignments: [...new Set(allMisalignments)].length,
+    hasTraceabilityRisk: traceability.hasTraceabilityRisk,
+    directQuestionMiss: questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses,
+    overallScore,
+  });
 
   return {
     score: overallScore,
@@ -997,6 +1069,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     ruleDescription: STATE_DESCRIPTIONS[normalizedState] || '',
     positives: [...new Set(allPositives)],
     misalignments: [...new Set(allMisalignments)],
+    alignmentClassification,
     rubricAlignmentFlags: rubricMisalignments,
     guardrail: 'Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, emotion, or personality.',
   };

@@ -59,6 +59,7 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 import { applyTransformSafetyHarness } from "./transformSafetyHarness";
+import { resolveConstraintLoopAction } from "./constraintLoopPolicy";
 import {
   extractConstraintCandidatesFromText,
   buildConstraintGrounding,
@@ -2427,9 +2428,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repLower = String(repMessage || "").toLowerCase();
     const priorRepTurnsCount = turns.filter((t) => !!t.repMessage).length;
     const greetingSignals = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hows it going|how was your weekend|nice to meet you|good to see you|thanks for your time)\b/;
+    const wellbeingCheckSignals = /\b(how are you|how's it going|hows it going|how have you been|how was your weekend|hope you're well|hope you are well)\b/;
     const businessSignals = /\b(prep|hiv|sti|cab|cabotegravir|injectable|screening|resistance|adherence|study|trial|data|results|efficacy|durability|monitoring|protocol|materials?|brochure|resource|patients?)\b/;
     const isPleasantryOnly = greetingSignals.test(repLower) && !businessSignals.test(repLower);
     const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
+    const repAskedWellbeing = wellbeingCheckSignals.test(repLower);
 
     let alignment = computeAlignment(
       prevState,
@@ -2802,8 +2805,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildFirstTurnScenarioFallback = () => {
       const warmGreeting = inPleasantryGracePeriod
-        ? "I'm doing well, thanks for asking."
+        ? (repAskedWellbeing ? "I'm doing well, thanks for asking." : "")
         : "Thanks for checking in.";
+      const withOptionalGreeting = (line) => (
+        warmGreeting ? `${warmGreeting} ${line}` : line
+      );
       const strictKolEvidenceContext = (
         /\bonc-kol\b|\bkey opinion leader\b|\bkol\b/.test(scenarioLower)
         && /\b(skeptic|skeptical|peer-reviewed|phase 3|overall survival|long-term data|published)\b/.test(scenarioLower)
@@ -2818,60 +2824,60 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
       if (scenarioPrepFocus && scenarioPressured) {
-        return `${warmGreeting} I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?");
       }
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?");
       }
 
       if (strictKolEvidenceContext) {
-        return `${warmGreeting} I have a tight window, and for KOL discussions I need evidence I can defend with peer-reviewed rigor. What's your strongest decision-level data point?`;
+        return withOptionalGreeting("I have a tight window, and for KOL discussions I need evidence I can defend with peer-reviewed rigor. What's your strongest decision-level data point?");
       }
 
       if (strictOralOncOnboardingContext) {
-        return `${warmGreeting} Our oral oncolytic starts are still hitting refill gaps around day 25 to 30, so I need a concrete onboarding workflow fix. Where do you want us to intervene first?`;
+        return withOptionalGreeting("Our oral oncolytic starts are still hitting refill gaps around day 25 to 30, so I need a concrete onboarding workflow fix. Where do you want us to intervene first?");
       }
 
       if (strictPostDischargeTransitionsContext) {
-        return `${warmGreeting} Our post-discharge MI/HF handoffs are where readmission risk shows up, so keep this tied to transition workflow. What's the first operational step you'd recommend?`;
+        return withOptionalGreeting("Our post-discharge MI/HF handoffs are where readmission risk shows up, so keep this tied to transition workflow. What's the first operational step you'd recommend?");
       }
 
       if (scenarioCommitteeFocus) {
-        return `${warmGreeting} We're reviewing formulary and P&T considerations this week, so let's keep this focused. What's the key update you wanted to share?`;
+        return withOptionalGreeting("We're reviewing formulary and P&T considerations this week, so let's keep this focused. What's the key update you wanted to share?");
       }
 
       if (scenarioPayerFocus) {
-        return `${warmGreeting} I've been focused on payer coverage and utilization criteria, so I can give you a couple minutes. What's most relevant for medical director review?`;
+        return withOptionalGreeting("I've been focused on payer coverage and utilization criteria, so I can give you a couple minutes. What's most relevant for medical director review?");
       }
 
       if (scenarioPathwayWorkflowFocus) {
-        return `${warmGreeting} We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?`;
+        return withOptionalGreeting("We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?");
       }
 
       if (scenarioOncologyKOLFocus) {
-        return `${warmGreeting} Before we go further, I need evidence we can defend in front of our KOL group, not broad claims. What's the most decision-relevant data point?`;
+        return withOptionalGreeting("Before we go further, I need evidence we can defend in front of our KOL group, not broad claims. What's the most decision-relevant data point?");
       }
 
       if (scenarioOralOncOnboardingFocus) {
-        return `${warmGreeting} Our oral oncolytic starts are losing momentum between onboarding and first refill, so I need an operational fix, not a concept. Where should we intervene first?`;
+        return withOptionalGreeting("Our oral oncolytic starts are losing momentum between onboarding and first refill, so I need an operational fix, not a concept. Where should we intervene first?");
       }
 
       if (scenarioPostMiTransitionsFocus) {
-        return `${warmGreeting} Our post-MI and heart failure discharge transitions are where readmissions creep in, so keep this tightly tied to handoffs and follow-up execution. What is your first-step recommendation?`;
+        return withOptionalGreeting("Our post-MI and heart failure discharge transitions are where readmissions creep in, so keep this tightly tied to handoffs and follow-up execution. What is your first-step recommendation?");
       }
 
       if (scenarioMonitoringFocus) {
-        return `${warmGreeting} I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?");
       }
 
       if (scenarioPressured) {
-        return `${warmGreeting} I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?");
       }
 
       return scenarioPrepFocus
-        ? `${warmGreeting} I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.`
-        : `${warmGreeting} I can spare a focused minute or two. Give me the one practical issue you're here to solve today.`;
+        ? withOptionalGreeting("I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.")
+        : withOptionalGreeting("I can spare a focused minute or two. Give me the one practical issue you're here to solve today.");
     };
 
     const buildFollowUpScenarioFallback = () => {
@@ -3692,14 +3698,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .filter(Boolean)
         .slice(-4)
         .filter((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.7).length;
+      const consecutiveBlockCloseTurns = (() => {
+        let count = 0;
+        for (let i = prevTurns.length - 1; i >= 0; i -= 1) {
+          if (prevTurns[i]?.hcpConstraintState?.blockClose) count += 1;
+          else break;
+        }
+        return count;
+      })();
 
-      if (repeatedRepPattern && similarConstraintPrompts >= 2) {
-        nextHcpState = "boundary-setting";
-        nextHcpDialogue = "We are looping. Give one practice-ready step with one supporting evidence point, or we should pause here.";
-      }
-      if (repeatedRepPattern && similarConstraintPrompts >= 3) {
-        nextHcpState = "disengaged";
-        nextHcpDialogue = terminalCloseFallback;
+      const loopAction = resolveConstraintLoopAction({
+        consecutiveBlockCloseTurns,
+        repeatedRepPattern,
+        similarConstraintPrompts,
+        activeConcern,
+        terminalCloseFallback,
+      });
+      if (loopAction) {
+        nextHcpState = loopAction.nextHcpState;
+        nextHcpDialogue = loopAction.nextHcpDialogue;
       }
     }
 
@@ -3727,6 +3744,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           normalizedActiveConstraints.includes("time")
           || activeConstraintForTurn === "time"
         ),
+        seed: `${generationKey}:${nextTurnNumber}:late-turn`,
+        recentResponses: prevTurns
+          .map((turn) => turn?.hcpDialogueBefore)
+          .filter(Boolean)
+          .slice(-3),
       });
     }
 
