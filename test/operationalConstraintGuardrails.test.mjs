@@ -317,6 +317,18 @@ test('continuity repair enforces strict rep-to-hcp topical response before final
   assert.match(rolePlayChatSource, /ROLEPLAY_CONTINUITY_REPAIR_FAILED/);
 });
 
+test('single rewrite authority enforces anti-repeat or continuity repair per turn', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /const rewriteAuthority =/);
+  assert.match(rolePlayChatSource, /repetitiveCandidate \? "anti_repeat" : continuity\.needsRepair \? "continuity_repair" : "none"/);
+  assert.match(rolePlayChatSource, /if \(rewriteAuthority === "anti_repeat"\)/);
+  assert.match(rolePlayChatSource, /else if \(rewriteAuthority === "continuity_repair"\)/);
+});
+
 test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {
   const fixtures = [
     { scenarioId: 'hiv_prevention_gap', concern: 'access' },

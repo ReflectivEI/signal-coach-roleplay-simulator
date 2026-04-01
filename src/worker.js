@@ -11,6 +11,7 @@ import {
     normalizeManagerInsightsResponse
 } from "./components/manager/managerInsightsShared.js";
 import { appendFollowUpSnapshot, buildValidationSummary, createValidationRecord, listCanonicalCapabilities } from "./components/manager/managerValidationLogic.js";
+import { listRoleplaySessions, persistRoleplaySession } from "./lib/roleplaySessionStore.js";
 const assetManifest = JSON.parse(manifestJSON);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -99,7 +100,6 @@ function getCookieValue(request, cookieName) {
 // ─── IN-MEMORY SESSION STORE (Development) ──────────────────────────────
 const sessions = new Map();
 const logs = [];
-const rolePlaySessions = [];
 const customScenarios = [];
 const managerValidationRecords = buildDemoValidationRecords();
 
@@ -998,30 +998,20 @@ async function handleLearningPaths(request) {
 }
 
 // RolePlay Sessions: Save and retrieve roleplay session data
-async function handleRolePlaySessions(request) {
+async function handleRolePlaySessions(request, env) {
     if (request.method === "POST") {
         try {
             const body = await request.json();
-            const session = {
-                id: body.id || Date.now().toString(),
-                scenarioId: body.scenarioId,
-                sessionData: body.sessionData || {},
-                turns: body.turns || [],
-                feedback: body.feedback || "",
-                scores: body.scores || {},
-                transcript: body.transcript || "",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            rolePlaySessions.push(session);
-            return Response.json({ success: true, session });
+            const result = await persistRoleplaySession(body, env);
+            return Response.json({ success: true, session: result.session, durability: { durable: result.durable, provider: result.provider } });
         } catch (err) {
             return Response.json({ error: err.message }, { status: 400 });
         }
     }
 
     if (request.method === "GET") {
-        return Response.json({ sessions: rolePlaySessions });
+        const result = await listRoleplaySessions(env);
+        return Response.json({ sessions: result.sessions, durability: { durable: result.durable, provider: result.provider } });
     }
 
     return Response.json({ error: "Method not allowed" }, { status: 405 });
