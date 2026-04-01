@@ -20,8 +20,8 @@ const DEMO_SCENARIO_SMOKE_CASES = [
   { id: "cv_np_ckd_sglt2_calendar", title: "Rural HF Program with CKD Safety Concerns", description: "Risk-averse NP uncertain about CKD treatment protocols.", hcp_category: "Prescriber / Treater", influence_driver: "Risk-Averse" },
   { id: "vac_id_adult_flu_playbook", title: "Adult Flu Program Optimization", description: "ID practice needs guideline-consistent seasonal execution.", hcp_category: "KOL / Thought Leader", influence_driver: "Guideline-Anchored" },
   { id: "covid_pulm_md_antiviral_ddi_path", title: "Outpatient Antiviral Optimization", description: "Pulmonary practice slowed by DDI triage complexity.", hcp_category: "Prescriber / Treater", influence_driver: "Risk-Averse" },
-  { id: "neuro_access", title: "Neurology Market Access", description: "Payer-facing discussion on prior authorization friction.", hcp_category: "Non-Prescribing Influencer", influence_driver: "Risk-Averse" },
-  { id: "rare_diagnosis", title: "Rare Disease Diagnosis Journey", description: "Academic specialist needs efficient diagnostic pathway recognition.", hcp_category: "KOL / Thought Leader", influence_driver: "Evidence-Based" },
+  { id: "neuro-access", title: "Neurology Market Access", description: "Payer-facing discussion on prior authorization friction.", hcp_category: "Non-Prescribing Influencer", influence_driver: "Risk-Averse" },
+  { id: "rare-diagnosis", title: "Rare Disease Diagnosis Journey", description: "Academic specialist needs efficient diagnostic pathway recognition.", hcp_category: "KOL / Thought Leader", influence_driver: "Evidence-Based" },
 ];
 
 const REP_MESSAGES = [
