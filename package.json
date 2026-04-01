@@ -21,7 +21,7 @@
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
     "ci:build": "npm run build && npm run verify:build-output",
     "testenv:start": "node ./scripts/start-test-env.mjs",
-    "testenv:check": "node --test test/constraintLoopPolicy.test.mjs test/scenarioTaxonomy.test.mjs test/scenarioMetadataEnvelope.test.mjs test/turnPlanContract.test.mjs test/roleplayV2BackendAdapter.test.mjs test/roleplayV2ScenarioCanonicalContract.test.mjs"
+    "testenv:check": "node --test test/constraintLoopPolicy.test.mjs test/scenarioTaxonomy.test.mjs test/scenarioMetadataEnvelope.test.mjs test/metricIdAdapter.test.mjs test/openingBeatConsistency.test.mjs test/turnPlanContract.test.mjs test/roleplayV2BackendAdapter.test.mjs test/roleplayV2ScenarioCanonicalContract.test.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.4.2",

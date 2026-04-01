@@ -998,10 +998,14 @@ async function handleLearningPaths(request) {
 }
 
 // RolePlay Sessions: Save and retrieve roleplay session data
-async function handleRolePlaySessions(request) {
+async function handleRolePlaySessions(request, env) {
+    const kv = env?.ROLEPLAY_SESSIONS_KV;
+    const keyPrefix = "roleplay_session:";
+
     if (request.method === "POST") {
         try {
             const body = await request.json();
+            const now = new Date().toISOString();
             const session = {
                 id: body.id || Date.now().toString(),
                 scenarioId: body.scenarioId,
@@ -1010,18 +1014,40 @@ async function handleRolePlaySessions(request) {
                 feedback: body.feedback || "",
                 scores: body.scores || {},
                 transcript: body.transcript || "",
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
+                createdAt: body.createdAt || now,
+                updatedAt: now
             };
-            rolePlaySessions.push(session);
-            return Response.json({ success: true, session });
+
+            if (kv) {
+                await kv.put(`${keyPrefix}${session.id}`, JSON.stringify(session));
+            } else {
+                rolePlaySessions.push(session);
+            }
+
+            return Response.json({ success: true, session, persistence: kv ? "kv" : "memory" });
         } catch (err) {
             return Response.json({ error: err.message }, { status: 400 });
         }
     }
 
     if (request.method === "GET") {
-        return Response.json({ sessions: rolePlaySessions });
+        if (kv) {
+            const listed = await kv.list({ prefix: keyPrefix, limit: 1000 });
+            const sessions = await Promise.all(
+                (listed.keys || []).map(async (item) => {
+                    const raw = await kv.get(item.name);
+                    if (!raw) return null;
+                    try {
+                        return JSON.parse(raw);
+                    } catch {
+                        return null;
+                    }
+                })
+            );
+            return Response.json({ sessions: sessions.filter(Boolean), persistence: "kv" });
+        }
+
+        return Response.json({ sessions: rolePlaySessions, persistence: "memory" });
     }
 
     return Response.json({ error: "Method not allowed" }, { status: 405 });
@@ -1292,7 +1318,7 @@ export default {
             }
 
             if (pathname === "/api/roleplay/sessions" && (request.method === "GET" || request.method === "POST")) {
-                return setCorsHeaders(await handleRolePlaySessions(request));
+                return setCorsHeaders(await handleRolePlaySessions(request, env));
             }
 
             if (pathname === "/api/scenarios" && (request.method === "GET" || request.method === "POST" || request.method === "PUT" || request.method === "DELETE")) {
