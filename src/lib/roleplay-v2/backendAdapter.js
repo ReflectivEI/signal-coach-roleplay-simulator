@@ -1,5 +1,12 @@
 import { buildTurnPlan, validateTurnPlan } from './turnPlanContract.js';
 
+/**
+ * @typedef {Object.<string, string | boolean | undefined>} RuntimeEnv
+ */
+
+/**
+ * @param {{ env?: RuntimeEnv, search?: string }} [options]
+ */
 export function createRolePlayV2BackendConfig({ env = {}, search = '' } = {}) {
   const envEnabled = String(env.VITE_ROLEPLAY_V2_BACKEND_ENABLED || '').toLowerCase() === 'true';
   const forcePreview = String(env.VITE_ROLEPLAY_V2_PREVIEW_ONLY || '').toLowerCase() !== 'false';
@@ -78,6 +85,9 @@ export async function startV2Session({ scenarioId = 'v2', scenarioSummary = '' }
   return { sessionId };
 }
 
+/**
+ * @param {{ sessionId?: string, scenarioSummary?: string, repMessage?: string, turnNumber?: number }} [params]
+ */
 export async function respondV2Turn({ sessionId, scenarioSummary = '', repMessage = '', turnNumber = 1 } = {}) {
   const fallback = {
     turnNumber,
