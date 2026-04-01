@@ -109,6 +109,8 @@ export function detectConstraintDraftViolations({
 export function buildConstraintSafeRegeneratedResponse({
   fallbackResponse = "",
   concern = "evidence",
+  includeWarmth = false,
+  scenarioContext = "",
 } = {}) {
   const fallback = String(fallbackResponse || "").trim();
   const containsConstraint = extractConstraintCandidatesFromText(fallback).length > 0;
@@ -118,11 +120,34 @@ export function buildConstraintSafeRegeneratedResponse({
     evidence: "I still need clinically meaningful evidence before I would change practice.",
     screening: "I need clearer patient-selection criteria before I can move forward.",
     access: "I need to understand the patient access implications more clearly before deciding.",
+    prior_auth: "I need one practical step that works within our prior-authorization burden before deciding.",
+    workflow: "I need one concrete workflow step we can run this week without adding burden.",
+    staffing: "I need a recommendation that fits our current staffing limits before we proceed.",
+    capacity: "I need a step that reduces capacity strain, not one that adds workload.",
+    scheduling: "I need this translated into a scheduling-safe step we can actually execute.",
+    handoff: "I need a clear handoff step so ownership is unambiguous in our clinic flow.",
+    throughput: "I need an action that improves throughput without disrupting care flow.",
+    callback: "I need a realistic follow-up callback step we can sustain operationally.",
+    monitoring: "I need a monitoring step we can implement without creating extra burden.",
     time: "I can only process one concrete clinical takeaway right now.",
     policy: "I need this aligned with our current protocol before I can proceed.",
   };
 
-  return neutralByConcern[concern] || "Help me understand the most clinically relevant takeaway for my patients.";
+  const context = String(scenarioContext || "").toLowerCase();
+  const inferContextFallback = () => {
+    if (/\b(screening|candidacy|eligibility|criteria|resistance|cab)\b/.test(context)) return neutralByConcern.screening;
+    if (/\b(monitoring|follow-up|durability|methodology|study duration)\b/.test(context)) return neutralByConcern.monitoring;
+    if (/\b(prior auth|authorization|coverage|payer|access)\b/.test(context)) return neutralByConcern.access;
+    if (/\b(staffing|short-staffed|capacity|throughput|pathway|workflow)\b/.test(context)) return neutralByConcern.staffing;
+    return neutralByConcern.workflow;
+  };
+
+  const baseResponse = neutralByConcern[concern] || inferContextFallback();
+  if (!includeWarmth) return baseResponse;
+
+  const warmPrefix = "Good to see you. ";
+
+  return `${warmPrefix}${baseResponse}`;
 }
 
 const LATE_TURN_REQUIREMENT_BY_CONCERN = {
