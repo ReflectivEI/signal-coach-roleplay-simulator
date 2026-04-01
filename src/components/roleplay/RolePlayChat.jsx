@@ -106,6 +106,190 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   }
 }
 
+function normalizeLlmInvokeText(payload) {
+  const source = payload && typeof payload === "object"
+    ? (payload.response ?? payload.text ?? payload.content ?? "")
+    : "";
+
+  if (typeof source === "string") return source.trim();
+  if (Array.isArray(source)) return source.map((item) => String(item || "")).join(" ").trim();
+  if (source && typeof source === "object") {
+    if (typeof source.text === "string") return source.text.trim();
+    try {
+      return JSON.stringify(source).trim();
+    } catch {
+      return String(source).trim();
+    }
+  }
+  return String(source || "").trim();
+}
+
+function classifyDialogueCueIntent(text = "") {
+  const value = String(text || "").toLowerCase();
+  if (!value) return "neutral";
+  if (/\b(understood|front desk|follow-up slot|conversation is ending|wrap this up|need to move on)\b/.test(value)) return "closing";
+  if (/\b(not interested|not convinced|we are done|stop here|can't recommend|won't|decline|refuse|skeptical|doubt)\b/.test(value)) return "resistant";
+  if (/\b(happy to|that helps|that works|makes sense|good point|let's do that)\b/.test(value)) return "engaged";
+  if (/\b(running late|short on time|quickly|briefly|patient waiting|pager|clock|schedule)\b/.test(value)) return "time";
+  return "neutral";
+}
+
+function classifyCueTextIntent(cueText = "") {
+  const value = String(cueText || "").toLowerCase();
+  if (!value) return "neutral";
+  if (/\b(ending|leave|front desk|threshold|wrap|closing)\b/.test(value)) return "closing";
+  if (/\b(clipped|less engaged|skeptic|defensive|patience thinning|frustrat|impatient|irritat)\b/.test(value)) return "resistant";
+  if (/\b(engagement|leans forward|acknowledgment|relaxed|engaged)\b/.test(value)) return "engaged";
+  if (/\b(clock|watch|pager|time|hurry|quick)\b/.test(value)) return "time";
+  return "neutral";
+}
+
+function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpState = "neutral" } = {}) {
+  const cueIntent = classifyCueTextIntent(cueText);
+  const dialogueIntent = classifyDialogueCueIntent(dialogueText);
+  const state = String(hcpState || "neutral");
+  const contradiction = (
+    (cueIntent === "engaged" && (dialogueIntent === "resistant" || state === "resistant" || state === "disengaged" || state === "irritated"))
+    || (cueIntent === "resistant" && (dialogueIntent === "engaged" || state === "engaged"))
+    || (cueIntent === "closing" && dialogueIntent === "engaged")
+  );
+  return { cueIntent, dialogueIntent, contradiction };
+}
+
+function hasTurnIntegrityIssues(turn) {
+  const issues = [];
+  if (!Number.isFinite(turn?.turnNumber)) issues.push("missing_turn_number");
+  if (typeof turn?.cueBefore !== "string" || !turn.cueBefore.trim()) issues.push("missing_cue");
+  if (typeof turn?.hcpDialogueBefore !== "string" || !turn.hcpDialogueBefore.trim()) issues.push("missing_hcp_dialogue");
+  if (!turn?.generationKey) issues.push("missing_generation_key");
+  return issues;
+}
+
+function extractHcpConstraints(hcpMessage = "") {
+  const text = String(hcpMessage || "");
+  const lower = text.toLowerCase();
+  if (!lower.trim()) return [];
+  const found = [];
+  const register = (type, description, confidenceSignals = 0) => {
+    const confidence = Math.min(1, 0.4 + (confidenceSignals * 0.2));
+    if (confidence < 0.6) return;
+    found.push({ type, description, priority: "blocking", confidence, source: "hcp_message", turnsActive: 0 });
+  };
+
+  const evidenceSignals = [
+    /\b(evidence|data|study|proof|published|head-to-head|outcome)\b/.test(lower),
+    /\b(show me|what data|what evidence|which study)\b/.test(lower),
+    /\b(patient population|practice-relevant|real-world)\b/.test(lower),
+  ].filter(Boolean).length;
+  if (evidenceSignals > 0) {
+    register("request_for_evidence", "HCP requests concrete evidence", evidenceSignals);
+  }
+  const specificitySignals = [
+    /\b(specific|exactly|concrete|one example|practical example|what specifically)\b/.test(lower),
+    /\b(one step|single step|be precise|not generic)\b/.test(lower),
+  ].filter(Boolean).length;
+  if (specificitySignals > 0) {
+    register("request_for_specificity", "HCP requests specific, concrete detail", specificitySignals);
+  }
+  const applicabilitySignals = [
+    /\b(for my patients|in my practice|for our clinic|applicable|relevant here|in this setting)\b/.test(lower),
+    /\b(how this applies here|for our setting|for my team)\b/.test(lower),
+  ].filter(Boolean).length;
+  if (applicabilitySignals > 0) {
+    register("request_for_applicability", "HCP requests setting-specific applicability", applicabilitySignals);
+  }
+  const operationalSignals = [
+    /\b(workflow|staff|time|capacity|operational|implementation|fit|process|prior auth|paperwork)\b/.test(lower),
+    /\b(without extra burden|within our constraints|how this fits)\b/.test(lower),
+  ].filter(Boolean).length;
+  if (operationalSignals > 0) {
+    register("request_for_operational_fit", "HCP requests operational fit", operationalSignals);
+  }
+  const clarificationSignals = [
+    /\b(clarify|what do you mean|explain|walk me through|help me understand)\b/.test(lower),
+    /\b(unclear|not clear|spell it out)\b/.test(lower),
+  ].filter(Boolean).length;
+  if (clarificationSignals > 0) {
+    register("request_for_clarification", "HCP requests clarification", clarificationSignals);
+  }
+
+  return found;
+}
+
+function isConstraintSatisfied(constraint, repMessage = "") {
+  const rep = String(repMessage || "").toLowerCase();
+  if (!rep.trim()) return "not_satisfied";
+  const hasEvidence = /\b(study|trial|data|outcome|published|rate|percent|cohort|population)\b/.test(rep);
+  const hasSpecificity = /\b(example|specifically|exactly|for instance|one step|first step|checklist|protocol)\b/.test(rep);
+  const hasApplicability = /\b(your clinic|your patients|in your setting|for your team|in practice|workflow)\b/.test(rep);
+  const hasOperational = /\b(workflow|staff|capacity|time|prior auth|paperwork|implementation|handoff|process)\b/.test(rep);
+  const hasClarification = /\b(meaning|to clarify|what this means|in other words|step by step)\b/.test(rep);
+  const acknowledgesConstraint = /\b(i hear|you raised|you mentioned|you are right|that concern|that constraint|fair point)\b/.test(rep);
+  const directAnswerSignal = /\b(so the step is|here is the step|specifically|first action|do this)\b/.test(rep);
+
+  switch (constraint?.type) {
+    case "request_for_evidence":
+      if (hasEvidence && hasSpecificity && hasApplicability) return "fully_satisfied";
+      if ((hasEvidence && (hasSpecificity || hasApplicability)) || acknowledgesConstraint) return "partially_satisfied";
+      return "not_satisfied";
+    case "request_for_specificity":
+      if (hasSpecificity && directAnswerSignal) return "fully_satisfied";
+      if (hasSpecificity || acknowledgesConstraint) return "partially_satisfied";
+      return "not_satisfied";
+    case "request_for_applicability":
+      if (hasApplicability && (hasSpecificity || hasEvidence)) return "fully_satisfied";
+      if (hasApplicability || acknowledgesConstraint) return "partially_satisfied";
+      return "not_satisfied";
+    case "request_for_operational_fit":
+      if (hasOperational && hasSpecificity && hasApplicability) return "fully_satisfied";
+      if (hasOperational || acknowledgesConstraint) return "partially_satisfied";
+      return "not_satisfied";
+    case "request_for_clarification":
+      if (hasClarification && hasSpecificity) return "fully_satisfied";
+      if (hasClarification || hasSpecificity || acknowledgesConstraint) return "partially_satisfied";
+      return "not_satisfied";
+    default:
+      return "not_satisfied";
+  }
+}
+
+function mergeActiveConstraints(previous = [], detected = []) {
+  const merged = [];
+  const seen = new Set();
+  [...(Array.isArray(previous) ? previous : []), ...(Array.isArray(detected) ? detected : [])].forEach((constraint) => {
+    const key = `${constraint?.type || "unknown"}::${constraint?.description || ""}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    merged.push(constraint);
+  });
+  return merged;
+}
+
+function validateConstraintState(constraints = []) {
+  if (!Array.isArray(constraints)) return [];
+  return constraints
+    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+    .map((constraint) => ({
+      ...constraint,
+      priority: constraint.priority === "soft" ? "soft" : "blocking",
+      turnsActive: Math.max(0, Number(constraint.turnsActive || 0)),
+      confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
+      satisfaction: constraint.satisfaction || "not_satisfied",
+    }));
+}
+
+function computeSimilarity(a = "", b = "") {
+  const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+  const tokensA = new Set(normalize(a).split(" ").filter((token) => token.length > 2));
+  const tokensB = new Set(normalize(b).split(" ").filter((token) => token.length > 2));
+  if (tokensA.size === 0 || tokensB.size === 0) return 0;
+  let overlap = 0;
+  tokensA.forEach((token) => {
+    if (tokensB.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(tokensA.size, tokensB.size);
+}
+
 function hardenTextSurface(text) {
   let value = String(text || "")
     .replace(/\s+/g, " ")
@@ -174,7 +358,7 @@ function readDebugFlag(flagKey) {
   try {
     const value = window.localStorage?.getItem(flagKey);
     return value === "1" || value === "true";
-  } catch (_error) {
+  } catch {
     return false;
   }
 }
@@ -1186,7 +1370,7 @@ function buildTerminalDecisionDialogue({ concern = "workflow", seed = "" } = {})
   const pool = byConcern[concern] || byConcern.workflow;
   const baseIndex = deterministicIndex(`${seed}:${concern}:terminal-statement`, pool.length);
   const askIndex = deterministicIndex(`${seed}:${concern}:terminal-ask`, askOptions.length);
-  const includeAsk = Math.random() < 0.45;
+  const includeAsk = deterministicBoolean(`${seed}:${concern}:include-ask`, 0.45);
   const statement = pool[baseIndex];
   return includeAsk ? `${statement} ${askOptions[askIndex]}` : statement;
 }
@@ -1876,6 +2060,12 @@ function deterministicIndex(seedText, total) {
   return hash % total;
 }
 
+function deterministicBoolean(seedText, threshold = 0.5) {
+  const bounded = Math.max(0, Math.min(1, Number(threshold) || 0));
+  const scale = 1000;
+  return deterministicIndex(`${seedText}:bool`, scale) < Math.floor(bounded * scale);
+}
+
 function mapIssueCategory(alignment) {
   const firstFlag = String(alignment?.rubricAlignmentFlags?.[0] || "").toLowerCase();
   const firstMisalignment = String(alignment?.misalignments?.[0] || "").toLowerCase();
@@ -1994,6 +2184,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     boundaryLevel: "normal",
     requirementRestatedCount: 0,
   });
+  const hcpConstraintEngineRef = useRef({
+    activeConstraints: [],
+  });
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -2083,6 +2276,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           activeRequirement: null,
           boundaryLevel: "normal",
           requirementRestatedCount: 0,
+        };
+        hcpConstraintEngineRef.current = {
+          activeConstraints: [],
         };
 
         // Build a locked profile for turn 0 to establish initial cue and context
@@ -2394,7 +2590,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
-    const continueCurrentBehavior = !terminalDecisionTriggerActive || Math.random() < continueProbability;
+    const continueCurrentBehavior = !terminalDecisionTriggerActive
+      || deterministicBoolean(`${sid}:${scenario?.id || "scenario"}:${nextTurnNumber}:${activeConcern}:${decayState.tier}`, continueProbability);
     const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
     const hardLoopBreaker =
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
@@ -2806,9 +3003,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         });
         if (res.ok) {
           const data = await res.json();
-          const raw = (data.response || data.text || data.content || '');
-          const rawStr = typeof raw === 'string' ? raw : String(raw);
+          const rawStr = normalizeLlmInvokeText(data);
           nextHcpDialogue = rawStr.trim().split('\n')[0];
+          if (!nextHcpDialogue) {
+            if (import.meta.env.DEV) {
+              console.warn("ROLEPLAY_DIALOGUE_PRESENCE_GUARD", {
+                turnNumber: nextTurnNumber,
+                source: "llm_normalized_empty",
+              });
+            }
+            usedDeterministicFallback = true;
+            draftResponseSource = "empty_normalized_fallback";
+            nextHcpDialogue = isFirstHcpResponse
+              ? buildFirstTurnScenarioFallback()
+              : buildFollowUpScenarioFallback();
+          }
 
           if (
             import.meta.env.DEV
@@ -3070,11 +3279,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     // Always match cue to the same state/context as the generated HCP dialogue
     // Alignment check: ensure cues, emotional state, dialogue, and context are logically consistent
     contextualCue = undefined;
+    const selectedCueLayers = [];
     if (overrideExit) {
       // Constrain HCP behavior: closure only, no questions or escalation
       nextHcpDialogue = 'Understood. Please coordinate a follow-up slot with the front desk.';
       contextualCue = 'The HCP stands and checks their calendar, signaling the conversation is ending soon.';
+      selectedCueLayers.push("safeguard_override");
     } else {
+      selectedCueLayers.push("locked_base");
       // Derive cue from the exact same grounded inputs as dialogue (scenario + rep message + generated response)
       const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
       if (terminalDecisionMode) {
@@ -3083,8 +3295,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           TERMINAL_DECISION_CUES.length,
         );
         contextualCue = TERMINAL_DECISION_CUES[cueIndex];
+        selectedCueLayers.push("contextual_terminal");
       } else {
         contextualCue = buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
+        selectedCueLayers.push("contextual_dialogue_aligned");
       }
 
       const recentCues = prevTurns
@@ -3119,6 +3333,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         }
 
         contextualCue = replacement;
+        selectedCueLayers.push("safeguard_no_repeat");
       }
     }
 
@@ -3139,11 +3354,107 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         decayState.tier
       );
       contextualCue = hardenTextSurface(contextualCue);
+      selectedCueLayers.push("safeguard_recent_memory");
+    }
+
+    const cueAlignmentCheck = validateCueDialogueAlignment({
+      cueText: contextualCue,
+      dialogueText: nextHcpDialogue,
+      hcpState: nextHcpState,
+    });
+    if (cueAlignmentCheck.contradiction) {
+      const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
+      const alignedCue = buildScenarioAlignedCue(
+        `${nextHcpDialogue} ${nextHcpState}`,
+        isFirstHcpResponse,
+        recentCueText,
+        decayState.tier
+      );
+      const hardenedAlignedCue = hardenTextSurface(alignedCue);
+      if (hardenedAlignedCue) {
+        contextualCue = hardenedAlignedCue;
+        selectedCueLayers.push("safeguard_alignment");
+      }
+      if (import.meta.env.DEV) {
+        console.warn("ROLEPLAY_CUE_ALIGNMENT_MISMATCH", {
+          turnNumber: nextTurnNumber,
+          hcpState: nextHcpState,
+          cueIntent: cueAlignmentCheck.cueIntent,
+          dialogueIntent: cueAlignmentCheck.dialogueIntent,
+        });
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      const uniqueLayers = [...new Set(selectedCueLayers)];
+      if (uniqueLayers.length > 3) {
+        console.warn("ROLEPLAY_CUE_THRASHING_GUARD", {
+          turnNumber: nextTurnNumber,
+          layers: uniqueLayers,
+        });
+      }
     }
 
     // 7. Coaching overlay — driven by alignment rubric flags
     const coachingResult = shouldTriggerCoaching(alignment, prevState, nextHcpState);
     if (coachingResult.shouldShow) setCoachingTip(coachingResult);
+
+    const priorHcpConstraints = Array.isArray(respondingToTurn?.hcpConstraintState?.activeConstraints)
+      ? respondingToTurn.hcpConstraintState.activeConstraints
+      : hcpConstraintEngineRef.current.activeConstraints;
+    const calibratedPriorConstraints = priorHcpConstraints
+      .map((constraint) => {
+        const satisfaction = isConstraintSatisfied(constraint, repMessage);
+        const turnsActive = Number(constraint?.turnsActive || 0) + 1;
+        if (turnsActive > 5) return null; // decay auto-resolve
+        const nextPriority = (
+          turnsActive > 3
+          && satisfaction === "partially_satisfied"
+          && String(constraint?.priority || "blocking") === "blocking"
+        )
+          ? "soft"
+          : String(constraint?.priority || "blocking");
+        if (satisfaction === "fully_satisfied") return null;
+        return {
+          ...constraint,
+          turnsActive,
+          priority: nextPriority,
+          satisfaction,
+        };
+      })
+      .filter(Boolean);
+    const newlyDetectedHcpConstraints = extractHcpConstraints(nextHcpDialogue);
+    const activeHcpConstraints = validateConstraintState(
+      mergeActiveConstraints(calibratedPriorConstraints, newlyDetectedHcpConstraints)
+    );
+    const blockingUnresolvedConstraints = activeHcpConstraints.filter(
+      (constraint) => String(constraint?.priority || "blocking") === "blocking"
+    );
+    const hasPartialProgress = activeHcpConstraints.some(
+      (constraint) => constraint?.satisfaction === "partially_satisfied"
+    );
+    const blockClose = blockingUnresolvedConstraints.length > 0 && !hasPartialProgress;
+    if (import.meta.env.DEV) {
+      console.debug("ROLEPLAY_CALIBRATION", {
+        turnNumber: nextTurnNumber,
+        priorCount: priorHcpConstraints.length,
+        unresolvedCount: calibratedPriorConstraints.length,
+        detectedCount: newlyDetectedHcpConstraints.length,
+        activeCount: activeHcpConstraints.length,
+        confidences: newlyDetectedHcpConstraints.map((constraint) => ({
+          type: constraint.type,
+          confidence: constraint.confidence,
+        })),
+        states: activeHcpConstraints.map((constraint) => ({
+          type: constraint.type,
+          priority: constraint.priority,
+          satisfaction: constraint.satisfaction || "not_satisfied",
+          turnsActive: constraint.turnsActive || 0,
+        })),
+        hasPartialProgress,
+        blockClose,
+      });
+    }
 
     // 8. Lock next turn with contextual cue (matches dialogue + question quality)
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
@@ -3178,7 +3489,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       engagementDecayTier: decayState.tier,
       engagementPressureScore: decayState.pressureScore,
       generationKey,
+      hcpConstraintState: {
+        activeConstraints: activeHcpConstraints,
+        blockClose,
+      },
     };
+
+    const turnIntegrityIssues = hasTurnIntegrityIssues(nextTurn);
+    if (import.meta.env.DEV && turnIntegrityIssues.length > 0) {
+      console.warn("ROLEPLAY_TURN_INTEGRITY_GUARD", {
+        turnNumber: nextTurnNumber,
+        issues: turnIntegrityIssues,
+      });
+    }
 
     const terminalPolicyAction = determineTerminalPolicyAction({
       hcpState: decayState.tier,
@@ -3191,6 +3514,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
+    }
+
+    if (blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
+      const primaryBlockingConstraint = blockingUnresolvedConstraints[0]?.type || "request_for_specificity";
+      const persistentPromptMap = {
+        request_for_evidence: "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
+        request_for_specificity: "I still need one concrete, specific step we can execute this week. Be exact.",
+        request_for_applicability: "I still need this translated to our exact setting and patient mix before we move on.",
+        request_for_operational_fit: "I still need to hear exactly how this fits our workflow and staffing constraints.",
+        request_for_clarification: "I still need one clear clarification in operational terms before we proceed.",
+      };
+      nextHcpDialogue = persistentPromptMap[primaryBlockingConstraint] || persistentPromptMap.request_for_specificity;
+    }
+
+    if (!blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
+      nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
+    }
+
+    const recentHcpUtterances = prevTurns
+      .map((turn) => turn?.hcpDialogueBefore)
+      .filter(Boolean)
+      .slice(-2);
+    const isRepetitiveHcpLine = recentHcpUtterances.some((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.82);
+    if (isRepetitiveHcpLine) {
+      const repetitionFallback = hasPartialProgress
+        ? "You are getting closer—now make it specific to our staffing and workflow constraints."
+        : "You are repeating the theme. Give me one specific, practice-level action with evidence and workflow fit.";
+      nextHcpDialogue = repetitionFallback;
     }
 
     if (!overrideExit && lateTurnConstraintDecision.forced) {
@@ -3312,10 +3663,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
-    const shouldEndSessionAfterTurn = overrideExit || (
+    const shouldEndSessionAfterTurn = !blockClose && (overrideExit || (
       (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
       || terminalPolicyAction === "close"
-    );
+    ));
 
     if (shouldEndSessionAfterTurn) {
       sessionControllerRef.current.state = SessionState.ENDED;
@@ -3327,6 +3678,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     lateTurnConstraintStateRef.current = nextLateTurnConstraintState;
+    hcpConstraintEngineRef.current = {
+      activeConstraints: activeHcpConstraints,
+    };
 
     // Prevent duplicate HCP turns: only add one HCP turn after rep input
     setTurns((prevTurnsState) => {
@@ -3517,7 +3871,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (res.ok) {
         const data = await res.json();
-        const rawContent = (data.response || data.text || data.content || '').trim();
+        const rawContent = normalizeLlmInvokeText(data);
 
         console.log('=== RAW FEEDBACK CONTENT ===');
         console.log(rawContent.substring(0, 300));
