@@ -3626,6 +3626,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
     }
 
+    if (overrideExit) {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = terminalCloseFallback;
+    }
+
     const terminalPolicyAction = determineTerminalPolicyAction({
       hcpState: decayState.tier,
       concernFlowOutcome,
@@ -3635,11 +3640,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       explicitExitOverride: overrideExit,
     });
 
-    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
-    if (blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
       const primaryBlockingConstraint = blockingUnresolvedConstraints[0]?.type || "request_for_specificity";
       const persistentPromptMap = {
         request_for_evidence: "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
@@ -3651,7 +3656,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = persistentPromptMap[primaryBlockingConstraint] || persistentPromptMap.request_for_specificity;
     }
 
-    if (!blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && !blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
     }
 
@@ -3660,7 +3665,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       .filter(Boolean)
       .slice(-2);
     const isRepetitiveHcpLine = recentHcpUtterances.some((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.82);
-    if (isRepetitiveHcpLine) {
+    if (!overrideExit && isRepetitiveHcpLine) {
       const repetitionFallback = hasPartialProgress
         ? "You are getting closer—now make it specific to our staffing and workflow constraints."
         : "You are repeating the theme. Give me one specific, practice-level action with evidence and workflow fit.";
