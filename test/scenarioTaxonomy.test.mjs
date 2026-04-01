@@ -23,4 +23,6 @@ test('enrichScenarioWithTaxonomy preserves existing scenario fields', () => {
 
   assert.equal(enriched.id, 's1');
   assert.ok(enriched.taxonomy?.journeyStage);
+  assert.ok(enriched.metadataEnvelope?.family);
+  assert.ok(enriched.metadataEnvelope?.chapter_stage);
 });

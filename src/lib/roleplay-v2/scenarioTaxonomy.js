@@ -1,3 +1,5 @@
+import { deriveScenarioMetadataEnvelope } from './scenarioMetadataEnvelope.js';
+
 export const CUSTOMER_JOURNEY_STAGES = Object.freeze([
   'initial_access_prospecting',
   'discovery_needs_assessment',
@@ -96,8 +98,11 @@ export function classifyScenarioTaxonomy(scenario = {}) {
 }
 
 export function enrichScenarioWithTaxonomy(scenario = {}) {
+  const taxonomy = classifyScenarioTaxonomy(scenario);
+  const metadataEnvelope = deriveScenarioMetadataEnvelope(scenario, taxonomy);
   return {
     ...scenario,
-    taxonomy: classifyScenarioTaxonomy(scenario),
+    taxonomy,
+    metadataEnvelope,
   };
 }
