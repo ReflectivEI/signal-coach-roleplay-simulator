@@ -265,6 +265,19 @@ function mergeActiveConstraints(previous = [], detected = []) {
   return merged;
 }
 
+function validateConstraintState(constraints = []) {
+  if (!Array.isArray(constraints)) return [];
+  return constraints
+    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+    .map((constraint) => ({
+      ...constraint,
+      priority: constraint.priority === "soft" ? "soft" : "blocking",
+      turnsActive: Math.max(0, Number(constraint.turnsActive || 0)),
+      confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
+      satisfaction: constraint.satisfaction || "not_satisfied",
+    }));
+}
+
 function computeSimilarity(a = "", b = "") {
   const normalize = (value) => String(value || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
   const tokensA = new Set(normalize(a).split(" ").filter((token) => token.length > 2));
@@ -3444,7 +3457,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       })
       .filter(Boolean);
     const newlyDetectedHcpConstraints = extractHcpConstraints(nextHcpDialogue);
-    const activeHcpConstraints = mergeActiveConstraints(calibratedPriorConstraints, newlyDetectedHcpConstraints);
+    const activeHcpConstraints = validateConstraintState(
+      mergeActiveConstraints(calibratedPriorConstraints, newlyDetectedHcpConstraints)
+    );
     const blockingUnresolvedConstraints = activeHcpConstraints.filter(
       (constraint) => String(constraint?.priority || "blocking") === "blocking"
     );
