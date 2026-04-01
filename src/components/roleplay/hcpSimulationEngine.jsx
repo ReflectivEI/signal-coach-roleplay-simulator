@@ -768,12 +768,12 @@ export function detectHcpDisagreement(hcpResponse) {
   const msg = hcpResponse.toLowerCase()
 
   const strongDisagree =
-    /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi.m not (convinced|sold|buying|interested)|\bthat.s (wrong|incorrect|not true|not accurate)|\bcan.t recommend|\bwon.t (prescribe|use)|\bskeptical|\bdoubt\b|\b(not|isn.t) (helpful|beneficial|relevant|applicable)/i.test(
+    /\bdisagree\b|\bdon.t (think|believe|accept)\b|\bi (refuse|decline)\b|\bwe (won.t|will not)\b|\bcan.t recommend\b|\bwon.t (prescribe|use)\b|\bwe are done\b|\bthis isn.t moving forward\b|\bstop here\b|\bskeptical\b|\bdoubt\b|\bdismissive\b|\bnot interested\b/i.test(
       msg
     )
 
   const mildDisagree =
-    /\bhesitant|\bunsure|\bconcern|\bquestion (whether|if)|\bneed more (evidence|data|proof)|\bneed to think|\bneed to (review|check)|\bnot sure (yet|about)|\blet me (think|review)/i.test(
+    /\bhesitant\b|\bunsure\b|\bconcern(?:ed)?\b|\bquestion (whether|if)\b|\bneed more (evidence|data|proof)\b|\bneed to think\b|\bneed to (review|check)\b|\blet me (think|review)\b|\bnot convinced\b/i.test(
       msg
     )
 
