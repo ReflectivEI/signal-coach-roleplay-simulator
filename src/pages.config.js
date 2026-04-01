@@ -66,6 +66,7 @@ import PerformanceAnalytics from './pages/PerformanceAnalytics';
 import PreCallPlanning from './pages/PreCallPlanning';
 import ProfileSettings from './pages/ProfileSettings';
 import RolePlaySimulator from './pages/RolePlaySimulator';
+import RolePlaySimulatorV2 from './pages/RolePlaySimulatorV2';
 import RolePlaySimulatorSafe from './pages/RolePlaySimulatorSafe';
 import ScenarioBuilder from './pages/ScenarioBuilder';
 import __Layout from './Layout.jsx';
@@ -91,6 +92,7 @@ export const PAGES = {
     "PreCallPlanning": PreCallPlanning,
     "ProfileSettings": ProfileSettings,
     "RolePlaySimulator": RolePlaySimulator,
+    "RolePlaySimulatorV2": RolePlaySimulatorV2,
     "RolePlaySimulatorSafe": RolePlaySimulatorSafe,
     "ScenarioBuilder": ScenarioBuilder,
 }

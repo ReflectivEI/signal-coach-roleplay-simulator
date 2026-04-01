@@ -443,7 +443,7 @@ export function generateContextualCue(sessionId, turnNumber, hcpState, hcpDialog
       }
     }
   }
-  if (/frustrat|annoy|impatient|pushy|demand|interrupt|negative|skeptic|resist|challenge/.test(repSentiment)) {
+  if (/frustrat|annoy|impatient|pushy|demand|interrupt|skeptic|resist|challenge|refus|declin|dismiss/.test(repSentiment)) {
     if (hcpState === 'resistant' || hcpState === 'irritated') {
       const irritatedCues = CUE_BANK['irritated'] || [];
       if (irritatedCues.length > 0) {
