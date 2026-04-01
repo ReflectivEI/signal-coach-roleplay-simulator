@@ -35,6 +35,7 @@ export default function EnterpriseScenarioCard({
   scenario,
   footerAction,
   footerSecondary,
+  onStart,
   allowStart = true,
   defaultExpanded = false,
   openingSceneLabel = "Play Scene",
@@ -176,6 +177,7 @@ export default function EnterpriseScenarioCard({
           <ScenarioCard
             scenario={scenario}
             renderAs="button-only"
+            onStart={onStart}
             buttonClassName="inline-flex w-auto self-center items-center justify-center rounded-full px-6 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy focus-visible:ring-offset-2"
           />
         ) : null)}

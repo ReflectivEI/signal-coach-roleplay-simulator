@@ -54,7 +54,6 @@ export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassN
     const handleButtonOnlyStart = () => {
       if (typeof onStart === "function") {
         onStart();
-        return;
       }
       setPlaying(true);
     };
@@ -67,7 +66,7 @@ export default function ScenarioCard({ scenario, renderAs, onStart, buttonClassN
         >
           Start Scenario →
         </button>
-        {!onStart && playing && typeof document !== "undefined"
+        {playing && typeof document !== "undefined"
           ? createPortal(<RolePlayChat scenario={scenario} onClose={() => setPlaying(false)} />, document.body)
           : null}
       </>

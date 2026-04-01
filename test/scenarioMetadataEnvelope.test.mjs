@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  AUTHORITATIVE_METADATA_BY_ID,
   deriveScenarioMetadataEnvelope,
   validateScenarioMetadataEnvelope,
 } from '../src/lib/roleplay-v2/scenarioMetadataEnvelope.js';
 
-import { classifyScenarioTaxonomy } from '../src/lib/roleplay-v2/scenarioTaxonomy.js';
+import { classifyScenarioTaxonomy, SCENARIO_TAXONOMY_OVERRIDES } from '../src/lib/roleplay-v2/scenarioTaxonomy.js';
 
 test('authoritative id map produces stable metadata envelope for known scenario', () => {
   const scenario = {
@@ -45,4 +46,16 @@ test('embedded metadata envelope is preserved when valid', () => {
   const envelope = deriveScenarioMetadataEnvelope(scenario, {});
   assert.equal(envelope.metadata_source, 'scenario_embedded');
   assert.equal(validateScenarioMetadataEnvelope(envelope).valid, true);
+});
+
+test('authoritative metadata map stays aligned with global taxonomy scenario ids', () => {
+  const taxonomyIds = Object.keys(SCENARIO_TAXONOMY_OVERRIDES).sort();
+  const metadataIds = Object.keys(AUTHORITATIVE_METADATA_BY_ID).sort();
+  assert.deepEqual(metadataIds, taxonomyIds);
+
+  for (const id of metadataIds) {
+    const envelope = deriveScenarioMetadataEnvelope({ id, difficulty: 'intermediate' }, classifyScenarioTaxonomy({ id }));
+    assert.equal(envelope.metadata_source, 'authoritative_id_map', `${id}: should resolve via authoritative map`);
+    assert.equal(validateScenarioMetadataEnvelope(envelope).valid, true, `${id}: envelope must validate`);
+  }
 });
