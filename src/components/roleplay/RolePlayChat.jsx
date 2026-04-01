@@ -60,7 +60,6 @@ import {
 } from "./behavioralInferenceLayer";
 import { applyTransformSafetyHarness } from "./transformSafetyHarness";
 import { resolveConstraintLoopAction } from "./constraintLoopPolicy";
-import { enforceOpeningBeatConsistency } from "./openingBeatConsistency";
 import {
   extractConstraintCandidatesFromText,
   buildConstraintGrounding,
@@ -3018,30 +3017,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
     };
 
-
-function normalizeRepTopicForDialogue(repMessage = "") {
-  const topicStopWords = new Set([
-    "the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today",
-    "patient", "patients", "doctor", "great", "question", "thanks", "thank", "hello", "hi", "hey", "good",
-    "morning", "afternoon", "evening", "please", "just", "really", "very",
-  ]);
-  const tokens = String(repMessage || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token && token.length > 2 && !topicStopWords.has(token));
-
-  const deduped = [];
-  for (const token of tokens) {
-    if (!deduped.includes(token)) deduped.push(token);
-    if (deduped.length >= 5) break;
-  }
-
-  const topic = deduped.join(" ").trim();
-  if (!topic || topic.split(/\s+/).length < 2) return "";
-  return topic;
-}
-
     const buildNonRepeatingScenarioFallback = (previousDialogue = "") => {
       const base = buildFollowUpScenarioFallback();
       const prevNorm = String(previousDialogue || "").trim().toLowerCase();
@@ -3049,22 +3024,26 @@ function normalizeRepTopicForDialogue(repMessage = "") {
       if (!prevNorm || prevNorm !== baseNorm) return base;
 
       const repLower = String(repMessage || "").toLowerCase();
-      const normalizedRepTopic = normalizeRepTopicForDialogue(repMessage);
-      const repTopic = normalizedRepTopic || "that point";
+      const repTopicTokens = repLower
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today"]).has(w))
+        .slice(0, 4);
+      const repTopic = repTopicTokens.join(" ") || "that point";
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return `Regarding ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
+        return `On ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
       }
 
       if (scenarioPrepFocus) {
-        return `Regarding ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
+        return `On ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
       }
 
       if (scenarioMonitoringFocus) {
-        return `Regarding ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
+        return `On ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
       }
 
-      return `Regarding ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
+      return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
     };
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
@@ -3540,18 +3519,6 @@ function normalizeRepTopicForDialogue(repMessage = "") {
       console.log('Selected Influence:', selectedInfluence);
     }
 
-    if (isFirstHcpResponse) {
-      const openingConsistency = enforceOpeningBeatConsistency({
-        openingScene: scenario?.opening_scene || scenario?.openingScene || '',
-        candidate: nextHcpDialogue,
-        activeConcern,
-      });
-      nextHcpDialogue = openingConsistency.dialogue;
-    }
-
-    // Final acceptance contract: punctuation/surface normalization only after all semantic rewrites are done.
-    nextHcpDialogue = normalizeHcpDialoguePunctuation(String(nextHcpDialogue || '')).trim();
-
     // 6.5 DETECT HCP DISAGREEMENT & RECORD FOR NEXT TURN
     // If the HCP disagreed with the rep's suggestion, flag this for the NEXT turn's temperature escalation
     const disagreementInfo = detectHcpDisagreement(nextHcpDialogue);
@@ -3907,23 +3874,7 @@ function normalizeRepTopicForDialogue(repMessage = "") {
       .filter(Boolean)
       .slice(-2);
     const repetitiveCandidate = recentHcpUtterances.find((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.84);
-    const continuity = (!overrideExit && nextHcpState !== "disengaged")
-      ? evaluateRepToHcpContinuity({
-          repMessage,
-          hcpDialogue: nextHcpDialogue,
-          priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
-          activeConcern,
-        })
-      : { needsRepair: false };
-
-    const rewriteAuthority = (() => {
-      if (overrideExit || nextHcpState === "disengaged") return 'none';
-      if (repetitiveCandidate) return 'anti_repeat';
-      if (continuity.needsRepair) return 'continuity';
-      return 'none';
-    })();
-
-    if (rewriteAuthority === 'anti_repeat') {
+    if (!overrideExit && repetitiveCandidate && nextHcpState !== "disengaged") {
       let regenerated = "";
       try {
         const antiRepeatPrompt = [
@@ -3983,41 +3934,49 @@ function normalizeRepTopicForDialogue(repMessage = "") {
       }
     }
 
-    if (rewriteAuthority === 'continuity') {
-      try {
-        const continuityPrompt = [
-          "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
-          `Scenario grounding: ${scenarioGroundingText}`,
-          `Active concern: ${activeConcern}`,
-          `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
-          `Rep message: ${repMessage}`,
-          `Current HCP draft: ${nextHcpDialogue}`,
-          "Rules:",
-          "- Keep one sentence only.",
-          "- Preserve professional tone and current pressure level.",
-          "- Keep the same concern family; do not introduce unrelated topics.",
-          "- If rep addressed an evidence/study question, react to that directly before redirecting.",
-        ].join('
-');
+    if (!overrideExit && nextHcpState !== "disengaged") {
+      const continuity = evaluateRepToHcpContinuity({
+        repMessage,
+        hcpDialogue: nextHcpDialogue,
+        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      });
 
-        const continuityRes = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: continuityPrompt,
-            max_tokens: 120,
-            temperature: 0,
-            roleplay: true,
-          })
-        });
-        if (continuityRes.ok) {
-          const continuityData = await continuityRes.json();
-          const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
-          if (revisedLine) nextHcpDialogue = revisedLine;
-        }
-      } catch (continuityError) {
-        if (import.meta.env.DEV) {
-          console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
+      if (continuity.needsRepair) {
+        try {
+          const continuityPrompt = [
+            "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
+            `Scenario grounding: ${scenarioGroundingText}`,
+            `Active concern: ${activeConcern}`,
+            `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+            `Rep message: ${repMessage}`,
+            `Current HCP draft: ${nextHcpDialogue}`,
+            "Rules:",
+            "- Keep one sentence only.",
+            "- Preserve professional tone and current pressure level.",
+            "- Keep the same concern family; do not introduce unrelated topics.",
+            "- If rep addressed an evidence/study question, react to that directly before redirecting.",
+          ].join('\n');
+
+          const continuityRes = await fetch('/api/llm/invoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: continuityPrompt,
+              max_tokens: 120,
+              temperature: 0,
+              roleplay: true,
+            })
+          });
+          if (continuityRes.ok) {
+            const continuityData = await continuityRes.json();
+            const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
+            if (revisedLine) nextHcpDialogue = revisedLine;
+          }
+        } catch (continuityError) {
+          if (import.meta.env.DEV) {
+            console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
+          }
         }
       }
     }
