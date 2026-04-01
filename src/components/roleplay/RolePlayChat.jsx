@@ -2481,7 +2481,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpState = escalateHcpState(nextHcpState, 1);
     }
 
-    if (poorTurns >= 2) {
+    if (poorTurns >= 3 || (poorTurns >= 2 && alignment?.score <= 2)) {
       nextHcpState = "disengaged";
     }
 
