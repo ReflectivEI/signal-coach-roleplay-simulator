@@ -157,6 +157,45 @@ function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpStat
   return { cueIntent, dialogueIntent, contradiction };
 }
 
+function extractContinuityTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !["with", "that", "this", "your", "from", "have", "what", "when", "where", "which", "would"].includes(token));
+}
+
+function evaluateRepToHcpContinuity({
+  repMessage = "",
+  hcpDialogue = "",
+  priorHcpDialogue = "",
+  activeConcern = "workflow",
+} = {}) {
+  const repTokens = new Set(extractContinuityTokens(repMessage));
+  const hcpTokens = new Set(extractContinuityTokens(hcpDialogue));
+  const priorTokens = new Set(extractContinuityTokens(priorHcpDialogue));
+  const overlapWithRep = [...repTokens].filter((token) => hcpTokens.has(token)).length;
+  const overlapWithPrior = [...priorTokens].filter((token) => hcpTokens.has(token)).length;
+
+  const repMentionsEvidence = /\b(study|trial|evidence|methodology|duration|jama|published|endpoint)\b/i.test(repMessage);
+  const priorAskedEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(priorHcpDialogue);
+  const hcpMentionsEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(hcpDialogue);
+  const hcpMentionsConcern = new RegExp(`\\b${String(activeConcern || "workflow").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(hcpDialogue);
+
+  const directContinuityGap =
+    (repTokens.size >= 3 && overlapWithRep === 0)
+    || (priorTokens.size >= 3 && overlapWithPrior === 0);
+  const evidenceDriftGap = repMentionsEvidence && priorAskedEvidence && !hcpMentionsEvidence && !hcpMentionsConcern;
+
+  return {
+    needsRepair: directContinuityGap || evidenceDriftGap,
+    overlapWithRep,
+    overlapWithPrior,
+    evidenceDriftGap,
+  };
+}
+
 function hasTurnIntegrityIssues(turn) {
   const issues = [];
   if (!Number.isFinite(turn?.turnNumber)) issues.push("missing_turn_number");
@@ -3171,6 +3210,50 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : buildFollowUpScenarioFallback();
       draftResponseBeforePostProcessing = nextHcpDialogue;
     }
+
+    if (usedDeterministicFallback && !forceTerminalDisengagement) {
+      try {
+        const fallbackRecoveryPrompt = [
+          "You are generating ONE HCP reply in a role-play simulation.",
+          `Scenario grounding: ${scenarioGroundingText}`,
+          `Current HCP state: ${nextHcpState}`,
+          `Active concern: ${activeConcern}`,
+          `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+          `Rep reply to react to: ${repMessage}`,
+          "Rules:",
+          "- Respond directly to the rep's last message.",
+          "- Keep continuity with the previous HCP line and active concern.",
+          "- Do not drift to unrelated topics.",
+          "- One sentence only.",
+          "- Keep realistic clinical/workflow pressure tone.",
+        ].join('\n');
+
+        const recoveryRes = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: fallbackRecoveryPrompt,
+            max_tokens: 120,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (recoveryRes.ok) {
+          const recoveryData = await recoveryRes.json();
+          const recoveredLine = normalizeLlmInvokeText(recoveryData).split('\n')[0].trim();
+          if (recoveredLine) {
+            nextHcpDialogue = recoveredLine;
+            draftResponseBeforePostProcessing = recoveredLine;
+            draftResponseSource = `${draftResponseSource}_ai_recovery`;
+          }
+        }
+      } catch (recoveryError) {
+        if (import.meta.env.DEV) {
+          console.warn("ROLEPLAY_AI_FALLBACK_RECOVERY_FAILED", { recoveryError });
+        }
+      }
+    }
+
     if (!String(nextHcpDialogue || "").trim()) {
       const deterministicFallback = isFirstHcpResponse
         ? buildFirstTurnScenarioFallback()
@@ -3807,6 +3890,53 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           includeWarmth: false,
           scenarioContext: scenarioGroundingText,
         });
+      }
+    }
+
+    if (!overrideExit && nextHcpState !== "disengaged") {
+      const continuity = evaluateRepToHcpContinuity({
+        repMessage,
+        hcpDialogue: nextHcpDialogue,
+        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      });
+
+      if (continuity.needsRepair) {
+        try {
+          const continuityPrompt = [
+            "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
+            `Scenario grounding: ${scenarioGroundingText}`,
+            `Active concern: ${activeConcern}`,
+            `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+            `Rep message: ${repMessage}`,
+            `Current HCP draft: ${nextHcpDialogue}`,
+            "Rules:",
+            "- Keep one sentence only.",
+            "- Preserve professional tone and current pressure level.",
+            "- Keep the same concern family; do not introduce unrelated topics.",
+            "- If rep addressed an evidence/study question, react to that directly before redirecting.",
+          ].join('\n');
+
+          const continuityRes = await fetch('/api/llm/invoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: continuityPrompt,
+              max_tokens: 120,
+              temperature: 0,
+              roleplay: true,
+            })
+          });
+          if (continuityRes.ok) {
+            const continuityData = await continuityRes.json();
+            const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
+            if (revisedLine) nextHcpDialogue = revisedLine;
+          }
+        } catch (continuityError) {
+          if (import.meta.env.DEV) {
+            console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
+          }
+        }
       }
     }
 

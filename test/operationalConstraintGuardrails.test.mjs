@@ -293,6 +293,30 @@ test('global anti-repeat path uses AI regeneration before deterministic fallback
   assert.match(rolePlayChatSource, /ROLEPLAY_ANTI_REPEAT_REGEN_FAILED/);
 });
 
+test('fallback recovery path attempts AI-driven continuity before deterministic template fallback', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /usedDeterministicFallback && !forceTerminalDisengagement/);
+  assert.match(rolePlayChatSource, /Respond directly to the rep's last message/);
+  assert.match(rolePlayChatSource, /Do not drift to unrelated topics/);
+  assert.match(rolePlayChatSource, /ROLEPLAY_AI_FALLBACK_RECOVERY_FAILED/);
+});
+
+test('continuity repair enforces strict rep-to-hcp topical response before finalizing dialogue', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /function evaluateRepToHcpContinuity/);
+  assert.match(rolePlayChatSource, /continuity\.needsRepair/);
+  assert.match(rolePlayChatSource, /If rep addressed an evidence\/study question, react to that directly before redirecting/);
+  assert.match(rolePlayChatSource, /ROLEPLAY_CONTINUITY_REPAIR_FAILED/);
+});
+
 test('7-scenario fallback fixture: guardrail regeneration stays context-aware and avoids generic collapse', () => {
   const fixtures = [
     { scenarioId: 'hiv_prevention_gap', concern: 'access' },
