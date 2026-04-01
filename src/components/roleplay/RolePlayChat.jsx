@@ -59,6 +59,7 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 import { applyTransformSafetyHarness } from "./transformSafetyHarness";
+import { resolveConstraintLoopAction } from "./constraintLoopPolicy";
 import {
   extractConstraintCandidatesFromText,
   buildConstraintGrounding,
@@ -154,6 +155,45 @@ function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpStat
     || (cueIntent === "closing" && dialogueIntent === "engaged")
   );
   return { cueIntent, dialogueIntent, contradiction };
+}
+
+function extractContinuityTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !["with", "that", "this", "your", "from", "have", "what", "when", "where", "which", "would"].includes(token));
+}
+
+function evaluateRepToHcpContinuity({
+  repMessage = "",
+  hcpDialogue = "",
+  priorHcpDialogue = "",
+  activeConcern = "workflow",
+} = {}) {
+  const repTokens = new Set(extractContinuityTokens(repMessage));
+  const hcpTokens = new Set(extractContinuityTokens(hcpDialogue));
+  const priorTokens = new Set(extractContinuityTokens(priorHcpDialogue));
+  const overlapWithRep = [...repTokens].filter((token) => hcpTokens.has(token)).length;
+  const overlapWithPrior = [...priorTokens].filter((token) => hcpTokens.has(token)).length;
+
+  const repMentionsEvidence = /\b(study|trial|evidence|methodology|duration|jama|published|endpoint)\b/i.test(repMessage);
+  const priorAskedEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(priorHcpDialogue);
+  const hcpMentionsEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(hcpDialogue);
+  const hcpMentionsConcern = new RegExp(`\\b${String(activeConcern || "workflow").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(hcpDialogue);
+
+  const directContinuityGap =
+    (repTokens.size >= 3 && overlapWithRep === 0)
+    || (priorTokens.size >= 3 && overlapWithPrior === 0);
+  const evidenceDriftGap = repMentionsEvidence && priorAskedEvidence && !hcpMentionsEvidence && !hcpMentionsConcern;
+
+  return {
+    needsRepair: directContinuityGap || evidenceDriftGap,
+    overlapWithRep,
+    overlapWithPrior,
+    evidenceDriftGap,
+  };
 }
 
 function hasTurnIntegrityIssues(turn) {
@@ -265,10 +305,23 @@ function mergeActiveConstraints(previous = [], detected = []) {
   return merged;
 }
 
-function validateConstraintState(constraints = []) {
-  if (!Array.isArray(constraints)) return [];
-  return constraints
-    .filter((constraint) => constraint && typeof constraint === "object" && constraint.type)
+function validateConstraintState(constraints = [], options = {}) {
+  const detailed = options?.detailed === true;
+  const issues = [];
+
+  if (!Array.isArray(constraints)) {
+    issues.push("constraints_not_array");
+    return detailed ? { constraints: [], issues } : [];
+  }
+
+  const normalized = constraints
+    .filter((constraint, index) => {
+      const valid = constraint && typeof constraint === "object" && constraint.type;
+      if (!valid) {
+        issues.push(`invalid_constraint_at_${index}`);
+      }
+      return valid;
+    })
     .map((constraint) => ({
       ...constraint,
       priority: constraint.priority === "soft" ? "soft" : "blocking",
@@ -276,6 +329,17 @@ function validateConstraintState(constraints = []) {
       confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
       satisfaction: constraint.satisfaction || "not_satisfied",
     }));
+
+  return detailed ? { constraints: normalized, issues } : normalized;
+}
+
+function normalizeConstraintValidationResult(result) {
+  if (Array.isArray(result)) {
+    return { constraints: result, issues: ["legacy_array_shape"] };
+  }
+  const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
+  const issues = Array.isArray(result?.issues) ? result.issues : [];
+  return { constraints, issues };
 }
 
 function computeSimilarity(a = "", b = "") {
@@ -2159,8 +2223,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  // Stable session ID for deterministic cue selection
-  const sessionIdRef = useRef(`session_${Date.now()}_${Math.floor(Math.random() * 1000)}`);
+  // Stable, non-random session seed for deterministic cue selection.
+  const scenarioSeed = String(scenario?.id || scenario?.title || "scenario")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "scenario";
+  const sessionIdRef = useRef(`session_${scenarioSeed}_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
@@ -2398,14 +2467,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const repLower = String(repMessage || "").toLowerCase();
     const priorRepTurnsCount = turns.filter((t) => !!t.repMessage).length;
     const greetingSignals = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hows it going|how was your weekend|nice to meet you|good to see you|thanks for your time)\b/;
+    const wellbeingCheckSignals = /\b(how are you|how's it going|hows it going|how have you been|how was your weekend|hope you're well|hope you are well)\b/;
     const businessSignals = /\b(prep|hiv|sti|cab|cabotegravir|injectable|screening|resistance|adherence|study|trial|data|results|efficacy|durability|monitoring|protocol|materials?|brochure|resource|patients?)\b/;
     const isPleasantryOnly = greetingSignals.test(repLower) && !businessSignals.test(repLower);
     const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
+    const repAskedWellbeing = wellbeingCheckSignals.test(repLower);
 
     let alignment = computeAlignment(
       prevState,
       repMessage,
-      { hcpUtterance: respondingToTurn?.hcpDialogueBefore || "" },
+      {
+        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+        cueText: respondingToTurn?.cueBefore || "",
+      },
       prevTemp,
       prevHcpState
     );
@@ -2449,7 +2523,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpState = escalateHcpState(nextHcpState, 1);
     }
 
-    if (poorTurns >= 2) {
+    if (poorTurns >= 3 || (poorTurns >= 2 && alignment?.score <= 2)) {
       nextHcpState = "disengaged";
     }
 
@@ -2533,13 +2607,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       latestRepTurn: repMessage,
     });
-    const constraintValidation = validateConstraintState(
+    const rawConstraintValidation = validateConstraintState(
       operationalConstraintState.normalizedActiveConstraints,
       {
+        detailed: true,
         previousValid: lastValidConstraintsRef.current,
         recentTurnConstraints: turns.map((turn) => turn?.activeConstraints),
       }
     );
+    const constraintValidation = normalizeConstraintValidationResult(rawConstraintValidation);
     const normalizedActiveConstraints = constraintValidation.constraints;
     if (normalizedActiveConstraints.length > 0) {
       lastValidConstraintsRef.current = normalizedActiveConstraints;
@@ -2768,8 +2844,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildFirstTurnScenarioFallback = () => {
       const warmGreeting = inPleasantryGracePeriod
-        ? "I'm doing well, thanks for asking."
+        ? (repAskedWellbeing ? "I'm doing well, thanks for asking." : "")
         : "Thanks for checking in.";
+      const withOptionalGreeting = (line) => (
+        warmGreeting ? `${warmGreeting} ${line}` : line
+      );
       const strictKolEvidenceContext = (
         /\bonc-kol\b|\bkey opinion leader\b|\bkol\b/.test(scenarioLower)
         && /\b(skeptic|skeptical|peer-reviewed|phase 3|overall survival|long-term data|published)\b/.test(scenarioLower)
@@ -2784,60 +2863,60 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
       if (scenarioPrepFocus && scenarioPressured) {
-        return `${warmGreeting} I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been catching up on patient charts and prior authorizations, so I only have a couple minutes. What brings you in today?");
       }
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return `${warmGreeting} I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been reviewing candidacy and screening questions for long-acting cabotegravir, and I only have a couple minutes. What brings you in today?");
       }
 
       if (strictKolEvidenceContext) {
-        return `${warmGreeting} I have a tight window, and for KOL discussions I need evidence I can defend with peer-reviewed rigor. What's your strongest decision-level data point?`;
+        return withOptionalGreeting("I have a tight window, and for KOL discussions I need evidence I can defend with peer-reviewed rigor. What's your strongest decision-level data point?");
       }
 
       if (strictOralOncOnboardingContext) {
-        return `${warmGreeting} Our oral oncolytic starts are still hitting refill gaps around day 25 to 30, so I need a concrete onboarding workflow fix. Where do you want us to intervene first?`;
+        return withOptionalGreeting("Our oral oncolytic starts are still hitting refill gaps around day 25 to 30, so I need a concrete onboarding workflow fix. Where do you want us to intervene first?");
       }
 
       if (strictPostDischargeTransitionsContext) {
-        return `${warmGreeting} Our post-discharge MI/HF handoffs are where readmission risk shows up, so keep this tied to transition workflow. What's the first operational step you'd recommend?`;
+        return withOptionalGreeting("Our post-discharge MI/HF handoffs are where readmission risk shows up, so keep this tied to transition workflow. What's the first operational step you'd recommend?");
       }
 
       if (scenarioCommitteeFocus) {
-        return `${warmGreeting} We're reviewing formulary and P&T considerations this week, so let's keep this focused. What's the key update you wanted to share?`;
+        return withOptionalGreeting("We're reviewing formulary and P&T considerations this week, so let's keep this focused. What's the key update you wanted to share?");
       }
 
       if (scenarioPayerFocus) {
-        return `${warmGreeting} I've been focused on payer coverage and utilization criteria, so I can give you a couple minutes. What's most relevant for medical director review?`;
+        return withOptionalGreeting("I've been focused on payer coverage and utilization criteria, so I can give you a couple minutes. What's most relevant for medical director review?");
       }
 
       if (scenarioPathwayWorkflowFocus) {
-        return `${warmGreeting} We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?`;
+        return withOptionalGreeting("We're working through pathway and staffing workflow updates right now, so keep it practical. What change are you recommending?");
       }
 
       if (scenarioOncologyKOLFocus) {
-        return `${warmGreeting} Before we go further, I need evidence we can defend in front of our KOL group, not broad claims. What's the most decision-relevant data point?`;
+        return withOptionalGreeting("Before we go further, I need evidence we can defend in front of our KOL group, not broad claims. What's the most decision-relevant data point?");
       }
 
       if (scenarioOralOncOnboardingFocus) {
-        return `${warmGreeting} Our oral oncolytic starts are losing momentum between onboarding and first refill, so I need an operational fix, not a concept. Where should we intervene first?`;
+        return withOptionalGreeting("Our oral oncolytic starts are losing momentum between onboarding and first refill, so I need an operational fix, not a concept. Where should we intervene first?");
       }
 
       if (scenarioPostMiTransitionsFocus) {
-        return `${warmGreeting} Our post-MI and heart failure discharge transitions are where readmissions creep in, so keep this tightly tied to handoffs and follow-up execution. What is your first-step recommendation?`;
+        return withOptionalGreeting("Our post-MI and heart failure discharge transitions are where readmissions creep in, so keep this tightly tied to handoffs and follow-up execution. What is your first-step recommendation?");
       }
 
       if (scenarioMonitoringFocus) {
-        return `${warmGreeting} I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I've been tightening our follow-up and monitoring workflow, and I only have a couple minutes. What brings you in today?");
       }
 
       if (scenarioPressured) {
-        return `${warmGreeting} I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?`;
+        return withOptionalGreeting("I'm between patients and paperwork right now, so I only have a couple minutes. What brings you in today?");
       }
 
       return scenarioPrepFocus
-        ? `${warmGreeting} I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.`
-        : `${warmGreeting} I can spare a focused minute or two. Give me the one practical issue you're here to solve today.`;
+        ? withOptionalGreeting("I can spare a focused minute or two. If this is about PrEP access, start with the biggest barrier you're solving.")
+        : withOptionalGreeting("I can spare a focused minute or two. Give me the one practical issue you're here to solve today.");
     };
 
     const buildFollowUpScenarioFallback = () => {
@@ -2928,14 +3007,70 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
       const value = String(dialogue || "").toLowerCase();
-      if (isFirstTurn && scenarioPrepFocus && scenarioPressured) {
-        return "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.";
-      }
-      if (isFirstTurn && scenarioCabFocus && scenarioScreeningFocus) {
-        return "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.";
-      }
-      if (isFirstTurn && scenarioMonitoringFocus) {
-        return "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.";
+      if (isFirstTurn) {
+        const firstTurnCueSeed = `${scenario?.id || scenario?.title || "scenario"}:${nextTurnNumber}:${activeConcern}`;
+        const scenarioFirstTurnConcern = detectPrimaryConcern([
+          scenario?.title,
+          scenario?.description,
+          scenario?.context,
+          scenario?.opening_scene || scenario?.openingScene || "",
+          scenario?.objective,
+          Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
+        ].join(" "));
+        if (scenarioPrepFocus && scenarioPressured) {
+          const prepPressureCues = [
+            "The HCP glances at a stack of prior-authorization forms, then looks up with a polite but rushed expression.",
+            "The HCP checks a clinic schedule board, then turns back with focused, time-aware attention.",
+            "The HCP sets a chart beside pending prior-auth packets and motions for a concise point.",
+          ];
+          return prepPressureCues[deterministicIndex(firstTurnCueSeed, prepPressureCues.length)];
+        }
+        if (scenarioCabFocus && scenarioScreeningFocus) {
+          const cabScreeningCues = [
+            "The HCP reviews a chart note and screening checklist, then looks up with a focused, slightly uncertain expression.",
+            "The HCP pauses over candidacy criteria in the chart and nods for a specific recommendation.",
+            "The HCP highlights screening fields on a form, then asks with careful, practical focus.",
+          ];
+          return cabScreeningCues[deterministicIndex(firstTurnCueSeed, cabScreeningCues.length)];
+        }
+        if (scenarioMonitoringFocus) {
+          const monitoringCues = [
+            "The HCP taps a follow-up list on the desk, then turns back with a practical, time-aware expression.",
+            "The HCP checks upcoming follow-up slots and signals for one implementable monitoring step.",
+            "The HCP scans a monitoring tracker, then looks up expecting a concrete, workflow-fit action.",
+          ];
+          return monitoringCues[deterministicIndex(firstTurnCueSeed, monitoringCues.length)];
+        }
+
+        const firstTurnCuePools = {
+          access: [
+            "The HCP glances at coverage notes and asks for one practical access step that can work in this setting.",
+            "The HCP sets a payer policy printout on the desk and signals for a realistic access recommendation.",
+            "The HCP checks prior-auth paperwork, then looks up expecting a practical access-first suggestion.",
+          ],
+          workflow: [
+            "The HCP points to a clinic workflow map and asks for one concrete step that will not add burden.",
+            "The HCP reviews handoff notes and signals for a process-level recommendation that is realistic this week.",
+            "The HCP checks staffing assignments and asks for a workflow-fit action they can actually run now.",
+          ],
+          evidence: [
+            "The HCP turns to outcome notes and asks for the single most practice-relevant evidence point.",
+            "The HCP highlights a study summary and signals for one evidence-backed takeaway they can trust.",
+            "The HCP scans trial notes and asks for a concise, clinically meaningful data point.",
+          ],
+          screening: [
+            "The HCP reviews candidacy criteria and asks for one clear selection rule they can apply immediately.",
+            "The HCP marks screening checkpoints and asks for a practical criteria-first recommendation.",
+            "The HCP checks patient-selection notes and signals for one implementable screening decision rule.",
+          ],
+          time: [
+            "The HCP checks the schedule and asks for one concise, high-yield point before moving on.",
+            "The HCP glances at the clock and signals for a brief, immediately actionable takeaway.",
+            "The HCP keeps one hand on the chart and asks for a single practical point in under a minute.",
+          ],
+        };
+        const resolvedPool = firstTurnCuePools[scenarioFirstTurnConcern] || firstTurnCuePools.workflow;
+        return resolvedPool[deterministicIndex(firstTurnCueSeed, resolvedPool.length)];
       }
       if (nextHcpState === "disengaged") {
         return "The HCP turns back toward the patient room and reaches for the door, body language making clear the exchange is over.";
@@ -3075,6 +3210,50 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         : buildFollowUpScenarioFallback();
       draftResponseBeforePostProcessing = nextHcpDialogue;
     }
+
+    if (usedDeterministicFallback && !forceTerminalDisengagement) {
+      try {
+        const fallbackRecoveryPrompt = [
+          "You are generating ONE HCP reply in a role-play simulation.",
+          `Scenario grounding: ${scenarioGroundingText}`,
+          `Current HCP state: ${nextHcpState}`,
+          `Active concern: ${activeConcern}`,
+          `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+          `Rep reply to react to: ${repMessage}`,
+          "Rules:",
+          "- Respond directly to the rep's last message.",
+          "- Keep continuity with the previous HCP line and active concern.",
+          "- Do not drift to unrelated topics.",
+          "- One sentence only.",
+          "- Keep realistic clinical/workflow pressure tone.",
+        ].join('\n');
+
+        const recoveryRes = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: fallbackRecoveryPrompt,
+            max_tokens: 120,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (recoveryRes.ok) {
+          const recoveryData = await recoveryRes.json();
+          const recoveredLine = normalizeLlmInvokeText(recoveryData).split('\n')[0].trim();
+          if (recoveredLine) {
+            nextHcpDialogue = recoveredLine;
+            draftResponseBeforePostProcessing = recoveredLine;
+            draftResponseSource = `${draftResponseSource}_ai_recovery`;
+          }
+        }
+      } catch (recoveryError) {
+        if (import.meta.env.DEV) {
+          console.warn("ROLEPLAY_AI_FALLBACK_RECOVERY_FAILED", { recoveryError });
+        }
+      }
+    }
+
     if (!String(nextHcpDialogue || "").trim()) {
       const deterministicFallback = isFirstHcpResponse
         ? buildFirstTurnScenarioFallback()
@@ -3536,6 +3715,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
     }
 
+    if (overrideExit) {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = terminalCloseFallback;
+    }
+
     const terminalPolicyAction = determineTerminalPolicyAction({
       hcpState: decayState.tier,
       concernFlowOutcome,
@@ -3545,36 +3729,82 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       explicitExitOverride: overrideExit,
     });
 
-    if (terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
-    if (blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
       const primaryBlockingConstraint = blockingUnresolvedConstraints[0]?.type || "request_for_specificity";
-      const persistentPromptMap = {
-        request_for_evidence: "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
-        request_for_specificity: "I still need one concrete, specific step we can execute this week. Be exact.",
-        request_for_applicability: "I still need this translated to our exact setting and patient mix before we move on.",
-        request_for_operational_fit: "I still need to hear exactly how this fits our workflow and staffing constraints.",
-        request_for_clarification: "I still need one clear clarification in operational terms before we proceed.",
+      const constraintPromptGroups = {
+        request_for_evidence: [
+          "I still need one practice-relevant evidence point tied to my patient population. Be precise.",
+          "Give me one concrete data point that applies to this patient mix—no broad summary.",
+          "Name one clinically meaningful evidence detail I can use in this exact setting this week.",
+        ],
+        request_for_specificity: [
+          "I still need one concrete, specific step we can execute this week. Be exact.",
+          "Give me one operational step with clear ownership and timing for this clinic.",
+          "Name a single implementable action we can run now without adding process burden.",
+        ],
+        request_for_applicability: [
+          "I still need this translated to our exact setting and patient mix before we move on.",
+          "Show me how this applies to our real workflow, not a generic scenario.",
+          "Tie this directly to our patient selection and visit constraints in this clinic.",
+        ],
+        request_for_operational_fit: [
+          "I still need to hear exactly how this fits our workflow and staffing constraints.",
+          "Map this to a practical clinic workflow step with minimal staffing disruption.",
+          "Explain the operational handoff so this can run without adding administrative friction.",
+        ],
+        request_for_clarification: [
+          "I still need one clear clarification in operational terms before we proceed.",
+          "Clarify the key point in one concrete sentence I can act on today.",
+          "Resolve the ambiguity with one precise, practical explanation for this setting.",
+        ],
       };
-      nextHcpDialogue = persistentPromptMap[primaryBlockingConstraint] || persistentPromptMap.request_for_specificity;
+      const constraintPool = constraintPromptGroups[primaryBlockingConstraint] || constraintPromptGroups.request_for_specificity;
+      const selectedIndex = deterministicIndex(
+        `${generationKey}:${nextTurnNumber}:${primaryBlockingConstraint}:constraint-prompt`,
+        constraintPool.length
+      );
+      nextHcpDialogue = constraintPool[selectedIndex];
+
+      const recentRepMsgs = prevTurns
+        .map((turn) => String(turn?.repMessage || "").trim())
+        .filter(Boolean)
+        .slice(-2);
+      const repeatedRepPattern = recentRepMsgs.length >= 2
+        && computeSimilarity(recentRepMsgs[0], recentRepMsgs[1]) >= 0.9
+        && computeSimilarity(recentRepMsgs[1], repMessage) >= 0.9;
+      const similarConstraintPrompts = prevTurns
+        .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+        .filter(Boolean)
+        .slice(-4)
+        .filter((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.7).length;
+      const consecutiveBlockCloseTurns = (() => {
+        let count = 0;
+        for (let i = prevTurns.length - 1; i >= 0; i -= 1) {
+          if (prevTurns[i]?.hcpConstraintState?.blockClose) count += 1;
+          else break;
+        }
+        return count;
+      })();
+
+      const loopAction = resolveConstraintLoopAction({
+        consecutiveBlockCloseTurns,
+        repeatedRepPattern,
+        similarConstraintPrompts,
+        activeConcern,
+        terminalCloseFallback,
+      });
+      if (loopAction) {
+        nextHcpState = loopAction.nextHcpState;
+        nextHcpDialogue = loopAction.nextHcpDialogue;
+      }
     }
 
-    if (!blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && !blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
-    }
-
-    const recentHcpUtterances = prevTurns
-      .map((turn) => turn?.hcpDialogueBefore)
-      .filter(Boolean)
-      .slice(-2);
-    const isRepetitiveHcpLine = recentHcpUtterances.some((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.82);
-    if (isRepetitiveHcpLine) {
-      const repetitionFallback = hasPartialProgress
-        ? "You are getting closer—now make it specific to our staffing and workflow constraints."
-        : "You are repeating the theme. Give me one specific, practice-level action with evidence and workflow fit.";
-      nextHcpDialogue = repetitionFallback;
     }
 
     if (!overrideExit && lateTurnConstraintDecision.forced) {
@@ -3585,41 +3815,179 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           normalizedActiveConstraints.includes("time")
           || activeConstraintForTurn === "time"
         ),
+        seed: `${generationKey}:${nextTurnNumber}:late-turn`,
+        progressionStage: lateTurnConstraintDecision.nextRequirementRestatedCount,
       });
+
+      if (
+        lateTurnConstraintDecision.mode === "close"
+        && priorLateTurnConstraintState.boundaryLevel === "closing"
+      ) {
+        nextHcpState = "disengaged";
+        nextHcpDialogue = terminalCloseFallback;
+      }
+    }
+
+    const recentHcpUtterances = prevTurns
+      .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+      .filter(Boolean)
+      .slice(-2);
+    const repetitiveCandidate = recentHcpUtterances.find((utterance) => computeSimilarity(utterance, nextHcpDialogue) >= 0.84);
+    if (!overrideExit && repetitiveCandidate && nextHcpState !== "disengaged") {
+      let regenerated = "";
+      try {
+        const antiRepeatPrompt = [
+          "Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent.",
+          `Scenario context: ${scenarioGroundingText}`,
+          `HCP state: ${nextHcpState}`,
+          `Active concern: ${activeConcern}`,
+          `Previous repeated HCP line: ${repetitiveCandidate}`,
+          `Current draft line: ${nextHcpDialogue}`,
+          "Rules:",
+          "- Keep one sentence only.",
+          "- Preserve the same constraint/request and pressure level.",
+          "- Do not add new topics.",
+          "- Use different wording from both previous and current lines.",
+        ].join("\n");
+
+        const antiRepeatRes = await fetch('/api/llm/invoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: antiRepeatPrompt,
+            max_tokens: 120,
+            temperature: 0,
+            roleplay: true,
+          })
+        });
+        if (antiRepeatRes.ok) {
+          const antiRepeatData = await antiRepeatRes.json();
+          regenerated = normalizeLlmInvokeText(antiRepeatData).split('\n')[0].trim();
+        }
+      } catch (antiRepeatError) {
+        if (import.meta.env.DEV) {
+          console.warn("ROLEPLAY_ANTI_REPEAT_REGEN_FAILED", { antiRepeatError });
+        }
+      }
+
+      if (regenerated && computeSimilarity(regenerated, repetitiveCandidate) < 0.8) {
+        nextHcpDialogue = regenerated;
+      } else if (lateTurnConstraintDecision.forced) {
+        nextHcpDialogue = buildLateTurnConstraintResponse({
+          concern: activeRequirementForTurn,
+          mode: lateTurnConstraintDecision.mode,
+          includeConstraintSignal: Boolean(
+            normalizedActiveConstraints.includes("time")
+            || activeConstraintForTurn === "time"
+          ),
+          seed: `${generationKey}:${nextTurnNumber}:late-turn:anti-repeat`,
+          progressionStage: lateTurnConstraintDecision.nextRequirementRestatedCount + 1,
+        });
+      } else {
+        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+          fallbackResponse: groundedFallback,
+          concern: activeConcern,
+          includeWarmth: false,
+          scenarioContext: scenarioGroundingText,
+        });
+      }
+    }
+
+    if (!overrideExit && nextHcpState !== "disengaged") {
+      const continuity = evaluateRepToHcpContinuity({
+        repMessage,
+        hcpDialogue: nextHcpDialogue,
+        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      });
+
+      if (continuity.needsRepair) {
+        try {
+          const continuityPrompt = [
+            "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
+            `Scenario grounding: ${scenarioGroundingText}`,
+            `Active concern: ${activeConcern}`,
+            `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
+            `Rep message: ${repMessage}`,
+            `Current HCP draft: ${nextHcpDialogue}`,
+            "Rules:",
+            "- Keep one sentence only.",
+            "- Preserve professional tone and current pressure level.",
+            "- Keep the same concern family; do not introduce unrelated topics.",
+            "- If rep addressed an evidence/study question, react to that directly before redirecting.",
+          ].join('\n');
+
+          const continuityRes = await fetch('/api/llm/invoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: continuityPrompt,
+              max_tokens: 120,
+              temperature: 0,
+              roleplay: true,
+            })
+          });
+          if (continuityRes.ok) {
+            const continuityData = await continuityRes.json();
+            const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
+            if (revisedLine) nextHcpDialogue = revisedLine;
+          }
+        } catch (continuityError) {
+          if (import.meta.env.DEV) {
+            console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
+          }
+        }
+      }
     }
 
     const openingBeforeGuardrail = getOpeningSentence(nextHcpDialogue);
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const initialViolation = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    const draftRejectedForConstraintRule = !initialViolation.valid;
-    if (draftRejectedForConstraintRule) {
-      usedDeterministicFallback = true;
-      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
-        fallbackResponse: groundedFallback,
-        concern: activeConcern,
+    const shouldApplyConstraintDraftGuardrail = respondingToTurn?.turnNumber > 0;
+    let initialViolation = {
+      valid: true,
+      rejectionReason: null,
+      ungroundedTypes: [],
+      duplicateTypes: [],
+    };
+    let draftRejectedForConstraintRule = false;
+    let finalViolationCheck = {
+      valid: true,
+      draftTypes: [],
+    };
+    if (shouldApplyConstraintDraftGuardrail) {
+      initialViolation = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
       });
-    }
-    const finalViolationCheck = detectConstraintDraftViolations({
-      draftText: nextHcpDialogue,
-      groundedTypes: groundedConstraintTypes,
-      alreadySurfacedTypes: previouslySurfacedConstraintTypes,
-      newlyRaisedTypes: newConstraintTypesThisTurn,
-      revisitRequested,
-      changedConstraint,
-      clarificationNeeded,
-    });
-    if (!finalViolationCheck.valid) {
-      nextHcpDialogue = "Help me understand the most clinically relevant takeaway for my patients.";
+      draftRejectedForConstraintRule = !initialViolation.valid;
+      if (draftRejectedForConstraintRule) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+          fallbackResponse: groundedFallback,
+          concern: activeConcern,
+          includeWarmth: false,
+          scenarioContext: scenarioGroundingText,
+        });
+      }
+      finalViolationCheck = detectConstraintDraftViolations({
+        draftText: nextHcpDialogue,
+        groundedTypes: groundedConstraintTypes,
+        alreadySurfacedTypes: previouslySurfacedConstraintTypes,
+        newlyRaisedTypes: newConstraintTypesThisTurn,
+        revisitRequested,
+        changedConstraint,
+        clarificationNeeded,
+      });
+      if (!finalViolationCheck.valid) {
+        nextHcpDialogue = buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || "");
+      }
     }
 
     const nextLateTurnConstraintState = {

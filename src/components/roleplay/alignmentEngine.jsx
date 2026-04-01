@@ -49,6 +49,15 @@ function isDisengagingState(hcpState) {
   return hcpState === 'disengaging' || hcpState === 'disengaged';
 }
 
+function normalizeHcpState(rawState = 'neutral') {
+  const state = String(rawState || 'neutral').trim().toLowerCase().replace(/[_\s]+/g, '-');
+  if (state === 'time-pressed' || state === 'time-pressured') return 'time-pressured';
+  if (state === 'boundary-setting' || state === 'boundary') return 'boundary-setting';
+  if (state === 'disengaged' || state === 'disengaging') return state;
+  if (state === 'resistant' || state === 'engaged' || state === 'neutral' || state === 'irritated') return state;
+  return state || 'neutral';
+}
+
 /**
  * Detect observable behavioral patterns in rep message.
  * Each key corresponds to a specific, observable behavioral signal.
@@ -57,6 +66,10 @@ function detectPatterns(msg) {
   const lc = msg.toLowerCase();
   const wc = wordCount(msg);
   const qc = questionCount(msg);
+  const greetingOnly =
+    /\b(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(lc)
+    && !/\b(prep|hiv|sti|cab|screening|study|trial|data|workflow|patient|practice|evidence|recommend|step|clinic|operational|pathway)\b/.test(lc)
+    && wc <= 7;
 
   return {
     // ── Signal Awareness patterns ──────────────────────────────────────────
@@ -147,6 +160,7 @@ function detectPatterns(msg) {
     isLong: wc > 60,
     isVeryLong: wc > 100,
     singleAsk: qc <= 1,
+    isGreetingOnly: greetingOnly,
   };
 }
 
@@ -200,6 +214,69 @@ function repAddressesQuestionDemand(repMessage = "", demand = {}) {
       (!demand.requiresMetric || hasMetricAnchor || lexicalOverlap >= 1)
       && (!demand.requiresThreshold || hasNumericAnchor),
   };
+}
+
+function detectCueDemand(context = {}) {
+  const cue = String(context?.cueText || '').toLowerCase();
+  const hcp = String(context?.hcpUtterance || context?.latestHcpUtterance || '').toLowerCase();
+  const combined = `${cue} ${hcp}`;
+  return {
+    hasCueSignal: Boolean(cue.trim()),
+    timeConstraint:
+      /\b(time|schedule|quick|brief|middle of|get to the point|patients waiting|don't have a lot of time|not worth more time)\b/.test(combined),
+    explicitResistance:
+      /\b(concern|skeptic|not convinced|still trying to understand|objection|doesn't apply|does not apply)\b/.test(combined),
+    closingSignal:
+      /\b(door|leave|take care|patients waiting|exchange is over|not worth more time)\b/.test(combined),
+    engagementSignal:
+      /\b(interesting|help me understand|connect the dots|curious|can you clarify)\b/.test(combined),
+  };
+}
+
+const TOPIC_STOPWORDS = new Set([
+  "what", "when", "where", "which", "would", "could", "should", "their", "there", "this", "that",
+  "with", "from", "into", "about", "your", "patients", "patient", "please", "thanks", "thank",
+]);
+
+function extractTopicTokens(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length >= 4)
+    .filter((token) => !TOPIC_STOPWORDS.has(token));
+}
+
+function evaluateTopicTraceability(repMessage = "", context = {}) {
+  const repTokens = new Set(extractTopicTokens(repMessage));
+  const sourceTokens = new Set([
+    ...extractTopicTokens(context?.cueText || ""),
+    ...extractTopicTokens(context?.hcpUtterance || context?.latestHcpUtterance || ""),
+  ]);
+
+  if (repTokens.size === 0 || sourceTokens.size === 0) {
+    return { hasTraceabilityRisk: false, overlapCount: 0, repTopicCount: repTokens.size };
+  }
+
+  const overlapCount = [...repTokens].filter((token) => sourceTokens.has(token)).length;
+  const repTopicCount = repTokens.size;
+  const overlapRatio = overlapCount / Math.max(1, Math.min(repTopicCount, 6));
+  const hasTraceabilityRisk = repTopicCount >= 3 && overlapRatio < 0.2;
+
+  return { hasTraceabilityRisk, overlapCount, repTopicCount };
+}
+
+function classifyAlignmentOutcome({
+  totalMisalignments = 0,
+  hasTraceabilityRisk = false,
+  directQuestionMiss = false,
+  overallScore = 3,
+}) {
+  if (hasTraceabilityRisk && totalMisalignments >= 3) return "over_pivot";
+  if (directQuestionMiss && totalMisalignments >= 2) return "missed_signal";
+  if (totalMisalignments >= 3 || overallScore <= 2) return "misaligned";
+  if (totalMisalignments > 0 || overallScore === 3) return "partially_aligned";
+  return "aligned";
 }
 
 // ─── 1. SIGNAL AWARENESS — Question Quality ────────────────────────────────────
@@ -746,7 +823,7 @@ function scoreCommitmentGeneration(hcpState, temperature, p) {
 }
 
 // ─── SIGNAL–RESPONSE ALIGNMENT RUBRIC (5 derived checks) ──────────────────────
-function computeAlignmentRubric(hcpState, p) {
+function computeAlignmentRubric(hcpState, p, questionDemand = {}, questionResponseFit = {}) {
   const rubricMisalignments = [];
 
   const concernDetected = hcpState === 'resistant' || hcpState === 'boundary-setting';
@@ -772,10 +849,20 @@ function computeAlignmentRubric(hcpState, p) {
       'Value was introduced before customer priorities were established, which may feel misaligned.'
     );
   }
-  const readinessSignal = hcpState === 'engaged' && !p.invitesCommitment && !p.offersNextStep && !p.specifiesNextStep;
+  const readinessSignal =
+    hcpState === 'engaged'
+    && !questionDemand.isDirectQuestion
+    && !p.invitesCommitment
+    && !p.offersNextStep
+    && !p.specifiesNextStep;
   if (readinessSignal && !p.hasQuestion) {
     rubricMisalignments.push(
       'A readiness signal appeared, but next steps were not aligned, which may slow momentum.'
+    );
+  }
+  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+    rubricMisalignments.push(
+      'The HCP asked a direct question, but the reply did not provide the requested concrete answer.'
     );
   }
 
@@ -794,8 +881,12 @@ function computeAlignmentRubric(hcpState, p) {
  * @returns alignment object
  */
 export function computeAlignment(hcpState, repMessage, context = null, temperature = 'neutral', prevHcpState = null) {
+  const normalizedState = normalizeHcpState(hcpState);
+  const normalizedPrevState = normalizeHcpState(prevHcpState);
   const p = detectPatterns(repMessage);
   const promptContext = typeof context === "string" ? context : (context?.hcpUtterance || context?.latestHcpUtterance || "");
+  const cueDemand = detectCueDemand(typeof context === 'object' && context ? context : {});
+  const traceability = evaluateTopicTraceability(repMessage, typeof context === 'object' && context ? context : {});
   const questionDemand = detectQuestionDemand(promptContext);
   const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
   // Robust misalignment: track repeated/aggressive responses
@@ -833,15 +924,60 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   };
 
   const metricResults = {
-    signal_awareness:         scoreSignalAwareness(hcpState, temperature, p),
-    signal_interpretation:    scoreSignalInterpretation(hcpState, temperature, p),
-    value_connection:         scoreValueConnection(hcpState, temperature, p),
-    customer_engagement:      scoreCustomerEngagement(hcpState, temperature, p),
-    objection_navigation:     scoreObjectionNavigation(hcpState, temperature, p),
-    conversation_management:  scoreConversationManagement(hcpState, temperature, p),
-    adaptive_response:        scoreAdaptiveResponse(hcpState, temperature, p, prevHcpState),
-    commitment_generation:    scoreCommitmentGeneration(hcpState, temperature, p),
+    signal_awareness:         scoreSignalAwareness(normalizedState, temperature, p),
+    signal_interpretation:    scoreSignalInterpretation(normalizedState, temperature, p),
+    value_connection:         scoreValueConnection(normalizedState, temperature, p),
+    customer_engagement:      scoreCustomerEngagement(normalizedState, temperature, p),
+    objection_navigation:     scoreObjectionNavigation(normalizedState, temperature, p),
+    conversation_management:  scoreConversationManagement(normalizedState, temperature, p),
+    adaptive_response:        scoreAdaptiveResponse(normalizedState, temperature, p, normalizedPrevState),
+    commitment_generation:    scoreCommitmentGeneration(normalizedState, temperature, p),
   };
+
+  if (cueDemand.hasCueSignal) {
+    if (traceability.hasTraceabilityRisk) {
+      metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 1);
+      metricResults.signal_interpretation.subScores.accuracy_of_interpretation = clamp(
+        metricResults.signal_interpretation.subScores.accuracy_of_interpretation - 1
+      );
+      metricResults.signal_interpretation.misalignments.push('Rep introduced a topic not traceable to active HCP cue/dialogue signals.');
+    }
+    if ((cueDemand.timeConstraint || questionDemand.isDirectQuestion) && p.isGreetingOnly) {
+      metricResults.signal_awareness.score = clamp(metricResults.signal_awareness.score - 2);
+      metricResults.signal_awareness.subScores.contextual_relevance = clamp(
+        metricResults.signal_awareness.subScores.contextual_relevance - 2
+      );
+      metricResults.signal_awareness.misalignments.push('Greeting-only opener ignored the active cue/dialogue demand.');
+    }
+    if (cueDemand.timeConstraint && !p.acknowledguesTime) {
+      metricResults.adaptive_response.score = clamp(metricResults.adaptive_response.score - 1);
+      metricResults.adaptive_response.subScores.situational_responsiveness = clamp(
+        metricResults.adaptive_response.subScores.situational_responsiveness - 1
+      );
+      metricResults.adaptive_response.misalignments.push('Time-pressure cue was present but not acknowledged in the rep response.');
+    }
+    if (cueDemand.explicitResistance && !p.acknowledgesConcern && !p.paraphrasesHcp) {
+      metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 1);
+      metricResults.signal_interpretation.subScores.accuracy_of_interpretation = clamp(
+        metricResults.signal_interpretation.subScores.accuracy_of_interpretation - 1
+      );
+      metricResults.signal_interpretation.misalignments.push('HCP resistance cue/dialogue was not reflected before moving forward.');
+    }
+    if (cueDemand.closingSignal && !p.gracefulClose && !p.offersNextStep && !p.specifiesNextStep) {
+      metricResults.conversation_management.score = clamp(metricResults.conversation_management.score - 1);
+      metricResults.conversation_management.subScores.adaptive_steering = clamp(
+        metricResults.conversation_management.subScores.adaptive_steering - 1
+      );
+      metricResults.conversation_management.misalignments.push('Closing cue was detected, but response did not close or release gracefully.');
+    }
+    if (cueDemand.engagementSignal && (p.buildsOnHcp || p.asksContextualQuestion)) {
+      metricResults.customer_engagement.score = clamp(metricResults.customer_engagement.score + 1);
+      metricResults.customer_engagement.subScores.responsiveness_to_cues = clamp(
+        metricResults.customer_engagement.subScores.responsiveness_to_cues + 1
+      );
+      metricResults.customer_engagement.positives.push('Rep leveraged an engagement cue with contextual follow-through.');
+    }
+  }
 
   if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
     metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 2);
@@ -862,6 +998,20 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
         metricResults.conversation_management.subScores.directional_clarity - 1
       );
       metricResults.conversation_management.misalignments.push('Threshold-oriented question lacked a concrete threshold in the reply.');
+    }
+  } else if (questionDemand.isDirectQuestion && questionResponseFit.directlyAddresses) {
+    metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score + 1);
+    metricResults.signal_interpretation.subScores.responsiveness_of_action = clamp(
+      metricResults.signal_interpretation.subScores.responsiveness_of_action + 1
+    );
+    metricResults.signal_interpretation.positives.push('Direct HCP question was answered with concrete specificity.');
+
+    if (questionDemand.requiresThreshold && questionResponseFit.hasNumericAnchor) {
+      metricResults.value_connection.score = clamp(metricResults.value_connection.score + 1);
+      metricResults.value_connection.subScores.outcome_translation = clamp(
+        metricResults.value_connection.subScores.outcome_translation + 1
+      );
+      metricResults.value_connection.positives.push('Threshold-oriented question received a concrete measurable answer.');
     }
   }
 
@@ -892,7 +1042,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     globalMisalignments.push('Repeated misaligned response — scores further reduced.');
   }
 
-  const rubricMisalignments = computeAlignmentRubric(hcpState, p);
+  const rubricMisalignments = computeAlignmentRubric(normalizedState, p, questionDemand, questionResponseFit);
 
   const metricScores = Object.values(metricResults).map(m => m.score);
   const rawAvg = metricScores.reduce((a, b) => a + b, 0) / metricScores.length;
@@ -905,14 +1055,21 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     allMisalignments.push(...m.misalignments);
   });
   allMisalignments.push(...rubricMisalignments);
+  const alignmentClassification = classifyAlignmentOutcome({
+    totalMisalignments: [...new Set(allMisalignments)].length,
+    hasTraceabilityRisk: traceability.hasTraceabilityRisk,
+    directQuestionMiss: questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses,
+    overallScore,
+  });
 
   return {
     score: overallScore,
     metrics: metricResults,
-    ruleLabel: STATE_LABELS[hcpState] || 'Unknown State',
-    ruleDescription: STATE_DESCRIPTIONS[hcpState] || '',
+    ruleLabel: STATE_LABELS[normalizedState] || 'Unknown State',
+    ruleDescription: STATE_DESCRIPTIONS[normalizedState] || '',
     positives: [...new Set(allPositives)],
     misalignments: [...new Set(allMisalignments)],
+    alignmentClassification,
     rubricAlignmentFlags: rubricMisalignments,
     guardrail: 'Signal–Response Alignment evaluates observable behavioral adaptation — not empathy, intent, emotion, or personality.',
   };

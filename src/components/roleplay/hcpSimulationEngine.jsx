@@ -1902,8 +1902,14 @@ export function buildHCPDialoguePrompt({
   const repLine = [...historyLines]
     .reverse()
     .find((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
+  const hcpLine = [...historyLines]
+    .reverse()
+    .find((l) => l.startsWith('HCP:'))
   const lastRepMessage = repLine
     ? repLine.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim()
+    : ''
+  const lastHcpMessage = hcpLine
+    ? hcpLine.replace(/^HCP:\s*/i, '').trim()
     : ''
   const lastRepLower = lastRepMessage.toLowerCase()
   const repWasLowValue =
@@ -1960,6 +1966,21 @@ export function buildHCPDialoguePrompt({
       + (repWasLowValue ? '\n- The rep response was low-value or minimally useful.' : '')
       + (repWasVagueOrDismissive ? '\n- The rep response was vague, dismissive, or unhelpful.' : '')
       + (repWasRude ? '\n- The rep response was rude or unprofessional.' : '')
+  }
+
+  const continuityTags = []
+  if (/\b(study|trial|evidence|methodology|duration|endpoint|publication|jama)\b/i.test(lastHcpMessage)) continuityTags.push('evidence')
+  if (/\b(workflow|operational|prior auth|staff|capacity|burden|implementation|clinic)\b/i.test(lastHcpMessage)) continuityTags.push('workflow')
+  if (/\b(access|coverage|payer|reimbursement|authorization)\b/i.test(lastHcpMessage)) continuityTags.push('access')
+  let continuityHint = ''
+  if (lastHcpMessage && continuityTags.length > 0) {
+    continuityHint =
+      '\nTHREAD CONTINUITY LOCK:\n'
+      + '- Last HCP thread: "' + sanitize(lastHcpMessage) + '".\n'
+      + '- Active thread tags: ' + continuityTags.join(', ') + '.\n'
+      + '- Respond to this thread FIRST before any adjacent reframing.\n'
+      + '- If rep addressed the active thread partially, acknowledge and ask one narrower follow-up on the same thread.\n'
+      + '- Do not switch to a different concern family unless the active thread has been answered.\n';
   }
 
   let prompt = ''
@@ -2042,6 +2063,9 @@ export function buildHCPDialoguePrompt({
   prompt += '- Preserve your primary concern from this scenario; do not drift into unrelated topics.\n'
   prompt += '- Do not restate the same objection phrasing more than twice; if concern remains unresolved, escalate posture instead of looping wording.\n'
   prompt += '- Progress unresolved concern semantically across stages instead of reusing near-identical sentence structures.\n'
+  if (continuityHint) {
+    prompt += continuityHint
+  }
 
   prompt += '\nINTERACTION MODE SHIFT RULES:\n'
   prompt += '- As engagement declines, change posture, not only length: Exploratory -> Clarifying -> Directive -> Closing / Decision.\n'

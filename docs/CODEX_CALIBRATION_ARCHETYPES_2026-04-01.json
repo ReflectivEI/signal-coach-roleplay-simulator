@@ -1,0 +1,85 @@
+{
+  "version": "2026-04-01",
+  "determinism": true,
+  "scoring_scope": "rep_only_observable_behavior",
+  "state_machine": {
+    "ordered_states": ["engaged", "constrained", "impatient", "disengaging"],
+    "transition_drivers": {
+      "misalignment": "move_right",
+      "partial_alignment": "hold",
+      "strong_alignment": "move_left"
+    }
+  },
+  "archetypes": [
+    {
+      "id": "time_constrained_access_pressure",
+      "initial_state": "constrained",
+      "signals": ["short_responses", "interruptions", "time_reference"],
+      "expected_progression": {
+        "aligned": ["constrained", "engaged"],
+        "missed": ["constrained", "impatient"]
+      },
+      "pass_conditions": ["acknowledge_constraint", "concise_relevance", "outcome_based_framing"],
+      "fail_conditions": ["ignore_time_constraint", "over_explain", "multi_layer_questions"],
+      "metric_priority": ["conversation_management", "adaptive_response", "value_connection"]
+    },
+    {
+      "id": "skeptical_evidence_pressure",
+      "initial_state": "engaged",
+      "signals": ["challenge_data", "request_justification", "comparative_framing"],
+      "expected_progression": {
+        "aligned": ["engaged", "engaged"],
+        "missed": ["engaged", "constrained", "impatient"]
+      },
+      "pass_conditions": ["acknowledge_challenge", "evidence_relevance_bridge", "calm_pacing"],
+      "fail_conditions": ["defensive_tone", "data_dump", "ignore_underlying_concern"],
+      "metric_priority": ["objection_navigation", "signal_interpretation", "signal_awareness"]
+    },
+    {
+      "id": "low_engagement_passive",
+      "initial_state": "disengaging",
+      "signals": ["minimal_responses", "no_followup_questions", "flat_language"],
+      "expected_progression": {
+        "aligned": ["disengaging", "constrained", "engaged"],
+        "missed": ["disengaging", "disengaged"]
+      },
+      "pass_conditions": ["relevance_trigger", "activating_question", "push_to_pull_shift"],
+      "fail_conditions": ["continued_monologue", "no_adaptation", "generic_messaging"],
+      "metric_priority": ["customer_engagement", "signal_awareness", "adaptive_response"]
+    },
+    {
+      "id": "ready_forward_moving",
+      "initial_state": "engaged",
+      "signals": ["forward_language", "implementation_question", "openness_signal"],
+      "expected_progression": {
+        "aligned": ["engaged", "commitment"],
+        "missed": ["engaged", "constrained"]
+      },
+      "pass_conditions": ["recognize_readiness", "clear_next_step", "confirm_agreement"],
+      "fail_conditions": ["miss_buying_signal", "over_explain", "fails_to_close"],
+      "metric_priority": ["commitment_generation", "conversation_management", "value_connection"]
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": "access_restricted_gatekeeper",
+      "signals": ["gatekeeping_language", "no_clinical_discussion_allowed"],
+      "required_rep_behavior": ["respect_boundary", "pivot_to_allowed_topic"]
+    },
+    {
+      "id": "evidence_heavy_specialist",
+      "signals": ["high_data_fluency", "low_tolerance_for_simplification"],
+      "required_rep_behavior": ["match_depth", "avoid_oversimplification"]
+    },
+    {
+      "id": "rapid_state_flip",
+      "signals": ["engaged_to_impatient_single_turn"],
+      "required_rep_behavior": ["detect_transition", "adapt_within_next_turn"]
+    }
+  ],
+  "hard_rules": [
+    "no_scoring_without_detected_signal",
+    "no_intent_emotion_personality_scoring",
+    "rep_cannot_introduce_new_topic_without_traceable_active_signal"
+  ]
+}

@@ -111,7 +111,7 @@ export function recalibrateHcpDialogueAndCue({
   question,
   currentTab,
   scenario = scenarios[0],
-  sessionId = "default",
+  sessionId,
   turnNumber = 0,
   state = "neutral",
   severity = 0,
@@ -158,7 +158,14 @@ export function recalibrateHcpDialogueAndCue({
 
   // Deterministic cue selection
   const cueList = cueBank[mood] || cueBank.neutral;
-  const cueBefore = deterministicCue(sessionId, turnNumber, state, severity, cueList);
+  const resolvedSessionSeed = String(
+    sessionId
+    || scenario?.id
+    || scenario?.title
+    || scenario?.hcp?.name
+    || "scenario-seed"
+  );
+  const cueBefore = deterministicCue(resolvedSessionSeed, turnNumber, state, severity, cueList);
 
   // Dialogue generation
   let hcpDialogue = "";
