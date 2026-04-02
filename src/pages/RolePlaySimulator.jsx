@@ -18,6 +18,7 @@ import {
   INTERACTION_PRESSURES,
 } from "@/lib/roleplay-v2/scenarioCatalog";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
+import { formatTaxonomyFilterLabel } from "@/lib/roleplayUiFormatting";
 
 const BUILDER_TO_SIMULATOR_KEY = "reflectivai:builderScenario";
 
@@ -195,7 +196,11 @@ export default function RolePlaySimulator() {
                 <SelectValue placeholder="Journey Stage" />
               </SelectTrigger>
               <SelectContent>
-                {JOURNEY_STAGES.map((stage) => <SelectItem key={stage} value={stage}>{stage}</SelectItem>)}
+                {JOURNEY_STAGES.map((stage) => (
+                  <SelectItem key={stage} value={stage}>
+                    {formatTaxonomyFilterLabel(stage)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={interactionPressureFilter} onValueChange={setInteractionPressureFilter}>
@@ -203,7 +208,11 @@ export default function RolePlaySimulator() {
                 <SelectValue placeholder="Interaction Pressure" />
               </SelectTrigger>
               <SelectContent>
-                {INTERACTION_PRESSURES.map((pressure) => <SelectItem key={pressure} value={pressure}>{pressure}</SelectItem>)}
+                {INTERACTION_PRESSURES.map((pressure) => (
+                  <SelectItem key={pressure} value={pressure}>
+                    {formatTaxonomyFilterLabel(pressure)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

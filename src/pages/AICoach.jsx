@@ -55,6 +55,7 @@ import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
 import TodaysTipCard from "@/components/shared/TodaysTipCard";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
+import { normalizeInvokeResponseText } from "@/lib/roleplayUiFormatting";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -345,7 +346,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
       });
       if (res.ok) {
         const data = await res.json();
-        let summaryText = (data.response || data.text || data.content || '').trim();
+        let summaryText = normalizeInvokeResponseText(data);
         // Strip markdown code blocks if present
         summaryText = summaryText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
         if (summaryText) setSessionSummary(summaryText);
