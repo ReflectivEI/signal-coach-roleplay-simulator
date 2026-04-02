@@ -69,6 +69,8 @@ import {
   buildLateTurnConstraintResponse,
   detectOperationalConstraintTypes,
 } from "./operationalConstraintGuardrails";
+import { buildDeterministicGenerationKey } from "./generationKey";
+import { buildCoachingFeedbackMarkdown, parseStructuredFeedback } from "./sessionFeedbackFormatter";
 
 function escapeHTML(text) {
   return String(text)
@@ -2456,7 +2458,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
-    const generationKey = `${respondingToTurn.turnNumber}::${repMessage.toLowerCase()}`;
+    const generationKey = buildDeterministicGenerationKey({
+      sessionId: sid,
+      turnNumber: respondingToTurn.turnNumber,
+      repMessage,
+    });
     if (processedTurnKeysRef.current.has(generationKey)) {
       setIsLoading(false);
       return;
@@ -4321,83 +4327,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (res.ok) {
         const data = await res.json();
         const rawContent = normalizeLlmInvokeText(data);
-
-        console.log('=== RAW FEEDBACK CONTENT ===');
-        console.log(rawContent.substring(0, 300));
-
-        // Strategy 1: Try delimiter-based parsing
-        let sections = rawContent.split('[SECTION_END]').map(s => s.trim()).filter(Boolean);
-
-        // If delimiter parsing didn't work well, try regex-based extraction
-        if (sections.length < 4 || sections.some(s => s.length < 20)) {
-          console.log('Delimiter parsing failed, trying regex approach...');
-
-          // Try to extract by section headers/keywords
-          const strengthsMatch = rawContent.match(/(?:STRENGTHS?|Done Well|Strong|Positive)[:\s]*\n+([\s\S]*?)(?=(?:IMPROVE|Develop|Weakness|Gap|SECTION)|$)/i);
-          const improvementsMatch = rawContent.match(/(?:IMPROVE|Develop|Focus|Weakness|Gap)[:\s]*\n+([\s\S]*?)(?=(?:PATTERN|Align|SECTION|ACTION)|$)/i);
-          const patternsMatch = rawContent.match(/(?:PATTERN|Align|Signal|Response)[:\s]*\n+([\s\S]*?)(?=(?:ACTION|SECTION|$))/i);
-          const actionsMatch = rawContent.match(/(?:ACTION|Item|Behavioral Change|Next)[:\s]*\n+([\s\S]*?)$/i);
-
-          sections = [
-            strengthsMatch?.[1] || '',
-            improvementsMatch?.[1] || '',
-            patternsMatch?.[1] || '',
-            actionsMatch?.[1] || ''
-          ];
-          console.log('Regex extraction produced', sections.length, 'sections');
-        }
-
-        // Fallback: if still not enough content, split by double newlines and distribute
-        if (sections.length < 4 || sections.every(s => !s || s.length < 15)) {
-          console.log('Regex also failed, using raw content directly');
-          sections = [rawContent, '', '', ''];
-        }
-
-        // Extract and clean section content
-        const strengthsText = (sections[0] || '')
-          .replace(/^SECTION\s+1:\s+STRENGTHS\s*\n?/i, '')
-          .replace(/^STRENGTHS?\s*[:—]*\s*\n?/i, '')
-          .trim() || 'The HCP demonstrated solid engagement and appropriate questioning throughout the conversation.';
-
-        const improvementsText = (sections[1] || '')
-          .replace(/^SECTION\s+2:\s+IMPROVEMENTS\s*\n?/i, '')
-          .replace(/^IMPROVE[A-Z]*\s*[:—]*\s*\n?/i, '')
-          .trim() || 'Continue developing the ability to connect signals to specific clinical or practice outcomes.';
-
-        const patternsText = (sections[2] || '')
-          .replace(/^SECTION\s+3:\s+PATTERNS\s*\n?/i, '')
-          .replace(/^PATTERN[A-Z]*\s*[:—]*\s*\n?/i, '')
-          .trim() || 'The HCP showed responsive engagement, adapting questions based on the sales rep\'s input.';
-
-        const actionText = (sections[3] || '')
-          .replace(/^SECTION\s+4:\s+ACTION\s+ITEMS\s*\n?/i, '')
-          .replace(/^ACTION[A-Z]*\s*[:—]*\s*\n?/i, '')
-          .trim() || 'Focus on: (1) Deeper exploration of the HCP\'s current workflow, (2) Connecting study findings to practice impact, (3) Addressing objections with research-backed evidence.';
-
-        // Reconstruct with proper markdown format
-        const coachingFeedback = `## 2) Capabilities Done Well
-
-${strengthsText}
-
-## 3) Capabilities to Develop
-
-${improvementsText}
-
-## 4) Signal–Response Alignment
-
-${patternsText}
-
-## 5) Specific Action Items
-
-${actionText}`;
-
-        const fullFeedback = coachingFeedback;
-        console.log('=== FEEDBACK PARSING COMPLETE ===');
-        console.log('Strengths length:', strengthsText.length);
-        console.log('Improvements length:', improvementsText.length);
-        console.log('Patterns length:', patternsText.length);
-        console.log('Actions length:', actionText.length);
-        setFeedback(fullFeedback);
+        const parsed = parseStructuredFeedback(rawContent);
+        const coachingFeedback = buildCoachingFeedbackMarkdown(parsed);
+        setFeedback(coachingFeedback);
       } else {
         setFeedback("Unable to generate session feedback. Please try again.");
       }
