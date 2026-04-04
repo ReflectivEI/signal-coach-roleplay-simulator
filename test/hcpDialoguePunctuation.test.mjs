@@ -26,10 +26,22 @@ test("normalizeHcpDialoguePunctuation splits run-on question clause", () => {
   assert.equal(output, "I'm familiar with the data. What specific outcome would change your decision?");
 });
 
+test("normalizeHcpDialoguePunctuation repairs comma splice between independent clauses", () => {
+  const input = "We reviewed adherence barriers, we need one concrete next step";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "We reviewed adherence barriers. We need one concrete next step.");
+});
+
 test("normalizeHcpDialoguePunctuation handles multi-clause punctuation without semantic rewrite", () => {
   const input = "We're short-staffed today, can you give one practical next step, and keep it brief";
   const output = normalizeHcpDialoguePunctuation(input);
   assert.equal(output, "We're short-staffed today. Can you give one practical next step, and keep it brief?");
+});
+
+test("normalizeHcpDialoguePunctuation keeps valid coordinating-conjunction commas", () => {
+  const input = "I hear you, and I'm not against trying that";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "I hear you, and I'm not against trying that.");
 });
 
 test("normalizeHcpDialoguePunctuation repairs all-caps output while preserving key acronyms", () => {
