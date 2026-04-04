@@ -18,6 +18,6 @@ test("intervention runtime is feature-flagged off by default", () => {
 test("intervention wiring is additive to turn state and audit payload", () => {
   assert.match(SOURCE, /interventionStateRef = useRef\(createInitialInterventionSessionState\(\)\)/);
   assert.match(SOURCE, /demandHoldHistoryRef = useRef\(/);
-  assert.match(SOURCE, /buildDemandHoldMessage\(/);
+  assert.match(SOURCE, /buildDemandHoldDirective\(/);
   assert.match(SOURCE, /logAuditEvent\('turn_created',[\s\S]*intervention: interventionSnapshot/);
 });
