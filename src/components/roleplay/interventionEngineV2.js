@@ -83,9 +83,11 @@ export function createInitialInterventionSessionState() {
       unresolvedTurns: 0,
       demandSatisfied: true,
       lastPrompt: "",
+      lastRepMessage: "",
       resolvedThisTurn: false,
       evasiveResponseDetected: false,
       longResponseClassified: false,
+      staleAnswerBlocked: false,
     },
     lastProcessedTurnNumber: null,
   };
@@ -228,11 +230,17 @@ function computeEscalationRisk({ repeatedMissedCues, repeatedLowAlignmentEvents,
 export function buildDemandHoldMessage({
   demandType,
   activeConcern = "workflow",
+  scenarioFamily = "",
   unresolvedTurns = 1,
   seed = "",
   avoidLine = "",
 } = {}) {
-  const concern = String(activeConcern || "workflow").toLowerCase();
+  const family = normalizeText(scenarioFamily);
+  const concernSource = String(activeConcern || "workflow").toLowerCase();
+  const concernHasCrossFamilyLexicon = (
+    family && !/hiv|prep/.test(family) && /\b(hiv|prep|pre exposure)\b/.test(concernSource)
+  );
+  const concern = concernHasCrossFamilyLexicon ? "workflow" : concernSource;
   const demandMessages = {
     [DEMAND_TYPES.EVIDENCE_REQUEST]: {
       stage1: [
@@ -329,12 +337,17 @@ export function buildDemandHoldMessage({
   if (normalizedAvoid && pool.length > 1 && normalizeText(selected) === normalizedAvoid) {
     selected = pool[(idx + 1) % pool.length];
   }
+  const lineHasCrossFamilyLexicon = family && !/hiv|prep/.test(family) && /\b(hiv|prep|pre exposure)\b/i.test(selected);
+  if (lineHasCrossFamilyLexicon) {
+    return "Keep this focused on the current clinic context and provide one concrete next step.";
+  }
   return selected;
 }
 
 export function buildDemandHoldDirective({
   demandType,
   activeConcern = "workflow",
+  scenarioFamily = "",
   unresolvedTurns = 1,
   seed = "",
   avoidLine = "",
@@ -342,7 +355,7 @@ export function buildDemandHoldDirective({
   const stage = unresolvedTurns >= 4 ? 4 : unresolvedTurns >= 3 ? 3 : unresolvedTurns >= 2 ? 2 : 1;
   return {
     stage,
-    line: buildDemandHoldMessage({ demandType, activeConcern, unresolvedTurns, seed, avoidLine }),
+    line: buildDemandHoldMessage({ demandType, activeConcern, scenarioFamily, unresolvedTurns, seed, avoidLine }),
     impatientTone: stage >= 3,
     disengagementTrajectory: stage >= 4,
   };
@@ -355,6 +368,7 @@ export function updateInterventionSessionState(previousState, {
   hcpPrompt = "",
   repMessage = "",
   activeConcern = "",
+  scenarioFamily = "",
   hasBlockingConstraints = false,
   needsConstraintReanchor = false,
 } = {}) {
@@ -381,7 +395,11 @@ export function updateInterventionSessionState(previousState, {
   });
 
   const evasiveSignals = detectEvasiveRepResponse({ repMessage, hcpPrompt });
-  const demandSatisfied = demandType
+  const demandTypeChanged = Boolean(prior?.activeDemand?.type && demandType && prior.activeDemand.type !== demandType);
+  const materiallyDifferentPrompt = overlapRatio(hcpPrompt, prior?.activeDemand?.lastPrompt || "") < 0.45;
+  const nearIdenticalRepReuse = overlapRatio(repMessage, prior?.activeDemand?.lastRepMessage || "") >= 0.82;
+  const staleAnswerBlocked = demandTypeChanged && materiallyDifferentPrompt && nearIdenticalRepReuse;
+  const demandSatisfied = (demandType && !staleAnswerBlocked)
     ? isDemandSatisfied({ demandType, repMessage, hcpPrompt, activeConcern })
     : true;
   const unresolvedDemand = Boolean(demandType) && (!demandSatisfied || evasiveSignals.evasive);
@@ -396,9 +414,12 @@ export function updateInterventionSessionState(previousState, {
     unresolvedTurns: unresolvedDemand ? priorUnresolvedTurns + 1 : 0,
     demandSatisfied,
     lastPrompt: hcpPrompt,
+    lastRepMessage: repMessage,
     resolvedThisTurn: Boolean(demandType) && !unresolvedDemand,
     evasiveResponseDetected: unresolvedDemand && evasiveSignals.evasive,
     longResponseClassified: Boolean(demandType) && evasiveSignals.longResponse,
+    staleAnswerBlocked,
+    scenarioFamily: normalizeText(scenarioFamily),
   };
 
   const directQuestionPending = demandType === DEMAND_TYPES.DIRECT_ANSWER_REQUIRED && unresolvedDemand;

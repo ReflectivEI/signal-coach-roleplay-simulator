@@ -335,3 +335,67 @@ test("same unresolved-demand input sequence yields identical deterministic hold 
 
   assert.deepEqual(runSequence(), runSequence());
 });
+
+test("demand switch from evidence/applicability to monitoring/workflow updates active demand and blocks stale answer reuse", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 40,
+    hcpPrompt: "What evidence supports this recommendation in our setting?",
+    repMessage: "This is generally important for outcomes.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.EVIDENCE_REQUEST);
+  assert.equal(state.activeDemand.isActive, true);
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 41,
+    hcpPrompt: "How do we monitor this week and fit it into staffing workflow?",
+    repMessage: "This is generally important for outcomes.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+    hasBlockingConstraints: true,
+    needsConstraintReanchor: true,
+  });
+
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED);
+  assert.equal(state.activeDemand.isActive, true);
+  assert.equal(state.activeDemand.staleAnswerBlocked, true);
+});
+
+test("near-identical rep answer can resolve only when downstream ask is semantically aligned", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 42,
+    hcpPrompt: "How does this apply in our clinic setting?",
+    repMessage: "In your clinic, start with one intake checklist owned by the MA team this week.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.APPLICABILITY_REQUEST);
+  assert.equal(state.activeDemand.isActive, false);
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 43,
+    hcpPrompt: "How does this apply in our practice setting?",
+    repMessage: "In your clinic, start with one intake checklist owned by the MA team this week.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.APPLICABILITY_REQUEST);
+  assert.equal(state.activeDemand.isActive, false);
+  assert.equal(state.activeDemand.staleAnswerBlocked, false);
+});
+
+test("cross-domain lexical contamination in concern is safely bounded to current scenario family", () => {
+  const line = buildDemandHoldMessage({
+    demandType: DEMAND_TYPES.APPLICABILITY_REQUEST,
+    activeConcern: "PrEP patients workflow",
+    scenarioFamily: "oncology_io",
+    unresolvedTurns: 2,
+    seed: "cross-domain",
+  });
+
+  assert.doesNotMatch(line, /prep|hiv|pre exposure/i);
+  assert.match(line.toLowerCase(), /workflow|setting|clinic|current clinic context/);
+});
