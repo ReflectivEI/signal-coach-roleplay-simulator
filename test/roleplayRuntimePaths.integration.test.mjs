@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import fixtures from "./fixtures/roleplay-runtime-fixtures.json" with { type: "json" };
 
 import { computeAlignment } from "../src/components/roleplay/alignmentEngine.jsx";
@@ -183,4 +184,16 @@ test("multi-scenario fixtures keep deterministic scoring and stronger replies ou
       `${fixture.scenarioId}: transition state should resolve for weak and strong turns`,
     );
   }
+});
+
+test("live RolePlayChat path protects engaged evidence-seeking turns from premature terminal mapping", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /function isEvidenceSeekingEngagement/);
+  assert.match(source, /const engagedEvidenceSeekingRequest = isEvidenceSeekingEngagement/);
+  assert.match(source, /holdAtBoundary: engagedEvidenceSeekingRequest && !overrideExit/);
+  assert.match(source, /hasMaterialProgression: engagedEvidenceSeekingRequest \|\| materiallyProgressedConstraintRequest/);
 });

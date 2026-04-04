@@ -28,3 +28,16 @@ test('forces disengaged closure on persistent repeated loop', () => {
     nextHcpDialogue: 'terminal-close',
   });
 });
+
+test('engaged evidence progression does not map loop policy to boundary/terminal close', () => {
+  const result = resolveConstraintLoopAction({
+    consecutiveBlockCloseTurns: 3,
+    repeatedRepPattern: true,
+    similarConstraintPrompts: 3,
+    activeConcern: 'evidence',
+    terminalCloseFallback: 'terminal-close',
+    hasMaterialProgression: true,
+  });
+
+  assert.equal(result, null);
+});

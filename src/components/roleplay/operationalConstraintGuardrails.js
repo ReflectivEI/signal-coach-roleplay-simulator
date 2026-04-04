@@ -166,6 +166,7 @@ export function selectLateTurnConstraintResponseMode({
   requirementAddressed = true,
   boundaryLevel = "normal",
   requirementRestatedCount = 0,
+  holdAtBoundary = false,
 } = {}) {
   const level = boundaryLevel === "closing" ? "closing" : boundaryLevel === "constrained" ? "constrained" : "normal";
   const restatedCount = Number.isFinite(requirementRestatedCount)
@@ -185,8 +186,8 @@ export function selectLateTurnConstraintResponseMode({
   if (level === "closing") {
     return {
       forced: true,
-      mode: "close",
-      nextBoundaryLevel: "closing",
+      mode: holdAtBoundary ? "boundary" : "close",
+      nextBoundaryLevel: holdAtBoundary ? "constrained" : "closing",
       nextRequirementRestatedCount: restatedCount,
     };
   }
@@ -211,8 +212,8 @@ export function selectLateTurnConstraintResponseMode({
 
   return {
     forced: true,
-    mode: "close",
-    nextBoundaryLevel: "closing",
+    mode: holdAtBoundary ? "boundary" : "close",
+    nextBoundaryLevel: holdAtBoundary ? "constrained" : "closing",
     nextRequirementRestatedCount: restatedCount,
   };
 }
