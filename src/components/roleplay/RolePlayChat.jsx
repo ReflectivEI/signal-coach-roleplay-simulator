@@ -82,6 +82,7 @@ import {
   buildDemandHoldDirective,
   updateInterventionSessionState,
 } from "./interventionEngineV2";
+import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 
 function escapeHTML(text) {
   return String(text)
@@ -3151,22 +3152,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "What is the most practical monitoring plan we can apply consistently without overloading the clinic team?";
       }
 
-      const repTopicTokens = repLower
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today", "patient", "patients"]).has(w))
-        .slice(0, 5);
-      const repTopic = repTopicTokens.join(" ");
+      const safeLeadIn = buildSafeReferenceLeadIn(repMessage, "I hear your concern.");
 
       if (scenarioPrepFocus) {
-        return repTopic
-          ? `You mentioned ${repTopic}. Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`
-          : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
+        return `${safeLeadIn} Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`;
       }
 
-      return repTopic
-        ? `You mentioned ${repTopic}. Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`
-        : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
+      return `${safeLeadIn} Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`;
     };
 
     const buildNonRepeatingScenarioFallback = (previousDialogue = "") => {
@@ -3176,26 +3168,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (!prevNorm || prevNorm !== baseNorm) return base;
 
       const repLower = String(repMessage || "").toLowerCase();
-      const repTopicTokens = repLower
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today"]).has(w))
-        .slice(0, 4);
-      const repTopic = repTopicTokens.join(" ") || "that point";
+      const safeLeadIn = buildSafeReferenceLeadIn(repMessage, "I hear your concern.");
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return `On ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
+        return `${safeLeadIn} Help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
       }
 
       if (scenarioPrepFocus) {
-        return `On ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
+        return `${safeLeadIn} Given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
       }
 
       if (scenarioMonitoringFocus) {
-        return `On ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
+        return `${safeLeadIn} What is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
       }
 
-      return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
+      return `${safeLeadIn} What is the most practical next step we can apply in clinic today without disrupting workflow?`;
     };
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {

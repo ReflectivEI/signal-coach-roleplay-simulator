@@ -251,9 +251,6 @@ export function buildDemandHoldMessage({
         `We are still unresolved on evidence for ${concern}. If you cannot give one concrete data point now, it is hard to continue this discussion.`,
         `This remains unresolved on evidence for ${concern}. Without one specific data point now, I do not see a reason to keep moving forward.`,
       ],
-      stage4: [
-        `We are still unresolved on evidence for ${concern}. If you cannot give one concrete data point now, it is hard to continue this discussion.`,
-      ],
     },
     [DEMAND_TYPES.PROOF_POINT_REQUEST]: {
       stage1: [
