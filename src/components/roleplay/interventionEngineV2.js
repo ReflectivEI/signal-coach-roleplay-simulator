@@ -1,4 +1,3 @@
-import { satisfiesEvidenceDemandBinding } from "./repDemandBinding.js";
 const DEFAULT_COOLDOWN_TURNS = 2;
 
 export const INTERVENTION_DECISIONS = Object.freeze({
@@ -255,12 +254,12 @@ function isDemandSatisfied({ demandType, repMessage = "", hcpPrompt = "", active
   const touchesConcern = concern ? rep.includes(concern) : true;
 
   if (demandType === DEMAND_TYPES.PROOF_POINT_REQUEST) {
-    return (satisfiesEvidenceDemandBinding({ repMessage, hcpPrompt }) && respondsToQuestion)
+    return (hasEvidence && /\b(\d+|percent|%|rate|threshold)\b/.test(rep) && respondsToQuestion)
       || (acknowledgesLimitation && hasSpecificAction);
   }
 
   if (demandType === DEMAND_TYPES.EVIDENCE_REQUEST) {
-    return (satisfiesEvidenceDemandBinding({ repMessage, hcpPrompt }) && (respondsToQuestion || hasPracticalAnchor || hasSpecificAction))
+    return (hasEvidence && (respondsToQuestion || hasPracticalAnchor || hasSpecificAction))
       || (acknowledgesLimitation && hasSpecificAction);
   }
 
