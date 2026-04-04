@@ -1663,29 +1663,16 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
   const sentences = text.match(/[^?.!]+[?.!]?/g) || [text]
 
   const normalized = sentences
-    .map((rawSentence, index) => {
+    .map((rawSentence) => {
       const sentence = rawSentence.trim()
       if (!sentence) return ''
 
       const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
-      let repaired = withoutEndPunct
-        .replace(/^On\s+(great|good)\s+question\b/i, 'That is a $1 question')
-        .replace(/\b(question)\s+i think\b/i, '$1, I think')
+      const isQuestion = questionStarterPattern.test(withoutEndPunct)
 
-      if (index === 0 && /^(And|So)\s+/i.test(repaired)) {
-        const stripped = repaired.replace(/^(And|So)\s+/i, '').trim()
-        if (stripped.split(/\s+/).length >= 3) {
-          repaired = stripped
-        }
-      }
-
-      repaired = repaired.replace(/^\s*([a-z])/, (match, letter) => letter.toUpperCase())
-      const declarativeWhLead = /^(What|How)\s+we\b/i.test(repaired)
-      const isQuestion = questionStarterPattern.test(repaired) && !declarativeWhLead
-
-      if (isQuestion) return `${repaired}?`
+      if (isQuestion) return `${withoutEndPunct}?`
       if (/[?.!]$/.test(sentence)) return sentence
-      return `${repaired}.`
+      return `${withoutEndPunct}.`
     })
     .filter(Boolean)
     .join(' ')
