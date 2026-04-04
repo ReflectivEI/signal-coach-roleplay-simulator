@@ -4,6 +4,7 @@ export function resolveConstraintLoopAction({
   similarConstraintPrompts = 0,
   activeConcern = 'workflow',
   terminalCloseFallback = 'We can pause here for now.',
+  hasMaterialProgression = false,
 } = {}) {
   const structuredDemandByConcern = {
     monitoring: 'We are still not specific enough. Give exactly: (1) monitoring owner, (2) follow-up cadence, (3) escalation trigger for adverse events.',
@@ -13,19 +14,19 @@ export function resolveConstraintLoopAction({
     time: 'We are still not specific enough. Give exactly: (1) one under-60-second action, (2) owner, (3) immediate next checkpoint.',
   };
 
-  if (repeatedRepPattern && similarConstraintPrompts >= 3) {
+  if (!hasMaterialProgression && repeatedRepPattern && similarConstraintPrompts >= 3) {
     return { nextHcpState: 'disengaged', nextHcpDialogue: terminalCloseFallback };
   }
-  if (consecutiveBlockCloseTurns >= 3) {
+  if (!hasMaterialProgression && consecutiveBlockCloseTurns >= 3) {
     return { nextHcpState: 'disengaged', nextHcpDialogue: terminalCloseFallback };
   }
-  if (repeatedRepPattern && similarConstraintPrompts >= 2) {
+  if (!hasMaterialProgression && repeatedRepPattern && similarConstraintPrompts >= 2) {
     return {
       nextHcpState: 'boundary-setting',
       nextHcpDialogue: 'We are looping. Give one practice-ready step with one supporting evidence point, or we should pause here.',
     };
   }
-  if (consecutiveBlockCloseTurns >= 2) {
+  if (!hasMaterialProgression && consecutiveBlockCloseTurns >= 2) {
     return {
       nextHcpState: 'boundary-setting',
       nextHcpDialogue: structuredDemandByConcern[activeConcern] || structuredDemandByConcern.workflow,

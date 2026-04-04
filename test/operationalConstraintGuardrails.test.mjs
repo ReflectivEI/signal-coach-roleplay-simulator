@@ -178,6 +178,22 @@ test('late-turn addressed requirement concisely -> no forced closure path', () =
   assert.equal(decision.nextRequirementRestatedCount, 1);
 });
 
+test('engaged evidence-seeking request holds late-turn policy at boundary instead of close', () => {
+  const decision = selectLateTurnConstraintResponseMode({
+    hasActiveConstraint: true,
+    hasActiveRequirement: true,
+    inLateTurnState: true,
+    requirementAddressed: false,
+    boundaryLevel: 'closing',
+    requirementRestatedCount: 2,
+    holdAtBoundary: true,
+  });
+
+  assert.equal(decision.forced, true);
+  assert.equal(decision.mode, 'boundary');
+  assert.equal(decision.nextBoundaryLevel, 'constrained');
+});
+
 test('stale-request guard prevents late-turn state mutation from older request', () => {
   const rolePlayChatSource = fs.readFileSync(
     new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
