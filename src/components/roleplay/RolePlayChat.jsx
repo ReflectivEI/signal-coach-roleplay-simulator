@@ -83,6 +83,8 @@ import {
   buildDemandHoldDirective,
   updateInterventionSessionState,
 } from "./interventionEngineV2";
+import { shouldAllowDemandHoldOverride } from "./demandHoldContinuity";
+import { sanitizeFinalHcpDialogueSurface } from "./finalHcpOutputGuardrails";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 
 function escapeHTML(text) {
@@ -4023,11 +4025,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const activeDemand = interventionStateRef.current?.activeDemand;
+    const demandHoldContinuityAllowsOverride = shouldAllowDemandHoldOverride({
+      activeDemandType: activeDemand?.type || null,
+      candidateHcpDialogue: nextHcpDialogue,
+    });
     const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME
       && !overrideExit
       && nextHcpState !== "disengaged"
       && activeDemand?.isActive
-      && activeDemand?.type;
+      && activeDemand?.type
+      && demandHoldContinuityAllowsOverride;
     let demandHoldStage = 0;
     let demandHoldOverrodeProgression = false;
     if (demandHoldActive) {
@@ -4229,6 +4236,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
+    const finalSurfaceGuard = sanitizeFinalHcpDialogueSurface({
+      dialogue: nextHcpDialogue,
+      activeConcern,
+      fallbackDialogue: buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || ""),
+    });
+    if (finalSurfaceGuard.applied) {
+      nextHcpDialogue = applyDeterministicPunctuationContract(finalSurfaceGuard.dialogue);
+    }
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
@@ -4275,7 +4290,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       openingAcknowledgesConstraint,
       postProcessingChangedOpening:
         getOpeningSentence(draftResponseBeforePostProcessing) !== finalOpening,
-      guardrailApplied: false,
+      guardrailApplied: Boolean(finalSurfaceGuard.applied),
+      guardrailReason: finalSurfaceGuard.reason,
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
       demandType: activeDemand?.type || null,
