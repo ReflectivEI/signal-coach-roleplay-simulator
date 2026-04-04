@@ -6,7 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { enrichScenarioWithTaxonomy } from "@/lib/roleplay-v2/scenarioTaxonomy";
-import { normalizeScenarioDropdownControls } from "@/lib/roleplay-v2/scenarioControlNormalization";
 import {
   ALL_SCENARIOS,
   CATEGORIES,
@@ -57,14 +56,7 @@ export default function RolePlaySimulator() {
   const [interactionPressureFilter, setInteractionPressureFilter] = useState("All Interaction Pressures");
 
   const scenarioCatalog = useMemo(
-    () => ALL_SCENARIOS.map((scenario) => {
-      const enrichedScenario = enrichScenarioWithTaxonomy(scenario);
-      const normalizedControls = normalizeScenarioDropdownControls(enrichedScenario, enrichedScenario.taxonomy);
-      return {
-        ...enrichedScenario,
-        normalizedControls,
-      };
-    }),
+    () => ALL_SCENARIOS.map((scenario) => enrichScenarioWithTaxonomy(scenario)),
     []
   );
 
@@ -74,13 +66,12 @@ export default function RolePlaySimulator() {
       const diffMatch = activeDifficulty === "All Levels" || s.difficulty === activeDifficulty;
       const q = search.toLowerCase();
       const searchMatch = !q || s.title.toLowerCase().includes(q) || s.description.toLowerCase().includes(q) || s.stakeholder.toLowerCase().includes(q) || s.category.toLowerCase().includes(q);
-      const controls = s.normalizedControls || {};
-      const dsMatch = diseaseStateFilter === "All Disease States" || controls.diseaseState === diseaseStateFilter;
-      const specMatch = specialtyFilter === "All Specialties" || controls.specialty === specialtyFilter;
-      const hcpMatch = hcpCategoryFilter === "All HCP Types" || controls.hcpCategory === hcpCategoryFilter;
-      const infMatch = influenceDriverFilter === "All Influence Drivers" || controls.influenceDriver === influenceDriverFilter;
-      const stageMatch = journeyStageFilter === "All Journey Stages" || controls.journeyStage === journeyStageFilter;
-      const pressureMatch = interactionPressureFilter === "All Interaction Pressures" || controls.interactionPressure === interactionPressureFilter;
+      const dsMatch = diseaseStateFilter === "All Disease States" || s.category === diseaseStateFilter;
+      const specMatch = specialtyFilter === "All Specialties" || s.specialty === specialtyFilter;
+      const hcpMatch = hcpCategoryFilter === "All HCP Types" || s.hcp_category === hcpCategoryFilter;
+      const infMatch = influenceDriverFilter === "All Influence Drivers" || s.influence_driver === influenceDriverFilter;
+      const stageMatch = journeyStageFilter === "All Journey Stages" || s.taxonomy?.journeyStage === journeyStageFilter;
+      const pressureMatch = interactionPressureFilter === "All Interaction Pressures" || s.taxonomy?.interactionPressure === interactionPressureFilter;
       return catMatch && diffMatch && searchMatch && dsMatch && specMatch && hcpMatch && infMatch && stageMatch && pressureMatch;
     });
   }, [scenarioCatalog, activeCategory, activeDifficulty, search, diseaseStateFilter, specialtyFilter, hcpCategoryFilter, influenceDriverFilter, journeyStageFilter, interactionPressureFilter]);
