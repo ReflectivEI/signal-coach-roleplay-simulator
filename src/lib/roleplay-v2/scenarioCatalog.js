@@ -1,15 +1,13 @@
 // Canonical scenario catalog + filter dimensions for Role Play Simulator
-import { DROPDOWN_DIMENSIONS } from './scenarioControlNormalization.js';
-
 export const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
 export const DIFFICULTIES = ["All Levels", "beginner", "intermediate", "advanced"];
 
-export const DISEASE_STATES = DROPDOWN_DIMENSIONS.diseaseState;
-export const SPECIALTIES = DROPDOWN_DIMENSIONS.specialty;
-export const HCP_CATEGORIES = DROPDOWN_DIMENSIONS.hcpCategory;
-export const INFLUENCE_DRIVERS = DROPDOWN_DIMENSIONS.influenceDriver;
-export const JOURNEY_STAGES = DROPDOWN_DIMENSIONS.journeyStage;
-export const INTERACTION_PRESSURES = DROPDOWN_DIMENSIONS.interactionPressure;
+export const DISEASE_STATES = ["All Disease States", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
+export const SPECIALTIES = ["All Specialties", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Family Medicine", "Neurology", "Pulmonology"];
+export const HCP_CATEGORIES = ["All HCP Types", "Prescriber / Treater", "KOL / Thought Leader", "Non-Prescribing Influencer"];
+export const INFLUENCE_DRIVERS = ["All Influence Drivers", "Patient-Centered", "Evidence-Based", "Risk-Averse", "Guideline-Anchored"];
+export const JOURNEY_STAGES = ["All Journey Stages", "initial_access_prospecting", "discovery_needs_assessment", "clinical_value_detailing", "objection_handling", "adoption_implementation", "commitment_next_step_close"];
+export const INTERACTION_PRESSURES = ["All Interaction Pressures", "time_pressured", "resistant_skeptical", "curious_uncertain", "operationally_blocked", "competitive_threat", "safety_concern", "access_prior_auth_barrier"];
 
 // ...existing code...
 

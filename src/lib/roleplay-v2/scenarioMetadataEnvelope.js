@@ -1,11 +1,4 @@
 export const SCENARIO_METADATA_VERSION = '1.0.0';
-import {
-  CHAPTER_STAGE_BY_JOURNEY_STAGE,
-  INTERACTION_SKILL_BY_PRESSURE,
-  deriveScenarioFamily,
-  inferJourneyAndPressureFromSignals,
-  normalizeScenarioText,
-} from './scenarioControlNormalization.js';
 
 export const SCENARIO_FAMILIES = Object.freeze([
   'hiv_prep',
@@ -194,6 +187,32 @@ export const AUTHORITATIVE_METADATA_BY_ID = Object.freeze({
   },
 });
 
+function normalizeText(scenario = {}) {
+  return [
+    scenario.title,
+    scenario.description,
+    scenario.objective,
+    scenario.context,
+    scenario.openingScene,
+    scenario.hcpMood,
+    scenario.category,
+    scenario.specialty,
+    scenario.hcp_category,
+    scenario.influence_driver,
+  ].join(' ').toLowerCase();
+}
+
+function inferFamily(text = '') {
+  if (/hiv|prep|cabotegravir|sti/.test(text)) return 'hiv_prep';
+  if (/oncology|tumor|kol|adc|io\b|hem\/onc/.test(text)) return 'oncology_io';
+  if (/cardio|heart failure|gdmt|post-mi|myocardial/.test(text)) return 'cardiology_gdmt';
+  if (/vaccine|immunization|flu/.test(text)) return 'vaccines_adult';
+  if (/covid|remdesivir|paxlovid/.test(text)) return 'covid_outpatient';
+  if (/neurology/.test(text)) return 'neurology_specialty';
+  if (/immunology/.test(text)) return 'immunology_specialty';
+  return 'rare_disease_specialty';
+}
+
 function inferPersona(text = '') {
   if (/np|pa-c|pa\b|nurse|technician/.test(text)) return 'nurse_clinical_user';
   if (/administrator|economic buyer|committee|formulary|p&t|procurement/.test(text)) return 'administrator_economic_buyer';
@@ -212,9 +231,14 @@ function inferInteractionSkill(text = '') {
   return 'workflow_implementation';
 }
 
-function inferChapterStage(_text = '', taxonomy = {}, scenario = {}) {
-  const stage = taxonomy.journeyStage || inferJourneyAndPressureFromSignals(scenario).journeyStage;
-  return CHAPTER_STAGE_BY_JOURNEY_STAGE[stage] || 'prospecting_initial_call';
+function inferChapterStage(text = '', taxonomy = {}) {
+  const stage = taxonomy.journeyStage || '';
+  if (stage === 'commitment_next_step_close') return 'commitment_close';
+  if (stage === 'adoption_implementation') return 'adoption_implementation';
+  if (stage === 'objection_handling') return 'objection_navigation';
+  if (stage === 'clinical_value_detailing') return 'clinical_value_detailing';
+  if (stage === 'discovery_needs_assessment') return 'discovery_needs_assessment';
+  return 'prospecting_initial_call';
 }
 
 function inferDifficultyLevel(scenario = {}) {
@@ -272,14 +296,12 @@ export function deriveScenarioMetadataEnvelope(scenario = {}, taxonomy = {}) {
     };
   }
 
-  const text = normalizeScenarioText(scenario);
-  const normalizedSignals = inferJourneyAndPressureFromSignals(scenario);
-  const normalizedPressure = taxonomy.interactionPressure || normalizedSignals.interactionPressure;
+  const text = normalizeText(scenario);
   return {
-    family: deriveScenarioFamily(scenario),
-    chapter_stage: inferChapterStage(text, taxonomy, scenario),
+    family: inferFamily(text),
+    chapter_stage: inferChapterStage(text, taxonomy),
     persona_primary: inferPersona(text),
-    interaction_skill: INTERACTION_SKILL_BY_PRESSURE[normalizedPressure] || inferInteractionSkill(text),
+    interaction_skill: inferInteractionSkill(text),
     difficulty_level: inferDifficultyLevel(scenario),
     compliance_mode: inferComplianceMode(text, taxonomy),
     metadata_version: SCENARIO_METADATA_VERSION,
