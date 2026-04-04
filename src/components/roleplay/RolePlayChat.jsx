@@ -83,6 +83,7 @@ import {
   buildDemandHoldDirective,
   updateInterventionSessionState,
 } from "./interventionEngineV2";
+import { shouldAllowDemandHoldOverride } from "./demandHoldContinuity";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 
 function escapeHTML(text) {
@@ -4023,11 +4024,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const activeDemand = interventionStateRef.current?.activeDemand;
+    const demandHoldContinuityAllowsOverride = shouldAllowDemandHoldOverride({
+      activeDemandType: activeDemand?.type || null,
+      candidateHcpDialogue: nextHcpDialogue,
+    });
     const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME
       && !overrideExit
       && nextHcpState !== "disengaged"
       && activeDemand?.isActive
-      && activeDemand?.type;
+      && activeDemand?.type
+      && demandHoldContinuityAllowsOverride;
     let demandHoldStage = 0;
     let demandHoldOverrodeProgression = false;
     if (demandHoldActive) {
