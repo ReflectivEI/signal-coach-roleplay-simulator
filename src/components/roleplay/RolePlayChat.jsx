@@ -75,6 +75,15 @@ import {
   createInitialInterventionSessionState,
   updateInterventionSessionState,
 } from "./interventionEngineV2";
+import {
+  RESPONSE_ARBITRATION_STAGE_ORDER,
+  evaluateRepToHcpContinuity,
+  hasNextTurnAlready,
+  isStaleAsyncResponse,
+  selectRewriteAuthority,
+  shouldApplyConstraintDraftGuardrail,
+  shouldEndSessionAfterTurn,
+} from "./runtimeResponseArbitration";
 
 function escapeHTML(text) {
   return String(text)
@@ -161,45 +170,6 @@ function validateCueDialogueAlignment({ cueText = "", dialogueText = "", hcpStat
     || (cueIntent === "closing" && dialogueIntent === "engaged")
   );
   return { cueIntent, dialogueIntent, contradiction };
-}
-
-function extractContinuityTokens(text = "") {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 4)
-    .filter((token) => !["with", "that", "this", "your", "from", "have", "what", "when", "where", "which", "would"].includes(token));
-}
-
-function evaluateRepToHcpContinuity({
-  repMessage = "",
-  hcpDialogue = "",
-  priorHcpDialogue = "",
-  activeConcern = "workflow",
-} = {}) {
-  const repTokens = new Set(extractContinuityTokens(repMessage));
-  const hcpTokens = new Set(extractContinuityTokens(hcpDialogue));
-  const priorTokens = new Set(extractContinuityTokens(priorHcpDialogue));
-  const overlapWithRep = [...repTokens].filter((token) => hcpTokens.has(token)).length;
-  const overlapWithPrior = [...priorTokens].filter((token) => hcpTokens.has(token)).length;
-
-  const repMentionsEvidence = /\b(study|trial|evidence|methodology|duration|jama|published|endpoint)\b/i.test(repMessage);
-  const priorAskedEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(priorHcpDialogue);
-  const hcpMentionsEvidence = /\b(study|methodology|duration|evidence|data|endpoint)\b/i.test(hcpDialogue);
-  const hcpMentionsConcern = new RegExp(`\\b${String(activeConcern || "workflow").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(hcpDialogue);
-
-  const directContinuityGap =
-    (repTokens.size >= 3 && overlapWithRep === 0)
-    || (priorTokens.size >= 3 && overlapWithPrior === 0);
-  const evidenceDriftGap = repMentionsEvidence && priorAskedEvidence && !hcpMentionsEvidence && !hcpMentionsConcern;
-
-  return {
-    needsRepair: directContinuityGap || evidenceDriftGap,
-    overlapWithRep,
-    overlapWithPrior,
-    evidenceDriftGap,
-  };
 }
 
 function hasTurnIntegrityIssues(turn) {
@@ -2455,6 +2425,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setInput("");
       setIsLoading(true);
 
+      emitPlannerTrace("response_arbitration_stage_order", {
+        turnNumber: turns.length,
+        stages: RESPONSE_ARBITRATION_STAGE_ORDER,
+      });
+
     // Stop mic if it's still listening when message is sent
     if (isListening) {
       stopListening();
@@ -3926,9 +3901,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         activeConcern,
       })
       : { needsRepair: false };
-    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged")
-      ? (repetitiveCandidate ? "anti_repeat" : continuity.needsRepair ? "continuity_repair" : "none")
-      : "none";
+    const rewriteAuthority = selectRewriteAuthority({
+      overrideExit,
+      nextHcpState,
+      repetitiveCandidate,
+      continuityNeedsRepair: continuity.needsRepair,
+    });
 
     if (rewriteAuthority === "anti_repeat") {
       let regenerated = "";
@@ -4030,7 +4008,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const revisitRequested = /\b(again|revisit|you mentioned|earlier you said|back to|still unresolved|remind me)\b/i.test(repMessage);
     const clarificationNeeded = /\b(contradict|inconsistent|clarify|unclear|conflict)\b/i.test(repMessage);
     const changedConstraint = newConstraintTypesThisTurn.length > 0;
-    const shouldApplyConstraintDraftGuardrail = respondingToTurn?.turnNumber > 0;
+    const applyConstraintDraftGuardrail = shouldApplyConstraintDraftGuardrail(respondingToTurn?.turnNumber);
     let initialViolation = {
       valid: true,
       rejectionReason: null,
@@ -4042,7 +4020,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       valid: true,
       draftTypes: [],
     };
-    if (shouldApplyConstraintDraftGuardrail) {
+    if (applyConstraintDraftGuardrail) {
       initialViolation = detectConstraintDraftViolations({
         draftText: nextHcpDialogue,
         groundedTypes: groundedConstraintTypes,
@@ -4152,17 +4130,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
-    const shouldEndSessionAfterTurn = !blockClose && (overrideExit || (
-      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalPolicyAction === "close"
-    ));
+    const shouldCloseSessionAfterTurn = shouldEndSessionAfterTurn({
+      blockClose,
+      overrideExit,
+      nextHcpState,
+      nextHcpDialogue,
+      terminalPolicyAction,
+      isTerminalClosureDialogue,
+    });
 
-    if (shouldEndSessionAfterTurn) {
+    if (shouldCloseSessionAfterTurn) {
       sessionControllerRef.current.state = SessionState.ENDED;
       sessionControllerRef.current.pendingResponseQueue = [];
     }
 
-    if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {
+    if (isStaleAsyncResponse({ requestId, activeRequestId: activeRequestIdRef.current, sessionActive: sessionControllerRef.current.isActive })) {
       return;
     }
 
@@ -4179,14 +4161,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (currentRespondingTurn.repMessage) return prevTurnsState;
 
       const replaced = [...prevTurnsState.slice(0, prevTurnsState.length - 1), lockedRespondingTurn];
-      const hasNextTurnAlready = prevTurnsState.some(
-        (t) => (
-          t.turnNumber === nextTurn.turnNumber
-          && !t.repMessage
-          && t.hcpDialogueBefore
-        ) || (t.generationKey && t.generationKey === generationKey)
-      );
-      if (hasNextTurnAlready) {
+      const nextTurnAlreadyExists = hasNextTurnAlready({
+        prevTurnsState,
+        nextTurn,
+        generationKey,
+      });
+      if (nextTurnAlreadyExists) {
         return replaced;
       }
       processedTurnKeysRef.current.add(generationKey);

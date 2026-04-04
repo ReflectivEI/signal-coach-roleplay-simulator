@@ -186,7 +186,7 @@ test('stale-request guard prevents late-turn state mutation from older request',
 
   const assignmentIndex = rolePlayChatSource.indexOf('lateTurnConstraintStateRef.current = nextLateTurnConstraintState;');
   const staleGuardIndex = rolePlayChatSource.indexOf(
-    'if (requestId !== activeRequestIdRef.current || !sessionControllerRef.current.isActive) {',
+    'if (isStaleAsyncResponse({ requestId, activeRequestId: activeRequestIdRef.current, sessionActive: sessionControllerRef.current.isActive })) {',
   );
   assert.ok(staleGuardIndex !== -1 && assignmentIndex !== -1, 'expected stale guard and late-turn state assignment');
   assert.ok(staleGuardIndex < assignmentIndex, 'stale guard should run before late-turn state mutation');
@@ -311,7 +311,11 @@ test('continuity repair enforces strict rep-to-hcp topical response before final
     'utf8',
   );
 
-  assert.match(rolePlayChatSource, /function evaluateRepToHcpContinuity/);
+  const runtimeArbitrationSource = fs.readFileSync(
+    new URL('../src/components/roleplay/runtimeResponseArbitration.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(runtimeArbitrationSource, /export function evaluateRepToHcpContinuity/);
   assert.match(rolePlayChatSource, /continuity\.needsRepair/);
   assert.match(rolePlayChatSource, /If rep addressed an evidence\/study question, react to that directly before redirecting/);
   assert.match(rolePlayChatSource, /ROLEPLAY_CONTINUITY_REPAIR_FAILED/);
@@ -323,8 +327,8 @@ test('single rewrite authority enforces anti-repeat or continuity repair per tur
     'utf8',
   );
 
-  assert.match(rolePlayChatSource, /const rewriteAuthority =/);
-  assert.match(rolePlayChatSource, /repetitiveCandidate \? "anti_repeat" : continuity\.needsRepair \? "continuity_repair" : "none"/);
+  assert.match(rolePlayChatSource, /const rewriteAuthority = selectRewriteAuthority\(/);
+  assert.match(rolePlayChatSource, /continuityNeedsRepair: continuity\.needsRepair/);
   assert.match(rolePlayChatSource, /if \(rewriteAuthority === "anti_repeat"\)/);
   assert.match(rolePlayChatSource, /else if \(rewriteAuthority === "continuity_repair"\)/);
 });
@@ -393,6 +397,6 @@ test('opening turn does not get overridden by late-turn constraint draft guardra
 
   assert.match(
     rolePlayChatSource,
-    /const shouldApplyConstraintDraftGuardrail = respondingToTurn\?\.turnNumber > 0;/,
+    /const applyConstraintDraftGuardrail = shouldApplyConstraintDraftGuardrail\(respondingToTurn\?\.turnNumber\);/,
   );
 });
