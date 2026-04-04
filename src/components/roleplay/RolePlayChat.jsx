@@ -42,7 +42,8 @@ Capabilities (use canonical labels only):
 ${SIGNAL_CAPABILITIES.map(c => `• ${c.label} [${c.id}]: ${c.canonicalQuestion} — ${c.definition}`).join("\n")}
 Overlap rules: ${GOVERNANCE.overlapRules.join(" | ")}
 GUARDRAIL: Never invent capabilities, sub-metrics, or scores not listed above. Observable behavior only — no intent inference.`;
-import { computeAlignment } from "./alignmentEngine";
+import { computeAlignment, END_SESSION_EVALUATION_BASELINE } from "./alignmentEngine";
+import { getBaselineAlignedInlineGuidance } from "./inlineCoachingCalibration";
 import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
@@ -923,7 +924,7 @@ function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
 
-  const explicitClosePattern = /\b(i (have|need|must) to (go|leave|head out|jump|run)|i'm (heading out|signing off)|gotta (run|go)|time to go|need to hop off|let's (stop|wrap) here|we should wrap (this )?up|can we (continue|finish) later|let's (pick this up|reconnect) later|we can pick this up (later|another time)|i have (another|my next) patient|i need to get to (my )?next patient|i have an emergency|i need to jump to another room|i need to get back to clinic)\b/i;
+  const explicitClosePattern = /\b(i (have|need|must) to (go|leave|head out|jump|run)|i'm (heading out|signing off)|gotta (run|go)|time to go|need to hop off|let's (stop|wrap) here|we should wrap (this )?up|can we (continue|finish) later|let's (pick this up|reconnect) later|we can pick this up (later|another time)|i have (another|my next) patient|i need to get to (my )?next patient|i have an emergency|i need to jump to another room|i need to get back to clinic|i need to get back to patients|this isn'?t productive|this is not productive)\b/i;
   if (explicitClosePattern.test(normalized)) return true;
 
   const hasSignoff = /\b(goodbye|good bye|bye|have a great day|see you (next week|next time)|talk soon)\b/i.test(normalized);
@@ -958,9 +959,13 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i need to get back to patients|this isn'?t productive|this is not productive|take care|patients waiting)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
+}
+
+function isTerminalDisengagementIntent(text = "") {
+  return hasExplicitExitIntent(text) || isTerminalClosureDialogue(text);
 }
 
 function isEvidenceSeekingEngagement(text = "") {
@@ -2242,6 +2247,8 @@ function buildGuidanceCandidate(turn) {
 function buildRepGuidance(turn, allTurns = []) {
   const alignment = turn?.alignment;
   if (!alignment) return null;
+  const baselineAlignedGuidance = getBaselineAlignedInlineGuidance({ turn, alignment });
+  if (baselineAlignedGuidance) return baselineAlignedGuidance;
 
   const recentGuidanceWindow = allTurns
     .filter((t) => t.turnNumber < turn.turnNumber && t.repMessage)
@@ -3989,7 +3996,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
     }
 
-    if (!overrideExit && lateTurnConstraintDecision.forced) {
+    if (isTerminalDisengagementIntent(nextHcpDialogue)) {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = terminalCloseFallback;
+    }
+
+    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
         mode: lateTurnConstraintDecision.mode,
@@ -4174,7 +4186,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       valid: true,
       draftTypes: [],
     };
-    if (shouldApplyConstraintDraftGuardrail) {
+    if (shouldApplyConstraintDraftGuardrail && nextHcpState !== "disengaged") {
       initialViolation = detectConstraintDraftViolations({
         draftText: nextHcpDialogue,
         groundedTypes: groundedConstraintTypes,
@@ -4289,10 +4301,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
-    const shouldEndSessionAfterTurn = !blockClose && (overrideExit || (
-      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalPolicyAction === "close"
-    ));
+    const shouldEndSessionAfterTurn = overrideExit
+      || (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || (!blockClose && terminalPolicyAction === "close");
 
     if (shouldEndSessionAfterTurn) {
       sessionControllerRef.current.state = SessionState.ENDED;
@@ -4485,7 +4496,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
         : '';
 
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
+      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nBASELINE EVALUATION CONTRACT:\n- Baseline ID: ${END_SESSION_EVALUATION_BASELINE.id}\n- Baseline Path: ${END_SESSION_EVALUATION_BASELINE.path}\n- Treat this end-of-session path as the canonical reference for final evaluation behavior.\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

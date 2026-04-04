@@ -54,6 +54,18 @@ function overlapRatio(sourceA = "", sourceB = "") {
   return overlap / Math.max(1, Math.min(aSet.size, bSet.size));
 }
 
+function buildStructureSignature(text = "") {
+  const normalized = normalizeText(text);
+  if (!normalized) return "";
+  const tokens = normalized.split(" ").filter(Boolean);
+  const buckets = tokens.map((token) => {
+    if (/^\d+$/.test(token)) return "<num>";
+    if (token.length <= 3) return token;
+    return token.slice(0, 3);
+  });
+  return buckets.join(" ");
+}
+
 function deterministicIndex(seed = "", length = 1) {
   if (!length) return 0;
   const value = String(seed || "");
@@ -63,6 +75,69 @@ function deterministicIndex(seed = "", length = 1) {
     hash |= 0;
   }
   return Math.abs(hash) % length;
+}
+
+function collectPromptSignals(hcpPrompt = "") {
+  const text = String(hcpPrompt || "");
+  const normalized = normalizeText(text);
+  const signals = {
+    instruction: new Set(),
+    cue: new Set(),
+    constraint: new Set(),
+  };
+
+  if (/\b(keep it brief|be brief|keep this brief|concise|short answer|in 30 seconds|one sentence)\b/i.test(text)) {
+    signals.constraint.add("concision");
+    signals.instruction.add("format:concise");
+  }
+  if (/\b(time is limited|limited time|rushed|quickly|in the next minute|before my next patient|time pressure)\b/i.test(text)) {
+    signals.constraint.add("time_pressure");
+    signals.cue.add("pace:rushed");
+  }
+  if (/\b(clinically meaningful|clinical relevance|anchor on clinically meaningful evidence|evidence first)\b/i.test(text)) {
+    signals.constraint.add("clinical_priority");
+    signals.instruction.add("anchor:clinical_first");
+  }
+  if (/\b(practice relevant|practice-relevant|for our practice|for this clinic|in our setting|applicable to my patients)\b/i.test(text)) {
+    signals.constraint.add("practice_relevance");
+    signals.instruction.add("anchor:practice_relevance");
+  }
+  if (/\b(stop|done|not productive|take care|patients waiting|need to get back to patients)\b/i.test(normalized)) {
+    signals.cue.add("terminal");
+  }
+
+  return {
+    instruction: [...signals.instruction].sort(),
+    cue: [...signals.cue].sort(),
+    constraint: [...signals.constraint].sort(),
+  };
+}
+
+function hasSignalDelta(previous = [], next = []) {
+  const previousSet = new Set(previous);
+  const nextSet = new Set(next);
+  for (const value of nextSet) {
+    if (!previousSet.has(value)) return true;
+  }
+  for (const value of previousSet) {
+    if (!nextSet.has(value)) return true;
+  }
+  return false;
+}
+
+function repAddressesPromptSignals(repMessage = "", promptSignals = {}) {
+  const rep = String(repMessage || "").toLowerCase();
+  const constraints = Array.isArray(promptSignals.constraint) ? promptSignals.constraint : [];
+  if (!constraints.length) return true;
+
+  const coverage = {
+    concision: rep.split(/\s+/).filter(Boolean).length <= 55,
+    time_pressure: /\b(now|today|this week|immediate|immediately|first step|quick|within)\b/.test(rep),
+    clinical_priority: /\b(clinically meaningful|clinical|endpoint|outcome|study|trial|evidence|data)\b/.test(rep),
+    practice_relevance: /\b(your clinic|your practice|your setting|for your patients|in this clinic|in your setting)\b/.test(rep),
+  };
+
+  return constraints.every((constraint) => coverage[constraint] ?? true);
 }
 
 export function createInitialInterventionSessionState() {
@@ -88,6 +163,11 @@ export function createInitialInterventionSessionState() {
       evasiveResponseDetected: false,
       longResponseClassified: false,
       staleAnswerBlocked: false,
+      latestPromptSignals: {
+        instruction: [],
+        cue: [],
+        constraint: [],
+      },
     },
     lastProcessedTurnNumber: null,
   };
@@ -144,9 +224,10 @@ export function detectEvasiveRepResponse({ repMessage = "", hcpPrompt = "" } = {
     && !/\b(because|data|study|step|metric|threshold|owner|timeline)\b/i.test(repLower);
   const parroting = questionOverlap >= 0.7 && rep.length < 180;
   const pivotAway = /\b(anyway|separately|zoom out|overall|big picture|in broader terms)\b/i.test(repLower);
+  const repeatedExplanationLoop = /\b(i just mentioned that|as i (just )?mentioned|as i said|like i said|already covered that|as noted earlier)\b/i.test(repLower);
   const longResponse = rep.length >= 320;
 
-  const evasive = genericPrincipleOnly || vagueDeferral || unsupportedSummary || parroting || pivotAway;
+  const evasive = genericPrincipleOnly || vagueDeferral || unsupportedSummary || parroting || pivotAway || repeatedExplanationLoop;
 
   return {
     evasive,
@@ -155,6 +236,7 @@ export function detectEvasiveRepResponse({ repMessage = "", hcpPrompt = "" } = {
     unsupportedSummary,
     parroting,
     pivotAway,
+    repeatedExplanationLoop,
     longResponse,
     questionOverlap,
   };
@@ -395,12 +477,30 @@ export function updateInterventionSessionState(previousState, {
   });
 
   const evasiveSignals = detectEvasiveRepResponse({ repMessage, hcpPrompt });
+  const latestPromptSignals = collectPromptSignals(hcpPrompt);
+  const priorPromptSignals = prior?.activeDemand?.latestPromptSignals || { instruction: [], cue: [], constraint: [] };
+  const instructionShifted = hasSignalDelta(priorPromptSignals.instruction, latestPromptSignals.instruction);
+  const cueShifted = hasSignalDelta(priorPromptSignals.cue, latestPromptSignals.cue);
+  const constraintShifted = hasSignalDelta(priorPromptSignals.constraint, latestPromptSignals.constraint);
   const demandTypeChanged = Boolean(prior?.activeDemand?.type && demandType && prior.activeDemand.type !== demandType);
   const materiallyDifferentPrompt = overlapRatio(hcpPrompt, prior?.activeDemand?.lastPrompt || "") < 0.45;
   const nearIdenticalRepReuse = overlapRatio(repMessage, prior?.activeDemand?.lastRepMessage || "") >= 0.82;
-  const staleAnswerBlocked = demandTypeChanged && materiallyDifferentPrompt && nearIdenticalRepReuse;
-  const demandSatisfied = (demandType && !staleAnswerBlocked)
-    ? isDemandSatisfied({ demandType, repMessage, hcpPrompt, activeConcern })
+  const structuralReuse = (
+    buildStructureSignature(repMessage)
+    && buildStructureSignature(repMessage) === buildStructureSignature(prior?.activeDemand?.lastRepMessage || "")
+  );
+  const missingNewestRequirement = !repAddressesPromptSignals(repMessage, latestPromptSignals);
+  const promptShifted = instructionShifted || cueShifted || constraintShifted || materiallyDifferentPrompt;
+  const reusePatternDetected = nearIdenticalRepReuse || structuralReuse || evasiveSignals.repeatedExplanationLoop;
+  const staleAnswerBlocked = reusePatternDetected && (
+    demandTypeChanged
+    || promptShifted
+    || missingNewestRequirement
+  );
+  const demandSatisfied = demandType
+    ? (staleAnswerBlocked
+      ? false
+      : isDemandSatisfied({ demandType, repMessage, hcpPrompt, activeConcern }))
     : true;
   const unresolvedDemand = Boolean(demandType) && (!demandSatisfied || evasiveSignals.evasive);
 
@@ -419,6 +519,7 @@ export function updateInterventionSessionState(previousState, {
     evasiveResponseDetected: unresolvedDemand && evasiveSignals.evasive,
     longResponseClassified: Boolean(demandType) && evasiveSignals.longResponse,
     staleAnswerBlocked,
+    latestPromptSignals,
     scenarioFamily: normalizeText(scenarioFamily),
   };
 

@@ -387,6 +387,99 @@ test("near-identical rep answer can resolve only when downstream ask is semantic
   assert.equal(state.activeDemand.staleAnswerBlocked, false);
 });
 
+test("same demand with new constraint invalidates reused answer", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 44,
+    hcpPrompt: "What evidence supports this recommendation for our clinic?",
+    repMessage: "A phase 3 trial showed improved progression-free survival.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.EVIDENCE_REQUEST);
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 45,
+    hcpPrompt: "Same evidence question, but keep it concise and anchor on clinically meaningful evidence first.",
+    repMessage: "A phase 3 trial showed improved progression-free survival.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.EVIDENCE_REQUEST);
+  assert.equal(state.activeDemand.staleAnswerBlocked, true);
+  assert.equal(state.activeDemand.isActive, true);
+});
+
+test("repeated long-form answer is blocked when latest cue adds time/relevance/concision constraints", () => {
+  let state = createInitialInterventionSessionState();
+  const repeatedLongForm = "The trial program had broad enrollment and several analyses across endpoints, and while there are many nuances in subgroup interpretation, the publication provides details that can be reviewed for context across treatment pathways and operational planning needs in many systems.";
+  state = updateInterventionSessionState(state, {
+    turnNumber: 46,
+    hcpPrompt: "How does this apply in our setting?",
+    repMessage: repeatedLongForm,
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 47,
+    hcpPrompt: "I only have a minute—keep this concise and practice relevant.",
+    repMessage: repeatedLongForm,
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.APPLICABILITY_REQUEST);
+  assert.equal(state.activeDemand.staleAnswerBlocked, true);
+  assert.equal(state.activeDemand.isActive, true);
+});
+
+test("repeated answer structure is blocked when latest instruction is ignored", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 48,
+    hcpPrompt: "Give one evidence point for our clinic workflow.",
+    repMessage: "The trial included broad enrollment and showed outcomes with subgroup nuances for implementation planning.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 49,
+    hcpPrompt: "Keep it concise and practice relevant for this week.",
+    repMessage: "The trial had broad enrollment and showed outcomes with subgroup nuances for workflow planning.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  assert.equal(state.activeDemand.staleAnswerBlocked, true);
+  assert.equal(state.activeDemand.isActive, true);
+});
+
+test("generic fallback loop language is blocked as evasive stale reuse", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 50,
+    hcpPrompt: "How is this applicable in our setting?",
+    repMessage: "In your clinic, start with one intake checklist this week.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 51,
+    hcpPrompt: "I need this concise and practical right now—how does that apply in our clinic?",
+    repMessage: "I just mentioned that already, and as I said the guidance remains generally important.",
+    activeConcern: "workflow",
+    scenarioFamily: "oncology_io",
+  });
+
+  assert.equal(state.activeDemand.staleAnswerBlocked, true);
+  assert.equal(state.activeDemand.evasiveResponseDetected, true);
+  assert.equal(state.activeDemand.isActive, true);
+});
+
 test("cross-domain lexical contamination in concern is safely bounded to current scenario family", () => {
   const line = buildDemandHoldMessage({
     demandType: DEMAND_TYPES.APPLICABILITY_REQUEST,
