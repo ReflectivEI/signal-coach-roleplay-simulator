@@ -2795,7 +2795,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       || priorLateTurnConstraintState.activeConstraint
       || activeConcern;
     const activeRequirementForTurn = activeConcern || priorLateTurnConstraintState.activeRequirement || "workflow";
-    const priorHcpPrompt = [...prevTurns]
+    const priorHcpPrompt = [...turns]
       .reverse()
       .find((turn) => Number(turn?.turnNumber) < Number(respondingToTurn?.turnNumber))
       ?.hcpDialogueBefore || "";
