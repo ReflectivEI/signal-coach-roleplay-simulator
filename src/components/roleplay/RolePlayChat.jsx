@@ -71,6 +71,11 @@ import {
 } from "./operationalConstraintGuardrails";
 import { buildDeterministicGenerationKey } from "./generationKey";
 import { buildCoachingFeedbackMarkdown, parseStructuredFeedback } from "./sessionFeedbackFormatter";
+import {
+  createInitialInterventionSessionState,
+  buildDemandHoldMessage,
+  updateInterventionSessionState,
+} from "./interventionEngineV2";
 
 function escapeHTML(text) {
   return String(text)
@@ -706,6 +711,8 @@ const DECAY_CUE_BUCKETS = {
 // Feature flags (default OFF): safety harness for optional dialogue realism transforms.
 const ENABLE_REALISM_TRANSFORM_HARNESS = import.meta.env.VITE_ENABLE_REALISM_TRANSFORM_HARNESS === "true";
 const ENABLE_REALISM_REPLAY_METRICS = import.meta.env.VITE_ENABLE_REALISM_REPLAY_METRICS === "true";
+const ENABLE_V2_INTERVENTION_RUNTIME = import.meta.env.VITE_ROLEPLAY_V2_INTERVENTION_ENABLED === "true";
+const ENABLE_V2_INTERVENTION_UI = import.meta.env.VITE_ROLEPLAY_V2_INTERVENTION_UI === "true";
 
 const TERMINAL_DECISION_CUES = [
   "The HCP glances toward the door, waiting for one final relevant point.",
@@ -2309,6 +2316,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const hcpConstraintEngineRef = useRef({
     activeConstraints: [],
   });
+  const interventionStateRef = useRef(createInitialInterventionSessionState());
+  const demandHoldHistoryRef = useRef({
+    demandType: null,
+    line: "",
+  });
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -2401,6 +2413,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         };
         hcpConstraintEngineRef.current = {
           activeConstraints: [],
+        };
+        interventionStateRef.current = createInitialInterventionSessionState();
+        demandHoldHistoryRef.current = {
+          demandType: null,
+          line: "",
         };
 
         // Build a locked profile for turn 0 to establish initial cue and context
@@ -2735,6 +2752,37 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return (outcome === "missed" || outcome === "overpivot") ? count + 1 : count;
       }, 0);
     const recoveryTiming = classifyRecoveryTiming({ recentMisses });
+    const interventionStateAfterTurn = updateInterventionSessionState(interventionStateRef.current, {
+      turnNumber: nextTurnNumber,
+      alignmentScore: alignment?.score,
+      concernFlowOutcome,
+      hcpPrompt: respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+      activeConcern,
+      hasBlockingConstraints: normalizedActiveConstraints.length > 0,
+      needsConstraintReanchor: concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot",
+    });
+    const interventionDecision = interventionStateAfterTurn.lastDecision || "none";
+    const interventionVisible = ENABLE_V2_INTERVENTION_RUNTIME && interventionDecision !== "none";
+    const interventionSnapshot = {
+      decision: interventionDecision,
+      surfaced: interventionVisible,
+      silent: interventionDecision !== "none" && !interventionVisible,
+      escalationRisk: interventionStateAfterTurn.escalationRisk,
+      repeatedMissedCues: interventionStateAfterTurn.repeatedMissedCues,
+      repeatedLowAlignmentEvents: interventionStateAfterTurn.repeatedLowAlignmentEvents,
+      cooldownTurnsRemaining: interventionStateAfterTurn.cooldownTurnsRemaining,
+      needsConstraintReanchor: interventionStateAfterTurn.needsConstraintReanchor,
+      activeDemandType: interventionStateAfterTurn.activeDemand?.type || null,
+      activeDemandUnresolvedTurns: interventionStateAfterTurn.activeDemand?.unresolvedTurns || 0,
+      evasiveResponseDetected: Boolean(interventionStateAfterTurn.activeDemand?.evasiveResponseDetected),
+      evidenceCheckpoint: interventionStateAfterTurn.evidenceCheckpoints?.slice(-1)?.[0] || null,
+    };
+    interventionStateRef.current = {
+      ...interventionStateAfterTurn,
+      surfacedInterventionCount: interventionStateAfterTurn.surfacedInterventionCount + (interventionVisible ? 1 : 0),
+      silentInterventionCount: interventionStateAfterTurn.silentInterventionCount + (interventionSnapshot.silent ? 1 : 0),
+    };
     const repHasConcreteMove = hasConcreteOperationalMove(repMessage);
     const repHasFollowUpCommitment = hasSpecificFollowUpCommitment(repMessage);
     const repDefersImmediateAction = isDeferringWithoutImmediateAction(repMessage);
@@ -3935,6 +3983,33 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
+    const activeDemand = interventionStateRef.current?.activeDemand;
+    const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME
+      && !overrideExit
+      && nextHcpState !== "disengaged"
+      && activeDemand?.isActive
+      && activeDemand?.type;
+    if (demandHoldActive) {
+      const previousHold = demandHoldHistoryRef.current;
+      nextHcpDialogue = buildDemandHoldMessage({
+        demandType: activeDemand.type,
+        activeConcern,
+        unresolvedTurns: activeDemand.unresolvedTurns,
+        seed: `${generationKey}:${nextTurnNumber}:${activeDemand.type}`,
+        avoidLine: previousHold.demandType === activeDemand.type ? previousHold.line : "",
+      });
+      demandHoldHistoryRef.current = {
+        demandType: activeDemand.type,
+        line: nextHcpDialogue,
+      };
+      if (nextHcpState === "engaged") nextHcpState = "resistant";
+    } else {
+      demandHoldHistoryRef.current = {
+        demandType: null,
+        line: "",
+      };
+    }
+
     const recentHcpUtterances = prevTurns
       .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
       .filter(Boolean)
@@ -4226,6 +4301,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           plannerStateSnapshot,
           plannerGapComparison: nextTurn.plannerGapComparison,
           chosenResponseObjective,
+          intervention: interventionSnapshot,
           feedback: coachingResult,
         });
       }
@@ -4303,7 +4379,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
-  const showLiveMetricsPanel = false;
+  const showLiveMetricsPanel = ENABLE_V2_INTERVENTION_UI;
 
   const exportFeedbackPDF = () => {
     if (!feedback) return;
