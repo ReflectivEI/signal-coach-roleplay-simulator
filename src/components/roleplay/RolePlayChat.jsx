@@ -84,6 +84,7 @@ import {
   updateInterventionSessionState,
 } from "./interventionEngineV2";
 import { shouldAllowDemandHoldOverride } from "./demandHoldContinuity";
+import { sanitizeFinalHcpDialogueSurface } from "./finalHcpOutputGuardrails";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 
 function escapeHTML(text) {
@@ -4235,6 +4236,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
+    const finalSurfaceGuard = sanitizeFinalHcpDialogueSurface({
+      dialogue: nextHcpDialogue,
+      activeConcern,
+      fallbackDialogue: buildNonRepeatingScenarioFallback(respondingToTurn?.hcpDialogueBefore || ""),
+    });
+    if (finalSurfaceGuard.applied) {
+      nextHcpDialogue = applyDeterministicPunctuationContract(finalSurfaceGuard.dialogue);
+    }
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
@@ -4281,7 +4290,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       openingAcknowledgesConstraint,
       postProcessingChangedOpening:
         getOpeningSentence(draftResponseBeforePostProcessing) !== finalOpening,
-      guardrailApplied: false,
+      guardrailApplied: Boolean(finalSurfaceGuard.applied),
+      guardrailReason: finalSurfaceGuard.reason,
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
       demandType: activeDemand?.type || null,
