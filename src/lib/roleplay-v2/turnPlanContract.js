@@ -1,3 +1,8 @@
+import {
+  detectDialogueBoundaryIssues,
+  normalizeDialogueSentenceBoundaries,
+} from '../roleplay/dialogueGrammar.js';
+
 const TURN_PLAN_VERSION = 'v2.0.0';
 
 function deepFreeze(value) {
@@ -18,7 +23,9 @@ function safeString(value) {
 
 export function buildTurnPlan(input = {}) {
   const turnNumber = Number.isFinite(input.turnNumber) ? input.turnNumber : 0;
-  const dialogue = safeString(input.nextDialogue || 'I can give you one focused minute—what is the most practical issue to solve first?');
+  const dialogue = normalizeDialogueSentenceBoundaries(
+    safeString(input.nextDialogue || 'I can give you one focused minute—what is the most practical issue to solve first?')
+  );
   const cue = safeString(input.nextCue || 'The HCP stays attentive, waiting for one concrete and relevant point.');
   const state = safeString(input.nextState || 'neutral');
 
@@ -49,6 +56,9 @@ export function validateTurnPlan(plan) {
   if (safeString(plan?.version) !== TURN_PLAN_VERSION) issues.push('unsupported_version');
   if (!Number.isFinite(plan?.turnNumber)) issues.push('turn_number_invalid');
   if (!safeString(plan?.nextDialogue)) issues.push('missing_next_dialogue');
+  if (safeString(plan?.nextDialogue) && detectDialogueBoundaryIssues(plan.nextDialogue).length > 0) {
+    issues.push('dialogue_sentence_boundary_violation');
+  }
   if (!safeString(plan?.nextCue)) issues.push('missing_next_cue');
   if (!safeString(plan?.nextState)) issues.push('missing_next_state');
   if (!plan?.constraintDecision || typeof plan.constraintDecision !== 'object') issues.push('missing_constraint_decision');

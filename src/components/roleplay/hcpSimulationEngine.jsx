@@ -17,6 +17,7 @@ Core responsibilities
 ******************************************************************************************/
 
 import { scenarios } from './hcpDialogueEngine.jsx'
+import { normalizeDialogueSentenceBoundaries } from '../../lib/roleplay/dialogueGrammar.js'
 
 /******************************************************************************************
 SCENARIO CONTEXT
@@ -1619,118 +1620,7 @@ PUNCTUATION NORMALIZATION
 ******************************************************************************************/
 
 export function normalizeHcpDialoguePunctuation(dialogue) {
-  if (!dialogue) return dialogue
-
-  let text = String(dialogue).replace(/\s+/g, ' ').trim()
-  if (!text) return text
-
-  const questionStarterPattern =
-    /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
-  const subordinateDeclarativePattern =
-    /^(What|How|Why|When|Where|Which)\s+(we|i|you|they|it|this|that)\b[\w\s-]{0,60}\b(is|are|was|were|has|have|had)\b/i
-  const acronymTokenPattern = /^(HCP|FDA|NPI|EHR|EMR|PA|P\&T|IDN|ICU|ER|US|EU|IV|IM)$/i
-
-  const normalizeAllCapsSentence = (sentence = '') => {
-    const lettersOnly = sentence.replace(/[^A-Za-z]/g, '')
-    if (!lettersOnly) return sentence
-    const hasLowercase = /[a-z]/.test(lettersOnly)
-    const hasUppercase = /[A-Z]/.test(lettersOnly)
-    if (!hasUppercase || hasLowercase) return sentence
-
-    let normalizedSentence = sentence.toLowerCase()
-    normalizedSentence = normalizedSentence.replace(/\bi\b/g, 'I')
-    normalizedSentence = normalizedSentence.replace(/\b([a-z&]{2,5})\b/g, (token) => {
-      return acronymTokenPattern.test(token) ? token.toUpperCase() : token
-    })
-    return normalizedSentence
-  }
-
-  const normalizeMalformedOpener = (value = '') => {
-    return String(value)
-      .replace(/^on\s+(great|good|important|fair)\s+question\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} question, `)
-      .replace(/^on\s+(great|good|important|fair)\s+point\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} point, `)
-      .trim()
-  }
-
-  const mergeDependentClauseFragments = (sentences = []) => {
-    const dependentRelativeStarterPattern = /^(which|that|who|whom|whose|where|when)\b/i
-    const dependentSubordinatorStarterPattern = /^(because|although|while|if|unless|since)\b/i
-
-    return sentences.reduce((merged, rawSentence) => {
-      const sentence = String(rawSentence || '').trim()
-      if (!sentence) return merged
-      if (merged.length === 0) {
-        merged.push(sentence)
-        return merged
-      }
-
-      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
-      const isQuestion = /\?$/.test(sentence)
-      const isRelativeFragment = dependentRelativeStarterPattern.test(withoutEndPunct) && !isQuestion
-      const isSubordinatorFragment =
-        dependentSubordinatorStarterPattern.test(withoutEndPunct)
-        && !isQuestion
-        && !withoutEndPunct.includes(',')
-
-      if (!isRelativeFragment && !isSubordinatorFragment) {
-        merged.push(sentence)
-        return merged
-      }
-
-      const previous = merged.pop() || ''
-      const previousWithoutEndPunct = previous.replace(/[?.!]+$/, '').trim()
-      const currentWithoutEndPunct = withoutEndPunct.replace(/^([A-Z])/, (char) => char.toLowerCase())
-      merged.push(`${previousWithoutEndPunct}, ${currentWithoutEndPunct}.`)
-      return merged
-    }, [])
-  }
-
-  text = normalizeMalformedOpener(text)
-
-  // Split run-on constructions where a statement is followed by a question clause.
-  // Example: "I'm familiar with the journal, what specific aspect..." ->
-  // "I'm familiar with the journal. What specific aspect...?"
-  text = text
-    .replace(/^[,;:\-–—]+\s*/g, '')
-    .replace(/\s+([,.;:!?])/g, '$1')
-    .replace(/([,;:])(?=\S)/g, '$1 ')
-    .replace(/([a-z0-9])([.!?])([A-Za-z])/g, '$1$2 $3')
-    .replace(/([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, (_match, prefix, starter) => `${prefix.trim()}. ${starter}`)
-    .replace(/\.\s*\?/g, '?')
-    .replace(/\s{2,}/g, ' ')
-    .trim()
-
-  const sentences = text.match(/[^?.!]+[?.!]?/g) || [text]
-
-  const normalizedSentences = sentences
-    .map((rawSentence) => {
-      const sentence = normalizeAllCapsSentence(rawSentence.trim())
-      if (!sentence) return ''
-
-      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
-      if (!withoutEndPunct) return ''
-
-      const capitalized = withoutEndPunct.replace(/^([a-z])/, (_match, c) => c.toUpperCase())
-      const isQuestion = questionStarterPattern.test(withoutEndPunct)
-      const isSubordinateDeclarative = subordinateDeclarativePattern.test(withoutEndPunct)
-
-      if (isQuestion && !isSubordinateDeclarative) return `${capitalized}?`
-      if (/[?.!]$/.test(sentence)) return sentence
-      return `${capitalized}.`
-    })
-    .filter(Boolean)
-
-  const normalized = mergeDependentClauseFragments(normalizedSentences)
-    .join(' ')
-    .trim()
-    .replace(/^([a-z])/, (_match, c) => c.toUpperCase())
-    .replace(/([.!?]\s+)([a-z])/g, (_match, prefix, c) => `${prefix}${c.toUpperCase()}`)
-
-  if (!/[?.!]$/.test(normalized)) {
-    return `${normalized}.`
-  }
-
-  return normalized
+  return normalizeDialogueSentenceBoundaries(dialogue)
 }
 
 /******************************************************************************************
@@ -2153,6 +2043,8 @@ export function buildHCPDialoguePrompt({
   prompt += '\nPUNCTUATION RULE:\n'
   prompt += '- Every question must end with a question mark.\n'
   prompt += '- Every statement must end with a period.\n'
+  prompt += '- Do not join two complete thoughts with a comma alone.\n'
+  prompt += '- Use a period, semicolon, or coordinating conjunction when linking independent clauses.\n'
 
   prompt += contextHint
 
