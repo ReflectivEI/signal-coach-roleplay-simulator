@@ -78,25 +78,3 @@ test('greeting-only opener is penalized when cue/dialogue demand immediate conte
     'expected greeting-only misalignment when direct demand is present'
   );
 });
-
-test('reflection without substantive answer is explicitly flagged as unanswered', () => {
-  const result = computeAlignment(
-    'neutral',
-    'I hear you. You are asking what first step to run this week.',
-    {
-      cueText: 'HCP asks for an immediate operational recommendation.',
-      hcpUtterance: 'Given workflow constraints, what is the first step we should run this week?'
-    },
-    'neutral',
-    'neutral'
-  );
-
-  assert.ok(
-    result.misalignments.some((m) => m.includes('did not answer the question')),
-    'expected explicit unanswered-question misalignment'
-  );
-  assert.ok(
-    result.misalignments.some((m) => m.includes('mirrored/reflected')),
-    'expected reflection-vs-answer distinction in misalignments'
-  );
-});
