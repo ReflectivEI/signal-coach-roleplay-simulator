@@ -2563,7 +2563,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       prevTemp,
       prevHcpState
     );
-    alignment = applyMetricApplicabilityGating(alignment, runtimeScenarioContractRef.current);
+    alignment = applyMetricApplicabilityGating(
+      alignment,
+      runtimeScenarioContractRef.current,
+      {
+        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+        repMessage,
+      }
+    );
     if (inPleasantryGracePeriod) {
       const normalizedMetrics = Object.fromEntries(
         Object.entries(alignment?.metrics || {}).map(([cap, val]) => [

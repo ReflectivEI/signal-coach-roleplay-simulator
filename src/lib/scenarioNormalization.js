@@ -294,17 +294,63 @@ export function validateScenarioRuntimeContract(contract = {}) {
   return { valid: issues.length === 0, issues, contract: normalized };
 }
 
-export function applyMetricApplicabilityGating(alignment = {}, runtimeContract = {}) {
+function detectApplicabilitySignals({ hcpUtterance = "", repMessage = "" } = {}) {
+  const hcp = String(hcpUtterance || "").toLowerCase();
+  const rep = String(repMessage || "").toLowerCase();
+  return {
+    hasExplicitObjection: /\b(not convinced|concern|concerned|hesitant|objection|skeptical|pushback|not sure)\b/.test(hcp),
+    hasCommitmentAttempt: /\b(would you be open|can we schedule|can we agree|next step|commit|set up|book|follow up)\b/.test(rep),
+    hasNewInformation: /\b(new|update|changed|different now|since last|now that)\b/.test(hcp),
+  };
+}
+
+function isMetricApplicable(status = "always_applicable", signals = {}) {
+  switch (String(status || "always_applicable")) {
+    case "not_applicable":
+      return false;
+    case "conditional_on_objection":
+      return Boolean(signals.hasExplicitObjection);
+    case "conditional_on_commitment_attempt":
+      return Boolean(signals.hasCommitmentAttempt);
+    case "conditional_on_new_information":
+      return Boolean(signals.hasNewInformation);
+    default:
+      return true;
+  }
+}
+
+export function applyMetricApplicabilityGating(alignment = {}, runtimeContract = {}, evidenceSignals = {}) {
   const applicabilityMap = runtimeContract?.metricApplicabilityMap || {};
+  const signals = detectApplicabilitySignals(evidenceSignals);
   const metricEntries = Object.entries(alignment?.metrics || {});
   const metricApplicability = {};
+  const metrics = {};
 
-  metricEntries.forEach(([metric]) => {
-    metricApplicability[metric] = applicabilityMap[metric] || "always_applicable";
+  metricEntries.forEach(([metric, metricValue]) => {
+    const status = applicabilityMap[metric] || "always_applicable";
+    const applicable = isMetricApplicable(status, signals);
+    metricApplicability[metric] = status;
+    metrics[metric] = applicable
+      ? metricValue
+      : {
+          ...metricValue,
+          score: 3,
+          positives: [],
+          misalignments: [],
+          reason: `Metric gated by applicability rule: ${status}`,
+          gatedByApplicability: true,
+        };
   });
+
+  const scores = Object.values(metrics).map((metric) => Number(metric?.score || 3));
+  const recalculatedScore = scores.length > 0
+    ? Math.max(1, Math.min(5, Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)))
+    : alignment?.score;
 
   return {
     ...alignment,
+    score: recalculatedScore,
+    metrics,
     metricApplicability,
   };
 }

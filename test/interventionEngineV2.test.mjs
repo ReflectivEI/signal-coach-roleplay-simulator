@@ -274,7 +274,7 @@ test("demand hold escalation reaches impatience then disengagement trajectory af
   assert.equal(stage3.impatientTone, true);
   assert.equal(stage3.disengagementTrajectory, false);
   assert.equal(stage4.disengagementTrajectory, true);
-  assert.match(stage4.line.toLowerCase(), /hard to continue|cannot move this conversation forward|disengage|do not see value/);
+  assert.match(stage4.line.toLowerCase(), /hard to continue|cannot move this conversation forward|disengage|do not see value|keep moving forward/);
 });
 
 test("demand hold behavior is deterministic and reusable across scenario types", () => {

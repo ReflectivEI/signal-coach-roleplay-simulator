@@ -245,6 +245,11 @@ export function buildDemandHoldMessage({
       ],
       stage3: [
         `Final clarification: provide one decision-level evidence point for ${concern}, or state the limitation and next practical action.`,
+        `I still need one concrete evidence point for ${concern}. Keep it specific or state the limitation and immediate next step.`,
+      ],
+      stage4: [
+        `We are still unresolved on evidence for ${concern}. If you cannot give one concrete data point now, it is hard to continue this discussion.`,
+        `This remains unresolved on evidence for ${concern}. Without one specific data point now, I do not see a reason to keep moving forward.`,
       ],
       stage4: [
         `We are still unresolved on evidence for ${concern}. If you cannot give one concrete data point now, it is hard to continue this discussion.`,
@@ -309,9 +314,11 @@ export function buildDemandHoldMessage({
       ],
       stage3: [
         `I need a direct applicability answer now: one concrete step for this setting, or a clear limitation plus fallback.`,
+        `Give one specific application for this setting now, or clearly state the limitation and immediate fallback step.`,
       ],
       stage4: [
         `I still cannot see applicability to this setting. Without one concrete example now, I do not see value in continuing.`,
+        `We are still not at applicability for this setting. If you cannot provide one concrete example now, I am ready to end here.`,
       ],
     },
   };
