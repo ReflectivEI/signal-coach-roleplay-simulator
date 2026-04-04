@@ -1624,59 +1624,107 @@ export function normalizeHcpDialoguePunctuation(dialogue) {
   let text = String(dialogue).replace(/\s+/g, ' ').trim()
   if (!text) return text
 
-  const grammarCorrections = [
-    { pattern: /to discuss regarding/gi, replacement: 'to discuss' },
-    { pattern: /to discuss about/gi, replacement: 'to discuss' },
-    { pattern: /to talk regarding/gi, replacement: 'to talk about' },
-    { pattern: /to talk about regarding/gi, replacement: 'to talk about' },
-    {
-      pattern: /What brings you here today to discuss/gi,
-      replacement: 'What brings you here today? Are you interested in discussing',
-    },
-    { pattern: /in the context of/gi, replacement: 'regarding' },
-    {
-      pattern: /What brings you here today to discuss regarding/gi,
-      replacement: 'What brings you here today? Are you interested in discussing',
-    },
-    {
-      pattern: /What brings you here today to discuss about/gi,
-      replacement: 'What brings you here today? Are you interested in discussing',
-    },
-  ]
+  const questionStarterPattern =
+    /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
+  const subordinateDeclarativePattern =
+    /^(What|How|Why|When|Where|Which)\s+(we|i|you|they|it|this|that)\b[\w\s-]{0,60}\b(is|are|was|were|has|have|had)\b/i
+  const acronymTokenPattern = /^(HCP|FDA|NPI|EHR|EMR|PA|P\&T|IDN|ICU|ER|US|EU|IV|IM)$/i
 
-  grammarCorrections.forEach(({ pattern, replacement }) => {
-    text = text.replace(pattern, replacement)
-  })
+  const normalizeAllCapsSentence = (sentence = '') => {
+    const lettersOnly = sentence.replace(/[^A-Za-z]/g, '')
+    if (!lettersOnly) return sentence
+    const hasLowercase = /[a-z]/.test(lettersOnly)
+    const hasUppercase = /[A-Z]/.test(lettersOnly)
+    if (!hasUppercase || hasLowercase) return sentence
+
+    let normalizedSentence = sentence.toLowerCase()
+    normalizedSentence = normalizedSentence.replace(/\bi\b/g, 'I')
+    normalizedSentence = normalizedSentence.replace(/\b([a-z&]{2,5})\b/g, (token) => {
+      return acronymTokenPattern.test(token) ? token.toUpperCase() : token
+    })
+    return normalizedSentence
+  }
+
+  const normalizeMalformedOpener = (value = '') => {
+    return String(value)
+      .replace(/^on\s+(great|good|important|fair)\s+question\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} question, `)
+      .replace(/^on\s+(great|good|important|fair)\s+point\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} point, `)
+      .trim()
+  }
+
+  const mergeDependentClauseFragments = (sentences = []) => {
+    const dependentRelativeStarterPattern = /^(which|that|who|whom|whose|where|when)\b/i
+    const dependentSubordinatorStarterPattern = /^(because|although|while|if|unless|since)\b/i
+
+    return sentences.reduce((merged, rawSentence) => {
+      const sentence = String(rawSentence || '').trim()
+      if (!sentence) return merged
+      if (merged.length === 0) {
+        merged.push(sentence)
+        return merged
+      }
+
+      const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
+      const isQuestion = /\?$/.test(sentence)
+      const isRelativeFragment = dependentRelativeStarterPattern.test(withoutEndPunct) && !isQuestion
+      const isSubordinatorFragment =
+        dependentSubordinatorStarterPattern.test(withoutEndPunct)
+        && !isQuestion
+        && !withoutEndPunct.includes(',')
+
+      if (!isRelativeFragment && !isSubordinatorFragment) {
+        merged.push(sentence)
+        return merged
+      }
+
+      const previous = merged.pop() || ''
+      const previousWithoutEndPunct = previous.replace(/[?.!]+$/, '').trim()
+      const currentWithoutEndPunct = withoutEndPunct.replace(/^([A-Z])/, (char) => char.toLowerCase())
+      merged.push(`${previousWithoutEndPunct}, ${currentWithoutEndPunct}.`)
+      return merged
+    }, [])
+  }
+
+  text = normalizeMalformedOpener(text)
 
   // Split run-on constructions where a statement is followed by a question clause.
   // Example: "I'm familiar with the journal, what specific aspect..." ->
   // "I'm familiar with the journal. What specific aspect...?"
   text = text
-    .replace(/,\s+(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, '. $1')
+    .replace(/^[,;:\-–—]+\s*/g, '')
+    .replace(/\s+([,.;:!?])/g, '$1')
+    .replace(/([,;:])(?=\S)/g, '$1 ')
+    .replace(/([a-z0-9])([.!?])([A-Za-z])/g, '$1$2 $3')
+    .replace(/([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, (_match, prefix, starter) => `${prefix.trim()}. ${starter}`)
     .replace(/\.\s*\?/g, '?')
     .replace(/\s{2,}/g, ' ')
     .trim()
 
-  const questionStarterPattern =
-    /^(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/i
-
   const sentences = text.match(/[^?.!]+[?.!]?/g) || [text]
 
-  const normalized = sentences
+  const normalizedSentences = sentences
     .map((rawSentence) => {
-      const sentence = rawSentence.trim()
+      const sentence = normalizeAllCapsSentence(rawSentence.trim())
       if (!sentence) return ''
 
       const withoutEndPunct = sentence.replace(/[?.!]+$/, '').trim()
-      const isQuestion = questionStarterPattern.test(withoutEndPunct)
+      if (!withoutEndPunct) return ''
 
-      if (isQuestion) return `${withoutEndPunct}?`
+      const capitalized = withoutEndPunct.replace(/^([a-z])/, (_match, c) => c.toUpperCase())
+      const isQuestion = questionStarterPattern.test(withoutEndPunct)
+      const isSubordinateDeclarative = subordinateDeclarativePattern.test(withoutEndPunct)
+
+      if (isQuestion && !isSubordinateDeclarative) return `${capitalized}?`
       if (/[?.!]$/.test(sentence)) return sentence
-      return `${withoutEndPunct}.`
+      return `${capitalized}.`
     })
     .filter(Boolean)
+
+  const normalized = mergeDependentClauseFragments(normalizedSentences)
     .join(' ')
     .trim()
+    .replace(/^([a-z])/, (_match, c) => c.toUpperCase())
+    .replace(/([.!?]\s+)([a-z])/g, (_match, prefix, c) => `${prefix}${c.toUpperCase()}`)
 
   if (!/[?.!]$/.test(normalized)) {
     return `${normalized}.`
