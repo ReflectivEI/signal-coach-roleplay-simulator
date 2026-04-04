@@ -6,6 +6,7 @@ const DEPENDENT_RELATIVE_STARTER_PATTERN = /^(which|that|who|whom|whose|where|wh
 const DEPENDENT_SUBORDINATOR_STARTER_PATTERN = /^(because|although|while|if|unless|since)\b/i;
 const COORDINATING_CONJUNCTION_PATTERN = /^(and|but|or|so|yet|for|nor)\b/i;
 const SUBORDINATE_STARTER_PATTERN = /^(because|although|while|if|unless|since|when|whereas|though|once|until|after|before|as)\b/i;
+const AUXILIARY_QUESTION_STARTER_PATTERN = /^(could|would|can|do|does|did|is|are|am|will|may|should)$/i;
 
 function normalizeAllCapsSentence(sentence = '') {
   const lettersOnly = sentence.replace(/[^A-Za-z]/g, '');
@@ -69,7 +70,15 @@ export function detectDialogueBoundaryIssues(text = '') {
 
 function repairSentenceBoundaryJoins(text = '') {
   return String(text || '')
-    .replace(/([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, (_match, prefix, starter) => `${prefix.trim()}. ${starter}`)
+    .replace(
+      /([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b(\s+(?:i|we|you|they|he|she|it|there|this|that)\b)?/gi,
+      (match, prefix, starter, subjectToken = '') => {
+        if (AUXILIARY_QUESTION_STARTER_PATTERN.test(starter) && !String(subjectToken || '').trim()) {
+          return match;
+        }
+        return `${prefix.trim()}. ${starter}${subjectToken || ''}`;
+      }
+    )
     .replace(/(^|[.!?]\s+)([^?.!]{8,}),\s+([^?.!]{8,})([?.!]?)(?=\s|$)/g, (match, prefix, leftClause, rightClause, trailingPunct) => {
       if (COORDINATING_CONJUNCTION_PATTERN.test(rightClause)) return match;
       if (!clauseLooksIndependent(leftClause) || !clauseLooksIndependent(rightClause)) return match;

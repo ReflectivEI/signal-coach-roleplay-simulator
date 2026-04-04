@@ -38,6 +38,12 @@ test("normalizeHcpDialoguePunctuation handles multi-clause punctuation without s
   assert.equal(output, "We're short-staffed today. Can you give one practical next step, and keep it brief?");
 });
 
+test("normalizeHcpDialoguePunctuation keeps dependent modal clause after 'such as' in one sentence", () => {
+  const input = "The strongest evidence in our workflow, such as initiating SGLT2 and ARNI, can be applied to current patients this month";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "The strongest evidence in our workflow, such as initiating SGLT2 and ARNI, can be applied to current patients this month.");
+});
+
 test("normalizeHcpDialoguePunctuation keeps valid coordinating-conjunction commas", () => {
   const input = "I hear you, and I'm not against trying that";
   const output = normalizeHcpDialoguePunctuation(input);

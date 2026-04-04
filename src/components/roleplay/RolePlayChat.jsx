@@ -955,6 +955,51 @@ function isTerminalClosureDialogue(text = "") {
   return closurePattern.test(sample) && !asksNewQuestion;
 }
 
+function isEvidenceSeekingEngagement(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample.trim()) return false;
+
+  const evidenceIntent = /\b(evidence|proof|data|study|trial|endpoint|clinically meaningful|relevance|relevant)\b/.test(sample);
+  const applicabilityIntent = /\b(applicable|applies|practice|current patients|patient selection|patient-level|for my patients|for our clinic|in this setting)\b/.test(sample);
+  const specificityIntent = /\b(clearest|specific|concrete|exact|which|what is|show me|give me|how)\b/.test(sample);
+  const patientContextIntent = /\b(patient|patients|practice|clinic|setting)\b/.test(sample);
+  const askIntent = /\?|\b(show|give|explain|prove|what|which|how)\b/.test(sample);
+
+  return askIntent && (
+    (evidenceIntent && (applicabilityIntent || specificityIntent || patientContextIntent))
+    || (applicabilityIntent && specificityIntent && patientContextIntent)
+  );
+}
+
+function hasMaterialConstraintProgression(previousText = "", currentText = "") {
+  const previous = String(previousText || "");
+  const current = String(currentText || "");
+  if (!previous.trim() || !current.trim()) return false;
+
+  const currentEngagedEvidence = isEvidenceSeekingEngagement(current);
+  if (!currentEngagedEvidence) return false;
+
+  const evidenceSpecificityScore = (text = "") => {
+    const value = String(text || "").toLowerCase();
+    if (!value.trim()) return 0;
+    let score = 0;
+    if (/\b(evidence|data|study|trial|endpoint|proof)\b/.test(value)) score += 1;
+    if (/\b(clearest|specific|concrete|exact|proof point|clinically meaningful)\b/.test(value)) score += 1;
+    if (/\b(patient|patients|patient-level|patient selection|current patients|practice|clinic|setting)\b/.test(value)) score += 1;
+    if (/\b(this month|this week|current|right now|today)\b/.test(value)) score += 1;
+    return score;
+  };
+
+  const previousScore = evidenceSpecificityScore(previous);
+  const currentScore = evidenceSpecificityScore(current);
+  const similarity = computeSimilarity(previous, current);
+  const currentTokens = extractContinuityTokens(current);
+  const previousTokens = new Set(extractContinuityTokens(previous));
+  const newlyAddedTokens = currentTokens.filter((token) => !previousTokens.has(token));
+
+  return currentScore > previousScore || similarity < 0.86 || newlyAddedTokens.length >= 2;
+}
+
 function hasWorkflowOperationalLanguage(text = "") {
   return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load|epa|front desk|check-?in|order[\s-]?set|routing rule|staffing model|nurse script|ma submit|ma routing|queue|huddle script)\b/i.test(String(text || ""));
 }
@@ -2750,6 +2795,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       || priorLateTurnConstraintState.activeConstraint
       || activeConcern;
     const activeRequirementForTurn = activeConcern || priorLateTurnConstraintState.activeRequirement || "workflow";
+    const priorHcpPrompt = [...turns]
+      .reverse()
+      .find((turn) => Number(turn?.turnNumber) < Number(respondingToTurn?.turnNumber))
+      ?.hcpDialogueBefore || "";
+    const engagedEvidenceSeekingRequest = isEvidenceSeekingEngagement(respondingToTurn?.hcpDialogueBefore || "");
+    const materiallyProgressedConstraintRequest = hasMaterialConstraintProgression(
+      priorHcpPrompt,
+      respondingToTurn?.hcpDialogueBefore || ""
+    );
     const inLateTurnConstraintState =
       nextTurnNumber >= 4
       || unresolvedConcernTurns >= 2
@@ -2763,6 +2817,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requirementAddressed: decayState.concernAddressed,
       boundaryLevel: priorLateTurnConstraintState.boundaryLevel,
       requirementRestatedCount: priorLateTurnConstraintState.requirementRestatedCount,
+      holdAtBoundary: engagedEvidenceSeekingRequest && !overrideExit,
     });
     const objectiveRanking = rankResponseObjective({
       overrideExit,
@@ -3881,6 +3936,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         similarConstraintPrompts,
         activeConcern,
         terminalCloseFallback,
+        hasMaterialProgression: engagedEvidenceSeekingRequest || materiallyProgressedConstraintRequest,
       });
       if (loopAction) {
         nextHcpState = loopAction.nextHcpState;
