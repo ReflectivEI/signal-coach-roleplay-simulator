@@ -1807,6 +1807,42 @@ export function buildHCPDialoguePrompt({
   historyText = null,
   isOpening = false,
 }) {
+  const LIVE_HISTORY_ALLOWED_PREFIX = /^(Sales Rep|Rep|HCP):\s*/i
+  const NON_SIMULATION_HISTORY_PATTERNS = [
+    /\b(root cause|testing output|test output|test results|debug log)\b/i,
+    /\b(console\.(debug|warn|error)|roleplay_calibration|realism_replay_harness_metrics|roleplay_planner_trace)\b/i,
+    /\b(codex|apply_patch|pull request|diff --git)\b/i,
+    /\[section_end\]/i,
+    /\b(session scoring data|deterministic session alignment summary|positives observed|misalignments observed)\b/i,
+    /^\s*(summary|files changed|test results|root cause)\s*:/i,
+  ]
+
+  function isValidSimulationHistoryContent(content = '') {
+    const normalized = String(content || '').trim()
+    if (!normalized) return false
+    return !NON_SIMULATION_HISTORY_PATTERNS.some((pattern) => pattern.test(normalized))
+  }
+
+  function sanitizeLiveHistoryText(rawHistoryText = '') {
+    const lines = String(rawHistoryText || '')
+      .split('\n')
+      .map((line) => String(line || '').trim())
+      .filter(Boolean)
+
+    return lines
+      .filter((line) => LIVE_HISTORY_ALLOWED_PREFIX.test(line))
+      .map((line) => {
+        const speakerMatch = line.match(/^(Sales Rep|Rep|HCP):\s*/i)
+        if (!speakerMatch) return null
+        const speaker = speakerMatch[1] === 'Rep' ? 'Sales Rep' : speakerMatch[1]
+        const content = line.replace(/^(Sales Rep|Rep|HCP):\s*/i, '').trim()
+        if (!isValidSimulationHistoryContent(content)) return null
+        return `${speaker}: ${content}`
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
   const {
     structuralState,
     temperature,
@@ -1832,7 +1868,8 @@ export function buildHCPDialoguePrompt({
     disengaged: 'withdrawing and signaling the conversation is ending',
   }
 
-  const historyLines = String(historyText || '').split('\n')
+  const sanitizedHistoryText = sanitizeLiveHistoryText(historyText)
+  const historyLines = String(sanitizedHistoryText || '').split('\n')
   const repHistoryMessages = historyLines
     .filter((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
     .map((line) => line.replace(/^Sales Rep:\s*|^Rep:\s*/i, '').trim())
@@ -2048,8 +2085,8 @@ export function buildHCPDialoguePrompt({
 
   prompt += contextHint
 
-  if (historyText) {
-    prompt += '\nCONVERSATION HISTORY:\n' + sanitize(historyText)
+  if (sanitizedHistoryText) {
+    prompt += '\nCONVERSATION HISTORY:\n' + sanitize(sanitizedHistoryText)
     prompt +=
       '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue. Keep wording natural and avoid templated repetition.'
   } else {
