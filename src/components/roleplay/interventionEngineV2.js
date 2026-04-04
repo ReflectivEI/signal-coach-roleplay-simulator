@@ -13,12 +13,14 @@ export const DEMAND_TYPES = Object.freeze({
   PROOF_POINT_REQUEST: "proof_point_request",
   DIRECT_ANSWER_REQUIRED: "direct_answer_required",
   OPERATIONAL_REANCHOR_REQUIRED: "operational_reanchor_required",
+  APPLICABILITY_REQUEST: "applicability_request",
 });
 
 const DEMAND_PRIORITY = [
   DEMAND_TYPES.PROOF_POINT_REQUEST,
   DEMAND_TYPES.EVIDENCE_REQUEST,
   DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED,
+  DEMAND_TYPES.APPLICABILITY_REQUEST,
   DEMAND_TYPES.DIRECT_ANSWER_REQUIRED,
 ];
 
@@ -79,6 +81,7 @@ export function createInitialInterventionSessionState() {
       type: null,
       isActive: false,
       unresolvedTurns: 0,
+      demandSatisfied: true,
       lastPrompt: "",
       resolvedThisTurn: false,
       evasiveResponseDetected: false,
@@ -110,12 +113,14 @@ export function classifyDemandType({
   const hasProofPointSignal = /\b(proof point|prove it|hard proof|decision-level|what exact data point)\b/i.test(text);
   const hasEvidenceSignal = /\b(evidence|data|study|trial|publication|outcome|metric|threshold|rate|percent)\b/i.test(text);
   const hasOperationalSignal = /\b(workflow|feasible|operational|staff|capacity|implementation|burden|constraint|fit our)\b/i.test(text);
+  const hasApplicabilitySignal = /\b(apply|applies|applicable|relevant|for my (?:patients|clinic|practice|setting)|in our (?:clinic|setting|practice)|for our (?:patients|team|clinic)|in this (?:clinic|setting|practice))\b/i.test(text);
   const hasDirectQuestionSignal = /\?/.test(text) || /\b(what|which|how|when|where|who)\b/i.test(text);
 
   const candidates = [];
   if (hasProofPointSignal) candidates.push(DEMAND_TYPES.PROOF_POINT_REQUEST);
   if (hasEvidenceSignal) candidates.push(DEMAND_TYPES.EVIDENCE_REQUEST);
   if (needsConstraintReanchor || hasBlockingConstraints || hasOperationalSignal) candidates.push(DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED);
+  if (hasApplicabilitySignal) candidates.push(DEMAND_TYPES.APPLICABILITY_REQUEST);
   if (hasDirectQuestionSignal) candidates.push(DEMAND_TYPES.DIRECT_ANSWER_REQUIRED);
 
   for (const demandType of DEMAND_PRIORITY) {
@@ -159,6 +164,7 @@ function isDemandSatisfied({ demandType, repMessage = "", hcpPrompt = "", active
   const hasEvidence = /\b(study|trial|data|published|outcome|endpoint|cohort|metric|threshold|percent|rate|sample)\b/.test(rep);
   const hasSpecificAction = /\b(first step|step 1|do this|start with|assign|owner|timeline|within|today|this week|by\s+\w+)\b/.test(rep);
   const hasPracticalAnchor = /\b(workflow|staff|capacity|handoff|process|clinic|setting|operational|feasible)\b/.test(rep);
+  const hasContextTie = /\b(your (?:clinic|patients|team|setting|workflow|practice)|in your (?:clinic|setting|practice)|for your (?:patients|team|clinic)|in this (?:clinic|setting|practice)|for this (?:clinic|setting|practice))\b/.test(rep);
   const acknowledgesLimitation = /\b(i don'?t have|i can'?t confirm|unknown right now|limitation|not available yet|what we can do now)\b/.test(rep);
   const respondsToQuestion = overlapRatio(rep, hcpPrompt) >= 0.35;
   const touchesConcern = concern ? rep.includes(concern) : true;
@@ -176,6 +182,11 @@ function isDemandSatisfied({ demandType, repMessage = "", hcpPrompt = "", active
   if (demandType === DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED) {
     return (hasSpecificAction && hasPracticalAnchor && touchesConcern)
       || (acknowledgesLimitation && hasPracticalAnchor);
+  }
+
+  if (demandType === DEMAND_TYPES.APPLICABILITY_REQUEST) {
+    return (hasContextTie && (hasSpecificAction || hasEvidence || hasPracticalAnchor))
+      || (acknowledgesLimitation && hasContextTie && hasSpecificAction);
   }
 
   if (demandType === DEMAND_TYPES.DIRECT_ANSWER_REQUIRED) {
@@ -234,6 +245,11 @@ export function buildDemandHoldMessage({
       ],
       stage3: [
         `Final clarification: provide one decision-level evidence point for ${concern}, or state the limitation and next practical action.`,
+        `I still need one concrete evidence point for ${concern}. Keep it specific or state the limitation and immediate next step.`,
+      ],
+      stage4: [
+        `We are still unresolved on evidence for ${concern}. If you cannot give one concrete data point now, it is hard to continue this discussion.`,
+        `This remains unresolved on evidence for ${concern}. Without one specific data point now, I do not see a reason to keep moving forward.`,
       ],
     },
     [DEMAND_TYPES.PROOF_POINT_REQUEST]: {
@@ -248,6 +264,9 @@ export function buildDemandHoldMessage({
       stage3: [
         `Last pass: one explicit proof point with measurable support, or acknowledge the gap and give a practical next step.`,
       ],
+      stage4: [
+        `I still do not have a usable proof point. Without one concrete metric now, I cannot move this conversation forward.`,
+      ],
     },
     [DEMAND_TYPES.DIRECT_ANSWER_REQUIRED]: {
       stage1: [
@@ -260,6 +279,9 @@ export function buildDemandHoldMessage({
       ],
       stage3: [
         `Final clarification: direct answer only—one specific action, or clearly state the limitation and immediate fallback.`,
+      ],
+      stage4: [
+        `You still have not answered directly. If you cannot give one specific action now, it is hard to see how this applies.`,
       ],
     },
     [DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED]: {
@@ -274,11 +296,32 @@ export function buildDemandHoldMessage({
       stage3: [
         `Final re-anchor: provide one operationally feasible action now, or explicitly acknowledge the limit and immediate mitigation.`,
       ],
+      stage4: [
+        `This remains unresolved operationally. Without one feasible step that fits staffing and capacity now, I am ready to disengage.`,
+      ],
+    },
+    [DEMAND_TYPES.APPLICABILITY_REQUEST]: {
+      stage1: [
+        `That stays general. Give one concrete example of how this applies in my setting.`,
+        `I still need one specific way this applies to our clinic context before we move on.`,
+      ],
+      stage2: [
+        `You are still general—what is one context-specific step for our practice right now?`,
+        `Narrow this to one practical example for our patient mix and workflow.`,
+      ],
+      stage3: [
+        `I need a direct applicability answer now: one concrete step for this setting, or a clear limitation plus fallback.`,
+        `Give one specific application for this setting now, or clearly state the limitation and immediate fallback step.`,
+      ],
+      stage4: [
+        `I still cannot see applicability to this setting. Without one concrete example now, I do not see value in continuing.`,
+        `We are still not at applicability for this setting. If you cannot provide one concrete example now, I am ready to end here.`,
+      ],
     },
   };
 
   const bundles = demandMessages[demandType] || demandMessages[DEMAND_TYPES.DIRECT_ANSWER_REQUIRED];
-  const stageKey = unresolvedTurns >= 3 ? "stage3" : unresolvedTurns >= 2 ? "stage2" : "stage1";
+  const stageKey = unresolvedTurns >= 4 ? "stage4" : unresolvedTurns >= 3 ? "stage3" : unresolvedTurns >= 2 ? "stage2" : "stage1";
   const pool = bundles[stageKey];
   const idx = deterministicIndex(`${demandType}:${concern}:${stageKey}:${seed}`, pool.length);
   const normalizedAvoid = normalizeText(avoidLine);
@@ -287,6 +330,22 @@ export function buildDemandHoldMessage({
     selected = pool[(idx + 1) % pool.length];
   }
   return selected;
+}
+
+export function buildDemandHoldDirective({
+  demandType,
+  activeConcern = "workflow",
+  unresolvedTurns = 1,
+  seed = "",
+  avoidLine = "",
+} = {}) {
+  const stage = unresolvedTurns >= 4 ? 4 : unresolvedTurns >= 3 ? 3 : unresolvedTurns >= 2 ? 2 : 1;
+  return {
+    stage,
+    line: buildDemandHoldMessage({ demandType, activeConcern, unresolvedTurns, seed, avoidLine }),
+    impatientTone: stage >= 3,
+    disengagementTrajectory: stage >= 4,
+  };
 }
 
 export function updateInterventionSessionState(previousState, {
@@ -335,6 +394,7 @@ export function updateInterventionSessionState(previousState, {
     type: demandType,
     isActive: unresolvedDemand,
     unresolvedTurns: unresolvedDemand ? priorUnresolvedTurns + 1 : 0,
+    demandSatisfied,
     lastPrompt: hcpPrompt,
     resolvedThisTurn: Boolean(demandType) && !unresolvedDemand,
     evasiveResponseDetected: unresolvedDemand && evasiveSignals.evasive,

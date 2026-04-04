@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DEMAND_TYPES,
   INTERVENTION_DECISIONS,
+  buildDemandHoldDirective,
   buildDemandHoldMessage,
   classifyDemandType,
   createInitialInterventionSessionState,
@@ -229,4 +230,108 @@ test("demand classifier maps reusable conversational patterns", () => {
     classifyDemandType({ hcpPrompt: "What should we do first?" }),
     DEMAND_TYPES.DIRECT_ANSWER_REQUIRED,
   );
+  assert.equal(
+    classifyDemandType({ hcpPrompt: "How does this apply in our clinic setting?" }),
+    DEMAND_TYPES.APPLICABILITY_REQUEST,
+  );
+});
+
+test("applicability demand remains active until the answer is tied to HCP context", () => {
+  let state = createInitialInterventionSessionState();
+  state = updateInterventionSessionState(state, {
+    turnNumber: 21,
+    hcpPrompt: "How does this apply in our clinic setting?",
+    repMessage: "This is broadly useful in many practices.",
+    activeConcern: "workflow",
+  });
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.APPLICABILITY_REQUEST);
+  assert.equal(state.activeDemand.isActive, true);
+
+  state = updateInterventionSessionState(state, {
+    turnNumber: 22,
+    hcpPrompt: "How does this apply in our clinic setting?",
+    repMessage: "In your clinic, start with one intake checklist owned by the MA team this week.",
+    activeConcern: "workflow",
+  });
+  assert.equal(state.activeDemand.isActive, false);
+});
+
+test("demand hold escalation reaches impatience then disengagement trajectory after repeated misses", () => {
+  const stage3 = buildDemandHoldDirective({
+    demandType: DEMAND_TYPES.EVIDENCE_REQUEST,
+    unresolvedTurns: 3,
+    activeConcern: "workflow",
+    seed: "stage-3",
+  });
+  const stage4 = buildDemandHoldDirective({
+    demandType: DEMAND_TYPES.EVIDENCE_REQUEST,
+    unresolvedTurns: 4,
+    activeConcern: "workflow",
+    seed: "stage-4",
+    avoidLine: stage3.line,
+  });
+
+  assert.equal(stage3.impatientTone, true);
+  assert.equal(stage3.disengagementTrajectory, false);
+  assert.equal(stage4.disengagementTrajectory, true);
+  assert.match(stage4.line.toLowerCase(), /hard to continue|cannot move this conversation forward|disengage|do not see value|keep moving forward/);
+});
+
+test("demand hold behavior is deterministic and reusable across scenario types", () => {
+  const scenarioFamilies = ["cardiology", "oncology"];
+  const outputs = scenarioFamilies.map((family) => buildDemandHoldDirective({
+    demandType: DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED,
+    activeConcern: family,
+    unresolvedTurns: 2,
+    seed: "stable-seed",
+  }));
+
+  outputs.forEach((directive) => {
+    assert.equal(typeof directive.line, "string");
+    assert.equal(directive.stage, 2);
+    assert.equal(directive.disengagementTrajectory, false);
+    assert.ok(directive.line.length > 20);
+  });
+});
+
+test("unresolved applicability demand is not bypassed by generic progression signals", () => {
+  const state = updateInterventionSessionState(createInitialInterventionSessionState(), {
+    turnNumber: 30,
+    hcpPrompt: "How does this apply in our clinic setting?",
+    repMessage: "This is relevant across many environments and should help broadly.",
+    alignmentScore: 4.5,
+    concernFlowOutcome: "aligned",
+    activeConcern: "workflow",
+    hasBlockingConstraints: false,
+    needsConstraintReanchor: false,
+  });
+
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.APPLICABILITY_REQUEST);
+  assert.equal(state.activeDemand.isActive, true);
+  assert.equal(state.activeDemand.demandSatisfied, false);
+});
+
+test("same unresolved-demand input sequence yields identical deterministic hold outputs", () => {
+  const runSequence = () => {
+    let state = createInitialInterventionSessionState();
+    const holdLines = [];
+    for (let i = 1; i <= 4; i += 1) {
+      state = updateInterventionSessionState(state, {
+        turnNumber: i,
+        hcpPrompt: "How does this apply in our clinic setting?",
+        repMessage: "This is generally relevant and important.",
+        activeConcern: "workflow",
+      });
+      const directive = buildDemandHoldDirective({
+        demandType: state.activeDemand.type,
+        activeConcern: "workflow",
+        unresolvedTurns: state.activeDemand.unresolvedTurns,
+        seed: `stable-sequence:${i}`,
+      });
+      holdLines.push({ stage: directive.stage, line: directive.line });
+    }
+    return holdLines;
+  };
+
+  assert.deepEqual(runSequence(), runSequence());
 });

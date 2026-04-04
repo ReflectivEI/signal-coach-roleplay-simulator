@@ -51,6 +51,12 @@ import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
 import {
+  applyMetricApplicabilityGating,
+  enforceFeedbackEvidenceRules,
+  enforceProhibitedStateTransition,
+  validateScenarioRuntimeContract,
+} from "@/lib/scenarioNormalization";
+import {
   ENABLE_INFERENCE_LAYER,
   createInitialRepInferenceState,
   getRecentRepTurns,
@@ -73,9 +79,10 @@ import { buildDeterministicGenerationKey } from "./generationKey";
 import { buildCoachingFeedbackMarkdown, parseStructuredFeedback } from "./sessionFeedbackFormatter";
 import {
   createInitialInterventionSessionState,
-  buildDemandHoldMessage,
+  buildDemandHoldDirective,
   updateInterventionSessionState,
 } from "./interventionEngineV2";
+import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 
 function escapeHTML(text) {
   return String(text)
@@ -2317,6 +2324,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     activeConstraints: [],
   });
   const interventionStateRef = useRef(createInitialInterventionSessionState());
+  const runtimeScenarioContractRef = useRef(validateScenarioRuntimeContract(scenario).contract);
   const demandHoldHistoryRef = useRef({
     demandType: null,
     line: "",
@@ -2394,6 +2402,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   // ─── INIT ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const controller = sessionControllerRef.current;
+    runtimeScenarioContractRef.current = validateScenarioRuntimeContract(scenario).contract;
     controller.state = SessionState.ACTIVE;
     controller.isActive = true;
     controller.isProcessingTurn = false;
@@ -2555,6 +2564,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       prevTemp,
       prevHcpState
     );
+    alignment = applyMetricApplicabilityGating(
+      alignment,
+      runtimeScenarioContractRef.current,
+      {
+        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+        repMessage,
+      }
+    );
     if (inPleasantryGracePeriod) {
       const normalizedMetrics = Object.fromEntries(
         Object.entries(alignment?.metrics || {}).map(([cap, val]) => [
@@ -2593,6 +2610,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     if (lowValueResponse) {
       nextHcpState = escalateHcpState(nextHcpState, 1);
+    }
+
+    const transitionBound = enforceProhibitedStateTransition({
+      fromState: prevState,
+      proposedState: nextHcpState,
+      runtimeContract: runtimeScenarioContractRef.current,
+    });
+    if (transitionBound.blocked) {
+      nextHcpState = transitionBound.nextState;
+      emitPlannerTrace("prohibited_transition_blocked", {
+        turnNumber: turns.length,
+        fromState: prevState,
+        proposedState: transitionBound.nextState,
+        reason: transitionBound.reason,
+      });
     }
 
     if (poorTurns >= 3 || (poorTurns >= 2 && alignment?.score <= 2)) {
@@ -2763,6 +2795,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       needsConstraintReanchor: concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot",
     });
     const interventionDecision = interventionStateAfterTurn.lastDecision || "none";
+    const unresolvedDemandActive = ENABLE_V2_INTERVENTION_RUNTIME
+      && Boolean(interventionStateAfterTurn.activeDemand?.isActive && interventionStateAfterTurn.activeDemand?.type);
     const interventionVisible = ENABLE_V2_INTERVENTION_RUNTIME && interventionDecision !== "none";
     const interventionSnapshot = {
       decision: interventionDecision,
@@ -2775,6 +2809,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       needsConstraintReanchor: interventionStateAfterTurn.needsConstraintReanchor,
       activeDemandType: interventionStateAfterTurn.activeDemand?.type || null,
       activeDemandUnresolvedTurns: interventionStateAfterTurn.activeDemand?.unresolvedTurns || 0,
+      demandSatisfied: interventionStateAfterTurn.activeDemand?.demandSatisfied ?? null,
       evasiveResponseDetected: Boolean(interventionStateAfterTurn.activeDemand?.evasiveResponseDetected),
       evidenceCheckpoint: interventionStateAfterTurn.evidenceCheckpoints?.slice(-1)?.[0] || null,
     };
@@ -2791,13 +2826,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && unresolvedConcernTurns >= 3
       && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
     const continueProbability = 0.65;
-    const continueCurrentBehavior = !terminalDecisionTriggerActive
+    const continueCurrentBehavior = unresolvedDemandActive
+      ? true
+      : !terminalDecisionTriggerActive
       || deterministicBoolean(`${sid}:${scenario?.id || "scenario"}:${nextTurnNumber}:${activeConcern}:${decayState.tier}`, continueProbability);
-    const terminalDecisionMode = terminalDecisionTriggerActive && !continueCurrentBehavior;
+    const terminalDecisionMode = !unresolvedDemandActive && terminalDecisionTriggerActive && !continueCurrentBehavior;
     const hardLoopBreaker =
+      !unresolvedDemandActive
+      && (
       (decayState.tier === "disengaging" || (decayState.tier === "impatient" && repDefersImmediateAction))
       && unresolvedConcernTurns >= 5
-      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction);
+      && ((!repHasConcreteMove && !repHasFollowUpCommitment) || repDefersImmediateAction)
+      );
     const priorLateTurnConstraintState = lateTurnConstraintStateRef.current || {
       activeConstraint: null,
       activeRequirement: null,
@@ -3112,22 +3152,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "What is the most practical monitoring plan we can apply consistently without overloading the clinic team?";
       }
 
-      const repTopicTokens = repLower
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today", "patient", "patients"]).has(w))
-        .slice(0, 5);
-      const repTopic = repTopicTokens.join(" ");
+      const safeLeadIn = buildSafeReferenceLeadIn(repMessage, "I hear your concern.");
 
       if (scenarioPrepFocus) {
-        return repTopic
-          ? `You mentioned ${repTopic}. Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`
-          : "Since my patients are the priority, and access to treatment is a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?";
+        return `${safeLeadIn} Since my patients are the priority and access remains a challenge, what is the most practical recommendation you can provide to improve access to PrEP today?`;
       }
 
-      return repTopic
-        ? `You mentioned ${repTopic}. Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`
-        : "Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?";
+      return `${safeLeadIn} Since my patients are the priority, what is the most practical recommendation you can provide for my workflow today?`;
     };
 
     const buildNonRepeatingScenarioFallback = (previousDialogue = "") => {
@@ -3137,26 +3168,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       if (!prevNorm || prevNorm !== baseNorm) return base;
 
       const repLower = String(repMessage || "").toLowerCase();
-      const repTopicTokens = repLower
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((w) => w && !new Set(["the", "and", "for", "with", "that", "this", "your", "have", "from", "what", "about", "today"]).has(w))
-        .slice(0, 4);
-      const repTopic = repTopicTokens.join(" ") || "that point";
+      const safeLeadIn = buildSafeReferenceLeadIn(repMessage, "I hear your concern.");
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return `On ${repTopic}, help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
+        return `${safeLeadIn} Help me understand the exact candidacy and resistance checks we can apply consistently this week.`;
       }
 
       if (scenarioPrepFocus) {
-        return `On ${repTopic}, given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
+        return `${safeLeadIn} Given our access bottlenecks and limited staff time, what single practical step should we start with today for PrEP patients?`;
       }
 
       if (scenarioMonitoringFocus) {
-        return `On ${repTopic}, what is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
+        return `${safeLeadIn} What is the simplest monitoring and follow-up step we can implement without adding extra burden?`;
       }
 
-      return `On ${repTopic}, what is the most practical next step we can apply in clinic today without disrupting workflow?`;
+      return `${safeLeadIn} What is the most practical next step we can apply in clinic today without disrupting workflow?`;
     };
 
     const buildScenarioAlignedCue = (dialogue, isFirstTurn, recentCues = [], engagementTier = "engaged") => {
@@ -3989,20 +4015,27 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && nextHcpState !== "disengaged"
       && activeDemand?.isActive
       && activeDemand?.type;
+    let demandHoldStage = 0;
+    let demandHoldOverrodeProgression = false;
     if (demandHoldActive) {
       const previousHold = demandHoldHistoryRef.current;
-      nextHcpDialogue = buildDemandHoldMessage({
+      const holdDirective = buildDemandHoldDirective({
         demandType: activeDemand.type,
         activeConcern,
         unresolvedTurns: activeDemand.unresolvedTurns,
         seed: `${generationKey}:${nextTurnNumber}:${activeDemand.type}`,
         avoidLine: previousHold.demandType === activeDemand.type ? previousHold.line : "",
       });
+      nextHcpDialogue = holdDirective.line;
+      demandHoldStage = holdDirective.stage;
+      demandHoldOverrodeProgression = true;
       demandHoldHistoryRef.current = {
         demandType: activeDemand.type,
         line: nextHcpDialogue,
       };
-      if (nextHcpState === "engaged") nextHcpState = "resistant";
+      if (holdDirective.disengagementTrajectory) nextHcpState = "disengaged";
+      else if (holdDirective.impatientTone && nextHcpState === "engaged") nextHcpState = "resistant";
+      else if (nextHcpState === "engaged") nextHcpState = "resistant";
     } else {
       demandHoldHistoryRef.current = {
         demandType: null,
@@ -4231,6 +4264,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       guardrailApplied: false,
       plannerGapComparison,
       finalResponse: nextHcpDialogue,
+      demandType: activeDemand?.type || null,
+      unresolvedDemandTurns: activeDemand?.unresolvedTurns || 0,
+      demandSatisfied: activeDemand?.demandSatisfied ?? null,
+      demandHoldStage,
+      demandHoldOverrodeProgression,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
     const previouslyVerbalizedOperationalConstraintTypes = [
@@ -4461,7 +4499,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const rawContent = normalizeLlmInvokeText(data);
         const parsed = parseStructuredFeedback(rawContent);
         const coachingFeedback = buildCoachingFeedbackMarkdown(parsed);
-        setFeedback(coachingFeedback);
+        setFeedback(enforceFeedbackEvidenceRules(coachingFeedback, runtimeScenarioContractRef.current));
       } else {
         setFeedback("Unable to generate session feedback. Please try again.");
       }
