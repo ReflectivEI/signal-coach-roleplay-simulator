@@ -197,3 +197,24 @@ test("live RolePlayChat path protects engaged evidence-seeking turns from premat
   assert.match(source, /holdAtBoundary: engagedEvidenceSeekingRequest && !overrideExit/);
   assert.match(source, /hasMaterialProgression: engagedEvidenceSeekingRequest \|\| materiallyProgressedConstraintRequest/);
 });
+
+test("active runtime route remains RolePlaySimulator -> ScenarioCard -> RolePlayChat with history passed into buildHCPDialoguePrompt", () => {
+  const simulatorSource = fs.readFileSync(
+    new URL("../src/pages/RolePlaySimulator.jsx", import.meta.url),
+    "utf8",
+  );
+  const scenarioCardSource = fs.readFileSync(
+    new URL("../src/components/roleplay/ScenarioCard.jsx", import.meta.url),
+    "utf8",
+  );
+  const rolePlayChatSource = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(simulatorSource, /EnterpriseScenarioCard/);
+  assert.match(scenarioCardSource, /import RolePlayChat from "\.\/RolePlayChat"/);
+  assert.match(scenarioCardSource, /<RolePlayChat scenario=\{scenario\}/);
+  assert.match(rolePlayChatSource, /const historyText = flattenTurns\(prevTurns\)/);
+  assert.match(rolePlayChatSource, /buildHCPDialoguePrompt\(\{\s*[\s\S]*historyText,/);
+});
