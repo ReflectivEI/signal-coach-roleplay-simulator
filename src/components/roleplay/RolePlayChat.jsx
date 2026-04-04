@@ -2803,8 +2803,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       needsConstraintReanchor: concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot",
     });
     const interventionDecision = interventionStateAfterTurn.lastDecision || "none";
-    const unresolvedDemandActive = ENABLE_V2_INTERVENTION_RUNTIME
-      && Boolean(interventionStateAfterTurn.activeDemand?.isActive && interventionStateAfterTurn.activeDemand?.type);
+    const unresolvedDemandActive = Boolean(
+      interventionStateAfterTurn.activeDemand?.isActive
+      && interventionStateAfterTurn.activeDemand?.type
+    );
     const interventionVisible = ENABLE_V2_INTERVENTION_RUNTIME && interventionDecision !== "none";
     const interventionSnapshot = {
       decision: interventionDecision,
@@ -4023,8 +4025,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const activeDemand = interventionStateRef.current?.activeDemand;
-    const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME
-      && !overrideExit
+    const demandHoldActive = !overrideExit
       && nextHcpState !== "disengaged"
       && activeDemand?.isActive
       && activeDemand?.type;
@@ -4070,7 +4071,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         activeConcern,
       })
       : { needsRepair: false };
-    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged")
+    const demandHoldHardLockActive = demandHoldActive && demandHoldOverrodeProgression;
+    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged" && !demandHoldHardLockActive)
       ? (repetitiveCandidate ? "anti_repeat" : continuity.needsRepair ? "continuity_repair" : "none")
       : "none";
 
@@ -4220,6 +4222,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
+    if (demandHoldHardLockActive && nextHcpState !== "disengaged") {
+      const lockedDemandLine = String(demandHoldHistoryRef.current?.line || "").trim();
+      if (lockedDemandLine) {
+        nextHcpDialogue = lockedDemandLine;
+      }
+    }
+
     const nextLateTurnConstraintState = {
       activeConstraint: activeConstraintForTurn,
       activeRequirement: activeRequirementForTurn,
@@ -4283,6 +4292,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       demandSatisfied: activeDemand?.demandSatisfied ?? null,
       demandHoldStage,
       demandHoldOverrodeProgression,
+      demandHoldHardLockActive,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
     const previouslyVerbalizedOperationalConstraintTypes = [
