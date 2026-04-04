@@ -30,6 +30,11 @@
 
 import { SIGNAL_CAPABILITIES } from './signalIntelligenceSOT';
 
+export const END_SESSION_EVALUATION_BASELINE = Object.freeze({
+  id: 'SI-v2-locked-2026-02-11',
+  path: 'end_session_end_get_feedback',
+});
+
 // ─── METRIC DEFINITIONS (canonical, from SOT) ──────────────────────────────────
 export const METRIC_DEFINITIONS = SIGNAL_CAPABILITIES.map(c => ({
   id: c.id,
@@ -161,6 +166,39 @@ function detectPatterns(msg) {
     isVeryLong: wc > 100,
     singleAsk: qc <= 1,
     isGreetingOnly: greetingOnly,
+  };
+}
+
+export function extractBaselineObservableEvidence({
+  repMessage = '',
+  hcpState = 'neutral',
+  hcpUtterance = '',
+  cueText = '',
+} = {}) {
+  const normalizedState = normalizeHcpState(hcpState);
+  const p = detectPatterns(repMessage);
+  const cueDemand = detectCueDemand({ cueText, hcpUtterance });
+  const questionDemand = detectQuestionDemand(hcpUtterance);
+  const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
+  const repLower = String(repMessage || '').toLowerCase();
+
+  const workflowPracticalAdaptation = /\b(workflow|staff(?:ing)?|handoff|burden|practical|operational|clinic flow|implementation)\b/.test(repLower)
+    && /\b(first step|start with|today|this week|assign|owner|checklist|pilot)\b/.test(repLower);
+  const timePressureAdaptation = (
+    p.acknowledguesTime
+    || /\b(quick|brief|one minute|in 30 seconds|i won't take long)\b/.test(repLower)
+  ) && (p.isBrief || p.singleAsk || p.reducedAsk);
+
+  return {
+    acknowledgesConcern: p.acknowledgesConcern,
+    concernReflection: p.paraphrasesHcp || p.buildsOnHcp,
+    timePressureAdaptation,
+    workflowPracticalAdaptation,
+    directResponseAlignment: questionDemand.isDirectQuestion ? questionResponseFit.directlyAddresses : (p.respondsToState || p.buildsOnHcp || questionResponseFit.lexicalOverlap >= 1),
+    valueConnection: p.referencesHcpPriority || p.translatesOutcome,
+    cueHadTimePressure: cueDemand.timeConstraint,
+    cueHadResistance: cueDemand.explicitResistance,
+    hcpStateNormalized: normalizedState,
   };
 }
 
