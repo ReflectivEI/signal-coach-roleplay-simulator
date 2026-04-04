@@ -2791,6 +2791,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpPrompt: respondingToTurn?.hcpDialogueBefore || "",
       repMessage,
       activeConcern,
+      scenarioFamily,
       hasBlockingConstraints: normalizedActiveConstraints.length > 0,
       needsConstraintReanchor: concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot",
     });
@@ -4022,6 +4023,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       const holdDirective = buildDemandHoldDirective({
         demandType: activeDemand.type,
         activeConcern,
+        scenarioFamily,
         unresolvedTurns: activeDemand.unresolvedTurns,
         seed: `${generationKey}:${nextTurnNumber}:${activeDemand.type}`,
         avoidLine: previousHold.demandType === activeDemand.type ? previousHold.line : "",
