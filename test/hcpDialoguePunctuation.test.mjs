@@ -31,3 +31,21 @@ test("normalizeHcpDialoguePunctuation handles multi-clause punctuation without s
   const output = normalizeHcpDialoguePunctuation(input);
   assert.equal(output, "We're short-staffed today. Can you give one practical next step, and keep it brief?");
 });
+
+test("normalizeHcpDialoguePunctuation repairs malformed opener fragments", () => {
+  const input = "On great question I think this could work in our clinic";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "That is a great question, I think this could work in our clinic.");
+});
+
+test("normalizeHcpDialoguePunctuation strips dangling first-sentence conjunction prefixes", () => {
+  const input = "And I think we should start with one pilot workflow";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "I think we should start with one pilot workflow.");
+});
+
+test("normalizeHcpDialoguePunctuation strips dangling 'So' prefix without changing intent", () => {
+  const input = "So the key action is assigning one owner today";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "The key action is assigning one owner today.");
+});
