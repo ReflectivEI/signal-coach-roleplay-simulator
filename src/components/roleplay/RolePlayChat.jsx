@@ -84,6 +84,7 @@ import {
   updateInterventionSessionState,
 } from "./interventionEngineV2";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
+import { enforceRepDemandBinding } from "./repDemandBinding";
 
 function escapeHTML(text) {
   return String(text)
@@ -2521,7 +2522,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const requestId = ++activeRequestIdRef.current;
     lastSubmittedTurnKeyRef.current = candidateTurnKey;
     try {
-      const repMessage = sanitizeUserMessage(normalizedInput);
+      let repMessage = sanitizeUserMessage(normalizedInput);
       setInput("");
       setIsLoading(true);
 
@@ -2536,6 +2537,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
+    const priorActiveDemand = interventionStateRef.current?.activeDemand;
+    const priorUnresolvedDemandActive = ENABLE_V2_INTERVENTION_RUNTIME
+      && Boolean(priorActiveDemand?.isActive && priorActiveDemand?.type);
+    const previousRepMessage = [...turns]
+      .slice(0, -1)
+      .reverse()
+      .find((t) => t?.repMessage)?.repMessage || "";
+    const repDemandBinding = enforceRepDemandBinding({
+      repMessage,
+      previousRepMessage,
+      unresolvedDemandActive: priorUnresolvedDemandActive,
+      activeDemandType: priorActiveDemand?.type || "",
+      hcpPrompt: respondingToTurn?.hcpDialogueBefore || "",
+      activeConcern: detectPrimaryConcern(
+        `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`
+      ),
+    });
+    repMessage = repDemandBinding.repMessage;
     const generationKey = buildDeterministicGenerationKey({
       sessionId: sid,
       turnNumber: respondingToTurn.turnNumber,
@@ -2820,6 +2839,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       demandSatisfied: interventionStateAfterTurn.activeDemand?.demandSatisfied ?? null,
       evasiveResponseDetected: Boolean(interventionStateAfterTurn.activeDemand?.evasiveResponseDetected),
       evidenceCheckpoint: interventionStateAfterTurn.evidenceCheckpoints?.slice(-1)?.[0] || null,
+      repDemandBindingConstrained: Boolean(repDemandBinding?.constrained),
+      repDemandBindingReason: repDemandBinding?.reason || null,
+      repDemandBindingShape: repDemandBinding?.shape || null,
     };
     interventionStateRef.current = {
       ...interventionStateAfterTurn,
