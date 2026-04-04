@@ -54,6 +54,16 @@ function overlapRatio(sourceA = "", sourceB = "") {
   return overlap / Math.max(1, Math.min(aSet.size, bSet.size));
 }
 
+const ECHO_STOPWORDS = new Set([
+  "what", "when", "where", "which", "would", "could", "should", "please", "about",
+  "this", "that", "with", "from", "your", "you", "have", "there", "their",
+  "question", "asking", "asked", "need", "want", "like", "just", "into",
+]);
+
+function uniqueContentTokenSet(text = "") {
+  return new Set(tokenize(text).filter((token) => token.length >= 4 && !ECHO_STOPWORDS.has(token)));
+}
+
 function buildStructureSignature(text = "") {
   const normalized = normalizeText(text);
   if (!normalized) return "";
@@ -223,11 +233,26 @@ export function detectEvasiveRepResponse({ repMessage = "", hcpPrompt = "" } = {
   const unsupportedSummary = /\b(this should help|this will work|it addresses that|we are aligned|that covers it)\b/i.test(repLower)
     && !/\b(because|data|study|step|metric|threshold|owner|timeline)\b/i.test(repLower);
   const parroting = questionOverlap >= 0.7 && rep.length < 180;
+  const structuralEcho = buildStructureSignature(rep) === buildStructureSignature(hcpPrompt) && rep.length < 220;
+  const acknowledgmentPrefix = /^\s*(i hear you|i understand|fair point|you(?:'re| are) asking|you want|you need)\b/i.test(rep);
+  const addsSubstance = /\b(\d+|percent|%|study|trial|data|first step|start with|owner|timeline|today|this week|by\s+\w+|in your (?:clinic|setting|practice)|for your (?:clinic|patients|workflow))\b/i.test(rep);
+  const repTokenSet = uniqueContentTokenSet(rep);
+  const promptTokenSet = uniqueContentTokenSet(hcpPrompt);
+  const newContentCount = [...repTokenSet].filter((token) => !promptTokenSet.has(token)).length;
+  const reflectionWithoutAnswer = acknowledgmentPrefix && !addsSubstance && newContentCount <= 1;
+  const pureEcho = (questionOverlap >= 0.62 || structuralEcho) && !addsSubstance && newContentCount <= 1;
   const pivotAway = /\b(anyway|separately|zoom out|overall|big picture|in broader terms)\b/i.test(repLower);
   const repeatedExplanationLoop = /\b(i just mentioned that|as i (just )?mentioned|as i said|like i said|already covered that|as noted earlier)\b/i.test(repLower);
   const longResponse = rep.length >= 320;
 
-  const evasive = genericPrincipleOnly || vagueDeferral || unsupportedSummary || parroting || pivotAway || repeatedExplanationLoop;
+  const evasive = genericPrincipleOnly
+    || vagueDeferral
+    || unsupportedSummary
+    || parroting
+    || pureEcho
+    || reflectionWithoutAnswer
+    || pivotAway
+    || repeatedExplanationLoop;
 
   return {
     evasive,
@@ -235,6 +260,8 @@ export function detectEvasiveRepResponse({ repMessage = "", hcpPrompt = "" } = {
     vagueDeferral,
     unsupportedSummary,
     parroting,
+    pureEcho,
+    reflectionWithoutAnswer,
     pivotAway,
     repeatedExplanationLoop,
     longResponse,
@@ -502,7 +529,8 @@ export function updateInterventionSessionState(previousState, {
       ? false
       : isDemandSatisfied({ demandType, repMessage, hcpPrompt, activeConcern }))
     : true;
-  const unresolvedDemand = Boolean(demandType) && (!demandSatisfied || evasiveSignals.evasive);
+  const demandSatisfiedAfterEchoGate = demandSatisfied && !(evasiveSignals.pureEcho || evasiveSignals.reflectionWithoutAnswer);
+  const unresolvedDemand = Boolean(demandType) && (!demandSatisfiedAfterEchoGate || evasiveSignals.evasive);
 
   const priorUnresolvedTurns = prior?.activeDemand?.isActive && prior?.activeDemand?.type === demandType
     ? Number(prior?.activeDemand?.unresolvedTurns || 0)
@@ -512,7 +540,7 @@ export function updateInterventionSessionState(previousState, {
     type: demandType,
     isActive: unresolvedDemand,
     unresolvedTurns: unresolvedDemand ? priorUnresolvedTurns + 1 : 0,
-    demandSatisfied,
+    demandSatisfied: demandSatisfiedAfterEchoGate,
     lastPrompt: hcpPrompt,
     lastRepMessage: repMessage,
     resolvedThisTurn: Boolean(demandType) && !unresolvedDemand,

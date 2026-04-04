@@ -226,7 +226,7 @@ function detectQuestionDemand(hcpText = "") {
   }
 
   const isDirectQuestion = text.includes("?") || /^(what|how|which|when|where|can|could|would|should|is|are)\b/.test(text.trim());
-  const requiresMetric = /\b(metric|monitor|specific|concrete|actionable|quickest way|test|justify|scaling|scale|worth scaling)\b/.test(text);
+  const requiresMetric = /\b(metric|monitor|specific|concrete|actionable|quickest way|first step|next step|test|justify|scaling|scale|worth scaling)\b/.test(text);
   const requiresThreshold = /\b(threshold|target|cutoff|cut-off|4 weeks|4-6|weeks|months|percent|%)\b/.test(text);
 
   return {
@@ -252,6 +252,25 @@ function repAddressesQuestionDemand(repMessage = "", demand = {}) {
       (!demand.requiresMetric || hasMetricAnchor || lexicalOverlap >= 1)
       && (!demand.requiresThreshold || hasNumericAnchor),
   };
+}
+
+function detectReflectionWithoutAnswer(repMessage = "", hcpText = "", questionDemand = {}, questionResponseFit = {}) {
+  if (!questionDemand?.isDirectQuestion) return { flagged: false };
+  const rep = String(repMessage || "").toLowerCase();
+  const hcp = String(hcpText || "").toLowerCase();
+  const repTokens = new Set(collectContentTokens(rep));
+  const hcpTokens = new Set(collectContentTokens(hcp));
+  const overlap = [...repTokens].filter((token) => hcpTokens.has(token)).length;
+  const newContent = [...repTokens].filter((token) => !hcpTokens.has(token)).length;
+  const mirrorsPrompt = overlap >= Math.max(1, Math.min(4, hcpTokens.size));
+  const reflectionOnlyLead = /^\s*(i hear|i understand|fair point|you(?:'re| are) asking|you want|you need|so what you(?:'re| are) saying)\b/.test(rep);
+  const hasSubstantiveAnchor = /\b(\d+|%|study|trial|data|evidence|start with|assign|owner|timeline|checklist|handoff)\b/.test(rep);
+  const missingDirectAnswer = !questionResponseFit?.directlyAddresses;
+  const shortReflectionOnly = reflectionOnlyLead && repTokens.size <= 10 && !hasSubstantiveAnchor;
+  const flagged = !hasSubstantiveAnchor
+    && ((mirrorsPrompt && newContent <= 2) || shortReflectionOnly);
+
+  return { flagged, reflectionOnlyLead, missingDirectAnswer };
 }
 
 function detectCueDemand(context = {}) {
@@ -927,6 +946,12 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   const traceability = evaluateTopicTraceability(repMessage, typeof context === 'object' && context ? context : {});
   const questionDemand = detectQuestionDemand(promptContext);
   const questionResponseFit = repAddressesQuestionDemand(repMessage, questionDemand);
+  const reflectionNonAnswer = detectReflectionWithoutAnswer(repMessage, promptContext, questionDemand, questionResponseFit);
+  const reflectionOnlyNonAnswer = questionDemand.isDirectQuestion
+    && /^\s*(i hear|i understand|fair point|you(?:'re| are) asking|you want|so what you(?:'re| are) saying)\b/i.test(String(repMessage || ""))
+    && !/\b(assign|start with|data|study|trial|\d|%|owner|timeline|checklist|handoff)\b/i.test(String(repMessage || ""));
+  const directQuestionUnanswered = questionDemand.isDirectQuestion
+    && (!questionResponseFit.directlyAddresses || reflectionNonAnswer.flagged || reflectionOnlyNonAnswer);
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
   let repeatedMisalignment = false;
@@ -1017,7 +1042,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     }
   }
 
-  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+  if (directQuestionUnanswered) {
     metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score - 2);
     metricResults.signal_interpretation.subScores.responsiveness_of_action = clamp(
       metricResults.signal_interpretation.subScores.responsiveness_of_action - 2
@@ -1036,6 +1061,10 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
         metricResults.conversation_management.subScores.directional_clarity - 1
       );
       metricResults.conversation_management.misalignments.push('Threshold-oriented question lacked a concrete threshold in the reply.');
+    }
+    if (reflectionNonAnswer.flagged) {
+      metricResults.signal_interpretation.misalignments.push('Response reflected the HCP input but did not answer the question with new, usable information.');
+      metricResults.conversation_management.misalignments.push('Reflection was used without a substantive answer — question remained unresolved.');
     }
   } else if (questionDemand.isDirectQuestion && questionResponseFit.directlyAddresses) {
     metricResults.signal_interpretation.score = clamp(metricResults.signal_interpretation.score + 1);
@@ -1067,12 +1096,15 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
     universalPenalty -= 1;
     globalMisalignments.push('Dismissive language used — ignores HCP signal across all dimensions');
   }
-  if (questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses) {
+  if (directQuestionUnanswered) {
     universalPenalty -= 1;
     globalMisalignments.push('Rep did not directly answer the HCP question prompt.');
     if (questionDemand.requiresThreshold && !questionResponseFit.hasNumericAnchor) {
       universalPenalty -= 1;
       globalMisalignments.push('HCP requested a threshold/metric and the reply lacked concrete measurable criteria.');
+    }
+    if (reflectionNonAnswer.flagged) {
+      globalMisalignments.push('Response did not answer the question; it mainly mirrored/reflected the HCP statement.');
     }
   }
   if (repeatedMisalignment) {
@@ -1096,7 +1128,7 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   const alignmentClassification = classifyAlignmentOutcome({
     totalMisalignments: [...new Set(allMisalignments)].length,
     hasTraceabilityRisk: traceability.hasTraceabilityRisk,
-    directQuestionMiss: questionDemand.isDirectQuestion && !questionResponseFit.directlyAddresses,
+    directQuestionMiss: directQuestionUnanswered,
     overallScore,
   });
 

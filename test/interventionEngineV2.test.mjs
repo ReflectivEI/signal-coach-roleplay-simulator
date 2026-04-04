@@ -492,3 +492,43 @@ test("cross-domain lexical contamination in concern is safely bounded to current
   assert.doesNotMatch(line, /prep|hiv|pre exposure/i);
   assert.match(line.toLowerCase(), /workflow|setting|clinic|current clinic context/);
 });
+
+test("pure mirroring response is flagged as non-answer and blocked from progression", () => {
+  const state = updateInterventionSessionState(createInitialInterventionSessionState(), {
+    turnNumber: 60,
+    hcpPrompt: "What is the first operational step we can run this week?",
+    repMessage: "What is the first operational step we can run this week?",
+    activeConcern: "workflow",
+  });
+
+  assert.equal(state.activeDemand.type, DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED);
+  assert.equal(state.activeDemand.isActive, true);
+  assert.equal(state.activeDemand.evasiveResponseDetected, true);
+  assert.equal(state.lastDecision, INTERVENTION_DECISIONS.REQUIRE_REANCHOR_TO_CONSTRAINT);
+});
+
+test("paraphrase without new information is flagged as insufficient", () => {
+  const state = updateInterventionSessionState(createInitialInterventionSessionState(), {
+    turnNumber: 61,
+    hcpPrompt: "What is the first operational step we can run this week?",
+    repMessage: "You are asking what operational step you can run this week.",
+    activeConcern: "workflow",
+  });
+
+  assert.equal(state.activeDemand.isActive, true);
+  assert.equal(state.activeDemand.demandSatisfied, false);
+  assert.equal(state.activeDemand.evasiveResponseDetected, true);
+});
+
+test("reflection followed by a substantive answer is allowed and resolves demand", () => {
+  const state = updateInterventionSessionState(createInitialInterventionSessionState(), {
+    turnNumber: 62,
+    hcpPrompt: "What is the first operational step we can run this week?",
+    repMessage: "I hear your concern. First step: assign one MA owner to run the intake checklist in your workflow today and review completion by Friday.",
+    activeConcern: "workflow",
+  });
+
+  assert.equal(state.activeDemand.isActive, false);
+  assert.equal(state.activeDemand.demandSatisfied, true);
+  assert.equal(state.activeDemand.evasiveResponseDetected, false);
+});
