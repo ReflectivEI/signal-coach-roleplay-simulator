@@ -48,6 +48,10 @@ export function deriveTurnContractState({
   activeConcern = "workflow",
   concernFlowOutcome = "aligned",
   unresolvedConcernTurns = 0,
+  loopBreakerBudget = 3,
+  overrideExit = false,
+  terminalDecisionMode = false,
+  hardLoopBreaker = false,
 } = {}) {
   const unansweredDirectQuestions = extractDirectQuestions(latestHcpTurn)
     .filter((question) => !repAddressesQuestion(repMessage, question))
@@ -57,13 +61,25 @@ export function deriveTurnContractState({
     : [];
   const unresolvedObjections = [...acceptedOperationalConstraints];
   if (activeConcern && !unresolvedObjections.includes(activeConcern)) unresolvedObjections.push(activeConcern);
+  const unresolvedLimitReached = Number(unresolvedConcernTurns) >= Math.max(1, Number(loopBreakerBudget) || 3);
+  const missedConstraintLoop = concernFlowOutcome === "missed" && unresolvedLimitReached;
+  const eligible = Boolean(overrideExit || terminalDecisionMode || hardLoopBreaker || missedConstraintLoop);
+
   return {
     unansweredDirectQuestions,
     acceptedOperationalConstraints,
     unresolvedObjections,
     concernFlowOutcome,
     unresolvedConcernTurns,
-    closureEligibility: { eligible: false },
+    closureEligibility: {
+      eligible,
+      reasons: [
+        overrideExit && "override_exit",
+        terminalDecisionMode && "terminal_decision_mode",
+        hardLoopBreaker && "hard_loop_breaker",
+        missedConstraintLoop && "missed_constraint_loop",
+      ].filter(Boolean),
+    },
   };
 }
 
@@ -82,6 +98,24 @@ export function selectDeterministicResponseMode({
   if (unansweredDirectQuestions.length > 0) return "answer";
   if (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot") return "repair";
   return fallbackMode;
+}
+
+
+export function buildTurnContractController({
+  turnContractState = {},
+  concernFlowOutcome = "aligned",
+  fallbackMode = "probe",
+} = {}) {
+  const responseMode = selectDeterministicResponseMode({
+    turnContractState,
+    concernFlowOutcome,
+    fallbackMode,
+  });
+
+  return {
+    responseMode,
+    objective: mapResponseModeToObjective(responseMode),
+  };
 }
 
 export function mapResponseModeToObjective(mode = "probe") {
