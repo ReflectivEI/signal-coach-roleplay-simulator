@@ -220,71 +220,59 @@ export function buildDemandHoldMessage({
   unresolvedTurns = 1,
   seed = "",
   avoidLine = "",
-  avoidDimension = "",
 } = {}) {
   const concern = String(activeConcern || "workflow").toLowerCase();
-  const normalizeDimension = (value = "") => normalizeText(value).replace(/\s+/g, "_");
-  const toBundle = (line, dimension) => ({ line, dimension: normalizeDimension(dimension) });
-  const inferDimensionFromLine = (line = "") => {
-    const text = normalizeText(line);
-    if (!text) return "";
-    if (/\b(owner|timing|today|this week|immediate|run now|first step)\b/.test(text)) return "execution";
-    if (/\b(minimal burden|staff|capacity|workflow|feasible|operational)\b/.test(text)) return "constraint";
-    if (/\b(metric|threshold|measureable|evidence|data point|proof point)\b/.test(text)) return "specificity";
-    if (/\b(decision|final|last pass|final clarification|limitation|fallback)\b/.test(text)) return "decision";
-    return "";
-  };
   const demandMessages = {
     [DEMAND_TYPES.EVIDENCE_REQUEST]: {
       stage1: [
-        toBundle(`I still need one concrete evidence anchor tied to ${concern} before we move on.`, "specificity"),
-        toBundle(`Keep this on the evidence request and name one measurable finding we can apply in ${concern}.`, "execution"),
+        `I still need one concrete evidence anchor tied to ${concern} before we move on.`,
+        `Keep this on the evidence request and give one practice-relevant data point for ${concern}.`,
       ],
       stage2: [
-        toBundle(`Your previous answer did not resolve the evidence request—name one specific data point relevant to ${concern}.`, "specificity"),
-        toBundle(`Narrow this to one evidence detail with an immediate implementation step for ${concern}.`, "execution"),
+        `Your previous answer did not resolve the evidence request—name one specific data point relevant to ${concern}.`,
+        `Narrow this to one evidence detail I can use in ${concern} right now.`,
       ],
       stage3: [
-        toBundle(`Final clarification: provide one decision-level evidence point for ${concern}, or state the limitation and next practical action.`, "decision"),
+        `Final clarification: provide one decision-level evidence point for ${concern}, or state the limitation and next practical action.`,
       ],
     },
     [DEMAND_TYPES.PROOF_POINT_REQUEST]: {
       stage1: [
-        toBundle(`I asked for a proof point—give one specific metric or threshold that supports your recommendation.`, "specificity"),
-        toBundle(`Stay with the proof-point request and tie one concrete metric to a practical decision point.`, "decision"),
+        `I asked for a proof point—give one specific metric or threshold that supports your recommendation.`,
+        `Stay with the proof-point request and provide one concrete, decision-level data point.`,
       ],
       stage2: [
-        toBundle(`That still reads as general guidance. Give one exact proof point with a measurable threshold.`, "specificity"),
-        toBundle(`Tighten this to one metric-backed proof point and the immediate action it supports.`, "execution"),
+        `That still reads as general guidance. Give one exact proof point with a measurable threshold.`,
+        `Tighten this to one metric-backed proof point that directly answers the question.`,
       ],
       stage3: [
-        toBundle(`Last pass: one explicit proof point with measurable support, or acknowledge the gap and give a practical next step.`, "decision"),
+        `Last pass: one explicit proof point with measurable support, or acknowledge the gap and give a practical next step.`,
       ],
     },
     [DEMAND_TYPES.DIRECT_ANSWER_REQUIRED]: {
       stage1: [
-        toBundle(`Please answer the direct question with one concrete next step.`, "execution"),
-        toBundle(`You still have not answered directly—give a specific answer with who owns it and when it happens.`, "constraint"),
+        `Please answer the direct question with one concrete next step.`,
+        `You still have not answered directly—give a specific, usable answer now.`,
       ],
       stage2: [
-        toBundle(`The question is still unresolved. Provide one direct action with owner and timing.`, "constraint"),
-        toBundle(`Keep this focused: answer directly with one step plus the practical condition needed to run it.`, "specificity"),
+        `The question is still unresolved. Provide one direct action with owner and timing.`,
+        `Keep this focused: answer directly with a concrete, immediately usable step.`,
       ],
       stage3: [
-        toBundle(`Final clarification: direct answer only—one specific action, or clearly state the limitation and immediate fallback.`, "decision"),
+        `Final clarification: direct answer only—one specific action, or clearly state the limitation and immediate fallback.`,
       ],
     },
     [DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED]: {
       stage1: [
-        toBundle(`Re-anchor to the operational constraint and give one feasible step we can run now.`, "constraint"),
-        toBundle(`Stay on the operational constraint and provide a workflow-fit action with ownership and timing.`, "execution"),
+        `Re-anchor to the operational constraint and give one feasible step we can run now.`,
+        `Stay on the operational constraint and provide a workflow-fit action with ownership and timing.`,
       ],
       stage2: [
-        toBundle(`This still misses the operational constraint. Give one feasible workflow action with minimal burden.`, "constraint"),
-        toBundle(`Narrow to one operationally feasible step tied to staffing/capacity reality and one concrete owner.`, "specificity"),
+        `This still misses the operational constraint. Give one feasible workflow action with minimal burden.`,
+        `Narrow to one operationally feasible step tied to staffing/capacity reality.`,
       ],
       stage3: [
-        toBundle(`Final re-anchor: provide one operationally feasible action now, or explicitly acknowledge the limit and immediate mitigation.`, "decision"),
+        `Final re-anchor: provide one operationally feasible action now, or explicitly acknowledge the limit and immediate mitigation.`,
       ],
     },
   };
@@ -294,16 +282,11 @@ export function buildDemandHoldMessage({
   const pool = bundles[stageKey];
   const idx = deterministicIndex(`${demandType}:${concern}:${stageKey}:${seed}`, pool.length);
   const normalizedAvoid = normalizeText(avoidLine);
-  const blockedDimension = normalizeDimension(avoidDimension) || inferDimensionFromLine(avoidLine);
   let selected = pool[idx];
-  if (normalizedAvoid && pool.length > 1 && normalizeText(selected.line) === normalizedAvoid) {
+  if (normalizedAvoid && pool.length > 1 && normalizeText(selected) === normalizedAvoid) {
     selected = pool[(idx + 1) % pool.length];
   }
-  if (blockedDimension && pool.length > 1 && selected.dimension === blockedDimension) {
-    const fallback = pool.find((entry) => entry.dimension && entry.dimension !== blockedDimension);
-    if (fallback) selected = fallback;
-  }
-  return selected.line;
+  return selected;
 }
 
 export function updateInterventionSessionState(previousState, {

@@ -154,29 +154,6 @@ test("same-demand hold message varies and does not repeat back-to-back", () => {
   assert.notEqual(first, second);
 });
 
-test("same-stage unresolved follow-up avoids semantic same-level paraphrase loops", () => {
-  const first = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.DIRECT_ANSWER_REQUIRED,
-    activeConcern: "workflow",
-    unresolvedTurns: 1,
-    seed: "loop-guard-1",
-  });
-  const second = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.DIRECT_ANSWER_REQUIRED,
-    activeConcern: "workflow",
-    unresolvedTurns: 1,
-    seed: "loop-guard-2",
-    avoidLine: first,
-  });
-
-  assert.notEqual(first, second);
-  const firstLower = first.toLowerCase();
-  const secondLower = second.toLowerCase();
-  const firstIsOwnerTiming = /owner|when|timing/.test(firstLower);
-  const secondIsOwnerTiming = /owner|when|timing/.test(secondLower);
-  assert.notEqual(firstIsOwnerTiming, secondIsOwnerTiming);
-});
-
 test("long rep response is still classified for active demand and remains unresolved when evasive", () => {
   const longRep = `${"This is generally important and strategic for outcomes. ".repeat(20)} We can circle back later.`;
   const state = updateInterventionSessionState(createInitialInterventionSessionState(), {
@@ -206,42 +183,6 @@ test("stale turn number is ignored and cannot recycle prior-message progression"
   });
 
   assert.deepEqual(stale, start);
-});
-
-test("progression stays anchored while changing dimension across demand families", () => {
-  const evidenceFirst = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.EVIDENCE_REQUEST,
-    activeConcern: "workflow",
-    unresolvedTurns: 2,
-    seed: "family-evidence-1",
-  });
-  const evidenceNext = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.EVIDENCE_REQUEST,
-    activeConcern: "workflow",
-    unresolvedTurns: 2,
-    seed: "family-evidence-2",
-    avoidLine: evidenceFirst,
-  });
-  const opsFirst = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED,
-    activeConcern: "capacity",
-    unresolvedTurns: 2,
-    seed: "family-ops-1",
-  });
-  const opsNext = buildDemandHoldMessage({
-    demandType: DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED,
-    activeConcern: "capacity",
-    unresolvedTurns: 2,
-    seed: "family-ops-2",
-    avoidLine: opsFirst,
-  });
-
-  assert.match(evidenceFirst.toLowerCase(), /evidence|data/);
-  assert.match(evidenceNext.toLowerCase(), /evidence|data/);
-  assert.notEqual(evidenceFirst, evidenceNext);
-  assert.match(opsFirst.toLowerCase(), /operational|workflow|staffing|capacity/);
-  assert.match(opsNext.toLowerCase(), /operational|workflow|staffing|capacity/);
-  assert.notEqual(opsFirst, opsNext);
 });
 
 test("progression stage tightens unresolved demand wording over repeated misses", () => {
