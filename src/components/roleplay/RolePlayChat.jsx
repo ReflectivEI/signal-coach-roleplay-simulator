@@ -923,7 +923,7 @@ function hasExplicitExitIntent(text = "") {
   const normalized = String(text || "").trim().toLowerCase();
   if (!normalized) return false;
 
-  const explicitClosePattern = /\b(i (have|need|must) to (go|leave|head out|jump|run)|i'm (heading out|signing off)|gotta (run|go)|time to go|need to hop off|let's (stop|wrap) here|we should wrap (this )?up|can we (continue|finish) later|let's (pick this up|reconnect) later|we can pick this up (later|another time)|i have (another|my next) patient|i need to get to (my )?next patient|i have an emergency|i need to jump to another room|i need to get back to clinic)\b/i;
+  const explicitClosePattern = /\b(i (have|need|must) to (go|leave|head out|jump|run)|i'm (heading out|signing off)|gotta (run|go)|time to go|need to hop off|let's (stop|wrap) here|we should wrap (this )?up|can we (continue|finish) later|let's (pick this up|reconnect) later|we can pick this up (later|another time)|i have (another|my next) patient|i need to get to (my )?next patient|i have an emergency|i need to jump to another room|i need to get back to clinic|i need to get back to patients|this isn'?t productive|this is not productive)\b/i;
   if (explicitClosePattern.test(normalized)) return true;
 
   const hasSignoff = /\b(goodbye|good bye|bye|have a great day|see you (next week|next time)|talk soon)\b/i.test(normalized);
@@ -958,9 +958,13 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i need to get back to patients|this isn'?t productive|this is not productive|take care|patients waiting)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
+}
+
+function isTerminalDisengagementIntent(text = "") {
+  return hasExplicitExitIntent(text) || isTerminalClosureDialogue(text);
 }
 
 function isEvidenceSeekingEngagement(text = "") {
@@ -3989,7 +3993,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
     }
 
-    if (!overrideExit && lateTurnConstraintDecision.forced) {
+    if (isTerminalDisengagementIntent(nextHcpDialogue)) {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = terminalCloseFallback;
+    }
+
+    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
         mode: lateTurnConstraintDecision.mode,
@@ -4174,7 +4183,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       valid: true,
       draftTypes: [],
     };
-    if (shouldApplyConstraintDraftGuardrail) {
+    if (shouldApplyConstraintDraftGuardrail && nextHcpState !== "disengaged") {
       initialViolation = detectConstraintDraftViolations({
         draftText: nextHcpDialogue,
         groundedTypes: groundedConstraintTypes,
@@ -4289,10 +4298,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
-    const shouldEndSessionAfterTurn = !blockClose && (overrideExit || (
-      (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
-      || terminalPolicyAction === "close"
-    ));
+    const shouldEndSessionAfterTurn = overrideExit
+      || (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || (!blockClose && terminalPolicyAction === "close");
 
     if (shouldEndSessionAfterTurn) {
       sessionControllerRef.current.state = SessionState.ENDED;
