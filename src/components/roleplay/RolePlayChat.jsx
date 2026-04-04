@@ -393,6 +393,58 @@ function applyDeterministicPunctuationContract(text) {
   return normalizeHcpDialoguePunctuation(String(text || "").trim()).trim();
 }
 
+const INTERNAL_CONTROL_TEXT_PATTERNS = [
+  /\bre-anchor to\b/i,
+  /\bnarrow to\b/i,
+  /\bnarrow this to\b/i,
+  /\bstay on the operational constraint\b/i,
+  /\boperational constraint\b/i,
+  /\bworkflow-fit action\b/i,
+  /\bfinal re-anchor\b/i,
+  /\bfinal clarification\b/i,
+  /\blast pass\b/i,
+  /\bdecision-level evidence\b/i,
+];
+
+function isInternalControlText(text = "") {
+  const source = String(text || "").trim();
+  if (!source) return false;
+  return INTERNAL_CONTROL_TEXT_PATTERNS.some((pattern) => pattern.test(source));
+}
+
+function buildSafeDemandHoldDialogue(text = "", activeConcern = "workflow") {
+  const source = String(text || "").trim();
+  const lower = source.toLowerCase();
+  const concern = String(activeConcern || "workflow").toLowerCase();
+  const escalated = /\b(hard to continue|ready to disengage|cannot move this conversation forward|do not see a reason to keep moving forward|ready to end here)\b/i.test(source);
+  const finalStage = /\b(final clarification|final re-anchor|last pass)\b/i.test(source);
+  const tighteningStage = /\b(still|unresolved|misses|did not resolve|not answered directly)\b/i.test(source);
+
+  if (/\b(evidence|data point|study|metric|proof point|decision-level)\b/.test(lower)) {
+    if (escalated) return `I still need one concrete evidence point relevant to ${concern}; without that, we should pause here.`;
+    if (finalStage) return `Before we continue, give me one concrete evidence point I can apply to ${concern} right now.`;
+    if (tighteningStage) return `Please keep this specific and give one concrete evidence point tied to ${concern}.`;
+    return `Give me one concrete evidence point tied to ${concern} so I can evaluate this practically.`;
+  }
+
+  if (/\b(operational|workflow|staff|capacity|burden|feasible)\b/.test(lower)) {
+    if (escalated) return "I still do not have a workable step for our staffing and workflow limits, so we should pause here.";
+    if (finalStage) return "Before we move on, give me one feasible step we can implement this week within workflow constraints.";
+    if (tighteningStage) return "Given our workflow constraints, what is one feasible step we can implement without adding burden?";
+    return "Keep this practical—what is one workflow-fit step we can run now with current staffing and capacity?";
+  }
+
+  if (/\b(apply|applicability|applicable|setting|practice|clinic|patient mix)\b/.test(lower)) {
+    if (escalated) return "I still need one concrete example for this setting, otherwise this is hard to apply in practice.";
+    if (finalStage) return "Before we continue, give one concrete example of how this applies in our clinic.";
+    return "Please make this specific to our setting with one practical example we can use now.";
+  }
+
+  if (escalated) return "I still need one specific next step to answer the question directly; without that, we should pause here.";
+  if (finalStage) return "Before we continue, answer directly with one concrete next step we can execute now.";
+  return "Please answer directly with one concrete next step we can act on right away.";
+}
+
 function extractScenarioKeywords(scenario) {
   const combined = [
     scenario?.title,
@@ -4227,7 +4279,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requirementRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
     };
 
-    const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
+    const acceptedDialogueBeforeFinalContract = isInternalControlText(nextHcpDialogue)
+      ? buildSafeDemandHoldDialogue(nextHcpDialogue, activeConcern)
+      : nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
