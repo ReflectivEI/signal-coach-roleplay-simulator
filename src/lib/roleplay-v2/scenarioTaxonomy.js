@@ -1,5 +1,4 @@
 import { deriveScenarioMetadataEnvelope } from './scenarioMetadataEnvelope.js';
-import { inferJourneyAndPressureFromSignals } from './scenarioControlNormalization.js';
 
 export const CUSTOMER_JOURNEY_STAGES = Object.freeze([
   'initial_access_prospecting',
@@ -62,8 +61,8 @@ export const SCENARIO_TAXONOMY_OVERRIDES = Object.freeze({
   'rare-diagnosis': { journeyStage: 'discovery_needs_assessment', interactionPressure: 'curious_uncertain' },
 });
 
-export function classifyScenarioTaxonomy(scenario = {}) {
-  const text = [
+function normalizeText(scenario = {}) {
+  return [
     scenario.title,
     scenario.description,
     scenario.objective,
@@ -75,8 +74,20 @@ export function classifyScenarioTaxonomy(scenario = {}) {
     scenario.specialty,
     scenario.influence_driver,
   ].join(' ').toLowerCase();
+}
+
+export function classifyScenarioTaxonomy(scenario = {}) {
+  const text = normalizeText(scenario);
   const globalOverride = SCENARIO_TAXONOMY_OVERRIDES[scenario.id] || {};
-  const inferred = inferJourneyAndPressureFromSignals(scenario);
+
+  const journeyStage = (() => {
+    if (/close|next step|commit|follow[- ]?up|schedule/.test(text)) return 'commitment_next_step_close';
+    if (/implement|workflow|protocol|onboarding|adopt|pathway/.test(text)) return 'adoption_implementation';
+    if (/objection|skeptic|resistan|pushback|doubt/.test(text)) return 'objection_handling';
+    if (/data|evidence|trial|clinical|value|outcome/.test(text)) return 'clinical_value_detailing';
+    if (/discover|assess|needs|understand|barrier/.test(text)) return 'discovery_needs_assessment';
+    return 'initial_access_prospecting';
+  })();
 
   const hcpPersona = (() => {
     if (/np|nurse|pa-c|pa\b/.test(text)) return 'nurse_clinical_user';
@@ -87,17 +98,27 @@ export function classifyScenarioTaxonomy(scenario = {}) {
     return 'busy_community_prescriber';
   })();
 
+  const interactionPressure = (() => {
+    if (/prior-auth|pa |coverage|access barrier|benefits/.test(text)) return 'access_prior_auth_barrier';
+    if (/safety|toxicity|adverse|risk/.test(text)) return 'safety_concern';
+    if (/workflow|staff|staffing|operational|burden/.test(text)) return 'operationally_blocked';
+    if (/curious|uncertain|not sure|learn/.test(text)) return 'curious_uncertain';
+    if (/resistant|skeptic|pushback|doubt/.test(text)) return 'resistant_skeptical';
+    if (/time|urgent|busy|limited bandwidth/.test(text)) return 'time_pressured';
+    return 'time_pressured';
+  })();
+
   const complianceMode = (() => {
-    if (inferred.signals.safetyTone) return 'safety_clarification';
-    if (inferred.signals.accessFriction) return 'access_discussion';
+    if (/safety|adverse|toxicity/.test(text)) return 'safety_clarification';
+    if (/access|prior-auth|coverage|payer/.test(text)) return 'access_discussion';
     if (/virtual|hybrid|remote/.test(text)) return 'virtual_hybrid_constraints';
     return 'on_label_clinical_only';
   })();
 
   return {
-    journeyStage: globalOverride.journeyStage || inferred.journeyStage,
+    journeyStage: globalOverride.journeyStage || journeyStage,
     hcpPersona,
-    interactionPressure: globalOverride.interactionPressure || inferred.interactionPressure,
+    interactionPressure: globalOverride.interactionPressure || interactionPressure,
     difficultyTier: String(scenario.difficulty || 'foundational').toLowerCase(),
     complianceMode,
   };
