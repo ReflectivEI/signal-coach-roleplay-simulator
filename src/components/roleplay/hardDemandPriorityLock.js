@@ -20,10 +20,13 @@ export function createInitialHardDemandPriorityState() {
     hardDemandType: null,
     hardDemandSourceTurn: null,
     hardDemandPriorityLock: false,
+    hardDemandUnresolved: false,
     hardDemandReleaseReason: null,
     pendingSecondaryConcerns: [],
     narrowingLevel: 0,
     supersessionReason: null,
+    lockedPlannerObjective: null,
+    objectiveOverrideBlocked: false,
   };
 }
 
@@ -69,7 +72,10 @@ export function updateHardDemandPriorityState(previousState, {
       activeHardDemand: null,
       hardDemandType: null,
       hardDemandPriorityLock: false,
+      hardDemandUnresolved: false,
       hardDemandReleaseReason: "terminal_exit",
+      lockedPlannerObjective: null,
+      objectiveOverrideBlocked: false,
     };
   }
 
@@ -80,8 +86,11 @@ export function updateHardDemandPriorityState(previousState, {
         activeHardDemand: null,
         hardDemandType: null,
         hardDemandPriorityLock: false,
+        hardDemandUnresolved: false,
         hardDemandReleaseReason: "superseded",
         supersessionReason: supersessionReason || "materially_stronger_blocker",
+        lockedPlannerObjective: null,
+        objectiveOverrideBlocked: false,
       };
     }
 
@@ -93,10 +102,12 @@ export function updateHardDemandPriorityState(previousState, {
       return {
         ...next,
         hardDemandPriorityLock: true,
+        hardDemandUnresolved: true,
         activeHardDemand: prev.activeHardDemand,
         hardDemandType: prev.hardDemandType,
         pendingSecondaryConcerns: nextPending,
         narrowingLevel: Math.min(4, (prev.narrowingLevel || 0) + 1),
+        objectiveOverrideBlocked: true,
       };
     }
 
@@ -106,8 +117,11 @@ export function updateHardDemandPriorityState(previousState, {
         activeHardDemand: null,
         hardDemandType: null,
         hardDemandPriorityLock: false,
+        hardDemandUnresolved: false,
         hardDemandReleaseReason: "satisfied",
         narrowingLevel: 0,
+        lockedPlannerObjective: null,
+        objectiveOverrideBlocked: false,
       };
     }
 
@@ -116,8 +130,11 @@ export function updateHardDemandPriorityState(previousState, {
       activeHardDemand: null,
       hardDemandType: null,
       hardDemandPriorityLock: false,
+      hardDemandUnresolved: false,
       hardDemandReleaseReason: "downgraded",
       narrowingLevel: 0,
+      lockedPlannerObjective: null,
+      objectiveOverrideBlocked: false,
     };
   }
 
@@ -129,12 +146,21 @@ export function updateHardDemandPriorityState(previousState, {
       hardDemandType: demandType || "operational_constraint_required",
       hardDemandSourceTurn: Number.isFinite(turnNumber) ? turnNumber : prev.hardDemandSourceTurn,
       hardDemandPriorityLock: true,
+      hardDemandUnresolved: true,
       pendingSecondaryConcerns: [],
       narrowingLevel: 1,
+      objectiveOverrideBlocked: true,
     };
   }
 
   return next;
+}
+
+export function buildHardDemandLockedObjective(hardDemandState = {}, fallbackConcern = "constraint") {
+  const lockActive = Boolean(hardDemandState?.hardDemandPriorityLock && hardDemandState?.hardDemandUnresolved);
+  if (!lockActive) return null;
+  const concern = String(hardDemandState?.activeHardDemand || fallbackConcern || "constraint").trim();
+  return `continue_hard_demand_lock[${concern || "constraint"}]`;
 }
 
 export function getBufferedConcernAfterHardDemandRelease(state) {

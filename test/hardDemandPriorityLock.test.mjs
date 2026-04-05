@@ -5,6 +5,7 @@ import {
   createInitialHardDemandPriorityState,
   updateHardDemandPriorityState,
   getBufferedConcernAfterHardDemandRelease,
+  buildHardDemandLockedObjective,
 } from '../src/components/roleplay/hardDemandPriorityLock.js';
 import { DEMAND_TYPES } from '../src/components/roleplay/interventionEngineV2.js';
 
@@ -34,9 +35,12 @@ test('evidence lock remains dominant and buffers secondary concerns while unreso
   });
 
   assert.equal(continued.hardDemandPriorityLock, true);
+  assert.equal(continued.hardDemandUnresolved, true);
   assert.equal(continued.hardDemandType, DEMAND_TYPES.SINGLE_POINT_REQUIRED);
   assert.equal(continued.activeHardDemand, 'evidence');
   assert.deepEqual(continued.pendingSecondaryConcerns, ['workflow']);
+  assert.equal(continued.objectiveOverrideBlocked, true);
+  assert.equal(buildHardDemandLockedObjective(continued), 'continue_hard_demand_lock[evidence]');
 });
 
 test('direct-answer lock continues with deterministic narrowing progression on miss', async () => {
@@ -82,8 +86,10 @@ test('buffered secondary concern can drive after hard demand satisfied', () => {
   });
 
   assert.equal(released.hardDemandPriorityLock, false);
+  assert.equal(released.hardDemandUnresolved, false);
   assert.equal(released.hardDemandReleaseReason, 'satisfied');
   assert.equal(getBufferedConcernAfterHardDemandRelease(released), 'staffing');
+  assert.equal(released.objectiveOverrideBlocked, false);
 });
 
 test('no silent unlock: release reason is explicit when lock clears without satisfaction', () => {
@@ -108,7 +114,9 @@ test('no silent unlock: release reason is explicit when lock clears without sati
   });
 
   assert.equal(downgraded.hardDemandPriorityLock, false);
+  assert.equal(downgraded.hardDemandUnresolved, false);
   assert.equal(downgraded.hardDemandReleaseReason, 'downgraded');
+  assert.equal(buildHardDemandLockedObjective(downgraded), null);
 });
 
 test('cross-scenario hard-demand detection is generic across evidence and operational families', () => {
