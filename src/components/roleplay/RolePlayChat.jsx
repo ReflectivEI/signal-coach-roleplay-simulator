@@ -96,6 +96,14 @@ import {
 } from "./hardDemandPriorityLock";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
 import { resolveCanonicalHcpIdentity } from "./hcpIdentity";
+import {
+  determinePreferredHcpDialogueRegister,
+  enforceOperationalRealismPreference,
+} from "./operationalRealismEnforcer";
+import {
+  buildHcpReactionContract,
+  enforceCueDialogueContractIntegrity,
+} from "./hcpReactionIntegrity";
 
 function escapeHTML(text) {
   return String(text)
@@ -2639,12 +2647,37 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const inPleasantryGracePeriod = isPleasantryOnly && priorRepTurnsCount < 2;
     const repAskedWellbeing = wellbeingCheckSignals.test(repLower);
 
+    const visibleReactionContract = respondingToTurn?.hcpReactionContract || {};
+    const scoringCueContext = visibleReactionContract?.selectedCueText || respondingToTurn?.cueBefore || "";
+    const scoringDialogueContext = visibleReactionContract?.selectedDialogueText || respondingToTurn?.hcpDialogueBefore || "";
+    const scoringContextInput = {
+      cueText: scoringCueContext,
+      hcpUtterance: scoringDialogueContext,
+      selectedDialogueRegister: visibleReactionContract?.selectedDialogueRegister || "unknown",
+      selectedDialogueIntent: visibleReactionContract?.selectedDialogueIntent || "unknown",
+      selectedCueMeaning: visibleReactionContract?.selectedCueMeaning || "unknown",
+      reactionContractHash: visibleReactionContract?.reactionContractHash || null,
+    };
+    if (
+      visibleReactionContract?.reactionContractHash
+      && (
+        String(respondingToTurn?.cueBefore || "").trim() !== String(scoringCueContext || "").trim()
+        || String(respondingToTurn?.hcpDialogueBefore || "").trim() !== String(scoringDialogueContext || "").trim()
+      )
+      && import.meta.env.DEV
+    ) {
+      console.warn("ROLEPLAY_SCORING_CONTEXT_DRIFT_GUARD", {
+        turnNumber: respondingToTurn?.turnNumber,
+        reactionContractHash: visibleReactionContract.reactionContractHash,
+      });
+    }
+
     let alignment = computeAlignment(
       prevState,
       repMessage,
       {
-        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
-        cueText: respondingToTurn?.cueBefore || "",
+        hcpUtterance: scoringDialogueContext,
+        cueText: scoringCueContext,
       },
       prevTemp,
       prevHcpState
@@ -2653,8 +2686,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       alignment,
       runtimeScenarioContractRef.current,
       {
-        hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+        hcpUtterance: scoringDialogueContext,
         repMessage,
+        scoringContextInput,
       }
     );
     if (inPleasantryGracePeriod) {
@@ -3784,6 +3818,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
+    const registerSelection = determinePreferredHcpDialogueRegister({
+      scenario,
+      runtimeState: {
+        activeHcpState: nextHcpState,
+        startingState: runtimeScenarioContractRef.current?.hcpStateModel?.startingState,
+      },
+      cueText: respondingToTurn?.cueBefore || "",
+      hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
+      activeConcern: primaryConcern,
+    });
+    const operationalRealismResult = enforceOperationalRealismPreference({
+      dialogue: nextHcpDialogue,
+      preferredRegister: registerSelection.preferredRegister,
+      activeConcern: primaryConcern,
+      flags: registerSelection.flags,
+    });
+    if (operationalRealismResult.applied) {
+      nextHcpDialogue = operationalRealismResult.dialogue;
+    }
+    emitPlannerTrace("operational_realism_register", {
+      turnNumber: nextTurnNumber,
+      preferredRegister: registerSelection.preferredRegister,
+      registerScores: registerSelection.registerScores,
+      registerFlags: registerSelection.flags,
+      rewriteApplied: operationalRealismResult.applied,
+      rewriteReasons: operationalRealismResult.reasons,
+      activeConcern: primaryConcern,
+    });
+
     if (ENABLE_INFERENCE_LAYER && selectedInfluence.type !== 'none' && nextHcpDialogue !== baseResponse) {
       repInferenceStateRef.current = {
         ...nextInferenceState,
@@ -4079,6 +4142,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     // 8. Lock next turn with contextual cue (matches dialogue + question quality)
     // Use contextual cue instead of base profile cue to ensure body language matches what HCP said
+    const coachingTriggerInputs = {
+      shouldShow: Boolean(coachingResult?.shouldShow),
+      label: coachingResult?.label || null,
+      severity: coachingResult?.severity || null,
+      escalationLabel: coachingResult?.escalationLabel || null,
+    };
+    const scoringContextForReaction = {
+      cueText: scoringCueContext,
+      hcpUtterance: scoringDialogueContext,
+      selectedCueMeaning: scoringContextInput.selectedCueMeaning,
+      selectedDialogueIntent: scoringContextInput.selectedDialogueIntent,
+      selectedDialogueRegister: scoringContextInput.selectedDialogueRegister,
+      prevState,
+      prevHcpState,
+      activeConcern,
+      alignmentMetricKeys: Object.keys(alignment?.metrics || {}).sort(),
+    };
     const nextTurn = {
       turnNumber: nextTurnNumber,
       hcpStateBefore: nextHcpState,
@@ -4120,6 +4200,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         hcpIdentityPreserved: true,
         hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
       },
+      coachingTriggerInputs,
+      scoringContextInput: scoringContextForReaction,
     };
 
     const turnIntegrityIssues = hasTurnIntegrityIssues(nextTurn);
@@ -4473,6 +4555,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
+    const cueDialogueIntegrity = enforceCueDialogueContractIntegrity({
+      cueText: contextualCue,
+      dialogueText: nextHcpDialogue,
+      hcpState: nextHcpState,
+      selectedRegister: registerSelection.preferredRegister,
+      activeConcern: primaryConcern,
+      rebuildCue: () => {
+        const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
+        return buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
+      },
+      rewriteDialogue: ({ dialogueText, selectedRegister, activeConcern }) => enforceOperationalRealismPreference({
+        dialogue: dialogueText,
+        preferredRegister: selectedRegister,
+        activeConcern,
+        flags: registerSelection.flags,
+      }).dialogue,
+    });
+    contextualCue = cueDialogueIntegrity.cueText;
+    nextHcpDialogue = cueDialogueIntegrity.dialogueText;
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
@@ -4540,6 +4641,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpIdentitySource: canonicalHcpIdentity.hcpIdentitySource,
       hcpIdentityPreserved: true,
       hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
+      cueDialogueAlignmentStatus: cueDialogueIntegrity.alignmentStatus,
+      cueDialogueRepairs: cueDialogueIntegrity.repairs,
+      cueIntent: cueDialogueIntegrity.cueIntent,
+      dialogueIntent: cueDialogueIntegrity.dialogueIntent,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
     const previouslyVerbalizedOperationalConstraintTypes = [
@@ -4550,6 +4655,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ),
     ];
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
+    const hcpReactionContract = buildHcpReactionContract({
+      scenario,
+      turnNumber: nextTurnNumber,
+      hcpState: nextHcpState,
+      cueText: contextualCue,
+      cueMeaning: cueDialogueIntegrity.cueIntent,
+      dialogueText: nextHcpDialogue,
+      dialogueIntent: cueDialogueIntegrity.dialogueIntent,
+      dialogueRegister: registerSelection.preferredRegister,
+      dialogueBand: `${registerSelection.preferredRegister}:${primaryConcern}`,
+      hardDemandState,
+      activeConcern: primaryConcern,
+      timePressureState: /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`),
+      coachingResult,
+      alignment,
+      scoringContext: scoringContextForReaction,
+    });
+    nextTurn.hcpReactionContract = hcpReactionContract;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
       ...nextTurn.plannerStateSnapshot,
@@ -4572,6 +4695,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpIdentitySource: canonicalHcpIdentity.hcpIdentitySource,
       hcpIdentityPreserved: true,
       hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
+      selectedDialogueRegister: registerSelection.preferredRegister,
+      selectedDialogueIntent: cueDialogueIntegrity.dialogueIntent,
+      cueDialogueAlignmentStatus: cueDialogueIntegrity.alignmentStatus,
+      reactionContractHash: hcpReactionContract.reactionContractHash,
+      repEvidenceContextHash: hcpReactionContract.repEvidenceContextHash,
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
@@ -4625,6 +4753,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           alignment,
           plannerStateSnapshot,
           plannerGapComparison: nextTurn.plannerGapComparison,
+          hcpReactionContract: nextTurn.hcpReactionContract,
           chosenResponseObjective,
           intervention: interventionSnapshot,
           feedback: coachingResult,

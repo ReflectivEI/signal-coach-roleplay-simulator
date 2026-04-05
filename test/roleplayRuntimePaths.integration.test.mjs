@@ -241,6 +241,56 @@ test("live RolePlayChat path preserves canonical HCP identity and blocks generic
   assert.match(identityHelper, /isGenericLabel/);
 });
 
+test("live RolePlayChat path applies deterministic operational realism register enforcement between planner and final turn contract", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+  const enforcerSource = fs.readFileSync(
+    new URL("../src/components/roleplay/operationalRealismEnforcer.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /determinePreferredHcpDialogueRegister/);
+  assert.match(source, /enforceOperationalRealismPreference/);
+  assert.match(source, /runtimeScenarioContractRef\.current\?\.hcpStateModel\?\.startingState/);
+  assert.match(source, /cueText:\s*respondingToTurn\?\.cueBefore/);
+  assert.match(source, /emitPlannerTrace\("operational_realism_register"/);
+
+  assert.ok(enforcerSource.includes("canonicalProfile.role"));
+  assert.ok(enforcerSource.includes("canonicalSceneSetup.timePressure"));
+  assert.ok(enforcerSource.includes("canonicalSceneSetup.currentClinicalOperationalContext"));
+  assert.match(enforcerSource, /patient_selection_practical/);
+  assert.match(enforcerSource, /workflow_implementation/);
+});
+
+test("live RolePlayChat path binds cue/dialogue/coaching/scoring to a deterministic hcpReactionContract", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+  const integritySource = fs.readFileSync(
+    new URL("../src/components/roleplay/hcpReactionIntegrity.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /buildHcpReactionContract/);
+  assert.match(source, /enforceCueDialogueContractIntegrity/);
+  assert.match(source, /scoringContextInput/);
+  assert.match(source, /scoringCueContext/);
+  assert.match(source, /scoringDialogueContext/);
+  assert.match(source, /cueDialogueAlignmentStatus/);
+  assert.match(source, /reactionContractHash/);
+  assert.match(source, /repEvidenceContextHash/);
+  assert.match(source, /hcpReactionContract/);
+
+  assert.match(integritySource, /reactionContractHash/);
+  assert.match(integritySource, /repEvidenceContextHash/);
+  assert.match(integritySource, /selectedDialogueRegister/);
+  assert.match(integritySource, /coachingTriggerInputs/);
+  assert.match(integritySource, /scoringContext/);
+});
+
 test("active runtime route remains RolePlaySimulator -> ScenarioCard -> RolePlayChat with history passed into buildHCPDialoguePrompt", () => {
   const simulatorSource = fs.readFileSync(
     new URL("../src/pages/RolePlaySimulator.jsx", import.meta.url),
