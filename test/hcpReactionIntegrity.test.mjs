@@ -7,6 +7,11 @@ import {
   deterministicHash,
 } from '../src/components/roleplay/hcpReactionIntegrity.js';
 import { determinePreferredHcpDialogueRegister } from '../src/components/roleplay/operationalRealismEnforcer.js';
+import {
+  deriveHcpEnforcementProfile,
+  deriveEscalationState,
+  ESCALATION_STAGES,
+} from '../src/components/roleplay/hcpEnforcementEscalation.js';
 import { computeAlignment } from '../src/components/roleplay/alignmentEngine.jsx';
 
 const BASE_SCORING_CONTEXT = {
@@ -218,4 +223,291 @@ test('non-regression: computeAlignment metric IDs and output shape remain unchan
   assert.ok(result.metrics && typeof result.metrics === 'object');
   assert.ok(Object.prototype.hasOwnProperty.call(result.metrics, 'adaptive_response'));
   assert.equal(typeof deterministicHash('stable'), 'string');
+});
+
+
+test('enforcement profile derivation is deterministic and context-sensitive across scenario/HCP archetypes', () => {
+  const operational = deriveHcpEnforcementProfile({
+    scenario: {
+      sceneSetup: { timePressure: 'high', currentClinicalOperationalContext: 'clinic throughput stress' },
+      enforcementCriteria: { baselineForgiveness: 0.35, baselineEscalationSensitivity: 0.7, baselineWorkflowStrictness: 0.8 },
+    },
+    hcpProfile: {
+      role: 'NP', specialty: 'Primary Care', careSetting: 'Busy clinic',
+      baselineCommunicationStyle: 'practical operational', baselineOpennessResistance: 'skeptical', knownConstraints: ['time pressure'],
+    },
+    hcpState: 'impatient',
+    cueMeaning: 'time',
+    activeConcern: 'workflow',
+    hardDemandState: { hardDemandPriorityLock: true },
+  });
+
+  const receptiveAnalytical = deriveHcpEnforcementProfile({
+    scenario: {
+      sceneSetup: { timePressure: 'low', currentClinicalOperationalContext: 'journal club style review' },
+      enforcementCriteria: { baselineForgiveness: 0.7, baselineEscalationSensitivity: 0.35, baselineEvidenceStrictness: 0.75 },
+    },
+    hcpProfile: {
+      role: 'Academic investigator', specialty: 'ID', careSetting: 'Academic center',
+      baselineCommunicationStyle: 'analytical collaborative', baselineOpennessResistance: 'receptive', knownConstraints: ['evidence standard'],
+    },
+    hcpState: 'engaged',
+    cueMeaning: 'neutral',
+    activeConcern: 'evidence',
+  });
+
+  assert.equal(operational.orientation, 'operational');
+  assert.equal(receptiveAnalytical.orientation, 'analytical');
+  assert.ok(operational.tonePressureLevel > receptiveAnalytical.tonePressureLevel);
+  assert.ok(operational.toleranceScore < receptiveAnalytical.toleranceScore);
+});
+
+test('escalation stage progression is deterministic with repeated misalignment and supports recovery', () => {
+  const profile = deriveHcpEnforcementProfile({
+    scenario: { sceneSetup: { timePressure: 'high' }, enforcementCriteria: { baselineEscalationSensitivity: 0.75 } },
+    hcpProfile: { baselineCommunicationStyle: 'operational', baselineOpennessResistance: 'skeptical' },
+    hcpState: 'impatient',
+    activeConcern: 'workflow',
+    cueMeaning: 'time',
+  });
+
+  const miss1 = deriveEscalationState({
+    profile,
+    priorEscalationStage: 'open',
+    alignment: { score: 1, misalignments: ['miss'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    repMessage: 'Great point.',
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true },
+  });
+  const miss2 = deriveEscalationState({
+    profile,
+    priorEscalationStage: miss1.escalationStage,
+    priorMisalignmentCount: miss1.misalignmentCount,
+    priorHardDemandMissCount: miss1.hardDemandMissCount,
+    alignment: { score: 1, misalignments: ['miss'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    repMessage: 'Still broad response.',
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true },
+  });
+  const recovery = deriveEscalationState({
+    profile,
+    priorEscalationStage: miss2.escalationStage,
+    priorMisalignmentCount: miss2.misalignmentCount,
+    priorHardDemandMissCount: miss2.hardDemandMissCount,
+    alignment: { score: 4, misalignments: [], rubricAlignmentFlags: [] },
+    concernFlowOutcome: 'aligned',
+    repMessage: 'One exact workflow step with owner and timing.',
+    hardDemandState: { hardDemandPriorityLock: false, hardDemandUnresolved: false },
+  });
+
+  assert.ok(ESCALATION_STAGES.indexOf(miss2.escalationStage) >= ESCALATION_STAGES.indexOf(miss1.escalationStage));
+  assert.ok(miss2.hardDemandMissCount >= miss1.hardDemandMissCount);
+  assert.ok(ESCALATION_STAGES.indexOf(recovery.escalationStage) <= ESCALATION_STAGES.indexOf(miss2.escalationStage));
+  assert.ok(recovery.repAdequacyScore > miss2.repAdequacyScore);
+});
+
+test('reaction contract binds escalation to cue/body-language/dialogue/coaching/scoring context coherently', () => {
+  const priorTrace = {
+    escalationStage: 'focused',
+    misalignmentCount: 1,
+    hardDemandMissCount: 1,
+  };
+  const contract = buildHcpReactionContract({
+    scenario: {
+      id: 'matrix_operational',
+      hcpProfile: { baselineCommunicationStyle: 'operational', baselineOpennessResistance: 'skeptical', knownConstraints: ['workflow'] },
+      sceneSetup: { timePressure: 'high', currentClinicalOperationalContext: 'busy clinic' },
+      enforcementCriteria: { baselineEscalationSensitivity: 0.8, baselineWorkflowStrictness: 0.8, baselineForgiveness: 0.3 },
+    },
+    turnNumber: 4,
+    hcpState: 'impatient',
+    cueText: 'The HCP checks the clock.',
+    dialogueText: 'What is one practical change this week?',
+    dialogueRegister: 'workflow_implementation',
+    activeConcern: 'workflow',
+    coachingResult: { shouldShow: true, label: 'Address demand directly', severity: 'high' },
+    alignment: { score: 1, misalignments: ['topic drift'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    repMessage: 'General comment only.',
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'operational_fit' },
+    priorEnforcementTrace: priorTrace,
+    scoringContext: BASE_SCORING_CONTEXT,
+  });
+
+  assert.ok(ESCALATION_STAGES.includes(contract.enforcementTrace.escalationStage));
+  assert.ok(contract.selectedCueText.length >= 'The HCP checks the clock.'.length);
+  assert.ok(contract.selectedDialogueText.length >= 'What is one practical change this week?'.length);
+  assert.equal(contract.coachingTriggerInputs.shouldShow, true);
+  assert.equal(contract.scoringContext.escalationStage, contract.enforcementTrace.escalationStage);
+});
+
+test('live-path scenario matrix validates context-sensitive escalation style across three archetypes', () => {
+  const scenarios = [
+    {
+      id: 'time_pressured_operational',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'operational practical', baselineOpennessResistance: 'skeptical', careSetting: 'busy clinic', knownConstraints: ['staffing'] },
+        sceneSetup: { timePressure: 'high', currentClinicalOperationalContext: 'throughput' },
+        enforcementCriteria: { baselineForgiveness: 0.3, baselineWorkflowStrictness: 0.85, baselineEscalationSensitivity: 0.8 },
+      },
+      concern: 'workflow',
+      expectedOrientation: 'operational',
+    },
+    {
+      id: 'analytical_evidence_driven',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'analytical evidence review', baselineOpennessResistance: 'neutral', careSetting: 'academic center', knownConstraints: ['evidence standards'] },
+        sceneSetup: { timePressure: 'low', currentClinicalOperationalContext: 'evidence committee' },
+        enforcementCriteria: { baselineForgiveness: 0.62, baselineEvidenceStrictness: 0.85, baselineEscalationSensitivity: 0.45 },
+      },
+      concern: 'evidence',
+      expectedOrientation: 'analytical',
+    },
+    {
+      id: 'mixed_patient_selection',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'practical collaborative', baselineOpennessResistance: 'engaged', careSetting: 'community oncology', knownConstraints: ['candidate triage'] },
+        sceneSetup: { timePressure: 'medium', currentClinicalOperationalContext: 'candidacy triage' },
+        enforcementCriteria: { baselineForgiveness: 0.55, baselinePrecisionDemand: 0.72, baselineEscalationSensitivity: 0.52 },
+      },
+      concern: 'patient_selection',
+      expectedOrientation: 'patient_selection',
+    },
+  ];
+
+  for (const row of scenarios) {
+    const aligned = buildHcpReactionContract({
+      scenario: { id: row.id, ...row.scenario },
+      cueText: 'The HCP asks a focused question.',
+      dialogueText: 'Please answer the active question directly.',
+      activeConcern: row.concern,
+      alignment: { score: 4, misalignments: [], rubricAlignmentFlags: [] },
+      concernFlowOutcome: 'aligned',
+      repMessage: 'Direct answer with specifics.',
+    });
+
+    const mildMiss = buildHcpReactionContract({
+      scenario: { id: row.id, ...row.scenario },
+      cueText: aligned.selectedCueText,
+      dialogueText: aligned.selectedDialogueText,
+      activeConcern: row.concern,
+      alignment: { score: 2, misalignments: ['mild drift'], rubricAlignmentFlags: [] },
+      concernFlowOutcome: 'overpivot',
+      repMessage: 'Partially relevant answer.',
+      priorEnforcementTrace: aligned.enforcementTrace,
+      hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'active_constraint' },
+    });
+
+    const repeatedMiss = buildHcpReactionContract({
+      scenario: { id: row.id, ...row.scenario },
+      cueText: mildMiss.selectedCueText,
+      dialogueText: mildMiss.selectedDialogueText,
+      activeConcern: row.concern,
+      alignment: { score: 1, misalignments: ['drift', 'cue miss'], rubricAlignmentFlags: ['cue_miss'] },
+      concernFlowOutcome: 'missed',
+      repMessage: 'Generic tangent response only.',
+      priorEnforcementTrace: mildMiss.enforcementTrace,
+      hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'active_constraint' },
+    });
+
+    const openIdx = ESCALATION_STAGES.indexOf(aligned.enforcementTrace.escalationStage);
+    const mildIdx = ESCALATION_STAGES.indexOf(mildMiss.enforcementTrace.escalationStage);
+    const repeatIdx = ESCALATION_STAGES.indexOf(repeatedMiss.enforcementTrace.escalationStage);
+
+    assert.equal(aligned.enforcementTrace.hcpEnforcementProfile.orientation, row.expectedOrientation);
+    assert.ok(mildIdx >= openIdx);
+    assert.ok(repeatIdx >= mildIdx);
+    assert.ok(repeatedMiss.selectedDialogueText.length >= mildMiss.selectedDialogueText.length);
+  }
+});
+
+
+test('domain integrity hook keeps in-domain and adjacent responses distinct from true contamination', () => {
+  const scenario = {
+    id: 'domain_matrix',
+    domainIntegrity: {
+      primaryScenarioDomain: 'oncology',
+      allowedDomains: ['oncology', 'operational_workflow', 'patient_selection'],
+      allowedContextFamilies: ['operational_workflow', 'evidence_review', 'patient_selection'],
+      disallowedCrossDomainFamilies: ['hiv', 'cardiology'],
+    },
+    sceneSetup: { timePressure: 'medium' },
+    hcpProfile: { baselineCommunicationStyle: 'operational', baselineOpennessResistance: 'skeptical', knownConstraints: ['staffing'] },
+  };
+
+  const inDomain = buildHcpReactionContract({
+    scenario,
+    activeConcern: 'workflow',
+    cueText: 'The HCP asks about staffing impact.',
+    dialogueText: 'How does this affect oncology infusion staffing?',
+    repMessage: 'In oncology infusion, we can rebalance nurse assignment by visit blocks this week.',
+    alignment: { score: 3, misalignments: [], rubricAlignmentFlags: [] },
+  });
+
+  const adjacent = buildHcpReactionContract({
+    scenario,
+    activeConcern: 'workflow',
+    cueText: 'The HCP asks for one practical step.',
+    dialogueText: 'What is one practical operational step?',
+    repMessage: 'Use a workflow checklist with an owner and weekly cadence to prevent backlog.',
+    alignment: { score: 2, misalignments: ['incomplete'], rubricAlignmentFlags: [] },
+  });
+
+  const crossDomain = buildHcpReactionContract({
+    scenario,
+    activeConcern: 'workflow',
+    cueText: 'The HCP asks about infusion staffing.',
+    dialogueText: 'How do we handle oncology staffing constraints?',
+    repMessage: 'For HIV cabotegravir screening, I would prioritize resistance profiling first.',
+    alignment: { score: 1, misalignments: ['topic drift'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+  });
+
+  assert.equal(inDomain.enforcementTrace.repDomainStatus, 'in_domain');
+  assert.equal(inDomain.enforcementTrace.contextContamination, false);
+  assert.ok(['adjacent_but_recoverable', 'in_domain'].includes(adjacent.enforcementTrace.repDomainStatus));
+  assert.equal(crossDomain.enforcementTrace.repDomainStatus, 'cross_domain_contamination');
+  assert.equal(crossDomain.enforcementTrace.contextContamination, true);
+  assert.equal(crossDomain.enforcementTrace.scenarioReanchorRequired, true);
+});
+
+test('cross-domain contamination deterministically increases pressure and forces HCP re-anchor dialogue', () => {
+  const scenario = {
+    id: 'domain_reanchor',
+    domainIntegrity: {
+      primaryScenarioDomain: 'oncology',
+      allowedDomains: ['oncology', 'operational_workflow'],
+      allowedContextFamilies: ['operational_workflow', 'evidence_review'],
+      disallowedCrossDomainFamilies: ['hiv', 'vaccines'],
+    },
+    sceneSetup: { timePressure: 'high' },
+    hcpProfile: { baselineCommunicationStyle: 'operational', baselineOpennessResistance: 'skeptical', knownConstraints: ['throughput'] },
+    enforcementCriteria: { baselineEscalationSensitivity: 0.8, baselineForgiveness: 0.3 },
+  };
+
+  const baseline = buildHcpReactionContract({
+    scenario,
+    activeConcern: 'workflow',
+    cueText: 'The HCP asks one workflow question.',
+    dialogueText: 'What changes in oncology workflow this week?',
+    repMessage: 'One staffing huddle plus intake triage for oncology infusion visits.',
+    alignment: { score: 3, misalignments: [], rubricAlignmentFlags: [] },
+  });
+
+  const contaminated = buildHcpReactionContract({
+    scenario,
+    activeConcern: 'workflow',
+    cueText: 'The HCP asks one workflow question.',
+    dialogueText: 'What changes in oncology workflow this week?',
+    repMessage: 'For HIV PrEP screening, we should prioritize lab sequencing.',
+    alignment: { score: 1, misalignments: ['topic drift'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    priorEnforcementTrace: baseline.enforcementTrace,
+  });
+
+  assert.equal(contaminated.enforcementTrace.contextContamination, true);
+  assert.ok(contaminated.enforcementTrace.tonePressureLevel >= baseline.enforcementTrace.tonePressureLevel);
+  assert.ok(contaminated.enforcementTrace.forgivenessSlack <= baseline.enforcementTrace.forgivenessSlack);
+  assert.match(contaminated.selectedDialogueText.toLowerCase(), /outside the oncology context|let's stay on workflow/);
+  assert.equal(contaminated.scoringContext.contextContamination, true);
 });

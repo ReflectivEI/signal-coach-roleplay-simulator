@@ -108,6 +108,24 @@ export interface TrainingIntent {
   metricApplicability: Record<MetricId, MetricApplicability>;
 }
 
+export interface ScenarioDomainIntegrityPolicy {
+  primaryScenarioDomain?: string;
+  allowedDomains?: string[];
+  allowedContextFamilies?: string[];
+  disallowedCrossDomainFamilies?: string[];
+}
+
+export interface EnforcementCriteria {
+  baselineForgiveness?: number;
+  baselinePrecisionDemand?: number;
+  baselineEvidenceStrictness?: number;
+  baselineWorkflowStrictness?: number;
+  baselineEscalationSensitivity?: number;
+  timePressureEscalationModifier?: number;
+  engagementSlackModifier?: number;
+  skepticismEscalationModifier?: number;
+}
+
 export interface HcpProfile {
   role: string;
   specialty: string;
@@ -115,6 +133,8 @@ export interface HcpProfile {
   baselineCommunicationStyle: string;
   baselineOpennessResistance: HcpState;
   knownConstraints: string[];
+  enforcementCriteria?: EnforcementCriteria;
+  domainIntegrity?: ScenarioDomainIntegrityPolicy;
 }
 
 export interface SceneSetup {
@@ -125,6 +145,8 @@ export interface SceneSetup {
   repKnowsAtStart: string[];
   repDoesNotKnowAtStart: string[];
   openingLine: string;
+  enforcementCriteria?: EnforcementCriteria;
+  domainIntegrity?: ScenarioDomainIntegrityPolicy;
 }
 
 export interface StateTransition {
@@ -197,6 +219,8 @@ export interface CanonicalScenario {
   dialogueResponseRules: DialogueResponseRules;
   metricEvidenceMap: Record<MetricId, MetricEvidenceDefinition>;
   feedbackContract: FeedbackContract;
+  enforcementCriteria?: EnforcementCriteria;
+  domainIntegrity?: ScenarioDomainIntegrityPolicy;
   testFixtures: {
     strong: [ScenarioFixture, ScenarioFixture, ScenarioFixture];
     weak: [ScenarioFixture, ScenarioFixture, ScenarioFixture];

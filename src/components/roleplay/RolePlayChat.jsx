@@ -104,6 +104,10 @@ import {
   buildHcpReactionContract,
   enforceCueDialogueContractIntegrity,
 } from "./hcpReactionIntegrity";
+import {
+  evaluateScenarioDomainIntegrity,
+  enforceDomainReanchorInDialogue,
+} from "./scenarioDomainIntegrity";
 
 function escapeHTML(text) {
   return String(text)
@@ -4553,6 +4557,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requirementRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
     };
 
+    const domainIntegrityAtConstruction = evaluateScenarioDomainIntegrity({
+      scenario,
+      repMessage,
+      activeConcern: primaryConcern,
+      cueText: contextualCue,
+      dialogueText: nextHcpDialogue,
+    });
+    nextHcpDialogue = enforceDomainReanchorInDialogue({
+      dialogueText: nextHcpDialogue,
+      domainAssessment: domainIntegrityAtConstruction,
+      activeConcern: primaryConcern,
+    });
+
     const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
     const cueDialogueIntegrity = enforceCueDialogueContractIntegrity({
@@ -4645,6 +4662,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       cueDialogueRepairs: cueDialogueIntegrity.repairs,
       cueIntent: cueDialogueIntegrity.cueIntent,
       dialogueIntent: cueDialogueIntegrity.dialogueIntent,
+      repDomainStatus: domainIntegrityAtConstruction.repDomainStatus,
+      contextContamination: domainIntegrityAtConstruction.contextContamination,
+      scenarioReanchorRequired: domainIntegrityAtConstruction.scenarioReanchorRequired,
+      contaminationReason: domainIntegrityAtConstruction.contaminationReason,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
     const previouslyVerbalizedOperationalConstraintTypes = [
@@ -4654,7 +4675,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           : detectOperationalConstraintTypes(turn?.hcpDialogueBefore || ""))
       ),
     ];
-    nextTurn.hcpDialogueBefore = nextHcpDialogue;
     const hcpReactionContract = buildHcpReactionContract({
       scenario,
       turnNumber: nextTurnNumber,
@@ -4671,7 +4691,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       coachingResult,
       alignment,
       scoringContext: scoringContextForReaction,
+      priorEnforcementTrace: respondingToTurn?.hcpReactionContract?.enforcementTrace || {},
+      concernFlowOutcome,
+      repMessage,
     });
+    contextualCue = hcpReactionContract.selectedCueText || contextualCue;
+    nextHcpDialogue = hcpReactionContract.selectedDialogueText || nextHcpDialogue;
+    nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.hcpReactionContract = hcpReactionContract;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
@@ -4700,6 +4726,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       cueDialogueAlignmentStatus: cueDialogueIntegrity.alignmentStatus,
       reactionContractHash: hcpReactionContract.reactionContractHash,
       repEvidenceContextHash: hcpReactionContract.repEvidenceContextHash,
+      escalationStage: hcpReactionContract?.enforcementTrace?.escalationStage || 'open',
+      escalationReason: hcpReactionContract?.enforcementTrace?.escalationReason || 'stable',
+      toleranceScore: hcpReactionContract?.enforcementTrace?.toleranceScore ?? null,
+      tonePressureLevel: hcpReactionContract?.enforcementTrace?.tonePressureLevel ?? null,
+      repDomainStatus: hcpReactionContract?.enforcementTrace?.repDomainStatus || 'in_domain',
+      contextContamination: Boolean(hcpReactionContract?.enforcementTrace?.contextContamination),
+      scenarioDomain: hcpReactionContract?.enforcementTrace?.scenarioDomain || null,
+      scenarioReanchorRequired: Boolean(hcpReactionContract?.enforcementTrace?.scenarioReanchorRequired),
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 

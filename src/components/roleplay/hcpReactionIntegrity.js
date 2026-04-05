@@ -1,3 +1,10 @@
+import {
+  deriveHcpEnforcementProfile,
+  deriveEscalationState,
+  applyEscalationPresentation,
+} from './hcpEnforcementEscalation.js';
+import { evaluateScenarioDomainIntegrity, enforceDomainReanchorInDialogue } from './scenarioDomainIntegrity.js';
+
 function normalizeText(value) {
   return String(value || '').trim();
 }
@@ -123,6 +130,9 @@ export function buildHcpReactionContract({
   coachingResult = {},
   alignment = {},
   scoringContext = {},
+  priorEnforcementTrace = {},
+  concernFlowOutcome = 'aligned',
+  repMessage = '',
 } = {}) {
   const normalizedCue = normalizeText(cueText);
   const normalizedDialogue = normalizeText(dialogueText);
@@ -133,10 +143,57 @@ export function buildHcpReactionContract({
     dialogueText: normalizedDialogue,
   });
 
+  const hcpEnforcementProfile = deriveHcpEnforcementProfile({
+    scenario,
+    hcpProfile: scenario?.hcpProfile || {},
+    sceneSetup: scenario?.sceneSetup || {},
+    hcpState,
+    cueMeaning: selectedCueMeaning,
+    activeConcern,
+    hardDemandState,
+  });
+
+  const domainAssessment = evaluateScenarioDomainIntegrity({
+    scenario,
+    repMessage,
+    activeConcern,
+    cueText: normalizedCue,
+    dialogueText: normalizedDialogue,
+  });
+
+  const escalationState = deriveEscalationState({
+    profile: hcpEnforcementProfile,
+    priorEscalationStage: priorEnforcementTrace?.escalationStage || 'open',
+    priorMisalignmentCount: priorEnforcementTrace?.misalignmentCount || 0,
+    priorHardDemandMissCount: priorEnforcementTrace?.hardDemandMissCount || 0,
+    alignment,
+    concernFlowOutcome,
+    repMessage,
+    hardDemandState,
+    domainAssessment,
+    priorDomainDriftCount: priorEnforcementTrace?.domainDriftCount || 0,
+  });
+
+  const escalatedPresentation = applyEscalationPresentation({
+    cueText: normalizedCue,
+    dialogueText: normalizedDialogue,
+    escalationStage: escalationState.escalationStage,
+    profile: hcpEnforcementProfile,
+    domainAssessment,
+    activeConcern,
+  });
+
+  const enforcedDialogue = enforceDomainReanchorInDialogue({
+    dialogueText: escalatedPresentation.dialogueText,
+    domainAssessment,
+    activeConcern,
+  });
+
   const coachingTriggerSet = [
     coachingResult?.label,
     coachingResult?.escalationLabel,
     ...(Array.isArray(alignment?.rubricAlignmentFlags) ? alignment.rubricAlignmentFlags : []),
+    domainAssessment?.contextContamination ? 'context_contamination_detected' : null,
   ].filter(Boolean);
 
   const reactionContract = {
@@ -144,12 +201,12 @@ export function buildHcpReactionContract({
     turnNumber,
     activeHcpState: hcpState,
     selectedCueId: deterministicHash(normalizedCue),
-    selectedCueText: normalizedCue,
+    selectedCueText: escalatedPresentation.cueText,
     selectedCueMeaning,
     selectedDialogueIntent,
     selectedDialogueRegister: dialogueRegister,
     selectedDialogueBand: dialogueBand || `${dialogueRegister}:${String(activeConcern || 'general').toLowerCase()}`,
-    selectedDialogueText: normalizedDialogue,
+    selectedDialogueText: enforcedDialogue,
     hardDemandState: {
       activeHardDemand: hardDemandState?.activeHardDemand || null,
       hardDemandType: hardDemandState?.hardDemandType || null,
@@ -163,7 +220,35 @@ export function buildHcpReactionContract({
       severity: coachingResult?.severity || null,
       triggerSet: coachingTriggerSet,
     },
-    scoringContext,
+    enforcementTrace: {
+      hcpEnforcementProfile,
+      escalationStage: escalationState.escalationStage,
+      escalationReason: escalationState.escalationReason,
+      toleranceScore: escalationState.toleranceScore,
+      repAdequacyScore: escalationState.repAdequacyScore,
+      misalignmentCount: escalationState.misalignmentCount,
+      hardDemandMissCount: escalationState.hardDemandMissCount,
+      domainDriftCount: escalationState.domainDriftCount,
+      forgivenessSlack: escalationState.forgivenessSlack,
+      tonePressureLevel: escalationState.tonePressureLevel,
+      repDomainStatus: domainAssessment.repDomainStatus,
+      contextContamination: domainAssessment.contextContamination,
+      scenarioDomain: domainAssessment.scenarioDomain,
+      matchedDomainSignals: domainAssessment.matchedDomainSignals,
+      contaminationReason: domainAssessment.contaminationReason,
+      scenarioReanchorRequired: domainAssessment.scenarioReanchorRequired,
+    },
+    scoringContext: {
+      ...scoringContext,
+      escalationStage: escalationState.escalationStage,
+      tonePressureLevel: escalationState.tonePressureLevel,
+      toleranceScore: escalationState.toleranceScore,
+      forgivenessSlack: escalationState.forgivenessSlack,
+      repDomainStatus: domainAssessment.repDomainStatus,
+      contextContamination: domainAssessment.contextContamination,
+      scenarioDomain: domainAssessment.scenarioDomain,
+      scenarioReanchorRequired: domainAssessment.scenarioReanchorRequired,
+    },
   };
 
   const scoringContextHash = deterministicHash(stableStringify(scoringContext));
