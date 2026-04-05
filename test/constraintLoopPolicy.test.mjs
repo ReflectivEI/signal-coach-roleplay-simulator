@@ -92,3 +92,28 @@ test('functional resolution keeps loop policy from forcing boundary/disengage', 
 
   assert.equal(result, null);
 });
+
+test('hard-demand continuation escalates narrowing before disengagement', () => {
+  const narrowed = resolveConstraintLoopAction({
+    hardDemandContinuation: true,
+    hardDemandNarrowingLevel: 2,
+    repeatingNonAnswer: true,
+    hasMaterialProgression: false,
+  });
+  assert.equal(narrowed?.nextHcpState, 'boundary-setting');
+  assert.ok((narrowed?.nextNarrowingLevel || 0) >= 3);
+
+  const disengage = resolveConstraintLoopAction({
+    hardDemandContinuation: true,
+    hardDemandNarrowingLevel: 4,
+    repeatingNonAnswer: true,
+    hasMaterialProgression: false,
+    terminalCloseFallback: 'terminal-close',
+  });
+  assert.deepEqual(disengage, {
+    nextHcpState: 'disengaged',
+    nextHcpDialogue: 'terminal-close',
+    nextNarrowingLevel: 4,
+    escalationMode: 'disengage',
+  });
+});

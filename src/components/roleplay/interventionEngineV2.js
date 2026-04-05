@@ -12,13 +12,17 @@ export const DEMAND_TYPES = Object.freeze({
   EVIDENCE_REQUEST: "evidence_request",
   PROOF_POINT_REQUEST: "proof_point_request",
   DIRECT_ANSWER_REQUIRED: "direct_answer_required",
+  SINGLE_POINT_REQUIRED: "single_point_required",
+  ONE_STEP_REQUIRED: "one_step_required",
   OPERATIONAL_REANCHOR_REQUIRED: "operational_reanchor_required",
   APPLICABILITY_REQUEST: "applicability_request",
 });
 
 const DEMAND_PRIORITY = [
   DEMAND_TYPES.PROOF_POINT_REQUEST,
+  DEMAND_TYPES.SINGLE_POINT_REQUIRED,
   DEMAND_TYPES.EVIDENCE_REQUEST,
+  DEMAND_TYPES.ONE_STEP_REQUIRED,
   DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED,
   DEMAND_TYPES.APPLICABILITY_REQUEST,
   DEMAND_TYPES.DIRECT_ANSWER_REQUIRED,
@@ -197,10 +201,14 @@ export function classifyDemandType({
   const hasOperationalSignal = /\b(workflow|feasible|operational|staff|capacity|implementation|burden|constraint|fit our)\b/i.test(text);
   const hasApplicabilitySignal = /\b(apply|applies|applicable|relevant|for my (?:patients|clinic|practice|setting)|in our (?:clinic|setting|practice)|for our (?:patients|team|clinic)|in this (?:clinic|setting|practice))\b/i.test(text);
   const hasDirectQuestionSignal = /\?/.test(text) || /\b(what|which|how|when|where|who)\b/i.test(text);
+  const hasSinglePointSignal = /\b(one|single)\s+(data point|metric|proof point|number|study point|evidence point|concrete point)\b/i.test(text);
+  const hasOneStepSignal = /\b(one|single|first)\s+(step|thing|action)\b/i.test(text) || /\b(this week|this month|immediate|right now)\b/.test(text);
 
   const candidates = [];
   if (hasProofPointSignal) candidates.push(DEMAND_TYPES.PROOF_POINT_REQUEST);
+  if (hasSinglePointSignal) candidates.push(DEMAND_TYPES.SINGLE_POINT_REQUIRED);
   if (hasEvidenceSignal) candidates.push(DEMAND_TYPES.EVIDENCE_REQUEST);
+  if (hasOneStepSignal) candidates.push(DEMAND_TYPES.ONE_STEP_REQUIRED);
   if (needsConstraintReanchor || hasBlockingConstraints || hasOperationalSignal) candidates.push(DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED);
   if (hasApplicabilitySignal) candidates.push(DEMAND_TYPES.APPLICABILITY_REQUEST);
   if (hasDirectQuestionSignal) candidates.push(DEMAND_TYPES.DIRECT_ANSWER_REQUIRED);
@@ -258,6 +266,15 @@ function isDemandSatisfied({ demandType, repMessage = "", hcpPrompt = "", active
       || (acknowledgesLimitation && hasSpecificAction);
   }
 
+
+  if (demandType === DEMAND_TYPES.SINGLE_POINT_REQUIRED) {
+    return (hasEvidence && /\b(\d+|percent|%|rate|threshold|number|metric)\b/.test(rep) && respondsToQuestion)
+      || (acknowledgesLimitation && hasSpecificAction);
+  }
+
+  if (demandType === DEMAND_TYPES.ONE_STEP_REQUIRED) {
+    return hasSpecificAction && (hasPracticalAnchor || respondsToQuestion || hasContextTie);
+  }
   if (demandType === DEMAND_TYPES.EVIDENCE_REQUEST) {
     return (hasEvidence && (respondsToQuestion || hasPracticalAnchor || hasSpecificAction))
       || (acknowledgesLimitation && hasSpecificAction);
@@ -356,6 +373,38 @@ export function buildDemandHoldMessage({
       ],
       stage4: [
         `I still do not have a usable proof point. Without one concrete metric now, I cannot move this conversation forward.`,
+      ],
+    },
+    [DEMAND_TYPES.SINGLE_POINT_REQUIRED]: {
+      stage1: [
+        `I still need one single concrete point—one number or one metric tied to the decision.`,
+        `Keep this to one proof point only, with measurable detail.`,
+      ],
+      stage2: [
+        `Still unresolved: one metric only, and what it changes in practice.`,
+        `Narrow this further: one number and one practical implication.`,
+      ],
+      stage3: [
+        `Final clarification: one decision-level number only, or state the limitation and immediate fallback.`,
+      ],
+      stage4: [
+        `I still do not have one usable point. Without one concrete number now, we should pause.`,
+      ],
+    },
+    [DEMAND_TYPES.ONE_STEP_REQUIRED]: {
+      stage1: [
+        `I still need one practical step we can execute this week.`,
+        `Give one concrete action for this month with owner and timing.`,
+      ],
+      stage2: [
+        `That is still broad. Give one immediate operational step only.`,
+        `Narrow to one action we can run now with clear ownership.`,
+      ],
+      stage3: [
+        `Final clarification: one practical step only, or state the limit and immediate fallback.`,
+      ],
+      stage4: [
+        `This is still unresolved on practical action. Without one concrete step now, we should stop here.`,
       ],
     },
     [DEMAND_TYPES.DIRECT_ANSWER_REQUIRED]: {

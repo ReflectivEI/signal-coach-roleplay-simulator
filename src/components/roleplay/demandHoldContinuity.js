@@ -6,6 +6,8 @@ const DEMAND_FAMILIES = {
   [DEMAND_TYPES.OPERATIONAL_REANCHOR_REQUIRED]: "operational",
   [DEMAND_TYPES.APPLICABILITY_REQUEST]: "operational",
   [DEMAND_TYPES.DIRECT_ANSWER_REQUIRED]: "direct",
+  [DEMAND_TYPES.SINGLE_POINT_REQUIRED]: "evidence",
+  [DEMAND_TYPES.ONE_STEP_REQUIRED]: "operational",
 };
 
 function getDemandFamily(demandType) {

@@ -198,6 +198,23 @@ test("live RolePlayChat path protects engaged evidence-seeking turns from premat
   assert.match(source, /hasMaterialProgression: engagedEvidenceSeekingRequest \|\| materiallyProgressedConstraintRequest/);
 });
 
+test("live RolePlayChat path applies hard-demand priority lock and writes traceable planner fields", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /updateHardDemandPriorityState/);
+  assert.match(source, /hardDemandPriorityLock/);
+  assert.match(source, /pendingSecondaryConcerns/);
+  assert.match(source, /hardDemandReleaseReason/);
+  assert.match(source, /secondaryConcernBuffered/);
+  assert.match(source, /secondaryConcernSuppressed/);
+  assert.match(source, /narrowingLevel/);
+  assert.match(source, /supersessionReason/);
+  assert.match(source, /hardDemandContinuation:\s*hardDemandState\.hardDemandPriorityLock/);
+});
+
 test("active runtime route remains RolePlaySimulator -> ScenarioCard -> RolePlayChat with history passed into buildHCPDialoguePrompt", () => {
   const simulatorSource = fs.readFileSync(
     new URL("../src/pages/RolePlaySimulator.jsx", import.meta.url),
