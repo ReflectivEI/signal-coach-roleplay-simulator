@@ -212,7 +212,33 @@ test("live RolePlayChat path applies hard-demand priority lock and writes tracea
   assert.match(source, /secondaryConcernSuppressed/);
   assert.match(source, /narrowingLevel/);
   assert.match(source, /supersessionReason/);
+  assert.match(source, /hardDemandUnresolved/);
+  assert.match(source, /lockedPlannerObjective/);
+  assert.match(source, /objectiveOverrideBlocked/);
+  assert.match(source, /const chosenResponseObjective = objectiveOverrideBlocked[\s\S]*lockedPlannerObjective/);
+  assert.match(source, /buildHardDemandLockedObjective/);
+  assert.match(source, /lateTurnConstraintDecision\.forced && !objectiveOverrideBlocked/);
   assert.match(source, /hardDemandContinuation:\s*hardDemandState\.hardDemandPriorityLock/);
+});
+
+test("live RolePlayChat path preserves canonical HCP identity and blocks generic fallback overwrite", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+  const identityHelper = fs.readFileSync(
+    new URL("../src/components/roleplay/hcpIdentity.js", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /resolveCanonicalHcpIdentity/);
+  assert.match(source, /canonicalHcpIdentityRef/);
+  assert.match(source, /canonicalHcpDisplayName/);
+  assert.match(source, /hcpIdentitySource/);
+  assert.match(source, /hcpIdentityPreserved/);
+  assert.match(source, /hcpFallbackUsed/);
+  assert.match(identityHelper, /scenario\?\.hcpProfile\?\.name/);
+  assert.match(identityHelper, /isGenericLabel/);
 });
 
 test("active runtime route remains RolePlaySimulator -> ScenarioCard -> RolePlayChat with history passed into buildHCPDialoguePrompt", () => {

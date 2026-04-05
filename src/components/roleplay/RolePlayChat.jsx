@@ -92,8 +92,10 @@ import {
   createInitialHardDemandPriorityState,
   updateHardDemandPriorityState,
   getBufferedConcernAfterHardDemandRelease,
+  buildHardDemandLockedObjective,
 } from "./hardDemandPriorityLock";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
+import { resolveCanonicalHcpIdentity } from "./hcpIdentity";
 
 function escapeHTML(text) {
   return String(text)
@@ -1172,6 +1174,7 @@ function rankResponseObjective({
   hardDemandState = {},
 } = {}) {
   const hardDemandPriorityLock = Boolean(hardDemandState?.hardDemandPriorityLock);
+  const hardDemandUnresolved = Boolean(hardDemandState?.hardDemandUnresolved);
   const activeHardDemand = hardDemandState?.activeHardDemand || null;
   const hardDemandType = hardDemandState?.hardDemandType || null;
 
@@ -1180,7 +1183,7 @@ function rankResponseObjective({
   const primaryConstraint = hasActiveConstraint ? activeConstraints[0] : "none";
   const directOperationalQuestion = hasActiveConstraint && isDirectUserQuestion(latestUserTurn);
 
-  if (hardDemandPriorityLock) {
+  if (hardDemandPriorityLock && hardDemandUnresolved) {
     return {
       selectedObjective: `continue_hard_demand_lock[${activeHardDemand || "constraint"}]`,
       primaryConstraint: activeHardDemand || primaryConstraint,
@@ -1195,6 +1198,7 @@ function rankResponseObjective({
       ],
       hardDemandType,
       hardDemandPriorityLock: true,
+      hardDemandUnresolved: true,
       rankedObjectives: [
         { id: "continue_hard_demand_lock", score: 1000, referencesConstraint: true },
       ],
@@ -1268,6 +1272,7 @@ function rankResponseObjective({
     ],
     hardDemandType: hardDemandType || null,
     hardDemandPriorityLock,
+    hardDemandUnresolved,
     rankedObjectives: candidates.map(({ id, score, referencesConstraint }) => ({ id, score, referencesConstraint })),
   };
 }
@@ -1847,8 +1852,8 @@ function toPossessiveName(name = "") {
   return /s$/i.test(value) ? `${value}’` : `${value}’s`;
 }
 
-function deriveHcpDisplayName({ stakeholder, hcp, hcpCategory }) {
-  const source = String(stakeholder || hcp || "").trim();
+function deriveHcpDisplayName({ stakeholder, hcp, hcpCategory, canonicalHcpDisplayName }) {
+  const source = String(canonicalHcpDisplayName || stakeholder || hcp || "").trim();
   const roleContext = `${source} ${String(hcpCategory || "")}`.toLowerCase();
   const base = source.split(/\s-\s/, 1)[0].split(",")[0].trim();
   const normalizedBase = base.replace(/^dr\.?\s+/i, "").trim();
@@ -2404,6 +2409,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     line: "",
   });
   const hardDemandPriorityRef = useRef(createInitialHardDemandPriorityState());
+  const canonicalHcpIdentityRef = useRef(resolveCanonicalHcpIdentity(scenario));
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -2453,10 +2459,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     hcpCategory: scenario.hcp_category,
     hcp: scenario.hcp,
   });
+  const canonicalHcpIdentity = canonicalHcpIdentityRef.current;
   const hcpDisplayName = deriveHcpDisplayName({
     stakeholder: scenario.stakeholder,
     hcp: scenario.hcp,
     hcpCategory: scenario.hcp_category,
+    canonicalHcpDisplayName: canonicalHcpIdentity.canonicalHcpDisplayName,
   });
   const difficultyVisual = getDifficultyVisuals(scenario.difficulty);
   const showScenarioContext = Boolean(descriptionText || openingScene || objectiveText || challengeItems.length > 0);
@@ -2478,6 +2486,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   useEffect(() => {
     const controller = sessionControllerRef.current;
     runtimeScenarioContractRef.current = validateScenarioRuntimeContract(scenario).contract;
+    canonicalHcpIdentityRef.current = resolveCanonicalHcpIdentity(scenario);
     controller.state = SessionState.ACTIVE;
     controller.isActive = true;
     controller.isProcessingTurn = false;
@@ -2924,6 +2933,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       materiallyStrongerBlocker: false,
     });
     hardDemandPriorityRef.current = hardDemandState;
+    const unresolvedHardDemandLock = Boolean(hardDemandState.hardDemandPriorityLock && hardDemandState.hardDemandUnresolved);
     const bufferedConcernCandidate = getBufferedConcernAfterHardDemandRelease(hardDemandState);
     const effectiveActiveConcern = hardDemandState.hardDemandPriorityLock
       ? (hardDemandState.activeHardDemand || activeConcern)
@@ -2973,7 +2983,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
       hardDemandState,
     });
-    const chosenResponseObjective = objectiveRanking.selectedObjective;
+    const lockedPlannerObjective = buildHardDemandLockedObjective(hardDemandState, activeConcern);
+    const objectiveOverrideBlocked = Boolean(unresolvedHardDemandLock && lockedPlannerObjective);
+    const chosenResponseObjective = objectiveOverrideBlocked
+      ? lockedPlannerObjective
+      : objectiveRanking.selectedObjective;
+    hardDemandPriorityRef.current = {
+      ...hardDemandPriorityRef.current,
+      lockedPlannerObjective: chosenResponseObjective,
+      objectiveOverrideBlocked,
+    };
     const plannerStateSnapshot = {
       activeConcern,
       effectiveActiveConcern,
@@ -2996,10 +3015,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hardDemandType: hardDemandState.hardDemandType,
       hardDemandSourceTurn: hardDemandState.hardDemandSourceTurn,
       hardDemandPriorityLock: hardDemandState.hardDemandPriorityLock,
+      hardDemandUnresolved: hardDemandState.hardDemandUnresolved,
       pendingSecondaryConcerns: hardDemandState.pendingSecondaryConcerns,
       hardDemandReleaseReason: hardDemandState.hardDemandReleaseReason,
       narrowingLevel: hardDemandState.narrowingLevel,
       supersessionReason: hardDemandState.supersessionReason,
+      lockedPlannerObjective: chosenResponseObjective,
+      objectiveOverrideBlocked,
       hardDemandKept: Boolean(hardDemandState.hardDemandPriorityLock && hardDemandState.hardDemandType),
       secondaryConcernBuffered: Boolean(
         hardDemandState.hardDemandPriorityLock
@@ -3034,6 +3056,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       secondaryConcernSuppressed: plannerStateSnapshot.secondaryConcernSuppressed,
       narrowingLevel: hardDemandState.narrowingLevel,
       supersessionReason: hardDemandState.supersessionReason,
+      lockedPlannerObjective: chosenResponseObjective,
+      objectiveOverrideBlocked,
     });
 
     if (hardLoopBreaker) {
@@ -3435,14 +3459,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
+        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${effectiveActiveConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         emitPlannerTrace("planner_input_assembled", {
           turnNumber: nextTurnNumber,
           plannerVisibleConstraints: normalizedActiveConstraints,
-          plannerVisibleConcern: activeConcern,
+          plannerVisibleConcern: effectiveActiveConcern,
           concernFlowOutcome,
           promptPreview: {
-            activeConcern,
+            activeConcern: effectiveActiveConcern,
             engagementTier: decayState.tier,
             concernAddressed: decayState.concernAddressed,
           },
@@ -3518,7 +3542,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "You are generating ONE HCP reply in a role-play simulation.",
           `Scenario grounding: ${scenarioGroundingText}`,
           `Current HCP state: ${nextHcpState}`,
-          `Active concern: ${activeConcern}`,
+          `Active concern: ${effectiveActiveConcern}`,
           `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
           `Rep reply to react to: ${repMessage}`,
           "Rules:",
@@ -4090,6 +4114,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         activeConstraints: activeHcpConstraints,
         blockClose,
       },
+      hcpIdentity: {
+        canonicalHcpDisplayName: canonicalHcpIdentity.canonicalHcpDisplayName,
+        hcpIdentitySource: canonicalHcpIdentity.hcpIdentitySource,
+        hcpIdentityPreserved: true,
+        hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
+      },
     };
 
     const turnIntegrityIssues = hasTurnIntegrityIssues(nextTurn);
@@ -4210,7 +4240,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = terminalCloseFallback;
     }
 
-    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced) {
+    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced && !objectiveOverrideBlocked) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
         mode: lateTurnConstraintDecision.mode,
@@ -4295,7 +4325,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent.",
           `Scenario context: ${scenarioGroundingText}`,
           `HCP state: ${nextHcpState}`,
-          `Active concern: ${activeConcern}`,
+          `Active concern: ${effectiveActiveConcern}`,
           `Previous repeated HCP line: ${repetitiveCandidate}`,
           `Current draft line: ${nextHcpDialogue}`,
           "Rules:",
@@ -4505,6 +4535,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       secondaryConcernSuppressed: plannerStateSnapshot.secondaryConcernSuppressed,
       narrowingLevel: hardDemandPriorityRef.current?.narrowingLevel || hardDemandState.narrowingLevel || 0,
       supersessionReason: hardDemandState.supersessionReason,
+      lockedPlannerObjective: chosenResponseObjective,
+      objectiveOverrideBlocked,
+      hcpIdentitySource: canonicalHcpIdentity.hcpIdentitySource,
+      hcpIdentityPreserved: true,
+      hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
     });
     const verbalizedOperationalConstraintTypes = detectOperationalConstraintTypes(nextHcpDialogue);
     const previouslyVerbalizedOperationalConstraintTypes = [
@@ -4524,6 +4559,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hardDemandType: hardDemandState.hardDemandType,
       hardDemandSourceTurn: hardDemandState.hardDemandSourceTurn,
       hardDemandPriorityLock: hardDemandState.hardDemandPriorityLock,
+      hardDemandUnresolved: hardDemandState.hardDemandUnresolved,
       hardDemandKept: plannerStateSnapshot.hardDemandKept,
       hardDemandReleaseReason: hardDemandState.hardDemandReleaseReason,
       pendingSecondaryConcerns: hardDemandState.pendingSecondaryConcerns,
@@ -4531,6 +4567,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       secondaryConcernSuppressed: plannerStateSnapshot.secondaryConcernSuppressed,
       narrowingLevel: hardDemandPriorityRef.current?.narrowingLevel || hardDemandState.narrowingLevel || 0,
       supersessionReason: hardDemandState.supersessionReason,
+      lockedPlannerObjective: chosenResponseObjective,
+      objectiveOverrideBlocked,
+      hcpIdentitySource: canonicalHcpIdentity.hcpIdentitySource,
+      hcpIdentityPreserved: true,
+      hcpFallbackUsed: canonicalHcpIdentity.hcpFallbackUsed,
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
