@@ -45,6 +45,14 @@ export function detectOperationalConstraintTypes(text = "") {
   return [...new Set(extractConstraintCandidatesFromText(text).map((item) => item.constraintType))];
 }
 
+export function isExplicitOperationalBlockerPrompt(text = "") {
+  const value = String(text || "");
+  if (!value.trim()) return false;
+  const hasBlockerSignal = /\b(blocker|unresolved|cannot move|can't move|stuck|before i can proceed|until this is resolved)\b/i.test(value);
+  if (!hasBlockerSignal) return false;
+  return /\b(workflow|operational|staff|capacity|prior auth|authorization|handoff|process|constraint)\b/i.test(value);
+}
+
 export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = [] } = {}) {
   const scenarioCandidates = extractConstraintCandidatesFromText(scenarioText);
   const dialogueCandidates = (Array.isArray(dialogueTurns) ? dialogueTurns : [])

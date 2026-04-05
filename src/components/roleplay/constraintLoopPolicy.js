@@ -86,6 +86,9 @@ export function resolveConstraintLoopAction({
   hasMaterialProgression = false,
   hasFunctionalResolution = false,
   diminishingReturnsDetected = false,
+  hardDemandContinuation = false,
+  hardDemandNarrowingLevel = 0,
+  repeatingNonAnswer = false,
 } = {}) {
   const structuredDemandByConcern = {
     monitoring: 'We are still not specific enough. Give exactly: (1) monitoring owner, (2) follow-up cadence, (3) escalation trigger for adverse events.',
@@ -97,6 +100,43 @@ export function resolveConstraintLoopAction({
 
   if (hasFunctionalResolution) return null;
 
+
+  if (hardDemandContinuation && !hasMaterialProgression) {
+    const level = Math.max(1, Number(hardDemandNarrowingLevel || 1));
+    if (repeatingNonAnswer && level >= 4) {
+      return {
+        nextHcpState: "disengaged",
+        nextHcpDialogue: terminalCloseFallback,
+        nextNarrowingLevel: 4,
+        escalationMode: "disengage",
+      };
+    }
+
+    if (level >= 3 || (repeatingNonAnswer && level >= 2)) {
+      return {
+        nextHcpState: "boundary-setting",
+        nextHcpDialogue: "I still need one concrete answer. One specific point, and what it changes in practice.",
+        nextNarrowingLevel: Math.min(4, level + 1),
+        escalationMode: "skepticism",
+      };
+    }
+
+    if (level >= 2) {
+      return {
+        nextHcpState: "boundary-setting",
+        nextHcpDialogue: "I still need one data point. Keep it specific and directly applicable.",
+        nextNarrowingLevel: Math.min(4, level + 1),
+        escalationMode: "narrowed_demand",
+      };
+    }
+
+    return {
+      nextHcpState: "boundary-setting",
+      nextHcpDialogue: "Reminder: answer the single unresolved request directly before adding anything else.",
+      nextNarrowingLevel: 2,
+      escalationMode: "reminder",
+    };
+  }
   const effectiveSimilarity = diminishingReturnsDetected
     ? Math.max(similarConstraintPrompts, 2)
     : similarConstraintPrompts;
