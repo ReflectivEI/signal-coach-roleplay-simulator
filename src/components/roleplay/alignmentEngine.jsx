@@ -930,18 +930,13 @@ export function computeAlignment(hcpState, repMessage, context = null, temperatu
   // Robust misalignment: track repeated/aggressive responses
   let repeatedAggressive = false;
   let repeatedMisalignment = false;
-  const sessionNamespace = typeof context === 'object' && context?.sessionNamespace
-    ? String(context.sessionNamespace)
-    : 'default';
-  const aggressiveKey = `lastAggressive:${sessionNamespace}`;
-  const misalignmentKey = `lastMisalignments:${sessionNamespace}`;
   if (typeof window !== 'undefined' && window.sessionStorage) {
-    let lastAggressive = window.sessionStorage.getItem(aggressiveKey) === 'true';
-    let lastMisalignments = window.sessionStorage.getItem(misalignmentKey) || '';
+    let lastAggressive = window.sessionStorage.getItem('lastAggressive') === 'true';
+    let lastMisalignments = window.sessionStorage.getItem('lastMisalignments') || '';
     repeatedAggressive = lastAggressive && p.isAggressive;
     repeatedMisalignment = lastMisalignments === repMessage;
-    window.sessionStorage.setItem(aggressiveKey, p.isAggressive ? 'true' : 'false');
-    window.sessionStorage.setItem(misalignmentKey, repMessage);
+    window.sessionStorage.setItem('lastAggressive', p.isAggressive ? 'true' : 'false');
+    window.sessionStorage.setItem('lastMisalignments', repMessage);
   }
 
   const STATE_LABELS = {
