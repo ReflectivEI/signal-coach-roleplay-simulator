@@ -66,7 +66,11 @@ import {
   applyInferenceBias,
 } from "./behavioralInferenceLayer";
 import { applyTransformSafetyHarness } from "./transformSafetyHarness";
-import { resolveConstraintLoopAction } from "./constraintLoopPolicy";
+import {
+  computeAuxiliaryProgressionScore,
+  detectDiminishingReturns,
+  resolveConstraintLoopAction,
+} from "./constraintLoopPolicy";
 import {
   extractConstraintCandidatesFromText,
   buildConstraintGrounding,
@@ -344,6 +348,12 @@ function validateConstraintState(constraints = [], options = {}) {
       turnsActive: Math.max(0, Number(constraint.turnsActive || 0)),
       confidence: Math.max(0, Math.min(1, Number(constraint.confidence || 0.6))),
       satisfaction: constraint.satisfaction || "not_satisfied",
+      partialCount: Math.max(0, Number(constraint.partialCount || 0)),
+      progressionScoreHistory: Array.isArray(constraint.progressionScoreHistory)
+        ? constraint.progressionScoreHistory.slice(-6).map((score) => Math.max(0, Math.min(1, Number(score || 0))))
+        : [],
+      lastResolutionState: constraint.lastResolutionState || constraint.satisfaction || "not_satisfied",
+      functionallyResolved: Boolean(constraint.functionallyResolved || constraint.satisfaction === "functionally_resolved"),
     }));
 
   return detailed ? { constraints: normalized, issues } : normalized;
@@ -368,6 +378,23 @@ function computeSimilarity(a = "", b = "") {
     if (tokensB.has(token)) overlap += 1;
   });
   return overlap / Math.max(tokensA.size, tokensB.size);
+}
+
+function mapDemandTypeToFamily(demandType = "") {
+  const type = String(demandType || "").toLowerCase();
+  if (!type) return null;
+  if (type.includes("evidence") || type.includes("proof")) return "evidence";
+  if (type.includes("operational") || type.includes("applicability")) return "operational";
+  if (type.includes("direct")) return "direct";
+  return null;
+}
+
+function mapConstraintTypeToDemandFamily(constraintType = "") {
+  const type = String(constraintType || "").toLowerCase();
+  if (type.includes("evidence")) return "evidence";
+  if (type.includes("operational") || type.includes("applicability") || type.includes("specificity")) return "operational";
+  if (type.includes("clarification")) return "direct";
+  return null;
 }
 
 function hardenTextSurface(text) {
@@ -3803,14 +3830,66 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const priorHcpConstraints = Array.isArray(respondingToTurn?.hcpConstraintState?.activeConstraints)
       ? respondingToTurn.hcpConstraintState.activeConstraints
       : hcpConstraintEngineRef.current.activeConstraints;
+    const activeDemandSnapshot = interventionStateRef.current?.activeDemand;
+    const strictDemandEscalationActive = Boolean(
+      activeDemandSnapshot?.isActive
+      && Number(activeDemandSnapshot?.unresolvedTurns || 0) >= 3
+    );
+    const activeDemandFamily = mapDemandTypeToFamily(activeDemandSnapshot?.type || "");
     const calibratedPriorConstraints = priorHcpConstraints
       .map((constraint) => {
         const satisfaction = isConstraintSatisfied(constraint, repMessage);
         const turnsActive = Number(constraint?.turnsActive || 0) + 1;
         if (turnsActive > 5) return null; // decay auto-resolve
+        const priorScoreHistory = Array.isArray(constraint?.progressionScoreHistory)
+          ? constraint.progressionScoreHistory.slice(-5)
+          : [];
+        const recentRepMsgs = prevTurns
+          .map((turn) => String(turn?.repMessage || "").trim())
+          .filter(Boolean)
+          .slice(-2);
+        const progressionScore = computeAuxiliaryProgressionScore({
+          constraintType: constraint?.type,
+          repMessage,
+          hcpPrompt: respondingToTurn?.hcpDialogueBefore || "",
+          previousRepMessage: recentRepMsgs[recentRepMsgs.length - 1] || "",
+        });
+        const progressionScoreHistory = [...priorScoreHistory, progressionScore].slice(-6);
+        const partialCount = satisfaction === "partially_satisfied"
+          ? Number(constraint?.partialCount || 0) + 1
+          : Number(constraint?.partialCount || 0);
+        const repeatedRepPatternInWindow = recentRepMsgs.length >= 2
+          && computeSimilarity(recentRepMsgs[0], recentRepMsgs[1]) >= 0.88
+          && computeSimilarity(recentRepMsgs[1], repMessage) >= 0.88;
+        const recentConstraintPrompts = prevTurns
+          .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+          .filter(Boolean)
+          .slice(-3);
+        const similarConstraintPromptsInWindow = recentConstraintPrompts
+          .filter((utterance) => computeSimilarity(utterance, respondingToTurn?.hcpDialogueBefore || "") >= 0.7).length;
+        const diminishingReturns = detectDiminishingReturns({
+          progressionScoreHistory,
+          repeatedRepPattern: repeatedRepPatternInWindow,
+          similarConstraintPrompts: similarConstraintPromptsInWindow,
+          recentRepMessages: [...recentRepMsgs, repMessage],
+        });
+        const sameDemandFamily = (() => {
+          const constraintDemandFamily = mapConstraintTypeToDemandFamily(constraint?.type || "");
+          if (!constraintDemandFamily || !activeDemandFamily) return true;
+          return constraintDemandFamily === activeDemandFamily;
+        })();
+        const functionallyResolved = (
+          !strictDemandEscalationActive
+          && sameDemandFamily
+          && satisfaction !== "fully_satisfied"
+          && turnsActive >= 2
+          && partialCount >= 1
+          && progressionScore >= 0.6
+          && diminishingReturns
+        );
         const nextPriority = (
           turnsActive > 3
-          && satisfaction === "partially_satisfied"
+          && (satisfaction === "partially_satisfied" || functionallyResolved)
           && String(constraint?.priority || "blocking") === "blocking"
         )
           ? "soft"
@@ -3819,21 +3898,49 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return {
           ...constraint,
           turnsActive,
+          progressionScore,
+          progressionScoreHistory,
+          partialCount,
+          lastResolutionState: functionallyResolved ? "functionally_resolved" : satisfaction,
+          functionallyResolved,
           priority: nextPriority,
-          satisfaction,
+          satisfaction: functionallyResolved ? "functionally_resolved" : satisfaction,
         };
       })
       .filter(Boolean);
-    const newlyDetectedHcpConstraints = extractHcpConstraints(nextHcpDialogue);
+    const priorFunctionallyResolvedByType = new Map(
+      calibratedPriorConstraints
+        .filter((constraint) => constraint?.functionallyResolved)
+        .map((constraint) => [constraint.type, constraint])
+    );
+    const newlyDetectedHcpConstraints = extractHcpConstraints(nextHcpDialogue).filter((candidate) => {
+      const priorResolved = priorFunctionallyResolvedByType.get(candidate?.type);
+      if (!priorResolved) return true;
+      const confidenceShift = Math.abs(Number(candidate?.confidence || 0) - Number(priorResolved?.confidence || 0));
+      const materiallyDifferentSignal = confidenceShift >= 0.25;
+      return materiallyDifferentSignal;
+    });
     const activeHcpConstraints = validateConstraintState(
       mergeActiveConstraints(calibratedPriorConstraints, newlyDetectedHcpConstraints)
     );
     const blockingUnresolvedConstraints = activeHcpConstraints.filter(
-      (constraint) => String(constraint?.priority || "blocking") === "blocking"
+      (constraint) => (
+        String(constraint?.priority || "blocking") === "blocking"
+        && constraint?.satisfaction !== "functionally_resolved"
+      )
     );
-    const hasPartialProgress = activeHcpConstraints.some(
+    const hasFunctionalResolution = activeHcpConstraints.some(
+      (constraint) => constraint?.satisfaction === "functionally_resolved"
+    );
+    const hasPartialProgress = hasFunctionalResolution || activeHcpConstraints.some(
       (constraint) => constraint?.satisfaction === "partially_satisfied"
     );
+    const diminishingReturnsDetected = activeHcpConstraints.some((constraint) => {
+      if (!Array.isArray(constraint?.progressionScoreHistory) || constraint.progressionScoreHistory.length < 2) return false;
+      const history = constraint.progressionScoreHistory.slice(-3);
+      const delta = Math.abs(Number(history[history.length - 1] || 0) - Number(history[0] || 0));
+      return delta <= 0.08 && Number(history[history.length - 1] || 0) >= 0.55;
+    });
     const blockClose = blockingUnresolvedConstraints.length > 0 && !hasPartialProgress;
     if (import.meta.env.DEV) {
       console.debug("ROLEPLAY_CALIBRATION", {
@@ -3851,8 +3958,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           priority: constraint.priority,
           satisfaction: constraint.satisfaction || "not_satisfied",
           turnsActive: constraint.turnsActive || 0,
+          progressionScore: Number(constraint.progressionScore || 0),
+          partialCount: Number(constraint.partialCount || 0),
         })),
         hasPartialProgress,
+        hasFunctionalResolution,
+        diminishingReturnsDetected,
         blockClose,
       });
     }
@@ -3986,6 +4097,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         activeConcern,
         terminalCloseFallback,
         hasMaterialProgression: engagedEvidenceSeekingRequest || materiallyProgressedConstraintRequest,
+        hasFunctionalResolution,
+        diminishingReturnsDetected,
       });
       if (loopAction) {
         nextHcpState = loopAction.nextHcpState;
