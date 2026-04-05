@@ -89,10 +89,6 @@ import {
 } from "./interventionEngineV2";
 import { shouldAllowDemandHoldOverride } from "./demandHoldContinuity";
 import { buildSafeReferenceLeadIn } from "./hcpReferenceSafety";
-import { createInitialTurnRuntimeState, planRoleplayTurn } from "./roleplayTurnPlanner";
-import { arbitrateRoleplayResponse } from "./roleplayResponseArbitrator";
-import { createRoleplaySessionTrace, appendSessionTrace } from "./roleplaySessionTrace";
-import { finalizeRoleplayMessage } from "./roleplayFinalizationContract";
 
 function escapeHTML(text) {
   return String(text)
@@ -109,8 +105,9 @@ function sanitizeRenderedMessage(text, source = "unknown") {
   const originalText = String(text || "");
 
   try {
-    const finalizedText = finalizeRoleplayMessage(originalText, { mode: "display" });
-    const hardenedText = hardenTextSurface(finalizedText);
+    const normalizedText = normalizeMessage(originalText);
+    const toneNormalizedText = normalizeTone(normalizedText);
+    const hardenedText = hardenTextSurface(toneNormalizedText);
     const renderedText = escapeHTML(hardenedText);
 
     if (
@@ -2332,13 +2329,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     || "scenario";
-  const deterministicSessionSeed = String(
-    scenario?.replaySeed
-    || scenario?.sessionSeed
-    || scenario?.deterministicSeed
-    || scenarioSeed
-  );
-  const sessionIdRef = useRef(`session_${deterministicSessionSeed}`);
+  const sessionIdRef = useRef(`session_${scenarioSeed}_${Date.now()}`);
   const sid = sessionIdRef.current;
   // Mutable simulation state — NOT in React state (no re-renders on change)
   const simStateRef = useRef({ temperature: 'neutral', severity: 0 });
@@ -2373,8 +2364,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     demandType: null,
     line: "",
   });
-  const plannerRuntimeStateRef = useRef(createInitialTurnRuntimeState(deterministicSessionSeed));
-  const plannerTraceStateRef = useRef(createRoleplaySessionTrace(deterministicSessionSeed));
 
   const {
     isListening, isSpeaking, interim, sttSupported, ttsSupported,
@@ -2474,8 +2463,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           demandType: null,
           line: "",
         };
-        plannerRuntimeStateRef.current = createInitialTurnRuntimeState(deterministicSessionSeed);
-        plannerTraceStateRef.current = createRoleplaySessionTrace(deterministicSessionSeed);
 
         // Build a locked profile for turn 0 to establish initial cue and context
         const initialProfile = buildHCPProfile({
@@ -2608,7 +2595,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       {
         hcpUtterance: respondingToTurn?.hcpDialogueBefore || "",
         cueText: respondingToTurn?.cueBefore || "",
-        sessionNamespace: sid,
       },
       prevTemp,
       prevHcpState
@@ -2933,25 +2919,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       latestUserTurn: respondingToTurn?.hcpDialogueBefore || "",
     });
     const chosenResponseObjective = objectiveRanking.selectedObjective;
-    const plannerContract = planRoleplayTurn({
-      runtimeState: plannerRuntimeStateRef.current,
-      repMessage,
-      previousHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
-      previousCue: respondingToTurn?.cueBefore || "",
-      alignmentScore: alignment?.score,
-      activeConcern,
-      activeConstraints: normalizedActiveConstraints,
-    });
-    plannerRuntimeStateRef.current = plannerContract.nextRuntimeState;
-    plannerTraceStateRef.current = appendSessionTrace(plannerTraceStateRef.current, {
-      turnNumber: nextTurnNumber,
-      stage: "planner_contract",
-      plannerIntent: plannerContract.plannerIntent,
-      checkpointType: plannerContract.checkpointType,
-      demandSignals: plannerContract.demandSignals,
-      missedCueCount: plannerContract.nextRuntimeState?.missedCueCount || 0,
-      difficultyMode: plannerContract.difficultyMode,
-    });
     const plannerStateSnapshot = {
       activeConcern,
       normalizedActiveConstraints,
@@ -2969,13 +2936,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       chosenResponseObjective,
       objectiveRanking,
       lateTurnConstraintDecision,
-      deterministicSessionSeed,
-      plannerIntent: plannerContract.plannerIntent,
-      checkpointType: plannerContract.checkpointType,
-      demandSignals: plannerContract.demandSignals,
-      checkpointStatus: plannerContract.checkpoint,
-      difficultyMode: plannerContract.difficultyMode,
-      missCount: plannerContract.nextRuntimeState?.missedCueCount || 0,
     };
     emitPlannerTrace("response_objective_selected", {
       turnNumber: nextTurnNumber,
@@ -3390,7 +3350,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
-        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.\n\nDETERMINISTIC TURN CONTRACT:\n- Planner intent: ${plannerContract.plannerIntent}.\n- Active checkpoint type: ${plannerContract.checkpointType || "none"}.\n- Hard demand unmet: ${plannerContract.checkpoint?.unmetHardDemand ? "yes" : "no"}.\n- Difficulty mode: ${plannerContract.difficultyMode}.`;
+        }) + `\n\nENGAGEMENT DECAY LAYER:\n- Current engagement tier: ${decayState.tier}.\n- Active concern to protect: ${activeConcern}.\n- Concern addressed by rep this turn: ${decayState.concernAddressed ? "yes" : "no"}.\n- Repeated evidence without operational link: ${decayState.repeatedEvidence ? "yes" : "no"}.\n- Tier directive: ${ENGAGEMENT_TIER_PROMPT_GUIDANCE[decayState.tier]}\n- Keep sentence count at or below ${ENGAGEMENT_TIER_SENTENCE_MAX[decayState.tier]}.\n- Maintain professional tone. Be firm if needed, but never hostile or sarcastic.`;
         emitPlannerTrace("planner_input_assembled", {
           turnNumber: nextTurnNumber,
           plannerVisibleConstraints: normalizedActiveConstraints,
@@ -4386,27 +4346,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requirementRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
     };
 
-    const arbitration = arbitrateRoleplayResponse({
-      draftResponse: nextHcpDialogue,
-      plannerContract,
-      activeConcern,
-      recentDialogues: prevTurns
-        .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
-        .filter(Boolean)
-        .slice(-4),
-    });
-    plannerTraceStateRef.current = appendSessionTrace(plannerTraceStateRef.current, {
-      turnNumber: nextTurnNumber,
-      stage: "response_arbitration",
-      arbitrationStages: arbitration.stages,
-      localRewriteReason: arbitration.localRewrite?.reason,
-      hardDemandEnforced: plannerContract?.checkpoint?.unmetHardDemand || false,
-    });
-
-    const acceptedDialogueBeforeFinalContract = arbitration.finalResponse;
-    nextHcpDialogue = applyDeterministicPunctuationContract(
-      finalizeRoleplayMessage(acceptedDialogueBeforeFinalContract, { mode: "storage" })
-    );
+    const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
+    nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
