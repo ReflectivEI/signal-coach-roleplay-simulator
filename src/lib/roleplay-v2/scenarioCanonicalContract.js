@@ -49,6 +49,51 @@ export const EVIDENCE_TAG_ENUM = Object.freeze([
   'pushed_without_evidence',
 ]);
 
+function validateEnforcementCriteria(criteria = {}, path = 'enforcementCriteria') {
+  const issues = [];
+  if (!criteria || typeof criteria !== 'object') return issues;
+  const ranged = [
+    'baselineForgiveness',
+    'baselinePrecisionDemand',
+    'baselineEvidenceStrictness',
+    'baselineWorkflowStrictness',
+    'baselineEscalationSensitivity',
+  ];
+  for (const key of ranged) {
+    if (key in criteria) {
+      const value = Number(criteria[key]);
+      if (!Number.isFinite(value) || value < 0 || value > 1) issues.push(`${path}.${key} must be between 0 and 1`);
+    }
+  }
+  const modifier = ['timePressureEscalationModifier', 'engagementSlackModifier', 'skepticismEscalationModifier'];
+  for (const key of modifier) {
+    if (key in criteria) {
+      const value = Number(criteria[key]);
+      if (!Number.isFinite(value) || value < -1 || value > 1) issues.push(`${path}.${key} must be between -1 and 1`);
+    }
+  }
+  return issues;
+}
+
+
+function validateDomainIntegrityPolicy(policy = {}, path = 'domainIntegrity') {
+  const issues = [];
+  if (!policy || typeof policy !== 'object') return issues;
+  const arrayKeys = ['allowedDomains', 'allowedContextFamilies', 'disallowedCrossDomainFamilies'];
+  for (const key of arrayKeys) {
+    if (key in policy) {
+      if (!Array.isArray(policy[key])) {
+        issues.push(`${path}.${key} must be an array of strings`);
+      } else if (policy[key].some((item) => typeof item !== 'string' || !item.trim())) {
+        issues.push(`${path}.${key} must contain non-empty strings`);
+      }
+    }
+  }
+  if ('primaryScenarioDomain' in policy && (typeof policy.primaryScenarioDomain !== 'string' || !policy.primaryScenarioDomain.trim())) {
+    issues.push(`${path}.primaryScenarioDomain must be a non-empty string`);
+  }
+  return issues;
+}
 function keyOrderIssues(obj = {}) {
   const keys = Object.keys(obj);
   const observed = keys.filter((k) => TOP_LEVEL_ORDER.includes(k));
@@ -87,6 +132,12 @@ export function validateCanonicalScenarioSpec(spec = {}) {
   }
 
   const evidenceMap = spec.metricEvidenceMap || {};
+  issues.push(...validateEnforcementCriteria(spec.enforcementCriteria, 'enforcementCriteria'));
+  issues.push(...validateEnforcementCriteria(spec.sceneSetup?.enforcementCriteria, 'sceneSetup.enforcementCriteria'));
+  issues.push(...validateEnforcementCriteria(spec.hcpProfile?.enforcementCriteria, 'hcpProfile.enforcementCriteria'));
+  issues.push(...validateDomainIntegrityPolicy(spec.domainIntegrity, 'domainIntegrity'));
+  issues.push(...validateDomainIntegrityPolicy(spec.sceneSetup?.domainIntegrity, 'sceneSetup.domainIntegrity'));
+  issues.push(...validateDomainIntegrityPolicy(spec.hcpProfile?.domainIntegrity, 'hcpProfile.domainIntegrity'));
   for (const [metric, cfg] of Object.entries(evidenceMap)) {
     const required = cfg?.observableEvidenceRequired || [];
     for (const tag of required) {
@@ -140,6 +191,16 @@ export function createCanonicalScenarioSpec(overrides = {}) {
       baselineCommunicationStyle: 'concise_analytical',
       baselineOpennessResistance: 'skeptical',
       knownConstraints: ['chair_time_pressure', 'p_and_t_scrutiny', 'reimbursement_variability'],
+      enforcementCriteria: {
+        baselineForgiveness: 0.45,
+        baselinePrecisionDemand: 0.72,
+        baselineEvidenceStrictness: 0.68,
+        baselineWorkflowStrictness: 0.6,
+        baselineEscalationSensitivity: 0.62,
+      },
+      domainIntegrity: {
+        allowedContextFamilies: ['operational_workflow', 'evidence_review'],
+      },
     },
     sceneSetup: {
       openingEnvironment: 'Clinic hallway between patients',
@@ -148,6 +209,17 @@ export function createCanonicalScenarioSpec(overrides = {}) {
       visitObjective: 'Clarify barriers without overselling.',
       repKnowsAtStart: ['HCP is evaluating options'],
       repDoesNotKnowAtStart: ['Which barrier is primary today'],
+      enforcementCriteria: {
+        timePressureEscalationModifier: 0.32,
+        engagementSlackModifier: 0.16,
+        skepticismEscalationModifier: 0.28,
+      },
+      domainIntegrity: {
+        primaryScenarioDomain: 'oncology',
+        allowedDomains: ['oncology', 'operational_workflow'],
+        allowedContextFamilies: ['operational_workflow', 'evidence_review'],
+        disallowedCrossDomainFamilies: ['hiv', 'cardiology', 'neurology'],
+      },
     },
     hcpStateModel: {
       startingState: 'skeptical',
@@ -182,6 +254,22 @@ export function createCanonicalScenarioSpec(overrides = {}) {
         minimumThreshold: 1,
         examples: ['rep paraphrases explicit HCP operational concern'],
       },
+    },
+    enforcementCriteria: {
+      baselineForgiveness: 0.5,
+      baselinePrecisionDemand: 0.6,
+      baselineEvidenceStrictness: 0.55,
+      baselineWorkflowStrictness: 0.58,
+      baselineEscalationSensitivity: 0.56,
+      timePressureEscalationModifier: 0.25,
+      engagementSlackModifier: 0.2,
+      skepticismEscalationModifier: 0.24,
+    },
+    domainIntegrity: {
+      primaryScenarioDomain: 'oncology',
+      allowedDomains: ['oncology', 'operational_workflow'],
+      allowedContextFamilies: ['operational_workflow', 'evidence_review', 'patient_selection'],
+      disallowedCrossDomainFamilies: ['hiv', 'cardiology', 'neurology'],
     },
     feedbackContract: {
       whatFeedbackCanReference: ['explicit_hcp_statement', 'visible_hcp_cue', 'rep_language_pattern', 'missing_expected_behavior'],

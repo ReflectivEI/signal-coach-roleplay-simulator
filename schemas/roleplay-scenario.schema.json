@@ -104,7 +104,9 @@
         "careSetting": { "type": "string" },
         "baselineCommunicationStyle": { "type": "string" },
         "baselineOpennessResistance": { "$ref": "#/$defs/hcpState" },
-        "knownConstraints": { "type": "array", "items": { "type": "string" } }
+        "knownConstraints": { "type": "array", "items": { "type": "string" } },
+        "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+        "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" }
       }
     },
     "sceneSetup": {
@@ -126,7 +128,9 @@
         "visitObjective": { "type": "string" },
         "repKnowsAtStart": { "type": "array", "items": { "type": "string" } },
         "repDoesNotKnowAtStart": { "type": "array", "items": { "type": "string" } },
-        "openingLine": { "type": "string" }
+        "openingLine": { "type": "string" },
+        "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+        "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" }
       }
     },
     "hcpStateModel": {
@@ -242,6 +246,8 @@
         "prohibitedLanguage": { "type": "array", "items": { "type": "string" } }
       }
     },
+    "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+    "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" },
     "testFixtures": {
       "type": "object",
       "additionalProperties": false,
@@ -253,6 +259,30 @@
     }
   },
   "$defs": {
+    "enforcementCriteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baselineForgiveness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselinePrecisionDemand": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineEvidenceStrictness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineWorkflowStrictness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineEscalationSensitivity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "timePressureEscalationModifier": { "type": "number", "minimum": -1, "maximum": 1 },
+        "engagementSlackModifier": { "type": "number", "minimum": -1, "maximum": 1 },
+        "skepticismEscalationModifier": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "domainIntegrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primaryScenarioDomain": { "type": "string", "minLength": 1 },
+        "allowedDomains": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "allowedContextFamilies": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "disallowedCrossDomainFamilies": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
     "stage": {
       "enum": [
         "initial_access",
