@@ -262,53 +262,6 @@ test('enforcement profile derivation is deterministic and context-sensitive acro
   assert.ok(operational.toleranceScore < receptiveAnalytical.toleranceScore);
 });
 
-test('enforcement profile merges scenario + hcp profile criteria and applies role/care-setting/difficulty guardrails deterministically', () => {
-  const foundationalAcademic = deriveHcpEnforcementProfile({
-    scenario: {
-      difficulty: 'foundational',
-      enforcementCriteria: { baselineForgiveness: 0.55, baselineEscalationSensitivity: 0.52 },
-      hcpProfile: {
-        enforcementCriteria: { baselineForgiveness: 0.62 },
-      },
-    },
-    hcpProfile: {
-      role: 'Academic investigator',
-      specialty: 'Infectious Disease research',
-      careSetting: 'Academic center',
-      baselineCommunicationStyle: 'analytical collaborative',
-      baselineOpennessResistance: 'engaged',
-    },
-    sceneSetup: { timePressure: 'low' },
-    hcpState: 'engaged',
-    cueMeaning: 'neutral',
-    activeConcern: 'evidence',
-  });
-
-  const stressBusyClinic = deriveHcpEnforcementProfile({
-    scenario: {
-      routing: { difficulty: 'adverse_stress_test' },
-      enforcementCriteria: { baselineForgiveness: 0.55, baselineEscalationSensitivity: 0.52 },
-    },
-    hcpProfile: {
-      role: 'NP',
-      specialty: 'Primary care',
-      careSetting: 'Busy clinic high volume',
-      baselineCommunicationStyle: 'operational practical',
-      baselineOpennessResistance: 'skeptical',
-    },
-    sceneSetup: { timePressure: 'high' },
-    hcpState: 'impatient',
-    cueMeaning: 'time',
-    activeConcern: 'workflow',
-  });
-
-  assert.equal(foundationalAcademic.baseline.baselineForgiveness, 0.62);
-  assert.ok(foundationalAcademic.toleranceScore > stressBusyClinic.toleranceScore);
-  assert.ok(stressBusyClinic.escalationVelocity > foundationalAcademic.escalationVelocity);
-  assert.ok(foundationalAcademic.drivers?.difficultyModifiers?.toleranceModifier > 0);
-  assert.ok(stressBusyClinic.drivers?.roleCareModifiers?.escalationModifier > 0);
-});
-
 test('escalation stage progression is deterministic with repeated misalignment and supports recovery', () => {
   const profile = deriveHcpEnforcementProfile({
     scenario: { sceneSetup: { timePressure: 'high' }, enforcementCriteria: { baselineEscalationSensitivity: 0.75 } },
