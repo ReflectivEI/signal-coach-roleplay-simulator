@@ -695,3 +695,46 @@ test('cross-domain contamination deterministically increases pressure and forces
   assert.match(contaminated.selectedDialogueText.toLowerCase(), /outside the oncology context|let's stay on workflow/);
   assert.equal(contaminated.scoringContext.contextContamination, true);
 });
+
+test('greeting-only first turn remains open and scenario-aware across scenarios', () => {
+  const scenarioA = {
+    id: 'greeting_opening_workflow',
+    sceneSetup: { timePressure: 'high' },
+    hcpProfile: { baselineCommunicationStyle: 'operational practical', baselineOpennessResistance: 'skeptical' },
+  };
+  const scenarioB = {
+    id: 'greeting_opening_evidence',
+    sceneSetup: { timePressure: 'low' },
+    hcpProfile: { baselineCommunicationStyle: 'analytical', baselineOpennessResistance: 'neutral' },
+  };
+
+  const responseA = buildHcpReactionContract({
+    scenario: scenarioA,
+    turnNumber: 1,
+    hcpState: 'time-pressured skeptical',
+    cueText: '',
+    dialogueText: "I'm fine, thanks, but I'd appreciate it if we could keep this brief.",
+    activeConcern: 'workflow',
+    repMessage: 'Hi, how are you?',
+    alignment: { score: 1, misalignments: ['greeting_only'] },
+    concernFlowOutcome: 'missed',
+  });
+
+  const responseB = buildHcpReactionContract({
+    scenario: scenarioB,
+    turnNumber: 1,
+    hcpState: 'engaged',
+    cueText: '',
+    dialogueText: "I'm fine, thanks, but I'd appreciate it if we could keep this brief.",
+    activeConcern: 'evidence',
+    repMessage: 'Hi, how are you?',
+    alignment: { score: 1, misalignments: ['greeting_only'] },
+    concernFlowOutcome: 'missed',
+  });
+
+  assert.equal(responseA.enforcementTrace.escalationStage, 'open');
+  assert.equal(responseB.enforcementTrace.escalationStage, 'open');
+  assert.notEqual(responseA.selectedDialogueText, responseB.selectedDialogueText);
+  assert.doesNotMatch(responseA.selectedDialogueText.toLowerCase(), /please anchor this to a specific evidence detail/);
+  assert.doesNotMatch(responseB.selectedDialogueText.toLowerCase(), /please anchor this to a specific evidence detail/);
+});
