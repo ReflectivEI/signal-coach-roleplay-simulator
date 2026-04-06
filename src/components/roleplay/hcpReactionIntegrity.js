@@ -2,6 +2,7 @@ import {
   deriveHcpEnforcementProfile,
   deriveEscalationState,
   applyEscalationPresentation,
+  downgradeToAllowedOpeningState,
 } from './hcpEnforcementEscalation.js';
 import { evaluateScenarioDomainIntegrity, enforceDomainReanchorInDialogue } from './scenarioDomainIntegrity.js';
 
@@ -46,6 +47,34 @@ function deterministicHash(value = '') {
   return `fnv1a_${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
+const OPENING_DIALOGUE_COLLAPSE_TRACKER = new Map();
+
+function trackOpeningDialogueVariation({
+  scenarioId = '',
+  turnNumber = 0,
+  repMessage = '',
+  selectedDialogueText = '',
+  threshold = 4,
+} = {}) {
+  if (Number(turnNumber) !== 1) return;
+  const repKey = normalizeText(repMessage).toLowerCase();
+  const scenarioKey = normalizeText(scenarioId).toLowerCase();
+  const dialogueKey = normalizeText(selectedDialogueText);
+  if (!repKey || !scenarioKey || !dialogueKey) return;
+
+  if (!OPENING_DIALOGUE_COLLAPSE_TRACKER.has(repKey)) {
+    OPENING_DIALOGUE_COLLAPSE_TRACKER.set(repKey, new Map());
+  }
+  const scenarioDialogueMap = OPENING_DIALOGUE_COLLAPSE_TRACKER.get(repKey);
+  scenarioDialogueMap.set(scenarioKey, dialogueKey);
+
+  if (scenarioDialogueMap.size < threshold) return;
+  const uniqueDialogues = new Set([...scenarioDialogueMap.values()].map((line) => line.toLowerCase()));
+  if (uniqueDialogues.size <= 1) {
+    throw new Error('Dialogue collapse detected — check scenario binding');
+  }
+}
+
 function deriveDialogueIntent({ activeConcern = 'workflow', hardDemandState = {}, dialogueText = '' } = {}) {
   if (hardDemandState?.hardDemandPriorityLock && hardDemandState?.activeHardDemand) {
     return `hard_demand_${hardDemandState.activeHardDemand}`;
@@ -60,6 +89,150 @@ function deriveDialogueIntent({ activeConcern = 'workflow', hardDemandState = {}
   if (/\b(which|what) patients?\b/.test(dialogue)) return 'patient_selection';
   if (/\b(study|trial|evidence|data)\b/.test(dialogue)) return 'evidence_interrogation';
   return 'practical_next_step';
+}
+
+const REALISM_CUE_BUCKETS = Object.freeze({
+  time_pressure: Object.freeze([
+    'Keeps glancing between the chart and the hallway before answering.',
+    'Answers while scanning the schedule, signaling limited bandwidth.',
+    'Checks the next chart and waits for the most relevant point.',
+  ]),
+  workflow_overload: Object.freeze([
+    'Glances at stacked workflow tasks and asks for the practical next step.',
+    'Keeps one hand on pending forms while narrowing the question.',
+    'Multitasks through paperwork and asks for what can be used this week.',
+  ]),
+  clinical_evaluation: Object.freeze([
+    'Reviews details briefly before asking a narrower clinical question.',
+    'Pauses on the data point and asks for direct applicability.',
+    'Scans the handout and asks for one decision-relevant detail.',
+  ]),
+  guarded_interest: Object.freeze([
+    'Leans in slightly, but keeps the question tightly scoped.',
+    'Nods once and asks for a concrete follow-up before moving on.',
+    'Acknowledges the point while holding to a practical condition.',
+  ]),
+});
+
+const REALISM_UNRESOLVED_CONCERN_LINE = Object.freeze({
+  workflow: Object.freeze([
+    'I still need to see how this fits our current workflow constraints.',
+    'Keep this tied to what my team can operationalize this week.',
+    'I need the practical implementation detail before we move forward.',
+  ]),
+  evidence: Object.freeze([
+    'I still need the one evidence point that changes the decision in practice.',
+    'Keep this anchored to a decision-relevant clinical detail.',
+    'I need clearer applicability before we advance this discussion.',
+  ]),
+  screening: Object.freeze([
+    'I still need clarity on which patients this applies to in real workflow.',
+    'Keep this tied to patient selection criteria we can apply consistently.',
+    'I need the qualification boundary to be clear before moving on.',
+  ]),
+  default: Object.freeze([
+    'I still need one concrete point tied to this scenario before we continue.',
+    'Keep this focused on the immediate constraint in front of us.',
+    'I need a practical condition addressed before we advance.',
+  ]),
+});
+
+function deterministicIndex(seed = '', modulo = 1) {
+  const text = String(seed || '');
+  if (!text || modulo <= 1) return 0;
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0) % modulo;
+}
+
+function cueBucketFromState({ hcpState = '', activeConcern = '', concernFlowOutcome = 'aligned' } = {}) {
+  const state = normalizeText(hcpState).toLowerCase();
+  const concern = normalizeText(activeConcern).toLowerCase();
+  if (state.includes('time') || state.includes('impatient')) return 'time_pressure';
+  if (concern.includes('workflow') || concern.includes('operational') || concernFlowOutcome === 'missed') return 'workflow_overload';
+  if (concern.includes('evidence')) return 'clinical_evaluation';
+  return 'guarded_interest';
+}
+
+function refineCueRealism({
+  cueText = '',
+  scenarioId = '',
+  turnNumber = 0,
+  hcpState = '',
+  activeConcern = '',
+  concernFlowOutcome = 'aligned',
+  priorCueSignature = '',
+} = {}) {
+  const bucket = cueBucketFromState({ hcpState, activeConcern, concernFlowOutcome });
+  const pool = REALISM_CUE_BUCKETS[bucket] || REALISM_CUE_BUCKETS.guarded_interest;
+  const seed = `${scenarioId}:${turnNumber}:${bucket}:${activeConcern}`;
+  let idx = deterministicIndex(seed, pool.length);
+  const candidate = pool[idx];
+  if (priorCueSignature === deterministicHash(candidate) && pool.length > 1) {
+    idx = (idx + 1) % pool.length;
+  }
+  const genericCue = /\b(looks uncertain|seems skeptical|appears frustrated|focused expression|posture tightens|body language is more pointed|visibly less patient|ready to disengage)\b/i.test(String(cueText || ''));
+  const isMissing = !normalizeText(cueText);
+  const nextCue = (genericCue || isMissing) ? pool[idx] : cueText;
+  return {
+    cueText: nextCue,
+    cueSignature: deterministicHash(nextCue),
+  };
+}
+
+function refineDialogueRealism({
+  dialogueText = '',
+  scenarioId = '',
+  turnNumber = 0,
+  activeConcern = '',
+  concernFlowOutcome = 'aligned',
+  alignmentScore = 3,
+  priorDialogueSignature = '',
+} = {}) {
+  const concern = String(activeConcern || '').toLowerCase();
+  const pool = REALISM_UNRESOLVED_CONCERN_LINE[concern]
+    || REALISM_UNRESOLVED_CONCERN_LINE.default;
+  const seed = `${scenarioId}:${turnNumber}:${concern}:${concernFlowOutcome}:${alignmentScore}`;
+  let idx = deterministicIndex(seed, pool.length);
+  if (priorDialogueSignature === deterministicHash(pool[idx]) && pool.length > 1) {
+    idx = (idx + 1) % pool.length;
+  }
+  const shouldKeepFriction = concernFlowOutcome === 'missed'
+    || concernFlowOutcome === 'overpivot'
+    || Number(alignmentScore) <= 2;
+  const base = String(dialogueText || '').trim();
+  const revised = shouldKeepFriction && base
+    ? `${base} ${pool[idx]}`
+    : base;
+  return {
+    dialogueText: revised || pool[idx],
+    dialogueSignature: deterministicHash(revised || pool[idx]),
+    tooIdealFlag: Boolean(shouldKeepFriction && base && !/still need|before we move|before we continue/i.test(base)),
+  };
+}
+
+function deriveScenarioBoundHcpState({ scenario = {}, hcpState = 'neutral', turnNumber = 0 } = {}) {
+  const openingState = String(scenario?.openingState || scenario?.sceneSetup?.openingState || '').trim().toLowerCase();
+  if (Number(turnNumber) !== 1) return normalizeText(hcpState) || 'neutral';
+  if (openingState === 'high_pressure') return normalizeText(hcpState) || 'neutral';
+  return downgradeToAllowedOpeningState(hcpState);
+}
+
+function assertValidOpeningResponse({
+  scenario = {},
+  turnNumber = 0,
+  escalationStage = 'open',
+} = {}) {
+  if (Number(turnNumber) !== 1) return;
+  const openingState = String(scenario?.openingState || scenario?.sceneSetup?.openingState || '').trim().toLowerCase();
+  if (openingState === 'high_pressure') return;
+  const disallowedStages = new Set(['high_pressure', 'disengaging']);
+  if (disallowedStages.has(String(escalationStage || '').toLowerCase())) {
+    throw new Error('Invalid first-turn escalation: violates conversation entry contract');
+  }
 }
 
 export function enforceCueDialogueContractIntegrity({
@@ -135,6 +308,7 @@ export function buildHcpReactionContract({
   repMessage = '',
 } = {}) {
   const normalizedCue = normalizeText(cueText);
+  const turnScopedHcpState = deriveScenarioBoundHcpState({ scenario, hcpState, turnNumber });
   const normalizedDialogue = normalizeText(dialogueText);
   const selectedCueMeaning = cueMeaning || classifyCueIntent(normalizedCue);
   const selectedDialogueIntent = dialogueIntent || deriveDialogueIntent({
@@ -147,7 +321,7 @@ export function buildHcpReactionContract({
     scenario,
     hcpProfile: scenario?.hcpProfile || {},
     sceneSetup: scenario?.sceneSetup || {},
-    hcpState,
+    hcpState: turnScopedHcpState,
     cueMeaning: selectedCueMeaning,
     activeConcern,
     hardDemandState,
@@ -163,6 +337,9 @@ export function buildHcpReactionContract({
 
   const escalationState = deriveEscalationState({
     profile: hcpEnforcementProfile,
+    turnNumber,
+    hcpState: turnScopedHcpState,
+    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || '',
     priorEscalationStage: priorEnforcementTrace?.escalationStage || 'open',
     priorMisalignmentCount: priorEnforcementTrace?.misalignmentCount || 0,
     priorHardDemandMissCount: priorEnforcementTrace?.hardDemandMissCount || 0,
@@ -181,10 +358,34 @@ export function buildHcpReactionContract({
     profile: hcpEnforcementProfile,
     domainAssessment,
     activeConcern,
+    turnNumber,
+    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || '',
+    hcpState: turnScopedHcpState,
+    scenarioId: scenario?.id || scenario?.scenario_id || scenario?.title || 'unknown_scenario',
+  });
+
+  const scenarioId = scenario?.id || scenario?.scenario_id || scenario?.title || 'unknown_scenario';
+  const realismDialogue = refineDialogueRealism({
+    dialogueText: escalatedPresentation.dialogueText,
+    scenarioId,
+    turnNumber,
+    activeConcern,
+    concernFlowOutcome,
+    alignmentScore: Number(alignment?.score ?? 3),
+    priorDialogueSignature: priorEnforcementTrace?.dialogueSignature || '',
+  });
+  const realismCue = refineCueRealism({
+    cueText: escalatedPresentation.cueText,
+    scenarioId,
+    turnNumber,
+    hcpState: turnScopedHcpState,
+    activeConcern,
+    concernFlowOutcome,
+    priorCueSignature: priorEnforcementTrace?.cueSignature || '',
   });
 
   const enforcedDialogue = enforceDomainReanchorInDialogue({
-    dialogueText: escalatedPresentation.dialogueText,
+    dialogueText: realismDialogue.dialogueText,
     domainAssessment,
     activeConcern,
   });
@@ -199,9 +400,9 @@ export function buildHcpReactionContract({
   const reactionContract = {
     activeScenarioId: scenario?.id || scenario?.scenario_id || scenario?.title || 'unknown_scenario',
     turnNumber,
-    activeHcpState: hcpState,
+    activeHcpState: turnScopedHcpState,
     selectedCueId: deterministicHash(normalizedCue),
-    selectedCueText: escalatedPresentation.cueText,
+    selectedCueText: realismCue.cueText,
     selectedCueMeaning,
     selectedDialogueIntent,
     selectedDialogueRegister: dialogueRegister,
@@ -237,6 +438,9 @@ export function buildHcpReactionContract({
       matchedDomainSignals: domainAssessment.matchedDomainSignals,
       contaminationReason: domainAssessment.contaminationReason,
       scenarioReanchorRequired: domainAssessment.scenarioReanchorRequired,
+      dialogueSignature: realismDialogue.dialogueSignature,
+      cueSignature: realismCue.cueSignature,
+      tooIdealFlag: realismDialogue.tooIdealFlag,
     },
     scoringContext: {
       ...scoringContext,
@@ -250,6 +454,18 @@ export function buildHcpReactionContract({
       scenarioReanchorRequired: domainAssessment.scenarioReanchorRequired,
     },
   };
+
+  trackOpeningDialogueVariation({
+    scenarioId: reactionContract.activeScenarioId,
+    turnNumber,
+    repMessage,
+    selectedDialogueText: reactionContract.selectedDialogueText,
+  });
+  assertValidOpeningResponse({
+    scenario,
+    turnNumber,
+    escalationStage: reactionContract?.enforcementTrace?.escalationStage || 'open',
+  });
 
   const scoringContextHash = deterministicHash(stableStringify(scoringContext));
   const reactionContractHash = deterministicHash(stableStringify({
