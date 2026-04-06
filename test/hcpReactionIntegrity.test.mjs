@@ -421,6 +421,190 @@ test('live-path scenario matrix validates context-sensitive escalation style acr
   }
 });
 
+test('opening exchange remains deterministic but persona/scenario-aware for identical rep opener', () => {
+  const repOpener = 'Hi Dr, can we discuss the JAMA study I dropped off last week?';
+  const scenarios = [
+    {
+      id: 'opening_time_pressed',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'practical', baselineOpennessResistance: 'neutral' },
+        sceneSetup: { timePressure: 'high' },
+      },
+      hcpState: 'impatient',
+      activeConcern: 'workflow',
+      expected: /minute|key takeaway|single|briefly|prioritize/i,
+    },
+    {
+      id: 'opening_engaged',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'collaborative', baselineOpennessResistance: 'receptive' },
+        sceneSetup: { timePressure: 'low' },
+      },
+      hcpState: 'engaged',
+      activeConcern: 'evidence',
+      expected: /reviewed part|stood out/i,
+    },
+    {
+      id: 'opening_skeptical',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'analytical', baselineOpennessResistance: 'skeptical' },
+        sceneSetup: { timePressure: 'medium' },
+      },
+      hcpState: 'skeptical',
+      activeConcern: 'evidence',
+      expected: /many studies|different|concrete reason|anchor/i,
+    },
+    {
+      id: 'opening_workflow',
+      scenario: {
+        hcpProfile: { baselineCommunicationStyle: 'operational practical', baselineOpennessResistance: 'neutral' },
+        sceneSetup: { timePressure: 'medium' },
+      },
+      hcpState: 'neutral',
+      activeConcern: 'workflow',
+      expected: /workflow step|team can use this week|implementation|changes tomorrow/i,
+    },
+  ];
+
+  const outputs = scenarios.map((fixture) => buildHcpReactionContract({
+    scenario: { id: fixture.id, ...fixture.scenario },
+    turnNumber: 1,
+    hcpState: fixture.hcpState,
+    cueText: '',
+    dialogueText: '',
+    activeConcern: fixture.activeConcern,
+    repMessage: repOpener,
+    alignment: { score: 1, misalignments: ['initial_drift'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'operational_fit' },
+  }));
+
+  for (let i = 0; i < outputs.length; i += 1) {
+    assert.match(outputs[i].selectedDialogueText.toLowerCase(), scenarios[i].expected);
+    assert.ok(!/I need one exact operational answer now or we should pause here\./i.test(outputs[i].selectedDialogueText));
+    assert.ok(['open', 'focused'].includes(outputs[i].enforcementTrace.escalationStage));
+  }
+
+  const uniqueOutputs = new Set(outputs.map((row) => row.selectedDialogueText.toLowerCase()));
+  assert.equal(uniqueOutputs.size, outputs.length);
+});
+
+test('opening guardrail enforces stage-based turn-1 safety unless scenario explicitly sets high pressure', () => {
+  const guardedDefault = buildHcpReactionContract({
+    scenario: { id: 'opening_guardrail_default' },
+    turnNumber: 1,
+    hcpState: 'neutral',
+    cueText: 'The HCP asks for one concise point.',
+    dialogueText: 'I need one exact operational answer now or we should pause here.',
+    activeConcern: 'workflow',
+    repMessage: 'Can we discuss the practical implementation?',
+    priorEnforcementTrace: { escalationStage: 'high_pressure' },
+  });
+  assert.ok(['open', 'focused'].includes(guardedDefault.enforcementTrace.escalationStage));
+
+  const allowedInExplicitHighPressure = buildHcpReactionContract({
+    scenario: { id: 'opening_guardrail_exception', openingState: 'high_pressure' },
+    turnNumber: 1,
+    hcpState: 'neutral',
+    cueText: 'The HCP asks for one concise point.',
+    dialogueText: 'I need one exact operational answer now or we should pause here.',
+    activeConcern: 'workflow',
+    repMessage: 'Can we discuss the practical implementation?',
+    priorEnforcementTrace: { escalationStage: 'high_pressure' },
+  });
+  assert.ok(['high_pressure', 'disengaging', 'firm', 'narrowed', 'focused', 'open'].includes(allowedInExplicitHighPressure.enforcementTrace.escalationStage));
+  assert.match(allowedInExplicitHighPressure.selectedDialogueText, /I need one exact operational answer now or we should pause here/i);
+});
+
+test('turn-1 state gating is topic-agnostic and never emits hard-demand escalation for generic opener', () => {
+  const openers = [
+    'Can we talk about your clinic throughput workflow?',
+    'Can we discuss last week\'s publication?',
+    'Could we review patient onboarding blockers?',
+  ];
+
+  const outputs = openers.map((repMessage, idx) => buildHcpReactionContract({
+    scenario: {
+      id: `topic_agnostic_${idx}`,
+      hcpProfile: { baselineCommunicationStyle: 'operational practical', baselineOpennessResistance: 'skeptical' },
+      sceneSetup: { timePressure: 'high' },
+    },
+    turnNumber: 1,
+    hcpState: 'hard_demand',
+    cueText: '',
+    dialogueText: '',
+    activeConcern: idx === 1 ? 'evidence' : 'workflow',
+    repMessage,
+    alignment: { score: 1, misalignments: ['opening_miss'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'operational_fit' },
+  }));
+
+  for (const contract of outputs) {
+    assert.ok(['open', 'focused'].includes(contract.enforcementTrace.escalationStage));
+    assert.ok(!/or we should pause here|do this now or|now or we stop/i.test(contract.selectedDialogueText));
+    assert.notEqual(contract.activeHcpState, 'hard_demand');
+  }
+});
+
+test('realism calibration layer preserves friction, cue variation, and professional tone across multi-turn behaviors', () => {
+  const scenario = {
+    id: 'realism_calibration_matrix',
+    openingScene: 'The HCP is reviewing prior-auth paperwork while running behind clinic schedule.',
+    sceneSetup: { timePressure: 'high' },
+    hcpProfile: {
+      baselineCommunicationStyle: 'practical skeptical',
+      baselineOpennessResistance: 'skeptical',
+      knownConstraints: ['prior auth burden', 'staffing constraints'],
+    },
+  };
+
+  const turn1 = buildHcpReactionContract({
+    scenario,
+    turnNumber: 1,
+    hcpState: 'time-pressured skeptical',
+    cueText: '',
+    dialogueText: 'Can we discuss the new data package?',
+    activeConcern: 'workflow',
+    repMessage: 'The efficacy results were strong overall.',
+    alignment: { score: 1, misalignments: ['missed_workflow'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+  });
+  assert.match(turn1.selectedDialogueText.toLowerCase(), /workflow|operational|practical|still need/);
+  assert.match(turn1.selectedCueText.toLowerCase(), /chart|schedule|forms|workflow|paperwork|multitask/);
+
+  const turn2 = buildHcpReactionContract({
+    scenario,
+    turnNumber: 2,
+    hcpState: 'time-pressured skeptical',
+    cueText: '',
+    dialogueText: 'That is better, but I still need specifics.',
+    activeConcern: 'workflow',
+    repMessage: 'We can route PAs to one owner and review weekly backlog.',
+    alignment: { score: 3, misalignments: [], rubricAlignmentFlags: [] },
+    concernFlowOutcome: 'aligned',
+    priorEnforcementTrace: turn1.enforcementTrace,
+  });
+  assert.ok(turn2.selectedDialogueText.length > 0);
+  assert.notEqual(turn2.enforcementTrace.cueSignature, turn1.enforcementTrace.cueSignature);
+
+  const turn3 = buildHcpReactionContract({
+    scenario,
+    turnNumber: 3,
+    hcpState: 'skeptical',
+    cueText: '',
+    dialogueText: 'Can this apply in our clinic constraints?',
+    activeConcern: 'workflow',
+    repMessage: 'Great point, this should work generally.',
+    alignment: { score: 1, misalignments: ['generic'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'overpivot',
+    priorEnforcementTrace: turn2.enforcementTrace,
+  });
+  assert.equal(turn3.enforcementTrace.tooIdealFlag, true);
+  assert.match(turn3.selectedDialogueText.toLowerCase(), /still need|before we move|before we continue/);
+  assert.ok(!/\b(hostile|ridiculous|nonsense|waste of time)\b/i.test(turn3.selectedDialogueText));
+});
+
 
 test('domain integrity hook keeps in-domain and adjacent responses distinct from true contamination', () => {
   const scenario = {

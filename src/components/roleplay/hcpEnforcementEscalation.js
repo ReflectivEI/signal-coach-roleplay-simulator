@@ -45,10 +45,63 @@ export const ESCALATION_STAGES = Object.freeze([
   'high_pressure',
   'disengaging',
 ]);
+const OPENING_STAGE_CAP_BY_PERSONA = Object.freeze({
+  engaged: 'open',
+  collaborative: 'open',
+  receptive: 'open',
+  neutral: 'focused',
+  skeptical: 'focused',
+  resistant: 'focused',
+  impatient: 'focused',
+  time_pressed: 'focused',
+  time: 'focused',
+});
+const OPENING_ALLOWED_STAGES = Object.freeze(['open', 'focused']);
+const OPENING_DISALLOWED_STATE_ALIASES = Object.freeze({
+  hard_demand: Object.freeze(['hard_demand', 'hard-demand', 'hard constraint']),
+  ultimatum: Object.freeze(['ultimatum', 'final_warning']),
+  disengage: Object.freeze(['disengage', 'disengaging', 'close_off']),
+  high_pressure_constraint: Object.freeze(['high_pressure_constraint', 'high_pressure']),
+});
+const DISALLOWED_OPENING_STATE_DOWNGRADE = Object.freeze({
+  hard_demand: 'focused',
+  ultimatum: 'time_constrained',
+  disengage: 'polite_redirect',
+  high_pressure_constraint: 'mild_focus',
+});
 
 function stageIndex(stage = 'open') {
   const idx = ESCALATION_STAGES.indexOf(stage);
   return idx >= 0 ? idx : 0;
+}
+
+function deterministicIndex(seed = '', modulo = 1) {
+  const normalized = String(seed || '');
+  if (!normalized || modulo <= 1) return 0;
+  let hash = 2166136261;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash ^= normalized.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0) % modulo;
+}
+
+function tokenizeState(rawValue = '') {
+  return String(rawValue || '')
+    .toLowerCase()
+    .split(/[,\s]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function resolveStateToken(rawValue = '', candidateMap = {}) {
+  const tokens = tokenizeState(rawValue);
+  for (const [state, aliases] of Object.entries(candidateMap)) {
+    if (aliases.some((alias) => tokens.includes(alias))) {
+      return state;
+    }
+  }
+  return null;
 }
 
 function deriveTimePressure(sceneSetup = {}, hcpState = '') {
@@ -214,6 +267,7 @@ function escalationDelta({
   concernFlowOutcome = 'aligned',
   domainAssessment = {},
   domainDriftCount = 0,
+  openingExchange = false,
 } = {}) {
   let delta = 0;
   const reason = [];
@@ -222,7 +276,7 @@ function escalationDelta({
     delta += 1;
     reason.push('rep_inadequate_response');
   }
-  if (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot') {
+  if (!openingExchange && (concernFlowOutcome === 'missed' || concernFlowOutcome === 'overpivot')) {
     delta += 1;
     reason.push('rep_topic_or_demand_miss');
   }
@@ -230,11 +284,11 @@ function escalationDelta({
     delta += 1;
     reason.push('multi_signal_misalignment');
   }
-  if (hardDemandMissCount >= 1) {
+  if (!openingExchange && hardDemandMissCount >= 1) {
     delta += 1;
     reason.push('hard_demand_not_met');
   }
-  if (hardDemandMissCount >= 3) {
+  if (!openingExchange && hardDemandMissCount >= 3) {
     delta += 1;
     reason.push('repeated_hard_demand_miss');
   }
@@ -262,8 +316,168 @@ function escalationDelta({
   return { delta: scaled, reason: reason.length > 0 ? reason.join('|') : 'stable' };
 }
 
+function deriveOpeningStageCap({ hcpState = '', profile = {} } = {}) {
+  const normalizedState = normalizeText(hcpState);
+  const matchedPersona = Object.keys(OPENING_STAGE_CAP_BY_PERSONA).find((key) => normalizedState.includes(key));
+  if (matchedPersona) return OPENING_STAGE_CAP_BY_PERSONA[matchedPersona];
+  if (profile?.drivers?.timePressure === 'high') return 'focused';
+  return 'focused';
+}
+
+export function downgradeToAllowedOpeningState(hcpState = '') {
+  const normalized = normalizeText(hcpState);
+  const resolvedDisallowed = resolveStateToken(normalized, OPENING_DISALLOWED_STATE_ALIASES);
+  if (!resolvedDisallowed) return normalized || 'neutral';
+  return DISALLOWED_OPENING_STATE_DOWNGRADE[resolvedDisallowed] || 'mild_focus';
+}
+
+function deriveTurnScopedOpeningStage({
+  requestedStage = 'open',
+  turnNumber = 0,
+  scenarioOpeningState = '',
+  hcpState = '',
+  profile = {},
+} = {}) {
+  const isExplicitHighPressureOpening = normalizeText(scenarioOpeningState) === 'high_pressure';
+  if (Number(turnNumber) !== 1 || isExplicitHighPressureOpening) return requestedStage;
+
+  const openingCap = deriveOpeningStageCap({ hcpState, profile });
+  const boundedStage = ESCALATION_STAGES[Math.min(stageIndex(requestedStage), stageIndex(openingCap))];
+  if (OPENING_ALLOWED_STAGES.includes(boundedStage)) return boundedStage;
+  return 'focused';
+}
+
+const OPENING_DIALOGUE_MAP = Object.freeze({
+  time_pressed: Object.freeze({
+    neutral: 'I have a minute—give me the key point that matters for today.',
+    polite_redirect: 'I am short on time—please connect this to one practical step.',
+    mild_focus: 'Keep it focused: what is the single takeaway for this setting?',
+    light_time_constraint: 'Briefly, what should I prioritize first in clinic?',
+    curious: 'Quickly, what did you want to highlight first?',
+    skeptical_low_intensity: 'I only have a moment—what is the strongest point?',
+  }),
+  engaged: Object.freeze({
+    neutral: 'Sure—what did you want to discuss first?',
+    polite_redirect: 'Happy to discuss this; keep it tied to my current patients.',
+    mild_focus: 'Let us focus on the key point you want me to consider.',
+    light_time_constraint: 'I can review this briefly—what should I look at first?',
+    curious: 'I am interested—what stood out most to you?',
+    skeptical_low_intensity: 'I am open to it, but what is your clearest takeaway?',
+  }),
+  skeptical: Object.freeze({
+    neutral: 'I hear this often—what specifically should I take away?',
+    polite_redirect: 'Before we go wide, anchor this to one concrete point.',
+    mild_focus: 'Focus me on the strongest reason this matters in practice.',
+    light_time_constraint: 'Given limited time, what is the most credible point?',
+    curious: 'What makes this different from what I already know?',
+    skeptical_low_intensity: 'I need one concrete reason to keep going.',
+  }),
+  operational: Object.freeze({
+    neutral: 'What is one workflow step my team can use this week?',
+    polite_redirect: 'Keep this practical—what is the next operational move?',
+    mild_focus: 'Focus on implementation: what changes tomorrow?',
+    light_time_constraint: 'In one minute, what is the practical priority?',
+    curious: 'How would this fit into current clinic flow?',
+    skeptical_low_intensity: 'What operationally changes if we do this?',
+  }),
+  analytical: Object.freeze({
+    neutral: 'What is the key evidence point I should weigh first?',
+    polite_redirect: 'Anchor this to one evidence detail before we expand.',
+    mild_focus: 'Focus on the single data point that drives the decision.',
+    light_time_constraint: 'Given limited time, which evidence signal matters most?',
+    curious: 'Which finding do you think is most decision-relevant?',
+    skeptical_low_intensity: 'What makes the evidence here more convincing?',
+  }),
+  balanced: Object.freeze({
+    neutral: 'Give me one concise point relevant to this scenario.',
+    polite_redirect: 'Let us keep this tied to the current context.',
+    mild_focus: 'Please focus on the main takeaway first.',
+    light_time_constraint: 'Briefly, what should I prioritize?',
+    curious: 'What do you think is most relevant right now?',
+    skeptical_low_intensity: 'What is the strongest reason this applies here?',
+  }),
+});
+const OPENING_VARIANT_SUFFIXES = Object.freeze({
+  neutral: Object.freeze([
+    'Keep it relevant to this scenario.',
+    'Stay close to my immediate context.',
+    'Make it practical for today.',
+  ]),
+  polite_redirect: Object.freeze([
+    'Start with what is actionable now.',
+    'Anchor it to the immediate decision.',
+    'Keep it tied to today’s constraints.',
+  ]),
+  mild_focus: Object.freeze([
+    'Then we can expand if needed.',
+    'We can go deeper after the core point.',
+    'Let’s start narrow and build from there.',
+  ]),
+  light_time_constraint: Object.freeze([
+    'My next patient is waiting.',
+    'I only have a short window.',
+    'Please keep this concise.',
+  ]),
+  curious: Object.freeze([
+    'I can explore details after that.',
+    'Then we can discuss specifics.',
+    'We can unpack it further once clear.',
+  ]),
+  skeptical_low_intensity: Object.freeze([
+    'I need it to be concrete.',
+    'I need it to be defensible.',
+    'I need a clear reason to proceed.',
+  ]),
+});
+
+function deriveOpeningDialogueState({ hcpState = '', scenarioOpeningState = '', activeConcern = '' } = {}) {
+  const normalizedScenarioState = normalizeText(scenarioOpeningState);
+  if (normalizedScenarioState && normalizedScenarioState !== 'high_pressure') return normalizedScenarioState;
+
+  const stateTokens = new Set(tokenizeState(hcpState));
+  if (stateTokens.has('skeptical') || stateTokens.has('resistant')) return 'skeptical_low_intensity';
+  if (stateTokens.has('engaged') || stateTokens.has('receptive') || stateTokens.has('collaborative')) return 'curious';
+  if (stateTokens.has('time-pressured') || stateTokens.has('time_pressured') || stateTokens.has('impatient') || stateTokens.has('rushed')) return 'light_time_constraint';
+
+  const concern = normalizeText(activeConcern);
+  if (concern.includes('workflow') || concern.includes('operational')) return 'mild_focus';
+  return 'neutral';
+}
+
+function deriveOpeningPersonaClass({ profile = {}, hcpState = '', activeConcern = '' } = {}) {
+  const stateTokens = new Set(tokenizeState(hcpState));
+  if (stateTokens.has('time-pressured') || stateTokens.has('time_pressured') || stateTokens.has('impatient') || stateTokens.has('rushed')) return 'time_pressed';
+  if (stateTokens.has('engaged') || stateTokens.has('receptive') || stateTokens.has('collaborative')) return 'engaged';
+  if (stateTokens.has('skeptical') || stateTokens.has('resistant')) return 'skeptical';
+  if (profile?.orientation === 'operational') return 'operational';
+  if (profile?.orientation === 'analytical') return 'analytical';
+  const concern = normalizeText(activeConcern);
+  if (concern.includes('workflow') || concern.includes('operational')) return 'operational';
+  if (concern.includes('evidence')) return 'analytical';
+  return 'balanced';
+}
+
+function selectScenarioBoundOpeningDialogue({
+  profile = {},
+  activeConcern = '',
+  hcpState = '',
+  scenarioOpeningState = '',
+  scenarioId = '',
+} = {}) {
+  const personaClass = deriveOpeningPersonaClass({ profile, hcpState, activeConcern });
+  const dialogueState = deriveOpeningDialogueState({ hcpState, scenarioOpeningState, activeConcern });
+  const personaMap = OPENING_DIALOGUE_MAP[personaClass] || OPENING_DIALOGUE_MAP.balanced;
+  const baseLine = personaMap[dialogueState] || personaMap.neutral || OPENING_DIALOGUE_MAP.balanced.neutral;
+  const suffixPool = OPENING_VARIANT_SUFFIXES[dialogueState] || OPENING_VARIANT_SUFFIXES.neutral;
+  const suffix = suffixPool[deterministicIndex(`${scenarioId}:${personaClass}:${dialogueState}:${activeConcern}`, suffixPool.length)];
+  return `${baseLine} ${suffix}`.trim();
+}
+
 export function deriveEscalationState({
   profile,
+  turnNumber = 0,
+  hcpState = '',
+  scenarioOpeningState = '',
   priorEscalationStage = 'open',
   priorMisalignmentCount = 0,
   priorHardDemandMissCount = 0,
@@ -275,6 +489,7 @@ export function deriveEscalationState({
   priorDomainDriftCount = 0,
   allowImmediateHighPressure = false,
 } = {}) {
+  const openingExchange = Number(turnNumber) <= 1 && stageIndex(priorEscalationStage) <= stageIndex('open');
   const repAdequacyScore = deriveRepAdequacyScore({ alignment, concernFlowOutcome, repMessage, domainAssessment });
   const currentMisalignmentCount = Array.isArray(alignment?.misalignments) ? alignment.misalignments.length : 0;
   const misalignmentCount = repAdequacyScore < 0.55
@@ -297,18 +512,22 @@ export function deriveEscalationState({
     concernFlowOutcome,
     domainAssessment,
     domainDriftCount,
+    openingExchange,
   });
 
-  const nextStageIndex = Math.max(0, Math.min(ESCALATION_STAGES.length - 1, stageIndex(priorEscalationStage) + delta));
-  let nextStage = ESCALATION_STAGES[nextStageIndex];
-  const noEscalationHistory = stageIndex(priorEscalationStage) === 0
-    && priorMisalignmentCount <= 0
-    && priorHardDemandMissCount <= 0
-    && priorDomainDriftCount <= 0;
-  if (!allowImmediateHighPressure && noEscalationHistory && (nextStage === 'high_pressure' || nextStage === 'disengaging')) {
-    nextStage = 'firm';
-  }
-  const boundedStageIndex = stageIndex(nextStage);
+  const uncappedStageIndex = Math.max(0, Math.min(ESCALATION_STAGES.length - 1, stageIndex(priorEscalationStage) + delta));
+  const openingStageCap = openingExchange ? deriveOpeningStageCap({ hcpState, profile }) : null;
+  const capIndex = openingStageCap ? stageIndex(openingStageCap) : ESCALATION_STAGES.length - 1;
+  const nextStageIndex = Math.min(uncappedStageIndex, capIndex);
+  const requestedStage = ESCALATION_STAGES[nextStageIndex];
+  const nextStage = deriveTurnScopedOpeningStage({
+    requestedStage,
+    turnNumber,
+    scenarioOpeningState,
+    hcpState,
+    profile,
+  });
+  const resolvedStageIndex = stageIndex(nextStage);
 
   return {
     escalationStage: nextStage,
@@ -317,9 +536,9 @@ export function deriveEscalationState({
     misalignmentCount,
     hardDemandMissCount,
     domainDriftCount,
-    tonePressureLevel: clamp(profile.tonePressureLevel + (boundedStageIndex * 0.1)),
-    forgivenessSlack: clamp(profile.forgivenessSlack - (boundedStageIndex * 0.1)),
-    toleranceScore: clamp(profile.toleranceScore - (boundedStageIndex * 0.08)),
+    tonePressureLevel: clamp(profile.tonePressureLevel + (resolvedStageIndex * 0.1)),
+    forgivenessSlack: clamp(profile.forgivenessSlack - (resolvedStageIndex * 0.1)),
+    toleranceScore: clamp(profile.toleranceScore - (resolvedStageIndex * 0.08)),
   };
 }
 
@@ -487,42 +706,36 @@ const STAGE_INTENT_REQUIREMENTS = Object.freeze({
   },
 });
 
-export function assertTemplateEquivalence(stage, templates) {
-  const requirement = STAGE_INTENT_REQUIREMENTS[stage];
-  if (!requirement) return;
-
-  Object.entries(templates || {}).forEach(([channel, channelTemplates]) => {
-    if (!Array.isArray(channelTemplates) || channelTemplates.length === 0) return;
-    if (channelTemplates.length > TEMPLATE_VARIANT_MAX) {
-      throw new Error(`Template variant cap exceeded for ${stage}.${channel}`);
-    }
-    const intentTag = requirement[channel === 'cue' ? 'cue' : 'dialogue'];
-    if (!intentTag) return;
-    channelTemplates.forEach((template, index) => {
-      if (typeof template !== 'string' || !template.trim()) {
-        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] empty_template`);
-      }
-      const storedIntentTag = `${stage}:${channel === 'cue' ? 'cue' : 'dialogue'}:${intentTag}`;
-      if (!storedIntentTag) {
-        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] missing intent tag`);
-      }
-    });
-  });
-}
-
-const shouldAssertTemplates = typeof process !== 'undefined'
-  && process?.env
-  && process.env.NODE_ENV !== 'production';
-
-if (shouldAssertTemplates) {
-  Object.entries(STAGE_DIRECTIVE_TEMPLATE_MAP).forEach(([stage, templates]) => {
-    assertTemplateEquivalence(stage, templates);
-  });
-}
-
-export function applyEscalationPresentation({ cueText = '', dialogueText = '', escalationStage = 'open', profile = {}, domainAssessment = {}, activeConcern = '' } = {}) {
-  const stageRules = STAGE_DIRECTIVE_TEMPLATE_MAP[escalationStage] || STAGE_DIRECTIVE_TEMPLATE_MAP.open;
-  if (escalationStage === 'open') return { cueText, dialogueText };
+export function applyEscalationPresentation({
+  cueText = '',
+  dialogueText = '',
+  escalationStage = 'open',
+  profile = {},
+  domainAssessment = {},
+  activeConcern = '',
+  turnNumber = 0,
+  scenarioOpeningState = '',
+  hcpState = '',
+  scenarioId = '',
+} = {}) {
+  const stageRules = STAGE_DIRECTIVE_MAP[escalationStage] || STAGE_DIRECTIVE_MAP.open;
+  const normalizedDialogue = String(dialogueText || '').trim() || (
+    Number(turnNumber) === 1
+      ? selectScenarioBoundOpeningDialogue({
+        profile,
+        activeConcern,
+        hcpState: hcpState || profile?.drivers?.hcpState || '',
+        scenarioOpeningState,
+        scenarioId,
+      })
+      : selectScenarioBoundOpeningDialogue({
+        profile,
+        activeConcern,
+        hcpState: hcpState || profile?.drivers?.hcpState || '',
+        scenarioId,
+      })
+  );
+  if (escalationStage === 'open') return { cueText, dialogueText: normalizedDialogue };
 
   const orientation = profile.orientation || 'balanced';
   const styleSeed = {
@@ -538,7 +751,6 @@ export function applyEscalationPresentation({ cueText = '', dialogueText = '', e
     ? cueText
     : `${cueText} ${cueSuffix}`.trim();
 
-  const normalizedDialogue = String(dialogueText || '').trim();
   const updatedDialogue = normalizedDialogue.toLowerCase().startsWith(dialoguePrefix.toLowerCase()) || !dialoguePrefix
     ? normalizedDialogue
     : `${dialoguePrefix} ${normalizedDialogue}`.trim();
