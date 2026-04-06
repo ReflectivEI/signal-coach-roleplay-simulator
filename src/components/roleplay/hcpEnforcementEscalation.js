@@ -145,16 +145,55 @@ function deriveOrientation({ baselineCommunicationStyle = '', activeConcern = ''
 
 function baselineFromScenario(scenario = {}) {
   const fromScenario = scenario?.enforcementCriteria || scenario?.sceneSetup?.enforcementCriteria || {};
-  return {
-    baselineForgiveness: clamp(fromScenario.baselineForgiveness ?? 0.55),
-    baselinePrecisionDemand: clamp(fromScenario.baselinePrecisionDemand ?? 0.5),
-    baselineEvidenceStrictness: clamp(fromScenario.baselineEvidenceStrictness ?? 0.5),
-    baselineWorkflowStrictness: clamp(fromScenario.baselineWorkflowStrictness ?? 0.5),
-    baselineEscalationSensitivity: clamp(fromScenario.baselineEscalationSensitivity ?? 0.5),
-    timePressureEscalationModifier: clamp(fromScenario.timePressureEscalationModifier ?? 0.25, -1, 1),
-    engagementSlackModifier: clamp(fromScenario.engagementSlackModifier ?? 0.2, -1, 1),
-    skepticismEscalationModifier: clamp(fromScenario.skepticismEscalationModifier ?? 0.25, -1, 1),
+  const fromHcpProfile = scenario?.hcpProfile?.enforcementCriteria || {};
+  const merged = {
+    ...fromScenario,
+    ...fromHcpProfile,
   };
+  return {
+    baselineForgiveness: clamp(merged.baselineForgiveness ?? 0.55),
+    baselinePrecisionDemand: clamp(merged.baselinePrecisionDemand ?? 0.5),
+    baselineEvidenceStrictness: clamp(merged.baselineEvidenceStrictness ?? 0.5),
+    baselineWorkflowStrictness: clamp(merged.baselineWorkflowStrictness ?? 0.5),
+    baselineEscalationSensitivity: clamp(merged.baselineEscalationSensitivity ?? 0.5),
+    timePressureEscalationModifier: clamp(merged.timePressureEscalationModifier ?? 0.25, -1, 1),
+    engagementSlackModifier: clamp(merged.engagementSlackModifier ?? 0.2, -1, 1),
+    skepticismEscalationModifier: clamp(merged.skepticismEscalationModifier ?? 0.25, -1, 1),
+  };
+}
+
+function deriveRoleCareSettingModifiers({ role = '', specialty = '', careSetting = '' } = {}) {
+  const joined = `${normalizeText(role)} ${normalizeText(specialty)} ${normalizeText(careSetting)}`;
+  let toleranceModifier = 0;
+  let escalationModifier = 0;
+
+  if (/\b(er|emergency|urgent care|hospitalist|inpatient|icu)\b/.test(joined)) {
+    toleranceModifier -= 0.08;
+    escalationModifier += 0.08;
+  }
+  if (/\b(academic|investigator|research|committee)\b/.test(joined)) {
+    toleranceModifier += 0.04;
+  }
+  if (/\b(community clinic|busy clinic|high volume|throughput)\b/.test(joined)) {
+    toleranceModifier -= 0.06;
+    escalationModifier += 0.06;
+  }
+
+  return {
+    toleranceModifier,
+    escalationModifier,
+  };
+}
+
+function deriveDifficultyModifiers(scenario = {}) {
+  const difficulty = normalizeText(scenario?.difficulty || scenario?.routing?.difficulty);
+  if (difficulty === 'foundational' || difficulty === 'beginner') {
+    return { toleranceModifier: 0.07, escalationModifier: -0.07 };
+  }
+  if (difficulty === 'adverse_stress_test' || difficulty === 'advanced') {
+    return { toleranceModifier: -0.05, escalationModifier: 0.05 };
+  }
+  return { toleranceModifier: 0, escalationModifier: 0 };
 }
 
 export function deriveHcpEnforcementProfile({
@@ -181,10 +220,18 @@ export function deriveHcpEnforcementProfile({
   const engagementModifier = deriveEngagementModifier(hcpState, hcpProfile?.baselineCommunicationStyle);
   const skepticismModifier = deriveSkepticismModifier(hcpState, hcpProfile?.baselineOpennessResistance);
   const hardDemandModifier = hardDemandState?.hardDemandPriorityLock ? 0.18 : 0;
+  const roleCareModifiers = deriveRoleCareSettingModifiers({
+    role: hcpProfile?.role,
+    specialty: hcpProfile?.specialty,
+    careSetting: hcpProfile?.careSetting,
+  });
+  const difficultyModifiers = deriveDifficultyModifiers(scenario);
 
   const toleranceScore = clamp(
     baseline.baselineForgiveness
       + engagementModifier
+      + roleCareModifiers.toleranceModifier
+      + difficultyModifiers.toleranceModifier
       - (timePressure * baseline.timePressureEscalationModifier)
       - (skepticismModifier * baseline.skepticismEscalationModifier)
       - hardDemandModifier,
@@ -192,6 +239,8 @@ export function deriveHcpEnforcementProfile({
 
   const escalationVelocity = clamp(
     baseline.baselineEscalationSensitivity
+      + roleCareModifiers.escalationModifier
+      + difficultyModifiers.escalationModifier
       + (timePressure * baseline.timePressureEscalationModifier)
       + (skepticismModifier * baseline.skepticismEscalationModifier)
       - (engagementModifier * baseline.engagementSlackModifier)
@@ -236,6 +285,8 @@ export function deriveHcpEnforcementProfile({
       hcpState,
       cueMeaning,
       activeConcern,
+      roleCareModifiers,
+      difficultyModifiers,
     },
   };
 }
