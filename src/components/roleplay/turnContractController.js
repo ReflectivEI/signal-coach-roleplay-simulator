@@ -24,6 +24,21 @@ function tokenize(value = "") {
     .match(/[a-z0-9]+/g) || [];
 }
 
+function normalizeCanonicalResponseMode(mode = "advance") {
+  const normalized = String(mode || "advance").trim().toLowerCase();
+  if (normalized === "repair") return "reanchor";
+  if (normalized === "probe") return "advance";
+  if (["close", "answer", "reanchor", "advance"].includes(normalized)) return normalized;
+  return "advance";
+}
+
+function toLegacyResponseMode(mode = "advance") {
+  const canonical = normalizeCanonicalResponseMode(mode);
+  if (canonical === "reanchor") return "repair";
+  if (canonical === "advance") return "probe";
+  return canonical;
+}
+
 export function extractDirectQuestions(text = "") {
   return String(text || "")
     .split(/(?<=[?])/)
@@ -86,7 +101,7 @@ export function deriveTurnContractState({
 export function selectDeterministicResponseMode({
   turnContractState = {},
   concernFlowOutcome = "aligned",
-  fallbackMode = "probe",
+  fallbackMode = "advance",
 } = {}) {
   const safeTurnContractState = turnContractState && typeof turnContractState === "object"
     ? turnContractState
@@ -96,37 +111,40 @@ export function selectDeterministicResponseMode({
     : [];
   if (safeTurnContractState?.closureEligibility?.eligible) return "close";
   if (unansweredDirectQuestions.length > 0) return "answer";
-  if (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot") return "repair";
-  return fallbackMode;
+  if (concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot") return "reanchor";
+  return normalizeCanonicalResponseMode(fallbackMode);
 }
-
 
 export function buildTurnContractController({
   turnContractState = {},
   concernFlowOutcome = "aligned",
-  fallbackMode = "probe",
+  fallbackMode = "advance",
 } = {}) {
-  const responseMode = selectDeterministicResponseMode({
+  const canonicalResponseMode = selectDeterministicResponseMode({
     turnContractState,
     concernFlowOutcome,
     fallbackMode,
   });
+  const responseMode = toLegacyResponseMode(canonicalResponseMode);
 
   return {
     responseMode,
-    objective: mapResponseModeToObjective(responseMode),
+    canonicalResponseMode,
+    legacyResponseMode: responseMode,
+    objective: mapResponseModeToObjective(canonicalResponseMode),
   };
 }
 
-export function mapResponseModeToObjective(mode = "probe") {
-  if (mode === "answer") return "answer_direct_constraint_question";
-  if (mode === "close") return "close_with_next_step";
-  if (mode === "repair") return "repair_alignment";
-  return "probe_for_operational_detail";
+export function mapResponseModeToObjective(mode = "advance") {
+  const canonical = normalizeCanonicalResponseMode(mode);
+  if (canonical === "answer") return "answer_direct_constraint_question";
+  if (canonical === "close") return "close_with_next_step";
+  if (canonical === "reanchor") return "reanchor_on_active_constraint";
+  return "advance_with_one_practical_detail";
 }
 
 export function validateGeneratedTurnContract({
-  responseMode = "probe",
+  responseMode = "advance",
   draftText = "",
   turnContractState = {},
 } = {}) {
@@ -138,19 +156,24 @@ export function validateGeneratedTurnContract({
     : [];
   const normalized = String(draftText || "").trim();
   const questionOnly = normalized.endsWith("?") && !/[.!]/.test(normalized);
-  const requiresAnswer = responseMode === "answer" && unansweredDirectQuestions.length > 0;
+  const canonicalResponseMode = normalizeCanonicalResponseMode(responseMode);
+  const requiresAnswer = canonicalResponseMode === "answer" && unansweredDirectQuestions.length > 0;
   if (requiresAnswer && questionOnly) {
     return { valid: false, reason: "question_only_answer_mode" };
   }
   return { valid: true, reason: "ok" };
 }
 
-export function buildContractRepairResponse({ responseMode = "probe", activeConcern = "workflow" } = {}) {
-  if (responseMode === "answer") {
+export function buildContractRepairResponse({ responseMode = "advance", activeConcern = "workflow" } = {}) {
+  const canonicalResponseMode = normalizeCanonicalResponseMode(responseMode);
+  if (canonicalResponseMode === "answer") {
     return `Let me give one practical answer tied to ${activeConcern} before we continue.`;
   }
-  if (responseMode === "close") {
+  if (canonicalResponseMode === "close") {
     return "Thanks. Let's close with one concrete next step and owner.";
   }
-  return `Let's reset on the ${activeConcern} constraint and keep this practical.`;
+  if (canonicalResponseMode === "reanchor") {
+    return `Let's come back to the ${activeConcern} constraint before we move forward.`;
+  }
+  return `Let's keep this on ${activeConcern} and move one practical step forward.`;
 }
