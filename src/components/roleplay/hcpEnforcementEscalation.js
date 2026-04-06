@@ -718,7 +718,7 @@ export function applyEscalationPresentation({
   hcpState = '',
   scenarioId = '',
 } = {}) {
-  const stageRules = STAGE_DIRECTIVE_MAP[escalationStage] || STAGE_DIRECTIVE_MAP.open;
+  const stageRules = STAGE_DIRECTIVE_TEMPLATE_MAP[escalationStage] || STAGE_DIRECTIVE_TEMPLATE_MAP.open;
   const normalizedDialogue = String(dialogueText || '').trim() || (
     Number(turnNumber) === 1
       ? selectScenarioBoundOpeningDialogue({
