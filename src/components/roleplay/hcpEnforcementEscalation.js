@@ -8,6 +8,35 @@ function normalizeText(value = '') {
   return String(value || '').trim().toLowerCase();
 }
 
+function canonicalizeHashInput(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalizeHashInput(entry)).sort().join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${key}:${canonicalizeHashInput(value[key])}`).join(',')}}`;
+  }
+  return String(value ?? '');
+}
+
+export function stableHash(input = '') {
+  const serialized = canonicalizeHashInput(input);
+  const value = String(serialized || '');
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash >>> 0;
+}
+
+function deterministicVariant(seed = '', options = []) {
+  if (!Array.isArray(options) || options.length === 0) return '';
+  const canonicalTemplate = String(options[0] || '');
+  if (options.length === 1) return canonicalTemplate;
+  const index = stableHash(seed) % options.length;
+  return String(options[index] || canonicalTemplate);
+}
+
 export const ESCALATION_STAGES = Object.freeze([
   'open',
   'focused',
@@ -244,6 +273,7 @@ export function deriveEscalationState({
   hardDemandState = {},
   domainAssessment = {},
   priorDomainDriftCount = 0,
+  allowImmediateHighPressure = false,
 } = {}) {
   const repAdequacyScore = deriveRepAdequacyScore({ alignment, concernFlowOutcome, repMessage, domainAssessment });
   const currentMisalignmentCount = Array.isArray(alignment?.misalignments) ? alignment.misalignments.length : 0;
@@ -270,7 +300,15 @@ export function deriveEscalationState({
   });
 
   const nextStageIndex = Math.max(0, Math.min(ESCALATION_STAGES.length - 1, stageIndex(priorEscalationStage) + delta));
-  const nextStage = ESCALATION_STAGES[nextStageIndex];
+  let nextStage = ESCALATION_STAGES[nextStageIndex];
+  const noEscalationHistory = stageIndex(priorEscalationStage) === 0
+    && priorMisalignmentCount <= 0
+    && priorHardDemandMissCount <= 0
+    && priorDomainDriftCount <= 0;
+  if (!allowImmediateHighPressure && noEscalationHistory && (nextStage === 'high_pressure' || nextStage === 'disengaging')) {
+    nextStage = 'firm';
+  }
+  const boundedStageIndex = stageIndex(nextStage);
 
   return {
     escalationStage: nextStage,
@@ -279,58 +317,222 @@ export function deriveEscalationState({
     misalignmentCount,
     hardDemandMissCount,
     domainDriftCount,
-    tonePressureLevel: clamp(profile.tonePressureLevel + (nextStageIndex * 0.1)),
-    forgivenessSlack: clamp(profile.forgivenessSlack - (nextStageIndex * 0.1)),
-    toleranceScore: clamp(profile.toleranceScore - (nextStageIndex * 0.08)),
+    tonePressureLevel: clamp(profile.tonePressureLevel + (boundedStageIndex * 0.1)),
+    forgivenessSlack: clamp(profile.forgivenessSlack - (boundedStageIndex * 0.1)),
+    toleranceScore: clamp(profile.toleranceScore - (boundedStageIndex * 0.08)),
   };
 }
 
-const STAGE_DIRECTIVE_MAP = Object.freeze({
-  open: { cue: '', operational: '', analytical: '', patient_selection: '', balanced: '' },
+const STAGE_DIRECTIVE_TEMPLATE_MAP = Object.freeze({
+  open: { cue: [''], operational: [''], analytical: [''], patient_selection: [''], balanced: [''] },
   focused: {
-    cue: 'The HCP posture tightens slightly, signaling a more focused ask.',
-    operational: "Let's keep this to one operationally specific step.",
-    analytical: 'Please anchor this to a specific evidence detail.',
-    patient_selection: 'Please keep this to one clear patient-selection criterion.',
-    balanced: 'Please answer the specific ask directly.',
+    cue: [
+      'The HCP posture tightens slightly, signaling a more focused ask.',
+      'The HCP leans in with a tighter posture, signaling a focused ask.',
+      'The HCP narrows posture and signals a more focused ask.',
+    ],
+    operational: [
+      "Let's keep this to one operationally specific step.",
+      'Keep this to one concrete workflow step.',
+      'Stay with one workflow-specific next step.',
+    ],
+    analytical: [
+      'Please anchor this to a specific evidence detail.',
+      'Please tie this to one concrete evidence detail.',
+      'Ground this in one specific piece of evidence.',
+    ],
+    patient_selection: [
+      'Please keep this to one clear patient-selection criterion.',
+      'Please provide one explicit patient-selection criterion.',
+      'Keep this to one precise criterion for patient selection.',
+    ],
+    balanced: [
+      'Please answer the specific ask directly.',
+      'Please respond directly to the specific ask.',
+      'Address the exact ask directly.',
+    ],
   },
   narrowed: {
-    cue: 'The HCP body language is more pointed, waiting for a precise answer.',
-    operational: 'That is not yet specific to workflow execution.',
-    analytical: 'That is not yet specific to the evidence threshold I need.',
-    patient_selection: 'That is not yet specific to who qualifies in practice.',
-    balanced: 'That still misses the specific decision point.',
+    cue: [
+      'The HCP body language is more pointed, waiting for a precise answer.',
+      'The HCP body language sharpens, waiting for a precise answer.',
+      'The HCP posture becomes more pointed, expecting a precise answer.',
+    ],
+    operational: [
+      'That is not yet specific to workflow execution.',
+      'That is still not specific enough for workflow execution.',
+      'That remains too broad for workflow execution.',
+    ],
+    analytical: [
+      'That is not yet specific to the evidence threshold I need.',
+      'That is still not specific to the evidence threshold I need.',
+      'That remains too broad for the evidence threshold I need.',
+    ],
+    patient_selection: [
+      'That is not yet specific to who qualifies in practice.',
+      'That is still not specific to who qualifies in practice.',
+      'That remains too broad for who qualifies in practice.',
+    ],
+    balanced: [
+      'That still misses the specific decision point.',
+      'That remains short of the specific decision point.',
+      'That does not yet address the specific decision point.',
+    ],
   },
   firm: {
-    cue: 'The HCP is visibly less patient and expects a direct correction.',
-    operational: 'Let us stay on the workflow blocker and answer it directly.',
-    analytical: 'Let us stay on the evidence question and answer it directly.',
-    patient_selection: 'Let us stay on patient selection and answer it directly.',
-    balanced: 'Let us stay on this question and answer it directly.',
+    cue: [
+      'The HCP is visibly less patient and expects a direct correction.',
+      'The HCP shows less patience and expects a direct correction.',
+      'The HCP appears less patient, expecting a direct correction.',
+    ],
+    operational: [
+      'Let us stay on the workflow blocker and answer it directly.',
+      'Stay on the workflow blocker and answer it directly.',
+      'Keep focus on the workflow blocker and answer directly.',
+    ],
+    analytical: [
+      'Let us stay on the evidence question and answer it directly.',
+      'Stay on the evidence question and answer it directly.',
+      'Keep focus on the evidence question and answer directly.',
+    ],
+    patient_selection: [
+      'Let us stay on patient selection and answer it directly.',
+      'Stay on patient selection and answer it directly.',
+      'Keep focus on patient selection and answer directly.',
+    ],
+    balanced: [
+      'Let us stay on this question and answer it directly.',
+      'Stay on this question and answer it directly.',
+      'Keep focus on this question and answer directly.',
+    ],
   },
   high_pressure: {
-    cue: 'The HCP looks ready to disengage if specificity does not improve now.',
-    operational: 'If this remains non-specific, it will not be usable in my workflow decisions.',
-    analytical: 'If this remains non-specific, it will not be usable for my evidence judgment.',
-    patient_selection: 'If this remains non-specific, it will not help patient selection.',
-    balanced: 'If this remains non-specific, this will not be useful to my decision.',
+    cue: [
+      'The HCP looks ready to disengage if specificity does not improve now.',
+      'The HCP appears ready to disengage unless specificity improves now.',
+      'The HCP looks close to disengaging if specificity does not improve now.',
+    ],
+    operational: [
+      'If this remains non-specific, it will not be usable in my workflow decisions.',
+      'If this stays non-specific, I cannot use it for workflow decisions.',
+      'Without specificity, this will not be usable for workflow decisions.',
+    ],
+    analytical: [
+      'If this remains non-specific, it will not be usable for my evidence judgment.',
+      'If this stays non-specific, I cannot use it for evidence judgment.',
+      'Without specificity, this will not be usable for evidence judgment.',
+    ],
+    patient_selection: [
+      'If this remains non-specific, it will not help patient selection.',
+      'If this stays non-specific, it will not help patient selection.',
+      'Without specificity, this will not support patient selection.',
+    ],
+    balanced: [
+      'If this remains non-specific, this will not be useful to my decision.',
+      'If this stays non-specific, this will not be useful for my decision.',
+      'Without specificity, this will not be useful to my decision.',
+    ],
   },
   disengaging: {
-    cue: 'The HCP is signaling close-off unless the response immediately realigns.',
-    operational: 'I need one exact operational answer now or we should pause here.',
-    analytical: 'I need one exact evidence answer now or we should pause here.',
-    patient_selection: 'I need one exact patient-selection answer now or we should pause here.',
-    balanced: 'I need one exact answer now or we should pause here.',
+    cue: [
+      'The HCP is signaling close-off unless the response immediately realigns.',
+      'The HCP signals close-off unless the response realigns immediately.',
+      'The HCP is preparing to close off unless the response realigns now.',
+    ],
+    operational: [
+      'I need one exact operational answer now or we should pause here.',
+      'Give one exact operational answer now, or we should pause here.',
+      'Provide one exact operational answer now, or we pause here.',
+    ],
+    analytical: [
+      'I need one exact evidence answer now or we should pause here.',
+      'Give one exact evidence answer now, or we should pause here.',
+      'Provide one exact evidence answer now, or we pause here.',
+    ],
+    patient_selection: [
+      'I need one exact patient-selection answer now or we should pause here.',
+      'Give one exact patient-selection answer now, or we should pause here.',
+      'Provide one exact patient-selection answer now, or we pause here.',
+    ],
+    balanced: [
+      'I need one exact answer now or we should pause here.',
+      'Give one exact answer now, or we should pause here.',
+      'Provide one exact answer now, or we pause here.',
+    ],
   },
 });
 
+const TEMPLATE_VARIANT_MAX = 5;
+
+const STAGE_INTENT_REQUIREMENTS = Object.freeze({
+  focused: {
+    cue: 'focused_cue',
+    dialogue: 'specific_directive',
+  },
+  narrowed: {
+    cue: 'narrowing_cue',
+    dialogue: 'specificity_gap',
+  },
+  firm: {
+    cue: 'firm_pressure_cue',
+    dialogue: 'direct_correction',
+  },
+  high_pressure: {
+    cue: 'high_pressure_cue',
+    dialogue: 'immediate_utility_risk',
+  },
+  disengaging: {
+    cue: 'disengaging_cue',
+    dialogue: 'final_exact_or_pause',
+  },
+});
+
+export function assertTemplateEquivalence(stage, templates) {
+  const requirement = STAGE_INTENT_REQUIREMENTS[stage];
+  if (!requirement) return;
+
+  Object.entries(templates || {}).forEach(([channel, channelTemplates]) => {
+    if (!Array.isArray(channelTemplates) || channelTemplates.length === 0) return;
+    if (channelTemplates.length > TEMPLATE_VARIANT_MAX) {
+      throw new Error(`Template variant cap exceeded for ${stage}.${channel}`);
+    }
+    const intentTag = requirement[channel === 'cue' ? 'cue' : 'dialogue'];
+    if (!intentTag) return;
+    channelTemplates.forEach((template, index) => {
+      if (typeof template !== 'string' || !template.trim()) {
+        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] empty_template`);
+      }
+      const storedIntentTag = `${stage}:${channel === 'cue' ? 'cue' : 'dialogue'}:${intentTag}`;
+      if (!storedIntentTag) {
+        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] missing intent tag`);
+      }
+    });
+  });
+}
+
+const shouldAssertTemplates = typeof process !== 'undefined'
+  && process?.env
+  && process.env.NODE_ENV !== 'production';
+
+if (shouldAssertTemplates) {
+  Object.entries(STAGE_DIRECTIVE_TEMPLATE_MAP).forEach(([stage, templates]) => {
+    assertTemplateEquivalence(stage, templates);
+  });
+}
+
 export function applyEscalationPresentation({ cueText = '', dialogueText = '', escalationStage = 'open', profile = {}, domainAssessment = {}, activeConcern = '' } = {}) {
-  const stageRules = STAGE_DIRECTIVE_MAP[escalationStage] || STAGE_DIRECTIVE_MAP.open;
+  const stageRules = STAGE_DIRECTIVE_TEMPLATE_MAP[escalationStage] || STAGE_DIRECTIVE_TEMPLATE_MAP.open;
   if (escalationStage === 'open') return { cueText, dialogueText };
 
   const orientation = profile.orientation || 'balanced';
-  const cueSuffix = stageRules.cue;
-  const dialoguePrefix = stageRules[orientation] || stageRules.balanced;
+  const styleSeed = {
+    escalationStage,
+    orientation,
+    activeConcern: normalizeText(activeConcern),
+    scenarioDomain: normalizeText(domainAssessment?.scenarioDomain),
+  };
+  const cueSuffix = deterministicVariant({ ...styleSeed, channel: 'cue' }, stageRules.cue);
+  const dialoguePrefix = deterministicVariant({ ...styleSeed, channel: 'dialogue' }, stageRules[orientation] || stageRules.balanced);
 
   const updatedCue = cueText.includes(cueSuffix) || !cueSuffix
     ? cueText
