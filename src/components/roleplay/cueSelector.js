@@ -25,22 +25,24 @@ export function selectContextualCue({
   engagementTier = 'engaged',
   noRepeatWindowTurns = 20,
   cueFactory,
+  scenarioBoundFallbackPool = [],
 } = {}) {
   const generatedCue = typeof cueFactory === 'function' ? cueFactory() : nextProfileLockedCue;
   const candidateCue = String(generatedCue || nextProfileLockedCue || '').trim();
   if (!candidateCue) return '';
 
+  const fallbackPool = [
+    nextProfileLockedCue,
+    ...(Array.isArray(scenarioBoundFallbackPool) ? scenarioBoundFallbackPool : []),
+  ]
+    .map((cue) => String(cue || '').trim())
+    .filter(Boolean);
+
   return enforceNoRecentCueRepeat({
     candidateCue,
     recentCueText,
     noRepeatWindowTurns,
-    fallbackPool: [
-      nextProfileLockedCue,
-      'The HCP pauses, clearly expecting something more useful.',
-      'The HCP glances at the clock, patience thinning.',
-      'The HCP shifts posture slightly, less engaged.',
-      'The HCP waits with clipped attention for one practical answer.',
-    ],
+    fallbackPool,
     seed: `${generationKey}:${nextTurnNumber}:${nextHcpState}:${activeConcern}:${engagementTier}:${responseText}`,
   });
 }
@@ -80,5 +82,5 @@ export function enforceNoRecentCueRepeat({
     }
   }
 
-  return pool[startIndex];
+  return String(candidateCue).trim();
 }
