@@ -91,6 +91,15 @@ function deriveDialogueIntent({ activeConcern = 'workflow', hardDemandState = {}
   return 'practical_next_step';
 }
 
+function isGreetingOnlyRepMessage(repMessage = '') {
+  const text = String(repMessage || '').trim().toLowerCase();
+  if (!text) return false;
+  const hasGreeting = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hope you're well)\b/.test(text);
+  const hasBusinessContext = /\b(workflow|clinic|practice|patient|evidence|trial|study|data|screen|selection|step|access|operational|monitor)\b/.test(text);
+  const tokenCount = text.split(/\s+/).filter(Boolean).length;
+  return hasGreeting && !hasBusinessContext && tokenCount <= 12;
+}
+
 const REALISM_CUE_BUCKETS = Object.freeze({
   time_pressure: Object.freeze([
     'Keeps glancing between the chart and the hallway before answering.',
@@ -165,6 +174,7 @@ function refineCueRealism({
   activeConcern = '',
   concernFlowOutcome = 'aligned',
   priorCueSignature = '',
+  inputCueMissing = false,
 } = {}) {
   const bucket = cueBucketFromState({ hcpState, activeConcern, concernFlowOutcome });
   const pool = REALISM_CUE_BUCKETS[bucket] || REALISM_CUE_BUCKETS.guarded_interest;
@@ -176,7 +186,7 @@ function refineCueRealism({
   }
   const genericCue = /\b(looks uncertain|seems skeptical|appears frustrated|focused expression|posture tightens|body language is more pointed|visibly less patient|ready to disengage)\b/i.test(String(cueText || ''));
   const isMissing = !normalizeText(cueText);
-  const nextCue = (genericCue || isMissing) ? pool[idx] : cueText;
+  const nextCue = (inputCueMissing || genericCue || isMissing) ? pool[idx] : cueText;
   return {
     cueText: nextCue,
     cueSignature: deterministicHash(nextCue),
@@ -310,6 +320,16 @@ export function buildHcpReactionContract({
   const normalizedCue = normalizeText(cueText);
   const turnScopedHcpState = deriveScenarioBoundHcpState({ scenario, hcpState, turnNumber });
   const normalizedDialogue = normalizeText(dialogueText);
+  const socialGreetingOpening = Number(turnNumber) === 1 && isGreetingOnlyRepMessage(repMessage);
+  const effectiveConcernFlowOutcome = socialGreetingOpening ? 'aligned' : concernFlowOutcome;
+  const effectiveAlignment = socialGreetingOpening
+    ? {
+      ...(alignment || {}),
+      score: Math.max(3, Number(alignment?.score ?? 3)),
+      misalignments: [],
+      rubricAlignmentFlags: Array.isArray(alignment?.rubricAlignmentFlags) ? alignment.rubricAlignmentFlags : [],
+    }
+    : alignment;
   const selectedCueMeaning = cueMeaning || classifyCueIntent(normalizedCue);
   const selectedDialogueIntent = dialogueIntent || deriveDialogueIntent({
     activeConcern,
@@ -335,7 +355,7 @@ export function buildHcpReactionContract({
     dialogueText: normalizedDialogue,
   });
 
-  const escalationState = deriveEscalationState({
+  let escalationState = deriveEscalationState({
     profile: hcpEnforcementProfile,
     turnNumber,
     hcpState: turnScopedHcpState,
@@ -343,17 +363,27 @@ export function buildHcpReactionContract({
     priorEscalationStage: priorEnforcementTrace?.escalationStage || 'open',
     priorMisalignmentCount: priorEnforcementTrace?.misalignmentCount || 0,
     priorHardDemandMissCount: priorEnforcementTrace?.hardDemandMissCount || 0,
-    alignment,
-    concernFlowOutcome,
+    alignment: effectiveAlignment,
+    concernFlowOutcome: effectiveConcernFlowOutcome,
     repMessage,
     hardDemandState,
     domainAssessment,
     priorDomainDriftCount: priorEnforcementTrace?.domainDriftCount || 0,
   });
+  if (socialGreetingOpening) {
+    escalationState = {
+      ...escalationState,
+      escalationStage: 'open',
+      escalationReason: 'social_opening_handshake',
+      repAdequacyScore: Math.max(Number(escalationState?.repAdequacyScore || 0), 0.85),
+      misalignmentCount: 0,
+      hardDemandMissCount: Math.max(0, priorEnforcementTrace?.hardDemandMissCount || 0),
+    };
+  }
 
   const escalatedPresentation = applyEscalationPresentation({
     cueText: normalizedCue,
-    dialogueText: normalizedDialogue,
+    dialogueText: socialGreetingOpening ? '' : normalizedDialogue,
     escalationStage: escalationState.escalationStage,
     profile: hcpEnforcementProfile,
     domainAssessment,
@@ -370,8 +400,8 @@ export function buildHcpReactionContract({
     scenarioId,
     turnNumber,
     activeConcern,
-    concernFlowOutcome,
-    alignmentScore: Number(alignment?.score ?? 3),
+    concernFlowOutcome: effectiveConcernFlowOutcome,
+    alignmentScore: Number(effectiveAlignment?.score ?? 3),
     priorDialogueSignature: priorEnforcementTrace?.dialogueSignature || '',
   });
   const realismCue = refineCueRealism({
@@ -380,8 +410,9 @@ export function buildHcpReactionContract({
     turnNumber,
     hcpState: turnScopedHcpState,
     activeConcern,
-    concernFlowOutcome,
+    concernFlowOutcome: effectiveConcernFlowOutcome,
     priorCueSignature: priorEnforcementTrace?.cueSignature || '',
+    inputCueMissing: !normalizedCue,
   });
 
   const enforcedDialogue = enforceDomainReanchorInDialogue({

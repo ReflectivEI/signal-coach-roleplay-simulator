@@ -489,7 +489,7 @@ export function deriveEscalationState({
   priorDomainDriftCount = 0,
   allowImmediateHighPressure = false,
 } = {}) {
-  const openingExchange = Number(turnNumber) <= 1 && stageIndex(priorEscalationStage) <= stageIndex('open');
+  const openingExchange = Number(turnNumber) === 1 && stageIndex(priorEscalationStage) <= stageIndex('open');
   const repAdequacyScore = deriveRepAdequacyScore({ alignment, concernFlowOutcome, repMessage, domainAssessment });
   const currentMisalignmentCount = Array.isArray(alignment?.misalignments) ? alignment.misalignments.length : 0;
   const misalignmentCount = repAdequacyScore < 0.55
@@ -520,13 +520,20 @@ export function deriveEscalationState({
   const capIndex = openingStageCap ? stageIndex(openingStageCap) : ESCALATION_STAGES.length - 1;
   const nextStageIndex = Math.min(uncappedStageIndex, capIndex);
   const requestedStage = ESCALATION_STAGES[nextStageIndex];
-  const nextStage = deriveTurnScopedOpeningStage({
+  let nextStage = deriveTurnScopedOpeningStage({
     requestedStage,
     turnNumber,
     scenarioOpeningState,
     hcpState,
     profile,
   });
+  const noEscalationHistory = stageIndex(priorEscalationStage) === 0
+    && priorMisalignmentCount <= 0
+    && priorHardDemandMissCount <= 0
+    && priorDomainDriftCount <= 0;
+  if (!allowImmediateHighPressure && noEscalationHistory && (nextStage === 'high_pressure' || nextStage === 'disengaging')) {
+    nextStage = 'firm';
+  }
   const resolvedStageIndex = stageIndex(nextStage);
 
   return {
@@ -705,6 +712,39 @@ const STAGE_INTENT_REQUIREMENTS = Object.freeze({
     dialogue: 'final_exact_or_pause',
   },
 });
+
+export function assertTemplateEquivalence(stage, templates) {
+  const requirement = STAGE_INTENT_REQUIREMENTS[stage];
+  if (!requirement) return;
+
+  Object.entries(templates || {}).forEach(([channel, channelTemplates]) => {
+    if (!Array.isArray(channelTemplates) || channelTemplates.length === 0) return;
+    if (channelTemplates.length > TEMPLATE_VARIANT_MAX) {
+      throw new Error(`Template variant cap exceeded for ${stage}.${channel}`);
+    }
+    const intentTag = requirement[channel === 'cue' ? 'cue' : 'dialogue'];
+    if (!intentTag) return;
+    channelTemplates.forEach((template, index) => {
+      if (typeof template !== 'string' || !template.trim()) {
+        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] empty_template`);
+      }
+      const storedIntentTag = `${stage}:${channel === 'cue' ? 'cue' : 'dialogue'}:${intentTag}`;
+      if (!storedIntentTag) {
+        throw new Error(`Template semantic divergence detected at ${stage}.${channel}[${index}] missing intent tag`);
+      }
+    });
+  });
+}
+
+const shouldAssertTemplates = typeof process !== 'undefined'
+  && process?.env
+  && process.env.NODE_ENV !== 'production';
+
+if (shouldAssertTemplates) {
+  Object.entries(STAGE_DIRECTIVE_TEMPLATE_MAP).forEach(([stage, templates]) => {
+    assertTemplateEquivalence(stage, templates);
+  });
+}
 
 export function applyEscalationPresentation({
   cueText = '',
