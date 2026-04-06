@@ -75,6 +75,27 @@ function normalizeTypeSet(value = []) {
   return new Set(Array.isArray(value) ? value.filter(Boolean) : []);
 }
 
+function extractScenarioBoundConstraintSentence({ scenarioContext = "", concern = "" } = {}) {
+  const sentences = String(scenarioContext || "")
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length === 0) return "";
+
+  const preferredPattern = OPERATIONAL_CONSTRAINT_PATTERNS[concern] || null;
+  if (preferredPattern) {
+    const preferred = sentences.find((sentence) => preferredPattern.test(sentence));
+    if (preferred) return preferred;
+  }
+
+  const anyGroundedConstraint = sentences.find((sentence) => (
+    OPERATIONAL_CONSTRAINT_TYPES.some((type) => OPERATIONAL_CONSTRAINT_PATTERNS[type].test(sentence))
+  ));
+
+  return anyGroundedConstraint || "";
+}
+
 export function detectConstraintDraftViolations({
   draftText = "",
   groundedTypes = [],
@@ -119,43 +140,25 @@ export function buildConstraintSafeRegeneratedResponse({
   concern = "evidence",
   includeWarmth = false,
   scenarioContext = "",
+  scenarioBoundFallbackResponse = "",
 } = {}) {
   const fallback = String(fallbackResponse || "").trim();
+  const scenarioBoundFallback = String(scenarioBoundFallbackResponse || "").trim();
   const containsConstraint = extractConstraintCandidatesFromText(fallback).length > 0;
+  const warmPrefix = includeWarmth ? "Good to see you. " : "";
+
+  if (scenarioBoundFallback) return `${warmPrefix}${scenarioBoundFallback}`.trim();
   if (fallback && !containsConstraint) return fallback;
 
-  const neutralByConcern = {
-    evidence: "I still need clinically meaningful evidence before I would change practice.",
-    screening: "I need clearer patient-selection criteria before I can move forward.",
-    access: "I need to understand the patient access implications more clearly before deciding.",
-    prior_auth: "I need one practical step that works within our prior-authorization burden before deciding.",
-    workflow: "I need one concrete workflow step we can run this week without adding burden.",
-    staffing: "I need a recommendation that fits our current staffing limits before we proceed.",
-    capacity: "I need a step that reduces capacity strain, not one that adds workload.",
-    scheduling: "I need this translated into a scheduling-safe step we can actually execute.",
-    handoff: "I need a clear handoff step so ownership is unambiguous in our clinic flow.",
-    throughput: "I need an action that improves throughput without disrupting care flow.",
-    callback: "I need a realistic follow-up callback step we can sustain operationally.",
-    monitoring: "I need a monitoring step we can implement without creating extra burden.",
-    time: "I can only process one concrete clinical takeaway right now.",
-    policy: "I need this aligned with our current protocol before I can proceed.",
-  };
+  const scenarioBoundSentence = extractScenarioBoundConstraintSentence({
+    scenarioContext,
+    concern,
+  });
+  if (scenarioBoundSentence) return `${warmPrefix}${scenarioBoundSentence}`.trim();
 
-  const context = String(scenarioContext || "").toLowerCase();
-  const inferContextFallback = () => {
-    if (/\b(screening|candidacy|eligibility|criteria|resistance|cab)\b/.test(context)) return neutralByConcern.screening;
-    if (/\b(monitoring|follow-up|durability|methodology|study duration)\b/.test(context)) return neutralByConcern.monitoring;
-    if (/\b(prior auth|authorization|coverage|payer|access)\b/.test(context)) return neutralByConcern.access;
-    if (/\b(staffing|short-staffed|capacity|throughput|pathway|workflow)\b/.test(context)) return neutralByConcern.staffing;
-    return neutralByConcern.workflow;
-  };
+  if (fallback) return fallback;
 
-  const baseResponse = neutralByConcern[concern] || inferContextFallback();
-  if (!includeWarmth) return baseResponse;
-
-  const warmPrefix = "Good to see you. ";
-
-  return `${warmPrefix}${baseResponse}`;
+  return `${warmPrefix}Let's stay with the specific constraint already on the table.`.trim();
 }
 
 const LATE_TURN_REQUIREMENT_BY_CONCERN = {
