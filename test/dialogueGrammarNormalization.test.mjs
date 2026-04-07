@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   detectDialogueBoundaryIssues,
+  formatHcpSentence,
   normalizeDialogueSentenceBoundaries,
 } from '../src/lib/roleplay/dialogueGrammar.js';
 
@@ -34,6 +35,41 @@ test('normalizeDialogueSentenceBoundaries handles jargon-heavy dialogue without 
   const input = 'Our GDMT adherence is drifting, the EHR handoff still misses PA flags';
   const output = normalizeDialogueSentenceBoundaries(input);
   assert.equal(output, 'Our GDMT adherence is drifting. The EHR handoff still misses PA flags.');
+});
+
+test('normalizeDialogueSentenceBoundaries joins dependent prefaces into natural questions', () => {
+  const input = 'Before we discuss further. Can you specifically address how the data applies to long-term durability?';
+  const output = normalizeDialogueSentenceBoundaries(input);
+  assert.equal(output, 'Before we discuss further, can you specifically address how the data applies to long-term durability?');
+  assert.doesNotMatch(output, /Before we discuss further\.\s+Can/i);
+});
+
+test('normalizeDialogueSentenceBoundaries repairs generalized fragment-to-question stitching', () => {
+  assert.equal(
+    normalizeDialogueSentenceBoundaries('Given the time pressure. What is the smallest workflow change?'),
+    'Given the time pressure, what is the smallest workflow change?'
+  );
+  assert.equal(
+    normalizeDialogueSentenceBoundaries('From a workflow perspective. How would the team start?'),
+    'From a workflow perspective, how would the team start?'
+  );
+  assert.equal(
+    normalizeDialogueSentenceBoundaries('I want to make sure I understand. How does this change the decision?'),
+    'I want to make sure I understand, how does this change the decision?'
+  );
+});
+
+test('formatHcpSentence composes preface plus ask deterministically without changing intent', () => {
+  const first = formatHcpSentence({
+    preface: 'Before we discuss further.',
+    ask: 'Can you address the durability point?',
+  });
+  const second = formatHcpSentence({
+    preface: 'Before we discuss further.',
+    ask: 'Can you address the durability point?',
+  });
+  assert.equal(first, 'Before we discuss further, can you address the durability point?');
+  assert.equal(second, first);
 });
 
 test('detectDialogueBoundaryIssues reports sentence-boundary defects and ignores valid joins', () => {

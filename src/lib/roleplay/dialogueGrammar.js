@@ -7,6 +7,8 @@ const DEPENDENT_SUBORDINATOR_STARTER_PATTERN = /^(because|although|while|if|unle
 const COORDINATING_CONJUNCTION_PATTERN = /^(and|but|or|so|yet|for|nor)\b/i;
 const SUBORDINATE_STARTER_PATTERN = /^(because|although|while|if|unless|since|when|whereas|though|once|until|after|before|as)\b/i;
 const AUXILIARY_QUESTION_STARTER_PATTERN = /^(could|would|can|do|does|did|is|are|am|will|may|should)$/i;
+const QUESTION_JOINER_PATTERN = /(who|what|when|where|why|how|is|are|am|was|were|do|does|did|can|could|will|would|should|shall|have|has|had|may|might|must)\b/i;
+const DEPENDENT_PREFACE_PATTERN = /^(before\s+(?:we|i)\s+[^.!?]{2,90}|given\s+[^.!?]{2,90}|from\s+(?:a|an|the|our|your)\s+[^.!?]{2,80}\s+perspective|to\s+make\s+sure\s+i\s+understand|i\s+want\s+to\s+make\s+sure\s+i\s+understand)$/i;
 
 function normalizeAllCapsSentence(sentence = '') {
   const lettersOnly = sentence.replace(/[^A-Za-z]/g, '');
@@ -28,6 +30,21 @@ function normalizeMalformedOpener(value = '') {
     .replace(/^on\s+(great|good|important|fair)\s+question\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} question, `)
     .replace(/^on\s+(great|good|important|fair)\s+point\b[\s,:-]*/i, (_match, descriptor) => `${descriptor.charAt(0).toUpperCase()}${descriptor.slice(1).toLowerCase()} point, `)
     .trim();
+}
+
+function lowercaseQuestionStarter(starter = '') {
+  return String(starter || '').toLowerCase();
+}
+
+export function formatHcpSentence({ preface = '', ask = '', tone = 'neutral' } = {}) {
+  const safePreface = String(preface || '').trim().replace(/[.!?]+$/, '');
+  const safeAsk = String(ask || '').trim().replace(/^[,;:!?\s]+/, '');
+  if (!safePreface) return safeAsk;
+  if (!safeAsk) return safePreface;
+
+  const askWithFlow = safeAsk.replace(QUESTION_JOINER_PATTERN, (starter) => lowercaseQuestionStarter(starter));
+  const joiner = tone === 'emphatic' ? ', ' : ', ';
+  return `${safePreface}${joiner}${askWithFlow}`;
 }
 
 function clauseLooksIndependent(text = '') {
@@ -87,6 +104,26 @@ function repairSentenceBoundaryJoins(text = '') {
     });
 }
 
+function repairDependentPrefaceQuestionFragments(text = '') {
+  return String(text || '').replace(
+    /(^|[.!?]\s+)([^.!?]{3,110}?)\.\s+(Who|What|When|Where|Why|How|Is|Are|Am|Was|Were|Do|Does|Did|Can|Could|Will|Would|Should|Shall|Have|Has|Had|May|Might|Must)\b/g,
+    (match, prefix, preface, starter) => {
+      const cleanPreface = String(preface || '').trim();
+      if (!DEPENDENT_PREFACE_PATTERN.test(cleanPreface)) return match;
+      return `${prefix}${formatHcpSentence({ preface: cleanPreface, ask: starter })}`;
+    }
+  );
+}
+
+function hasDependentPrefaceQuestion(text = '') {
+  const value = String(text || '').trim();
+  const commaIndex = value.indexOf(',');
+  if (commaIndex < 0) return false;
+  const preface = value.slice(0, commaIndex).trim();
+  const remainder = value.slice(commaIndex + 1).trim();
+  return DEPENDENT_PREFACE_PATTERN.test(preface) && QUESTION_JOINER_PATTERN.test(remainder);
+}
+
 function mergeDependentClauseFragments(sentences = []) {
   return sentences.reduce((merged, rawSentence) => {
     const sentence = String(rawSentence || '').trim();
@@ -126,6 +163,10 @@ export function normalizeDialogueSentenceBoundaries(dialogue) {
   text = normalizeMalformedOpener(text);
 
   text = repairSentenceBoundaryJoins(text)
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  text = repairDependentPrefaceQuestionFragments(text)
     .replace(/^[,;:\-–—]+\s*/g, '')
     .replace(/\s+([,.;:!?])/g, '$1')
     .replace(/([,;:])(?=\S)/g, '$1 ')
@@ -145,9 +186,10 @@ export function normalizeDialogueSentenceBoundaries(dialogue) {
 
       const capitalized = withoutEndPunct.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
       const isQuestion = QUESTION_STARTER_PATTERN.test(withoutEndPunct);
+      const isDependentPrefaceQuestion = hasDependentPrefaceQuestion(withoutEndPunct);
       const isSubordinateDeclarative = SUBORDINATE_DECLARATIVE_PATTERN.test(withoutEndPunct);
 
-      if (isQuestion && !isSubordinateDeclarative) return `${capitalized}?`;
+      if ((isQuestion || isDependentPrefaceQuestion) && !isSubordinateDeclarative) return `${capitalized}?`;
       if (/[?.!]$/.test(sentence)) return sentence;
       return `${capitalized}.`;
     })
