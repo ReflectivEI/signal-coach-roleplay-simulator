@@ -34,5 +34,5 @@ test('current RolePlayChat roleplay provider calls carry shared validation conte
   assert.match(CHAT_SOURCE, /const roleplayTurnValidationContext = \{/);
   assert.match(CHAT_SOURCE, /latestHcpAsk: respondingToTurn\?\.hcpDialogueBefore/);
   assert.match(CHAT_SOURCE, /repMessage,/);
-  assert.match(CHAT_SOURCE, /previousRepMessages: turns/);
+  assert.match(CHAT_SOURCE, /previousRepMessages: collectRepMessagesForSimilarLatestAsk\(turns, respondingToTurn\?\.hcpDialogueBefore/);
 });

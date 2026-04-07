@@ -1075,6 +1075,47 @@ function hasTerminalClosedTurn(turns = []) {
   ));
 }
 
+function isTerminalDisengagementCue(text = "") {
+  const sample = String(text || "").toLowerCase().trim();
+  if (!sample) return false;
+  return /\b(exchange is over|reaches for the door|door handle|turns back toward the patient room|stands and checks|conversation is ending|gestures? .* exit|signals? .* ending|readying for departure|leaving the room)\b/.test(sample);
+}
+
+function inferLatestAskFamilyForProgression(text = "") {
+  const sample = String(text || "").toLowerCase();
+  if (!sample) return null;
+  if (/\b(evidence|data|study|trial|proof|endpoint|outcome|clinically meaningful|practice|decision)\b/.test(sample)) return "evidence";
+  if (/\b(screen|screening|candidacy|candidate|eligible|eligibility|patient selection|criteria|resistance|adherence)\b/.test(sample)) return "screening";
+  if (/\b(access|coverage|payer|prior[-\s]?auth|authorization|approval|reimbursement|copay|hub|enrollment|bottleneck)\b/.test(sample)) return "access";
+  if (/\b(workflow|staff|team|owner|own|handoff|process|practical step|clinic flow|implementation)\b/.test(sample)) return "workflow";
+  return null;
+}
+
+function collectRepMessagesForSimilarLatestAsk(turns = [], latestHcpAsk = "") {
+  const ask = String(latestHcpAsk || "").trim();
+  if (!ask) return [];
+  const latestFamily = inferLatestAskFamilyForProgression(ask);
+  const messages = [];
+  const priorTurns = Array.isArray(turns) ? turns.slice(0, -1) : [];
+
+  for (let i = priorTurns.length - 1; i >= 0; i -= 1) {
+    const turn = priorTurns[i];
+    const priorAsk = String(turn?.hcpDialogueBefore || "").trim();
+    const rep = String(turn?.repMessage || "").trim();
+    if (!priorAsk || !rep) continue;
+    const priorFamily = inferLatestAskFamilyForProgression(priorAsk);
+    const similarAsk = priorAsk === ask || computeSimilarity(priorAsk, ask) >= 0.78;
+    const sameAskFamily = latestFamily && priorFamily && latestFamily === priorFamily;
+    if (!similarAsk && !sameAskFamily) {
+      if (messages.length > 0) break;
+      continue;
+    }
+    messages.unshift(rep);
+  }
+
+  return messages;
+}
+
 function stripFollowUpAfterTerminalClose(text = "") {
   const value = hardenTextSurface(text);
   if (!isTerminalDisengagementIntent(value)) return value;
@@ -2793,18 +2834,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const preTurnValidation = validateRoleplayRepTurn({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       repMessage,
-      previousRepMessages: turns
-        .slice(0, -1)
-        .map((turn) => String(turn?.repMessage || "").trim())
-        .filter(Boolean),
+      previousRepMessages: collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || ""),
     });
     const roleplayTurnValidationContext = {
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       repMessage,
-      previousRepMessages: turns
-        .slice(0, -1)
-        .map((turn) => String(turn?.repMessage || "").trim())
-        .filter(Boolean),
+      previousRepMessages: collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || ""),
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
     };
@@ -3267,10 +3302,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       lockedPlannerObjective: chosenResponseObjective,
       objectiveOverrideBlocked,
     };
-    const previousRepMessagesForProgression = turns
-      .slice(0, -1)
-      .map((turn) => String(turn?.repMessage || "").trim())
-      .filter(Boolean);
+    const previousRepMessagesForProgression = collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || "");
     const latestAskProgression = classifyLatestAskProgression({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       repMessage,
@@ -4251,6 +4283,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedCueLayers.push("safeguard_recent_memory");
     }
 
+    if (!overrideExit && isTerminalDisengagementCue(contextualCue)) {
+      nextHcpState = "disengaged";
+      nextHcpDialogue = terminalCloseFallback;
+      selectedCueLayers.push("safeguard_terminal_cue_close");
+    }
+
     const cueAlignmentCheck = validateCueDialogueAlignment({
       cueText: contextualCue,
       dialogueText: nextHcpDialogue,
@@ -5124,6 +5162,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const shouldEndSessionAfterTurn = overrideExit
       || (nextHcpState === "disengaged" && isTerminalClosureDialogue(nextHcpDialogue))
+      || isTerminalDisengagementCue(contextualCue)
       || (!blockClose && terminalPolicyAction === "close");
 
     if (shouldEndSessionAfterTurn) {

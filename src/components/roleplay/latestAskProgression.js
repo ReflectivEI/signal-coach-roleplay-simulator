@@ -120,6 +120,48 @@ function hasRepConversationLoopChallenge(repMessage = "") {
   return /\b(you just asked|you already asked|i already said|i said|again|as i said|just told you)\b/i.test(String(repMessage || ""));
 }
 
+function hasRepClarificationRequest(repMessage = "") {
+  return /\b(what decision|what do you mean|i don'?t understand|i do not understand|rephrase|clarify|say that another way|can you explain|not following|i'?m not following|hello\??)\b/i.test(String(repMessage || ""));
+}
+
+function selectMissedDialogueVariant(family = "general", missedAttemptCount = 1) {
+  const stage = Math.max(0, Math.min(3, Number(missedAttemptCount || 1) - 1));
+  const variantsByFamily = {
+    workflow: [
+      "I need you to answer the workflow question directly: what is the first practical step here?",
+      "I'm still not hearing the workflow piece. Start with one concrete step we could run here.",
+      "Keep it to the practical lift: what would my team do differently first?",
+      "I need to pause here if we cannot get to the workflow answer.",
+    ],
+    screening: [
+      "I need you to answer the screening question directly: what is the first checkpoint you would use?",
+      "I'm still not hearing the patient-selection answer. Start with the first screening checkpoint.",
+      "Keep this to candidacy: what would my team check first?",
+      "I need to pause here if we cannot get to the screening answer.",
+    ],
+    evidence: [
+      "I need you to answer the evidence question directly: what proof point changes the decision?",
+      "I'm still not hearing the evidence piece. What data would actually change my decision here?",
+      "Give me the proof point, not the setup: what should change in practice?",
+      "I need to pause here if we cannot get to the evidence answer.",
+    ],
+    access: [
+      "I need you to answer the access question directly: what is the first step that reduces the bottleneck?",
+      "I'm still not hearing the access step. What would reduce the PA or coverage burden first?",
+      "Keep this to the bottleneck: what changes first, and who starts it?",
+      "I need to pause here if we cannot get to the access answer.",
+    ],
+    general: [
+      "I need you to answer the question directly before we move on.",
+      "I'm still not hearing the answer to my question.",
+      "Give me the direct answer first, then we can move forward.",
+      "I need to pause here if we cannot answer the question.",
+    ],
+  };
+  const variants = variantsByFamily[family] || variantsByFamily.general;
+  return variants[stage] || variants[variants.length - 1];
+}
+
 export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "", previousRepMessages = [] } = {}) {
   const latestAsk = String(latestHcpAsk || "").trim();
   const rep = String(repMessage || "").trim();
@@ -137,6 +179,7 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
   const explicitOwner = hasExplicitOperationalOwner(rep);
   const ownershipDeflection = hasOwnershipDeflection(rep);
   const loopChallenge = hasRepConversationLoopChallenge(rep);
+  const clarificationRequest = hasRepClarificationRequest(rep);
   const repeatedRep = previousRepMessages
     .filter(Boolean)
     .slice(-3)
@@ -159,12 +202,15 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
     : repeatedRep || loopChallenge
       ? "repeated_missed"
       : "missed";
+  const missedAttemptCount = Math.max(1, Math.min(4, previousRepMessages.filter(Boolean).length + 1));
   const missedProgression = () => ({
     status: missedStatus,
     needsProgression: true,
     family: requiredFamily,
     repeatedRepCount,
     loopChallenge: loopChallenge || repeatedRep,
+    clarificationRequest,
+    missedAttemptCount,
   });
 
   if (requiresOwner) {
@@ -227,14 +273,7 @@ export function buildLatestAskProgressionDialogue(latestAskProgression = {}) {
   }
 
   if (latestAskProgression.status === "missed") {
-    const missedByFamily = {
-      workflow: "I need you to answer the workflow question directly: what is the first practical step here?",
-      screening: "I need you to answer the screening question directly: what is the first checkpoint you would use?",
-      evidence: "I need you to answer the evidence question directly: what proof point changes the decision?",
-      access: "I need you to answer the access question directly: what is the first step that reduces the bottleneck?",
-      general: "I need you to answer the question directly before we move on.",
-    };
-    return missedByFamily[family] || missedByFamily.general;
+    return selectMissedDialogueVariant(family, latestAskProgression.missedAttemptCount);
   }
 
   switch (latestAskProgression.status) {

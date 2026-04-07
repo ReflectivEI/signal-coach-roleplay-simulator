@@ -133,3 +133,31 @@ test('transcript replay harness: latest ask progression prevents workflow loops'
     }
   }
 });
+
+test('transcript replay harness: missed evidence asks vary before terminal close', () => {
+  const latestHcpAsk = 'I need you to answer the evidence question directly: what proof point changes the decision?';
+  const repTurns = [
+    'What decision?',
+    "I don't understand.",
+    'Rephrase your question.',
+    'Hello?',
+  ];
+  const previousRepMessages = [];
+  const dialogues = [];
+
+  for (const repMessage of repTurns) {
+    const progression = classifyLatestAskProgression({
+      latestHcpAsk,
+      repMessage,
+      previousRepMessages,
+    });
+    dialogues.push(buildLatestAskProgressionDialogue(progression));
+    previousRepMessages.push(repMessage);
+  }
+
+  const normalizedDialogues = dialogues.map((dialogue) => dialogue.toLowerCase());
+  assert.equal(new Set(normalizedDialogues).size, dialogues.length, 'missed evidence asks should not repeat verbatim');
+  assert.match(dialogues[1], /still not hearing the evidence piece/i);
+  assert.match(dialogues[2], /proof point, not the setup/i);
+  assert.match(dialogues[3], /pause here/i);
+});

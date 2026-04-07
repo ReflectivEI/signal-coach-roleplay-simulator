@@ -60,8 +60,10 @@ test("HCP dialogue surface hardening repairs malformed preference fragments", ()
 
 test("terminal close disables continued rep input in the live chat form", () => {
   assert.match(SOURCE, /function hasTerminalClosedTurn/);
+  assert.match(SOURCE, /function isTerminalDisengagementCue/);
   assert.match(SOURCE, /const conversationTerminalClosed = hasTerminalClosedTurn\(turns\)/);
   assert.match(SOURCE, /if \(hasTerminalClosedTurn\(turns\)\) \{[\s\S]*controller\.state = SessionState\.ENDED;[\s\S]*return;[\s\S]*\}/);
+  assert.match(SOURCE, /isTerminalDisengagementCue\(contextualCue\)/);
   assert.match(SOURCE, /if \(isLoading \|\| isEnding \|\| conversationTerminalClosed\) return;/);
   assert.match(SOURCE, /disabled=\{isLoading \|\| isEnding \|\| conversationTerminalClosed\}/);
   assert.match(SOURCE, /disabled=\{isLoading \|\| isEnding \|\| conversationTerminalClosed \|\| \(!sanitizeUserMessage\(input\) && !interim\)\}/);
