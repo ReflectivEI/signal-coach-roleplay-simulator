@@ -173,7 +173,7 @@ export function buildContractRepairResponse({ responseMode = "advance", activeCo
     return "Thanks. Let's close with one concrete next step and owner.";
   }
   if (canonicalResponseMode === "reanchor") {
-    return `Let's come back to the ${activeConcern} constraint before we move forward.`;
+    return `Bring this back to the ${activeConcern} constraint before we move forward.`;
   }
-  return `Let's keep this on ${activeConcern} and move one practical step forward.`;
+  return `Keep this on ${activeConcern} and move one practical step forward.`;
 }

@@ -1018,6 +1018,27 @@ function isTerminalDisengagementIntent(text = "") {
   return hasExplicitExitIntent(text) || isTerminalClosureDialogue(text);
 }
 
+function stripFollowUpAfterTerminalClose(text = "") {
+  const value = hardenTextSurface(text);
+  if (!isTerminalDisengagementIntent(value)) return value;
+  const parts = value.match(/[^.!?]+[.!?]/g) || [value];
+  const firstTerminal = parts.find((part) => isTerminalDisengagementIntent(part)) || parts[0];
+  return hardenTextSurface(firstTerminal);
+}
+
+function stripSimulatorMetaDialogue(text = "") {
+  let value = hardenTextSurface(text);
+  if (!value) return value;
+
+  value = value
+    .replace(/\b(?:to get back on track|to refocus|as i said earlier|as i asked earlier|as mentioned earlier|as previously stated),?\s*/gi, "")
+    .replace(/\b(?:i(?:'d| would) like to )?revisit (?:my|the|that)?\s*previous question (?:about|on)?\s*/gi, "")
+    .replace(/\b(?:my|the|that) previous question (?:was|is|about|on)\s*/gi, "")
+    .replace(/\b(?:given|considering) our current ([^.?!]+)\.\s+(?=(?:can|how|what|who|where|when|is|are|does|do|would|could)\b)/gi, "Given our current $1, ");
+
+  return hardenTextSurface(value);
+}
+
 function isEvidenceSeekingEngagement(text = "") {
   const sample = String(text || "").toLowerCase();
   if (!sample.trim()) return false;
@@ -1598,7 +1619,7 @@ function buildTerminalDecisionDialogue({ concern = "workflow", seed = "" } = {})
   const pool = byConcern[concern] || byConcern.workflow;
   const baseIndex = deterministicIndex(`${seed}:${concern}:terminal-statement`, pool.length);
   const askIndex = deterministicIndex(`${seed}:${concern}:terminal-ask`, askOptions.length);
-  const includeAsk = deterministicBoolean(`${seed}:${concern}:include-ask`, 0.45);
+  const includeAsk = false;
   const statement = pool[baseIndex];
   return includeAsk ? `${statement} ${askOptions[askIndex]}` : statement;
 }
@@ -3353,8 +3374,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return "Just give me one practical step.";
       }
 
-      if (mentionsStudy) {
+      const studyQuestionAllowed = mentionsStudy
+        && (activeConcern === "evidence" || scenarioCommitteeFocus || scenarioOncologyKOLFocus)
+        && !(activeConcern === "workflow" || activeConcern === "access" || scenarioPathwayWorkflowFocus || scenarioOralOncOnboardingFocus);
+      if (studyQuestionAllowed) {
         return "I'd like to know more about the study's methodology. What was the duration of the study?";
+      }
+
+      if (mentionsStudy && !studyQuestionAllowed) {
+        return chooseConcernSpecificVariant({
+          concern: activeConcern === "access" ? "access" : activeConcern === "screening" ? "screening" : "workflow",
+          seed: `${generationKey}:${nextTurnNumber}:study-reanchor`,
+          recentDialogues: collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS),
+        });
       }
 
       if (mentionsMaterials && scenarioPrepFocus) {
@@ -3830,6 +3862,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         progressionStage,
       });
     }
+    nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
+    nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
 
     const primaryConcern = detectPrimaryConcern(
       `${visibleScenarioGroundingText || scenario?.description || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`

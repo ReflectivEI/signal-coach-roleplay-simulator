@@ -560,7 +560,7 @@ const STAGE_DIRECTIVE_TEMPLATE_MAP = Object.freeze({
       'The HCP narrows posture and signals a more focused ask.',
     ],
     operational: [
-      "Let's keep this to one operationally specific step.",
+      'Start with one operationally specific step.',
       'Keep this to one concrete workflow step.',
       'Stay with one workflow-specific next step.',
     ],
@@ -668,24 +668,24 @@ const STAGE_DIRECTIVE_TEMPLATE_MAP = Object.freeze({
       'The HCP is preparing to close off unless the response realigns now.',
     ],
     operational: [
-      'I can keep going if you make this about one practical workflow step.',
-      "Let's keep this to one workflow step I could actually use.",
-      'Give me one practical workflow step, and we can continue.',
+      'Start with one practical workflow step my team could actually use.',
+      'Keep it to one workflow step we could use here.',
+      'Tell me the first practical workflow step you would recommend.',
     ],
     analytical: [
-      'I can keep going if you anchor this to one evidence point.',
-      "Let's keep this to one evidence point I can evaluate.",
-      'Give me one relevant evidence point, and we can continue.',
+      'Start with the evidence point that would matter most for this decision.',
+      'Keep it to one evidence point I can evaluate here.',
+      'Tell me the evidence point you think changes the decision.',
     ],
     patient_selection: [
-      'I can keep going if you name the patient type you mean.',
-      "Let's keep this to one patient-selection point I can use.",
-      'Give me one clear patient-selection point, and we can continue.',
+      'Start with the patient type you mean.',
+      'Keep it to one patient-selection point I can use here.',
+      'Tell me which patient profile you are talking about.',
     ],
     balanced: [
-      'I can keep going if you make this more specific.',
-      "Let's keep this to one specific point I can respond to.",
-      'Give me one specific point, and we can continue.',
+      'Start with the specific point you want me to respond to.',
+      'Keep it to one specific point I can use here.',
+      'Tell me the point you want me to consider first.',
     ],
   },
 });
@@ -753,7 +753,7 @@ function hasConcernBoundPressureMove(dialogueText = '', activeConcern = '') {
   if (!text.trim()) return false;
 
   const hasPressureShape = /\?/.test(text)
-    || /\b(i need|i still need|i can keep going|help me understand|can you|could you|what|how|start with|keep this tied|keep this to|let'?s keep|make this about|give me|show me|focus on)\b/.test(text);
+    || /\b(i need|i still need|i can keep going|help me understand|can you|could you|what|how|start with|keep it to|keep this tied|keep this to|let'?s keep|make this about|give me|tell me|show me|focus on)\b/.test(text);
   if (!hasPressureShape) return false;
 
   const pressureContent = /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible|access|prior|auth|coverage|payer|turnaround|friction|evidence|data|trial|endpoint|proof|clinical|patient|patients|screen|screening|selection|candidate|criteria)\b/;
