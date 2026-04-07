@@ -79,3 +79,10 @@ test("scenario-specific workflow answers count as operational alignment", () => 
   assert.doesNotMatch(SOURCE, /return "Just give me one practical step\.";/);
   assert.match(SOURCE, /I hear you, but with our staffing, give me one practical step we could actually run/);
 });
+
+test("screening plan acknowledgments produce operational follow-up instead of repeated practical-steps prompt", () => {
+  assert.match(SOURCE, /function hasScenarioAlignedScreeningPlan/);
+  assert.match(SOURCE, /That is the right focus\. Help me make it operational/);
+  assert.match(SOURCE, /I need the screening approach to be concrete/);
+  assert.doesNotMatch(SOURCE, /Before we move forward, what practical steps would you recommend/);
+});

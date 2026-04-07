@@ -1401,6 +1401,15 @@ function detectConcernAddressed(repMessage = "", concern = "workflow") {
   return concernPattern.test(String(repMessage || ""));
 }
 
+function hasScenarioAlignedScreeningPlan(repMessage = "") {
+  const value = String(repMessage || "").toLowerCase();
+  if (!value.trim()) return false;
+  const hasCandidacy = /\b(candidacy|candidate|eligib|screen|screening|criteria|qualification|qualify)\b/.test(value);
+  const hasDurability = /\b(durability|durable|resistance|adherence|monitoring|missed-dose|missed dose|regimen)\b/.test(value);
+  const hasPlanVerb = /\b(align|protect|standardi[sz]e|confirm|criteria|protocol|framework|checklist|review|screen)\b/.test(value);
+  return hasPlanVerb && (hasCandidacy || hasDurability);
+}
+
 function hasConcreteOperationalMove(repMessage = "") {
   return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|standardi[sz]e|train|training|education|monitoring|call-?tree|one-?pager|pathway|protocol|checklist|template|standing order|change for your team|for your staff)\b/i.test(String(repMessage || ""));
 }
@@ -1414,7 +1423,9 @@ function deriveEngagementDecay({
   scenarioKeywords = [],
 }) {
   const repLower = String(repMessage || "").toLowerCase();
-  const concernAddressed = detectConcernAddressed(repLower, activeConcern);
+  const scenarioScreeningPlanAddressed = hasScenarioAlignedScreeningPlan(repLower);
+  const concernAddressed = detectConcernAddressed(repLower, activeConcern)
+    || (["screening", "workflow", "policy"].includes(activeConcern) && scenarioScreeningPlanAddressed);
   const repeatedEvidence = /\b(study|trial|data|endpoint|publication|methodology|efficacy|p-value|hazard ratio)\b/.test(repLower)
     && !concernAddressed
     && ["workflow", "access", "time", "policy", "screening"].includes(activeConcern);
@@ -1433,7 +1444,7 @@ function deriveEngagementDecay({
   if (!reusedHcpLanguage && contextHits === 0) missWeight += 0.5;
   if (genericRep) missWeight += 0.4;
 
-  const strongRecovery = concernAddressed && (hasConcreteOperationalMove(repLower) || reusedHcpLanguage || contextHits > 0);
+  const strongRecovery = concernAddressed && (hasConcreteOperationalMove(repLower) || scenarioScreeningPlanAddressed || reusedHcpLanguage || contextHits > 0);
   const recoveryCredit = strongRecovery ? 1.1 : concernAddressed ? 0.5 : 0;
 
   const smoothedPressure = Math.max(0, Math.min(6, (previousPressure * 0.65) + missWeight - recoveryCredit));
@@ -3461,7 +3472,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       if (scenarioCabFocus && scenarioScreeningFocus) {
-        return "Before we move forward, what practical steps would you recommend so we can confirm candidacy and screening requirements for long-acting cabotegravir?";
+        const acknowledgedPlan = hasScenarioAlignedScreeningPlan(repMessage);
+        if (acknowledgedPlan) {
+          return "That is the right focus. Help me make it operational: which screening checkpoint would my team apply first?";
+        }
+        return "I need the screening approach to be concrete. Which candidacy checkpoint would you apply first for long-acting cabotegravir?";
       }
 
       if (scenarioMonitoringFocus) {
