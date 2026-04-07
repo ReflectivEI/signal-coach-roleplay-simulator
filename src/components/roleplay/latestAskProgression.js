@@ -72,7 +72,7 @@ function latestHcpAskRequiresEvidence(latestHcpAsk = "") {
   const value = String(latestHcpAsk || "").toLowerCase();
   if (!value.trim()) return false;
   const asksEvidence = /\b(evidence|data|study|trial|proof|endpoint|outcome|clinically meaningful|efficacy|safety|durability|p&t|formulary|committee)\b/.test(value);
-  const asksDecision = /\b(change|decide|decision|practice|defend|compare|justify|support|most relevant|matters|should)\b/.test(value);
+  const asksDecision = /\b(change|decide|decision|practice|defend|compare|justify|support|most relevant|matters|should|applies?|apply)\b/.test(value);
   return asksEvidence && asksDecision;
 }
 
@@ -122,6 +122,24 @@ function hasRepConversationLoopChallenge(repMessage = "") {
 
 function hasRepClarificationRequest(repMessage = "") {
   return /\b(what decision|what do you mean|i don'?t understand|i do not understand|rephrase|clarify|say that another way|can you explain|not following|i'?m not following|hello\??)\b/i.test(String(repMessage || ""));
+}
+
+function hasRelevantCheckBack(repMessage = "", latestHcpAsk = "", family = "general") {
+  const rep = String(repMessage || "").trim();
+  const ask = String(latestHcpAsk || "").trim();
+  if (!rep.includes("?")) return false;
+  const overlap = computeSimilarity(rep, ask);
+  const value = rep.toLowerCase();
+  const familySignals = {
+    workflow: /\b(workflow|burden|team|staff|step|process|clinic|visit|implementation|practical)\b/,
+    screening: /\b(screen|screening|candidacy|candidate|criteria|eligible|eligibility|resistance|adherence)\b/,
+    evidence: /\b(data|evidence|durability|outcome|proof|decision|study|trial|endpoint|relevant)\b/,
+    access: /\b(access|coverage|payer|prior[-\s]?auth|authorization|copay|hub|benefits|bottleneck)\b/,
+    general: /\b(priority|concern|decision|question|focus|matters)\b/,
+  };
+  const hasFamilySignal = (familySignals[family] || familySignals.general).test(value);
+  const checkBackFrame = /\b(what matters most|are you asking|should i focus|is your priority|would it help|before we go further|to make sure|do you want me to focus)\b/.test(value);
+  return (checkBackFrame && (hasFamilySignal || overlap >= 0.12)) || (hasFamilySignal && overlap >= 0.2);
 }
 
 function selectMissedDialogueVariant(family = "general", missedAttemptCount = 1) {
@@ -212,6 +230,16 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
     clarificationRequest,
     missedAttemptCount,
   });
+
+  if (hasRelevantCheckBack(rep, latestAsk, requiredFamily)) {
+    return {
+      status: `${requiredFamily}_clarification`,
+      needsProgression: true,
+      family: requiredFamily,
+      loopChallenge: false,
+      clarificationRequest: true,
+    };
+  }
 
   if (requiresOwner) {
     if (ownershipDeflection) {

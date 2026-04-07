@@ -70,7 +70,7 @@ function detectSpecificity(repMessage = "") {
 
 function detectPracticality(repMessage = "") {
   const text = String(repMessage || "").toLowerCase();
-  if (/\b(start|assign|own|run|pilot|implement|standardize|standardise|check|verify|route|submit|schedule|review|use|build|track)\b/.test(text)
+  if (/\b(start|assign|own|owned|run|pilot|implement|standardize|standardise|check|verify|route|submit|schedule|review|use|build|track|first step would be)\b/.test(text)
     && /\b(step|workflow|team|staff|checklist|protocol|owner|coordinator|nurse|np|pharmacist|process|handoff|this week|today)\b/.test(text)) {
     return "high";
   }
@@ -105,10 +105,14 @@ function detectToneAlignment(repMessage = "", latestHcpAsk = "") {
   return "moderate";
 }
 
+function hasGenericSetupLanguage(repMessage = "") {
+  return /\b(last conversation|shared with you last week|high risk patients|i'?m here to discuss)\b/i.test(String(repMessage || ""));
+}
+
 function hasClarifyingMove(repMessage = "", latestHcpAsk = "") {
   const rep = String(repMessage || "");
   if (!rep.includes("?")) return false;
-  return /\b(do you mean|are you asking|should i focus|would it help|is your priority|are you looking for|to make sure)\b/i.test(rep)
+  return /\b(do you mean|are you asking|should i focus|would it help|is your priority|are you looking for|to make sure|what matters most|before we go further)\b/i.test(rep)
     || computeTokenOverlap(rep, latestHcpAsk) >= 0.18;
 }
 
@@ -119,7 +123,7 @@ function hasAcknowledgement(repMessage = "", latestHcpAsk = "") {
 }
 
 function statusIndicatesProgress(status = "") {
-  return /progress$/.test(status) && !/missing/.test(status);
+  return (/progress$/.test(status) && !/missing/.test(status)) || /_clarification$/.test(status);
 }
 
 function statusIndicatesPartial(status = "") {
@@ -149,6 +153,20 @@ function chooseCoachingPriority({ progression, concernFamily, adaptationSignals,
     };
   }
   if (!adaptationSignals.addressed_active_ask) {
+    if (adaptationSignals.stayed_in_setup_language) {
+      return {
+        issue: "adaptation",
+        capability: "adaptive_response",
+        severity: validationOutput?.hardInvalid ? "high" : "medium",
+        reason: "The response stayed in setup language instead of adapting to the HCP's active ask.",
+        nextAction: concernFamily === "evidence"
+          ? "Adapt the opener into the proof point that changes the HCP's decision."
+          : concernFamily === "workflow"
+            ? "Adapt the opener into one practical workflow step the HCP can use."
+            : "Adapt the opener to answer what the HCP just asked.",
+        shouldShow: Boolean(validationOutput?.softInvalid || validationOutput?.hardInvalid),
+      };
+    }
     if (concernFamily === "evidence" && communicationQualities.evidence_linkage !== "high") {
       return {
         issue: "evidence_translation",
@@ -168,7 +186,7 @@ function chooseCoachingPriority({ progression, concernFamily, adaptationSignals,
       shouldShow: Boolean(validationOutput?.softInvalid || validationOutput?.hardInvalid),
     };
   }
-  if (concernFamily === "workflow" && communicationQualities.practicality !== "high") {
+  if (progression !== "progress" && concernFamily === "workflow" && communicationQualities.practicality !== "high") {
     return {
       issue: "specificity",
       capability: "conversation_management",
@@ -331,6 +349,7 @@ export function deriveConversationIntelligenceState({
     addressed_active_ask: Boolean(addressedActiveAsk),
     adapted_to_new_constraint: Boolean(addressedActiveAsk && !validationOutput?.nonAdaptiveRepetition?.detected),
     repeated_without_adapting: Boolean(validationOutput?.nonAdaptiveRepetition?.detected),
+    stayed_in_setup_language: hasGenericSetupLanguage(repMessage) && !addressedActiveAsk,
     clarified_before_advancing: hasClarifyingMove(repMessage, activeAskText),
     answered_concretely: communicationQualities.specificity === "high" || communicationQualities.practicality === "high",
   };

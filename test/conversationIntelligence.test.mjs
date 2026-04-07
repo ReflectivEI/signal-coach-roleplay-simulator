@@ -103,8 +103,31 @@ test('conversation intelligence does not let an evidence opening contract overri
   assert.equal(mixedContract.activeAsk.concernFamily, 'evidence');
   assert.equal(validation.latestAskProgression.status, 'workflow_progress');
   assert.equal(intelligence.turnInterpretation.concernFamily, 'workflow');
+  assert.equal(intelligence.communicationQualities.practicality, 'high');
   assert.equal(intelligence.coachingPriority.shouldShow, false);
   assert.equal(intelligence.capabilityMapping.primaryCapability, 'conversation_management');
+});
+
+test('conversation intelligence treats relevant check-backs as progress without over-coaching', () => {
+  const repMessage = 'Understood — before we go further, what matters most in your decision here: durability, workflow burden, or access?';
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'We are seeing patients on day 4 or 5, and it is almost too late for antivirals. What is one practical workflow step we can use without adding burden?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: buildRoleplayScenarioExecutionContract(workflowScenario),
+    latestHcpAsk: 'We are seeing patients on day 4 or 5, and it is almost too late for antivirals. What is one practical workflow step we can use without adding burden?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 1,
+  });
+
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.latestAskProgression.status, 'workflow_clarification');
+  assert.equal(intelligence.turnInterpretation.progression, 'progress');
+  assert.equal(intelligence.adaptationSignals.clarified_before_advancing, true);
+  assert.equal(intelligence.coachingPriority.shouldShow, false);
 });
 
 test('conversation intelligence identifies evidence setup without decision linkage', () => {
@@ -131,6 +154,28 @@ test('conversation intelligence identifies evidence setup without decision linka
   assert.equal(intelligence.capabilityMapping.primaryCapability, 'value_connection');
 });
 
+test('conversation intelligence labels canned but professional missed openers as adaptation gaps', () => {
+  const repMessage = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is one practical workflow step we can use without adding burden?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: buildRoleplayScenarioExecutionContract(workflowScenario),
+    latestHcpAsk: 'What is one practical workflow step we can use without adding burden?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 1,
+  });
+
+  assert.equal(validation.softInvalid, true);
+  assert.equal(intelligence.adaptationSignals.stayed_in_setup_language, true);
+  assert.equal(intelligence.coachingPriority.issue, 'adaptation');
+  assert.equal(intelligence.coachingPriority.capability, 'adaptive_response');
+  assert.match(intelligence.coachingPriority.nextAction, /workflow step/i);
+});
+
 test('conversation intelligence prioritizes the current live HCP ask over broader scenario contract family', () => {
   const repMessage = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
   const validation = validateRoleplayRepTurn({
@@ -155,7 +200,7 @@ test('conversation intelligence prioritizes the current live HCP ask over broade
 
   assert.equal(contract.activeAsk.concernFamily, 'workflow');
   assert.equal(intelligence.turnInterpretation.concernFamily, 'evidence');
-  assert.equal(intelligence.coachingPriority.capability, 'value_connection');
+  assert.equal(intelligence.coachingPriority.capability, 'adaptive_response');
 });
 
 test('conversation intelligence detects clarifying moves as structured adaptation signals', () => {

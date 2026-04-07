@@ -198,6 +198,34 @@ test('shared roleplay turn validation allows concise but correct answers', () =>
   assert.equal(validation.latestAskProgression.status, 'access_progress');
 });
 
+test('shared roleplay turn validation treats applied durability questions as evidence asks', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'Before we discuss further, can you specifically address how the data you shared last week applies to the long-term durability of treatments for my stable HIV patients?',
+    repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.latestAskProgression.status, 'missed');
+  assert.equal(validation.latestAskProgression.family, 'evidence');
+});
+
+test('shared roleplay turn validation treats relevant check-back questions as valid clarification', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'We are seeing patients on day 4 or 5, and it is almost too late for antivirals. What is one practical workflow step we can use without adding burden?',
+    repMessage: 'Understood — before we go further, what matters most in your decision here: durability, workflow burden, or access?',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.latestAskProgression.status, 'workflow_clarification');
+  assert.equal(validation.latestAskProgression.clarificationRequest, true);
+});
+
 test('shared roleplay turn validation does not block repeated wording when meaningful owner content is added', () => {
   const validation = validateRoleplayRepTurn({
     latestHcpAsk: 'Who on my team owns the first workflow step this week?',
