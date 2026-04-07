@@ -54,7 +54,10 @@ function latestHcpAskRequiresOwner(latestHcpAsk = "") {
 function latestHcpAskRequiresWorkflowStep(latestHcpAsk = "") {
   const value = String(latestHcpAsk || "").toLowerCase();
   if (!value.trim()) return false;
-  return /\b(first step|practical step|workflow step|process change|smallest workflow change|what would my team do|what is one change|what is one step|what should we do first|what changes in.*workflow)\b/.test(value);
+  const directWorkflowAsk = /\b(first step|practical step|workflow step|process change|smallest workflow change|what would my team do|what is one change|what is one step|what should we do first|what changes in.*workflow)\b/.test(value);
+  const impliedWorkflowAsk = /\b(can you help|help with that|what would you recommend|what should we do|how would you handle)\b/.test(value)
+    && /\b(workflow|staff|staffing|burden|overwhelm|overwhelmed|paperwork|pa\b|prior[-\s]?auth|administrative|clinic flow)\b/.test(value);
+  return directWorkflowAsk || impliedWorkflowAsk;
 }
 
 function latestHcpAskRequiresScreening(latestHcpAsk = "") {
@@ -138,6 +141,31 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
     .filter(Boolean)
     .slice(-3)
     .some((previous) => computeSimilarity(previous, rep) >= 0.84);
+  const repeatedRepCount = previousRepMessages
+    .filter(Boolean)
+    .slice(-5)
+    .filter((previous) => computeSimilarity(previous, rep) >= 0.84).length;
+  const requiredFamily = requiresOwner || requiresWorkflowStep
+    ? "workflow"
+    : requiresScreening
+      ? "screening"
+      : requiresEvidence
+        ? "evidence"
+        : requiresAccess
+          ? "access"
+          : "general";
+  const missedStatus = repeatedRepCount >= 3
+    ? "repeated_missed_close"
+    : repeatedRep || loopChallenge
+      ? "repeated_missed"
+      : "missed";
+  const missedProgression = () => ({
+    status: missedStatus,
+    needsProgression: true,
+    family: requiredFamily,
+    repeatedRepCount,
+    loopChallenge: loopChallenge || repeatedRep,
+  });
 
   if (requiresOwner) {
     if (ownershipDeflection) {
@@ -152,7 +180,7 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
     if (implementationMove) {
       return { status: loopChallenge || repeatedRep ? "repeated_missing_owner" : "missing_owner", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
     }
-    return { status: "missed", needsProgression: false, loopChallenge };
+    return missedProgression();
   }
 
   if (requiresWorkflowStep && implementationMove) {
@@ -171,10 +199,44 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
     return { status: loopChallenge || repeatedRep ? "repeated_access_progress" : "access_progress", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
   }
 
-  return { status: "missed", needsProgression: false, loopChallenge };
+  return missedProgression();
 }
 
 export function buildLatestAskProgressionDialogue(latestAskProgression = {}) {
+  const family = latestAskProgression.family || "general";
+  if (latestAskProgression.status === "repeated_missed_close") {
+    const closeByFamily = {
+      workflow: "I am hearing the same opener, but it still does not answer the workflow question. I need to pause here and get back to clinic.",
+      screening: "I am hearing the same opener, but it still does not answer the screening question. I need to pause here.",
+      evidence: "I am hearing the same opener, but it still does not answer the evidence question. I need to pause here.",
+      access: "I am hearing the same opener, but it still does not answer the access question. I need to pause here and get back to patients.",
+      general: "I am hearing the same opener, but it still does not answer my question. I need to pause here.",
+    };
+    return closeByFamily[family] || closeByFamily.general;
+  }
+
+  if (latestAskProgression.status === "repeated_missed") {
+    const repeatByFamily = {
+      workflow: "I am hearing the same opener, but I still need the workflow answer. Give me one concrete step, or we should pause.",
+      screening: "I am hearing the same opener, but I still need the screening answer. Give me the first checkpoint, or we should pause.",
+      evidence: "I am hearing the same opener, but I still need the evidence answer. Give me the decision-relevant point, or we should pause.",
+      access: "I am hearing the same opener, but I still need the access answer. Give me the first step that reduces the bottleneck, or we should pause.",
+      general: "I am hearing the same opener, but it still does not answer my question. Give me the direct answer, or we should pause.",
+    };
+    return repeatByFamily[family] || repeatByFamily.general;
+  }
+
+  if (latestAskProgression.status === "missed") {
+    const missedByFamily = {
+      workflow: "I need you to answer the workflow question directly: what is the first practical step here?",
+      screening: "I need you to answer the screening question directly: what is the first checkpoint you would use?",
+      evidence: "I need you to answer the evidence question directly: what proof point changes the decision?",
+      access: "I need you to answer the access question directly: what is the first step that reduces the bottleneck?",
+      general: "I need you to answer the question directly before we move on.",
+    };
+    return missedByFamily[family] || missedByFamily.general;
+  }
+
   switch (latestAskProgression.status) {
     case "ownership_deflected":
       return "Fair, you may not know my staffing model. Give me the role you usually see owning the first step, and I can decide if that fits here.";

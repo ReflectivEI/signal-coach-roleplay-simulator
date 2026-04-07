@@ -8,6 +8,18 @@ import {
 
 const TRANSCRIPT_CASES = [
   {
+    name: 'repeated generic opener against workflow ask boundaries then closes instead of rotating variants',
+    latestHcpAsk: 'I love getting my patients on PrEP, but the paperwork is killing us. We are drowning in PAs. Can you help with that?',
+    repTurns: [
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+    ],
+    expectedStatuses: ['missed', 'repeated_missed', 'repeated_missed', 'repeated_missed_close'],
+    expectedFinal: /same opener.*does not answer the workflow question.*pause/i,
+  },
+  {
     name: 'workflow step without owner progresses to ownership gap',
     latestHcpAsk: 'I need this grounded in our actual workflow. Start with the first step and who would own it.',
     repTurns: [
@@ -86,7 +98,7 @@ const TRANSCRIPT_CASES = [
   },
 ];
 
-const DISALLOWED_LOOP_PHRASES = /I'm not hearing the workflow piece yet|Start with one practical workflow step my team could actually use|If this is actionable, make it concrete: what is the first step my staff would own|I hear you, but with our staffing, give me one practical step|I still need clinically meaningful evidence before I would change practice|How would I identify the right patients|How would this reduce the prior-auth burden/i;
+const DISALLOWED_LOOP_PHRASES = /I'm not hearing the workflow piece yet|Start with one practical workflow step my team could actually use|If this is actionable, make it concrete: what is the first step my staff would own|I hear you, but with our staffing, give me one practical step|I still need clinically meaningful evidence before I would change practice|How would I identify the right patients|How would this reduce the prior-auth burden|Help me connect this to the patients I am actually seeing this week/i;
 
 function replayCase(fixture) {
   const previousRepMessages = [];

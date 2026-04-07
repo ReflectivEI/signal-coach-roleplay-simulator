@@ -3920,7 +3920,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       usedDeterministicFallback = true;
       draftResponseSource = `${draftResponseSource}_latest_ask_progression_gate`;
       nextHcpDialogue = latestAskBoundDialogue;
-      if (["repeated_owner_progress", "repeated_missing_owner", "repeated_workflow_progress"].includes(latestAskProgression.status)) {
+      if (latestAskProgression.status === "repeated_missed_close") {
+        nextHcpState = "disengaged";
+      } else if (["repeated_missed", "repeated_owner_progress", "repeated_missing_owner", "repeated_workflow_progress"].includes(latestAskProgression.status)) {
         nextHcpState = nextHcpState === "engaged" ? "resistant" : nextHcpState;
       }
     }
@@ -4553,7 +4555,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = terminalCloseFallback;
     }
 
-    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced && !objectiveOverrideBlocked) {
+    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced && !objectiveOverrideBlocked && !latestAskBoundDialogue) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
         mode: lateTurnConstraintDecision.mode,
