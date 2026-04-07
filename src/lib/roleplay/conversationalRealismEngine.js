@@ -166,52 +166,86 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
   }),
 });
 
-function normalizeProfileFocus(value = '') {
-  return normalizeHcpSpokenRealism(value)
-    .replace(/\bscenario\b/gi, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+function deriveContractProfileBucket(contract = {}) {
+  const context = [
+    contract?.scenarioIdentity?.scenarioId,
+    contract?.scenarioIdentity?.title,
+    contract?.scenarioIdentity?.category,
+    contract?.scenarioIdentity?.specialty,
+    contract?.hcpPersona?.stakeholder,
+    contract?.hcpPersona?.personaPrimary,
+    contract?.hcpPersona?.influenceDriver,
+    contract?.managerIntegration?.scenarioFamily,
+    contract?.managerIntegration?.interactionSkill,
+    contract?.activeAsk?.concernFamily,
+    contract?.openingState?.primaryConcernFamily,
+    ...(Array.isArray(contract?.constraints?.challenges) ? contract.constraints.challenges : []),
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  if (/\b(committee|formulary|p&t|budget|agenda)\b/.test(context)) return 'committee';
+  if (/\b(access|prior auth|prior-auth|authorization|coverage|payer|reimbursement|copay|admin|administrative)\b/.test(context)) return 'access_process';
+  if (/\b(screening|screen|diagnos|eligib|candidate|patient selection|identify|identification)\b/.test(context)) return 'screening_evaluation';
+  if (/\b(clinic|provider|patient|care|nurse|staff|workflow|implementation|operational|specialty|internal medicine|cardiology|oncology|pulm|infectious)\b/.test(context)) return 'clinic_team';
+  return 'clinic_team';
+}
+
+function contractProfileSettingForBucket(bucket = 'clinic_team') {
+  if (bucket === 'committee') return 'for this committee';
+  if (bucket === 'access_process') return 'in our process';
+  return 'here';
+}
+
+function contractProfileWorkflowAskForBucket(bucket = 'clinic_team') {
+  if (bucket === 'committee') return 'what should this committee do first';
+  if (bucket === 'access_process') return 'what would we change first in our process';
+  if (bucket === 'screening_evaluation') return 'what would we do first here';
+  return 'what would my team actually do first here';
+}
+
+function capitalizeQuestion(value = '') {
+  const text = String(value || '').trim().replace(/\?*$/, '');
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}?`;
 }
 
 function buildContractDerivedRealismProfile(contract = {}) {
-  const titleFocus = normalizeProfileFocus(contract?.scenarioIdentity?.title || '');
-  const specialtyFocus = normalizeProfileFocus(contract?.scenarioIdentity?.specialty || '');
-  const stakeholder = normalizeProfileFocus(contract?.hcpPersona?.stakeholder || 'my team');
-  const focus = titleFocus || specialtyFocus || contract?.scenarioIdentity?.scenarioId || 'this case';
-  const team = /team|committee|clinic|staff|nurse|pharmac/i.test(stakeholder) ? stakeholder : 'my team';
+  const bucket = deriveContractProfileBucket(contract);
+  const setting = contractProfileSettingForBucket(bucket);
+  const workflowAsk = contractProfileWorkflowAskForBucket(bucket);
+  const workflowQuestion = capitalizeQuestion(workflowAsk);
   return Object.freeze({
     profileSource: 'contract_derived_realism_profile',
+    bucket,
     defaultConcernFamily: contract?.activeAsk?.concernFamily || contract?.openingState?.primaryConcernFamily || 'workflow',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        evidence: `Given the time, what evidence changes the decision in ${focus}?`,
-        workflow: `Given the time, what would ${team} actually do first in ${focus}?`,
-        access: `Given the time, what access step changes the delay in ${focus}?`,
-        screening: `Given the time, who would we identify first in ${focus}?`,
+        evidence: `Given the time, what evidence changes the decision ${setting}?`,
+        workflow: `Given the time, ${workflowAsk}?`,
+        access: `Given the time, what access step changes the delay ${setting}?`,
+        screening: `Given the time, who would we identify first ${setting}?`,
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
-        evidence: `What evidence changes the decision in ${focus}?`,
-        workflow: `What would ${team} actually do first in ${focus}?`,
-        access: `What access step changes the delay in ${focus}?`,
-        screening: `Who would we identify first in ${focus}?`,
+        evidence: `What evidence changes the decision ${setting}?`,
+        workflow: workflowQuestion,
+        access: `What access step changes the delay ${setting}?`,
+        screening: `Who would we identify first ${setting}?`,
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        evidence: `What evidence changes the practical decision in ${focus}?`,
-        workflow: `What would ${team} actually do first in ${focus}?`,
-        access: `What access step changes the delay in ${focus}?`,
-        screening: `Who would we identify first in ${focus}?`,
+        evidence: `What evidence changes the practical decision ${setting}?`,
+        workflow: workflowQuestion,
+        access: `What access step changes the delay ${setting}?`,
+        screening: `Who would we identify first ${setting}?`,
       }),
       SOFT_RESISTANCE: Object.freeze({
-        evidence: `I still need the decision-relevant evidence for ${focus}. What changes the decision?`,
-        workflow: `I still need the practical step for ${focus}. What would ${team} do first?`,
-        access: `I still need the access step for ${focus}. What changes the delay?`,
-        screening: `I still need the patient boundary for ${focus}. Who would we identify first?`,
+        evidence: `I still need the decision-relevant evidence ${setting}. What changes the decision?`,
+        workflow: `I still need the practical step ${setting}. ${workflowQuestion}`,
+        access: `I still need the access step ${setting}. What changes the delay?`,
+        screening: `I still need the patient boundary ${setting}. Who would we identify first?`,
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        evidence: `If we continue with ${focus}, what evidence changes the decision?`,
-        workflow: `If we continue with ${focus}, what would ${team} do first?`,
-        access: `If we continue with ${focus}, what access step changes the delay?`,
-        screening: `If we continue with ${focus}, who would we identify first?`,
+        evidence: `If we continue ${setting}, what evidence changes the decision?`,
+        workflow: `If we continue ${setting}, ${workflowAsk}?`,
+        access: `If we continue ${setting}, what access step changes the delay?`,
+        screening: `If we continue ${setting}, who would we identify first?`,
       }),
     }),
   });

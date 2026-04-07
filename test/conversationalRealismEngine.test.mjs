@@ -355,6 +355,111 @@ test('state-driven realism changes output when state changes within the same sce
   assert.equal(resistant.metadata.stateName, 'SOFT_RESISTANCE');
 });
 
+test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing', () => {
+  const contract = buildRoleplayScenarioExecutionContract({
+    id: 'unprofiled-clinic-provider-test',
+    title: 'HIV Prevention Gap in High-Risk Population',
+    specialty: 'Internal Medicine',
+    stakeholder: 'Dr. Maya Patel - Internal Medicine MD, Urban Clinic',
+    openingScene: "Dr. Patel is between patients and asks what the team would do first.",
+  });
+  const result = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState: { ...contract.activeAsk, concernFamily: 'workflow' },
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.metadata.renderingSource, 'contract_derived_realism_profile');
+  assert.equal(result.text, 'Given the time, what would my team actually do first here?');
+  assert.doesNotMatch(result.text, /Dr\.|Maya|Patel|Internal Medicine|Urban Clinic/i);
+});
+
+test('contract-derived realism uses committee bucket for unprofiled formulary contexts', () => {
+  const contract = buildRoleplayScenarioExecutionContract({
+    id: 'unprofiled-formulary-committee-test',
+    title: 'Regional Formulary Review',
+    specialty: 'P&T Committee',
+    stakeholder: 'Pharmacy Director - Committee Chair',
+    openingScene: "The committee chair says there are three requests and asks what evidence should influence the decision.",
+  });
+  const result = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState: { ...contract.activeAsk, concernFamily: 'evidence' },
+    concernFamily: 'evidence',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.text, 'Given the time, what evidence changes the decision for this committee?');
+  assert.doesNotMatch(result.text, /Pharmacy Director|Committee Chair|Regional Formulary Review/i);
+});
+
+test('contract-derived realism uses process bucket for unprofiled access/admin contexts', () => {
+  const contract = buildRoleplayScenarioExecutionContract({
+    id: 'unprofiled-access-admin-test',
+    title: 'Prior Authorization Delay Review',
+    specialty: 'Access Operations',
+    stakeholder: 'Access Coordinator - Reimbursement Team Lead',
+    openingScene: "The access lead asks what step would reduce prior authorization delays.",
+  });
+  const result = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState: { ...contract.activeAsk, concernFamily: 'access' },
+    concernFamily: 'access',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.text, 'Given the time, what access step changes the delay in our process?');
+  assert.doesNotMatch(result.text, /Access Coordinator|Reimbursement Team Lead|Prior Authorization Delay Review/i);
+});
+
+test('contract-derived realism uses evaluation bucket for unprofiled screening and diagnosis contexts', () => {
+  const contract = buildRoleplayScenarioExecutionContract({
+    id: 'unprofiled-screening-diagnosis-test',
+    title: 'Rare Disease Diagnosis Journey',
+    specialty: 'Genetics Clinic',
+    stakeholder: 'Genetics NP - Diagnostic Intake Lead',
+    openingScene: "The NP asks who would be identified first for screening.",
+  });
+  const result = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState: { ...contract.activeAsk, concernFamily: 'screening' },
+    concernFamily: 'screening',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.text, 'Given the time, who would we identify first here?');
+  assert.doesNotMatch(result.text, /Genetics NP|Diagnostic Intake Lead|Rare Disease Diagnosis Journey/i);
+});
+
+test('contract-derived bucket hardening does not alter scenario-specific profiles', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const result = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState: { ...contract.activeAsk, concernFamily: 'workflow' },
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
+  assert.equal(result.text, 'I remember that data, but I need something actionable. What would my team actually do differently next week?');
+});
+
 test('conversational realism uses scenario-bound rich phrasing for workflow pressure', () => {
   const hiv = applyConversationalRealism({
     text: 'What is the first practical workflow step here?',
