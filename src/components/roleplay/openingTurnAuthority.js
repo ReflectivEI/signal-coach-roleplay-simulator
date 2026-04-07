@@ -4,6 +4,17 @@ function normalizeText(value = '') {
   return String(value || '').trim();
 }
 
+function deterministicIndex(seed = '', modulo = 1) {
+  const text = String(seed || '');
+  if (!text || modulo <= 1) return 0;
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0) % modulo;
+}
+
 function stripOuterPunctuation(value = '') {
   return String(value || '').trim().replace(/^[\s:;,.-]+|[\s:;,.-]+$/g, '').trim();
 }
@@ -63,6 +74,41 @@ function joinSpokenSegments(segments = []) {
     .trim();
 }
 
+function hasNaturalAcknowledgment(dialogueText = '') {
+  return /^(hi|hello|hey|good morning|good afternoon|good evening)\b[\s,.!]/i.test(String(dialogueText || '').trim());
+}
+
+function scenarioExplicitlySkipsGreeting(openingScene = '') {
+  return /\b(no greeting|without greeting|does not acknowledge|doesn't acknowledge|ignores the rep|cuts off the rep|refuses to engage)\b/i.test(String(openingScene || ''));
+}
+
+function chooseOpeningAcknowledgment(seed = '', openingScene = '') {
+  const scene = String(openingScene || '').toLowerCase();
+  const hurried = /\b(time|minutes?|schedule|watch|clock|between patients|running late|rushed|quick|tight)\b/.test(scene);
+  const pool = hurried
+    ? ['Hi.', 'Hi there.']
+    : ['Hi.', 'Hi there.', 'Hey, good to see you.'];
+  return pool[deterministicIndex(seed, pool.length)] || 'Hi.';
+}
+
+function normalizeOpeningRealism(dialogueText = '', openingScene = '', scenario = {}) {
+  let dialogue = normalizeText(dialogueText);
+  if (!dialogue) return '';
+
+  dialogue = dialogue
+    .replace(/\bi\s+have\s+about\s+10\s+minutes\b/gi, "I've got a few minutes")
+    .replace(/\bwhat['’]?s\s+this\s+about\??/gi, 'What did you want to go over?')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!hasNaturalAcknowledgment(dialogue) && !scenarioExplicitlySkipsGreeting(openingScene)) {
+    const seed = [scenario?.id, scenario?.scenarioId, scenario?.title, openingScene, dialogue].filter(Boolean).join(':');
+    dialogue = `${chooseOpeningAcknowledgment(seed, openingScene)} ${dialogue}`.trim();
+  }
+
+  return dialogue;
+}
+
 function extractQuotedDialogue(text = '') {
   const source = String(text || '').trim();
   if (!source) return '';
@@ -120,7 +166,8 @@ export function extractScenarioOwnedOpeningTurn(scenario = {}) {
   const openingScene = normalizeText(scenario?.openingScene || scenario?.opening_scene);
 
   const openingCue = extractNarrativeCue(openingScene) || buildCueFromCanonical(contract);
-  const openingDialogue = extractQuotedDialogue(openingScene) || buildDialogueFromCanonical(contract, scenario);
+  const rawOpeningDialogue = extractQuotedDialogue(openingScene) || buildDialogueFromCanonical(contract, scenario);
+  const openingDialogue = normalizeOpeningRealism(rawOpeningDialogue, openingScene, scenario);
 
   return {
     cueText: openingCue,

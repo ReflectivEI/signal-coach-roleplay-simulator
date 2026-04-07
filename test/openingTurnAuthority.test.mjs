@@ -60,7 +60,8 @@ test("scenario-owned opening parser extracts cue and dialogue from declared open
   const opening = extractScenarioOwnedOpeningTurn(OPENING_SCENARIOS[0]);
 
   assert.match(opening.cueText, /Michael checks upcoming follow-up slots/i);
-  assert.equal(opening.dialogueText, "I can give you a minute, but keep this tied to the monitoring step we can actually use this week.");
+  assert.match(opening.dialogueText, /^Hi\b/i);
+  assert.match(opening.dialogueText, /keep this tied to the monitoring step/i);
   assert.equal(opening.source, "scenario_opening_scene");
 });
 
@@ -73,8 +74,19 @@ test("scenario-owned opening parser handles contractions and multiple quoted dia
   assert.match(opening.cueText, /Dr\. Patel glances at her watch/i);
   assert.match(opening.cueText, /She's between patients, typing notes rapidly/i);
   assert.doesNotMatch(opening.cueText, /^S between/i);
-  assert.equal(opening.dialogueText, "I have about 10 minutes. What's this about?");
+  assert.equal(opening.dialogueText, "Hi. I've got a few minutes. What did you want to go over?");
   assert.doesNotMatch(opening.dialogueText, /she says|typing notes|between patients/i);
+  assert.doesNotMatch(opening.dialogueText, /what's this about/i);
+});
+
+test("opening realism keeps explicit no-greeting exceptions scenario-bound", () => {
+  const opening = extractScenarioOwnedOpeningTurn({
+    id: "explicit_no_greeting_case",
+    openingScene: `Dr. Harper ignores the rep and says without greeting. "What did you want to go over?"`,
+  });
+
+  assert.match(opening.cueText, /without greeting/i);
+  assert.equal(opening.dialogueText, "What did you want to go over?");
 });
 
 test("opening prompt carries deterministic scenario-owned authority marker", () => {
@@ -86,7 +98,7 @@ test("opening prompt carries deterministic scenario-owned authority marker", () 
   });
 
   assert.match(prompt, /ROLEPLAY_OPENING_TURN_AUTHORITY: scenario_owned/);
-  assert.match(prompt, /ROLEPLAY_OPENING_DIALOGUE_EXACT: I can give you a minute/);
+  assert.match(prompt, /ROLEPLAY_OPENING_DIALOGUE_EXACT: Hi\. I can give you a minute/);
   assert.match(prompt, /OPENING TURN CONTRACT/);
   assert.doesNotMatch(prompt, /That is interesting, but my biggest issue is prior auth delays, not outcomes/);
 });
