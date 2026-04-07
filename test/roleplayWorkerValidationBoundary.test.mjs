@@ -33,6 +33,9 @@ test('current RolePlayChat roleplay provider calls carry shared validation conte
   assert.equal(validationContextCount, roleplayCallCount, 'every roleplay provider call must send validation context');
   assert.match(CHAT_SOURCE, /const roleplayTurnValidationContext = \{/);
   assert.match(CHAT_SOURCE, /latestHcpAsk: respondingToTurn\?\.hcpDialogueBefore/);
+  assert.match(CHAT_SOURCE, /firstTurnOpeningContext,/);
   assert.match(CHAT_SOURCE, /repMessage,/);
-  assert.match(CHAT_SOURCE, /previousRepMessages: collectRepMessagesForSimilarLatestAsk\(turns, respondingToTurn\?\.hcpDialogueBefore/);
+  assert.match(CHAT_SOURCE, /const previousRepMessagesForValidation = collectRepMessagesForSimilarLatestAsk\(turns, respondingToTurn\?\.hcpDialogueBefore/);
+  assert.match(CHAT_SOURCE, /previousRepMessages: previousRepMessagesForValidation/);
+  assert.match(WORKER_SOURCE, /firstTurnOpeningContext: contract\.firstTurnOpeningContext/);
 });

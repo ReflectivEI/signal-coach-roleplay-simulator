@@ -115,7 +115,7 @@ import {
   buildLatestAskProgressionDialogue,
   classifyLatestAskProgression,
 } from "./latestAskProgression";
-import { detectOpeningSceneDialogueReplay } from "./openingTurnAuthority";
+import { detectOpeningSceneDialogueReplay, extractScenarioOwnedOpeningTurn } from "./openingTurnAuthority";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
 import { detectStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
@@ -2832,15 +2832,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
+    const isFirstRepTurn = respondingToTurn.turnNumber === 0 && !respondingToTurn?.hcpDialogueBefore;
+    const openingTurnForValidation = isFirstRepTurn ? extractScenarioOwnedOpeningTurn(scenario) : null;
+    const firstTurnOpeningContext = openingTurnForValidation
+      ? [openingTurnForValidation.cueText, openingTurnForValidation.dialogueText].filter(Boolean).join(" ")
+      : "";
+    const previousRepMessagesForValidation = collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || "");
     const preTurnValidation = validateRoleplayRepTurn({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
+      firstTurnOpeningContext,
       repMessage,
-      previousRepMessages: collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || ""),
+      previousRepMessages: previousRepMessagesForValidation,
     });
     const roleplayTurnValidationContext = {
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
+      firstTurnOpeningContext,
       repMessage,
-      previousRepMessages: collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || ""),
+      previousRepMessages: previousRepMessagesForValidation,
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
     };
@@ -2876,6 +2884,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
     });
+    if (preTurnValidation.coaching?.shouldShow) {
+      setCoachingTip(preTurnValidation.coaching);
+    }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;

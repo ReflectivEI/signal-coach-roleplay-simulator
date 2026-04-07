@@ -158,3 +158,75 @@ test('shared roleplay turn validation blocks repeated generic opener against evi
     ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored'],
   );
 });
+
+test('shared roleplay turn validation passes context-aware first turns against opening scene', () => {
+  const validation = validateRoleplayRepTurn({
+    firstTurnOpeningContext: 'The P&T committee members are reviewing budget reports. We have three formulary requests today. You have 20 minutes.',
+    repMessage: 'Understood. Given the time, I will keep this focused on the one outcomes point most relevant to formulary review.',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.invalid, false);
+  assert.equal(validation.openingContextProgression.status, 'responsive');
+  assert.equal(validation.openingContextProgression.family, 'evidence');
+  assert.equal(validation.coaching, null);
+});
+
+test('shared roleplay turn validation allows partially responsive first turns with lightweight coaching', () => {
+  const validation = validateRoleplayRepTurn({
+    firstTurnOpeningContext: 'The P&T committee members are reviewing budget reports. We have three formulary requests today. You have 20 minutes.',
+    repMessage: 'Thanks for your time. I will focus on the formulary evidence.',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.invalid, false);
+  assert.equal(validation.openingContextProgression.status, 'partially_responsive');
+  assert.equal(validation.coaching.escalationLabel, 'First-turn context note');
+  assert.match(validation.coaching.suggestion, /opening|formulary|evidence|time/i);
+});
+
+test('shared roleplay turn validation blocks generic first-turn openers that ignore opening scene', () => {
+  const validation = validateRoleplayRepTurn({
+    firstTurnOpeningContext: 'The P&T committee members are reviewing budget reports. We have three formulary requests today. You have 20 minutes.',
+    repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.invalid, true);
+  assert.equal(validation.blockHcpGeneration, true);
+  assert.equal(validation.blockScoring, true);
+  assert.equal(validation.blockStateAdvance, true);
+  assert.equal(validation.openingContextProgression.status, 'non_responsive');
+  assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
+  assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('first_turn_opening_context_ignored'));
+  assert.doesNotMatch(JSON.stringify(validation.telemetryEvents), /formulary requests/i);
+});
+
+test('shared roleplay turn validation blocks nonsense first-turn input before live progression', () => {
+  const validation = validateRoleplayRepTurn({
+    firstTurnOpeningContext: 'The HCP is short-staffed and asks for one practical workflow step.',
+    repMessage: 'Hello?',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.latestAskProgression.status, 'none');
+  assert.equal(validation.openingContextProgression.status, 'non_responsive');
+  assert.equal(validation.blockHcpGeneration, true);
+});
+
+test('shared roleplay turn validation transitions to normal latest-ask behavior after first turn', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first workflow step my team would own?',
+    firstTurnOpeningContext: '',
+    repMessage: 'Start a nurse-owned checklist in the existing follow-up call.',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.openingContextProgression, null);
+  assert.equal(validation.latestAskProgression.status, 'owner_progress');
+});

@@ -160,6 +160,7 @@ function enforceRoleplayTurnValidationBoundary(body = {}) {
 
     const validation = validateRoleplayRepTurn({
         latestHcpAsk: contract.latestHcpAsk || "",
+        firstTurnOpeningContext: contract.firstTurnOpeningContext || "",
         repMessage: contract.repMessage || "",
         previousRepMessages: Array.isArray(contract.previousRepMessages) ? contract.previousRepMessages : [],
         coachingRequirement: contract.coachingRequirement || null,
