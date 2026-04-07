@@ -5,6 +5,7 @@ import {
   downgradeToAllowedOpeningState,
 } from './hcpEnforcementEscalation.js';
 import { evaluateScenarioDomainIntegrity, enforceDomainReanchorInDialogue } from './scenarioDomainIntegrity.js';
+import { extractScenarioOwnedOpeningTurn } from './openingTurnAuthority.js';
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -326,9 +327,12 @@ export function buildHcpReactionContract({
   concernFlowOutcome = 'aligned',
   repMessage = '',
 } = {}) {
-  const normalizedCue = normalizeText(cueText);
+  const scenarioOwnedOpeningTurn = Number(turnNumber) === 1
+    ? extractScenarioOwnedOpeningTurn(scenario)
+    : null;
+  const normalizedCue = normalizeText(scenarioOwnedOpeningTurn?.cueText || cueText);
   const turnScopedHcpState = deriveScenarioBoundHcpState({ scenario, hcpState, turnNumber });
-  const normalizedDialogue = normalizeText(dialogueText);
+  const normalizedDialogue = normalizeText(scenarioOwnedOpeningTurn?.dialogueText || dialogueText);
   const socialGreetingOpening = Number(turnNumber) === 1 && isGreetingOnlyRepMessage(repMessage);
   const effectiveConcernFlowOutcome = socialGreetingOpening ? 'aligned' : concernFlowOutcome;
   const effectiveAlignment = socialGreetingOpening
@@ -481,6 +485,7 @@ export function buildHcpReactionContract({
       dialogueSignature: realismDialogue.dialogueSignature,
       cueSignature: realismCue.cueSignature,
       tooIdealFlag: realismDialogue.tooIdealFlag,
+      openingTurnSource: scenarioOwnedOpeningTurn?.source || null,
     },
     scoringContext: {
       ...scoringContext,
@@ -492,6 +497,7 @@ export function buildHcpReactionContract({
       contextContamination: domainAssessment.contextContamination,
       scenarioDomain: domainAssessment.scenarioDomain,
       scenarioReanchorRequired: domainAssessment.scenarioReanchorRequired,
+      openingTurnSource: scenarioOwnedOpeningTurn?.source || null,
     },
   };
 
