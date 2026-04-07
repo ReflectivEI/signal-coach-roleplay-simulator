@@ -116,6 +116,7 @@ import {
   classifyLatestAskProgression,
 } from "./latestAskProgression";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
+import { detectStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -5030,6 +5031,32 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     nextHcpDialogue = latestAskProtectedDialogue || hcpReactionContract.selectedDialogueText || nextHcpDialogue;
     nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
     nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
+
+    const structuredScenarioLeakCheck = detectStructuredScenarioContentLeak({
+      dialogueText: nextHcpDialogue,
+      scenario,
+      runtimeContract: runtimeScenarioContractRef.current,
+    });
+    if (
+      structuredScenarioLeakCheck.leaked
+      && !isTerminalClosureDialogue(nextHcpDialogue)
+    ) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+        fallbackResponse: groundedFallback,
+        concern: primaryConcern,
+        includeWarmth: false,
+        scenarioContext: visibleScenarioGroundingText,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+      emitPlannerTrace("structured_scenario_metadata_leak_repaired", {
+        turnNumber: nextTurnNumber,
+        activeConcern: primaryConcern,
+        anchorHitCount: structuredScenarioLeakCheck.anchorHits.length,
+        structuredLabelLeak: structuredScenarioLeakCheck.structuredLabelLeak,
+        descriptorLeak: structuredScenarioLeakCheck.descriptorLeak,
+      });
+    }
 
     const finalDialogueBeforeRepeatRepair = nextHcpDialogue;
     const finalDialogueNeededRepair = !latestAskBoundDialogue

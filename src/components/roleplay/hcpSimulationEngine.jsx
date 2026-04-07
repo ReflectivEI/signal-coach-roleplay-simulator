@@ -2069,6 +2069,8 @@ export function buildHCPDialoguePrompt({
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
   prompt += '- Keep responses specific and practice-worthy, grounded in scenario details and dialogue context.\n'
   prompt += '- Treat raw authoring/background context as non-speakable unless it is visible in the opening scene, prior dialogue, or an explicitly triggered allowed fact.\n'
+  prompt += '- Structured scenario fields are conditioning inputs only: never quote, list, concatenate, or transform objectives, tactical focus, key messages, challenges, persona labels, credentials, specialty, disease state, runtime tags, or field labels into spoken dialogue.\n'
+  prompt += '- If a structured field informs your reply, translate only the relevant live concern into natural clinician speech; do not output metadata fragments.\n'
   prompt += '- Hard rule: do not introduce staffing, workflow, operational, or resource constraints unless explicitly present in scenario details or prior dialogue.\n'
   prompt += '- If a constraint was already stated, avoid repeating it unless the rep asks to revisit it, it changed, or clarification is required.\n'
   prompt += '- Do not sound like a consultant, educator, or training script.\n'
