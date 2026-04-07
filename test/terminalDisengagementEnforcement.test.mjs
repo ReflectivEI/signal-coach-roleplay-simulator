@@ -4,6 +4,7 @@ import fs from "node:fs";
 
 const SOURCE = fs.readFileSync(new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url), "utf8");
 const LATEST_ASK_PROGRESSION_SOURCE = fs.readFileSync(new URL("../src/components/roleplay/latestAskProgression.js", import.meta.url), "utf8");
+const SHARED_TURN_VALIDATION_SOURCE = fs.readFileSync(new URL("../src/lib/roleplay/roleplayTurnValidation.js", import.meta.url), "utf8");
 
 test("terminal disengagement phrases are recognized as closure signals", () => {
   assert.match(SOURCE, /i need to get back to patients/);
@@ -107,10 +108,14 @@ test("surface hardening prevents capitalized question words after comma joins", 
 test("latest HCP ask progression gate prevents workflow ownership loops", () => {
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function classifyLatestAskProgression/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function buildLatestAskProgressionDialogue/);
-  assert.match(SOURCE, /function shouldBlockRepTurnForLatestAsk/);
-  assert.match(SOURCE, /const preTurnLatestAskProgression = classifyLatestAskProgression/);
-  assert.match(SOURCE, /shouldBlockRepTurnForLatestAsk\(preTurnLatestAskProgression\)/);
-  assert.match(SOURCE, /setCoachingTip\(buildInvalidTurnCoaching\(preTurnLatestAskProgression\)\)/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /function shouldBlockRepTurnForLatestAsk/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /function validateRoleplayRepTurn/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockHcpGeneration: invalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockScoring: invalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockStateAdvance: invalid/);
+  assert.match(SOURCE, /const preTurnValidation = validateRoleplayRepTurn/);
+  assert.match(SOURCE, /if \(preTurnValidation\.invalid\)/);
+  assert.match(SOURCE, /setCoachingTip\(preTurnValidation\.coaching\)/);
   assert.match(SOURCE, /rep_turn_blocked_for_latest_ask/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /latestHcpAskRequiresOwner/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /hasOwnershipDeflection/);

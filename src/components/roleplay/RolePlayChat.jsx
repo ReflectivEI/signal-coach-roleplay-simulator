@@ -115,6 +115,7 @@ import {
   buildLatestAskProgressionDialogue,
   classifyLatestAskProgression,
 } from "./latestAskProgression";
+import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
   return {
@@ -1076,37 +1077,6 @@ function stripSimulatorMetaDialogue(text = "") {
     .replace(/\b(?:given|considering) our current ([^.?!]+)\.\s+(?=(?:can|how|what|who|where|when|is|are|does|do|would|could)\b)/gi, "Given our current $1, ");
 
   return hardenTextSurface(value);
-}
-
-function buildInvalidTurnCoaching(latestAskProgression = {}) {
-  const family = latestAskProgression.family || "general";
-  const labelByFamily = {
-    workflow: "Answer the workflow ask",
-    screening: "Answer the screening ask",
-    evidence: "Answer the evidence ask",
-    access: "Answer the access ask",
-    general: "Answer the HCP ask",
-  };
-  const suggestionByFamily = {
-    workflow: "Give one concrete workflow step tied to the HCP's constraint before introducing anything new.",
-    screening: "Name the first screening or candidacy checkpoint you would use before moving forward.",
-    evidence: "Give the decision-relevant evidence point the HCP asked for before adding context.",
-    access: "Give the first access or prior-auth step that reduces the bottleneck before adding context.",
-    general: "Answer the HCP's latest question directly before moving forward.",
-  };
-
-  return {
-    shouldShow: true,
-    label: labelByFamily[family] || labelByFamily.general,
-    tip: "That turn repeated prior language without answering the HCP's latest ask, so it was not advanced.",
-    suggestion: suggestionByFamily[family] || suggestionByFamily.general,
-    severity: latestAskProgression.status === "repeated_missed_close" ? "high" : "medium",
-    escalationLabel: "Turn blocked",
-  };
-}
-
-function shouldBlockRepTurnForLatestAsk(latestAskProgression = {}) {
-  return ["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status);
 }
 
 function isRepeatedFinalDialogue(candidate = "", recentDialogues = []) {
@@ -2803,7 +2773,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
-    const preTurnLatestAskProgression = classifyLatestAskProgression({
+    const preTurnValidation = validateRoleplayRepTurn({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       repMessage,
       previousRepMessages: turns
@@ -2811,14 +2781,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .map((turn) => String(turn?.repMessage || "").trim())
         .filter(Boolean),
     });
-    if (shouldBlockRepTurnForLatestAsk(preTurnLatestAskProgression)) {
+    if (preTurnValidation.invalid) {
       setInput(repMessage);
-      setCoachingTip(buildInvalidTurnCoaching(preTurnLatestAskProgression));
+      setCoachingTip(preTurnValidation.coaching);
       setIsLoading(false);
       lastSubmittedTurnKeyRef.current = null;
       emitPlannerTrace("rep_turn_blocked_for_latest_ask", {
         turnNumber: respondingToTurn.turnNumber,
-        latestAskProgression: preTurnLatestAskProgression,
+        validation: preTurnValidation,
       });
       return;
     }
