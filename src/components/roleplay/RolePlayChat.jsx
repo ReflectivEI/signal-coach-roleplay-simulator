@@ -463,6 +463,10 @@ function hardenTextSurface(text) {
     .replace(/\bi\b/g, "I")
     .replace(/\b(I(?:'d| would) like) on\b/gi, "$1 guidance on")
     .replace(/\b(I(?:'d| would) like) about\b/gi, "$1 to talk about")
+    .replace(/\b(I(?:'d| would) like) for\s+(guidance|clarity|detail|details|help)\b/gi, "$1 $2")
+    .replace(/\b(I want) on\b/gi, "$1 guidance on")
+    .replace(/\b(I want) about\s+(?!\d+\b|one\b|two\b|three\b|four\b|five\b|six\b|seven\b|eight\b|nine\b|ten\b)/gi, "$1 to talk about ")
+    .replace(/\b(I want) for\s+(guidance|clarity|detail|details|help)\b/gi, "$1 $2")
     .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
     .replace(/,\s+(Who|What|How|Which|When|Where|Why|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, (_, word) => `, ${word.toLowerCase()}`)
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());

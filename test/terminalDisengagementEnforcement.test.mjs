@@ -51,6 +51,11 @@ test("HCP dialogue surface hardening repairs malformed preference fragments", ()
   assert.match(SOURCE, /\$1 guidance on/);
   assert.match(SOURCE, /I\(\?:'d\| would\) like\) about/);
   assert.match(SOURCE, /\$1 to talk about/);
+  assert.match(SOURCE, /I\(\?:'d\| would\) like\) for\\s\+\(guidance\|clarity\|detail\|details\|help\)/);
+  assert.match(SOURCE, /I want\) on/);
+  assert.match(SOURCE, /I want\) about\\s\+/);
+  assert.match(SOURCE, /I want\) for\\s\+\(guidance\|clarity\|detail\|details\|help\)/);
+  assert.match(SOURCE, /one\\b\|two\\b\|three\\b/);
 });
 
 test("terminal close disables continued rep input in the live chat form", () => {
