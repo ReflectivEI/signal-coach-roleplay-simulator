@@ -5325,6 +5325,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const conversationalRealism = applyConversationalRealism({
       text: nextHcpDialogue,
       activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || nextHcpDialogue,
+      activeAskState: conversationActiveAskState,
       concernFamily: hcpCueStateAlignment.concernFamily || conversationIntelligenceState?.turnInterpretation?.concernFamily || primaryConcern,
       engagementTier: decayState.tier,
       interactionMode: finalHcpReactionContract?.enforcementTrace?.interactionMode || nextHcpState,
@@ -5335,6 +5336,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       conversationIntelligence: conversationIntelligenceState,
       recentHcpTurns: recentHcpDialogues,
       scenarioContext: visibleScenarioGroundingText,
+      scenarioExecutionContract: roleplayTurnValidationContext.scenarioExecutionContract || null,
     });
     const stateCompressedHcpDialogue = conversationalRealism?.text || nextHcpDialogue;
     if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue) {

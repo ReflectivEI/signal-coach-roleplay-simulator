@@ -11,6 +11,14 @@ import {
   validateCueDialogueLockstep,
   varyPressurePhrasing,
 } from '../src/lib/roleplay/conversationalRealismEngine.js';
+import { buildRoleplayScenarioExecutionContract } from '../src/lib/roleplay/scenarioExecutionContract.js';
+import { ALL_SCENARIOS } from '../src/lib/roleplay-v2/scenarioCatalog.js';
+
+function scenarioContractById(id) {
+  const scenario = ALL_SCENARIOS.find((item) => item.id === id);
+  assert.ok(scenario, `missing scenario fixture ${id}`);
+  return buildRoleplayScenarioExecutionContract(scenario);
+}
 
 test('conversational realism keeps neutral evidence asks natural while preserving detail', () => {
   const result = applyConversationalRealism({
@@ -179,6 +187,76 @@ test('conversational realism restores stable HIV evidence richness instead of ge
   assert.equal(result.metadata.concernFamily, 'evidence');
   assert.equal(result.metadata.scenarioArchetype, 'stable_hiv_optimization');
   assert.doesNotMatch(result.text, /I can stay with this|make it concrete|What would my team do first/i);
+});
+
+test('state-driven realism uses active ask state over generic text without phrase-trigger routing', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const result = applyConversationalRealism({
+    text: 'I can stay with this if we make it concrete. What would my team do first?',
+    activeAskState: {
+      source: 'explicit_live_hcp_dialogue',
+      askText: 'durability threshold ask',
+      concernFamily: 'evidence',
+      strength: 'hard_explicit_ask',
+    },
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+  });
+
+  assert.equal(result.text, 'Given how little time we have, what specific evidence actually justifies switching stable patients?');
+  assert.equal(result.metadata.renderingSource, 'state_driven_realism_profile');
+  assert.equal(result.metadata.stateName, 'TIME_PRESSURE_DEFLECTION');
+  assert.equal(result.metadata.concernFamily, 'evidence');
+  assert.equal(result.metadata.scenarioId, 'hiv_pa_treat_switch_slowdown');
+  assert.doesNotMatch(result.text, /I can stay with this|make it concrete/i);
+});
+
+test('state-driven realism is deterministic and scenario-bound for identical inputs', () => {
+  const input = {
+    text: 'What is the first practical workflow step here?',
+    activeAskState: {
+      source: 'explicit_live_hcp_dialogue',
+      askText: 'operational next step ask',
+      concernFamily: 'workflow',
+      strength: 'hard_explicit_ask',
+    },
+    concernFamily: 'workflow',
+    cueCategory: 'hard_escalation',
+    interactionMode: 'directive',
+  };
+  const hivContract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const covidContract = scenarioContractById('covid_pulm_np_postcovid_adherence');
+  const first = applyConversationalRealism({ ...input, scenarioExecutionContract: hivContract });
+  const second = applyConversationalRealism({ ...input, scenarioExecutionContract: hivContract });
+  const covid = applyConversationalRealism({ ...input, scenarioExecutionContract: covidContract });
+
+  assert.equal(first.text, second.text);
+  assert.notEqual(first.text, covid.text);
+  assert.equal(first.metadata.stateName, 'SOFT_RESISTANCE');
+  assert.equal(covid.metadata.stateName, 'SOFT_RESISTANCE');
+});
+
+test('state-driven realism changes output when state changes within the same scenario', () => {
+  const contract = scenarioContractById('card-formulary');
+  const base = {
+    text: 'Given the time, what is the one decision-relevant evidence point?',
+    activeAskState: {
+      source: 'explicit_live_hcp_dialogue',
+      askText: 'evidence threshold ask',
+      concernFamily: 'evidence',
+      strength: 'hard_explicit_ask',
+    },
+    concernFamily: 'evidence',
+    scenarioExecutionContract: contract,
+  };
+  const timePressed = applyConversationalRealism({ ...base, cueCategory: 'time_constrained', timePressure: true });
+  const resistant = applyConversationalRealism({ ...base, cueCategory: 'hard_escalation', interactionMode: 'directive' });
+
+  assert.notEqual(timePressed.text, resistant.text);
+  assert.equal(timePressed.metadata.stateName, 'TIME_PRESSURE_DEFLECTION');
+  assert.equal(resistant.metadata.stateName, 'SOFT_RESISTANCE');
 });
 
 test('conversational realism uses scenario-bound rich phrasing for workflow pressure', () => {
