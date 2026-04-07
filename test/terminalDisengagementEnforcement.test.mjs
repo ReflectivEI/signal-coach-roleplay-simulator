@@ -107,6 +107,11 @@ test("surface hardening prevents capitalized question words after comma joins", 
 test("latest HCP ask progression gate prevents workflow ownership loops", () => {
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function classifyLatestAskProgression/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function buildLatestAskProgressionDialogue/);
+  assert.match(SOURCE, /function shouldBlockRepTurnForLatestAsk/);
+  assert.match(SOURCE, /const preTurnLatestAskProgression = classifyLatestAskProgression/);
+  assert.match(SOURCE, /shouldBlockRepTurnForLatestAsk\(preTurnLatestAskProgression\)/);
+  assert.match(SOURCE, /setCoachingTip\(buildInvalidTurnCoaching\(preTurnLatestAskProgression\)\)/);
+  assert.match(SOURCE, /rep_turn_blocked_for_latest_ask/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /latestHcpAskRequiresOwner/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /hasOwnershipDeflection/);
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /I heard the process change\. The missing piece is ownership/);
