@@ -8,38 +8,89 @@ export const HCP_REALISM_STATES = Object.freeze({
     allowedToneRange: ['neutral', 'mildly_constrained'],
     allowedNextStates: ['TIME_PRESSURE_DEFLECTION', 'EVIDENCE_CHALLENGE', 'OPERATIONAL_CHALLENGE'],
     disallowedTransitions: ['hard_rejection', 'early_disengagement', 'high_pressure_escalation'],
+    responseConstructionRules: Object.freeze([
+      'establish_scope_without_rejection',
+      'preserve_first_turn_protection',
+      'include_time_or_context_pressure_without_disengagement',
+    ]),
   }),
   TIME_PRESSURE_DEFLECTION: Object.freeze({
     behavioralIntent: 'limit_scope_due_to_time',
     allowedToneRange: ['efficient', 'slightly_clipped'],
     allowedNextStates: ['OPERATIONAL_CHALLENGE', 'EVIDENCE_CHALLENGE'],
     disallowedTransitions: ['broad_discovery', 'new_unbounded_topic'],
+    responseConstructionRules: Object.freeze([
+      'include_explicit_or_implicit_time_constraint',
+      'limit_to_one_decision_relevant_or_operational_ask',
+      'avoid_broad_exploration',
+    ]),
   }),
   EVIDENCE_CHALLENGE: Object.freeze({
     behavioralIntent: 'demand_decision_relevant_proof',
     allowedToneRange: ['analytical', 'skeptical'],
     allowedNextStates: ['OPERATIONAL_CHALLENGE', 'PARTIAL_ENGAGEMENT'],
     disallowedTransitions: ['workflow_without_evidence_bridge', 'disengagement_without_pressure_state'],
+    responseConstructionRules: Object.freeze([
+      'include_evidence_threshold_question',
+      'tie_proof_to_scenario_decision',
+      'preserve_analytical_skepticism_without_disengagement',
+    ]),
   }),
   OPERATIONAL_CHALLENGE: Object.freeze({
     behavioralIntent: 'force_practical_applicability',
     allowedToneRange: ['pragmatic', 'grounded'],
     allowedNextStates: ['PARTIAL_ENGAGEMENT', 'SOFT_RESISTANCE'],
     disallowedTransitions: ['abstract_evidence_loop', 'premature_acceptance'],
+    responseConstructionRules: Object.freeze([
+      'include_team_action_or_operational_owner',
+      'force_practical_applicability',
+      'avoid_abstract_theory_without_next_step',
+    ]),
   }),
   PARTIAL_ENGAGEMENT: Object.freeze({
     behavioralIntent: 'conditional_openness',
     allowedToneRange: ['controlled', 'less_resistant'],
     allowedNextStates: ['DEEPER_EVALUATION', 'SOFT_RESISTANCE'],
     disallowedTransitions: ['full_acceptance_without_condition'],
+    responseConstructionRules: Object.freeze([
+      'express_conditional_openness',
+      'preserve_one_unresolved_condition',
+      'avoid_full_acceptance_without_rep_resolution',
+    ]),
   }),
   SOFT_RESISTANCE: Object.freeze({
     behavioralIntent: 'maintain_hesitation_without_disengaging',
     allowedToneRange: ['reserved', 'cautious'],
     allowedNextStates: ['EVIDENCE_CHALLENGE', 'OPERATIONAL_CHALLENGE'],
     disallowedTransitions: ['new_broad_topic', 'generic_fallback'],
+    responseConstructionRules: Object.freeze([
+      'maintain_hesitation_without_terminal_exit',
+      'return_to_evidence_or_operational_pressure',
+      'avoid_new_broad_topic_or_generic_fallback',
+    ]),
   }),
 });
+
+export function validateHcpRealismStateMachine(stateMachine = HCP_REALISM_STATES) {
+  const issues = [];
+  const stateNames = Object.keys(stateMachine || {});
+  for (const stateName of stateNames) {
+    const state = stateMachine[stateName] || {};
+    if (!state.behavioralIntent) issues.push(`${stateName}:missing_behavioral_intent`);
+    if (!Array.isArray(state.allowedToneRange) || state.allowedToneRange.length === 0) issues.push(`${stateName}:missing_allowed_tone_range`);
+    if (!Array.isArray(state.allowedNextStates)) issues.push(`${stateName}:missing_allowed_next_states`);
+    if (!Array.isArray(state.disallowedTransitions)) issues.push(`${stateName}:missing_disallowed_transitions`);
+    if (!Array.isArray(state.responseConstructionRules) || state.responseConstructionRules.length === 0) issues.push(`${stateName}:missing_response_construction_rules`);
+    for (const nextState of state.allowedNextStates || []) {
+      if (!stateMachine[nextState] && nextState !== 'DEEPER_EVALUATION') issues.push(`${stateName}:unknown_next_state:${nextState}`);
+    }
+  }
+  return {
+    valid: issues.length === 0,
+    issues,
+    stateCount: stateNames.length,
+  };
+}
 
 const SCENARIO_REALISM_PROFILES = Object.freeze({
   hiv_pa_treat_switch_slowdown: Object.freeze({

@@ -6,9 +6,11 @@ import {
   compressByState,
   detectOverpackedSentence,
   enforceTerminalCompression,
+  HCP_REALISM_STATES,
   humanizeClinicalReferences,
   reduceFormalMetaLabeling,
   validateCueDialogueLockstep,
+  validateHcpRealismStateMachine,
   varyPressurePhrasing,
 } from '../src/lib/roleplay/conversationalRealismEngine.js';
 import { buildRoleplayScenarioExecutionContract } from '../src/lib/roleplay/scenarioExecutionContract.js';
@@ -19,6 +21,25 @@ function scenarioContractById(id) {
   assert.ok(scenario, `missing scenario fixture ${id}`);
   return buildRoleplayScenarioExecutionContract(scenario);
 }
+
+test('HCP realism state machine exposes required deterministic state contract', () => {
+  const validation = validateHcpRealismStateMachine();
+
+  assert.equal(validation.valid, true, validation.issues.join(', '));
+  assert.equal(validation.stateCount, 6);
+  for (const [stateName, state] of Object.entries(HCP_REALISM_STATES)) {
+    assert.ok(state.behavioralIntent, `${stateName} missing behavioral intent`);
+    assert.ok(state.allowedToneRange.length > 0, `${stateName} missing tone range`);
+    assert.ok(Array.isArray(state.allowedNextStates), `${stateName} missing allowed next states`);
+    assert.ok(Array.isArray(state.disallowedTransitions), `${stateName} missing disallowed transitions`);
+    assert.ok(state.responseConstructionRules.length > 0, `${stateName} missing construction rules`);
+  }
+  assert.deepEqual(HCP_REALISM_STATES.OPENING_CONSTRAINT.disallowedTransitions, [
+    'hard_rejection',
+    'early_disengagement',
+    'high_pressure_escalation',
+  ]);
+});
 
 test('conversational realism keeps neutral evidence asks natural while preserving detail', () => {
   const result = applyConversationalRealism({
