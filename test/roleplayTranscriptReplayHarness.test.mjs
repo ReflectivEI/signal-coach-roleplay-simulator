@@ -54,9 +54,39 @@ const TRANSCRIPT_CASES = [
     expectedStatuses: ['workflow_progress', 'repeated_workflow_progress'],
     expectedFinal: /I heard that workflow step.*who starts it, and when/i,
   },
+  {
+    name: 'screening patient-selection answer advances to first checkpoint',
+    latestHcpAsk: 'How would I identify the right patients and confirm screening requirements for long-acting cabotegravir?',
+    repTurns: [
+      'Align on candidacy and monitoring criteria. Protect long-term regimen durability through proper screening.',
+      'As I said, align on candidacy and monitoring criteria and protect long-term regimen durability through proper screening.',
+    ],
+    expectedStatuses: ['screening_progress', 'repeated_screening_progress'],
+    expectedFinal: /I heard the screening framework.*which checkpoint would my team apply first/i,
+  },
+  {
+    name: 'analytical evidence answer advances to decision implication',
+    latestHcpAsk: 'I still need clinically meaningful evidence before I would change practice.',
+    repTurns: [
+      'The study data show better persistence in the high-risk patient group, so the relevant decision is whether to prioritize those patients first.',
+      'Again, the study data show better persistence in the high-risk patient group, so the relevant decision is whether to prioritize those patients first.',
+    ],
+    expectedStatuses: ['evidence_progress', 'repeated_evidence_progress'],
+    expectedFinal: /I heard the evidence point.*what should change in practice/i,
+  },
+  {
+    name: 'access payer answer advances to bottleneck operationalization',
+    latestHcpAsk: 'How would this reduce the prior-auth burden for my team this week?',
+    repTurns: [
+      'Start the benefits investigation earlier and route prior-auth templates through the hub before the refill gap appears.',
+      'Again, start the benefits investigation earlier and route prior-auth templates through the hub before the refill gap appears.',
+    ],
+    expectedStatuses: ['access_progress', 'repeated_access_progress'],
+    expectedFinal: /I heard the access step.*who starts it, and where does it reduce rework/i,
+  },
 ];
 
-const DISALLOWED_LOOP_PHRASES = /I'm not hearing the workflow piece yet|Start with one practical workflow step my team could actually use|If this is actionable, make it concrete: what is the first step my staff would own|I hear you, but with our staffing, give me one practical step/i;
+const DISALLOWED_LOOP_PHRASES = /I'm not hearing the workflow piece yet|Start with one practical workflow step my team could actually use|If this is actionable, make it concrete: what is the first step my staff would own|I hear you, but with our staffing, give me one practical step|I still need clinically meaningful evidence before I would change practice|How would I identify the right patients|How would this reduce the prior-auth burden/i;
 
 function replayCase(fixture) {
   const previousRepMessages = [];
