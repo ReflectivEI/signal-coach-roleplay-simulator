@@ -45,6 +45,14 @@ test("HCP dialogue strips simulator meta-discourse before final turn output", ()
   assert.match(SOURCE, /nextHcpDialogue = stripSimulatorMetaDialogue\(nextHcpDialogue\);/);
 });
 
+test("HCP dialogue surface hardening repairs malformed preference fragments", () => {
+  assert.match(SOURCE, /function hardenTextSurface/);
+  assert.match(SOURCE, /I\(\?:'d\| would\) like\) on/);
+  assert.match(SOURCE, /\$1 guidance on/);
+  assert.match(SOURCE, /I\(\?:'d\| would\) like\) about/);
+  assert.match(SOURCE, /\$1 to talk about/);
+});
+
 test("terminal close disables continued rep input in the live chat form", () => {
   assert.match(SOURCE, /function hasTerminalClosedTurn/);
   assert.match(SOURCE, /const conversationTerminalClosed = hasTerminalClosedTurn\(turns\)/);
