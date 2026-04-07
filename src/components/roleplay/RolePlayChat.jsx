@@ -119,6 +119,7 @@ import { detectOpeningSceneDialogueReplay, extractScenarioOwnedOpeningTurn } fro
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
 import { detectStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
+import { buildRoleplayScenarioExecutionContract } from "@/lib/roleplay/scenarioExecutionContract";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -2835,6 +2836,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     const isFirstRepTurn = respondingToTurn.turnNumber === 0 && !respondingToTurn?.hcpDialogueBefore;
     const openingTurnForValidation = isFirstRepTurn ? extractScenarioOwnedOpeningTurn(scenario) : null;
+    const scenarioExecutionContract = isFirstRepTurn ? buildRoleplayScenarioExecutionContract(scenario) : null;
     const firstTurnConcernSourceText = [
       openingTurnForValidation?.cueText || "",
       openingTurnForValidation?.dialogueText || "",
@@ -2845,11 +2847,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
     ].join(" ");
     const firstTurnActiveAskState = isFirstRepTurn
-      ? resolveActiveHcpAskState({
-        narrativeContext: openingTurnForValidation?.cueText || "",
-        openingContext: openingTurnForValidation?.dialogueText || "",
-        fallbackConcern: detectPrimaryConcern(firstTurnConcernSourceText),
-      })
+      ? {
+        source: scenarioExecutionContract?.activeAsk?.source || "fallback_concern",
+        askText: scenarioExecutionContract?.activeAsk?.askText || resolveActiveHcpAskState({
+          narrativeContext: openingTurnForValidation?.cueText || "",
+          openingContext: openingTurnForValidation?.dialogueText || "",
+          fallbackConcern: detectPrimaryConcern(firstTurnConcernSourceText),
+        })?.askText || "",
+        concernFamily: scenarioExecutionContract?.activeAsk?.concernFamily || detectPrimaryConcern(firstTurnConcernSourceText),
+        frozen: false,
+      }
       : null;
     const firstTurnOpeningContext = firstTurnActiveAskState?.askText || "";
     const previousRepMessagesForValidation = collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || "");
@@ -2867,6 +2874,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
       activeHcpAskState: firstTurnActiveAskState || null,
+      scenarioExecutionContract: scenarioExecutionContract
+        ? {
+          contractVersion: scenarioExecutionContract.contractVersion,
+          activeAsk: scenarioExecutionContract.activeAsk,
+          openingState: scenarioExecutionContract.openingState,
+          managerIntegration: scenarioExecutionContract.managerIntegration,
+        }
+        : null,
     };
     if (preTurnValidation.invalid) {
       recordTurnValidationTelemetry(preTurnValidation, {
