@@ -116,6 +116,7 @@ import {
   classifyLatestAskProgression,
 } from "./latestAskProgression";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
+import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
   return {
@@ -715,6 +716,15 @@ function emitPlannerTrace(stage, payload) {
     stage,
     timestamp: new Date().toISOString(),
     ...payload,
+  });
+}
+
+function recordTurnValidationTelemetry(validation, context = {}) {
+  (validation?.telemetryEvents || []).forEach((event) => {
+    recordSimulatorTelemetry(event.eventType, {
+      ...(event.payload || {}),
+      ...context,
+    });
   });
 }
 
@@ -2782,6 +2792,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .filter(Boolean),
     });
     if (preTurnValidation.invalid) {
+      recordTurnValidationTelemetry(preTurnValidation, {
+        entryPoint: "RolePlayChat",
+        sessionId: sid,
+        scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
+        turnNumber: respondingToTurn.turnNumber,
+      });
       setInput(repMessage);
       setCoachingTip(preTurnValidation.coaching);
       setIsLoading(false);
@@ -2801,6 +2817,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       setIsLoading(false);
       return;
     }
+    recordTurnValidationTelemetry(preTurnValidation, {
+      entryPoint: "RolePlayChat",
+      sessionId: sid,
+      scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
+      turnNumber: respondingToTurn.turnNumber,
+    });
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
     const prevSev = respondingToTurn.severityBefore ?? simStateRef.current.severity;

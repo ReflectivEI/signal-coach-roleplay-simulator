@@ -103,7 +103,7 @@ function hasEvidenceAnswer(repMessage = "") {
 function hasAccessAnswer(repMessage = "") {
   const value = String(repMessage || "").toLowerCase();
   if (!value.trim()) return false;
-  const accessTerms = /\b(access|coverage|payer|prior[-\s]?auth|authorization|approval|denial|reimbursement|copay|affordability|hub|enrollment|benefits investigation|pa|appeal)\b/.test(value);
+  const accessTerms = /\b(access|coverage|payer|prior[-\s]?auth|authorization|approval|denial|reimbursement|copay|affordability|hub|enrollment|benefits investigation|benefits verification|pa|appeal)\b/.test(value);
   const actionTerms = /\b(start|move|submit|route|check|verify|standardi[sz]e|assign|process|workflow|template|reduce|cut|track|support)\b/.test(value);
   return accessTerms && actionTerms;
 }
