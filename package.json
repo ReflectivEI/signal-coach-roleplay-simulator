@@ -16,7 +16,7 @@
     "test:annotations": "node --test test/annotationUtils.test.mjs",
     "test:roleplay:contracts": "node --test test/turnContractController.test.mjs",
     "test:roleplay:runtime": "node --loader ./test/jsx-loader.mjs --test test/roleplayRuntimePaths.integration.test.mjs",
-    "test:roleplay:transcripts": "node --test test/roleplayTranscriptReplayHarness.test.mjs",
+    "test:roleplay:transcripts": "node --test test/roleplayTranscriptReplayHarness.test.mjs test/roleplayCatalogTranscriptMatrix.test.mjs",
     "test:stabilization": "npm run test:constraints && npm run test:annotations && npm run test:roleplay:contracts && npm run test:roleplay:runtime && npm run test:roleplay:transcripts && node ./scripts/verify-roleplay-freeze-equivalence.mjs",
     "preview": "vite preview",
     "verify:build-output": "node ./scripts/verify-build-output.mjs",
