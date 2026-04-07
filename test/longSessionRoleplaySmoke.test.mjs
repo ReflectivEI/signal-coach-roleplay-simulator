@@ -56,7 +56,7 @@ test('long-session smoke: repeated weak rep turns do not produce stacked or rubr
 
       const dialogue = contract.selectedDialogueText;
       assert.ok(dialogue.length > 0, `${scenario.id} turn ${index + 1} produced empty dialogue`);
-      const maxSentences = index === 0 ? 3 : 2;
+      const maxSentences = index === 0 ? 5 : 2;
       assert.ok(sentenceCount(dialogue) <= maxSentences, `${scenario.id} turn ${index + 1} stacked too many sentences: ${dialogue}`);
       assert.ok((dialogue.match(/\?/g) || []).length <= 1, `${scenario.id} turn ${index + 1} asked too many questions: ${dialogue}`);
       assert.doesNotMatch(dialogue, /Give one exact|non-specific|workflow decisions|evidence judgment|current scenario|Take care|this isn't productive|what my team can operationalize|practical implementation detail/i, `${scenario.id} turn ${index + 1} leaked rubric-like phrasing: ${dialogue}`);

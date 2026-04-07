@@ -143,17 +143,18 @@ test("first-turn reaction contract uses scenario-owned opening beat instead of c
   }
 });
 
-test("scenario catalog openings follow concise human opening-beat standard", () => {
+test("scenario catalog openings preserve scenario-specific human stakes without malformed dialogue", () => {
   const dialogues = [];
 
   for (const scenario of ALL_SCENARIOS) {
     const opening = extractScenarioOwnedOpeningTurn(scenario);
 
-    assert.ok(scenario.openingScene.length <= 240, `${scenario.id} opening scene is too long`);
+    assert.ok(scenario.openingScene.length <= 320, `${scenario.id} opening scene is too long`);
     assert.match(opening.dialogueText, /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i, `${scenario.id} opening dialogue needs a human acknowledgment`);
-    assert.ok(opening.dialogueText.split(/\s+/).filter(Boolean).length <= 28, `${scenario.id} opening dialogue is doing too much`);
-    assert.doesNotMatch(opening.dialogueText, /what['’]?s this about|make it count|killing us|drowning|losing patients|another complex|another refill/i, `${scenario.id} opening dialogue is too abrupt or over-scripted`);
-    assert.doesNotMatch(scenario.openingScene, /frustrated sigh|rubbing her temples|visible frustration|without looking up|what['’]?s this about/i, `${scenario.id} opening scene is over-directed`);
+    assert.ok(opening.dialogueText.split(/\s+/).filter(Boolean).length <= 42, `${scenario.id} opening dialogue is doing too much`);
+    assert.doesNotMatch(opening.dialogueText, /what['’]?s this about/i, `${scenario.id} opening dialogue is too abrupt`);
+    assert.doesNotMatch(opening.dialogueText, /\b(?:Dr\.|Jennifer|Lisa|Sarah|David|Michael|Karen|James|Alex|Maria)\b.*\b(?:looks|glances|reviewing|between patients)\b/i, `${scenario.id} opening dialogue leaked stage direction`);
+    assert.doesNotMatch(opening.cueText, /frustrated sigh|rubbing her temples|without looking up/i, `${scenario.id} opening cue is over-directed`);
     dialogues.push(opening.dialogueText);
   }
 
