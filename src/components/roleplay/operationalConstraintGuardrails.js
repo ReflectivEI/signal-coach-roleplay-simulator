@@ -134,6 +134,111 @@ function buildConcernSafeFallback({ concern = "", scenarioContext = "" } = {}) {
   return CONCERN_SAFE_REGENERATED_RESPONSE[normalizedConcern] || CONCERN_SAFE_REGENERATED_RESPONSE.workflow;
 }
 
+function normalizeFactSurface(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[‐‑‒–—]/g, "-")
+    .replace(/[-_/]+/g, " ")
+    .replace(/[^a-z0-9.%\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractScenarioFactAnchors(text = "") {
+  const value = String(text || "");
+  if (!value.trim()) return [];
+
+  const anchors = new Set();
+  const patterns = [
+    /\b\d+(?:\.\d+)?\s*(?:%|percent|percentage points?|years?|months?|weeks?|days?|hours?|minutes?|patients?|cases?|sites?|centers?|visits?)\b/gi,
+    /\b\d+(?:\.\d+)?[-\s]*(?:year|month|week|day|hour|minute|patient|case|site|center|visit)\b/gi,
+    /\b\d[\d,]*\s*(?:in|\/)\s*\d[\d,]*\b/gi,
+  ];
+
+  patterns.forEach((pattern) => {
+    for (const match of value.matchAll(pattern)) {
+      const anchor = normalizeFactSurface(match[0]);
+      if (anchor) anchors.add(anchor);
+    }
+  });
+
+  return [...anchors];
+}
+
+export function detectRepClarificationRequest(repMessage = "") {
+  const value = String(repMessage || "").trim();
+  if (!value) return false;
+
+  const tokens = value.toLowerCase().split(/\s+/).filter(Boolean);
+  const explicitClarification = /\b(what do you mean|what are you talking about|why are you telling me|why did you mention|can you clarify|could you clarify|clarify that|explain that|how so|unclear|i do not follow|i don't follow)\b/i.test(value);
+  if (explicitClarification) return true;
+
+  const shortQuestion = /\?\s*$/.test(value) && tokens.length <= 8;
+  const ellipticalQuestion = shortQuestion && (
+    /^(what|why|how|which|where|who)\b/i.test(value)
+    || /\b(what|why|how)\?\s*$/i.test(value)
+  );
+  const proposalLikeQuestion = /\b(can we|could we|would you|should we|can i|could i|would it|do you want|would it help)\b/i.test(value);
+
+  return Boolean(ellipticalQuestion && !proposalLikeQuestion);
+}
+
+export function detectUnsupportedScenarioFactIntroduction({
+  draftText = "",
+  scenarioContext = "",
+  visibleContext = "",
+} = {}) {
+  const draft = normalizeFactSurface(draftText);
+  const visible = normalizeFactSurface(visibleContext);
+  const anchors = extractScenarioFactAnchors(scenarioContext);
+
+  const introducedAnchors = anchors.filter((anchor) => (
+    anchor
+    && draft.includes(anchor)
+    && !visible.includes(anchor)
+  ));
+
+  return {
+    valid: introducedAnchors.length === 0,
+    introducedAnchors,
+    rejectionReason: introducedAnchors.length > 0 ? "unsupported_scenario_fact_introduction" : null,
+  };
+}
+
+export function buildScenarioFactSafeClarification({
+  previousHcpLine = "",
+  activeConcern = "workflow",
+} = {}) {
+  const previous = String(previousHcpLine || "").toLowerCase();
+  const concern = normalizeConcernForFallback(activeConcern);
+
+  if (/\b(diagnos|symptom|presentation|workup|red flag)/.test(previous)) {
+    return "I mean the clinical picture is not specific enough yet, so I need one practical way to decide who should move into the diagnostic workup.";
+  }
+
+  if (concern === "screening") {
+    return "I mean the patient-selection criteria need to be clear enough for us to apply consistently.";
+  }
+
+  if (concern === "evidence") {
+    return "I mean the evidence point needs to connect directly to the decision in front of me.";
+  }
+
+  if (concern === "prior_auth" || concern === "access") {
+    return "I mean the access step needs to be specific enough to change what happens next.";
+  }
+
+  if (concern === "monitoring") {
+    return "I mean the monitoring step needs to be concrete enough for the next follow-up.";
+  }
+
+  if (concern === "staffing") {
+    return "I mean the recommendation needs to fit what my team can realistically absorb.";
+  }
+
+  return "I mean the last point needs to be translated into one specific next step for this scenario.";
+}
+
 export function detectConstraintDraftViolations({
   draftText = "",
   groundedTypes = [],

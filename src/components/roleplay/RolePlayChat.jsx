@@ -79,6 +79,9 @@ import {
   selectLateTurnConstraintResponseMode,
   buildLateTurnConstraintResponse,
   detectOperationalConstraintTypes,
+  detectRepClarificationRequest,
+  detectUnsupportedScenarioFactIntroduction,
+  buildScenarioFactSafeClarification,
 } from "./operationalConstraintGuardrails";
 import { buildDeterministicGenerationKey } from "./generationKey";
 import { buildCoachingFeedbackMarkdown, parseStructuredFeedback } from "./sessionFeedbackFormatter";
@@ -2812,6 +2815,31 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenario?.objective,
       Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : "",
     ].join(" ");
+    const visibleScenarioGroundingText = [
+      scenario?.title,
+      scenario?.description,
+      scenario?.opening_scene,
+      scenario?.openingScene,
+      scenario?.objective,
+      scenario?.hcpMood,
+      scenario?.stakeholder,
+      scenario?.specialty,
+      Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : "",
+    ].join(" ");
+    const hiddenAuthoringContextText = [
+      scenario?.context,
+      Array.isArray(scenario?.keyMessages) ? scenario.keyMessages.join(" ") : "",
+      Array.isArray(scenario?.impact) ? scenario.impact.join(" ") : "",
+      Array.isArray(scenario?.suggestedPhrasing) ? scenario.suggestedPhrasing.join(" ") : "",
+    ].join(" ");
+    const visibleDialogueContextText = [
+      visibleScenarioGroundingText,
+      ...turns.flatMap((turn) => [turn?.cueBefore || "", turn?.hcpDialogueBefore || "", turn?.repMessage || ""]),
+      respondingToTurn?.cueBefore || "",
+      respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+    ].join(" ");
+    const repClarificationRequest = detectRepClarificationRequest(repMessage);
     const dialogueGroundingTurns = [
       ...turns.map((turn) => turn?.hcpDialogueBefore || ""),
       respondingToTurn?.hcpDialogueBefore || "",
@@ -3578,7 +3606,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       try {
         const fallbackRecoveryPrompt = [
           "You are generating ONE HCP reply in a role-play simulation.",
-          `Scenario grounding: ${scenarioGroundingText}`,
+          `Visible scenario grounding: ${visibleScenarioGroundingText}`,
           `Current HCP state: ${nextHcpState}`,
           `Active concern: ${effectiveActiveConcern}`,
           `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
@@ -3586,6 +3614,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "Rules:",
           "- Respond directly to the rep's last message.",
           "- Keep continuity with the previous HCP line and active concern.",
+          "- Do not introduce background facts from scenario context unless they were already spoken or directly requested.",
+          "- If the rep is asking what the HCP meant, clarify the previous HCP line rather than adding a new fact.",
           "- Do not drift to unrelated topics.",
           "- One sentence only.",
           "- Keep realistic clinical/workflow pressure tone.",
@@ -4409,7 +4439,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       try {
         const antiRepeatPrompt = [
           "Rewrite the HCP line to avoid repeated phrasing while keeping meaning consistent.",
-          `Scenario context: ${scenarioGroundingText}`,
+          `Visible scenario context: ${visibleScenarioGroundingText}`,
           `HCP state: ${nextHcpState}`,
           `Active concern: ${effectiveActiveConcern}`,
           `Previous repeated HCP line: ${repetitiveCandidate}`,
@@ -4418,6 +4448,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "- Keep one sentence only.",
           "- Preserve the same constraint/request and pressure level.",
           "- Do not add new topics.",
+          "- Do not add background scenario facts that were not already in the repeated or draft line.",
           "- Use different wording from both previous and current lines.",
         ].join("\n");
 
@@ -4466,7 +4497,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       try {
         const continuityPrompt = [
           "Revise the HCP reply so it directly responds to the rep's last message and stays in-topic.",
-          `Scenario grounding: ${scenarioGroundingText}`,
+          `Visible scenario grounding: ${visibleScenarioGroundingText}`,
           `Active concern: ${activeConcern}`,
           `Previous HCP line: ${respondingToTurn?.hcpDialogueBefore || ""}`,
           `Rep message: ${repMessage}`,
@@ -4475,6 +4506,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "- Keep one sentence only.",
           "- Preserve professional tone and current pressure level.",
           "- Keep the same concern family; do not introduce unrelated topics.",
+          "- Do not introduce background scenario facts unless they were already spoken or directly requested.",
+          "- If the rep is asking what the HCP meant, clarify the previous HCP line rather than adding a new fact.",
           "- If rep addressed an evidence/study question, react to that directly before redirecting.",
         ].join('\n');
 
@@ -4497,6 +4530,40 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         if (import.meta.env.DEV) {
           console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
         }
+      }
+    }
+
+    const hiddenFactCheck = detectUnsupportedScenarioFactIntroduction({
+      draftText: nextHcpDialogue,
+      scenarioContext: hiddenAuthoringContextText,
+      visibleContext: visibleDialogueContextText,
+    });
+    if (!hiddenFactCheck.valid && nextHcpState !== "disengaged") {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = buildScenarioFactSafeClarification({
+        previousHcpLine: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      });
+      if (import.meta.env.DEV) {
+        console.warn("ROLEPLAY_HIDDEN_FACT_GUARD", {
+          turnNumber: nextTurnNumber,
+          introducedAnchors: hiddenFactCheck.introducedAnchors,
+          replacement: nextHcpDialogue,
+        });
+      }
+    } else if (repClarificationRequest && rewriteAuthority !== "continuity_repair" && nextHcpState !== "disengaged") {
+      const directContinuity = evaluateRepToHcpContinuity({
+        repMessage,
+        hcpDialogue: nextHcpDialogue,
+        priorHcpDialogue: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+      });
+      if (directContinuity.needsRepair) {
+        usedDeterministicFallback = true;
+        nextHcpDialogue = buildScenarioFactSafeClarification({
+          previousHcpLine: respondingToTurn?.hcpDialogueBefore || "",
+          activeConcern,
+        });
       }
     }
 

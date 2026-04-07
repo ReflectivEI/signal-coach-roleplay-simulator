@@ -9,6 +9,9 @@ import {
   selectLateTurnConstraintResponseMode,
   buildLateTurnConstraintResponse,
   buildConstraintSafeRegeneratedResponse,
+  detectRepClarificationRequest,
+  detectUnsupportedScenarioFactIntroduction,
+  buildScenarioFactSafeClarification,
 } from '../src/components/roleplay/operationalConstraintGuardrails.js';
 
 test('no scenario constraint present -> no staffing/workflow injection allowed', () => {
@@ -411,4 +414,56 @@ test('opening turn does not get overridden by late-turn constraint draft guardra
     rolePlayChatSource,
     /const shouldApplyConstraintDraftGuardrail = respondingToTurn\?\.turnNumber > 0;/,
   );
+});
+
+test('hidden scenario authoring facts cannot leak into later HCP dialogue before they are visible', () => {
+  const result = detectUnsupportedScenarioFactIntroduction({
+    scenarioContext: 'The condition affects 1 in 50,000 patients. Average time to diagnosis is 5 years.',
+    visibleContext: 'The HCP said the diagnosis remains elusive. The rep asked for clarification.',
+    draftText: 'Average time to diagnosis is 5 years, so I need you to address urgency.',
+  });
+
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.introducedAnchors, ['5 years']);
+  assert.equal(result.rejectionReason, 'unsupported_scenario_fact_introduction');
+});
+
+test('scenario fact guard allows facts already visible in the conversation', () => {
+  const result = detectUnsupportedScenarioFactIntroduction({
+    scenarioContext: 'The condition affects 1 in 50,000 patients. Average time to diagnosis is 5 years.',
+    visibleContext: 'The HCP already said average time to diagnosis is 5 years.',
+    draftText: 'The 5 years point is why I need the workflow to be specific.',
+  });
+
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.introducedAnchors, []);
+});
+
+test('rep clarification detection is behavioral and not tied to one scenario phrase', () => {
+  assert.equal(detectRepClarificationRequest('Elusive how?'), true);
+  assert.equal(detectRepClarificationRequest('What are you talking about?'), true);
+  assert.equal(detectRepClarificationRequest('Can we discuss the workup and academic skepticism?'), false);
+});
+
+test('clarification fallback references visible prior HCP thread instead of hidden authoring facts', () => {
+  const result = buildScenarioFactSafeClarification({
+    previousHcpLine: "I've seen a few patients with similar presentations, but the diagnosis remains elusive. What brings you here?",
+    activeConcern: 'workflow',
+  });
+
+  assert.match(result, /clinical picture|diagnostic workup/i);
+  assert.doesNotMatch(result, /5 years|1 in 50,000/i);
+});
+
+test('live repair prompts use visible scenario grounding instead of full authoring context', () => {
+  const rolePlayChatSource = fs.readFileSync(
+    new URL('../src/components/roleplay/RolePlayChat.jsx', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(rolePlayChatSource, /const visibleScenarioGroundingText = \[/);
+  assert.match(rolePlayChatSource, /const hiddenAuthoringContextText = \[/);
+  assert.match(rolePlayChatSource, /Visible scenario grounding: \$\{visibleScenarioGroundingText\}/);
+  assert.match(rolePlayChatSource, /detectUnsupportedScenarioFactIntroduction/);
+  assert.match(rolePlayChatSource, /ROLEPLAY_HIDDEN_FACT_GUARD/);
 });
