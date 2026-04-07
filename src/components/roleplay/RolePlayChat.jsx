@@ -456,6 +456,7 @@ function hardenTextSurface(text) {
   value = value
     .replace(/\bi\b/g, "I")
     .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
+    .replace(/,\s+(Who|What|How|Which|When|Where|Why|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, (_, word) => `, ${word.toLowerCase()}`)
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());
 
   if (!/[.!?]$/.test(value)) {
@@ -1412,6 +1413,38 @@ function hasScenarioAlignedScreeningPlan(repMessage = "") {
 
 function hasConcreteOperationalMove(repMessage = "") {
   return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|standardi[sz]e|train|training|education|monitoring|call-?tree|one-?pager|pathway|protocol|checklist|template|standing order|change for your team|for your staff)\b/i.test(String(repMessage || ""));
+}
+
+function hasImplementationMove(repMessage = "") {
+  return /\b(standardi[sz]e|implement|roll out|rollout|pilot|start|add|use|train|training|education|monitoring|toxicity monitoring|call-?tree|one-?pager|pathway handout|pathway|protocol|checklist|template|handoff)\b/i.test(String(repMessage || ""));
+}
+
+function hasVagueOperationalOwner(repMessage = "") {
+  const value = String(repMessage || "").toLowerCase();
+  if (!value.trim()) return false;
+  return /\b(someone|somebody)\s+(on|from)?\s*(your|the|my)?\s*(staff|team)\b/.test(value)
+    || /\b(staff|team)\s+(would|can|could|should)?\s*(own|handle|run|manage|implement|do)\b/.test(value);
+}
+
+function hasExplicitOperationalOwner(repMessage = "") {
+  const value = String(repMessage || "").toLowerCase();
+  if (!value.trim()) return false;
+  return /\b(np|nurse|nursing|ma|medical assistant|pharmacist|pharmacy tech|care coordinator|case manager|hub coordinator|front desk|scheduler|provider|physician|clinician|app|advanced practice provider)\b/.test(value)
+    && /\b(own|lead|run|handle|manage|start|implement|standardi[sz]e|education|monitoring|call-?tree|checklist|protocol|handoff)\b/.test(value);
+}
+
+function buildWorkflowProgressionFollowUp(repMessage = "") {
+  if (!hasConcreteOperationalMove(repMessage) && !hasImplementationMove(repMessage)) return "";
+
+  if (hasVagueOperationalOwner(repMessage)) {
+    return "That gives me a direction, but 'someone on my staff' is too vague. Which role owns the first step?";
+  }
+
+  if (hasExplicitOperationalOwner(repMessage)) {
+    return "That is more useful. What is the first handoff they would own this week?";
+  }
+
+  return "That is closer. Who owns the first step, and what changes in the workflow this week?";
 }
 
 function deriveEngagementDecay({
@@ -3446,6 +3479,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
       if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier)) {
         return "Thanks. Please include payer-specific variation handling in that workflow plan and send it by the time you committed.";
+      }
+
+      const workflowProgressionFollowUp = ["workflow", "time", "policy", "access", "screening"].includes(activeConcern)
+        ? buildWorkflowProgressionFollowUp(repMessage)
+        : "";
+      if (workflowProgressionFollowUp) {
+        return workflowProgressionFollowUp;
       }
 
       if (nextHcpState === "time-pressured") {

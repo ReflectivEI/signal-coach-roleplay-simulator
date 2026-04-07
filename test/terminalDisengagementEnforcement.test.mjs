@@ -86,3 +86,16 @@ test("screening plan acknowledgments produce operational follow-up instead of re
   assert.match(SOURCE, /I need the screening approach to be concrete/);
   assert.doesNotMatch(SOURCE, /Before we move forward, what practical steps would you recommend/);
 });
+
+test("workflow implementation answers progress to ownership clarification instead of repeating practical-step demand", () => {
+  assert.match(SOURCE, /function buildWorkflowProgressionFollowUp/);
+  assert.match(SOURCE, /function hasVagueOperationalOwner/);
+  assert.match(SOURCE, /function hasExplicitOperationalOwner/);
+  assert.match(SOURCE, /Which role owns the first step/);
+  assert.match(SOURCE, /What is the first handoff they would own this week/);
+});
+
+test("surface hardening prevents capitalized question words after comma joins", () => {
+  assert.match(SOURCE, /,\\s\+\(Who\|What\|How\|Which/);
+  assert.match(SOURCE, /word\.toLowerCase\(\)/);
+});
