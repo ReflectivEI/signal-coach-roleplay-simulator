@@ -516,6 +516,31 @@ test('opening guardrail enforces stage-based turn-1 safety unless scenario expli
   assert.match(allowedInExplicitHighPressure.selectedDialogueText, /practical workflow step/i);
 });
 
+test('later-turn enforcement preserves one human pressure move instead of stacking prefixes and tails', () => {
+  const contract = buildHcpReactionContract({
+    scenario: {
+      id: 'workflow_pressure_single_move',
+      hcpProfile: { baselineCommunicationStyle: 'practical operational', baselineOpennessResistance: 'skeptical' },
+      sceneSetup: { timePressure: 'high' },
+    },
+    turnNumber: 4,
+    hcpState: 'impatient',
+    cueText: 'Sarah shifts toward the door and waits for immediate relevance.',
+    dialogueText: 'Given our current staffing constraints and prior-auth workload, can you propose a specific step that would reduce workflow burden this week?',
+    activeConcern: 'workflow',
+    repMessage: 'Hi, I would like to follow up on the outcomes data again.',
+    alignment: { score: 1, misalignments: ['missed_workflow_answer'], rubricAlignmentFlags: ['cue_miss'] },
+    concernFlowOutcome: 'missed',
+    priorEnforcementTrace: { escalationStage: 'firm', misalignmentCount: 3, hardDemandMissCount: 2 },
+    hardDemandState: { hardDemandPriorityLock: true, hardDemandUnresolved: true, activeHardDemand: 'operational_fit' },
+  });
+
+  assert.match(contract.selectedDialogueText, /specific step|workflow burden/i);
+  assert.doesNotMatch(contract.selectedDialogueText, /^Give me one practical workflow step/i);
+  assert.doesNotMatch(contract.selectedDialogueText, /Keep this tied to what my team can operationalize this week|I need the practical implementation detail before we move forward/i);
+  assert.ok((contract.selectedDialogueText.match(/\?/g) || []).length <= 1);
+});
+
 test('turn-1 state gating is topic-agnostic and never emits hard-demand escalation for generic opener', () => {
   const openers = [
     'Can we talk about your clinic throughput workflow?',
@@ -600,8 +625,9 @@ test('realism calibration layer preserves friction, cue variation, and professio
     concernFlowOutcome: 'overpivot',
     priorEnforcementTrace: turn2.enforcementTrace,
   });
-  assert.equal(turn3.enforcementTrace.tooIdealFlag, true);
-  assert.match(turn3.selectedDialogueText.toLowerCase(), /still need|before we move|before we continue/);
+  assert.equal(turn3.enforcementTrace.tooIdealFlag, false);
+  assert.match(turn3.selectedDialogueText.toLowerCase(), /clinic constraints|workflow|practical/);
+  assert.doesNotMatch(turn3.selectedDialogueText.toLowerCase(), /keep this tied to what my team|practical implementation detail/);
   assert.ok(!/\b(hostile|ridiculous|nonsense|waste of time)\b/i.test(turn3.selectedDialogueText));
 });
 

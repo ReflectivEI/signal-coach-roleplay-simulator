@@ -746,6 +746,26 @@ if (shouldAssertTemplates) {
   });
 }
 
+function hasConcernBoundPressureMove(dialogueText = '', activeConcern = '') {
+  const text = String(dialogueText || '').toLowerCase();
+  if (!text.trim()) return false;
+
+  const hasPressureShape = /\?/.test(text)
+    || /\b(i need|i still need|help me understand|can you|could you|what|how|start with|keep this tied|give me|show me|focus on)\b/.test(text);
+  if (!hasPressureShape) return false;
+
+  const concern = String(activeConcern || '').toLowerCase();
+  const concernPattern = /evidence|data/.test(concern)
+    ? /\b(evidence|data|trial|endpoint|proof|clinical)\b/
+    : /screen|selection|candidate/.test(concern)
+      ? /\b(patient|patients|screen|screening|selection|candidate|criteria)\b/
+      : /access|prior|auth|coverage/.test(concern)
+        ? /\b(access|prior|auth|coverage|payer|turnaround|friction)\b/
+        : /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible)\b/;
+
+  return concernPattern.test(text);
+}
+
 export function applyEscalationPresentation({
   cueText = '',
   dialogueText = '',
@@ -794,7 +814,10 @@ export function applyEscalationPresentation({
     ? cueText
     : `${cueText} ${cueSuffix}`.trim();
 
-  const updatedDialogue = normalizedDialogue.toLowerCase().startsWith(dialoguePrefix.toLowerCase()) || !dialoguePrefix
+  const shouldPreserveHumanMove = hasConcernBoundPressureMove(normalizedDialogue, activeConcern);
+  const updatedDialogue = shouldPreserveHumanMove
+    || normalizedDialogue.toLowerCase().startsWith(dialoguePrefix.toLowerCase())
+    || !dialoguePrefix
     ? normalizedDialogue
     : `${dialoguePrefix} ${normalizedDialogue}`.trim();
 
