@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   applyConversationalRealism,
+  assertLiveHcpRealismRenderInputs,
   compressByState,
   detectOverpackedSentence,
   enforceTerminalCompression,
@@ -11,6 +12,7 @@ import {
   reduceFormalMetaLabeling,
   validateCueDialogueLockstep,
   validateHcpRealismStateMachine,
+  validateLiveHcpRealismRenderInputs,
   varyPressurePhrasing,
 } from '../src/lib/roleplay/conversationalRealismEngine.js';
 import { buildRoleplayScenarioExecutionContract } from '../src/lib/roleplay/scenarioExecutionContract.js';
@@ -227,11 +229,84 @@ test('state-driven realism uses active ask state over generic text without phras
   });
 
   assert.equal(result.text, 'Given how little time we have, what specific evidence actually justifies switching stable patients?');
-  assert.equal(result.metadata.renderingSource, 'state_driven_realism_profile');
+  assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
   assert.equal(result.metadata.stateName, 'TIME_PRESSURE_DEFLECTION');
   assert.equal(result.metadata.concernFamily, 'evidence');
   assert.equal(result.metadata.scenarioId, 'hiv_pa_treat_switch_slowdown');
   assert.doesNotMatch(result.text, /I can stay with this|make it concrete/i);
+});
+
+test('live HCP realism rendering fails closed without scenarioExecutionContract', () => {
+  assert.throws(
+    () => applyConversationalRealism({
+      text: 'I can stay with this if we make it concrete. What would my team do first?',
+      activeAskState: {
+        source: 'explicit_live_hcp_dialogue',
+        askText: 'evidence threshold ask',
+        concernFamily: 'evidence',
+      },
+      concernFamily: 'evidence',
+      cueCategory: 'time_constrained',
+      requireContractBound: true,
+    }),
+    /missing_scenario_execution_contract/,
+  );
+});
+
+test('live HCP realism rendering fails closed without activeAskState', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  assert.throws(
+    () => applyConversationalRealism({
+      text: 'Given the time, what evidence point changes the decision?',
+      concernFamily: 'evidence',
+      cueCategory: 'time_constrained',
+      scenarioExecutionContract: contract,
+      requireContractBound: true,
+    }),
+    /missing_active_ask_state_text/,
+  );
+});
+
+test('live HCP realism rendering accepts only contract-bound state-driven output', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = {
+    source: 'explicit_live_hcp_dialogue',
+    askText: 'evidence threshold ask',
+    concernFamily: 'evidence',
+    strength: 'hard_explicit_ask',
+  };
+  const result = applyConversationalRealism({
+    text: 'I can stay with this if we make it concrete. What would my team do first?',
+    activeAskState,
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
+  assert.equal(result.metadata.scenarioId, 'hiv_pa_treat_switch_slowdown');
+  assert.equal(result.metadata.concernFamily, 'evidence');
+  assert.equal(result.metadata.stateName, 'TIME_PRESSURE_DEFLECTION');
+  assert.equal(validateLiveHcpRealismRenderInputs({
+    scenarioExecutionContract: contract,
+    activeAskState,
+    stateDrivenResult: {
+      metadata: {
+        stateName: result.metadata.stateName,
+      },
+    },
+  }).valid, true);
+  assert.doesNotThrow(() => assertLiveHcpRealismRenderInputs({
+    scenarioExecutionContract: contract,
+    activeAskState,
+    stateDrivenResult: {
+      metadata: {
+        stateName: result.metadata.stateName,
+      },
+    },
+  }));
 });
 
 test('state-driven realism is deterministic and scenario-bound for identical inputs', () => {

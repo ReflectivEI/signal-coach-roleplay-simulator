@@ -11,6 +11,10 @@ import {
   transitionState,
   transitionTemperature,
 } from "../src/components/roleplay/hcpSimulationEngine.jsx";
+import {
+  HCP_RENDERING_ENTRY_POINTS,
+  validateHcpRenderingEntryPointAudit,
+} from "../src/lib/roleplay/hcpRenderingEntryPoints.js";
 
 const EXPECTED_METRIC_KEYS = [
   "signal_awareness",
@@ -322,4 +326,31 @@ test("active runtime route remains RolePlaySimulator -> ScenarioCard -> RolePlay
   assert.match(scenarioCardSource, /<RolePlayChat scenario=\{scenario\}/);
   assert.match(rolePlayChatSource, /const historyText = flattenTurns\(prevTurns\)/);
   assert.match(rolePlayChatSource, /buildHCPDialoguePrompt\(\{\s*[\s\S]*historyText,/);
+});
+
+test("live HCP rendering entry point audit forbids runtime fallback renderers", () => {
+  const audit = validateHcpRenderingEntryPointAudit();
+  assert.equal(audit.valid, true, audit.issues.join(", "));
+  assert.equal(audit.liveRuntimeEntryCount, 1);
+
+  const liveEntries = HCP_RENDERING_ENTRY_POINTS.filter((entry) => entry.liveRuntime);
+  assert.deepEqual(liveEntries.map((entry) => entry.id), ["RolePlayChat.finalConversationalRealism"]);
+  assert.ok(liveEntries.every((entry) => entry.classification === "contract-bound/state-driven/scenario-bound"));
+  assert.ok(liveEntries.every((entry) => entry.requires.includes("scenarioExecutionContract")));
+  assert.ok(liveEntries.every((entry) => entry.requires.includes("activeAskState")));
+  assert.ok(liveEntries.every((entry) => entry.requires.includes("validHcpRealismState")));
+});
+
+test("live RolePlayChat final HCP render is hard-gated to contract-bound state", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /scenarioExecutionContract:\s*scenarioExecutionContract[\s\S]*scenarioIdentity:\s*scenarioExecutionContract\.scenarioIdentity/);
+  assert.match(source, /scenarioExecutionContract:\s*scenarioExecutionContract[\s\S]*activeAsk:\s*scenarioExecutionContract\.activeAsk/);
+  assert.match(source, /scenarioExecutionContract:\s*scenarioExecutionContract[\s\S]*stateMachine:\s*scenarioExecutionContract\.stateMachine/);
+  assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*activeAskState:\s*conversationActiveAskState/);
+  assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*scenarioExecutionContract:\s*roleplayTurnValidationContext\.scenarioExecutionContract \|\| null/);
+  assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*requireContractBound:\s*true/);
 });

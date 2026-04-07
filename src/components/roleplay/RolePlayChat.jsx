@@ -2909,8 +2909,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioExecutionContract: scenarioExecutionContract
         ? {
           contractVersion: scenarioExecutionContract.contractVersion,
+          scenarioIdentity: scenarioExecutionContract.scenarioIdentity,
+          hcpPersona: scenarioExecutionContract.hcpPersona,
           activeAsk: scenarioExecutionContract.activeAsk,
           openingState: scenarioExecutionContract.openingState,
+          constraints: scenarioExecutionContract.constraints,
+          stateMachine: scenarioExecutionContract.stateMachine,
           managerIntegration: scenarioExecutionContract.managerIntegration,
         }
         : null,
@@ -5337,6 +5341,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       recentHcpTurns: recentHcpDialogues,
       scenarioContext: visibleScenarioGroundingText,
       scenarioExecutionContract: roleplayTurnValidationContext.scenarioExecutionContract || null,
+      requireContractBound: true,
     });
     const stateCompressedHcpDialogue = conversationalRealism?.text || nextHcpDialogue;
     if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue) {

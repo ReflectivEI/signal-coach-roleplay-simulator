@@ -166,45 +166,63 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
   }),
 });
 
-const DEFAULT_REALISM_PROFILE = Object.freeze({
-  defaultConcernFamily: 'workflow',
-  lines: Object.freeze({
-    TIME_PRESSURE_DEFLECTION: Object.freeze({
-      evidence: 'Given the time, what decision-relevant evidence changes the next step?',
-      workflow: 'Given the time, what would the team actually do first?',
-      access: 'Given the time, what access step changes the delay?',
-      screening: 'Given the time, who should we identify first?',
+function normalizeProfileFocus(value = '') {
+  return normalizeHcpSpokenRealism(value)
+    .replace(/\bscenario\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function buildContractDerivedRealismProfile(contract = {}) {
+  const titleFocus = normalizeProfileFocus(contract?.scenarioIdentity?.title || '');
+  const specialtyFocus = normalizeProfileFocus(contract?.scenarioIdentity?.specialty || '');
+  const stakeholder = normalizeProfileFocus(contract?.hcpPersona?.stakeholder || 'my team');
+  const focus = titleFocus || specialtyFocus || contract?.scenarioIdentity?.scenarioId || 'this case';
+  const team = /team|committee|clinic|staff|nurse|pharmac/i.test(stakeholder) ? stakeholder : 'my team';
+  return Object.freeze({
+    profileSource: 'contract_derived_realism_profile',
+    defaultConcernFamily: contract?.activeAsk?.concernFamily || contract?.openingState?.primaryConcernFamily || 'workflow',
+    lines: Object.freeze({
+      TIME_PRESSURE_DEFLECTION: Object.freeze({
+        evidence: `Given the time, what evidence changes the decision in ${focus}?`,
+        workflow: `Given the time, what would ${team} actually do first in ${focus}?`,
+        access: `Given the time, what access step changes the delay in ${focus}?`,
+        screening: `Given the time, who would we identify first in ${focus}?`,
+      }),
+      EVIDENCE_CHALLENGE: Object.freeze({
+        evidence: `What evidence changes the decision in ${focus}?`,
+        workflow: `What would ${team} actually do first in ${focus}?`,
+        access: `What access step changes the delay in ${focus}?`,
+        screening: `Who would we identify first in ${focus}?`,
+      }),
+      OPERATIONAL_CHALLENGE: Object.freeze({
+        evidence: `What evidence changes the practical decision in ${focus}?`,
+        workflow: `What would ${team} actually do first in ${focus}?`,
+        access: `What access step changes the delay in ${focus}?`,
+        screening: `Who would we identify first in ${focus}?`,
+      }),
+      SOFT_RESISTANCE: Object.freeze({
+        evidence: `I still need the decision-relevant evidence for ${focus}. What changes the decision?`,
+        workflow: `I still need the practical step for ${focus}. What would ${team} do first?`,
+        access: `I still need the access step for ${focus}. What changes the delay?`,
+        screening: `I still need the patient boundary for ${focus}. Who would we identify first?`,
+      }),
+      PARTIAL_ENGAGEMENT: Object.freeze({
+        evidence: `If we continue with ${focus}, what evidence changes the decision?`,
+        workflow: `If we continue with ${focus}, what would ${team} do first?`,
+        access: `If we continue with ${focus}, what access step changes the delay?`,
+        screening: `If we continue with ${focus}, who would we identify first?`,
+      }),
     }),
-    EVIDENCE_CHALLENGE: Object.freeze({
-      evidence: 'What decision-relevant evidence changes the next step?',
-      workflow: 'What would the team actually do first?',
-      access: 'What access step changes the delay?',
-      screening: 'Who should we identify first?',
-    }),
-    OPERATIONAL_CHALLENGE: Object.freeze({
-      evidence: 'What evidence changes the practical decision?',
-      workflow: 'What would the team actually do first?',
-      access: 'What access step changes the delay?',
-      screening: 'Who would we identify first?',
-    }),
-    SOFT_RESISTANCE: Object.freeze({
-      evidence: 'I still need the decision-relevant evidence. What changes the next step?',
-      workflow: 'I still need the practical step. What would the team do first?',
-      access: 'I still need the access step. What changes the delay?',
-      screening: 'I still need the patient boundary. Who would we identify first?',
-    }),
-    PARTIAL_ENGAGEMENT: Object.freeze({
-      evidence: 'If we continue, what evidence changes the next step?',
-      workflow: 'If we continue, what would the team do first?',
-      access: 'If we continue, what access step changes the delay?',
-      screening: 'If we continue, who would we identify first?',
-    }),
-  }),
-});
+  });
+}
 
 function selectProfileByState(contract = {}) {
   const scenarioId = contract?.scenarioIdentity?.scenarioId || contract?.scenarioId || '';
-  return SCENARIO_REALISM_PROFILES[scenarioId] || DEFAULT_REALISM_PROFILE;
+  const scenarioProfile = SCENARIO_REALISM_PROFILES[scenarioId];
+  return scenarioProfile
+    ? { ...scenarioProfile, profileSource: 'scenario_realism_profile' }
+    : buildContractDerivedRealismProfile(contract);
 }
 
 function deriveStateNameFromStructuredInputs({ cueCategory = '', timePressure = false, terminalBehavior = false, activeAskState = {}, concernFamily = 'general' } = {}) {
@@ -250,9 +268,34 @@ function applyStateDrivenRealism({
       state,
       concernFamily: resolvedConcern,
       scenarioId: scenarioExecutionContract.scenarioIdentity.scenarioId,
-      source: 'state_driven_realism_profile',
+      source: profile.profileSource || 'scenario_realism_profile',
     },
   };
+}
+
+export function validateLiveHcpRealismRenderInputs({
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  stateDrivenResult = null,
+} = {}) {
+  const issues = [];
+  if (!scenarioExecutionContract?.scenarioIdentity?.scenarioId) issues.push('missing_scenario_execution_contract');
+  if (!activeAskState?.askText) issues.push('missing_active_ask_state_text');
+  if (!activeAskState?.concernFamily) issues.push('missing_active_ask_state_family');
+  const stateName = stateDrivenResult?.metadata?.stateName;
+  if (!stateName || !HCP_REALISM_STATES[stateName]) issues.push('missing_valid_realism_state');
+  return {
+    valid: issues.length === 0,
+    issues,
+  };
+}
+
+export function assertLiveHcpRealismRenderInputs(inputs = {}) {
+  const validation = validateLiveHcpRealismRenderInputs(inputs);
+  if (!validation.valid) {
+    throw new Error(`Live HCP rendering requires scenarioExecutionContract, activeAskState, and valid realism state: ${validation.issues.join(',')}`);
+  }
+  return validation;
 }
 
 const PRESSURE_CATEGORIES = new Set([
@@ -551,6 +594,7 @@ export function applyConversationalRealism({
   recentHcpTurns = [],
   scenarioContext = '',
   scenarioExecutionContract = null,
+  requireContractBound = false,
 } = {}) {
   const resolvedCueCategory = terminalBehavior
     ? 'terminal_exit'
@@ -566,6 +610,13 @@ export function applyConversationalRealism({
     timePressure,
   });
   if (stateDriven) {
+    if (requireContractBound) {
+      assertLiveHcpRealismRenderInputs({
+        scenarioExecutionContract,
+        activeAskState,
+        stateDrivenResult: stateDriven,
+      });
+    }
     const finalStateText = normalizeHcpSpokenRealism(stateDriven.text);
     return {
       text: finalStateText,
@@ -592,6 +643,14 @@ export function applyConversationalRealism({
         renderingSource: stateDriven.metadata.source,
       },
     };
+  }
+
+  if (requireContractBound) {
+    assertLiveHcpRealismRenderInputs({
+      scenarioExecutionContract,
+      activeAskState,
+      stateDrivenResult: stateDriven,
+    });
   }
 
   const expressionConcernFamily = deriveExpressionConcernFamily({ concernFamily, activeAsk, text, scenarioContext });
