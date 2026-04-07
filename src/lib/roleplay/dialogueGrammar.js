@@ -236,6 +236,18 @@ function compressWorkflowOwnershipQuestion(text = '', cueCategory = '') {
         : 'Okay, make it concrete. What would my staff do first?'
     )
     .replace(
+      /^Okay, make it concrete\. What would my staff own first\?$/i,
+      cueCategory === 'hard_escalation'
+        ? 'Then give me one step. What would my staff own first?'
+        : 'Okay, make it concrete. What would my staff own first?'
+    )
+    .replace(
+      /^Okay, make it concrete\. What is the first step my staff would own\?$/i,
+      cueCategory === 'hard_escalation'
+        ? 'Then give me one step. What would my staff own first?'
+        : 'Okay, make it concrete. What would my staff do first?'
+    )
+    .replace(
       /^I am open to the idea, but it has to be practical\. What is the smallest workflow change you would recommend first\?$/i,
       cueCategory === 'hard_escalation'
         ? 'Make it practical. What is the smallest workflow change?'

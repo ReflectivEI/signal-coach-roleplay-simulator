@@ -125,7 +125,7 @@ import { detectStructuredScenarioContentLeak, repairStructuredScenarioContentLea
 import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
 import { buildRoleplayScenarioExecutionContract } from "@/lib/roleplay/scenarioExecutionContract";
 import { selectStateAlignedHcpCue } from "@/lib/roleplay/hcpCueStateAlignment";
-import { compressHcpDialogueForState } from "@/lib/roleplay/dialogueGrammar";
+import { applyConversationalRealism } from "@/lib/roleplay/conversationalRealismEngine";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -5322,17 +5322,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || "scenario",
       turnNumber: nextTurnNumber,
     });
-    const stateCompressedHcpDialogue = compressHcpDialogueForState(nextHcpDialogue, {
-      cueCategory: hcpCueStateAlignment.cueCategory,
+    const conversationalRealism = applyConversationalRealism({
+      text: nextHcpDialogue,
+      activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || nextHcpDialogue,
       concernFamily: hcpCueStateAlignment.concernFamily || conversationIntelligenceState?.turnInterpretation?.concernFamily || primaryConcern,
+      engagementTier: decayState.tier,
+      interactionMode: finalHcpReactionContract?.enforcementTrace?.interactionMode || nextHcpState,
+      semanticStage: finalHcpReactionContract?.enforcementTrace?.escalationStage || nextHcpState,
+      terminalBehavior: Boolean(overrideExit || terminalDecisionMode || (nextHcpState === "disengaged") || (!blockClose && terminalPolicyAction === "close") || isTerminalClosureDialogue(nextHcpDialogue)),
+      timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier} ${nextHcpDialogue}`)),
+      cueCategory: hcpCueStateAlignment.cueCategory,
+      conversationIntelligence: conversationIntelligenceState,
+      recentHcpTurns: recentHcpDialogues,
+      scenarioContext: visibleScenarioGroundingText,
     });
+    const stateCompressedHcpDialogue = conversationalRealism?.text || nextHcpDialogue;
     if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue) {
       finalHcpReactionContract = {
         ...finalHcpReactionContract,
         selectedDialogueText: stateCompressedHcpDialogue,
         finalDialogueBeforeStateCompression: nextHcpDialogue,
+        conversationalRealism: conversationalRealism?.metadata || null,
       };
       nextHcpDialogue = stateCompressedHcpDialogue;
+    } else {
+      finalHcpReactionContract = {
+        ...finalHcpReactionContract,
+        conversationalRealism: conversationalRealism?.metadata || null,
+      };
     }
     contextualCue = hardenTextSurface(hcpCueStateAlignment.cueText || contextualCue);
     finalHcpReactionContract = {
