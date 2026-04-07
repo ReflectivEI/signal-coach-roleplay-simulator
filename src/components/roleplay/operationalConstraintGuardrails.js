@@ -96,6 +96,44 @@ function extractScenarioBoundConstraintSentence({ scenarioContext = "", concern 
   return anyGroundedConstraint || "";
 }
 
+const CONCERN_SAFE_REGENERATED_RESPONSE = Object.freeze({
+  access: "Keep this tied to the specific access step we can act on now.",
+  prior_auth: "Keep this tied to the prior-authorization step that changes what happens next.",
+  monitoring: "Keep this tied to the monitoring step we can use before the next follow-up.",
+  screening: "Keep this tied to patient-selection criteria we can apply consistently.",
+  staffing: "Keep this tied to the staffing constraint and what my team can realistically absorb.",
+  workflow: "Keep this tied to the workflow step we can implement without adding burden.",
+  evidence: "Keep this tied to the one evidence point that changes the clinical decision.",
+  policy: "Keep this tied to the policy or pathway constraint in front of us.",
+  capacity: "Keep this tied to capacity and what can realistically fit into clinic flow.",
+  scheduling: "Keep this tied to the scheduling step that prevents delay.",
+  handoff: "Keep this tied to the handoff point where ownership needs to be clearer.",
+  callback: "Keep this tied to the callback step that closes the follow-up gap.",
+  throughput: "Keep this tied to throughput and the bottleneck slowing patient flow.",
+  time: "Keep this to the one point that is useful in the time we have.",
+});
+
+function normalizeConcernForFallback(concern = "") {
+  const value = String(concern || "").trim().toLowerCase();
+  if (CONCERN_SAFE_REGENERATED_RESPONSE[value]) return value;
+  if (/screen|candidate|candidacy|eligib|resistance/.test(value)) return "screening";
+  if (/prior|auth|payer|coverage|access/.test(value)) return "prior_auth";
+  if (/monitor|follow/.test(value)) return "monitoring";
+  if (/staff/.test(value)) return "staffing";
+  if (/workflow|operation|implementation|process/.test(value)) return "workflow";
+  if (/evidence|data|study|trial/.test(value)) return "evidence";
+  return "workflow";
+}
+
+function buildConcernSafeFallback({ concern = "", scenarioContext = "" } = {}) {
+  const normalizedConcern = normalizeConcernForFallback(concern);
+  const context = String(scenarioContext || "");
+  if (/screen|candidate|candidacy|eligib|resistance/i.test(context)) {
+    return CONCERN_SAFE_REGENERATED_RESPONSE.screening;
+  }
+  return CONCERN_SAFE_REGENERATED_RESPONSE[normalizedConcern] || CONCERN_SAFE_REGENERATED_RESPONSE.workflow;
+}
+
 export function detectConstraintDraftViolations({
   draftText = "",
   groundedTypes = [],
@@ -154,11 +192,13 @@ export function buildConstraintSafeRegeneratedResponse({
     scenarioContext,
     concern,
   });
-  if (scenarioBoundSentence) return `${warmPrefix}${scenarioBoundSentence}`.trim();
+  if (scenarioBoundSentence) {
+    const concernSafeFallback = buildConcernSafeFallback({ concern, scenarioContext });
+    const scenarioSentenceIsGeneric = /remain unclear|constraint|unresolved/i.test(scenarioBoundSentence);
+    return `${warmPrefix}${scenarioSentenceIsGeneric ? concernSafeFallback : scenarioBoundSentence}`.trim();
+  }
 
-  if (fallback) return fallback;
-
-  return `${warmPrefix}Let's stay with the specific constraint already on the table.`.trim();
+  return `${warmPrefix}${buildConcernSafeFallback({ concern, scenarioContext })}`.trim();
 }
 
 const LATE_TURN_REQUIREMENT_BY_CONCERN = {
