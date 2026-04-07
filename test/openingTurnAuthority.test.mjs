@@ -5,6 +5,7 @@ import fs from "node:fs";
 import { extractScenarioOwnedOpeningTurn } from "../src/components/roleplay/openingTurnAuthority.js";
 import { buildHCPDialoguePrompt, buildHCPProfile, buildTurnSimulationBundle } from "../src/components/roleplay/hcpSimulationEngine.jsx";
 import { buildHcpReactionContract } from "../src/components/roleplay/hcpReactionIntegrity.js";
+import { ALL_SCENARIOS } from "../src/lib/roleplay-v2/scenarioCatalog.js";
 
 const OPENING_SCENARIOS = [
   {
@@ -140,6 +141,23 @@ test("first-turn reaction contract uses scenario-owned opening beat instead of c
     assert.doesNotMatch(dialogue, /prior auth delays, not outcomes/i);
     assert.doesNotMatch(dialogue, /^keep this to one|^stay with one|^please tie this/i);
   }
+});
+
+test("scenario catalog openings follow concise human opening-beat standard", () => {
+  const dialogues = [];
+
+  for (const scenario of ALL_SCENARIOS) {
+    const opening = extractScenarioOwnedOpeningTurn(scenario);
+
+    assert.ok(scenario.openingScene.length <= 240, `${scenario.id} opening scene is too long`);
+    assert.match(opening.dialogueText, /^(hi|hello|hey|good morning|good afternoon|good evening)\b/i, `${scenario.id} opening dialogue needs a human acknowledgment`);
+    assert.ok(opening.dialogueText.split(/\s+/).filter(Boolean).length <= 28, `${scenario.id} opening dialogue is doing too much`);
+    assert.doesNotMatch(opening.dialogueText, /what['’]?s this about|make it count|killing us|drowning|losing patients|another complex|another refill/i, `${scenario.id} opening dialogue is too abrupt or over-scripted`);
+    assert.doesNotMatch(scenario.openingScene, /frustrated sigh|rubbing her temples|visible frustration|without looking up|what['’]?s this about/i, `${scenario.id} opening scene is over-directed`);
+    dialogues.push(opening.dialogueText);
+  }
+
+  assert.ok(new Set(dialogues).size >= ALL_SCENARIOS.length - 2, "scenario openings should not collapse to one repeated phrase family");
 });
 
 test("worker source short-circuits roleplay opening authority before provider invocation", () => {
