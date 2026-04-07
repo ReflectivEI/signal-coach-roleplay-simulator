@@ -96,7 +96,7 @@ function hasEvidenceAnswer(repMessage = "") {
   const value = String(repMessage || "").toLowerCase();
   if (!value.trim()) return false;
   const evidenceTerms = /\b(data|study|trial|endpoint|outcome|evidence|published|efficacy|safety|durability|hazard ratio|confidence interval|real-world|real world|clinically meaningful|jama)\b/.test(value);
-  const decisionTerms = /\b(shows|supports|changes|matters|compare|applies|relevant|patients|practice|decision|because|therefore|so)\b/.test(value);
+  const decisionTerms = /\b(shows|supports|changes|matters|compare|applies|relevant|practice|decision|because|therefore|so)\b/.test(value);
   return evidenceTerms && decisionTerms;
 }
 

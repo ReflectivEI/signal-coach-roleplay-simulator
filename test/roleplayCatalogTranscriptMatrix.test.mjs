@@ -59,8 +59,8 @@ const MULTITURN_FAMILY_FIXTURES = Object.freeze({
     latestHcpAsk: 'What evidence would justify changing practice for the patients I am seeing?',
     turns: [
       { rep: 'This matters broadly.', expectedStatus: 'missed', expectedDialogue: /answer the evidence question directly.*proof point/i },
-      { rep: 'The study data show a meaningful outcome improvement for patients like yours.', expectedStatus: 'evidence_progress', expectedDialogue: /evidence is relevant.*decision/i },
-      { rep: 'Again, the study data show a meaningful outcome improvement for patients like yours.', expectedStatus: 'repeated_evidence_progress', expectedDialogue: /heard the evidence point.*practice/i },
+      { rep: 'The study data show a meaningful outcome improvement for patients like yours, so it supports changing practice for that subgroup.', expectedStatus: 'evidence_progress', expectedDialogue: /evidence is relevant.*decision/i },
+      { rep: 'Again, the study data show a meaningful outcome improvement for patients like yours, so it supports changing practice for that subgroup.', expectedStatus: 'repeated_evidence_progress', expectedDialogue: /heard the evidence point.*practice/i },
     ],
   },
   access: {

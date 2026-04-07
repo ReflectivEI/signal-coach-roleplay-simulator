@@ -139,3 +139,22 @@ test('shared roleplay turn validation gates only the latest HCP ask, not an olde
   assert.equal(validation.valid, true);
   assert.equal(validation.latestAskProgression.status, 'evidence_progress');
 });
+
+test('shared roleplay turn validation blocks repeated generic opener against evidence practice-change ask', () => {
+  const repeatedOpener = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'I heard the evidence point. Now tie it to the decision in front of me: what should change in practice?',
+    repMessage: repeatedOpener,
+    previousRepMessages: [repeatedOpener, repeatedOpener, repeatedOpener],
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.invalid, true);
+  assert.equal(validation.blockHcpGeneration, true);
+  assert.equal(validation.latestAskProgression.status, 'repeated_missed_close');
+  assert.equal(validation.latestAskProgression.family, 'evidence');
+  assert.deepEqual(
+    validation.telemetryEvents.map((event) => event.eventType),
+    ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored'],
+  );
+});
