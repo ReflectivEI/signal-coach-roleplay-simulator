@@ -187,9 +187,28 @@ test('shared roleplay turn validation allows partially responsive first turns wi
   assert.match(validation.coaching.suggestion, /opening|formulary|evidence|time/i);
 });
 
-test('shared roleplay turn validation blocks generic first-turn openers that ignore opening scene', () => {
+test('shared roleplay turn validation soft-coaches generic first-turn openers against context-only openings', () => {
   const validation = validateRoleplayRepTurn({
     firstTurnOpeningContext: 'The P&T committee members are reviewing budget reports. We have three formulary requests today. You have 20 minutes.',
+    repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.invalid, false);
+  assert.equal(validation.blockHcpGeneration, false);
+  assert.equal(validation.blockScoring, false);
+  assert.equal(validation.blockStateAdvance, false);
+  assert.equal(validation.openingContextProgression.status, 'partially_responsive');
+  assert.equal(validation.openingContextProgression.askStrength, 'soft_implied_ask');
+  assert.equal(validation.coaching.escalationLabel, 'First-turn context note');
+  assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('first_turn_opening_context_partial'));
+  assert.doesNotMatch(JSON.stringify(validation.telemetryEvents), /formulary requests/i);
+});
+
+test('shared roleplay turn validation blocks generic first-turn openers against hard explicit opening asks', () => {
+  const validation = validateRoleplayRepTurn({
+    firstTurnOpeningContext: 'Give me one concrete workflow step my team could use without adding burden.',
     repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
     previousRepMessages: [],
   });
@@ -200,9 +219,10 @@ test('shared roleplay turn validation blocks generic first-turn openers that ign
   assert.equal(validation.blockScoring, true);
   assert.equal(validation.blockStateAdvance, true);
   assert.equal(validation.openingContextProgression.status, 'non_responsive');
+  assert.equal(validation.openingContextProgression.askStrength, 'hard_explicit_ask');
   assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
   assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('first_turn_opening_context_ignored'));
-  assert.doesNotMatch(JSON.stringify(validation.telemetryEvents), /formulary requests/i);
+  assert.doesNotMatch(JSON.stringify(validation.telemetryEvents), /high risk patients/i);
 });
 
 test('shared roleplay turn validation blocks nonsense first-turn input before live progression', () => {

@@ -8,6 +8,12 @@ const OPENING_CONTEXT_STATUS = {
   NON_RESPONSIVE: "non_responsive",
 };
 
+const OPENING_ASK_STRENGTH = {
+  HARD: "hard_explicit_ask",
+  SOFT: "soft_implied_ask",
+  CONTEXT: "context_only",
+};
+
 const OPENING_STOP_WORDS = new Set([
   "about", "after", "again", "also", "and", "are", "because", "been", "before", "being", "can",
   "could", "did", "does", "for", "from", "have", "here", "how", "into", "just", "last", "like",
@@ -55,6 +61,25 @@ function hasGenericCannedOpening(repMessage = "") {
   return /\b(follow up|last conversation|dropped off|shared with you last week|high risk patients|thanks for your time|i'?m here to discuss)\b/.test(value);
 }
 
+function classifyOpeningAskStrength(openingContext = "") {
+  const value = String(openingContext || "").toLowerCase();
+  if (!value.trim()) return OPENING_ASK_STRENGTH.CONTEXT;
+
+  if (/\?/.test(value) || /\b(what|how|which|who|when)\b[^.?!]*(\?|should|would|could|can|do|does|is|are)\b/.test(value)) {
+    return OPENING_ASK_STRENGTH.HARD;
+  }
+
+  if (/\b(give me|show me|tell me|help me|keep it to|start with|focus on|answer|recommend|recommendation|concrete step|practical step|one step|single point|proof point|first step|what should change)\b/.test(value)) {
+    return OPENING_ASK_STRENGTH.HARD;
+  }
+
+  if (/\b(asks?|asked|asking|signals for|expects|looking for|needs?|wants?|concern|concerned|constraint|barrier|pressure|issue|problem|struggling|frustrated|short-staffed|workflow|screening|access|evidence|formulary|time|minutes)\b/.test(value)) {
+    return OPENING_ASK_STRENGTH.SOFT;
+  }
+
+  return OPENING_ASK_STRENGTH.CONTEXT;
+}
+
 function hasCannedAgendaOpening(repMessage = "") {
   const value = String(repMessage || "").toLowerCase();
   return /\b(follow up|last conversation|dropped off|shared with you last week|high risk patients|i'?m here to discuss)\b/.test(value);
@@ -93,15 +118,30 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
   const family = inferOpeningConcernFamily(context);
   const overlap = tokenOverlapCount(rep, context);
   const familySignal = hasFamilyResponsiveSignal(rep, family);
+  const askStrength = classifyOpeningAskStrength(context);
   const checkBack = hasOpeningCheckBack(rep, context);
   const genericCanned = hasGenericCannedOpening(rep);
   const cannedAgenda = hasCannedAgendaOpening(rep);
   const evasive = hasNonsenseOrEvasiveOpening(rep);
 
-  if (evasive || (cannedAgenda && overlap < 2 && !checkBack) || (genericCanned && overlap < 2 && !familySignal && !checkBack)) {
+  if (evasive) {
     return {
       status: OPENING_CONTEXT_STATUS.NON_RESPONSIVE,
       family,
+      askStrength,
+      severity: "hard_block",
+      overlap,
+      genericCanned,
+      cannedAgenda,
+      evasive,
+    };
+  }
+
+  if (askStrength === OPENING_ASK_STRENGTH.HARD && ((cannedAgenda && overlap < 2 && !checkBack) || (genericCanned && overlap < 2 && !familySignal && !checkBack))) {
+    return {
+      status: OPENING_CONTEXT_STATUS.NON_RESPONSIVE,
+      family,
+      askStrength,
       severity: "hard_block",
       overlap,
       genericCanned,
@@ -114,6 +154,7 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
     return {
       status: OPENING_CONTEXT_STATUS.RESPONSIVE,
       family,
+      askStrength,
       severity: "none",
       overlap,
       genericCanned,
@@ -122,10 +163,11 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
     };
   }
 
-  if (genericCanned || familySignal || overlap === 1) {
+  if (genericCanned || familySignal || overlap === 1 || askStrength !== OPENING_ASK_STRENGTH.HARD) {
     return {
       status: OPENING_CONTEXT_STATUS.PARTIALLY_RESPONSIVE,
       family,
+      askStrength,
       severity: "soft_coach",
       overlap,
       genericCanned,
@@ -137,6 +179,7 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
   return {
     status: OPENING_CONTEXT_STATUS.NON_RESPONSIVE,
     family,
+    askStrength,
     severity: "hard_block",
     overlap,
     genericCanned,
@@ -267,6 +310,7 @@ export function buildTurnValidationTelemetryEvents({
     coachingRequirementMet: Boolean(coachingRequirementMet),
     firstTurnOpeningStatus: openingContextProgression?.status || null,
     firstTurnOpeningFamily: openingContextProgression?.family || null,
+    firstTurnOpeningAskStrength: openingContextProgression?.askStrength || null,
     latestHcpAskFingerprint: buildTextFingerprint(latestHcpAsk),
     firstTurnOpeningFingerprint: buildTextFingerprint(firstTurnOpeningContext),
     repMessageFingerprint: buildTextFingerprint(repMessage),
@@ -310,7 +354,8 @@ export function validateRoleplayRepTurn({
     repMessage,
     previousRepMessages,
   });
-  const openingInvalid = openingContextProgression?.status === OPENING_CONTEXT_STATUS.NON_RESPONSIVE;
+  const openingInvalid = openingContextProgression?.status === OPENING_CONTEXT_STATUS.NON_RESPONSIVE
+    && openingContextProgression?.severity === "hard_block";
   const openingSoftCoach = openingContextProgression?.status === OPENING_CONTEXT_STATUS.PARTIALLY_RESPONSIVE;
   const invalid = openingInvalid || shouldBlockRepTurnForLatestAsk(latestAskProgression) || Boolean(coachingRequirement && !coachingRequirementMet);
   const telemetryEvents = buildTurnValidationTelemetryEvents({
