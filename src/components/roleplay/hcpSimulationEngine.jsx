@@ -2001,7 +2001,7 @@ export function buildHCPDialoguePrompt({
 
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
   prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(runtimeVisibleScenarioContext)
-  prompt += isOpening
+  prompt += isOpening && !sanitizedHistoryText
     ? '\nOPENING SCENE: ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
     : '\nOPENING CONTEXT (CONSUMED - DO NOT REPEAT AS SPOKEN DIALOGUE): ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
@@ -2032,9 +2032,11 @@ export function buildHCPDialoguePrompt({
     prompt += '\nROLEPLAY_OPENING_SOURCE: ' + sanitize(scenarioOwnedOpeningTurn.source || 'scenario_opening_scene')
   }
 
-  if (isOpening) {
+  if (isOpening && !sanitizedHistoryText) {
     prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
     prompt += '\nREALISM RULE: Doctors may be busy, but can still be human, cordial, neutral, or direct depending on context.'
+  } else if (isOpening && sanitizedHistoryText) {
+    prompt += '\nFIRST LIVE RESPONSE RULE: The opening context has been shown to the rep and consumed. Respond to the rep through the current HCP cue/ask; do not repeat the quoted opening scene as spoken dialogue.'
   }
 
   if (personality) {

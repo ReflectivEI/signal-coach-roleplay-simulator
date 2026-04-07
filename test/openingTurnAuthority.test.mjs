@@ -207,9 +207,10 @@ test("scenario catalog openings preserve scenario-specific human stakes without 
 test("worker source short-circuits roleplay opening authority before provider invocation", () => {
   const workerSource = fs.readFileSync(new URL("../src/worker.js", import.meta.url), "utf8");
   const providerIndex = workerSource.indexOf("const requestedProvider = body?.provider");
-  const authorityIndex = workerSource.indexOf("const roleplayOpeningAuthority = roleplay ? extractRoleplayOpeningAuthority(prompt) : null");
+  const authorityIndex = workerSource.indexOf("const roleplayOpeningAuthority = roleplay && !body?.roleplayTurnValidation?.firstTurnOpeningContext");
 
   assert.ok(authorityIndex > 0, "worker should inspect deterministic opening authority");
   assert.ok(providerIndex > authorityIndex, "opening authority must bypass provider selection and LLM calls");
+  assert.match(workerSource, /!body\?\.roleplayTurnValidation\?\.firstTurnOpeningContext/);
   assert.match(workerSource, /model: "deterministic_opening_turn"/);
 });

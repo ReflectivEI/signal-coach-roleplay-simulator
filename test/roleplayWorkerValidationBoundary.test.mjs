@@ -14,7 +14,7 @@ test('worker roleplay boundary enforces shared turn validation before provider i
   assert.match(WORKER_SOURCE, /blockScoring: true/);
   assert.match(WORKER_SOURCE, /blockStateAdvance: true/);
 
-  const openingAuthorityIndex = WORKER_SOURCE.indexOf('const roleplayOpeningAuthority = roleplay ? extractRoleplayOpeningAuthority(prompt) : null');
+  const openingAuthorityIndex = WORKER_SOURCE.indexOf('const roleplayOpeningAuthority = roleplay && !body?.roleplayTurnValidation?.firstTurnOpeningContext');
   const boundaryIndex = WORKER_SOURCE.indexOf('const boundary = enforceRoleplayTurnValidationBoundary(body)');
   const providerIndex = WORKER_SOURCE.indexOf('const requestedProvider = body?.provider');
   const fetchIndex = WORKER_SOURCE.indexOf('const openaiResponse = await fetch(llmUrl');
@@ -23,6 +23,7 @@ test('worker roleplay boundary enforces shared turn validation before provider i
   assert.ok(boundaryIndex > openingAuthorityIndex, 'worker should validate non-opening roleplay turns after opening authority');
   assert.ok(providerIndex > boundaryIndex, 'provider selection must not occur before roleplay validation');
   assert.ok(fetchIndex > boundaryIndex, 'provider fetch must not occur before roleplay validation');
+  assert.match(WORKER_SOURCE, /!body\?\.roleplayTurnValidation\?\.firstTurnOpeningContext/);
 });
 
 test('current RolePlayChat roleplay provider calls carry shared validation context', () => {

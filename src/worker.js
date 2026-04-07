@@ -842,7 +842,9 @@ async function handleLlmInvoke(request, env) {
         );
     }
 
-    const roleplayOpeningAuthority = roleplay ? extractRoleplayOpeningAuthority(prompt) : null;
+    const roleplayOpeningAuthority = roleplay && !body?.roleplayTurnValidation?.firstTurnOpeningContext
+        ? extractRoleplayOpeningAuthority(prompt)
+        : null;
     if (roleplayOpeningAuthority?.dialogue) {
         return Response.json({
             response: roleplayOpeningAuthority.dialogue,

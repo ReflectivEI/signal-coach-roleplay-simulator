@@ -118,6 +118,7 @@ import {
 import { detectOpeningSceneDialogueReplay, extractScenarioOwnedOpeningTurn } from "./openingTurnAuthority";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
 import { detectStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
+import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -2834,9 +2835,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     const isFirstRepTurn = respondingToTurn.turnNumber === 0 && !respondingToTurn?.hcpDialogueBefore;
     const openingTurnForValidation = isFirstRepTurn ? extractScenarioOwnedOpeningTurn(scenario) : null;
-    const firstTurnOpeningContext = openingTurnForValidation
-      ? [openingTurnForValidation.cueText, openingTurnForValidation.dialogueText].filter(Boolean).join(" ")
-      : "";
+    const firstTurnActiveAskState = isFirstRepTurn
+      ? resolveActiveHcpAskState({
+        narrativeContext: openingTurnForValidation?.cueText || "",
+        openingContext: openingTurnForValidation?.dialogueText || "",
+        fallbackConcern: detectPrimaryConcern(`${openingTurnForValidation?.cueText || ""} ${openingTurnForValidation?.dialogueText || ""} ${visibleScenarioGroundingText || ""}`),
+      })
+      : null;
+    const firstTurnOpeningContext = firstTurnActiveAskState?.askText || "";
     const previousRepMessagesForValidation = collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || "");
     const preTurnValidation = validateRoleplayRepTurn({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
@@ -2851,6 +2857,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       previousRepMessages: previousRepMessagesForValidation,
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
+      activeHcpAskState: firstTurnActiveAskState || null,
     };
     if (preTurnValidation.invalid) {
       recordTurnValidationTelemetry(preTurnValidation, {
@@ -3488,6 +3495,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     };
 
     const buildGlobalOpeningPrompt = () => {
+      if (isFirstHcpResponse && firstTurnActiveAskState?.askText) {
+        if (firstTurnActiveAskState.source === "narrative_context") {
+          return `Right now, I need ${firstTurnActiveAskState.askText}.`;
+        }
+        if (firstTurnActiveAskState.concernFamily === "workflow") {
+          return "Right now, the practical workflow issue is the priority. What is one step we could implement without adding burden?";
+        }
+        if (firstTurnActiveAskState.concernFamily === "screening") {
+          return "Right now, I need this tied to patient selection. What is the first screening checkpoint you would use?";
+        }
+        if (firstTurnActiveAskState.concernFamily === "evidence") {
+          return "Given the decision in front of us, what is the single most relevant evidence point I should focus on?";
+        }
+        if (firstTurnActiveAskState.concernFamily === "access") {
+          return "Right now, the access barrier is the priority. What is the first step that reduces the bottleneck?";
+        }
+      }
       const openingBeat = normalizeOpeningBeatToPrompt(scenario?.opening_scene || scenario?.openingScene || "");
       if (openingBeat) return openingBeat;
 
@@ -5076,6 +5100,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       priorEnforcementTrace: respondingToTurn?.hcpReactionContract?.enforcementTrace || {},
       concernFlowOutcome,
       repMessage,
+      openingTurnConsumed: isFirstHcpResponse,
     });
     contextualCue = hcpReactionContract.selectedCueText || contextualCue;
     nextHcpDialogue = latestAskProtectedDialogue || hcpReactionContract.selectedDialogueText || nextHcpDialogue;
@@ -5088,7 +5113,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     });
     if (
       openingReplayCheck.replayed
-      && !isFirstHcpResponse
       && !isTerminalClosureDialogue(nextHcpDialogue)
     ) {
       usedDeterministicFallback = true;

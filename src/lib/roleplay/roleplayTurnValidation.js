@@ -55,6 +55,11 @@ function hasGenericCannedOpening(repMessage = "") {
   return /\b(follow up|last conversation|dropped off|shared with you last week|high risk patients|thanks for your time|i'?m here to discuss)\b/.test(value);
 }
 
+function hasCannedAgendaOpening(repMessage = "") {
+  const value = String(repMessage || "").toLowerCase();
+  return /\b(follow up|last conversation|dropped off|shared with you last week|high risk patients|i'?m here to discuss)\b/.test(value);
+}
+
 function hasNonsenseOrEvasiveOpening(repMessage = "") {
   const value = normalizeForFingerprint(repMessage);
   const tokenCount = value.split(" ").filter(Boolean).length;
@@ -90,15 +95,17 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
   const familySignal = hasFamilyResponsiveSignal(rep, family);
   const checkBack = hasOpeningCheckBack(rep, context);
   const genericCanned = hasGenericCannedOpening(rep);
+  const cannedAgenda = hasCannedAgendaOpening(rep);
   const evasive = hasNonsenseOrEvasiveOpening(rep);
 
-  if (evasive || (genericCanned && overlap === 0 && !checkBack)) {
+  if (evasive || (cannedAgenda && overlap < 2 && !checkBack) || (genericCanned && overlap < 2 && !familySignal && !checkBack)) {
     return {
       status: OPENING_CONTEXT_STATUS.NON_RESPONSIVE,
       family,
       severity: "hard_block",
       overlap,
       genericCanned,
+      cannedAgenda,
       evasive,
     };
   }
@@ -110,6 +117,7 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
       severity: "none",
       overlap,
       genericCanned,
+      cannedAgenda,
       evasive,
     };
   }
@@ -121,6 +129,7 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
       severity: "soft_coach",
       overlap,
       genericCanned,
+      cannedAgenda,
       evasive,
     };
   }
@@ -131,6 +140,7 @@ function classifyFirstTurnOpeningContext({ openingContext = "", repMessage = "" 
     severity: "hard_block",
     overlap,
     genericCanned,
+    cannedAgenda,
     evasive,
   };
 }

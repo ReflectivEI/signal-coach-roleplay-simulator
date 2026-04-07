@@ -335,8 +335,9 @@ export function buildHcpReactionContract({
   priorEnforcementTrace = {},
   concernFlowOutcome = 'aligned',
   repMessage = '',
+  openingTurnConsumed = false,
 } = {}) {
-  const scenarioOwnedOpeningTurn = Number(turnNumber) === 1
+  const scenarioOwnedOpeningTurn = Number(turnNumber) === 1 && !openingTurnConsumed
     ? extractScenarioOwnedOpeningTurn(scenario)
     : null;
   const normalizedCue = normalizeText(scenarioOwnedOpeningTurn?.cueText || cueText);
