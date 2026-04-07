@@ -64,6 +64,19 @@ test("scenario-owned opening parser extracts cue and dialogue from declared open
   assert.equal(opening.source, "scenario_opening_scene");
 });
 
+test("scenario-owned opening parser handles contractions and multiple quoted dialogue fragments", () => {
+  const opening = extractScenarioOwnedOpeningTurn({
+    id: "multi_quote_contraction_case",
+    openingScene: "Dr. Patel glances at her watch as you enter. She's between patients, typing notes rapidly. 'I have about 10 minutes,' she says without looking up. 'What's this about?'",
+  });
+
+  assert.match(opening.cueText, /Dr\. Patel glances at her watch/i);
+  assert.match(opening.cueText, /She's between patients, typing notes rapidly/i);
+  assert.doesNotMatch(opening.cueText, /^S between/i);
+  assert.equal(opening.dialogueText, "I have about 10 minutes. What's this about?");
+  assert.doesNotMatch(opening.dialogueText, /she says|typing notes|between patients/i);
+});
+
 test("opening prompt carries deterministic scenario-owned authority marker", () => {
   const prompt = buildHCPDialoguePrompt({
     scenario: OPENING_SCENARIOS[0],
