@@ -157,7 +157,23 @@ test('transcript replay harness: missed evidence asks vary before terminal close
 
   const normalizedDialogues = dialogues.map((dialogue) => dialogue.toLowerCase());
   assert.equal(new Set(normalizedDialogues).size, dialogues.length, 'missed evidence asks should not repeat verbatim');
+  assert.match(dialogues[0], /I hear the setup, but I need the evidence answer/i);
   assert.match(dialogues[1], /still not hearing the evidence piece/i);
   assert.match(dialogues[2], /proof point, not the setup/i);
+  assert.match(dialogues[2], /because of it/i);
   assert.match(dialogues[3], /pause here/i);
+});
+
+test('transcript replay harness: missed workflow ask uses conversational framing while preserving ask clarity', () => {
+  const progression = classifyLatestAskProgression({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and outcomes data.",
+    previousRepMessages: [],
+  });
+  const dialogue = buildLatestAskProgressionDialogue(progression);
+
+  assert.equal(progression.status, 'missed');
+  assert.match(dialogue, /I hear you, but I need this brought back to workflow/i);
+  assert.match(dialogue, /first practical step/i);
+  assert.doesNotMatch(dialogue, /^I need you to answer the workflow question directly/i);
 });

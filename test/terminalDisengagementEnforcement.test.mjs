@@ -86,8 +86,9 @@ test("final HCP dialogue cannot repeat recent asks or echo the rep message", () 
 });
 
 test("repair dialogue uses conversational continuity instead of bare rubric questions", () => {
-  assert.match(SOURCE, /I'm not hearing the workflow piece yet/);
+  assert.match(SOURCE, /I hear the context, but in my clinic this comes down to workflow/);
   assert.match(SOURCE, /Candidacy is still the question for me/);
+  assert.match(SOURCE, /Before we discuss new data/);
   assert.doesNotMatch(SOURCE, /"What is the single workflow adjustment that saves my team time right away\?"/);
   assert.doesNotMatch(SOURCE, /"What is one step that fits our current protocol and can be implemented quickly\?"/);
   assert.doesNotMatch(SOURCE, /"How would I identify the right patients in my current panel during a standard visit\?"/);

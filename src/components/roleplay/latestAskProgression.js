@@ -128,25 +128,25 @@ function selectMissedDialogueVariant(family = "general", missedAttemptCount = 1)
   const stage = Math.max(0, Math.min(3, Number(missedAttemptCount || 1) - 1));
   const variantsByFamily = {
     workflow: [
-      "I need you to answer the workflow question directly: what is the first practical step here?",
-      "I'm still not hearing the workflow piece. Start with one concrete step we could run here.",
-      "Keep it to the practical lift: what would my team do differently first?",
+      "I hear you, but I need this brought back to workflow: what is the first practical step here?",
+      "I'm still not hearing how this changes the work for my team. What is one concrete step we could run here?",
+      "Keep it to the practical lift: what would my team actually do differently first?",
       "I need to pause here if we cannot get to the workflow answer.",
     ],
     screening: [
-      "I need you to answer the screening question directly: what is the first checkpoint you would use?",
-      "I'm still not hearing the patient-selection answer. Start with the first screening checkpoint.",
+      "I hear you, but I need this brought back to screening: what is the first checkpoint you would use?",
+      "I'm still not hearing the patient-selection answer. Start with the first screening checkpoint you would apply.",
       "Keep this to candidacy: what would my team check first?",
       "I need to pause here if we cannot get to the screening answer.",
     ],
     evidence: [
-      "I need you to answer the evidence question directly: what proof point changes the decision?",
+      "I hear the setup, but I need the evidence answer: what proof point changes the decision?",
       "I'm still not hearing the evidence piece. What data would actually change my decision here?",
-      "Give me the proof point, not the setup: what should change in practice?",
+      "Give me the proof point, not the setup: what should change in practice because of it?",
       "I need to pause here if we cannot get to the evidence answer.",
     ],
     access: [
-      "I need you to answer the access question directly: what is the first step that reduces the bottleneck?",
+      "I hear you, but I need the access answer: what is the first step that reduces the bottleneck?",
       "I'm still not hearing the access step. What would reduce the PA or coverage burden first?",
       "Keep this to the bottleneck: what changes first, and who starts it?",
       "I need to pause here if we cannot get to the access answer.",

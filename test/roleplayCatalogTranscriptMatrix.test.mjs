@@ -50,7 +50,7 @@ const MULTITURN_FAMILY_FIXTURES = Object.freeze({
   screening: {
     latestHcpAsk: 'How would I identify the right patients and confirm screening requirements in a standard visit?',
     turns: [
-      { rep: 'Yes, let us discuss that.', expectedStatus: 'missed', expectedDialogue: /answer the screening question directly.*first checkpoint/i },
+      { rep: 'Yes, let us discuss that.', expectedStatus: 'missed', expectedDialogue: /brought back to screening.*first checkpoint/i },
       { rep: 'Align on candidacy and monitoring criteria before starting therapy.', expectedStatus: 'screening_progress', expectedDialogue: /right screening focus.*checkpoint/i },
       { rep: 'Again, align on candidacy and monitoring criteria before starting therapy.', expectedStatus: 'repeated_screening_progress', expectedDialogue: /heard the screening framework.*checkpoint/i },
     ],
@@ -58,7 +58,7 @@ const MULTITURN_FAMILY_FIXTURES = Object.freeze({
   evidence: {
     latestHcpAsk: 'What evidence would justify changing practice for the patients I am seeing?',
     turns: [
-      { rep: 'This matters broadly.', expectedStatus: 'missed', expectedDialogue: /answer the evidence question directly.*proof point/i },
+      { rep: 'This matters broadly.', expectedStatus: 'missed', expectedDialogue: /need the evidence answer.*proof point/i },
       { rep: 'The study data show a meaningful outcome improvement for patients like yours, so it supports changing practice for that subgroup.', expectedStatus: 'evidence_progress', expectedDialogue: /evidence is relevant.*decision/i },
       { rep: 'Again, the study data show a meaningful outcome improvement for patients like yours, so it supports changing practice for that subgroup.', expectedStatus: 'repeated_evidence_progress', expectedDialogue: /heard the evidence point.*practice/i },
     ],
@@ -66,7 +66,7 @@ const MULTITURN_FAMILY_FIXTURES = Object.freeze({
   access: {
     latestHcpAsk: 'How would this reduce access, coverage, or prior-auth burden for my team this week?',
     turns: [
-      { rep: 'We can follow up later.', expectedStatus: 'missed', expectedDialogue: /answer the access question directly.*first step/i },
+      { rep: 'We can follow up later.', expectedStatus: 'missed', expectedDialogue: /need the access answer.*first step/i },
       { rep: 'Start benefits investigation earlier and route prior-auth templates through the hub.', expectedStatus: 'access_progress', expectedDialogue: /access step is relevant.*bottleneck/i },
       { rep: 'Again, start benefits investigation earlier and route prior-auth templates through the hub.', expectedStatus: 'repeated_access_progress', expectedDialogue: /heard the access step.*reduce rework/i },
     ],
@@ -74,7 +74,7 @@ const MULTITURN_FAMILY_FIXTURES = Object.freeze({
   workflow: {
     latestHcpAsk: 'What is the smallest workflow change you would recommend first, and who would own it?',
     turns: [
-      { rep: 'We should discuss workflow.', expectedStatus: 'missed', expectedDialogue: /answer the workflow question directly.*first practical step/i },
+      { rep: 'We should discuss workflow.', expectedStatus: 'missed', expectedDialogue: /brought back to workflow.*first practical step/i },
       { rep: 'Standardize patient education and add toxicity monitoring to the pathway checklist.', expectedStatus: 'missing_owner', expectedDialogue: /closer.*who owns/i },
       { rep: 'Again, standardize patient education and add toxicity monitoring to the pathway checklist.', expectedStatus: 'repeated_missing_owner', expectedDialogue: /heard the process change.*ownership/i },
       { rep: 'The NP should lead education and own the toxicity monitoring checklist at first follow-up.', expectedStatus: 'owner_progress', expectedDialogue: /more useful.*first handoff/i },

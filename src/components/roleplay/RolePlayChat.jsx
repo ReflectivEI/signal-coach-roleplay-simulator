@@ -471,6 +471,7 @@ function hardenTextSurface(text) {
     .replace(/\b(I want) on\b/gi, "$1 guidance on")
     .replace(/\b(I want) about\s+(?!\d+\b|one\b|two\b|three\b|four\b|five\b|six\b|seven\b|eight\b|nine\b|ten\b)/gi, "$1 to talk about ")
     .replace(/\b(I want) for\s+(guidance|clarity|detail|details|help)\b/gi, "$1 $2")
+    .replace(/\b(Before we discuss new data)\.\s+(Can|Could|Would|What|How|Which|When|Where|Why)\b/g, "$1, $2")
     .replace(/([.!?])\s*([a-z])/g, (_, punc, char) => `${punc} ${char.toUpperCase()}`)
     .replace(/,\s+(Who|What|How|Which|When|Where|Why|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, (_, word) => `, ${word.toLowerCase()}`)
     .replace(/^([a-z])/, (_, char) => char.toUpperCase());
@@ -933,25 +934,25 @@ function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
-      "I'm not hearing the workflow piece yet. Start with one process change my current team could use this week.",
-      "I need to understand the practical lift. What is one change we could try without adding staff burden?",
-      "Let's keep this grounded in clinic flow. What would my team do differently first?",
-      "If this is actionable, make it concrete: what is the first step my staff would own?",
-      "I can stay with this if it is practical. What is the smallest workflow change you would recommend first?",
+      "I hear the context, but in my clinic this comes down to workflow. What is one process change my team could use this week?",
+      "I get where you're going, but I need to understand the practical lift. What is one change we could try without adding staff burden?",
+      "That may be relevant, but clinic flow is the issue for me right now. What would my team actually do differently first?",
+      "I can stay with this if we make it concrete. What is the first step my staff would own?",
+      "I am open to the idea, but it has to be practical. What is the smallest workflow change you would recommend first?",
     ],
     access: [
-      "Access is still the barrier for me. What is one payer-facing step that could reduce rework for us?",
-      "I'm not hearing how this lowers the prior-auth burden yet. Start with one practical access step.",
-      "For this to help, it has to move approvals faster. What is the first access action you would recommend?",
-      "Keep this tied to the admin load. What process change would cut access delays without adding work?",
-      "I need one specific access tactic my team could actually run this week.",
+      "I understand the broader point, but access is still the barrier for me. What is one payer-facing step that could reduce rework for us?",
+      "That only helps if it lowers the prior-auth burden. What practical access step would you start with?",
+      "For this to matter here, it has to move approvals faster. What is the first access action you would recommend?",
+      "I need this tied to the admin load we actually feel. What process change would cut access delays without adding work?",
+      "I can work with one specific access tactic if my team can run it this week. What would that be?",
     ],
     evidence: [
-      "I still need the evidence tied to a real decision. Which proof point should change what I do now?",
+      "I hear you, but I still need the evidence tied to a real decision. Which proof point should change what I do now?",
       "Make the data practical for me. What one evidence point applies to the patients I am seeing this month?",
-      "I can evaluate one strong signal here. What is the data point that should affect tomorrow's decision?",
-      "Keep it tight: one proof point, and tell me the clinical implication for this practice.",
-      "I need one evidence takeaway connected directly to a care choice in clinic.",
+      "I can evaluate one strong signal here, but it has to connect to the decision. What data point should affect tomorrow's choice?",
+      "Keep it tight: give me one proof point and the clinical implication for this practice.",
+      "I need one evidence takeaway that connects directly to a care choice in clinic.",
     ],
     time: [
       "I have about a minute, so start with the action that matters most.",
@@ -968,7 +969,7 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
       "What is the first compliant step that would still improve workflow?",
     ],
     screening: [
-      "I'm not hearing the screening approach yet. Start with one checkpoint we could apply consistently.",
+      "I hear the intent, but I still need the screening approach. What is one checkpoint we could apply consistently?",
       "Candidacy is still the question for me. What is one step we could standardize without slowing clinic flow?",
       "Make this practical for our setting: what is the first screening action you would recommend?",
       "I need one clear screening move my staff could apply consistently during a visit.",
