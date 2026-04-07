@@ -1041,7 +1041,7 @@ function isDeferringWithoutImmediateAction(text = "") {
 function isTerminalClosureDialogue(text = "") {
   const sample = String(text || "").toLowerCase().trim();
   if (!sample) return false;
-  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i need to get back to patients|this isn'?t productive|this is not productive|take care|patients waiting)\b/;
+  const closurePattern = /\b(conversation is ending|exchange is over|continue speaking later|coordinate a follow-up|follow-up slot|front desk|we can continue later|wrap this up|need to move on|i need to get back to clinic|i need to get back to patients|i need to pause here|i'm going to pause us here|let's stop here|stop here for now|this isn'?t productive|this is not productive|take care|patients waiting)\b/;
   const asksNewQuestion = sample.includes("?");
   return closurePattern.test(sample) && !asksNewQuestion;
 }

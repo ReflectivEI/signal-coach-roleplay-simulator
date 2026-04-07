@@ -7,6 +7,9 @@ const LATEST_ASK_PROGRESSION_SOURCE = fs.readFileSync(new URL("../src/components
 
 test("terminal disengagement phrases are recognized as closure signals", () => {
   assert.match(SOURCE, /i need to get back to patients/);
+  assert.match(SOURCE, /i need to get back to clinic/);
+  assert.match(SOURCE, /i need to pause here/);
+  assert.match(SOURCE, /stop here for now/);
   assert.match(SOURCE, /this isn\'?t productive|this is not productive/);
   assert.match(SOURCE, /take care/);
 });
