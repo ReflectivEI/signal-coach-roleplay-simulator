@@ -11,7 +11,58 @@ const PRESSURE_CATEGORIES = new Set([
 ]);
 
 const SOFT_COLLABORATIVE_PATTERN = /\b(i can stay with this|happy to|let'?s explore|we can talk through|i'?m open to discussing)\b/i;
-const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap)\b/i;
+const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me)\b/i;
+const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
+
+function isHighPressureState({ cueCategory = '', interactionMode = '', engagementTier = '', semanticStage = '', terminalBehavior = false } = {}) {
+  if (terminalBehavior) return true;
+  return /terminal_exit|hard_escalation|time_constrained|non_adaptive_impatience|closing|disengaging|directive|hard|terminal/i
+    .test(`${cueCategory} ${interactionMode} ${engagementTier} ${semanticStage}`);
+}
+
+function compressFormalQuestionToSingleAsk({ text = '', concernFamily = 'general', cueCategory = 'neutral_attentive' } = {}) {
+  const value = normalizeHcpSpokenRealism(text);
+  const isTerminal = cueCategory === 'terminal_exit';
+  const terminalLead = isTerminal ? 'One point: ' : '';
+
+  if (concernFamily === 'workflow' || /workflow|staff|team|clinic flow|practical/i.test(value)) {
+    return isTerminal
+      ? 'One point: what would my team actually do first?'
+      : 'Then give me one step. What would my team do first?';
+  }
+  if (concernFamily === 'access' || /access|coverage|payer|prior auth|copay/i.test(value)) {
+    return `${terminalLead}what is the access step here?`.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
+  }
+  if (concernFamily === 'screening' || /screen|candidacy|criteria|resistance|patient selection/i.test(value)) {
+    return `${terminalLead}who would you screen first?`.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
+  }
+  if (concernFamily === 'evidence' || /durability|evidence|proof|data|decision|regimen/i.test(value)) {
+    if (/stable/i.test(value)) return `${terminalLead}how does that affect durability for stable patients?`.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
+    return `${terminalLead}how does that change the decision?`.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
+  }
+  return isTerminal ? 'One point: what changes here?' : 'Then give me the practical point.';
+}
+
+export function enforceTerminalCompression({ text, concernFamily = 'general', cueCategory = 'terminal_exit' } = {}) {
+  let value = normalizeHcpSpokenRealism(text)
+    .replace(/^To directly address[^.?!]*[.?!]\s*/i, '')
+    .replace(/^To address[^.?!]*[.?!]\s*/i, '')
+    .replace(/\bCan you specifically elaborate on how\b/gi, 'How does')
+    .replace(/\bcan you specifically elaborate on how\b/g, 'how does')
+    .replace(/\bsupports the long-term durability of treatment regimens for\b/gi, 'affect durability for')
+    .replace(/\bsupport the long-term durability of treatment regimens for\b/gi, 'affect durability for')
+    .replace(/\bsupports long-term durability of treatment regimens for\b/gi, 'affect durability for')
+    .replace(/\btreatment regimens\b/gi, 'treatments')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  value = normalizeHcpSpokenRealism(value);
+  const overpacked = detectOverpackedSentence({ text: value });
+  if (FORMAL_EXPANSION_PATTERN.test(text) || overpacked.overpacked || overpacked.wordCount > 16) {
+    return compressFormalQuestionToSingleAsk({ text: value, concernFamily, cueCategory });
+  }
+  return value;
+}
 
 function normalizeRecentTurns(recentHcpTurns = []) {
   return (Array.isArray(recentHcpTurns) ? recentHcpTurns : [])
@@ -141,7 +192,16 @@ export function applyConversationalRealism({
   const grammarNormalized = normalizeHcpSpokenRealism(text);
   const humanized = humanizeClinicalReferences({ text: grammarNormalized, concernFamily, scenarioContext });
   const spoken = enforceSpokenLanguage({ text: humanized, interactionMode, engagementTier });
-  const compressed = splitOrCompressSentence({ text: spoken, interactionMode, cueCategory: resolvedCueCategory, concernFamily });
+  const terminalCompressed = isHighPressureState({
+    cueCategory: resolvedCueCategory,
+    interactionMode,
+    engagementTier,
+    semanticStage,
+    terminalBehavior,
+  })
+    ? enforceTerminalCompression({ text: spoken, concernFamily, cueCategory: resolvedCueCategory })
+    : spoken;
+  const compressed = splitOrCompressSentence({ text: terminalCompressed, interactionMode, cueCategory: resolvedCueCategory, concernFamily });
   const varied = varyPressurePhrasing({ text: compressed, concernFamily, recentHcpTurns, interactionMode, cueCategory: resolvedCueCategory });
   const lockstep = validateCueDialogueLockstep({
     cueCategory: resolvedCueCategory,
@@ -152,7 +212,11 @@ export function applyConversationalRealism({
   });
   const finalText = lockstep.aligned
     ? varied.text
-    : compressByState({ text: varied.text, concernFamily, cueCategory: resolvedCueCategory });
+    : enforceTerminalCompression({
+      text: compressByState({ text: varied.text, concernFamily, cueCategory: resolvedCueCategory }),
+      concernFamily,
+      cueCategory: resolvedCueCategory,
+    });
 
   return {
     text: normalizeHcpSpokenRealism(finalText),
@@ -165,6 +229,7 @@ export function applyConversationalRealism({
       lockstep,
       overpacked: detectOverpackedSentence({ text: finalText }),
       activeAskPresent: Boolean(String(activeAsk || '').trim()),
+      terminalCompressionApplied: terminalCompressed !== spoken || finalText !== varied.text,
       conversationIntelligenceProgression: conversationIntelligence?.turnInterpretation?.progression || null,
     },
   };

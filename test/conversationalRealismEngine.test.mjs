@@ -5,6 +5,7 @@ import {
   applyConversationalRealism,
   compressByState,
   detectOverpackedSentence,
+  enforceTerminalCompression,
   humanizeClinicalReferences,
   reduceFormalMetaLabeling,
   validateCueDialogueLockstep,
@@ -85,6 +86,35 @@ test('conversational realism compresses terminal exits without adding a new ask'
   assert.equal(result.text, 'I need to pause here.');
   assert.doesNotMatch(result.text, /\?/);
   assert.equal(result.metadata.lockstep.aligned, true);
+});
+
+test('conversational realism hard-compresses formal terminal evidence expansion', () => {
+  const result = applyConversationalRealism({
+    text: 'To directly address your follow-up on outcomes data. Can you specifically elaborate on how that data supports the long-term durability of treatment regimens for my stable patients?',
+    concernFamily: 'evidence',
+    cueCategory: 'terminal_exit',
+    engagementTier: 'disengaging',
+    interactionMode: 'closing',
+    semanticStage: 'closing',
+    terminalBehavior: true,
+  });
+
+  assert.equal(result.text, 'One point: how does that affect durability for stable patients?');
+  assert.doesNotMatch(result.text, /To directly address|specifically elaborate|treatment regimens/i);
+  assert.ok(result.text.split(/\s+/).length <= 10);
+  assert.equal(result.metadata.lockstep.aligned, true);
+  assert.equal(result.metadata.terminalCompressionApplied, true);
+});
+
+test('terminal compression keeps pressured asks short by concern family', () => {
+  assert.equal(
+    enforceTerminalCompression({
+      text: 'To address your workflow follow-up. Can you specifically elaborate on how this would support the operational implications for my staff?',
+      concernFamily: 'workflow',
+      cueCategory: 'terminal_exit',
+    }),
+    'One point: what would my team actually do first?'
+  );
 });
 
 test('conversational realism reports cue-dialogue lockstep mismatches', () => {
