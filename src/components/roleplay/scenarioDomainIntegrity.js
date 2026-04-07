@@ -40,7 +40,7 @@ function inferScenarioDomainPolicy({ scenario = {}, activeConcern = '' } = {}) {
       scenario?.category,
       scenario?.specialty,
       scenario?.therapeuticArea,
-      scenario?.context,
+      scenario?.visibleScenarioContext,
       scenario?.objective,
       scenario?.openingScene,
       activeConcern,
@@ -50,7 +50,7 @@ function inferScenarioDomainPolicy({ scenario = {}, activeConcern = '' } = {}) {
   const inferredAllowed = uniq([
     inferredPrimary,
     ...(explicitPolicy.allowedDomains || []),
-    ...inferDomainFamily(`${scenario?.context || ''} ${scenario?.openingScene || ''} ${scenario?.objective || ''}`),
+    ...inferDomainFamily(`${scenario?.visibleScenarioContext || ''} ${scenario?.openingScene || ''} ${scenario?.objective || ''}`),
     ...(String(activeConcern || '').toLowerCase().includes('workflow') ? ['operational_workflow'] : []),
     ...(String(activeConcern || '').toLowerCase().includes('evidence') ? ['evidence_review'] : []),
     ...(String(activeConcern || '').toLowerCase().includes('selection') ? ['patient_selection'] : []),

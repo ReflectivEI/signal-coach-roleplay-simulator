@@ -447,7 +447,7 @@ function extractScenarioKeywords(scenario) {
   const combined = [
     scenario?.title,
     scenario?.description,
-    scenario?.context,
+    scenario?.visibleScenarioContext,
     scenario?.opening_scene,
     scenario?.openingScene,
     scenario?.objective,
@@ -1292,22 +1292,29 @@ function rankResponseObjective({
   };
 }
 
-function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0 } = {}) {
+function buildOperationalReanchorDialogue({ mode = "missed", unresolvedConcernTurns = 0, activeConcern = "workflow" } = {}) {
+  const concern = String(activeConcern || "workflow").toLowerCase();
+  const concernLabel = concern === "access"
+    ? "access step"
+    : concern === "time"
+      ? "time-limited next step"
+      : "workflow step";
+
   if (mode === "aligned") {
     return unresolvedConcernTurns >= 2
-      ? "That could help, as long as it reduces back-and-forth without adding work for my team."
-      : "That sounds relevant, but it depends on whether it is realistic for our current staffing."
+      ? `That could help, as long as it makes the ${concernLabel} easier to execute without adding work.`
+      : `That sounds relevant, but it depends on whether the ${concernLabel} is realistic for this setting.`
   }
 
   if (mode === "overpivot") {
     return unresolvedConcernTurns >= 2
-      ? "I understand the outcomes point, but approvals are still the bottleneck. Unless this streamlines prior auth, it is hard to act on."
-      : "I get the data, but outcomes are not our blocker right now. Prior auth friction is."
+      ? `I understand the outcomes point, but I still need the specific ${concernLabel} that changes what happens next.`
+      : `I get the data, but I need the next step tied to the ${concernLabel} in front of us.`
   }
 
   return unresolvedConcernTurns >= 2
-    ? "I understand, but data is not the barrier. Approvals and paperwork are what slow us down."
-    : "That is interesting, but my biggest issue is prior auth delays, not outcomes.";
+    ? `I understand, but the current ${concernLabel} is still unresolved. Make the next step specific to this scenario.`
+    : `Tie this to the specific ${concernLabel} in front of us before we move on.`;
 }
 
 function detectConcernAddressed(repMessage = "", concern = "workflow") {
@@ -2437,7 +2444,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const objectiveText = Array.isArray(scenario.objective)
     ? scenario.objective.join("; ")
     : (scenario.objective || scenario.goal || "Guide this HCP interaction toward a clear, mutually agreed next step.");
-  const descriptionText = scenario.hcp || scenario.description || scenario.context || "";
+  const descriptionText = scenario.hcp || scenario.description || scenario.visibleScenarioContext || "";
   const challengeItems = (Array.isArray(scenario.challenges)
     ? scenario.challenges
     : String(scenario.challenges || "")
@@ -2470,7 +2477,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     stakeholder: scenario.stakeholder,
     specialty: scenario.specialty,
     descriptionText,
-    context: scenario.context,
+    context: scenario.visibleScenarioContext || scenario.description || "",
     hcpCategory: scenario.hcp_category,
     hcp: scenario.hcp,
   });
@@ -2816,7 +2823,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const scenarioGroundingText = [
       scenario?.title,
       scenario?.description,
-      scenario?.context,
       scenario?.opening_scene,
       scenario?.openingScene,
       scenario?.objective,
@@ -3403,7 +3409,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const scenarioFirstTurnConcern = detectPrimaryConcern([
           scenario?.title,
           scenario?.description,
-          scenario?.context,
+          visibleScenarioGroundingText,
           scenario?.opening_scene || scenario?.openingScene || "",
           scenario?.objective,
           Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
@@ -3480,7 +3486,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         return decayPool[startIndex];
       }
 
-      const concern = detectPrimaryConcern(`${value} ${scenario?.description || ""}`);
+      const concern = detectPrimaryConcern(`${value} ${visibleScenarioGroundingText || scenario?.description || ""}`);
       const bucketKey = (() => {
         if (nextHcpState === "boundary-setting" || nextHcpState === "disengaged") return "closure";
         if (nextHcpState === "resistant" || concern === "evidence") return "mildSkepticism";
@@ -3756,9 +3762,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         nextHcpDialogue = buildOperationalReanchorDialogue({
           mode: concernFlowOutcome,
           unresolvedConcernTurns,
+          activeConcern,
         });
         if (concernFlowOutcome === "aligned" && recoveryTiming === "late") {
-          nextHcpDialogue = "That may help, but we are still behind on approvals. If you want me to act on this, keep it specific and operational.";
+          nextHcpDialogue = buildOperationalReanchorDialogue({
+            mode: "aligned",
+            unresolvedConcernTurns: Math.max(2, unresolvedConcernTurns),
+            activeConcern,
+          });
         }
         if (needsReanchor && nextHcpState === "engaged") {
           nextHcpState = "resistant";
@@ -3821,7 +3832,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const primaryConcern = detectPrimaryConcern(
-      `${scenario?.description || ""} ${scenario?.context || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
+      `${visibleScenarioGroundingText || scenario?.description || ""} ${respondingToTurn?.hcpDialogueBefore || ""} ${nextHcpDialogue}`
     );
     const latestRepLower = String(repMessage || "").toLowerCase();
     const repWasGeneric = latestRepLower.length < 18

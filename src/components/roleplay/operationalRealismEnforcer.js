@@ -104,14 +104,14 @@ export function determinePreferredHcpDialogueRegister({
     scenario?.stakeholder,
     scenario?.specialty,
     scenario?.description,
-    scenario?.context,
+    scenario?.visibleScenarioContext,
     scenario?.hcp,
   ]);
 
   const evidence = {
     roleText: normalizeContextText([canonicalProfile.role, legacyText]),
     specialtyText: normalizeContextText([canonicalProfile.specialty, scenario?.specialty]),
-    careSettingText: normalizeContextText([canonicalProfile.careSetting, scenario?.context]),
+    careSettingText: normalizeContextText([canonicalProfile.careSetting, scenario?.visibleScenarioContext]),
     styleText: normalizeContextText([canonicalProfile.baselineCommunicationStyle]),
     constraintText: normalizeContextText([
       stringifyArray(canonicalProfile.knownConstraints),
@@ -123,7 +123,7 @@ export function determinePreferredHcpDialogueRegister({
       scenario?.opening_scene,
       scenario?.openingScene,
       scenario?.description,
-      scenario?.context,
+      scenario?.visibleScenarioContext,
     ]),
     cueText: normalizeContextText([cueText]),
     utteranceText: normalizeContextText([hcpUtterance]),
