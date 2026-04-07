@@ -164,7 +164,7 @@ function templateForRegister(register, concern = 'workflow') {
   const concernToken = String(concern || 'workflow').toLowerCase();
 
   if (register === 'patient_selection_practical') {
-    return 'How would I identify the right patients in my current panel during a standard visit?';
+    return 'Help me make this practical: how would we identify the right patients during a standard visit?';
   }
 
   if (register === 'resource_constraint') {
@@ -173,8 +173,8 @@ function templateForRegister(register, concern = 'workflow') {
 
   if (register === 'workflow_implementation') {
     return concernToken === 'time'
-      ? 'In a 10-minute visit, what do I do differently first so this fits our workflow?'
-      : 'What changes in my workflow this week, and who on my team owns the first step?';
+      ? 'Given the time pressure, start with the first workflow change you would make here.'
+      : 'I need this grounded in our actual workflow. Start with the first step and who would own it.';
   }
 
   if (register === 'evidence_interrogation') {
@@ -185,7 +185,7 @@ function templateForRegister(register, concern = 'workflow') {
     return 'Which evidence detail should I weigh most heavily for this decision?';
   }
 
-  return 'What does this change in practice for the patients I am actually seeing this week?';
+  return 'Help me connect this to the patients I am actually seeing this week.';
 }
 
 function startsWithPoliteLeadIn(text = '') {

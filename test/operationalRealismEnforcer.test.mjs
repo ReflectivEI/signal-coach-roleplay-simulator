@@ -45,6 +45,7 @@ test('operational realism preference rewrites academic phrasing in workflow-cons
   assert.equal(enforced.applied, true);
   assert.match(enforced.dialogue, /workflow|step|week|practice|visit|time|staff/i);
   assert.doesNotMatch(enforced.dialogue, /conceptual evidence base/i);
+  assert.doesNotMatch(enforced.dialogue, /What changes in my workflow this week, and who on my team owns the first step/i);
 });
 
 test('register selection differentiates operational, patient-selection, and academic evidence contexts deterministically', () => {
@@ -192,6 +193,7 @@ test('live golden scenarios: strong/weak rep examples map to expected preferred 
       assert.equal(enforcedWeak.applied, true, `${fixture.id}: weak academic phrasing should be rewritten`);
     }
     assert.match(enforcedWeak.dialogue, fixture.phraseBand, `${fixture.id}: dialogue should remain in expected phrasing band`);
+    assert.doesNotMatch(enforcedWeak.dialogue, /How would I identify the right patients in my current panel during a standard visit/i);
 
     const strongScore = computeAlignment('engaged', fixture.strongRep, { hcpUtterance: fixture.hcpUtterance }, 'neutral', 'engaged').score;
     const weakScore = computeAlignment('engaged', fixture.weakRep, { hcpUtterance: fixture.hcpUtterance }, 'neutral', 'engaged').score;

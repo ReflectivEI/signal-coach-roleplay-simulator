@@ -57,3 +57,18 @@ test("final HCP dialogue cannot repeat recent asks or echo the rep message", () 
   assert.match(SOURCE, /isRepeatedFinalDialogue\(nextHcpDialogue, recentHcpDialogues\)/);
   assert.match(SOURCE, /isRepEchoInHcpDialogue\(\{ dialogue: nextHcpDialogue, repMessage \}\)/);
 });
+
+test("repair dialogue uses conversational continuity instead of bare rubric questions", () => {
+  assert.match(SOURCE, /I'm not hearing the workflow piece yet/);
+  assert.match(SOURCE, /Candidacy is still the question for me/);
+  assert.doesNotMatch(SOURCE, /"What is the single workflow adjustment that saves my team time right away\?"/);
+  assert.doesNotMatch(SOURCE, /"What is one step that fits our current protocol and can be implemented quickly\?"/);
+  assert.doesNotMatch(SOURCE, /"How would I identify the right patients in my current panel during a standard visit\?"/);
+});
+
+test("cue variety treats semantically similar closeout cues as repeat risk", () => {
+  assert.match(SOURCE, /calculateTokenOverlapRatio\(safeCue, priorCue\) >= 0\.62/);
+  assert.match(SOURCE, /calculateSemanticSimilarity\(safeCue, priorCue\) >= 0\.66/);
+  assert.doesNotMatch(SOURCE, /gathers the chart with minimal expression/);
+  assert.match(SOURCE, /leaves space for one useful, concrete answer/);
+});

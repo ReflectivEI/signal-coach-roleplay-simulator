@@ -782,13 +782,13 @@ const DECAY_CUE_BUCKETS = {
     "The HCP keeps one hand on the notes, signaling limited bandwidth but continued cooperation.",
   ],
   impatient: [
-    "The HCP glances toward the hallway and waits for one practical point.",
-    "The HCP keeps a clipped posture, clearly trying to keep the conversation moving.",
-    "The HCP taps the chart once, signaling urgency and limited patience for tangents.",
+    "The HCP glances toward the hallway, then returns attention for one practical point.",
+    "The HCP keeps the exchange concise, clearly trying to protect clinic flow.",
+    "The HCP taps the chart once, signaling that the next point needs to be practical.",
   ],
   disengaging: [
-    "The HCP shifts toward the door and waits for immediate relevance.",
-    "The HCP gathers the chart with minimal expression, signaling the exchange is close to ending.",
+    "The HCP shifts slightly toward the next task, waiting for immediate relevance.",
+    "The HCP gathers the chart but leaves space for one useful, concrete answer.",
     "The HCP keeps attention brief, expecting one concrete point before moving on.",
   ],
 };
@@ -907,46 +907,46 @@ function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
 function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentDialogues = [] } = {}) {
   const variants = {
     workflow: [
-      "I need one operational step my current team can run with this week.",
-      "Give me one concrete process change we can apply without adding staff burden.",
-      "What is the single workflow adjustment that saves my team time right away?",
-      "If this is actionable, map one step my staff can execute in our current flow.",
-      "Keep it practical: what one change should we implement first in clinic?",
+      "I'm not hearing the workflow piece yet. Start with one process change my current team could use this week.",
+      "I need to understand the practical lift. What is one change we could try without adding staff burden?",
+      "Let's keep this grounded in clinic flow. What would my team do differently first?",
+      "If this is actionable, make it concrete: what is the first step my staff would own?",
+      "I can stay with this if it is practical. What is the smallest workflow change you would recommend first?",
     ],
     access: [
-      "What is one payer-facing step that could reduce prior auth rework for us?",
-      "Give me one practical way to lower prior authorization friction this week.",
-      "What is one concrete action that helps us move access approvals faster?",
-      "Name one process change that cuts access delays without extra admin load.",
-      "I need one specific access tactic my team can run immediately.",
+      "Access is still the barrier for me. What is one payer-facing step that could reduce rework for us?",
+      "I'm not hearing how this lowers the prior-auth burden yet. Start with one practical access step.",
+      "For this to help, it has to move approvals faster. What is the first access action you would recommend?",
+      "Keep this tied to the admin load. What process change would cut access delays without adding work?",
+      "I need one specific access tactic my team could actually run this week.",
     ],
     evidence: [
-      "Point me to the most practice-relevant proof and why it changes my decision now.",
-      "Give me one evidence point that directly applies to patients I am seeing this month.",
-      "What is the strongest data signal I can use in a real treatment decision tomorrow?",
-      "Keep it tight: one proof point and the exact clinical implication for my practice.",
-      "I need one evidence takeaway tied directly to a care choice in clinic.",
+      "I still need the evidence tied to a real decision. Which proof point should change what I do now?",
+      "Make the data practical for me. What one evidence point applies to the patients I am seeing this month?",
+      "I can evaluate one strong signal here. What is the data point that should affect tomorrow's decision?",
+      "Keep it tight: one proof point, and tell me the clinical implication for this practice.",
+      "I need one evidence takeaway connected directly to a care choice in clinic.",
     ],
     time: [
-      "I have about a minute—what is the one practical action worth doing first?",
-      "Given our schedule pressure, what is your single highest-yield next step?",
-      "Keep this to one immediate step we can start today without extra meetings.",
-      "What is one quick change that helps this week despite limited time?",
-      "I need one concise action item we can execute between patients.",
+      "I have about a minute, so start with the action that matters most.",
+      "Given the schedule, I need the highest-yield next step, not the whole story.",
+      "Keep this to one immediate step we could start today without another meeting.",
+      "If there is a quick change that helps this week, start there.",
+      "I need one concise action item we could execute between patients.",
     ],
     policy: [
-      "What is one step that fits our current protocol and can be implemented quickly?",
-      "Show me one adjustment that aligns with our pathway constraints as written.",
-      "I need one protocol-compatible move we can actually use this month.",
-      "Give me one concrete recommendation that stays within institutional policy.",
-      "What is the first compliant step that still improves workflow?",
+      "I need this to fit the protocol we actually use. What is one step we could implement quickly?",
+      "Show me the pathway-compatible adjustment, not a broad recommendation.",
+      "I need one protocol-compatible move we could realistically use this month.",
+      "Give me one concrete recommendation that stays inside our institutional policy.",
+      "What is the first compliant step that would still improve workflow?",
     ],
     screening: [
-      "What is one screening checkpoint we should add first for consistent execution?",
-      "Give me one candidacy step we can standardize without slowing clinic flow.",
-      "What is the first practical screening action your team recommends for our setting?",
-      "I need one clear screening move that my staff can apply consistently.",
-      "Name one immediate candidacy workflow step we can use this week.",
+      "I'm not hearing the screening approach yet. Start with one checkpoint we could apply consistently.",
+      "Candidacy is still the question for me. What is one step we could standardize without slowing clinic flow?",
+      "Make this practical for our setting: what is the first screening action you would recommend?",
+      "I need one clear screening move my staff could apply consistently during a visit.",
+      "Start with the candidacy workflow step we could use this week.",
     ],
   };
 
@@ -1594,17 +1594,17 @@ function enforceCueVariety(candidateCue = "", recentCues = [], seed = "") {
     .map((cue) => String(cue || "").trim())
     .filter(Boolean);
   const isTooSimilar = normalizedRecent.some((priorCue) =>
-    calculateTokenOverlapRatio(safeCue, priorCue) >= 0.78
-    || calculateSemanticSimilarity(safeCue, priorCue) >= 0.72
+    calculateTokenOverlapRatio(safeCue, priorCue) >= 0.62
+    || calculateSemanticSimilarity(safeCue, priorCue) >= 0.66
   );
   if (!isTooSimilar) return safeCue;
 
   const cueFallbackPool = [
-    "The HCP keeps their reply concise and waits for a practical operational detail.",
-    "The HCP scans the chart and returns with a tighter, implementation-focused expression.",
-    "The HCP pauses briefly, signaling patience is narrowing around execution details.",
-    "The HCP keeps attention on the handoff steps, expecting one realistic next action.",
-    "The HCP gives a short nod, focused on feasibility rather than broad framing.",
+    "The HCP keeps the exchange brief and waits for the practical detail.",
+    "The HCP looks back to the chart, then returns to the implementation question.",
+    "The HCP pauses for a beat, leaving room for one concrete answer.",
+    "The HCP stays focused on the handoff step and waits for a realistic next action.",
+    "The HCP gives a short nod, listening for feasibility rather than broad framing.",
   ];
   const startIndex = deterministicIndex(`${seed}:cue-semantic-fallback`, cueFallbackPool.length);
   for (let i = 0; i < cueFallbackPool.length; i += 1) {
