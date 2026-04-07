@@ -162,6 +162,56 @@ test('conversational realism preserves concise evidence framing under time press
   );
 });
 
+test('conversational realism restores stable HIV evidence richness instead of generic workflow fallback', () => {
+  const result = applyConversationalRealism({
+    text: 'I can stay with this if we make it concrete. What would my team do first?',
+    activeAsk: 'Before we discuss further, can you specifically address how the data you shared last week applies to the long-term durability of treatments for my stable HIV patients?',
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioContext: 'Michael Chen, PA-C - Academic HIV Center. Treatment Optimization in Stable HIV Patients. Reluctance to optimize stable, suppressed patients. Long-term durability is the active concern.',
+  });
+
+  assert.equal(
+    result.text,
+    'Given how little time we have, what specific evidence actually justifies switching stable patients?'
+  );
+  assert.equal(result.metadata.concernFamily, 'evidence');
+  assert.equal(result.metadata.scenarioArchetype, 'stable_hiv_optimization');
+  assert.doesNotMatch(result.text, /I can stay with this|make it concrete|What would my team do first/i);
+});
+
+test('conversational realism uses scenario-bound rich phrasing for workflow pressure', () => {
+  const hiv = applyConversationalRealism({
+    text: 'What is the first practical workflow step here?',
+    activeAsk: 'What would my team actually do differently starting next week?',
+    concernFamily: 'workflow',
+    cueCategory: 'hard_escalation',
+    scenarioContext: 'Michael Chen. Treatment Optimization in Stable HIV Patients. Stable suppressed patients and optimization inertia.',
+  }).text;
+  const covid = applyConversationalRealism({
+    text: 'What is the first practical workflow step here?',
+    activeAsk: 'What would this look like in practice on day one?',
+    concernFamily: 'workflow',
+    cueCategory: 'hard_escalation',
+    scenarioContext: 'Post-COVID clinic antiviral adherence. Callback list. Patients are showing up on day 4 or 5, almost too late for antivirals.',
+  }).text;
+  const formulary = applyConversationalRealism({
+    text: 'What is the first practical workflow step here?',
+    activeAsk: 'If we move forward, what would that mean for the formulary team?',
+    concernFamily: 'workflow',
+    cueCategory: 'hard_escalation',
+    scenarioContext: 'Cardiology Formulary Review. P&T committee with three formulary requests and 20 minutes.',
+  }).text;
+
+  assert.equal(hiv, 'I remember that data, but I need something actionable. What would my team actually do differently next week?');
+  assert.equal(covid, 'That\'s exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?');
+  assert.equal(formulary, 'What is the realistic first step for my team?');
+  assert.notEqual(hiv, covid);
+  assert.notEqual(covid, formulary);
+  assert.doesNotMatch(`${hiv} ${covid} ${formulary}`, /I can stay with this if we make it concrete/i);
+});
+
 test('conversational realism reports cue-dialogue lockstep mismatches', () => {
   assert.deepEqual(
     validateCueDialogueLockstep({ cueCategory: 'hard_escalation', finalText: 'I can stay with this if we make it concrete.' }).mismatchReasons,

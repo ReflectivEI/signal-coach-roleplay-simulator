@@ -15,6 +15,96 @@ const CONSTRAINED_DIRECT_ASK_PATTERN = /\bi can stay with this if we make it con
 const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me|move on)\b/i;
 const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
 
+function normalizeRuntimeText(...values) {
+  return values.map((value) => String(value || '').toLowerCase()).join(' ');
+}
+
+function deriveScenarioArchetype({ scenarioContext = '', activeAsk = '', text = '' } = {}) {
+  const combined = normalizeRuntimeText(scenarioContext, activeAsk, text);
+  if (/\b(stable hiv|stable,? suppressed|suppressed patients|michael chen)\b/.test(combined)) return 'stable_hiv_optimization';
+  if (/\bdurability\b/.test(combined) && /\bstable patients?\b/.test(combined)) return 'stable_hiv_optimization';
+  if (/\b(post-?covid|antiviral|day 4|day 5|callback list)\b/.test(combined)) return 'post_covid_antiviral_adherence';
+  if (/\b(formulary|p&t|committee|cardiology|budget reports?)\b/.test(combined)) return 'cardiology_formulary_review';
+  return 'general';
+}
+
+function deriveExpressionConcernFamily({ concernFamily = 'general', activeAsk = '', text = '', scenarioContext = '' } = {}) {
+  const ask = normalizeRuntimeText(activeAsk);
+  const combined = normalizeRuntimeText(activeAsk, text, scenarioContext);
+  if (/\b(workflow|staff|team|operational|practice|day one|do differently|first step)\b/.test(ask)) return 'workflow';
+  if (/\b(durability|evidence|proof|data point|decision-relevant|outcomes?|justify|justifies|formulary)\b/.test(ask)) return 'evidence';
+  if (/\b(access|coverage|payer|prior auth|copay)\b/.test(ask)) return 'access';
+  if (/\b(screen|candidate|criteria|patient selection)\b/.test(ask)) return 'screening';
+  if (concernFamily && concernFamily !== 'general') return concernFamily;
+  if (/\b(durability|evidence|proof|data point|decision-relevant|outcomes?|justify|justifies|formulary)\b/.test(combined)) return 'evidence';
+  if (/\b(workflow|staff|team|operational|practice|day one|do differently|first step)\b/.test(combined)) return 'workflow';
+  return concernFamily || 'general';
+}
+
+function isGenericCompressedAsk(text = '') {
+  return /\b(make it concrete|make it practical|what would my (?:team|staff) do first|what evidence point changes the decision|how does that change the decision)\b/i.test(text);
+}
+
+function selectScenarioGroundedHcpLine({
+  text = '',
+  activeAsk = '',
+  scenarioContext = '',
+  concernFamily = 'general',
+  cueCategory = 'neutral_attentive',
+  terminalBehavior = false,
+  timePressure = false,
+} = {}) {
+  const scenarioArchetype = deriveScenarioArchetype({ scenarioContext, activeAsk, text });
+  const expressionConcern = deriveExpressionConcernFamily({ concernFamily, activeAsk, text, scenarioContext });
+  const highPressure = /focused_narrowing|non_adaptive_impatience|time_constrained|hard_escalation|terminal_exit/i.test(cueCategory)
+    || terminalBehavior
+    || timePressure;
+  const shouldReplace = highPressure && isGenericCompressedAsk(text);
+  if (!shouldReplace) return text;
+
+  if (scenarioArchetype === 'stable_hiv_optimization') {
+    if (expressionConcern === 'evidence') {
+      if (cueCategory === 'terminal_exit' || terminalBehavior) {
+        return "I'm about to move on. If this changes durability for stable patients, what is the evidence point?";
+      }
+      if (cueCategory === 'time_constrained' || timePressure) {
+        return 'Given how little time we have, what specific evidence actually justifies switching stable patients?';
+      }
+      return "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence justifies the switch?";
+    }
+    if (expressionConcern === 'workflow') {
+      if (cueCategory === 'terminal_exit' || terminalBehavior) {
+        return "I'm about to move on. If this is real, what would my team do differently next week?";
+      }
+      return "I remember that data, but I need something actionable. What would my team actually do differently next week?";
+    }
+  }
+
+  if (scenarioArchetype === 'post_covid_antiviral_adherence') {
+    if (cueCategory === 'terminal_exit' || terminalBehavior) {
+      return "I'm watching the clock. If this is not simple to operationalize, it's not happening.";
+    }
+    return "That's exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?";
+  }
+
+  if (scenarioArchetype === 'cardiology_formulary_review') {
+    if (expressionConcern === 'evidence') {
+      if (cueCategory === 'terminal_exit' || terminalBehavior) {
+        return "I'm about to move on. What single data point should influence this decision?";
+      }
+      return 'Let me stop you there: this comes down to evidence. What single data point should influence this decision?';
+    }
+    if (expressionConcern === 'workflow') {
+      if (cueCategory === 'terminal_exit' || terminalBehavior) {
+        return "I'm about to move on. If we move forward, what is the first step for my team?";
+      }
+      return 'What is the realistic first step for my team?';
+    }
+  }
+
+  return text;
+}
+
 function isHighPressureState({ cueCategory = '', interactionMode = '', engagementTier = '', semanticStage = '', terminalBehavior = false } = {}) {
   if (terminalBehavior) return true;
   return /terminal_exit|hard_escalation|time_constrained|non_adaptive_impatience|focused_narrowing|closing|disengaging|directive|hard|terminal/i
@@ -207,12 +297,13 @@ export function applyConversationalRealism({
   recentHcpTurns = [],
   scenarioContext = '',
 } = {}) {
+  const expressionConcernFamily = deriveExpressionConcernFamily({ concernFamily, activeAsk, text, scenarioContext });
   const resolvedCueCategory = terminalBehavior
     ? 'terminal_exit'
     : (timePressure && cueCategory === 'neutral_attentive' ? 'time_constrained' : cueCategory || 'neutral_attentive');
 
   const grammarNormalized = normalizeHcpSpokenRealism(text);
-  const humanized = humanizeClinicalReferences({ text: grammarNormalized, concernFamily, scenarioContext });
+  const humanized = humanizeClinicalReferences({ text: grammarNormalized, concernFamily: expressionConcernFamily, scenarioContext });
   const spoken = enforceSpokenLanguage({ text: humanized, interactionMode, engagementTier });
   const terminalCompressed = isHighPressureState({
     cueCategory: resolvedCueCategory,
@@ -221,10 +312,19 @@ export function applyConversationalRealism({
     semanticStage,
     terminalBehavior,
   })
-    ? enforceTerminalCompression({ text: spoken, concernFamily, cueCategory: resolvedCueCategory })
+    ? enforceTerminalCompression({ text: spoken, concernFamily: expressionConcernFamily, cueCategory: resolvedCueCategory })
     : spoken;
-  const compressed = splitOrCompressSentence({ text: terminalCompressed, interactionMode, cueCategory: resolvedCueCategory, concernFamily });
-  const varied = varyPressurePhrasing({ text: compressed, concernFamily, recentHcpTurns, interactionMode, cueCategory: resolvedCueCategory });
+  const compressed = splitOrCompressSentence({ text: terminalCompressed, interactionMode, cueCategory: resolvedCueCategory, concernFamily: expressionConcernFamily });
+  const scenarioGrounded = selectScenarioGroundedHcpLine({
+    text: compressed,
+    activeAsk,
+    scenarioContext,
+    concernFamily: expressionConcernFamily,
+    cueCategory: resolvedCueCategory,
+    terminalBehavior,
+    timePressure,
+  });
+  const varied = varyPressurePhrasing({ text: scenarioGrounded, concernFamily: expressionConcernFamily, recentHcpTurns, interactionMode, cueCategory: resolvedCueCategory });
   const lockstep = validateCueDialogueLockstep({
     cueCategory: resolvedCueCategory,
     interactionMode,
@@ -235,8 +335,8 @@ export function applyConversationalRealism({
   const finalText = lockstep.aligned
     ? varied.text
     : enforceTerminalCompression({
-      text: compressByState({ text: varied.text, concernFamily, cueCategory: resolvedCueCategory }),
-      concernFamily,
+      text: compressByState({ text: varied.text, concernFamily: expressionConcernFamily, cueCategory: resolvedCueCategory }),
+      concernFamily: expressionConcernFamily,
       cueCategory: resolvedCueCategory,
     });
 
@@ -245,7 +345,8 @@ export function applyConversationalRealism({
     metadata: {
       version: CONVERSATIONAL_REALISM_ENGINE_VERSION,
       cueCategory: resolvedCueCategory,
-      concernFamily,
+      concernFamily: expressionConcernFamily,
+      scenarioArchetype: deriveScenarioArchetype({ scenarioContext, activeAsk, text }),
       phraseFamily: varied.phraseFamily,
       repeatedFamilyCount: varied.repeatedFamilyCount,
       lockstep,
