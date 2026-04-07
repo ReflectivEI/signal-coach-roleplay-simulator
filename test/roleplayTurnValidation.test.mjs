@@ -9,6 +9,8 @@ test('shared roleplay turn validation blocks repeated non-responsive latest-ask 
     repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
     previousRepMessages: [
       "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+      "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
     ],
   });
 
@@ -19,13 +21,13 @@ test('shared roleplay turn validation blocks repeated non-responsive latest-ask 
   assert.equal(validation.blockHcpGeneration, true);
   assert.equal(validation.blockScoring, true);
   assert.equal(validation.blockStateAdvance, true);
-  assert.equal(validation.latestAskProgression.status, 'repeated_missed');
+  assert.equal(validation.latestAskProgression.status, 'repeated_missed_close');
   assert.equal(validation.latestAskProgression.family, 'workflow');
   assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
-  assert.match(validation.coaching.suggestion, /workflow step/i);
+  assert.match(validation.coaching.suggestion, /what they just asked/i);
   assert.deepEqual(
     validation.telemetryEvents.map((event) => event.eventType),
-    ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored'],
+    ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored', 'non_adaptive_repetition_detected'],
   );
   assert.equal(validation.telemetryEvents[0].payload.blockHcpGeneration, true);
   assert.match(validation.telemetryEvents[0].payload.repMessageFingerprint, /^fnv1a_[a-f0-9]{8}$/);
@@ -88,6 +90,88 @@ test('shared roleplay turn validation marks coherent early misses as soft invali
   assert.equal(validation.latestAskProgression.status, 'missed');
   assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('soft_invalid_turn_allowed'));
   assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('latest_ask_ignored'));
+});
+
+test('shared roleplay turn validation detects first non-adaptive repeat without blocking generation', () => {
+  const repeatedOpener = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage: repeatedOpener,
+    previousRepMessages: [],
+    allPreviousRepMessages: [repeatedOpener],
+    previousHcpAsks: ['What proof point changes the decision for stable HIV patients?'],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.blockHcpGeneration, false);
+  assert.equal(validation.nonAdaptiveRepetition.detected, true);
+  assert.equal(validation.nonAdaptiveRepetition.repeatCount, 1);
+  assert.equal(validation.nonAdaptiveRepetition.stage, 'soft_coach');
+  assert.equal(validation.coaching.escalationLabel, 'Adaptation note');
+  assert.match(validation.coaching.suggestion, /what they just asked/i);
+  assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_adaptive_repetition_detected'));
+});
+
+test('shared roleplay turn validation escalates second non-adaptive repeat coaching without blocking', () => {
+  const repeatedOpener = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage: repeatedOpener,
+    previousRepMessages: [],
+    allPreviousRepMessages: [repeatedOpener, repeatedOpener],
+    previousHcpAsks: [
+      'What proof point changes the decision for stable HIV patients?',
+      'What would my team do differently first?',
+    ],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.nonAdaptiveRepetition.repeatCount, 2);
+  assert.equal(validation.nonAdaptiveRepetition.stage, 'escalated_soft_coach');
+  assert.equal(validation.coaching.severity, 'medium');
+});
+
+test('shared roleplay turn validation hard-blocks third non-adaptive repeat', () => {
+  const repeatedOpener = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage: repeatedOpener,
+    previousRepMessages: [],
+    allPreviousRepMessages: [repeatedOpener, repeatedOpener, repeatedOpener],
+    previousHcpAsks: [
+      'What proof point changes the decision for stable HIV patients?',
+      'What would my team do differently first?',
+      'What is one concrete step my team can run?',
+    ],
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
+  assert.equal(validation.blockHcpGeneration, true);
+  assert.equal(validation.nonAdaptiveRepetition.detected, true);
+  assert.equal(validation.nonAdaptiveRepetition.repeatCount, 3);
+  assert.equal(validation.nonAdaptiveRepetition.stage, 'hard_block');
+  assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
+  assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_adaptive_repetition_detected'));
+});
+
+test('shared roleplay turn validation does not treat legitimate paraphrasing as non-adaptive repetition', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage: 'To build on that, start a nurse-owned workflow checklist this week so the team knows the first handoff.',
+    previousRepMessages: [],
+    allPreviousRepMessages: ['Start a workflow checklist this week.'],
+    previousHcpAsks: ['What is the first practical workflow step here?'],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.nonAdaptiveRepetition.detected, false);
 });
 
 test('shared roleplay turn validation allows valid paraphrases that answer the latest ask', () => {
@@ -186,7 +270,7 @@ test('shared roleplay turn validation blocks repeated generic opener against evi
   assert.equal(validation.latestAskProgression.family, 'evidence');
   assert.deepEqual(
     validation.telemetryEvents.map((event) => event.eventType),
-    ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored'],
+    ['invalid_turn_blocked', 'repeated_non_answer_blocked', 'latest_ask_ignored', 'non_adaptive_repetition_detected'],
   );
 });
 

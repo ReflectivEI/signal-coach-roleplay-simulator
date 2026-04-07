@@ -47,6 +47,17 @@ function tokenOverlapCount(a = "", b = "") {
   return overlap;
 }
 
+function computeMeaningfulSimilarity(a = "", b = "") {
+  const tokensA = new Set(tokenizeMeaningful(a));
+  const tokensB = new Set(tokenizeMeaningful(b));
+  if (!tokensA.size || !tokensB.size) return 0;
+  let overlap = 0;
+  tokensA.forEach((token) => {
+    if (tokensB.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(tokensA.size, tokensB.size);
+}
+
 function inferOpeningConcernFamily(openingContext = "") {
   const value = String(openingContext || "").toLowerCase();
   if (/\b(screen|screening|candidacy|candidate|eligible|eligibility|patient selection|resistance|adherence|missed[-\s]?dose|long[-\s]?acting|injectable|cabotegravir)\b/.test(value)) return "screening";
@@ -199,6 +210,58 @@ function buildTextFingerprint(value = "") {
   return `fnv1a_${hash.toString(16).padStart(8, "0")}`;
 }
 
+function detectNonAdaptiveRepetition({
+  latestHcpAsk = "",
+  repMessage = "",
+  allPreviousRepMessages = [],
+  previousHcpAsks = [],
+  latestAskProgression = {},
+} = {}) {
+  const previousReps = Array.isArray(allPreviousRepMessages) ? allPreviousRepMessages.filter(Boolean) : [];
+  const previousAsks = Array.isArray(previousHcpAsks) ? previousHcpAsks.filter(Boolean) : [];
+  const rep = String(repMessage || "").trim();
+  const latestAskUnresolved = ["missed", "repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status);
+  if (!rep || !previousReps.length || !latestAskUnresolved) {
+    return { detected: false, repeatCount: 0, stage: "none", latestAskChanged: false, latestAskEscalating: false };
+  }
+
+  const repFingerprint = buildTextFingerprint(rep);
+  let repeatCount = 0;
+  for (let i = previousReps.length - 1; i >= 0; i -= 1) {
+    const previousRep = String(previousReps[i] || "").trim();
+    const exactRepeat = repFingerprint && repFingerprint === buildTextFingerprint(previousRep);
+    const nearRepeat = computeMeaningfulSimilarity(rep, previousRep) >= 0.92;
+    if (!exactRepeat && !nearRepeat) break;
+    repeatCount += 1;
+  }
+
+  if (!repeatCount) {
+    return { detected: false, repeatCount: 0, stage: "none", latestAskChanged: false, latestAskEscalating: false };
+  }
+
+  const lastAsk = String(previousAsks.at(-1) || "").trim();
+  const currentAsk = String(latestHcpAsk || "").trim();
+  const latestAskChanged = Boolean(lastAsk && currentAsk && computeMeaningfulSimilarity(lastAsk, currentAsk) < 0.92);
+  const latestAskEscalating = ["missed", "repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status)
+    || /\b(still|directly|again|same|pause|concrete|first|practical|answer)\b/i.test(currentAsk);
+  const detected = latestAskChanged || latestAskEscalating;
+  const stage = !detected
+    ? "none"
+    : repeatCount >= 3
+      ? "hard_block"
+      : repeatCount >= 2
+        ? "escalated_soft_coach"
+        : "soft_coach";
+
+  return {
+    detected,
+    repeatCount,
+    stage,
+    latestAskChanged,
+    latestAskEscalating,
+  };
+}
+
 export function buildInvalidTurnCoaching(latestAskProgression = {}) {
   const family = latestAskProgression.family || "general";
   const labelByFamily = {
@@ -248,14 +311,26 @@ function buildOpeningContextCoaching(openingContextProgression = {}, { invalid =
   };
 }
 
+function buildNonAdaptiveRepetitionCoaching(nonAdaptiveRepetition = {}) {
+  return {
+    shouldShow: true,
+    label: "Adapt to the HCP's response",
+    tip: "You're repeating the same message without adapting to the HCP's question.",
+    suggestion: "Adjust your response to what they just asked before continuing your original point.",
+    severity: nonAdaptiveRepetition.stage === "escalated_soft_coach" ? "medium" : "low",
+    escalationLabel: nonAdaptiveRepetition.stage === "hard_block" ? "Turn blocked" : "Adaptation note",
+  };
+}
+
 export function shouldBlockRepTurnForLatestAsk(latestAskProgression = {}) {
   return ["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status);
 }
 
-function buildReasonCodes({ invalid, softInvalid = false, latestAskProgression = {}, coachingRequirementMet = true } = {}) {
+function buildReasonCodes({ invalid, softInvalid = false, latestAskProgression = {}, nonAdaptiveRepetition = {}, coachingRequirementMet = true } = {}) {
   const reasonCodes = [];
   if (invalid) reasonCodes.push("invalid_turn_blocked");
   if (softInvalid) reasonCodes.push("soft_invalid_turn_allowed");
+  if (nonAdaptiveRepetition.detected) reasonCodes.push("non_adaptive_repetition_detected");
   if (["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status)) {
     reasonCodes.push("repeated_non_answer_blocked");
   }
@@ -280,6 +355,7 @@ export function buildTurnValidationTelemetryEvents({
   openingContextProgression = null,
   invalid = false,
   softInvalid = false,
+  nonAdaptiveRepetition = {},
   latestHcpAsk = "",
   firstTurnOpeningContext = "",
   repMessage = "",
@@ -295,7 +371,7 @@ export function buildTurnValidationTelemetryEvents({
       ].filter(Boolean)
     : [];
   const reasonCodes = mergeUniqueReasonCodes(
-    buildReasonCodes({ invalid, softInvalid, latestAskProgression, coachingRequirementMet }),
+    buildReasonCodes({ invalid, softInvalid, latestAskProgression, nonAdaptiveRepetition, coachingRequirementMet }),
     openingReasonCodes,
   );
   const basePayload = {
@@ -309,6 +385,9 @@ export function buildTurnValidationTelemetryEvents({
     blockScoring: invalid,
     blockStateAdvance: invalid,
     repeatedRepCount: latestAskProgression.repeatedRepCount || 0,
+    nonAdaptiveRepetition: Boolean(nonAdaptiveRepetition.detected),
+    nonAdaptiveRepeatCount: nonAdaptiveRepetition.repeatCount || 0,
+    nonAdaptiveStage: nonAdaptiveRepetition.stage || "none",
     loopChallenge: Boolean(latestAskProgression.loopChallenge),
     coachingRequirementType: coachingRequirement?.behavior || null,
     coachingRequirementMet: Boolean(coachingRequirementMet),
@@ -332,11 +411,17 @@ export function buildTurnValidationTelemetryEvents({
     if (reasonCodes.includes("coaching_requirement_not_met")) {
       events.push({ eventType: "coaching_requirement_not_met", payload: basePayload });
     }
+    if (reasonCodes.includes("non_adaptive_repetition_detected")) {
+      events.push({ eventType: "non_adaptive_repetition_detected", payload: basePayload });
+    }
     return events;
   }
 
   if (softInvalid) {
     const events = [{ eventType: "soft_invalid_turn_allowed", payload: basePayload }];
+    if (reasonCodes.includes("non_adaptive_repetition_detected")) {
+      events.push({ eventType: "non_adaptive_repetition_detected", payload: basePayload });
+    }
     if (reasonCodes.includes("latest_ask_ignored")) {
       events.push({ eventType: "latest_ask_ignored", payload: basePayload });
     }
@@ -355,6 +440,8 @@ export function validateRoleplayRepTurn({
   firstTurnOpeningContext = "",
   repMessage = "",
   previousRepMessages = [],
+  allPreviousRepMessages = previousRepMessages,
+  previousHcpAsks = [],
   coachingRequirement = null,
   coachingRequirementMet = true,
 } = {}) {
@@ -370,13 +457,26 @@ export function validateRoleplayRepTurn({
     && openingContextProgression?.severity === "hard_block";
   const openingSoftCoach = openingContextProgression?.status === OPENING_CONTEXT_STATUS.PARTIALLY_RESPONSIVE;
   const latestAskSoftMiss = latestAskProgression.status === "missed";
-  const hardInvalid = openingInvalid || shouldBlockRepTurnForLatestAsk(latestAskProgression) || Boolean(coachingRequirement && !coachingRequirementMet);
-  const softInvalid = !hardInvalid && (openingSoftCoach || latestAskSoftMiss);
+  const nonAdaptiveRepetition = detectNonAdaptiveRepetition({
+    latestHcpAsk,
+    repMessage,
+    allPreviousRepMessages,
+    previousHcpAsks,
+    latestAskProgression,
+  });
+  const nonAdaptiveHardBlock = nonAdaptiveRepetition.stage === "hard_block";
+  const nonAdaptiveSoftCoach = ["soft_coach", "escalated_soft_coach"].includes(nonAdaptiveRepetition.stage);
+  const hardInvalid = openingInvalid
+    || nonAdaptiveHardBlock
+    || (!nonAdaptiveRepetition.detected && shouldBlockRepTurnForLatestAsk(latestAskProgression))
+    || Boolean(coachingRequirement && !coachingRequirementMet);
+  const softInvalid = !hardInvalid && (openingSoftCoach || latestAskSoftMiss || nonAdaptiveSoftCoach);
   const telemetryEvents = buildTurnValidationTelemetryEvents({
     latestAskProgression,
     openingContextProgression,
     invalid: hardInvalid,
     softInvalid,
+    nonAdaptiveRepetition,
     latestHcpAsk,
     firstTurnOpeningContext,
     repMessage,
@@ -395,8 +495,17 @@ export function validateRoleplayRepTurn({
     blockStateAdvance: hardInvalid,
     latestAskProgression,
     openingContextProgression,
+    nonAdaptiveRepetition: {
+      detected: Boolean(nonAdaptiveRepetition.detected),
+      repeatCount: nonAdaptiveRepetition.repeatCount || 0,
+      stage: nonAdaptiveRepetition.stage || "none",
+      latestAskChanged: Boolean(nonAdaptiveRepetition.latestAskChanged),
+      latestAskEscalating: Boolean(nonAdaptiveRepetition.latestAskEscalating),
+    },
     coaching: openingInvalid || openingSoftCoach
       ? buildOpeningContextCoaching(openingContextProgression, { invalid: openingInvalid })
+      : nonAdaptiveRepetition.detected
+        ? buildNonAdaptiveRepetitionCoaching(nonAdaptiveRepetition)
       : hardInvalid
         ? buildInvalidTurnCoaching(latestAskProgression)
         : null,

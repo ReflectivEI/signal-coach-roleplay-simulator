@@ -163,6 +163,8 @@ function enforceRoleplayTurnValidationBoundary(body = {}) {
         firstTurnOpeningContext: contract.firstTurnOpeningContext || "",
         repMessage: contract.repMessage || "",
         previousRepMessages: Array.isArray(contract.previousRepMessages) ? contract.previousRepMessages : [],
+        allPreviousRepMessages: Array.isArray(contract.allPreviousRepMessages) ? contract.allPreviousRepMessages : contract.previousRepMessages,
+        previousHcpAsks: Array.isArray(contract.previousHcpAsks) ? contract.previousHcpAsks : [],
         coachingRequirement: contract.coachingRequirement || null,
         coachingRequirementMet: contract.coachingRequirementMet !== false,
     });

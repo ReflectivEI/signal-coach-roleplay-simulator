@@ -1120,6 +1120,20 @@ function collectRepMessagesForSimilarLatestAsk(turns = [], latestHcpAsk = "") {
   return messages;
 }
 
+function collectRecentRepMessages(turns = [], limit = 5) {
+  return (Array.isArray(turns) ? turns.slice(0, -1) : [])
+    .map((turn) => String(turn?.repMessage || "").trim())
+    .filter(Boolean)
+    .slice(-limit);
+}
+
+function collectRecentHcpAsksForValidation(turns = [], limit = 5) {
+  return (Array.isArray(turns) ? turns.slice(0, -1) : [])
+    .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+    .filter(Boolean)
+    .slice(-limit);
+}
+
 function stripFollowUpAfterTerminalClose(text = "") {
   const value = hardenTextSurface(text);
   if (!isTerminalDisengagementIntent(value)) return value;
@@ -2861,17 +2875,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       : null;
     const firstTurnOpeningContext = firstTurnActiveAskState?.askText || "";
     const previousRepMessagesForValidation = collectRepMessagesForSimilarLatestAsk(turns, respondingToTurn?.hcpDialogueBefore || "");
+    const allPreviousRepMessagesForValidation = collectRecentRepMessages(turns);
+    const previousHcpAsksForValidation = collectRecentHcpAsksForValidation(turns);
     const preTurnValidation = validateRoleplayRepTurn({
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       firstTurnOpeningContext,
       repMessage,
       previousRepMessages: previousRepMessagesForValidation,
+      allPreviousRepMessages: allPreviousRepMessagesForValidation,
+      previousHcpAsks: previousHcpAsksForValidation,
     });
     const roleplayTurnValidationContext = {
       latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
       firstTurnOpeningContext,
       repMessage,
       previousRepMessages: previousRepMessagesForValidation,
+      allPreviousRepMessages: allPreviousRepMessagesForValidation,
+      previousHcpAsks: previousHcpAsksForValidation,
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
       activeHcpAskState: firstTurnActiveAskState || null,
