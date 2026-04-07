@@ -174,6 +174,63 @@ test('shared roleplay turn validation does not treat legitimate paraphrasing as 
   assert.equal(validation.nonAdaptiveRepetition.detected, false);
 });
 
+test('shared roleplay turn validation flags bullet-style rep notes as non-conversational soft invalid', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'How does this apply to long-term durability for stable HIV patients?',
+    repMessage: '- Durability and convenience benefits\n- Stable suppressed patients\n- Quarterly review',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.blockHcpGeneration, false);
+  assert.equal(validation.nonConversationalInput.detected, true);
+  assert.equal(validation.nonConversationalInput.stage, 'soft_coach');
+  assert.match(validation.coaching.tip, /notes, not a conversation/i);
+  assert.match(validation.coaching.suggestion, /complete sentence/i);
+  assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_conversational_input_detected'));
+});
+
+test('shared roleplay turn validation escalates repeated note-style input to hard invalid', () => {
+  const noteInput = 'Reluctance to optimize stable patients. Durability and convenience benefits. Quarterly review.';
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What proof point changes your decision for these patients?',
+    repMessage: noteInput,
+    previousRepMessages: [],
+    allPreviousRepMessages: [noteInput],
+  });
+
+  assert.equal(validation.valid, false);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
+  assert.equal(validation.blockHcpGeneration, true);
+  assert.equal(validation.blockScoring, true);
+  assert.equal(validation.blockStateAdvance, true);
+  assert.equal(validation.nonConversationalInput.detected, true);
+  assert.equal(validation.nonConversationalInput.stage, 'hard_block');
+  assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
+  assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_conversational_input_detected'));
+});
+
+test('shared roleplay turn validation does not flag proper spoken sentences or short spoken acknowledgements as note fragments', () => {
+  const spoken = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first workflow step?',
+    repMessage: 'The first step would be a nurse-owned checklist before the refill window.',
+    previousRepMessages: [],
+  });
+  const shortAcknowledgement = validateRoleplayRepTurn({
+    latestHcpAsk: 'Can you keep this focused?',
+    repMessage: 'Absolutely.',
+    previousRepMessages: [],
+  });
+
+  assert.equal(spoken.nonConversationalInput.detected, false);
+  assert.equal(spoken.valid, true);
+  assert.equal(shortAcknowledgement.nonConversationalInput.detected, false);
+  assert.equal(shortAcknowledgement.hardInvalid, false);
+});
+
 test('shared roleplay turn validation allows valid paraphrases that answer the latest ask', () => {
   const validation = validateRoleplayRepTurn({
     latestHcpAsk: 'Can you give me one workflow step that would reduce the PA burden?',

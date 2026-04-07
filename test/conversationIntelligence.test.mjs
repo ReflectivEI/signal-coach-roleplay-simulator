@@ -176,6 +176,30 @@ test('conversation intelligence labels canned but professional missed openers as
   assert.match(intelligence.coachingPriority.nextAction, /workflow step/i);
 });
 
+test('conversation intelligence treats note-style rep input as non-conversational, not valid progress', () => {
+  const repMessage = 'Reluctance to optimize stable patients. Durability and convenience benefits. Quarterly review.';
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What proof point changes the decision for stable HIV patients?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: buildRoleplayScenarioExecutionContract(evidenceScenario),
+    latestHcpAsk: 'What proof point changes the decision for stable HIV patients?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 1,
+  });
+
+  assert.equal(validation.nonConversationalInput.detected, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(intelligence.turnInterpretation.progression, 'non_conversational');
+  assert.equal(intelligence.adaptationSignals.non_conversational_input, true);
+  assert.equal(intelligence.coachingPriority.issue, 'spoken_response_format');
+  assert.equal(intelligence.capabilityMapping.capabilitySignals.conversation_management, 'gap');
+  assert.equal(intelligence.coachingMessage.label, 'Use spoken language');
+});
+
 test('conversation intelligence prioritizes the current live HCP ask over broader scenario contract family', () => {
   const repMessage = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
   const validation = validateRoleplayRepTurn({

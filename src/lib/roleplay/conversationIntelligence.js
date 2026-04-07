@@ -132,6 +132,7 @@ function statusIndicatesPartial(status = "") {
 
 function deriveProgression({ validationOutput = {}, communicationQualities = {} } = {}) {
   const status = validationOutput?.latestAskProgression?.status || validationOutput?.openingContextProgression?.status || "none";
+  if (validationOutput?.nonConversationalInput?.detected) return "non_conversational";
   if (validationOutput?.nonAdaptiveRepetition?.detected) return "non_adaptive";
   if (validationOutput?.hardInvalid) return validationOutput?.openingContextProgression?.evasive ? "evasive" : "stalled";
   if (statusIndicatesProgress(status)) return "progress";
@@ -142,6 +143,16 @@ function deriveProgression({ validationOutput = {}, communicationQualities = {} 
 }
 
 function chooseCoachingPriority({ progression, concernFamily, adaptationSignals, communicationQualities, validationOutput = {} } = {}) {
+  if (validationOutput?.nonConversationalInput?.detected) {
+    return {
+      issue: "spoken_response_format",
+      capability: "conversation_management",
+      severity: validationOutput?.hardInvalid ? "high" : "medium",
+      reason: "The response reads like notes rather than spoken dialogue.",
+      nextAction: "Respond in a complete sentence as you would say it to the HCP.",
+      shouldShow: true,
+    };
+  }
   if (validationOutput?.nonAdaptiveRepetition?.detected || adaptationSignals.repeated_without_adapting) {
     return {
       issue: "adaptation",
@@ -237,10 +248,17 @@ function buildCapabilityMapping({ concernFamily, progression, adaptationSignals,
   capabilitySignals.customer_engagement = adaptationSignals.acknowledged_hcp_concern ? "strength" : "mixed";
   capabilitySignals.commitment_generation = adaptationSignals.answered_concretely ? "mixed" : "not_observed";
 
+  if (adaptationSignals.non_conversational_input) {
+    capabilitySignals.signal_interpretation = "gap";
+    capabilitySignals.conversation_management = "gap";
+    capabilitySignals.customer_engagement = "gap";
+  }
+
   const primaryCapability = coachingPriority?.capability || CONCERN_FAMILY_BY_CAPABILITY[concernFamily] || "signal_interpretation";
   const supportingCapabilities = [
     CONCERN_FAMILY_BY_CAPABILITY[concernFamily],
     adaptationSignals.repeated_without_adapting ? "adaptive_response" : null,
+    adaptationSignals.non_conversational_input ? "conversation_management" : null,
     adaptationSignals.acknowledged_hcp_concern ? "signal_awareness" : null,
     adaptationSignals.answered_concretely ? "conversation_management" : null,
   ].filter(Boolean);
@@ -269,6 +287,10 @@ function deriveReliability({ validationOutput = {}, activeAskText = "", adaptati
   if (validationOutput?.nonAdaptiveRepetition?.detected) {
     score += 0.12;
     deterministicEvidence.push("non_adaptive_repetition_detected");
+  }
+  if (validationOutput?.nonConversationalInput?.detected) {
+    score += 0.12;
+    deterministicEvidence.push("non_conversational_input_detected");
   }
   if (activeAskText) {
     score += 0.06;
@@ -311,6 +333,7 @@ function buildCoachingMessage(coachingPriority = {}) {
     specificity: "Make it concrete",
     evidence_translation: "Connect evidence to the decision",
     awareness: "Acknowledge the concern",
+    spoken_response_format: "Use spoken language",
   };
   return {
     shouldShow: true,
@@ -349,6 +372,7 @@ export function deriveConversationIntelligenceState({
     addressed_active_ask: Boolean(addressedActiveAsk),
     adapted_to_new_constraint: Boolean(addressedActiveAsk && !validationOutput?.nonAdaptiveRepetition?.detected),
     repeated_without_adapting: Boolean(validationOutput?.nonAdaptiveRepetition?.detected),
+    non_conversational_input: Boolean(validationOutput?.nonConversationalInput?.detected),
     stayed_in_setup_language: hasGenericSetupLanguage(repMessage) && !addressedActiveAsk,
     clarified_before_advancing: hasClarifyingMove(repMessage, activeAskText),
     answered_concretely: communicationQualities.specificity === "high" || communicationQualities.practicality === "high",
@@ -405,6 +429,7 @@ export function buildConversationIntelligenceTelemetryEvent(conversationIntellig
       concernFamily: conversationIntelligenceState?.turnInterpretation?.concernFamily || null,
       latestAskStatus: conversationIntelligenceState?.turnInterpretation?.latestAskStatus || null,
       repeatedWithoutAdapting: Boolean(conversationIntelligenceState?.adaptationSignals?.repeated_without_adapting),
+      nonConversationalInput: Boolean(conversationIntelligenceState?.adaptationSignals?.non_conversational_input),
       addressedActiveAsk: Boolean(conversationIntelligenceState?.adaptationSignals?.addressed_active_ask),
       acknowledgedHcpConcern: Boolean(conversationIntelligenceState?.adaptationSignals?.acknowledged_hcp_concern),
       answeredConcretely: Boolean(conversationIntelligenceState?.adaptationSignals?.answered_concretely),

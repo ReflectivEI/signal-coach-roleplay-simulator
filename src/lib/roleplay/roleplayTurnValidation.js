@@ -103,6 +103,74 @@ function hasNonsenseOrEvasiveOpening(repMessage = "") {
   return /^(hello|hi|hey|you tell me|you tell|what decision|i don t understand|i do not understand|rephrase your question|rephrase|clarify|what do you mean)$/i.test(value);
 }
 
+const SHORT_SPOKEN_ACKNOWLEDGEMENT_PATTERN = /^(absolutely|yes|yeah|yep|sure|understood|got it|that makes sense|fair point|i hear you|i understand|okay|ok)([.!?]*)$/i;
+const SPOKEN_SENTENCE_SIGNAL_PATTERN = /\b(i|we|you|your|our|let'?s|that|this|it|they|my|the team|hcp|doctor)\b/i;
+const FINITE_OR_IMPERATIVE_VERB_PATTERN = /\b(am|is|are|was|were|be|being|been|have|has|had|do|does|did|can|could|will|would|should|may|might|must|need|needs|needed|want|wants|wanted|think|thinks|thought|hear|heard|understand|understood|see|seeing|saw|show|shows|showed|support|supports|supported|change|changes|changed|matter|matters|apply|applies|applied|start|starts|started|assign|assigns|assigned|own|owns|owned|run|runs|ran|pilot|pilots|piloted|implement|implements|implemented|standardize|standardizes|standardized|standardise|standardises|standardised|check|checks|checked|verify|verifies|verified|route|routes|routed|submit|submits|submitted|schedule|schedules|scheduled|review|reviews|reviewed|use|uses|used|build|builds|built|track|tracks|tracked|focus|focuses|focused|connect|connects|connected|answer|answers|answered|ask|asks|asked|address|addresses|addressed|give|gives|gave|tell|tells|told|walk|walks|walked)\b/i;
+const NOTE_FRAGMENT_NOUN_PATTERN = /\b(benefits?|durability|convenience|reluctance|awareness|perception|priorities|barriers?|criteria|candidacy|resistance|workflow|process|optimization|patients?|data|evidence|outcomes?|objective|challenge|focus|recommendation|coverage|access|adherence|screening|monitoring)\b/i;
+
+function splitNoteLikeSegments(value = "") {
+  return String(value || "")
+    .split(/[;•\n]+|(?:\s+-\s+)|(?:,\s+)|(?:\.\s+)/)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+}
+
+function detectNonConversationalShape(repMessage = "") {
+  const raw = String(repMessage || "").trim();
+  const normalized = normalizeForFingerprint(raw);
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (!raw || tokens.length < 3 || SHORT_SPOKEN_ACKNOWLEDGEMENT_PATTERN.test(raw)) {
+    return { detected: false, reasons: [] };
+  }
+
+  const reasons = [];
+  const bulletLike = /^(?:[-*•]|\d+[.)])\s+/.test(raw) || /(?:^|\n)\s*(?:[-*•]|\d+[.)])\s+/.test(raw);
+  if (bulletLike) reasons.push("bullet_or_list_marker");
+
+  const segments = splitNoteLikeSegments(raw);
+  const shortSegmentCount = segments.filter((segment) => tokenizeMeaningful(segment).length > 0 && tokenizeMeaningful(segment).length <= 5).length;
+
+  const hasSpokenSignal = SPOKEN_SENTENCE_SIGNAL_PATTERN.test(raw) || /[?]/.test(raw);
+  const startsWithImperative = /^(start|assign|pilot|use|review|check|verify|route|submit|schedule|track|focus|connect|answer|address|give|tell|walk)\b/i.test(raw);
+  const hasFiniteVerb = FINITE_OR_IMPERATIVE_VERB_PATTERN.test(raw) && !/^\w+\s+to\s+\w+/i.test(raw);
+  const hasMultipleShortPhrases = segments.length >= 2 && shortSegmentCount >= 2 && !hasSpokenSignal && !startsWithImperative && !hasFiniteVerb;
+  if (hasMultipleShortPhrases) reasons.push("multiple_short_note_phrases");
+  const lacksSentenceStructure = tokens.length >= 4 && !hasSpokenSignal && !startsWithImperative && !hasFiniteVerb;
+  if (lacksSentenceStructure) reasons.push("lacks_spoken_sentence_structure");
+
+  const noteStyleTitle = tokens.length >= 4
+    && !hasSpokenSignal
+    && NOTE_FRAGMENT_NOUN_PATTERN.test(raw)
+    && !/[?]/.test(raw)
+    && !startsWithImperative
+    && !hasFiniteVerb;
+  if (noteStyleTitle) reasons.push("note_style_fragment");
+
+  return {
+    detected: reasons.length > 0,
+    reasons: [...new Set(reasons)],
+  };
+}
+
+function detectNonConversationalInput({ repMessage = "", allPreviousRepMessages = [] } = {}) {
+  const current = detectNonConversationalShape(repMessage);
+  if (!current.detected) {
+    return { detected: false, repeatCount: 0, stage: "none", reasons: [] };
+  }
+
+  const previousMessages = Array.isArray(allPreviousRepMessages) ? allPreviousRepMessages : [];
+  const repeatCount = previousMessages.reduce((count, previousMessage) => {
+    return detectNonConversationalShape(previousMessage).detected ? count + 1 : count;
+  }, 0);
+  const stage = repeatCount >= 1 ? "hard_block" : "soft_coach";
+  return {
+    detected: true,
+    repeatCount,
+    stage,
+    reasons: current.reasons,
+  };
+}
+
 function hasFamilyResponsiveSignal(repMessage = "", family = "general") {
   const value = String(repMessage || "").toLowerCase();
   const checks = {
@@ -322,15 +390,27 @@ function buildNonAdaptiveRepetitionCoaching(nonAdaptiveRepetition = {}) {
   };
 }
 
+function buildNonConversationalInputCoaching(nonConversationalInput = {}) {
+  return {
+    shouldShow: true,
+    label: "Use spoken language",
+    tip: "This reads like notes, not a conversation.",
+    suggestion: "Respond in a complete sentence as you would say it to the HCP.",
+    severity: nonConversationalInput.stage === "hard_block" ? "high" : "medium",
+    escalationLabel: nonConversationalInput.stage === "hard_block" ? "Turn blocked" : "Conversation note",
+  };
+}
+
 export function shouldBlockRepTurnForLatestAsk(latestAskProgression = {}) {
   return ["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status);
 }
 
-function buildReasonCodes({ invalid, softInvalid = false, latestAskProgression = {}, nonAdaptiveRepetition = {}, coachingRequirementMet = true } = {}) {
+function buildReasonCodes({ invalid, softInvalid = false, latestAskProgression = {}, nonAdaptiveRepetition = {}, nonConversationalInput = {}, coachingRequirementMet = true } = {}) {
   const reasonCodes = [];
   if (invalid) reasonCodes.push("invalid_turn_blocked");
   if (softInvalid) reasonCodes.push("soft_invalid_turn_allowed");
   if (nonAdaptiveRepetition.detected) reasonCodes.push("non_adaptive_repetition_detected");
+  if (nonConversationalInput.detected) reasonCodes.push("non_conversational_input_detected");
   if (["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status)) {
     reasonCodes.push("repeated_non_answer_blocked");
   }
@@ -356,6 +436,7 @@ export function buildTurnValidationTelemetryEvents({
   invalid = false,
   softInvalid = false,
   nonAdaptiveRepetition = {},
+  nonConversationalInput = {},
   latestHcpAsk = "",
   firstTurnOpeningContext = "",
   repMessage = "",
@@ -371,7 +452,7 @@ export function buildTurnValidationTelemetryEvents({
       ].filter(Boolean)
     : [];
   const reasonCodes = mergeUniqueReasonCodes(
-    buildReasonCodes({ invalid, softInvalid, latestAskProgression, nonAdaptiveRepetition, coachingRequirementMet }),
+    buildReasonCodes({ invalid, softInvalid, latestAskProgression, nonAdaptiveRepetition, nonConversationalInput, coachingRequirementMet }),
     openingReasonCodes,
   );
   const basePayload = {
@@ -388,6 +469,10 @@ export function buildTurnValidationTelemetryEvents({
     nonAdaptiveRepetition: Boolean(nonAdaptiveRepetition.detected),
     nonAdaptiveRepeatCount: nonAdaptiveRepetition.repeatCount || 0,
     nonAdaptiveStage: nonAdaptiveRepetition.stage || "none",
+    nonConversationalInput: Boolean(nonConversationalInput.detected),
+    nonConversationalInputStage: nonConversationalInput.stage || "none",
+    nonConversationalInputRepeatCount: nonConversationalInput.repeatCount || 0,
+    nonConversationalInputReasons: Array.isArray(nonConversationalInput.reasons) ? nonConversationalInput.reasons : [],
     loopChallenge: Boolean(latestAskProgression.loopChallenge),
     coachingRequirementType: coachingRequirement?.behavior || null,
     coachingRequirementMet: Boolean(coachingRequirementMet),
@@ -414,6 +499,9 @@ export function buildTurnValidationTelemetryEvents({
     if (reasonCodes.includes("non_adaptive_repetition_detected")) {
       events.push({ eventType: "non_adaptive_repetition_detected", payload: basePayload });
     }
+    if (reasonCodes.includes("non_conversational_input_detected")) {
+      events.push({ eventType: "non_conversational_input_detected", payload: basePayload });
+    }
     return events;
   }
 
@@ -424,6 +512,9 @@ export function buildTurnValidationTelemetryEvents({
     }
     if (reasonCodes.includes("latest_ask_ignored")) {
       events.push({ eventType: "latest_ask_ignored", payload: basePayload });
+    }
+    if (reasonCodes.includes("non_conversational_input_detected")) {
+      events.push({ eventType: "non_conversational_input_detected", payload: basePayload });
     }
     return events;
   }
@@ -464,19 +555,27 @@ export function validateRoleplayRepTurn({
     previousHcpAsks,
     latestAskProgression,
   });
+  const nonConversationalInput = detectNonConversationalInput({
+    repMessage,
+    allPreviousRepMessages,
+  });
   const nonAdaptiveHardBlock = nonAdaptiveRepetition.stage === "hard_block";
   const nonAdaptiveSoftCoach = ["soft_coach", "escalated_soft_coach"].includes(nonAdaptiveRepetition.stage);
+  const nonConversationalHardBlock = nonConversationalInput.stage === "hard_block";
+  const nonConversationalSoftCoach = nonConversationalInput.stage === "soft_coach";
   const hardInvalid = openingInvalid
+    || nonConversationalHardBlock
     || nonAdaptiveHardBlock
     || (!nonAdaptiveRepetition.detected && shouldBlockRepTurnForLatestAsk(latestAskProgression))
     || Boolean(coachingRequirement && !coachingRequirementMet);
-  const softInvalid = !hardInvalid && (openingSoftCoach || latestAskSoftMiss || nonAdaptiveSoftCoach);
+  const softInvalid = !hardInvalid && (openingSoftCoach || latestAskSoftMiss || nonAdaptiveSoftCoach || nonConversationalSoftCoach);
   const telemetryEvents = buildTurnValidationTelemetryEvents({
     latestAskProgression,
     openingContextProgression,
     invalid: hardInvalid,
     softInvalid,
     nonAdaptiveRepetition,
+    nonConversationalInput,
     latestHcpAsk,
     firstTurnOpeningContext,
     repMessage,
@@ -502,8 +601,16 @@ export function validateRoleplayRepTurn({
       latestAskChanged: Boolean(nonAdaptiveRepetition.latestAskChanged),
       latestAskEscalating: Boolean(nonAdaptiveRepetition.latestAskEscalating),
     },
-    coaching: openingInvalid || openingSoftCoach
-      ? buildOpeningContextCoaching(openingContextProgression, { invalid: openingInvalid })
+    nonConversationalInput: {
+      detected: Boolean(nonConversationalInput.detected),
+      repeatCount: nonConversationalInput.repeatCount || 0,
+      stage: nonConversationalInput.stage || "none",
+      reasons: Array.isArray(nonConversationalInput.reasons) ? nonConversationalInput.reasons : [],
+    },
+    coaching: nonConversationalInput.detected
+        ? buildNonConversationalInputCoaching(nonConversationalInput)
+      : openingInvalid || openingSoftCoach
+        ? buildOpeningContextCoaching(openingContextProgression, { invalid: openingInvalid })
       : nonAdaptiveRepetition.detected
         ? buildNonAdaptiveRepetitionCoaching(nonAdaptiveRepetition)
       : hardInvalid
