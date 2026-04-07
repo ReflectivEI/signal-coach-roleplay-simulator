@@ -2796,7 +2796,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const previousPressureScore = Number.isFinite(respondingToTurn.engagementPressureScore)
       ? respondingToTurn.engagementPressureScore
       : 0;
-    const concernSourceText = `${respondingToTurn?.hcpDialogueBefore || ""} ${scenario?.description || ""} ${scenario?.context || ""}`;
+    const concernSourceText = [
+      respondingToTurn?.hcpDialogueBefore || "",
+      scenario?.title || "",
+      scenario?.description || "",
+      scenario?.opening_scene || scenario?.openingScene || "",
+      scenario?.objective || "",
+      Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
+    ].join(" ");
     const activeConcern = detectPrimaryConcern(concernSourceText);
     const recentUserConstraintCandidates = extractConstraintCandidatesFromTurns(turns, 3);
     const currentUserConstraintCandidates = extractConstraintCandidatesFromText(respondingToTurn?.hcpDialogueBefore || "");
@@ -3187,14 +3194,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && priorHcpDialogueTurns === 0
     );
 
-    const scenarioContext = [
-      String(scenario.id || ""),
-      String(scenario.title || ""),
-      String(scenario.opening_scene || scenario.openingScene || ""),
-      String(scenario.description || scenario.context || ""),
-      String(scenario.objective || ""),
-      Array.isArray(scenario.challenges) ? scenario.challenges.join(" ") : String(scenario.challenges || ""),
-    ].join(" ").trim();
+    const scenarioContext = visibleScenarioGroundingText.trim();
     const scenarioLower = scenarioContext.toLowerCase();
     const scenarioPressured = /\b(busy|behind|limited time|short on time|time pressure|running late|short-staffed|paperwork|drowning|prior auth|authorization|workflow friction|backlog)\b/.test(scenarioLower);
     const scenarioPrepFocus = /\bprep|hiv|sti\b/.test(scenarioLower);
@@ -3521,7 +3521,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         nextHcpDialogue = terminalCloseFallback;
       } else {
         const systemPrompt = buildHCPDialoguePrompt({
-          scenario,
+          scenario: {
+            ...scenario,
+            visibleScenarioContext: visibleScenarioGroundingText,
+            hiddenAuthoringContext: hiddenAuthoringContextText,
+          },
           hcpProfile: nextProfile,
           historyText,
           isOpening: isFirstHcpResponse,
@@ -4490,7 +4494,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           fallbackResponse: groundedFallback,
           concern: activeConcern,
           includeWarmth: false,
-          scenarioContext: scenarioGroundingText,
+          scenarioContext: visibleScenarioGroundingText,
         });
       }
     } else if (rewriteAuthority === "continuity_repair") {
@@ -4600,7 +4604,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           fallbackResponse: groundedFallback,
           concern: activeConcern,
           includeWarmth: false,
-          scenarioContext: scenarioGroundingText,
+          scenarioContext: visibleScenarioGroundingText,
         });
       }
       finalViolationCheck = detectConstraintDraftViolations({

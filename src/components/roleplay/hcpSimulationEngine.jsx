@@ -1977,8 +1977,10 @@ export function buildHCPDialoguePrompt({
   prompt += '- Prefer natural, conversational wording over formulaic phrasing.\n'
   prompt += '- Vary sentence openings naturally across turns while preserving the same core concern.\n'
 
+  const runtimeVisibleScenarioContext = scenario.visibleScenarioContext || scenario.description || ''
+
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
-  prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(scenario.description || scenario.context || '')
+  prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(runtimeVisibleScenarioContext)
   prompt += '\nOPENING SCENE: ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
@@ -2029,6 +2031,7 @@ export function buildHCPDialoguePrompt({
   prompt += '- Stay in character completely.\n'
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
   prompt += '- Keep responses specific and practice-worthy, grounded in scenario details and dialogue context.\n'
+  prompt += '- Treat raw authoring/background context as non-speakable unless it is visible in the opening scene, prior dialogue, or an explicitly triggered allowed fact.\n'
   prompt += '- Hard rule: do not introduce staffing, workflow, operational, or resource constraints unless explicitly present in scenario details or prior dialogue.\n'
   prompt += '- If a constraint was already stated, avoid repeating it unless the rep asks to revisit it, it changed, or clarification is required.\n'
   prompt += '- Do not sound like a consultant, educator, or training script.\n'

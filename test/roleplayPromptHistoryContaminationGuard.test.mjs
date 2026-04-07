@@ -72,3 +72,21 @@ test("active live route chain remains wired to prompt-context assembly", () => {
   assert.match(prompt, /CONVERSATION HISTORY:/);
   assert.match(prompt, /Sales Rep: I'd like to focus on one concrete next step\./i);
 });
+
+test("buildHCPDialoguePrompt uses runtime-visible scenario context instead of hidden authoring facts", () => {
+  const prompt = buildHCPDialoguePrompt({
+    scenario: {
+      ...SCENARIO,
+      description: "Visible clinic setup about an elusive diagnosis.",
+      context: "Hidden authoring fact: Average time to diagnosis is 5 years.",
+      visibleScenarioContext: "Visible clinic setup about an elusive diagnosis and a time-limited chart review.",
+    },
+    hcpProfile: PROFILE,
+    historyText: "Sales Rep: Elusive how?",
+    isOpening: false,
+  });
+
+  assert.match(prompt, /Visible clinic setup about an elusive diagnosis/i);
+  assert.doesNotMatch(prompt, /Average time to diagnosis is 5 years/i);
+  assert.match(prompt, /raw authoring\/background context as non-speakable/i);
+});
