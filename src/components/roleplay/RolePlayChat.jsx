@@ -2835,11 +2835,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     const isFirstRepTurn = respondingToTurn.turnNumber === 0 && !respondingToTurn?.hcpDialogueBefore;
     const openingTurnForValidation = isFirstRepTurn ? extractScenarioOwnedOpeningTurn(scenario) : null;
+    const firstTurnConcernSourceText = [
+      openingTurnForValidation?.cueText || "",
+      openingTurnForValidation?.dialogueText || "",
+      scenario?.title || "",
+      scenario?.description || "",
+      scenario?.visibleScenarioContext || "",
+      scenario?.objective || "",
+      Array.isArray(scenario?.challenges) ? scenario.challenges.join(" ") : String(scenario?.challenges || ""),
+    ].join(" ");
     const firstTurnActiveAskState = isFirstRepTurn
       ? resolveActiveHcpAskState({
         narrativeContext: openingTurnForValidation?.cueText || "",
         openingContext: openingTurnForValidation?.dialogueText || "",
-        fallbackConcern: detectPrimaryConcern(`${openingTurnForValidation?.cueText || ""} ${openingTurnForValidation?.dialogueText || ""} ${visibleScenarioGroundingText || ""}`),
+        fallbackConcern: detectPrimaryConcern(firstTurnConcernSourceText),
       })
       : null;
     const firstTurnOpeningContext = firstTurnActiveAskState?.askText || "";
