@@ -39,3 +39,21 @@ test("HCP dialogue strips simulator meta-discourse before final turn output", ()
   assert.match(SOURCE, /to get back on track/);
   assert.match(SOURCE, /nextHcpDialogue = stripSimulatorMetaDialogue\(nextHcpDialogue\);/);
 });
+
+test("terminal close disables continued rep input in the live chat form", () => {
+  assert.match(SOURCE, /function hasTerminalClosedTurn/);
+  assert.match(SOURCE, /const conversationTerminalClosed = hasTerminalClosedTurn\(turns\)/);
+  assert.match(SOURCE, /if \(hasTerminalClosedTurn\(turns\)\) \{[\s\S]*controller\.state = SessionState\.ENDED;[\s\S]*return;[\s\S]*\}/);
+  assert.match(SOURCE, /if \(isLoading \|\| isEnding \|\| conversationTerminalClosed\) return;/);
+  assert.match(SOURCE, /disabled=\{isLoading \|\| isEnding \|\| conversationTerminalClosed\}/);
+  assert.match(SOURCE, /disabled=\{isLoading \|\| isEnding \|\| conversationTerminalClosed \|\| \(!sanitizeUserMessage\(input\) && !interim\)\}/);
+});
+
+test("final HCP dialogue cannot repeat recent asks or echo the rep message", () => {
+  assert.match(SOURCE, /function isRepeatedFinalDialogue/);
+  assert.match(SOURCE, /function isRepEchoInHcpDialogue/);
+  assert.doesNotMatch(SOURCE, /love to follow up on our last conversation/i);
+  assert.match(SOURCE, /final-repeat-repair/);
+  assert.match(SOURCE, /isRepeatedFinalDialogue\(nextHcpDialogue, recentHcpDialogues\)/);
+  assert.match(SOURCE, /isRepEchoInHcpDialogue\(\{ dialogue: nextHcpDialogue, repMessage \}\)/);
+});

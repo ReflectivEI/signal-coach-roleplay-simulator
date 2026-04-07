@@ -1045,6 +1045,13 @@ function isTerminalDisengagementIntent(text = "") {
   return hasExplicitExitIntent(text) || isTerminalClosureDialogue(text);
 }
 
+function hasTerminalClosedTurn(turns = []) {
+  return (Array.isArray(turns) ? turns : []).some((turn) => (
+    turn?.hcpDialogueBefore
+    && isTerminalClosureDialogue(turn.hcpDialogueBefore)
+  ));
+}
+
 function stripFollowUpAfterTerminalClose(text = "") {
   const value = hardenTextSurface(text);
   if (!isTerminalDisengagementIntent(value)) return value;
@@ -1064,6 +1071,30 @@ function stripSimulatorMetaDialogue(text = "") {
     .replace(/\b(?:given|considering) our current ([^.?!]+)\.\s+(?=(?:can|how|what|who|where|when|is|are|does|do|would|could)\b)/gi, "Given our current $1, ");
 
   return hardenTextSurface(value);
+}
+
+function isRepeatedFinalDialogue(candidate = "", recentDialogues = []) {
+  const normalizedCandidate = normalizeDialogueSignature(candidate);
+  if (!normalizedCandidate) return false;
+  return (Array.isArray(recentDialogues) ? recentDialogues : []).some((prior) => {
+    const normalizedPrior = normalizeDialogueSignature(prior);
+    if (!normalizedPrior) return false;
+    return normalizedPrior === normalizedCandidate
+      || calculateTokenOverlapRatio(candidate, prior) >= 0.82
+      || calculateSemanticSimilarity(candidate, prior) >= 0.78;
+  });
+}
+
+function isRepEchoInHcpDialogue({ dialogue = "", repMessage = "" } = {}) {
+  const normalizedHcp = normalizeDialogueSignature(dialogue);
+  const normalizedRep = normalizeDialogueSignature(repMessage);
+  if (!normalizedHcp || !normalizedRep) return false;
+
+  const repTokens = normalizedRep.split(/\s+/).filter(Boolean);
+  const echoWindow = repTokens.slice(0, Math.min(repTokens.length, 14)).join(" ");
+  return (normalizedRep.length >= 40 && normalizedHcp.includes(normalizedRep))
+    || (echoWindow.split(/\s+/).length >= 8 && normalizedHcp.includes(echoWindow))
+    || (calculateTokenOverlapRatio(normalizedHcp, normalizedRep) >= 0.86 && normalizedHcp.length >= 40);
 }
 
 function isEvidenceSeekingEngagement(text = "") {
@@ -2541,6 +2572,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const showOpeningSceneFallback = !openingScene && Boolean(objectiveText);
   const showScenarioSupportFallback = challengeItems.length === 0 && !openingScene && !objectiveText;
   const scenarioKeywords = extractScenarioKeywords(scenario);
+  const conversationTerminalClosed = hasTerminalClosedTurn(turns)
+    || sessionControllerRef.current.state === SessionState.ENDED;
 
   useEffect(() => {
     if (activeTab === "chat") {
@@ -2636,6 +2669,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const controller = sessionControllerRef.current;
     const normalizedInput = String(rawInput || "").trim();
     if (!normalizedInput) return;
+    if (hasTerminalClosedTurn(turns)) {
+      controller.state = SessionState.ENDED;
+      controller.pendingResponseQueue = [];
+      return;
+    }
     if (!controller.isActive || controller.state === SessionState.ENDED || controller.state === SessionState.CLOSING) return;
     if (controller.isProcessingTurn || sendInFlightRef.current) {
       controller.pendingResponseQueue.push(normalizedInput);
@@ -4843,8 +4881,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     });
     contextualCue = hcpReactionContract.selectedCueText || contextualCue;
     nextHcpDialogue = hcpReactionContract.selectedDialogueText || nextHcpDialogue;
+    nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
+    nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
+
+    const finalDialogueBeforeRepeatRepair = nextHcpDialogue;
+    const finalDialogueNeededRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && (
+        isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
+        || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
+      );
+    if (finalDialogueNeededRepair) {
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: primaryConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:final-repeat-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+    }
+
+    const finalHcpReactionContract = nextHcpDialogue === hcpReactionContract.selectedDialogueText
+      ? hcpReactionContract
+      : {
+          ...hcpReactionContract,
+          selectedDialogueText: nextHcpDialogue,
+          finalDialogueRepeatRepair: finalDialogueNeededRepair,
+          finalDialogueBeforeRepeatRepair,
+        };
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
-    nextTurn.hcpReactionContract = hcpReactionContract;
+    nextTurn.hcpReactionContract = finalHcpReactionContract;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
     nextTurn.plannerStateSnapshot = {
       ...nextTurn.plannerStateSnapshot,
@@ -4870,16 +4934,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedDialogueRegister: registerSelection.preferredRegister,
       selectedDialogueIntent: cueDialogueIntegrity.dialogueIntent,
       cueDialogueAlignmentStatus: cueDialogueIntegrity.alignmentStatus,
-      reactionContractHash: hcpReactionContract.reactionContractHash,
-      repEvidenceContextHash: hcpReactionContract.repEvidenceContextHash,
-      escalationStage: hcpReactionContract?.enforcementTrace?.escalationStage || 'open',
-      escalationReason: hcpReactionContract?.enforcementTrace?.escalationReason || 'stable',
-      toleranceScore: hcpReactionContract?.enforcementTrace?.toleranceScore ?? null,
-      tonePressureLevel: hcpReactionContract?.enforcementTrace?.tonePressureLevel ?? null,
-      repDomainStatus: hcpReactionContract?.enforcementTrace?.repDomainStatus || 'in_domain',
-      contextContamination: Boolean(hcpReactionContract?.enforcementTrace?.contextContamination),
-      scenarioDomain: hcpReactionContract?.enforcementTrace?.scenarioDomain || null,
-      scenarioReanchorRequired: Boolean(hcpReactionContract?.enforcementTrace?.scenarioReanchorRequired),
+      reactionContractHash: finalHcpReactionContract.reactionContractHash,
+      repEvidenceContextHash: finalHcpReactionContract.repEvidenceContextHash,
+      escalationStage: finalHcpReactionContract?.enforcementTrace?.escalationStage || 'open',
+      escalationReason: finalHcpReactionContract?.enforcementTrace?.escalationReason || 'stable',
+      toleranceScore: finalHcpReactionContract?.enforcementTrace?.toleranceScore ?? null,
+      tonePressureLevel: finalHcpReactionContract?.enforcementTrace?.tonePressureLevel ?? null,
+      repDomainStatus: finalHcpReactionContract?.enforcementTrace?.repDomainStatus || 'in_domain',
+      contextContamination: Boolean(finalHcpReactionContract?.enforcementTrace?.contextContamination),
+      scenarioDomain: finalHcpReactionContract?.enforcementTrace?.scenarioDomain || null,
+      scenarioReanchorRequired: Boolean(finalHcpReactionContract?.enforcementTrace?.scenarioReanchorRequired),
     };
     nextTurn.plannerGapComparison = plannerGapComparison;
 
@@ -5316,7 +5380,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                 <form
                   onSubmit={e => {
                     e.preventDefault();
-                    if (isLoading || isEnding) return;
+                    if (isLoading || isEnding || conversationTerminalClosed) return;
                     const message = sanitizeUserMessage(input);
                     if (!message) return;
                     sendMessage(input);
@@ -5341,7 +5405,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                         }
                       }}
                         placeholder={isListening ? "Listening…" : "Your response as the sales rep (REP)..."}
-                    disabled={isLoading || isEnding}
+                    disabled={isLoading || isEnding || conversationTerminalClosed}
                     className={`flex-1 w-full pr-2 ${isListening ? "border-red-400 ring-1 ring-red-300" : ""}`}
                     />
                     {isListening && interim && (
@@ -5360,7 +5424,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
-                  <Button type="submit" disabled={isLoading || isEnding || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
+                  <Button type="submit" disabled={isLoading || isEnding || conversationTerminalClosed || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
                 </form>
