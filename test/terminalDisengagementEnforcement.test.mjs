@@ -133,9 +133,11 @@ test("latest HCP ask progression gate prevents workflow ownership loops", () => 
   assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function buildLatestAskProgressionDialogue/);
   assert.match(SHARED_TURN_VALIDATION_SOURCE, /function shouldBlockRepTurnForLatestAsk/);
   assert.match(SHARED_TURN_VALIDATION_SOURCE, /function validateRoleplayRepTurn/);
-  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockHcpGeneration: invalid/);
-  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockScoring: invalid/);
-  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockStateAdvance: invalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /softInvalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /hardInvalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockHcpGeneration: hardInvalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockScoring: hardInvalid/);
+  assert.match(SHARED_TURN_VALIDATION_SOURCE, /blockStateAdvance: hardInvalid/);
   assert.match(SHARED_TURN_VALIDATION_SOURCE, /buildTurnValidationTelemetryEvents/);
   assert.match(SHARED_TURN_VALIDATION_SOURCE, /invalid_turn_blocked/);
   assert.match(SHARED_TURN_VALIDATION_SOURCE, /valid_turn_progressed/);

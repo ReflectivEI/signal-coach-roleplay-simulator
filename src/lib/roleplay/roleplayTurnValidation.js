@@ -252,9 +252,10 @@ export function shouldBlockRepTurnForLatestAsk(latestAskProgression = {}) {
   return ["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status);
 }
 
-function buildReasonCodes({ invalid, latestAskProgression = {}, coachingRequirementMet = true } = {}) {
+function buildReasonCodes({ invalid, softInvalid = false, latestAskProgression = {}, coachingRequirementMet = true } = {}) {
   const reasonCodes = [];
   if (invalid) reasonCodes.push("invalid_turn_blocked");
+  if (softInvalid) reasonCodes.push("soft_invalid_turn_allowed");
   if (["repeated_missed", "repeated_missed_close"].includes(latestAskProgression.status)) {
     reasonCodes.push("repeated_non_answer_blocked");
   }
@@ -278,6 +279,7 @@ export function buildTurnValidationTelemetryEvents({
   latestAskProgression = {},
   openingContextProgression = null,
   invalid = false,
+  softInvalid = false,
   latestHcpAsk = "",
   firstTurnOpeningContext = "",
   repMessage = "",
@@ -293,7 +295,7 @@ export function buildTurnValidationTelemetryEvents({
       ].filter(Boolean)
     : [];
   const reasonCodes = mergeUniqueReasonCodes(
-    buildReasonCodes({ invalid, latestAskProgression, coachingRequirementMet }),
+    buildReasonCodes({ invalid, softInvalid, latestAskProgression, coachingRequirementMet }),
     openingReasonCodes,
   );
   const basePayload = {
@@ -301,6 +303,8 @@ export function buildTurnValidationTelemetryEvents({
     status: latestAskProgression.status || "none",
     family: latestAskProgression.family || "general",
     reasonCodes,
+    softInvalid: Boolean(softInvalid),
+    hardInvalid: Boolean(invalid),
     blockHcpGeneration: invalid,
     blockScoring: invalid,
     blockStateAdvance: invalid,
@@ -331,6 +335,14 @@ export function buildTurnValidationTelemetryEvents({
     return events;
   }
 
+  if (softInvalid) {
+    const events = [{ eventType: "soft_invalid_turn_allowed", payload: basePayload }];
+    if (reasonCodes.includes("latest_ask_ignored")) {
+      events.push({ eventType: "latest_ask_ignored", payload: basePayload });
+    }
+    return events;
+  }
+
   if (reasonCodes.includes("latest_ask_ignored")) {
     return [{ eventType: "latest_ask_ignored", payload: basePayload }];
   }
@@ -357,11 +369,14 @@ export function validateRoleplayRepTurn({
   const openingInvalid = openingContextProgression?.status === OPENING_CONTEXT_STATUS.NON_RESPONSIVE
     && openingContextProgression?.severity === "hard_block";
   const openingSoftCoach = openingContextProgression?.status === OPENING_CONTEXT_STATUS.PARTIALLY_RESPONSIVE;
-  const invalid = openingInvalid || shouldBlockRepTurnForLatestAsk(latestAskProgression) || Boolean(coachingRequirement && !coachingRequirementMet);
+  const latestAskSoftMiss = latestAskProgression.status === "missed";
+  const hardInvalid = openingInvalid || shouldBlockRepTurnForLatestAsk(latestAskProgression) || Boolean(coachingRequirement && !coachingRequirementMet);
+  const softInvalid = !hardInvalid && (openingSoftCoach || latestAskSoftMiss);
   const telemetryEvents = buildTurnValidationTelemetryEvents({
     latestAskProgression,
     openingContextProgression,
-    invalid,
+    invalid: hardInvalid,
+    softInvalid,
     latestHcpAsk,
     firstTurnOpeningContext,
     repMessage,
@@ -371,16 +386,18 @@ export function validateRoleplayRepTurn({
   });
 
   return {
-    valid: !invalid,
-    invalid,
-    blockHcpGeneration: invalid,
-    blockScoring: invalid,
-    blockStateAdvance: invalid,
+    valid: !hardInvalid,
+    invalid: hardInvalid,
+    softInvalid,
+    hardInvalid,
+    blockHcpGeneration: hardInvalid,
+    blockScoring: hardInvalid,
+    blockStateAdvance: hardInvalid,
     latestAskProgression,
     openingContextProgression,
     coaching: openingInvalid || openingSoftCoach
       ? buildOpeningContextCoaching(openingContextProgression, { invalid: openingInvalid })
-      : invalid
+      : hardInvalid
         ? buildInvalidTurnCoaching(latestAskProgression)
         : null,
     telemetryEvents,

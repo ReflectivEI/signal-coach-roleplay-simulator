@@ -14,6 +14,8 @@ test('shared roleplay turn validation blocks repeated non-responsive latest-ask 
 
   assert.equal(validation.valid, false);
   assert.equal(validation.invalid, true);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
   assert.equal(validation.blockHcpGeneration, true);
   assert.equal(validation.blockScoring, true);
   assert.equal(validation.blockStateAdvance, true);
@@ -41,6 +43,8 @@ test('shared roleplay turn validation allows concrete progress through the same 
 
   assert.equal(validation.valid, true);
   assert.equal(validation.invalid, false);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, false);
   assert.equal(validation.blockHcpGeneration, false);
   assert.equal(validation.blockScoring, false);
   assert.equal(validation.blockStateAdvance, false);
@@ -57,10 +61,33 @@ test('shared roleplay turn validation emits latest-ask ignored telemetry before 
   });
 
   assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
   assert.equal(validation.latestAskProgression.status, 'missed');
-  assert.deepEqual(validation.telemetryEvents.map((event) => event.eventType), ['latest_ask_ignored']);
+  assert.deepEqual(validation.telemetryEvents.map((event) => event.eventType), ['soft_invalid_turn_allowed', 'latest_ask_ignored']);
   assert.equal(validation.telemetryEvents[0].payload.blockHcpGeneration, false);
-  assert.deepEqual(validation.telemetryEvents[0].payload.reasonCodes, ['latest_ask_ignored']);
+  assert.equal(validation.telemetryEvents[0].payload.softInvalid, true);
+  assert.equal(validation.telemetryEvents[0].payload.hardInvalid, false);
+  assert.deepEqual(validation.telemetryEvents[0].payload.reasonCodes, ['soft_invalid_turn_allowed', 'latest_ask_ignored']);
+});
+
+test('shared roleplay turn validation marks coherent early misses as soft invalid without blocking generation', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What proof point changes the decision for stable HIV patients?',
+    repMessage: "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.",
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.invalid, false);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
+  assert.equal(validation.blockHcpGeneration, false);
+  assert.equal(validation.blockScoring, false);
+  assert.equal(validation.blockStateAdvance, false);
+  assert.equal(validation.latestAskProgression.status, 'missed');
+  assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('soft_invalid_turn_allowed'));
+  assert.ok(validation.telemetryEvents[0].payload.reasonCodes.includes('latest_ask_ignored'));
 });
 
 test('shared roleplay turn validation allows valid paraphrases that answer the latest ask', () => {
@@ -111,6 +138,8 @@ test('shared roleplay turn validation blocks unmet coaching requirements before 
 
   assert.equal(validation.valid, false);
   assert.equal(validation.blockHcpGeneration, true);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
   assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'coaching_requirement_not_met'));
 });
 
@@ -150,6 +179,8 @@ test('shared roleplay turn validation blocks repeated generic opener against evi
 
   assert.equal(validation.valid, false);
   assert.equal(validation.invalid, true);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
   assert.equal(validation.blockHcpGeneration, true);
   assert.equal(validation.latestAskProgression.status, 'repeated_missed_close');
   assert.equal(validation.latestAskProgression.family, 'evidence');
@@ -196,6 +227,8 @@ test('shared roleplay turn validation soft-coaches generic first-turn openers ag
 
   assert.equal(validation.valid, true);
   assert.equal(validation.invalid, false);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.hardInvalid, false);
   assert.equal(validation.blockHcpGeneration, false);
   assert.equal(validation.blockScoring, false);
   assert.equal(validation.blockStateAdvance, false);
@@ -215,6 +248,8 @@ test('shared roleplay turn validation blocks generic first-turn openers against 
 
   assert.equal(validation.valid, false);
   assert.equal(validation.invalid, true);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
   assert.equal(validation.blockHcpGeneration, true);
   assert.equal(validation.blockScoring, true);
   assert.equal(validation.blockStateAdvance, true);
@@ -233,6 +268,8 @@ test('shared roleplay turn validation blocks nonsense first-turn input before li
   });
 
   assert.equal(validation.valid, false);
+  assert.equal(validation.softInvalid, false);
+  assert.equal(validation.hardInvalid, true);
   assert.equal(validation.latestAskProgression.status, 'none');
   assert.equal(validation.openingContextProgression.status, 'non_responsive');
   assert.equal(validation.blockHcpGeneration, true);
