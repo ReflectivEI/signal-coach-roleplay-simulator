@@ -2791,6 +2791,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         .map((turn) => String(turn?.repMessage || "").trim())
         .filter(Boolean),
     });
+    const roleplayTurnValidationContext = {
+      latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+      previousRepMessages: turns
+        .slice(0, -1)
+        .map((turn) => String(turn?.repMessage || "").trim())
+        .filter(Boolean),
+      scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
+      turnNumber: respondingToTurn.turnNumber,
+    };
     if (preTurnValidation.invalid) {
       recordTurnValidationTelemetry(preTurnValidation, {
         entryPoint: "RolePlayChat",
@@ -3765,6 +3775,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             max_tokens: 220,
             temperature: 0,
             roleplay: true,
+            roleplayTurnValidation: roleplayTurnValidationContext,
           })
         });
         if (res.ok) {
@@ -3849,6 +3860,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             max_tokens: 120,
             temperature: 0,
             roleplay: true,
+            roleplayTurnValidation: roleplayTurnValidationContext,
           })
         });
         if (recoveryRes.ok) {
@@ -4701,6 +4713,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             max_tokens: 120,
             temperature: 0,
             roleplay: true,
+            roleplayTurnValidation: roleplayTurnValidationContext,
           })
         });
         if (antiRepeatRes.ok) {
@@ -4760,6 +4773,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             max_tokens: 120,
             temperature: 0,
             roleplay: true,
+            roleplayTurnValidation: roleplayTurnValidationContext,
           })
         });
         if (continuityRes.ok) {

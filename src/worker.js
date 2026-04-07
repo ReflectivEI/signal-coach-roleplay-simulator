@@ -12,6 +12,7 @@ import {
 } from "./components/manager/managerInsightsShared.js";
 import { appendFollowUpSnapshot, buildValidationSummary, createValidationRecord, listCanonicalCapabilities } from "./components/manager/managerValidationLogic.js";
 import { listRoleplaySessions, persistRoleplaySession } from "./lib/roleplaySessionStore.js";
+import { validateRoleplayRepTurn } from "./lib/roleplay/roleplayTurnValidation.js";
 const assetManifest = JSON.parse(manifestJSON);
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -116,6 +117,74 @@ function extractRoleplayOpeningAuthority(prompt = "") {
         cue: readMarkerLine("ROLEPLAY_OPENING_CUE"),
         source: readMarkerLine("ROLEPLAY_OPENING_SOURCE") || "scenario_opening_scene",
     };
+}
+
+function recordWorkerTurnValidationTelemetry(validation, context = {}) {
+    (validation?.telemetryEvents || []).forEach((event) => {
+        console.info("[RoleplayTurnValidation]", event.eventType, {
+            ...(event.payload || {}),
+            ...context,
+        });
+    });
+}
+
+function buildRoleplayValidationRequiredResponse() {
+    const validation = {
+        valid: false,
+        invalid: true,
+        blockHcpGeneration: true,
+        blockScoring: true,
+        blockStateAdvance: true,
+        reasonCodes: ["roleplay_turn_validation_required"],
+        coaching: {
+            shouldShow: true,
+            label: "Turn validation required",
+            tip: "Roleplay turns must be validated against the HCP's latest ask before generation.",
+            suggestion: "Submit latestHcpAsk, repMessage, and previousRepMessages through the shared validation contract before invoking the provider.",
+            severity: "high",
+            escalationLabel: "Turn blocked",
+        },
+    };
+
+    return Response.json({
+        error: "ROLEPLAY_TURN_VALIDATION_REQUIRED",
+        blocked: true,
+        deterministic: true,
+        validation,
+    }, { status: 428 });
+}
+
+function enforceRoleplayTurnValidationBoundary(body = {}) {
+    const contract = body?.roleplayTurnValidation;
+    if (!contract) return { response: buildRoleplayValidationRequiredResponse() };
+
+    const validation = validateRoleplayRepTurn({
+        latestHcpAsk: contract.latestHcpAsk || "",
+        repMessage: contract.repMessage || "",
+        previousRepMessages: Array.isArray(contract.previousRepMessages) ? contract.previousRepMessages : [],
+        coachingRequirement: contract.coachingRequirement || null,
+        coachingRequirementMet: contract.coachingRequirementMet !== false,
+    });
+
+    recordWorkerTurnValidationTelemetry(validation, {
+        entryPoint: "worker:/api/llm/invoke",
+        scenarioId: contract.scenarioId || null,
+        turnNumber: contract.turnNumber || null,
+    });
+
+    if (validation.invalid) {
+        return {
+            validation,
+            response: Response.json({
+                error: "ROLEPLAY_TURN_BLOCKED",
+                blocked: true,
+                deterministic: true,
+                validation,
+            }, { status: 422 }),
+        };
+    }
+
+    return { validation, response: null };
 }
 
 // ─── IN-MEMORY SESSION STORE (Development) ──────────────────────────────
@@ -781,6 +850,11 @@ async function handleLlmInvoke(request, env) {
             deterministic: true,
             roleplayOpeningAuthority,
         });
+    }
+
+    if (roleplay) {
+        const boundary = enforceRoleplayTurnValidationBoundary(body);
+        if (boundary.response) return boundary.response;
     }
 
     const requestedProvider = body?.provider;
