@@ -99,3 +99,14 @@ test("surface hardening prevents capitalized question words after comma joins", 
   assert.match(SOURCE, /,\\s\+\(Who\|What\|How\|Which/);
   assert.match(SOURCE, /word\.toLowerCase\(\)/);
 });
+
+test("latest HCP ask progression gate prevents workflow ownership loops", () => {
+  assert.match(SOURCE, /function classifyLatestAskProgression/);
+  assert.match(SOURCE, /function buildLatestAskProgressionDialogue/);
+  assert.match(SOURCE, /latestHcpAskRequiresOwner/);
+  assert.match(SOURCE, /hasOwnershipDeflection/);
+  assert.match(SOURCE, /I heard the process change\. The missing piece is ownership/);
+  assert.match(SOURCE, /Fair, you may not know my staffing model/);
+  assert.match(SOURCE, /const latestAskBoundDialogue = buildLatestAskProgressionDialogue\(latestAskProgression\)/);
+  assert.match(SOURCE, /&& !latestAskBoundDialogue[\s\S]*\) \{/);
+});

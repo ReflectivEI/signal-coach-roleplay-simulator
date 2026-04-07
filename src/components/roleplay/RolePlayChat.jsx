@@ -1447,6 +1447,97 @@ function buildWorkflowProgressionFollowUp(repMessage = "") {
   return "That is closer. Who owns the first step, and what changes in the workflow this week?";
 }
 
+function latestHcpAskRequiresOwner(latestHcpAsk = "") {
+  const value = String(latestHcpAsk || "").toLowerCase();
+  if (!value.trim()) return false;
+  const asksOwnership = /\b(who|which role|owner|own|owns|responsib|assigned|handoff)\b/.test(value);
+  const operationalFrame = /\b(first|step|workflow|staff|team|task|implement|run|use|this week)\b/.test(value);
+  return asksOwnership && operationalFrame;
+}
+
+function latestHcpAskRequiresWorkflowStep(latestHcpAsk = "") {
+  const value = String(latestHcpAsk || "").toLowerCase();
+  if (!value.trim()) return false;
+  return /\b(first step|practical step|workflow step|process change|smallest workflow change|what would my team do|what is one change|what is one step|what should we do first|what changes in.*workflow)\b/.test(value);
+}
+
+function hasOwnershipDeflection(repMessage = "") {
+  const value = String(repMessage || "").toLowerCase();
+  if (!value.trim()) return false;
+  const ownershipLanguage = /\b(who|owner|own|staff|team|role|responsib|decision)\b/.test(value);
+  const deflectionLanguage = /\b(can't|cannot|can not|don't know|do not know|couldn't|wouldn't|your decision|you decide|up to you|not my decision)\b/.test(value);
+  return ownershipLanguage && deflectionLanguage;
+}
+
+function hasRepConversationLoopChallenge(repMessage = "") {
+  return /\b(you just asked|you already asked|i already said|i said|again|as i said|just told you)\b/i.test(String(repMessage || ""));
+}
+
+function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "", previousRepMessages = [] } = {}) {
+  const latestAsk = String(latestHcpAsk || "").trim();
+  const rep = String(repMessage || "").trim();
+  if (!latestAsk || !rep) return { status: "none", needsProgression: false };
+
+  const requiresOwner = latestHcpAskRequiresOwner(latestAsk);
+  const requiresWorkflowStep = latestHcpAskRequiresWorkflowStep(latestAsk);
+  if (!requiresOwner && !requiresWorkflowStep) return { status: "none", needsProgression: false };
+
+  const implementationMove = hasImplementationMove(rep) || hasConcreteOperationalMove(rep);
+  const vagueOwner = hasVagueOperationalOwner(rep);
+  const explicitOwner = hasExplicitOperationalOwner(rep);
+  const ownershipDeflection = hasOwnershipDeflection(rep);
+  const loopChallenge = hasRepConversationLoopChallenge(rep);
+  const repeatedRep = previousRepMessages
+    .filter(Boolean)
+    .slice(-3)
+    .some((previous) => computeSimilarity(previous, rep) >= 0.84);
+
+  if (requiresOwner) {
+    if (ownershipDeflection) {
+      return { status: "ownership_deflected", needsProgression: true, loopChallenge };
+    }
+    if (implementationMove && explicitOwner) {
+      return { status: loopChallenge || repeatedRep ? "repeated_owner_progress" : "owner_progress", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
+    }
+    if (implementationMove && vagueOwner) {
+      return { status: "vague_owner_progress", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
+    }
+    if (implementationMove) {
+      return { status: loopChallenge || repeatedRep ? "repeated_missing_owner" : "missing_owner", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
+    }
+    return { status: "missed", needsProgression: false, loopChallenge };
+  }
+
+  if (requiresWorkflowStep && implementationMove) {
+    return { status: loopChallenge || repeatedRep ? "repeated_workflow_progress" : "workflow_progress", needsProgression: true, loopChallenge: loopChallenge || repeatedRep };
+  }
+
+  return { status: "missed", needsProgression: false, loopChallenge };
+}
+
+function buildLatestAskProgressionDialogue(latestAskProgression = {}) {
+  switch (latestAskProgression.status) {
+    case "ownership_deflected":
+      return "Fair, you may not know my staffing model. Give me the role you usually see owning the first step, and I can decide if that fits here.";
+    case "repeated_owner_progress":
+      return "I heard the owner and the action. What is the first handoff they would run this week?";
+    case "owner_progress":
+      return "That is more useful. What is the first handoff they would run this week?";
+    case "vague_owner_progress":
+      return "That gives me a direction, but the owner is still too vague. Which role owns the first step?";
+    case "repeated_missing_owner":
+      return "I heard the process change. The missing piece is ownership: which role starts it first?";
+    case "missing_owner":
+      return "That is closer. Who owns the first step, and what changes in the workflow this week?";
+    case "repeated_workflow_progress":
+      return "I heard that workflow step. Now make it usable for me: who starts it, and when?";
+    case "workflow_progress":
+      return "That is a workable starting point. Who owns it first, and when would they do it?";
+    default:
+      return "";
+  }
+}
+
 function deriveEngagementDecay({
   previousTier = "engaged",
   previousPressure = 0,
@@ -3204,6 +3295,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       lockedPlannerObjective: chosenResponseObjective,
       objectiveOverrideBlocked,
     };
+    const previousRepMessagesForProgression = turns
+      .slice(0, -1)
+      .map((turn) => String(turn?.repMessage || "").trim())
+      .filter(Boolean);
+    const latestAskProgression = classifyLatestAskProgression({
+      latestHcpAsk: respondingToTurn?.hcpDialogueBefore || "",
+      repMessage,
+      previousRepMessages: previousRepMessagesForProgression,
+    });
     const plannerStateSnapshot = {
       activeConcern,
       effectiveActiveConcern,
@@ -3222,6 +3322,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       chosenResponseObjective,
       objectiveRanking,
       lateTurnConstraintDecision,
+      latestAskProgression,
       activeHardDemand: hardDemandState.activeHardDemand,
       hardDemandType: hardDemandState.hardDemandType,
       hardDemandSourceTurn: hardDemandState.hardDemandSourceTurn,
@@ -3901,11 +4002,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
 
+    const latestAskBoundDialogue = buildLatestAskProgressionDialogue(latestAskProgression);
+    if (!overrideExit && nextHcpState !== "disengaged" && latestAskBoundDialogue) {
+      usedDeterministicFallback = true;
+      draftResponseSource = `${draftResponseSource}_latest_ask_progression_gate`;
+      nextHcpDialogue = latestAskBoundDialogue;
+      if (["repeated_owner_progress", "repeated_missing_owner", "repeated_workflow_progress"].includes(latestAskProgression.status)) {
+        nextHcpState = nextHcpState === "engaged" ? "resistant" : nextHcpState;
+      }
+    }
+
     if (
       !overrideExit
       && nextHcpState !== "disengaged"
       && ["missed", "overpivot", "aligned"].includes(concernFlowOutcome)
       && (activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time")
+      && !latestAskBoundDialogue
     ) {
       const needsReanchor = concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot";
       const shouldNudgeConditional =
@@ -4040,7 +4152,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       activeConcern: primaryConcern,
       flags: registerSelection.flags,
     });
-    if (operationalRealismResult.applied) {
+    if (operationalRealismResult.applied && !latestAskBoundDialogue) {
       nextHcpDialogue = operationalRealismResult.dialogue;
     }
     emitPlannerTrace("operational_realism_register", {
@@ -4048,7 +4160,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       preferredRegister: registerSelection.preferredRegister,
       registerScores: registerSelection.registerScores,
       registerFlags: registerSelection.flags,
-      rewriteApplied: operationalRealismResult.applied,
+      rewriteApplied: operationalRealismResult.applied && !latestAskBoundDialogue,
       rewriteReasons: operationalRealismResult.reasons,
       activeConcern: primaryConcern,
     });
@@ -4602,7 +4714,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         activeConcern,
       })
       : { needsRepair: false };
-    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged")
+    const rewriteAuthority = (!overrideExit && nextHcpState !== "disengaged" && !latestAskBoundDialogue)
       ? (repetitiveCandidate ? "anti_repeat" : continuity.needsRepair ? "continuity_repair" : "none")
       : "none";
 
