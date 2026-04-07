@@ -220,16 +220,10 @@ function refineDialogueRealism({
     const text = base.toLowerCase();
     if (!text) return false;
     const hasPressureShape = /\?/.test(text)
-      || /\b(i need|i still need|help me understand|can you|could you|what|how|start with|keep this tied|give me|show me|focus on)\b/.test(text);
+      || /\b(i need|i still need|i can keep going|help me understand|can you|could you|what|how|start with|keep this tied|keep this to|let'?s keep|make this about|give me|show me|focus on)\b/.test(text);
     if (!hasPressureShape) return false;
-    const concernPattern = /evidence|data/.test(concern)
-      ? /\b(evidence|data|trial|endpoint|proof|clinical)\b/
-      : /screen|selection|candidate/.test(concern)
-        ? /\b(patient|patients|screen|screening|selection|candidate|criteria)\b/
-        : /access|prior|auth|coverage/.test(concern)
-          ? /\b(access|prior|auth|coverage|payer|turnaround|friction)\b/
-          : /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible)\b/;
-    return concernPattern.test(text);
+    const pressureContent = /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible|access|prior|auth|coverage|payer|turnaround|friction|evidence|data|trial|endpoint|proof|clinical|patient|patients|screen|screening|selection|candidate|criteria)\b/;
+    return pressureContent.test(text);
   })();
   const revised = isOpeningTurn
     ? base

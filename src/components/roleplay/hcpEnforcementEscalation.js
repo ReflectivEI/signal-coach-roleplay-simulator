@@ -33,7 +33,8 @@ function deterministicVariant(seed = '', options = []) {
   if (!Array.isArray(options) || options.length === 0) return '';
   const canonicalTemplate = String(options[0] || '');
   if (options.length === 1) return canonicalTemplate;
-  const index = stableHash(seed) % options.length;
+  const turnOffset = seed && typeof seed === 'object' ? Math.max(0, Number(seed.turnNumber || 0)) : 0;
+  const index = (stableHash(seed) + turnOffset) % options.length;
   return String(options[index] || canonicalTemplate);
 }
 
@@ -349,12 +350,12 @@ function deriveTurnScopedOpeningStage({
 
 const OPENING_DIALOGUE_MAP = Object.freeze({
   time_pressed: Object.freeze({
-    neutral: 'I have a minute—give me the key point that matters for today.',
-    polite_redirect: 'I am short on time—please connect this to one practical step.',
+    neutral: 'I have a minute, so what is the point that matters for today?',
+    polite_redirect: 'I am short on time, so connect this to one practical step.',
     mild_focus: 'Keep it focused: what is the single takeaway for this setting?',
-    light_time_constraint: 'Briefly, what should I prioritize first in clinic?',
+    light_time_constraint: 'I have a short window, so what should I prioritize first?',
     curious: 'Quickly, what did you want to highlight first?',
-    skeptical_low_intensity: 'I only have a moment—what is the strongest point?',
+    skeptical_low_intensity: 'I only have a moment, so what is the strongest point?',
   }),
   engaged: Object.freeze({
     neutral: 'Sure—what did you want to discuss first?',
@@ -373,8 +374,8 @@ const OPENING_DIALOGUE_MAP = Object.freeze({
     skeptical_low_intensity: 'I need one concrete reason to keep going.',
   }),
   operational: Object.freeze({
-    neutral: 'What is one workflow step my team can use this week?',
-    polite_redirect: 'Keep this practical—what is the next operational move?',
+    neutral: 'What is one workflow step my team could actually use this week?',
+    polite_redirect: 'Keep this practical: what is the next operational move?',
     mild_focus: 'Focus on implementation: what changes tomorrow?',
     light_time_constraint: 'In one minute, what is the practical priority?',
     curious: 'How would this fit into current clinic flow?',
@@ -389,8 +390,8 @@ const OPENING_DIALOGUE_MAP = Object.freeze({
     skeptical_low_intensity: 'What makes the evidence here more convincing?',
   }),
   balanced: Object.freeze({
-    neutral: 'Give me one concise point relevant to this scenario.',
-    polite_redirect: 'Let us keep this tied to the current context.',
+    neutral: 'What is the specific point you want me to respond to?',
+    polite_redirect: 'Let’s keep this tied to the current context.',
     mild_focus: 'Please focus on the main takeaway first.',
     light_time_constraint: 'Briefly, what should I prioritize?',
     curious: 'What do you think is most relevant right now?',
@@ -399,24 +400,24 @@ const OPENING_DIALOGUE_MAP = Object.freeze({
 });
 const OPENING_VARIANT_SUFFIXES = Object.freeze({
   neutral: Object.freeze([
-    'Keep it relevant to this scenario.',
-    'Stay close to my immediate context.',
-    'Make it practical for today.',
+    '',
+    'Keep it practical for today.',
+    'Tie it to what is happening in clinic.',
   ]),
   polite_redirect: Object.freeze([
+    '',
     'Start with what is actionable now.',
     'Anchor it to the immediate decision.',
-    'Keep it tied to today’s constraints.',
   ]),
   mild_focus: Object.freeze([
+    '',
     'Then we can expand if needed.',
     'We can go deeper after the core point.',
-    'Let’s start narrow and build from there.',
   ]),
   light_time_constraint: Object.freeze([
+    '',
     'My next patient is waiting.',
     'I only have a short window.',
-    'Please keep this concise.',
   ]),
   curious: Object.freeze([
     'I can explore details after that.',
@@ -463,13 +464,14 @@ function selectScenarioBoundOpeningDialogue({
   hcpState = '',
   scenarioOpeningState = '',
   scenarioId = '',
+  turnNumber = 0,
 } = {}) {
   const personaClass = deriveOpeningPersonaClass({ profile, hcpState, activeConcern });
   const dialogueState = deriveOpeningDialogueState({ hcpState, scenarioOpeningState, activeConcern });
   const personaMap = OPENING_DIALOGUE_MAP[personaClass] || OPENING_DIALOGUE_MAP.balanced;
   const baseLine = personaMap[dialogueState] || personaMap.neutral || OPENING_DIALOGUE_MAP.balanced.neutral;
   const suffixPool = OPENING_VARIANT_SUFFIXES[dialogueState] || OPENING_VARIANT_SUFFIXES.neutral;
-  const suffix = suffixPool[deterministicIndex(`${scenarioId}:${personaClass}:${dialogueState}:${activeConcern}`, suffixPool.length)];
+  const suffix = suffixPool[deterministicIndex(`${scenarioId}:${turnNumber}:${personaClass}:${dialogueState}:${activeConcern}`, suffixPool.length)];
   return `${baseLine} ${suffix}`.trim();
 }
 
@@ -667,22 +669,22 @@ const STAGE_DIRECTIVE_TEMPLATE_MAP = Object.freeze({
     ],
     operational: [
       'I can keep going if you make this about one practical workflow step.',
-      'Let us keep this to one workflow step I could actually use.',
+      "Let's keep this to one workflow step I could actually use.",
       'Give me one practical workflow step, and we can continue.',
     ],
     analytical: [
       'I can keep going if you anchor this to one evidence point.',
-      'Let us keep this to one evidence point I can evaluate.',
+      "Let's keep this to one evidence point I can evaluate.",
       'Give me one relevant evidence point, and we can continue.',
     ],
     patient_selection: [
       'I can keep going if you name the patient type you mean.',
-      'Let us keep this to one patient-selection point I can use.',
+      "Let's keep this to one patient-selection point I can use.",
       'Give me one clear patient-selection point, and we can continue.',
     ],
     balanced: [
       'I can keep going if you make this more specific.',
-      'Let us keep this to one specific point I can respond to.',
+      "Let's keep this to one specific point I can respond to.",
       'Give me one specific point, and we can continue.',
     ],
   },
@@ -751,19 +753,11 @@ function hasConcernBoundPressureMove(dialogueText = '', activeConcern = '') {
   if (!text.trim()) return false;
 
   const hasPressureShape = /\?/.test(text)
-    || /\b(i need|i still need|help me understand|can you|could you|what|how|start with|keep this tied|give me|show me|focus on)\b/.test(text);
+    || /\b(i need|i still need|i can keep going|help me understand|can you|could you|what|how|start with|keep this tied|keep this to|let'?s keep|make this about|give me|show me|focus on)\b/.test(text);
   if (!hasPressureShape) return false;
 
-  const concern = String(activeConcern || '').toLowerCase();
-  const concernPattern = /evidence|data/.test(concern)
-    ? /\b(evidence|data|trial|endpoint|proof|clinical)\b/
-    : /screen|selection|candidate/.test(concern)
-      ? /\b(patient|patients|screen|screening|selection|candidate|criteria)\b/
-      : /access|prior|auth|coverage/.test(concern)
-        ? /\b(access|prior|auth|coverage|payer|turnaround|friction)\b/
-        : /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible)\b/;
-
-  return concernPattern.test(text);
+  const pressureContent = /\b(workflow|operational|practical|team|clinic|staff|step|implement|implementation|burden|feasible|access|prior|auth|coverage|payer|turnaround|friction|evidence|data|trial|endpoint|proof|clinical|patient|patients|screen|screening|selection|candidate|criteria)\b/;
+  return pressureContent.test(text);
 }
 
 export function applyEscalationPresentation({
@@ -779,21 +773,18 @@ export function applyEscalationPresentation({
   scenarioId = '',
 } = {}) {
   const stageRules = STAGE_DIRECTIVE_TEMPLATE_MAP[escalationStage] || STAGE_DIRECTIVE_TEMPLATE_MAP.open;
-  const normalizedDialogue = String(dialogueText || '').trim() || (
-    Number(turnNumber) === 1
+  const providedDialogue = String(dialogueText || '').trim();
+  const normalizedDialogue = providedDialogue || (
+    Number(turnNumber) === 1 || escalationStage === 'open'
       ? selectScenarioBoundOpeningDialogue({
         profile,
         activeConcern,
         hcpState: hcpState || profile?.drivers?.hcpState || '',
         scenarioOpeningState,
         scenarioId,
+        turnNumber,
       })
-      : selectScenarioBoundOpeningDialogue({
-        profile,
-        activeConcern,
-        hcpState: hcpState || profile?.drivers?.hcpState || '',
-        scenarioId,
-      })
+      : ''
   );
   if (escalationStage === 'open') return { cueText, dialogueText: normalizedDialogue };
   if (Number(turnNumber) === 1) {
@@ -806,6 +797,7 @@ export function applyEscalationPresentation({
     orientation,
     activeConcern: normalizeText(activeConcern),
     scenarioDomain: normalizeText(domainAssessment?.scenarioDomain),
+    turnNumber: Number(turnNumber) || 0,
   };
   const cueSuffix = deterministicVariant({ ...styleSeed, channel: 'cue' }, stageRules.cue);
   const dialoguePrefix = deterministicVariant({ ...styleSeed, channel: 'dialogue' }, stageRules[orientation] || stageRules.balanced);
