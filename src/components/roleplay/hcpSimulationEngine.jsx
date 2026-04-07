@@ -610,12 +610,32 @@ INITIAL STATE
 ******************************************************************************************/
 
 export function deriveInitialState(scenario) {
+  const explicitStartingState = String(
+    scenario?.hcpStateModel?.startingState
+      || scenario?.sceneSetup?.openingState
+      || scenario?.runtimeBehaviorTags?.startingState
+      || scenario?.openingState
+      || ''
+  ).trim().toLowerCase()
+  if (explicitStartingState) return explicitStartingState
+
   const text = [
     scenario.title || '',
     scenario.description || '',
     scenario.details || '',
     scenario.hcp_category || '',
     scenario.influence_driver || '',
+    scenario.hcpMood || '',
+    scenario.openingScene || '',
+    scenario.opening_scene || '',
+    scenario.context || '',
+    scenario?.sceneSetup?.timePressure || '',
+    scenario?.sceneSetup?.currentClinicalOperationalContext || '',
+    scenario?.hcpProfile?.baselineCommunicationStyle || '',
+    scenario?.hcpProfile?.baselineOpennessResistance || '',
+    scenario?.runtimeBehaviorTags?.timePressure || '',
+    scenario?.runtimeBehaviorTags?.engagementLevel || '',
+    ...(Array.isArray(scenario.challenges) ? scenario.challenges : []),
   ]
     .join(' ')
     .toLowerCase()
@@ -1985,6 +2005,23 @@ export function buildHCPDialoguePrompt({
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
+
+  if (scenario?.runtimeBehaviorTags) {
+    const tags = scenario.runtimeBehaviorTags
+    prompt += '\nRUNTIME BEHAVIOR TAGS:'
+    prompt += '\n- engagementLevel: ' + sanitize(tags.engagementLevel || 'neutral')
+    prompt += '\n- timePressure: ' + sanitize(tags.timePressure || 'medium')
+    prompt += '\n- communicationPace: ' + sanitize(tags.communicationPace || 'balanced')
+    prompt += '\n- dialogueLength: ' + sanitize(tags.dialogueLength || 'concise')
+    prompt += '\n- tonePressure: ' + sanitize(tags.tonePressure || 'moderate')
+    prompt += '\n- orientation: ' + sanitize(tags.orientation || 'balanced')
+  }
+
+  if (scenario?.sceneSetup) {
+    prompt += '\nCANONICAL SCENE SETUP:'
+    prompt += '\n- timePressure: ' + sanitize(scenario.sceneSetup.timePressure || 'medium')
+    prompt += '\n- currentClinicalOperationalContext: ' + sanitize(scenario.sceneSetup.currentClinicalOperationalContext || scenario.sceneSetup.currentContext || '')
+  }
 
   if (hasScenarioOwnedOpeningAuthority) {
     prompt += '\nROLEPLAY_OPENING_TURN_AUTHORITY: scenario_owned'

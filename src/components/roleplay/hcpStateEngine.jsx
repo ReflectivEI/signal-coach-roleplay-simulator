@@ -21,12 +21,32 @@ export const STATE_INDEX = Object.fromEntries(HCP_STATES.map((s, i) => [s, i]));
  * Derive initial HCP state from scenario metadata tags (title, description, hcp_category, difficulty).
  */
 export function deriveInitialState(scenario) {
+  const explicitStartingState = String(
+    scenario?.hcpStateModel?.startingState
+      || scenario?.sceneSetup?.openingState
+      || scenario?.runtimeBehaviorTags?.startingState
+      || scenario?.openingState
+      || ''
+  ).trim().toLowerCase();
+  if (explicitStartingState) return explicitStartingState;
+
   const text = [
     scenario.title || '',
     scenario.description || '',
     scenario.details || '',
     scenario.hcp_category || '',
     scenario.influence_driver || '',
+    scenario.hcpMood || '',
+    scenario.openingScene || '',
+    scenario.opening_scene || '',
+    scenario.context || '',
+    scenario?.sceneSetup?.timePressure || '',
+    scenario?.sceneSetup?.currentClinicalOperationalContext || '',
+    scenario?.hcpProfile?.baselineCommunicationStyle || '',
+    scenario?.hcpProfile?.baselineOpennessResistance || '',
+    scenario?.runtimeBehaviorTags?.timePressure || '',
+    scenario?.runtimeBehaviorTags?.engagementLevel || '',
+    ...(Array.isArray(scenario.challenges) ? scenario.challenges : []),
   ].join(' ').toLowerCase();
 
   if (/frustrat|overwhelm|busy|rush|no time|tight|slammed|hectic|pressed/.test(text)) {

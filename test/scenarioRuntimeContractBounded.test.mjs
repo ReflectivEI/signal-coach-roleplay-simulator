@@ -77,3 +77,45 @@ test("feedback evidence rule enforcement removes prohibited inference language",
   assert.ok(!/hcp felt/i.test(cleaned));
   assert.ok(!/you are pushy/i.test(cleaned));
 });
+
+test("runtime behavior tags calibrate legacy scenarios into explicit tone/state inputs", () => {
+  const contract = normalizeScenarioRuntimeContract({
+    id: "legacy_time_pressed_workflow",
+    title: "Workflow-constrained access visit",
+    specialty: "Infectious Diseases",
+    hcpMood: "frustrated, overwhelmed",
+    context: "Short-staffed clinic with heavy prior-auth paperwork and workflow friction.",
+    openingScene: "Sarah is reviewing prior-auth paperwork between patient visits. 'Hi. We're tight on staff today. What did you want to focus on?'",
+    challenges: ["Limited staffing resources", "Prior-auth processing burden"],
+  });
+
+  assert.equal(contract.runtimeBehaviorTags.timePressure, "high");
+  assert.equal(contract.runtimeBehaviorTags.engagementLevel, "guarded");
+  assert.equal(contract.runtimeBehaviorTags.orientation, "operational");
+  assert.equal(contract.runtimeBehaviorTags.communicationPace, "curt");
+  assert.equal(contract.sceneSetup.timePressure, "high");
+  assert.equal(contract.hcpStateModel.startingState, "time-pressured");
+  assert.match(contract.hcpProfile.baselineCommunicationStyle, /frustrated|overwhelmed/i);
+});
+
+test("canonical behavior tags override legacy prose when provided explicitly", () => {
+  const contract = normalizeScenarioRuntimeContract({
+    title: "Engaged evidence review",
+    context: "The clinic is busy and operationally blocked.",
+    hcpMood: "frustrated, overwhelmed",
+    hcpProfile: {
+      baselineCommunicationStyle: "collaborative analytical",
+      baselineOpennessResistance: "engaged",
+    },
+    sceneSetup: {
+      timePressure: "low",
+      currentClinicalOperationalContext: "evidence review",
+    },
+    hcpStateModel: { startingState: "engaged" },
+  });
+
+  assert.equal(contract.runtimeBehaviorTags.timePressure, "low");
+  assert.equal(contract.runtimeBehaviorTags.engagementLevel, "engaged");
+  assert.equal(contract.hcpStateModel.startingState, "engaged");
+  assert.equal(contract.sceneSetup.timePressure, "low");
+});

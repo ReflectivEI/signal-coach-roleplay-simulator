@@ -112,6 +112,33 @@ import {
   enforceDomainReanchorInDialogue,
 } from "./scenarioDomainIntegrity";
 
+function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
+  return {
+    ...scenario,
+    hcpProfile: runtimeContract?.hcpProfile || scenario?.hcpProfile,
+    sceneSetup: runtimeContract?.sceneSetup || scenario?.sceneSetup,
+    hcpStateModel: runtimeContract?.hcpStateModel || scenario?.hcpStateModel,
+    enforcementCriteria:
+      runtimeContract?.sceneSetup?.enforcementCriteria
+      || scenario?.enforcementCriteria,
+    metricApplicabilityMap:
+      runtimeContract?.metricApplicabilityMap
+      || scenario?.metricApplicabilityMap,
+    runtimeBehaviorTags:
+      runtimeContract?.runtimeBehaviorTags
+      || scenario?.runtimeBehaviorTags,
+  };
+}
+
+function resolveScenarioOpeningState(scenario = {}, runtimeContract = {}) {
+  return runtimeContract?.hcpStateModel?.startingState
+    || runtimeContract?.runtimeBehaviorTags?.startingState
+    || scenario?.hcpStateModel?.startingState
+    || scenario?.openingState
+    || scenario?.sceneSetup?.openingState
+    || null;
+}
+
 function escapeHTML(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -2537,7 +2564,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const init = async () => {
       setIsLoading(true);
       try {
-        const initialState = deriveInitialState(scenario);
+        const runtimeScenario = buildRuntimeScenarioView(scenario, runtimeScenarioContractRef.current);
+        const initialState = resolveScenarioOpeningState(scenario, runtimeScenarioContractRef.current)
+          || deriveInitialState(runtimeScenario);
         const initialTemp = deriveInitialTemperature(initialState);
         simStateRef.current = { temperature: initialTemp, severity: 0 };
         repInferenceStateRef.current = createInitialRepInferenceState();
@@ -3560,7 +3589,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       } else {
         const systemPrompt = buildHCPDialoguePrompt({
           scenario: {
-            ...scenario,
+            ...buildRuntimeScenarioView(scenario, runtimeScenarioContractRef.current),
             visibleScenarioContext: visibleScenarioGroundingText,
             hiddenAuthoringContext: hiddenAuthoringContextText,
           },
@@ -3901,8 +3930,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
+    const runtimeScenarioView = buildRuntimeScenarioView(scenario, runtimeScenarioContractRef.current);
     const registerSelection = determinePreferredHcpDialogueRegister({
-      scenario,
+      scenario: runtimeScenarioView,
       runtimeState: {
         activeHcpState: nextHcpState,
         startingState: runtimeScenarioContractRef.current?.hcpStateModel?.startingState,
@@ -4792,7 +4822,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       ),
     ];
     const hcpReactionContract = buildHcpReactionContract({
-      scenario,
+      scenario: runtimeScenarioView,
       turnNumber: nextTurnNumber,
       hcpState: nextHcpState,
       cueText: contextualCue,

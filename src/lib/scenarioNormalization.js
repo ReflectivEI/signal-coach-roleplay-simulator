@@ -215,6 +215,89 @@ function normalizeCueSet(value) {
     .filter(Boolean);
 }
 
+function normalizeCalibrationToken(value = "") {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function deriveRuntimeBehaviorTags({ scenario = {}, canonicalHcpProfile = {}, canonicalSceneSetup = {}, canonicalStateModel = {} } = {}) {
+  const sourceText = [
+    scenario?.title,
+    scenario?.description,
+    scenario?.context,
+    scenario?.openingScene,
+    scenario?.opening_scene,
+    scenario?.hcpMood,
+    scenario?.hcp_category,
+    scenario?.influence_driver,
+    scenario?.difficulty,
+    ...(Array.isArray(scenario?.challenges) ? scenario.challenges : []),
+    canonicalHcpProfile?.baselineCommunicationStyle,
+    canonicalHcpProfile?.baselineOpennessResistance,
+    canonicalHcpProfile?.careSetting,
+    canonicalSceneSetup?.timePressure,
+    canonicalSceneSetup?.currentClinicalOperationalContext,
+    canonicalSceneSetup?.openingEnvironment,
+    canonicalStateModel?.startingState,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  const explicitTimePressure = normalizeCalibrationToken(canonicalSceneSetup?.timePressure || scenario?.timePressure);
+  const timePressure = explicitTimePressure
+    || (/\b(no time|tight on time|few minutes|between patients|full agenda|time-pressed|time pressured|rushed|busy|slammed|hectic|running behind|short-staffed|staffing|overwhelmed)\b/.test(sourceText)
+      ? "high"
+      : /\b(practical|workflow|implementation|clinic schedule|agenda|committee|between visits)\b/.test(sourceText)
+        ? "medium"
+        : "low");
+
+  const explicitOpenness = normalizeCalibrationToken(
+    canonicalHcpProfile?.baselineOpennessResistance || canonicalHcpProfile?.baselineState || scenario?.baselineOpennessResistance
+  );
+  const engagementLevel = explicitOpenness
+    || (/\b(resistant|skeptical|skeptic|unconvinced|pushback|doubt|frustrated|overwhelmed|blocked|burden)\b/.test(sourceText)
+      ? "guarded"
+      : /\b(eager|curious|open|receptive|collaborative|glad|happy to talk|interested)\b/.test(sourceText)
+        ? "engaged"
+        : "neutral");
+
+  const orientation = /\b(screen|screening|candidate|candidacy|eligib|patient selection|triage)\b/.test(sourceText)
+    ? "patient_selection"
+    : /\b(evidence|data|trial|endpoint|committee|formulary|pathway|analytical|cost-conscious|kol)\b/.test(sourceText)
+      ? "analytical"
+      : /\b(workflow|operational|implementation|staff|staffing|prior auth|access|paperwork|burden|throughput|monitoring|follow-up|refill)\b/.test(sourceText)
+        ? "operational"
+        : "balanced";
+
+  const startingState = normalizeCalibrationToken(canonicalStateModel?.startingState || scenario?.startingState || scenario?.openingState)
+    || (timePressure === "high"
+      ? "time-pressured"
+      : /\b(resistant|skeptical|skeptic|unconvinced|pushback|doubt)\b/.test(sourceText)
+        ? "resistant"
+        : engagementLevel === "engaged" || /\b(eager|curious|open|receptive|collaborative)\b/.test(sourceText)
+          ? "engaged"
+          : "neutral");
+
+  const communicationPace = timePressure === "high"
+    ? "curt"
+    : timePressure === "medium" || orientation === "operational"
+      ? "concise"
+      : engagementLevel === "engaged"
+        ? "conversational"
+        : "balanced";
+
+  const dialogueLength = communicationPace === "curt" ? "short" : communicationPace === "conversational" ? "medium" : "concise";
+  const tonePressure = timePressure === "high" || engagementLevel === "guarded" ? "elevated" : engagementLevel === "engaged" ? "low" : "moderate";
+
+  return {
+    engagementLevel,
+    timePressure,
+    startingState,
+    communicationPace,
+    dialogueLength,
+    tonePressure,
+    orientation,
+    calibrationSource: "canonical_or_legacy_scenario_fields",
+  };
+}
+
 function normalizeMetricApplicability(raw = {}) {
   const source = raw && typeof raw === "object" ? raw : {};
   return DEFAULT_ALLOWED_METRICS.reduce((acc, metric) => {
@@ -270,6 +353,13 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
     rubricNotes: normalizeString(canonicalTrainingIntent?.rubricNotes),
   };
 
+  const runtimeBehaviorTags = deriveRuntimeBehaviorTags({
+    scenario,
+    canonicalHcpProfile,
+    canonicalSceneSetup,
+    canonicalStateModel,
+  });
+
   const hcpProfile = {
     name: normalizeString(canonicalHcpProfile?.name || scenario?.hcpName),
     role: normalizeString(canonicalHcpProfile?.role || scenario?.stakeholder, "HCP"),
@@ -279,17 +369,31 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
       "clinical setting"
     ),
     baselineCommunicationStyle: normalizeString(
-      canonicalHcpProfile?.baselineCommunicationStyle || canonicalHcpProfile?.communicationStyle || scenario?.hcpMood
+      canonicalHcpProfile?.baselineCommunicationStyle
+        || canonicalHcpProfile?.communicationStyle
+        || scenario?.hcpMood
+        || `${runtimeBehaviorTags.communicationPace} ${runtimeBehaviorTags.orientation}`
     ),
     baselineOpennessResistance: normalizeString(
-      canonicalHcpProfile?.baselineOpennessResistance || canonicalHcpProfile?.baselineState || scenario?.baselineOpennessResistance
+      canonicalHcpProfile?.baselineOpennessResistance
+        || canonicalHcpProfile?.baselineState
+        || scenario?.baselineOpennessResistance
+        || runtimeBehaviorTags.engagementLevel
     ),
     knownConstraints: normalizeList(canonicalHcpProfile?.knownConstraints || scenario?.knownConstraints || scenario?.challenges),
   };
 
+  const explicitOpeningCueSet = normalizeCueSet(canonicalSceneSetup?.openingCueSet || scenario?.openingCueSet);
+  const inferredOpeningCue = normalizeString(
+    canonicalSceneSetup?.openingEnvironment
+      || scenario?.openingEnvironment
+      || scenario?.opening_scene
+      || scenario?.openingScene
+  );
+
   const sceneSetup = {
     openingEnvironment: normalizeString(canonicalSceneSetup?.openingEnvironment || scenario?.openingEnvironment),
-    timePressure: normalizeString(canonicalSceneSetup?.timePressure || scenario?.timePressure),
+    timePressure: normalizeString(canonicalSceneSetup?.timePressure || scenario?.timePressure || runtimeBehaviorTags.timePressure),
     currentClinicalOperationalContext: normalizeString(
       canonicalSceneSetup?.currentClinicalOperationalContext || canonicalSceneSetup?.currentContext || scenario?.context || scenario?.description
     ),
@@ -302,13 +406,21 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
     whatRepKnowsAtStart: normalizeList(canonicalSceneSetup?.whatRepKnowsAtStart || scenario?.whatRepKnowsAtStart),
     whatRepDoesNotKnowAtStart: normalizeList(canonicalSceneSetup?.whatRepDoesNotKnowAtStart || scenario?.whatRepDoesNotKnowAtStart),
     openingLine: normalizeString(canonicalSceneSetup?.openingLine || scenario?.opening_scene || scenario?.openingScene),
-    openingCueSet: normalizeCueSet(canonicalSceneSetup?.openingCueSet || scenario?.openingCueSet),
+    openingCueSet: explicitOpeningCueSet.length > 0
+      ? explicitOpeningCueSet
+      : inferredOpeningCue
+        ? [inferredOpeningCue]
+        : [],
     enforcementCriteria: canonicalSceneSetup?.enforcementCriteria || scenario?.enforcementCriteria || {},
   };
 
   const hcpStateModel = {
     startingState: normalizeString(
-      canonicalStateModel?.startingState || canonicalSceneSetup?.openingState || scenario?.startingState || scenario?.openingState,
+      canonicalStateModel?.startingState
+        || canonicalSceneSetup?.openingState
+        || scenario?.startingState
+        || scenario?.openingState
+        || runtimeBehaviorTags.startingState,
       "neutral"
     ),
     allowedTransitions: canonicalStateModel?.allowedTransitions && typeof canonicalStateModel.allowedTransitions === "object"
@@ -402,6 +514,7 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
     dialogueResponseRules,
     metricEvidenceMap,
     metricApplicabilityMap,
+    runtimeBehaviorTags,
     feedbackContract,
     contractProvenance,
     contractCompleteness,

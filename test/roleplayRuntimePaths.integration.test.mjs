@@ -85,6 +85,18 @@ test("deriveInitialState/deriveInitialTemperature remain stable for same scenari
   assert.equal(tempA, tempB);
 });
 
+test("deriveInitialState honors explicit runtime behavior tags before prose inference", () => {
+  const state = deriveInitialState({
+    title: "Busy clinic with staffing pressure",
+    description: "The scenario prose mentions time pressure and prior-auth backlog.",
+    runtimeBehaviorTags: { startingState: "engaged", timePressure: "low", engagementLevel: "engaged" },
+    hcpStateModel: { startingState: "engaged" },
+  });
+
+  assert.equal(state, "engaged");
+  assert.equal(deriveInitialTemperature(state), "positive");
+});
+
 test("direct HCP metric/threshold question is penalized when rep answer is non-specific", () => {
   const vagueAnswer = computeAlignment(
     "time-pressured",
