@@ -76,11 +76,35 @@ test('conversation intelligence marks concrete workflow answer as progress', () 
 
   assert.equal(validation.valid, true);
   assert.equal(intelligence.turnInterpretation.progression, 'progress');
+  assert.equal(intelligence.turnInterpretation.concernFamily, 'workflow');
   assert.equal(intelligence.adaptationSignals.addressed_active_ask, true);
   assert.equal(intelligence.adaptationSignals.answered_concretely, true);
   assert.equal(intelligence.communicationQualities.practicality, 'high');
   assert.equal(intelligence.capabilityMapping.capabilitySignals.conversation_management, 'strength');
   assert.equal(intelligence.coachingPriority.shouldShow, false);
+});
+
+test('conversation intelligence does not let an evidence opening contract override a live workflow ask', () => {
+  const repMessage = 'Start a nurse-owned checklist this week so stable patients are reviewed before the refill window.';
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const mixedContract = buildRoleplayScenarioExecutionContract(evidenceScenario);
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: mixedContract,
+    latestHcpAsk: 'What is the first practical workflow step here?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 3,
+  });
+
+  assert.equal(mixedContract.activeAsk.concernFamily, 'evidence');
+  assert.equal(validation.latestAskProgression.status, 'workflow_progress');
+  assert.equal(intelligence.turnInterpretation.concernFamily, 'workflow');
+  assert.equal(intelligence.coachingPriority.shouldShow, false);
+  assert.equal(intelligence.capabilityMapping.primaryCapability, 'conversation_management');
 });
 
 test('conversation intelligence identifies evidence setup without decision linkage', () => {
@@ -100,10 +124,38 @@ test('conversation intelligence identifies evidence setup without decision linka
 
   assert.equal(validation.softInvalid, true);
   assert.equal(intelligence.turnInterpretation.progression, 'stalled');
+  assert.equal(intelligence.turnInterpretation.concernFamily, 'evidence');
   assert.equal(intelligence.communicationQualities.evidence_linkage, 'moderate');
   assert.equal(intelligence.adaptationSignals.addressed_active_ask, false);
-  assert.equal(intelligence.coachingPriority.issue, 'interpretation');
-  assert.equal(intelligence.capabilityMapping.primaryCapability, 'signal_interpretation');
+  assert.equal(intelligence.coachingPriority.issue, 'evidence_translation');
+  assert.equal(intelligence.capabilityMapping.primaryCapability, 'value_connection');
+});
+
+test('conversation intelligence prioritizes the current live HCP ask over broader scenario contract family', () => {
+  const repMessage = "Hi, I'd love to follow up on our last conversation regarding your high risk patients and the outcomes data I shared with you last week.";
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'What proof point changes the decision for my stable HIV patients?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const contract = buildRoleplayScenarioExecutionContract({
+    id: 'mixed_contract_family',
+    title: 'Mixed Scenario Family',
+    description: 'A workflow-heavy scenario later narrows to an evidence decision.',
+    openingScene: "Michael asks for one workflow step.",
+    challenges: ['Workflow burden', 'Competing clinical priorities'],
+  });
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: contract,
+    latestHcpAsk: 'What proof point changes the decision for my stable HIV patients?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 2,
+  });
+
+  assert.equal(contract.activeAsk.concernFamily, 'workflow');
+  assert.equal(intelligence.turnInterpretation.concernFamily, 'evidence');
+  assert.equal(intelligence.coachingPriority.capability, 'value_connection');
 });
 
 test('conversation intelligence detects clarifying moves as structured adaptation signals', () => {

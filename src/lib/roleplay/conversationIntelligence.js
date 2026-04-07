@@ -49,15 +49,15 @@ function computeTokenOverlap(a = "", b = "") {
 }
 
 function detectConcernFamily({ activeHcpAskState = null, scenarioExecutionContract = null, validationOutput = {}, latestHcpAsk = "" } = {}) {
-  const explicitFamily = activeHcpAskState?.concernFamily
-    || scenarioExecutionContract?.activeAsk?.concernFamily
-    || validationOutput?.latestAskProgression?.family;
-  if (explicitFamily && explicitFamily !== "general") return explicitFamily;
   const text = String(latestHcpAsk || "").toLowerCase();
+  const validationFamily = validationOutput?.latestAskProgression?.family;
+  if (validationFamily && validationFamily !== "general") return validationFamily;
   if (/\b(screen|screening|candidacy|candidate|eligib|criteria|resistance|adherence|long[-\s]?acting|injectable)\b/.test(text)) return "screening";
   if (/\b(access|coverage|payer|prior[-\s]?auth|authorization|copay|afford|hub|enrollment|benefits)\b/.test(text)) return "access";
   if (/\b(evidence|data|study|trial|outcome|proof|durability|formulary|p&t|decision)\b/.test(text)) return "evidence";
   if (/\b(workflow|staff|team|step|process|clinic flow|handoff|monitoring|implementation|practical)\b/.test(text)) return "workflow";
+  const explicitFamily = activeHcpAskState?.concernFamily || scenarioExecutionContract?.activeAsk?.concernFamily;
+  if (explicitFamily && explicitFamily !== "general") return explicitFamily;
   return explicitFamily || "general";
 }
 
@@ -149,6 +149,16 @@ function chooseCoachingPriority({ progression, concernFamily, adaptationSignals,
     };
   }
   if (!adaptationSignals.addressed_active_ask) {
+    if (concernFamily === "evidence" && communicationQualities.evidence_linkage !== "high") {
+      return {
+        issue: "evidence_translation",
+        capability: "value_connection",
+        severity: validationOutput?.hardInvalid ? "high" : "medium",
+        reason: "The response mentions evidence but does not connect it to the HCP's decision.",
+        nextAction: "State the proof point and why it changes the decision in this setting.",
+        shouldShow: Boolean(validationOutput?.softInvalid || validationOutput?.hardInvalid),
+      };
+    }
     return {
       issue: "interpretation",
       capability: "signal_interpretation",
@@ -304,7 +314,7 @@ export function deriveConversationIntelligenceState({
   recentTurnHistory = [],
   turnNumber = null,
 } = {}) {
-  const activeAskText = activeHcpAskState?.askText || scenarioExecutionContract?.activeAsk?.askText || latestHcpAsk || "";
+  const activeAskText = latestHcpAsk || activeHcpAskState?.askText || scenarioExecutionContract?.activeAsk?.askText || "";
   const concernFamily = detectConcernFamily({ activeHcpAskState, scenarioExecutionContract, validationOutput, latestHcpAsk: activeAskText || latestHcpAsk });
   const latestStatus = validationOutput?.latestAskProgression?.status || "none";
   const communicationQualities = {
