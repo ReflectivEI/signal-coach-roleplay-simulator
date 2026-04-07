@@ -17,7 +17,7 @@ const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-
 
 function isHighPressureState({ cueCategory = '', interactionMode = '', engagementTier = '', semanticStage = '', terminalBehavior = false } = {}) {
   if (terminalBehavior) return true;
-  return /terminal_exit|hard_escalation|time_constrained|non_adaptive_impatience|closing|disengaging|directive|hard|terminal/i
+  return /terminal_exit|hard_escalation|time_constrained|non_adaptive_impatience|focused_narrowing|closing|disengaging|directive|hard|terminal/i
     .test(`${cueCategory} ${interactionMode} ${engagementTier} ${semanticStage}`);
 }
 
@@ -28,7 +28,7 @@ function compressFormalQuestionToSingleAsk({ text = '', concernFamily = 'general
 
   if (concernFamily === 'workflow' || /workflow|staff|team|clinic flow|practical/i.test(value)) {
     return isTerminal
-      ? "I'm about to move on. If this is practical, what would my team do first?"
+      ? "I'm about to move on, but make it practical. What would my team do first?"
       : 'I can stay with this if we make it concrete. What would my team do first?';
   }
   if (concernFamily === 'access' || /access|coverage|payer|prior auth|copay/i.test(value)) {
@@ -58,6 +58,25 @@ export function enforceTerminalCompression({ text, concernFamily = 'general', cu
     .trim();
 
   value = normalizeHcpSpokenRealism(value);
+  if (concernFamily === 'workflow' || /workflow|staff|team|clinic flow|practical/i.test(value)) {
+    value = value
+      .replace(/^What is the first practical workflow step here\?$/i, 'I can stay with this if we make it concrete. What would my team do first?')
+      .replace(/^Start with one practical workflow step my team could actually use\.?$/i, 'I can stay with this if we make it concrete. What would my team do first?')
+      .replace(/^Keep it to one workflow step we could use here\.?$/i, 'I can stay with this if we make it concrete. What would my team do first?')
+      .replace(/^Tell me the first practical workflow step you would recommend\.?$/i, 'I can stay with this if we make it concrete. What would my team do first?');
+    if (cueCategory === 'terminal_exit') {
+      value = value.replace(/^I can stay with this if we make it concrete\. What would my team do first\?$/i, "I'm about to move on, but make it practical. What would my team do first?");
+    }
+  }
+  if (concernFamily === 'evidence' || /evidence|proof|data|decision|durability|formulary/i.test(value)) {
+    value = value
+      .replace(/^Given the time, what is the one decision-relevant evidence point\?$/i, 'Given the time, what evidence point changes the decision?')
+      .replace(/^How does that change the decision\?$/i, 'Can you tie that to the decision?')
+      .replace(/^Before we move on, can you tie that to durability for my stable patients\?$/i, 'Before we move on, can you tie that to durability for my stable patients?');
+    if (cueCategory === 'terminal_exit') {
+      value = value.replace(/^Given the time, what evidence point changes the decision\?$/i, "I'm about to move on. What evidence point changes the decision?");
+    }
+  }
   const overpacked = detectOverpackedSentence({ text: value });
   if (FORMAL_EXPANSION_PATTERN.test(text) || overpacked.overpacked || overpacked.wordCount > 16) {
     return compressFormalQuestionToSingleAsk({ text: value, concernFamily, cueCategory });

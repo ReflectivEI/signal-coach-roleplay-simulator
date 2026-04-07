@@ -114,7 +114,51 @@ test('terminal compression keeps pressured asks short by concern family', () => 
       concernFamily: 'workflow',
       cueCategory: 'terminal_exit',
     }),
-    "I'm about to move on. If this is practical, what would my team do first?"
+    "I'm about to move on, but make it practical. What would my team do first?"
+  );
+});
+
+test('conversational realism preserves rich framing for generic pressured workflow asks', () => {
+  assert.equal(
+    applyConversationalRealism({
+      text: 'What is the first practical workflow step here?',
+      concernFamily: 'workflow',
+      cueCategory: 'hard_escalation',
+      interactionMode: 'directive',
+    }).text,
+    'I can stay with this if we make it concrete. What would my team do first?'
+  );
+
+  assert.equal(
+    applyConversationalRealism({
+      text: 'Keep it to one workflow step we could use here.',
+      concernFamily: 'workflow',
+      cueCategory: 'terminal_exit',
+      terminalBehavior: true,
+    }).text,
+    "I'm about to move on, but make it practical. What would my team do first?"
+  );
+});
+
+test('conversational realism preserves concise evidence framing under time pressure', () => {
+  assert.equal(
+    applyConversationalRealism({
+      text: 'Given the time, what is the one decision-relevant evidence point?',
+      concernFamily: 'evidence',
+      cueCategory: 'time_constrained',
+      timePressure: true,
+    }).text,
+    'Given the time, what evidence point changes the decision?'
+  );
+
+  assert.equal(
+    applyConversationalRealism({
+      text: 'Given the time, what is the one decision-relevant evidence point?',
+      concernFamily: 'evidence',
+      cueCategory: 'terminal_exit',
+      terminalBehavior: true,
+    }).text,
+    "I'm about to move on. What evidence point changes the decision?"
   );
 });
 
