@@ -124,6 +124,7 @@ import {
 import { detectStructuredScenarioContentLeak, repairStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
 import { buildRoleplayScenarioExecutionContract } from "@/lib/roleplay/scenarioExecutionContract";
+import { selectStateAlignedHcpCue } from "@/lib/roleplay/hcpCueStateAlignment";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -5295,7 +5296,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
     }
 
-    const finalHcpReactionContract = nextHcpDialogue === hcpReactionContract.selectedDialogueText
+    let finalHcpReactionContract = nextHcpDialogue === hcpReactionContract.selectedDialogueText
       ? hcpReactionContract
       : {
           ...hcpReactionContract,
@@ -5303,6 +5304,35 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           finalDialogueRepeatRepair: finalDialogueNeededRepair,
           finalDialogueBeforeRepeatRepair,
         };
+
+    const hcpCueStateAlignment = selectStateAlignedHcpCue({
+      existingCueText: contextualCue,
+      preferStateDerived: true,
+      activeHcpAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || nextHcpDialogue,
+      concernFamily: conversationIntelligenceState?.turnInterpretation?.concernFamily || primaryConcern,
+      escalationStage: finalHcpReactionContract?.enforcementTrace?.escalationStage || nextHcpState,
+      hcpState: nextHcpState,
+      decayTier: decayState.tier,
+      timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier} ${nextHcpDialogue}`)),
+      terminal: Boolean(overrideExit || terminalDecisionMode || (nextHcpState === "disengaged") || (!blockClose && terminalPolicyAction === "close") || isTerminalClosureDialogue(nextHcpDialogue)),
+      conversationIntelligenceState,
+      validationOutput: preTurnValidation,
+      dialogueText: nextHcpDialogue,
+      scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || "scenario",
+      turnNumber: nextTurnNumber,
+    });
+    contextualCue = hardenTextSurface(hcpCueStateAlignment.cueText || contextualCue);
+    finalHcpReactionContract = {
+      ...finalHcpReactionContract,
+      selectedCueText: contextualCue,
+      cueStateAlignment: hcpCueStateAlignment,
+      enforcementTrace: {
+        ...(finalHcpReactionContract?.enforcementTrace || {}),
+        cueStateAlignmentCategory: hcpCueStateAlignment.cueCategory,
+        cueStateAlignmentConcernFamily: hcpCueStateAlignment.concernFamily,
+      },
+    };
+    nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.hcpReactionContract = finalHcpReactionContract;
     nextTurn.surfacedOperationalConstraintTypes = finalSurfacedConstraintTypes;
