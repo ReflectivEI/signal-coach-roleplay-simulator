@@ -214,8 +214,8 @@ function refineDialogueRealism({
   const shouldKeepFriction = concernFlowOutcome === 'missed'
     || concernFlowOutcome === 'overpivot'
     || Number(alignmentScore) <= 2;
-  const base = String(dialogueText || '').trim();
   const isOpeningTurn = Number(turnNumber) === 1;
+  const base = String(dialogueText || '').trim();
   const revised = isOpeningTurn
     ? base
     : shouldKeepFriction && base

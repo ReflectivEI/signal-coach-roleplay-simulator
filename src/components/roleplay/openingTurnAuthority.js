@@ -59,6 +59,8 @@ function buildDialogueFromCanonical(contract = {}, scenario = {}) {
   return normalizeText(
     contract?.sceneSetup?.openingLine
       || scenario?.openingLine
+      || scenario?.opening_line
+      || scenario?.initialHcpLine
       || scenario?.opening_scene
       || scenario?.openingScene
   );

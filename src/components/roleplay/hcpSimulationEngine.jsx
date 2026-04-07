@@ -18,6 +18,7 @@ Core responsibilities
 
 import { scenarios } from './hcpDialogueEngine.jsx'
 import { normalizeDialogueSentenceBoundaries } from '../../lib/roleplay/dialogueGrammar.js'
+import { extractScenarioOwnedOpeningTurn } from './openingTurnAuthority.js'
 
 /******************************************************************************************
 SCENARIO CONTEXT
@@ -1869,6 +1870,12 @@ export function buildHCPDialoguePrompt({
   }
 
   const sanitizedHistoryText = sanitizeLiveHistoryText(historyText)
+  const scenarioOwnedOpeningTurn = isOpening ? extractScenarioOwnedOpeningTurn(scenario) : null
+  const hasScenarioOwnedOpeningAuthority = Boolean(
+    isOpening
+      && !sanitizedHistoryText
+      && String(scenarioOwnedOpeningTurn?.dialogueText || '').trim()
+  )
   const historyLines = String(sanitizedHistoryText || '').split('\n')
   const repHistoryMessages = historyLines
     .filter((l) => l.startsWith('Sales Rep:') || l.startsWith('Rep:'))
@@ -1976,6 +1983,13 @@ export function buildHCPDialoguePrompt({
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
+
+  if (hasScenarioOwnedOpeningAuthority) {
+    prompt += '\nROLEPLAY_OPENING_TURN_AUTHORITY: scenario_owned'
+    prompt += '\nROLEPLAY_OPENING_CUE: ' + sanitize(scenarioOwnedOpeningTurn.cueText || '')
+    prompt += '\nROLEPLAY_OPENING_DIALOGUE_EXACT: ' + sanitize(scenarioOwnedOpeningTurn.dialogueText || '')
+    prompt += '\nROLEPLAY_OPENING_SOURCE: ' + sanitize(scenarioOwnedOpeningTurn.source || 'scenario_opening_scene')
+  }
 
   if (isOpening) {
     prompt += '\nOPENING RULE: Use natural, conversational grammar. Avoid awkward phrasing.'
@@ -2090,8 +2104,9 @@ export function buildHCPDialoguePrompt({
     prompt +=
       '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue. Keep wording natural and avoid templated repetition.'
   } else {
-    prompt +=
-      '\n\nThe sales rep has just entered. This is your opening line. React naturally to the rep’s arrival and your current state. Do not ask the rep a question in the opening unless it is completely natural and brief.'
+    prompt += hasScenarioOwnedOpeningAuthority
+      ? '\n\nOPENING TURN CONTRACT: This is the first HCP turn. The scenario-owned opening beat is authoritative. Output exactly the ROLEPLAY_OPENING_DIALOGUE_EXACT line and nothing else.'
+      : '\n\nThe sales rep has just entered. This is your opening line. React naturally to the rep’s arrival and your current state. Do not ask the rep a question in the opening unless it is completely natural and brief.'
   }
 
   return prompt
@@ -2122,6 +2137,7 @@ export function buildTurnSimulationBundle({
     prevProfile,
     alignment,
   })
+  const scenarioOwnedOpeningTurn = isOpening ? extractScenarioOwnedOpeningTurn(scenario) : null
 
   const prompt = buildHCPDialoguePrompt({
     scenario,
@@ -2133,7 +2149,10 @@ export function buildTurnSimulationBundle({
   return {
     profile,
     prompt,
-    cue: profile.lockedCue,
+    cue: scenarioOwnedOpeningTurn?.cueText || profile.lockedCue,
+    openingDialogue: scenarioOwnedOpeningTurn?.dialogueText || '',
+    openingTurnAuthority: Boolean(isOpening && scenarioOwnedOpeningTurn?.dialogueText),
+    openingTurnSource: scenarioOwnedOpeningTurn?.source || null,
     state: profile.structuralState,
     severity: profile.severity,
     temperature: profile.temperature,

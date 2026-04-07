@@ -97,6 +97,27 @@ function getCookieValue(request, cookieName) {
     return cookies[cookieName] || null;
 }
 
+function extractRoleplayOpeningAuthority(prompt = "") {
+    const source = String(prompt || "");
+    if (!source.includes("ROLEPLAY_OPENING_TURN_AUTHORITY: scenario_owned")) return null;
+
+    const readMarkerLine = (label) => {
+        const prefix = `${label}:`;
+        const lines = source.replaceAll(String.fromCharCode(13), "").split(String.fromCharCode(10));
+        const line = lines.find((item) => String(item || "").trim().startsWith(prefix));
+        return line ? line.slice(line.indexOf(prefix) + prefix.length).trim() : "";
+    };
+
+    const dialogue = readMarkerLine("ROLEPLAY_OPENING_DIALOGUE_EXACT");
+    if (!dialogue) return null;
+
+    return {
+        dialogue,
+        cue: readMarkerLine("ROLEPLAY_OPENING_CUE"),
+        source: readMarkerLine("ROLEPLAY_OPENING_SOURCE") || "scenario_opening_scene",
+    };
+}
+
 // ─── IN-MEMORY SESSION STORE (Development) ──────────────────────────────
 const sessions = new Map();
 const logs = [];
@@ -749,6 +770,17 @@ async function handleLlmInvoke(request, env) {
             JSON.stringify({ error: "Missing prompt field" }),
             { status: 400, headers: { "Content-Type": "application/json" } }
         );
+    }
+
+    const roleplayOpeningAuthority = roleplay ? extractRoleplayOpeningAuthority(prompt) : null;
+    if (roleplayOpeningAuthority?.dialogue) {
+        return Response.json({
+            response: roleplayOpeningAuthority.dialogue,
+            model: "deterministic_opening_turn",
+            usage: { prompt_tokens: 0, completion_tokens: 0 },
+            deterministic: true,
+            roleplayOpeningAuthority,
+        });
     }
 
     const requestedProvider = body?.provider;
