@@ -18,7 +18,11 @@ function computeSimilarity(a = "", b = "") {
 }
 
 function hasConcreteOperationalMove(repMessage = "") {
-  return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|standardi[sz]e|train|training|education|monitoring|call-?tree|one-?pager|pathway|protocol|checklist|template|standing order|change for your team|for your staff)\b/i.test(String(repMessage || ""));
+  const value = String(repMessage || "");
+  const hasOperationalObject = /\b(step|plan|process|handoff|assign|pilot|start with|first action|specific|implement|standardi[sz]e|train|training|education|monitoring|call-?tree|one-?pager|pathway|protocol|checklist|template|standing order|change for your team|for your staff)\b/i.test(value);
+  const hasWorkflowWithAction = /\b(workflow)\b/i.test(value)
+    && /\b(change|step|implement|pilot|start|run|assign|standardize|standardise|add|route|use|checklist|handoff|protocol)\b/i.test(value);
+  return hasOperationalObject || hasWorkflowWithAction;
 }
 
 function hasImplementationMove(repMessage = "") {
