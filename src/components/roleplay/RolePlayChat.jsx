@@ -117,6 +117,10 @@ import {
 } from "./latestAskProgression";
 import { detectOpeningSceneDialogueReplay, extractScenarioOwnedOpeningTurn } from "./openingTurnAuthority";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
+import {
+  buildConversationIntelligenceTelemetryEvent,
+  deriveConversationIntelligenceState,
+} from "@/lib/roleplay/conversationIntelligence";
 import { detectStructuredScenarioContentLeak, repairStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
 import { buildRoleplayScenarioExecutionContract } from "@/lib/roleplay/scenarioExecutionContract";
@@ -737,6 +741,11 @@ function recordTurnValidationTelemetry(validation, context = {}) {
       ...context,
     });
   });
+}
+
+function recordConversationIntelligenceTelemetry(conversationIntelligenceState, context = {}) {
+  const event = buildConversationIntelligenceTelemetryEvent(conversationIntelligenceState, context);
+  recordSimulatorTelemetry(event.eventType, event.payload);
 }
 
 const CUE_BUCKETS = {
@@ -2851,7 +2860,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
     const isFirstRepTurn = respondingToTurn.turnNumber === 0 && !respondingToTurn?.hcpDialogueBefore;
     const openingTurnForValidation = isFirstRepTurn ? extractScenarioOwnedOpeningTurn(scenario) : null;
-    const scenarioExecutionContract = isFirstRepTurn ? buildRoleplayScenarioExecutionContract(scenario) : null;
+    const scenarioExecutionContract = buildRoleplayScenarioExecutionContract(scenario);
     const firstTurnConcernSourceText = [
       openingTurnForValidation?.cueText || "",
       openingTurnForValidation?.dialogueText || "",
@@ -2904,6 +2913,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         }
         : null,
     };
+    const conversationActiveAskState = firstTurnActiveAskState || {
+      source: respondingToTurn?.hcpDialogueBefore ? "explicit_live_hcp_dialogue" : "fallback_concern",
+      askText: respondingToTurn?.hcpDialogueBefore || scenarioExecutionContract?.activeAsk?.askText || "",
+      concernFamily: preTurnValidation?.latestAskProgression?.family || scenarioExecutionContract?.activeAsk?.concernFamily || "general",
+      strength: scenarioExecutionContract?.activeAsk?.strength || null,
+      answerStatus: preTurnValidation?.latestAskProgression?.status || "unanswered",
+      frozen: false,
+    };
+    const conversationIntelligenceState = deriveConversationIntelligenceState({
+      scenarioExecutionContract,
+      activeHcpAskState: conversationActiveAskState,
+      latestHcpAsk: respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || "",
+      repMessage,
+      validationOutput: preTurnValidation,
+      recentTurnHistory: turns.slice(-5),
+      turnNumber: respondingToTurn.turnNumber,
+    });
     if (preTurnValidation.invalid) {
       recordTurnValidationTelemetry(preTurnValidation, {
         entryPoint: "RolePlayChat",
@@ -2911,13 +2937,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
         turnNumber: respondingToTurn.turnNumber,
       });
+      recordConversationIntelligenceTelemetry(conversationIntelligenceState, {
+        entryPoint: "RolePlayChat",
+        sessionId: sid,
+        scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
+        turnNumber: respondingToTurn.turnNumber,
+      });
       setInput(repMessage);
-      setCoachingTip(preTurnValidation.coaching);
+      setCoachingTip(preTurnValidation.coaching || conversationIntelligenceState.coachingMessage);
       setIsLoading(false);
       lastSubmittedTurnKeyRef.current = null;
       emitPlannerTrace("rep_turn_blocked_for_latest_ask", {
         turnNumber: respondingToTurn.turnNumber,
         validation: preTurnValidation,
+        conversationIntelligence: conversationIntelligenceState,
       });
       return;
     }
@@ -2936,8 +2969,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
       turnNumber: respondingToTurn.turnNumber,
     });
+    recordConversationIntelligenceTelemetry(conversationIntelligenceState, {
+      entryPoint: "RolePlayChat",
+      sessionId: sid,
+      scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || null,
+      turnNumber: respondingToTurn.turnNumber,
+    });
     if (preTurnValidation.coaching?.shouldShow) {
       setCoachingTip(preTurnValidation.coaching);
+    } else if (conversationIntelligenceState.coachingMessage?.shouldShow && preTurnValidation.softInvalid) {
+      setCoachingTip(conversationIntelligenceState.coachingMessage);
     }
     const prevState = respondingToTurn.hcpStateBefore;
     const prevTemp = respondingToTurn.temperatureBefore || simStateRef.current.temperature;
@@ -3468,6 +3509,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       engagementPressureScore: decayState.pressureScore,
       lateTurnConstraintBoundaryLevel: lateTurnConstraintDecision.nextBoundaryLevel,
       lateTurnConstraintRestatedCount: lateTurnConstraintDecision.nextRequirementRestatedCount,
+      conversationIntelligence: conversationIntelligenceState,
       generationKey,
     };
     emitPlannerTrace("constraints_written_to_state", {
@@ -5353,6 +5395,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           plannerStateSnapshot,
           plannerGapComparison: nextTurn.plannerGapComparison,
           hcpReactionContract: nextTurn.hcpReactionContract,
+          conversationIntelligence: conversationIntelligenceState,
           chosenResponseObjective,
           intervention: interventionSnapshot,
           feedback: coachingResult,
