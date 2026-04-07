@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   collectScenarioMetadataLeakAnchors,
   detectStructuredScenarioContentLeak,
+  repairStructuredScenarioContentLeak,
 } from '../src/lib/roleplay/structuredScenarioLeakGuard.js';
 
 test('structured scenario leak guard detects objective persona and challenge metadata clusters', () => {
@@ -82,4 +83,54 @@ test('structured scenario leak guard collects internal metadata anchors without 
 
   assert.ok(anchors.some((anchor) => /benefits verification/i.test(anchor.raw)));
   assert.ok(anchors.some((anchor) => /unclear owner/i.test(anchor.raw)));
+});
+
+test('structured scenario leak guard repairs appended objective persona and challenge metadata while preserving spoken ask', () => {
+  const scenario = {
+    objective: 'Reinforce durability and convenience benefits; define clear optimization criteria and implement quarterly review',
+    hcpMood: 'curious, data-driven',
+    stakeholder: 'Michael Chen, PA-C - Academic HIV Center',
+    specialty: 'Infectious Diseases',
+    challenges: [
+      'Reluctance to optimize stable, suppressed patients',
+      'Perception of complete optimization',
+      'Limited awareness of newer treatment options',
+      'Competing clinical priorities',
+    ],
+  };
+  const contaminated = "What data do you have on long-term durability? ' Reinforce durability and convenience benefits; define clear optimization criteria and implement quarterly review curious, data-driven Michael Chen, PA-C - Academic HIV Center Infectious Diseases Reluctance to optimize stable, suppressed patients Perception of complete optimization Limited awareness of newer treatment options Competing clinical priorities?";
+
+  const repaired = repairStructuredScenarioContentLeak({ scenario, dialogueText: contaminated });
+
+  assert.equal(repaired, 'What data do you have on long-term durability?');
+  assert.doesNotMatch(repaired, /Reinforce durability|Michael Chen|Competing clinical priorities/i);
+});
+
+test('structured scenario leak guard treats scenarioExecutionContract metadata as internal only', () => {
+  const runtimeContract = {
+    hcpPersona: {
+      stakeholder: 'Michael Chen, PA-C - Academic HIV Center',
+      mood: 'curious, data-driven',
+      personaPrimary: 'nurse_clinical_user',
+    },
+    constraints: {
+      challenges: ['Limited awareness of newer treatment options'],
+      keyMessages: ['Long-term durability and resistance barrier data'],
+    },
+    managerIntegration: {
+      scenarioFamily: 'hiv_prep',
+      interactionSkill: 'objection_handling',
+    },
+    coachingHooks: {
+      firstTurnWeakContext: 'soft_coach_if_weak',
+    },
+  };
+  const contaminated = 'What data do you have on long-term durability? Michael Chen, PA-C - Academic HIV Center curious, data-driven Long-term durability and resistance barrier data objection_handling soft_coach_if_weak.';
+
+  const result = detectStructuredScenarioContentLeak({ dialogueText: contaminated, runtimeContract });
+  const repaired = repairStructuredScenarioContentLeak({ dialogueText: contaminated, runtimeContract });
+
+  assert.equal(result.leaked, true);
+  assert.equal(repaired, 'What data do you have on long-term durability?');
+  assert.doesNotMatch(repaired, /soft_coach|objection_handling|Michael Chen/i);
 });

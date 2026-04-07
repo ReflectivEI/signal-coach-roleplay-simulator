@@ -19,6 +19,17 @@ const METADATA_FIELD_KEYS = [
   "suggestedPhrasing",
 ];
 
+const CONTRACT_METADATA_SECTION_KEYS = [
+  "coachingHooks",
+  "predictivePrep",
+  "metadataEnvelope",
+  "managerIntegration",
+  "scenarioIdentity",
+  "hcpPersona",
+  "constraints",
+  "repEvaluationTargets",
+];
+
 const STRUCTURED_LABEL_PATTERN = /\b(objective|tactical focus|stakeholder|hcp category|specialty|disease state|key messages?|challenges?|impact|suggested phrasing|persona|runtime behavior tags?)\b/i;
 const CREDENTIAL_OR_DESCRIPTOR_PATTERN = /\b(pa-c|pharmd|md|d\.o\.|do|np|rn|oncology practice|medical oncology|gu oncology|process-focused|process focused|patient-centered|patient centered)\b/i;
 
@@ -38,6 +49,13 @@ function flattenMetadataValue(value) {
       .filter(([key]) => METADATA_FIELD_KEYS.includes(key))
       .flatMap(([, nested]) => flattenMetadataValue(nested));
   }
+  return [String(value)];
+}
+
+function flattenAllPrimitiveValues(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap((item) => flattenAllPrimitiveValues(item));
+  if (typeof value === "object") return Object.values(value).flatMap((nested) => flattenAllPrimitiveValues(nested));
   return [String(value)];
 }
 
@@ -64,6 +82,9 @@ export function collectScenarioMetadataLeakAnchors(scenario = {}, runtimeContrac
 
   sources.push(...flattenMetadataValue(runtimeContract?.hiddenAuthoringContextText));
   sources.push(...flattenMetadataValue(runtimeContract?.hiddenAuthoringContext));
+  for (const key of CONTRACT_METADATA_SECTION_KEYS) {
+    sources.push(...flattenAllPrimitiveValues(runtimeContract?.[key]));
+  }
 
   const anchors = sources
     .flatMap(splitMetadataAnchor)
@@ -79,6 +100,47 @@ export function collectScenarioMetadataLeakAnchors(scenario = {}, runtimeContrac
     seen.add(anchor.normalized);
     return true;
   });
+}
+
+function findFirstAnchorIndex(dialogueText = "", anchorHits = []) {
+  const lowerDialogue = String(dialogueText || "").toLowerCase();
+  let earliest = -1;
+  for (const anchor of anchorHits) {
+    const raw = String(anchor || "").trim();
+    if (!raw) continue;
+    const directIndex = lowerDialogue.indexOf(raw.toLowerCase());
+    if (directIndex >= 0 && (earliest < 0 || directIndex < earliest)) earliest = directIndex;
+  }
+  return earliest;
+}
+
+function cleanDialoguePrefix(prefix = "") {
+  return String(prefix || "")
+    .replace(/[\s'"“”‘’,:;|-]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function repairStructuredScenarioContentLeak({
+  dialogueText = "",
+  scenario = {},
+  runtimeContract = {},
+  fallbackDialogue = "",
+} = {}) {
+  const leakCheck = detectStructuredScenarioContentLeak({ dialogueText, scenario, runtimeContract });
+  if (!leakCheck.leaked) return String(dialogueText || "").trim();
+
+  const anchorIndex = findFirstAnchorIndex(dialogueText, leakCheck.anchorHits);
+  if (anchorIndex > 0) {
+    const prefix = cleanDialoguePrefix(String(dialogueText || "").slice(0, anchorIndex));
+    if (prefix.split(/\s+/).filter(Boolean).length >= 4) return prefix;
+  }
+
+  const labelSplit = String(dialogueText || "").split(STRUCTURED_LABEL_PATTERN)[0];
+  const cleanedLabelPrefix = cleanDialoguePrefix(labelSplit);
+  if (cleanedLabelPrefix.split(/\s+/).filter(Boolean).length >= 4) return cleanedLabelPrefix;
+
+  return String(fallbackDialogue || "I need one concrete answer tied to the point in front of us.").trim();
 }
 
 export function detectStructuredScenarioContentLeak({
