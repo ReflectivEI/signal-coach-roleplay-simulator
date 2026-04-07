@@ -359,7 +359,7 @@ test('7-scenario fallback fixture: guardrail regeneration stays context-aware an
     { scenarioId: 'oral_oncolytic_onboarding', concern: 'workflow' },
   ];
 
-  const genericLegacyLine = 'Help me understand the most clinically relevant takeaway for my patients.';
+  const retiredGenericLine = 'Help me understand the most clinically relevant takeaway for my patients.';
   const outputs = fixtures.map((fixture) => {
     const result = buildConstraintSafeRegeneratedResponse({
       fallbackResponse: 'workflow and staffing constraints remain unresolved.',
@@ -370,7 +370,7 @@ test('7-scenario fallback fixture: guardrail regeneration stays context-aware an
 
   outputs.forEach(({ scenarioId, result }) => {
     assert.ok(result && result.length > 12, `expected non-empty fallback for ${scenarioId}`);
-    assert.notEqual(result, genericLegacyLine, `should not collapse to legacy generic line for ${scenarioId}`);
+    assert.notEqual(result, retiredGenericLine, `should not collapse to retired generic line for ${scenarioId}`);
   });
 
   const uniqueOutputs = new Set(outputs.map((item) => item.result));
@@ -389,7 +389,7 @@ test('warmth option prepends HCP-side warm opener while preserving scenario-cont
 });
 
 test('global context-aware coverage: every operational constraint type resolves via scenario context without generic collapse', () => {
-  const genericLegacyLine = 'Help me understand the most clinically relevant takeaway for my patients.';
+  const retiredGenericLine = 'Help me understand the most clinically relevant takeaway for my patients.';
   const outputs = OPERATIONAL_CONSTRAINT_TYPES.map((concern) => ({
     concern,
     result: buildConstraintSafeRegeneratedResponse({
@@ -400,7 +400,7 @@ test('global context-aware coverage: every operational constraint type resolves 
 
   outputs.forEach(({ concern, result }) => {
     assert.ok(result && result.length > 12, `expected non-empty context-aware fallback for constraint ${concern}`);
-    assert.notEqual(result, genericLegacyLine, `should not collapse to legacy generic line for constraint ${concern}`);
+    assert.notEqual(result, retiredGenericLine, `should not collapse to retired generic line for constraint ${concern}`);
   });
 });
 

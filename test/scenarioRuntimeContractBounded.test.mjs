@@ -11,15 +11,15 @@ import {
 } from "../src/lib/scenarioNormalization.js";
 
 test("backward compatibility: existing normalized scenario adapts to runtime canonical contract", () => {
-  const legacy = normalizeGeneratedScenario({
-    title: "Legacy Scenario",
+  const migratedInput = normalizeGeneratedScenario({
+    title: "Migrated Scenario",
     content: "Opening Scene: Busy clinic hallway.\nObjective: Secure one practical next step.",
     specialty: "Cardiology",
   });
-  const contract = normalizeScenarioRuntimeContract(legacy);
+  const contract = normalizeScenarioRuntimeContract(migratedInput);
   const result = validateScenarioRuntimeContract(contract);
   assert.equal(result.valid, true);
-  assert.equal(contract.scenarioIdentity.title, "Legacy Scenario");
+  assert.equal(contract.scenarioIdentity.title, "Migrated Scenario");
   assert.equal(typeof contract.metricApplicabilityMap.signal_awareness, "string");
 });
 
@@ -78,9 +78,9 @@ test("feedback evidence rule enforcement removes prohibited inference language",
   assert.ok(!/you are pushy/i.test(cleaned));
 });
 
-test("runtime behavior tags calibrate legacy scenarios into explicit tone/state inputs", () => {
+test("runtime behavior tags calibrate migrated scenarios into explicit tone/state inputs", () => {
   const contract = normalizeScenarioRuntimeContract({
-    id: "legacy_time_pressed_workflow",
+    id: "migrated_time_pressed_workflow",
     title: "Workflow-constrained access visit",
     specialty: "Infectious Diseases",
     hcpMood: "frustrated, overwhelmed",
@@ -98,7 +98,7 @@ test("runtime behavior tags calibrate legacy scenarios into explicit tone/state 
   assert.match(contract.hcpProfile.baselineCommunicationStyle, /frustrated|overwhelmed/i);
 });
 
-test("canonical behavior tags override legacy prose when provided explicitly", () => {
+test("canonical behavior tags override migrated prose when provided explicitly", () => {
   const contract = normalizeScenarioRuntimeContract({
     title: "Engaged evidence review",
     context: "The clinic is busy and operationally blocked.",

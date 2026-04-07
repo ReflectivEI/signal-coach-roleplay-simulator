@@ -410,7 +410,7 @@ function validateConstraintState(constraints = [], options = {}) {
 
 function normalizeConstraintValidationResult(result) {
   if (Array.isArray(result)) {
-    return { constraints: result, issues: ["legacy_array_shape"] };
+    return { constraints: result, issues: ["array_shape_adapter"] };
   }
   const constraints = Array.isArray(result?.constraints) ? result.constraints : [];
   const issues = Array.isArray(result?.issues) ? result.issues : [];
@@ -615,7 +615,7 @@ function buildOperationalConstraintState({
   const prior = Array.isArray(previousConstraints) ? previousConstraints : [];
   const stateByType = new Map(
     prior.map((constraint, idx) => [
-      constraint?.constraintType || constraint?.type || `legacy_${idx}`,
+      constraint?.constraintType || constraint?.type || `constraint_${idx}`,
       {
         ...constraint,
         constraintType: constraint?.constraintType || constraint?.type || "workflow",

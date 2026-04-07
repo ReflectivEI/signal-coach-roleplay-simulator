@@ -69,18 +69,18 @@ test('normalizeScenarioRuntimeContract preserves canonical scene anchors and sta
   assert.equal(validation.valid, true, validation.issues.join('; '));
 });
 
-test('validateScenarioRuntimeContract surfaces missing canonical scene anchors for legacy runtime inputs', () => {
+test('validateScenarioRuntimeContract adapts migrated runtime inputs into bounded scene anchors', () => {
   const validation = validateScenarioRuntimeContract({
-    id: 'legacy_001',
-    title: 'Legacy Scenario',
+    id: 'migrated_001',
+    title: 'Migrated Scenario',
     context: 'Busy clinic',
     openingScene: 'We have a lot going on.',
   });
 
-  assert.equal(validation.valid, false);
-  assert.ok(validation.issues.includes('missing_scene_time_pressure_anchor'));
-  assert.ok(validation.issues.includes('missing_scene_opening_cues'));
-  assert.ok(validation.issues.includes('missing_hcp_communication_style'));
+  assert.equal(validation.valid, true, validation.issues.join('; '));
+  assert.equal(validation.contract.sceneSetup.timePressure, 'high');
+  assert.deepEqual(validation.contract.sceneSetup.openingCueSet, ['We have a lot going on.']);
+  assert.equal(validation.contract.hcpProfile.baselineCommunicationStyle, 'curt balanced');
 });
 
 test('applyEscalationPresentation does not prepend generic directive templates on turn 1', () => {
@@ -140,7 +140,7 @@ test('buildHcpReactionContract keeps first-turn missed responses single-voice an
   assert.equal(contract.activeHcpState, 'skeptical');
   assert.equal(
     contract.selectedDialogueText,
-    'That is interesting, but my biggest issue is testing turnaround in clinic, not outcomes.'
+    'Hey, good to see you. Testing turnaround is my concern.'
   );
   assert.ok(!/I still need|Keep this focused on the immediate constraint/i.test(contract.selectedDialogueText));
 });

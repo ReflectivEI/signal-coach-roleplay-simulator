@@ -32,7 +32,7 @@ function normalizeCanonicalResponseMode(mode = "advance") {
   return "advance";
 }
 
-function toLegacyResponseMode(mode = "advance") {
+function toTransportResponseMode(mode = "advance") {
   const canonical = normalizeCanonicalResponseMode(mode);
   if (canonical === "reanchor") return "repair";
   if (canonical === "advance") return "probe";
@@ -125,12 +125,12 @@ export function buildTurnContractController({
     concernFlowOutcome,
     fallbackMode,
   });
-  const responseMode = toLegacyResponseMode(canonicalResponseMode);
+  const responseMode = toTransportResponseMode(canonicalResponseMode);
 
   return {
     responseMode,
     canonicalResponseMode,
-    legacyResponseMode: responseMode,
+    transportResponseMode: responseMode,
     objective: mapResponseModeToObjective(canonicalResponseMode),
   };
 }

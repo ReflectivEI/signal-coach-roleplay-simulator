@@ -294,7 +294,7 @@ function deriveRuntimeBehaviorTags({ scenario = {}, canonicalHcpProfile = {}, ca
     dialogueLength,
     tonePressure,
     orientation,
-    calibrationSource: "canonical_or_legacy_scenario_fields",
+    calibrationSource: "canonical_or_migrated_scenario_fields",
   };
 }
 

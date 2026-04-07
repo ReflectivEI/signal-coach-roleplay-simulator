@@ -720,7 +720,7 @@ function buildManagerInsightsPrompt(payload, derived) {
         "9. Risk items must include a root cause tied to engagement, capability gaps, territory conditions, or sales trend.",
         "10. Reject output if any capability mismatch exists, if any score is assigned to the wrong capability, if the weak area conflicts with the canonical dataset, or if generic language appears.",
         "11. If no deterministic risk flag is triggered, say that explicitly instead of inventing one.",
-        "12. Do not use legacy labels such as Adaptability, Objection Handling, Value Communication, Emotional Attunement, or Conversation Control.",
+        "12. Do not use non-canonical labels such as Adaptability, Objection Handling, Value Communication, Emotional Attunement, or Conversation Control.",
         "",
         "Recommendation format:",
         "Action → Situation → Expected Outcome",

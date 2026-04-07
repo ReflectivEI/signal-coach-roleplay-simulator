@@ -100,7 +100,7 @@ export function determinePreferredHcpDialogueRegister({
 } = {}) {
   const canonicalProfile = scenario?.hcpProfile || {};
   const canonicalSceneSetup = scenario?.sceneSetup || {};
-  const legacyText = normalizeContextText([
+  const scenarioDescriptorText = normalizeContextText([
     scenario?.stakeholder,
     scenario?.specialty,
     scenario?.description,
@@ -109,7 +109,7 @@ export function determinePreferredHcpDialogueRegister({
   ]);
 
   const evidence = {
-    roleText: normalizeContextText([canonicalProfile.role, legacyText]),
+    roleText: normalizeContextText([canonicalProfile.role, scenarioDescriptorText]),
     specialtyText: normalizeContextText([canonicalProfile.specialty, scenario?.specialty]),
     careSettingText: normalizeContextText([canonicalProfile.careSetting, scenario?.visibleScenarioContext]),
     styleText: normalizeContextText([canonicalProfile.baselineCommunicationStyle]),

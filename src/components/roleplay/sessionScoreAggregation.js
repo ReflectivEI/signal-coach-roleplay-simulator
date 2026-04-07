@@ -31,7 +31,7 @@ export function shouldIncludeMetricScore(metric = {}) {
     return explicitEvaluated && explicitTriggered;
   }
 
-  // Fallback for legacy metric payloads without explicit flags.
+  // Compatibility fallback for metric payloads without explicit flags.
   // Observable evidence indicates the capability was behaviorally present.
   return hasBehavioralEvidence(metric);
 }
@@ -61,4 +61,3 @@ export function computeSessionOverallScoreFromTurns(turns = [], capabilityIds = 
   // Round only at final output.
   return Math.round(preciseAverage * 10) / 10;
 }
-

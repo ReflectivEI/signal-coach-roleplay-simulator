@@ -597,7 +597,7 @@ export default function PreCallPlanning() {
     const barrier = predictiveInputs.access_barrier.toLowerCase();
     const tips = [];
 
-    if (habit.includes("legacy") || habit.includes("older") || habit.includes("stable")) {
+    if (habit.includes("older") || habit.includes("established") || habit.includes("stable")) {
       tips.push("Lead with switch criteria and one outcome-based rationale for patients who may be appropriate for optimization.");
     } else {
       tips.push("Open with a patient-segment opportunity and one specialty-specific use case that feels immediately relevant.");
@@ -760,7 +760,7 @@ export default function PreCallPlanning() {
                   <Input
                     value={predictiveInputs.prescribing_habit}
                     onChange={(e) => setPredictiveInputs((prev) => ({ ...prev, prescribing_habit: e.target.value }))}
-                    placeholder="Prescribing habit (e.g., prefers legacy regimen)"
+                    placeholder="Prescribing habit (e.g., prefers established regimen)"
                   />
                   <Input
                     value={predictiveInputs.access_barrier}
