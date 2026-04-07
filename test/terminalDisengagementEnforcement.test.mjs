@@ -72,3 +72,10 @@ test("cue variety treats semantically similar closeout cues as repeat risk", () 
   assert.doesNotMatch(SOURCE, /gathers the chart with minimal expression/);
   assert.match(SOURCE, /leaves space for one useful, concrete answer/);
 });
+
+test("scenario-specific workflow answers count as operational alignment", () => {
+  assert.match(SOURCE, /standardi\[sz\]e\|training\|education\|monitoring\|call-\?tree\|one-\?pager\|pathway/);
+  assert.match(SOURCE, /toxicity monitoring/);
+  assert.doesNotMatch(SOURCE, /return "Just give me one practical step\.";/);
+  assert.match(SOURCE, /I hear you, but with our staffing, give me one practical step we could actually run/);
+});

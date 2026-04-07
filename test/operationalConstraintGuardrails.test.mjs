@@ -53,6 +53,23 @@ test('scenario constraint present -> mention allowed once only', () => {
   assert.deepEqual(secondMention.duplicateTypes, ['workflow']);
 });
 
+test('scenario-specific implementation terms are treated as workflow grounding', () => {
+  const grounding = buildConstraintGrounding({
+    scenarioText: 'Staffing limitations for AE management. Need standardized NP-led education and toxicity call-tree within pathway workflow.',
+    dialogueTurns: [],
+  });
+
+  assert.ok(grounding.groundedTypes.has('workflow'));
+
+  const result = detectConstraintDraftViolations({
+    draftText: 'Standardize patient education and implement toxicity monitoring with an AE one-pager and call-tree.',
+    groundedTypes: [...grounding.groundedTypes],
+    alreadySurfacedTypes: [],
+  });
+
+  assert.equal(result.valid, true);
+});
+
 test('repeated paraphrase of same known constraint -> blocked', () => {
   const result = detectConstraintDraftViolations({
     draftText: 'Bandwidth is limited, so this still feels burdensome.',

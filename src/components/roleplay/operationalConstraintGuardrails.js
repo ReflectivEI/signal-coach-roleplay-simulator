@@ -1,6 +1,6 @@
 const OPERATIONAL_CONSTRAINT_PATTERNS = {
   staffing: /\b(staffing|short-staffed|staff shortage|understaffed|team capacity|nurse shortage|ma shortage|coverage gap)\b/i,
-  workflow: /\b(workflow|operational|implementation|process|steps|clinic flow|handoff process)\b/i,
+  workflow: /\b(workflow|operational|implementation|implement|process|steps|clinic flow|handoff process|standardi[sz]e|training|education|monitoring|call-?tree|one-?pager|pathway|checklist|protocol|template|standing order)\b/i,
   capacity: /\b(capacity|bandwidth|burden|workload|overwhelmed|buried|limited resources)\b/i,
   prior_auth: /\b(prior auth|prior authorization|authorization|pa denial|appeal|payer paperwork)\b/i,
   scheduling: /\b(schedule|scheduling|calendar|slot|appointment|booked|back-to-back|time window)\b/i,
@@ -10,7 +10,7 @@ const OPERATIONAL_CONSTRAINT_PATTERNS = {
   time: /\b(time|minutes|today|this week|deadline|urgent|rush|limited time)\b/i,
   access: /\b(access|prior auth|authorization|coverage|payer|insurance|formular|cost|reimbursement|paperwork)\b/i,
   policy: /\b(policy|protocol|guideline|committee|pathway|institution|restriction)\b/i,
-  screening: /\b(screening|eligibility|candidacy|contraindication|resistance|monitoring)\b/i,
+  screening: /\b(screening|eligibility|candidacy|contraindication|resistance)\b/i,
   evidence: /\b(evidence|study|trial|endpoint|head-to-head|methodology|duration|confidence interval|data|proof)\b/i,
 };
 
@@ -50,7 +50,7 @@ export function isExplicitOperationalBlockerPrompt(text = "") {
   if (!value.trim()) return false;
   const hasBlockerSignal = /\b(blocker|unresolved|cannot move|can't move|stuck|before i can proceed|until this is resolved)\b/i.test(value);
   if (!hasBlockerSignal) return false;
-  return /\b(workflow|operational|staff|capacity|prior auth|authorization|handoff|process|constraint)\b/i.test(value);
+  return /\b(workflow|operational|staff|capacity|prior auth|authorization|handoff|process|constraint|standardi[sz]e|training|education|monitoring|call-?tree|one-?pager|pathway|checklist|protocol|template|standing order)\b/i.test(value);
 }
 
 export function buildConstraintGrounding({ scenarioText = "", dialogueTurns = [] } = {}) {

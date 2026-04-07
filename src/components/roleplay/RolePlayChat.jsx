@@ -502,12 +502,12 @@ function isScenarioGroundedDialogue(text, scenarioKeywords, repMessage) {
 }
 
 const REALISM_CONCERN_PATTERNS = {
-  workflow: /\b(workflow|staff|staffing|nurse|team|throughput|burden|operational|implementation|process|capacity)\b/i,
+  workflow: /\b(workflow|staff|staffing|nurse|team|throughput|burden|operational|implementation|implement|process|capacity|standardi[sz]e|training|education|monitoring|call-?tree|one-?pager|pathway|handoff|checklist|protocol|template|standing order)\b/i,
   evidence: /\b(evidence|study|trial|endpoint|head-to-head|methodology|duration|confidence interval|data|proof)\b/i,
   access: /\b(access|prior auth|authorization|coverage|payer|insurance|formular|cost|reimbursement|paperwork)\b/i,
   time: /\b(time|busy|schedule|clinic|today|quick|minutes|rush|back-to-back)\b/i,
   policy: /\b(policy|protocol|guideline|committee|pathway|institution|restriction)\b/i,
-  screening: /\b(screening|eligibility|candidacy|contraindication|resistance|monitoring)\b/i,
+  screening: /\b(screening|eligibility|candidacy|contraindication|resistance)\b/i,
 };
 
 const PLANNER_TRACE_FLAG_KEY = "roleplay.debug.planner_trace";
@@ -1143,7 +1143,7 @@ function hasMaterialConstraintProgression(previousText = "", currentText = "") {
 }
 
 function hasWorkflowOperationalLanguage(text = "") {
-  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|feasibility|team load|epa|front desk|check-?in|order[\s-]?set|routing rule|staffing model|nurse script|ma submit|ma routing|queue|huddle script)\b/i.test(String(text || ""));
+  return /\b(prior auth|prior authorization|approval|approvals|paperwork|workflow|resubmission|resubmissions|bottleneck|back-and-forth|back and forth|staff burden|clinic flow|implementation|implement|standardi[sz]e|training|education|monitoring|toxicity monitoring|call-?tree|one-?pager|pathway handouts?|feasibility|team load|epa|front desk|check-?in|order[\s-]?set|routing rule|staffing model|nurse script|ma submit|ma routing|queue|huddle script|checklist|protocol|template|standing order)\b/i.test(String(text || ""));
 }
 
 function hasEvidencePivotLanguage(text = "") {
@@ -1155,7 +1155,7 @@ const SCENARIO_FAMILY_LEXICAL_PACKS = Object.freeze({
     "prep", "prior auth", "coverage", "adherence", "screening", "resistance", "back-and-forth", "resubmission",
   ],
   oncology_access: [
-    "regimen", "line of therapy", "biomarker", "pathway", "prior auth", "reimbursement", "denial", "infusion",
+    "regimen", "line of therapy", "biomarker", "pathway", "prior auth", "reimbursement", "denial", "infusion", "education", "toxicity", "call-tree", "one-pager", "monitoring",
   ],
   cardiometabolic: [
     "step therapy", "formulary", "coverage", "adherence", "refill", "prior auth", "care coordination",
@@ -1402,7 +1402,7 @@ function detectConcernAddressed(repMessage = "", concern = "workflow") {
 }
 
 function hasConcreteOperationalMove(repMessage = "") {
-  return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|change for your team|for your staff)\b/i.test(String(repMessage || ""));
+  return /\b(step|plan|process|workflow|handoff|assign|pilot|start with|first action|specific|implement|standardi[sz]e|train|training|education|monitoring|call-?tree|one-?pager|pathway|protocol|checklist|template|standing order|change for your team|for your staff)\b/i.test(String(repMessage || ""));
 }
 
 function deriveEngagementDecay({
@@ -3438,7 +3438,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
 
       if (nextHcpState === "time-pressured") {
-        return "Just give me one practical step.";
+        return "I hear you, but with our staffing, give me one practical step we could actually run.";
       }
 
       const studyQuestionAllowed = mentionsStudy
