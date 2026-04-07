@@ -214,21 +214,28 @@ function refineDialogueRealism({
     || concernFlowOutcome === 'overpivot'
     || Number(alignmentScore) <= 2;
   const base = String(dialogueText || '').trim();
-  const revised = shouldKeepFriction && base
-    ? `${base} ${pool[idx]}`
-    : base;
+  const isOpeningTurn = Number(turnNumber) === 1;
+  const revised = isOpeningTurn
+    ? base
+    : shouldKeepFriction && base
+      ? `${base} ${pool[idx]}`
+      : base;
+  const fallback = isOpeningTurn ? base : pool[idx];
   return {
-    dialogueText: revised || pool[idx],
-    dialogueSignature: deterministicHash(revised || pool[idx]),
-    tooIdealFlag: Boolean(shouldKeepFriction && base && !/still need|before we move|before we continue/i.test(base)),
+    dialogueText: revised || fallback,
+    dialogueSignature: deterministicHash(revised || fallback),
+    tooIdealFlag: Boolean(!isOpeningTurn && shouldKeepFriction && base && !/still need|before we move|before we continue/i.test(base)),
   };
 }
 
 function deriveScenarioBoundHcpState({ scenario = {}, hcpState = 'neutral', turnNumber = 0 } = {}) {
-  const openingState = String(scenario?.openingState || scenario?.sceneSetup?.openingState || '').trim().toLowerCase();
+  const openingState = String(
+    scenario?.hcpStateModel?.startingState || scenario?.openingState || scenario?.sceneSetup?.openingState || ''
+  ).trim().toLowerCase();
   if (Number(turnNumber) !== 1) return normalizeText(hcpState) || 'neutral';
-  if (openingState === 'high_pressure') return normalizeText(hcpState) || 'neutral';
-  return downgradeToAllowedOpeningState(hcpState);
+  if (!openingState) return downgradeToAllowedOpeningState(hcpState);
+  if (openingState === 'high_pressure') return normalizeText(hcpState || openingState) || 'neutral';
+  return downgradeToAllowedOpeningState(openingState);
 }
 
 function assertValidOpeningResponse({
@@ -237,7 +244,9 @@ function assertValidOpeningResponse({
   escalationStage = 'open',
 } = {}) {
   if (Number(turnNumber) !== 1) return;
-  const openingState = String(scenario?.openingState || scenario?.sceneSetup?.openingState || '').trim().toLowerCase();
+  const openingState = String(
+    scenario?.hcpStateModel?.startingState || scenario?.openingState || scenario?.sceneSetup?.openingState || ''
+  ).trim().toLowerCase();
   if (openingState === 'high_pressure') return;
   const disallowedStages = new Set(['high_pressure', 'disengaging']);
   if (disallowedStages.has(String(escalationStage || '').toLowerCase())) {
@@ -359,7 +368,7 @@ export function buildHcpReactionContract({
     profile: hcpEnforcementProfile,
     turnNumber,
     hcpState: turnScopedHcpState,
-    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || '',
+    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || scenario?.hcpStateModel?.startingState || '',
     priorEscalationStage: priorEnforcementTrace?.escalationStage || 'open',
     priorMisalignmentCount: priorEnforcementTrace?.misalignmentCount || 0,
     priorHardDemandMissCount: priorEnforcementTrace?.hardDemandMissCount || 0,
@@ -389,7 +398,7 @@ export function buildHcpReactionContract({
     domainAssessment,
     activeConcern,
     turnNumber,
-    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || '',
+    scenarioOpeningState: scenario?.openingState || scenario?.sceneSetup?.openingState || scenario?.hcpStateModel?.startingState || '',
     hcpState: turnScopedHcpState,
     scenarioId: scenario?.id || scenario?.scenario_id || scenario?.title || 'unknown_scenario',
   });

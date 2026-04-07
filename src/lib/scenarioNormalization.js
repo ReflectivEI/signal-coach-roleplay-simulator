@@ -73,7 +73,7 @@ function splitIntoBullets(value, maxItems = 3) {
   if (!normalized) return [];
 
   const bulletCandidates = normalized
-    .split(/\n|•|\u2022|;|(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .split(/\n|\u2022|\\u2022|;|(?<=[.!?])\s+(?=[A-Z0-9])/)
     .map((item) => item.replace(/^\d+[.)]\s*/, "").trim())
     .filter(Boolean);
 
@@ -93,7 +93,7 @@ function splitIntoBullets(value, maxItems = 3) {
 function truncateLine(value, maxWords = 18) {
   const cleaned = stripMarkdown(value)
     .replace(/\s+/g, " ")
-    .replace(/^[:\-–]+\s*/, "")
+    .replace(/^[:\-\u2013]+\s*/, "")
     .trim();
 
   if (!cleaned) return "";
@@ -195,52 +195,142 @@ function normalizeList(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+function normalizeString(value, fallback = "") {
+  const normalized = String(value ?? "").trim();
+  return normalized || fallback;
+}
+
+function normalizeScenarioSection(scenario = {}, ...keys) {
+  for (const key of keys) {
+    const value = scenario?.[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  }
+  return {};
+}
+
+function normalizeCueSet(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : String(entry?.cue || entry?.label || "").trim()))
+    .filter(Boolean);
+}
+
 function normalizeMetricApplicability(raw = {}) {
   const source = raw && typeof raw === "object" ? raw : {};
   return DEFAULT_ALLOWED_METRICS.reduce((acc, metric) => {
-    const status = String(source[metric] || "always_applicable").toLowerCase();
+    const rawStatus = String(source[metric] || "always_applicable").toLowerCase();
+    const status = rawStatus === "active"
+      ? "always_applicable"
+      : rawStatus === "suppressed"
+        ? "not_applicable"
+        : rawStatus;
     acc[metric] = status;
     return acc;
   }, {});
 }
 
 export function normalizeScenarioRuntimeContract(scenario = {}) {
+  const canonicalIdentity = normalizeScenarioSection(scenario, "scenarioIdentity", "identity");
+  const canonicalTrainingIntent = normalizeScenarioSection(scenario, "trainingIntent");
+  const canonicalHcpProfile = normalizeScenarioSection(scenario, "hcpProfile");
+  const canonicalSceneSetup = normalizeScenarioSection(scenario, "sceneSetup");
+  const canonicalStateModel = normalizeScenarioSection(scenario, "hcpStateModel", "stateModel");
+  const canonicalFeedbackContract = normalizeScenarioSection(scenario, "feedbackContract");
+  const canonicalMetricApplicability = canonicalTrainingIntent?.metricApplicability
+    || scenario?.metricApplicabilityMap
+    || scenario?.metricApplicability
+    || {};
+
   const identity = {
-    scenarioId: String(scenario?.id || "runtime_scenario"),
-    title: String(scenario?.title || "Role Play Scenario"),
-    difficulty: String(scenario?.difficulty || "intermediate"),
-    version: String(scenario?.version || "1.0.0"),
+    scenarioId: normalizeString(
+      canonicalIdentity?.scenarioId || scenario?.scenarioId || scenario?.scenario_id || scenario?.id,
+      "runtime_scenario"
+    ),
+    title: normalizeString(canonicalIdentity?.title || scenario?.title, "Role Play Scenario"),
+    therapeuticArea: normalizeString(canonicalIdentity?.therapeuticArea || scenario?.therapeuticArea || scenario?.category),
+    topic: normalizeString(canonicalIdentity?.topic || scenario?.topic || scenario?.description),
+    difficulty: normalizeString(canonicalIdentity?.difficulty || scenario?.difficulty, "intermediate"),
+    version: normalizeString(canonicalIdentity?.version || scenario?.version, "1.0.0"),
+    status: normalizeString(canonicalIdentity?.status || scenario?.status || scenario?.state, "active"),
   };
 
   const trainingIntent = {
-    primaryCapabilityFocus: normalizeList(scenario?.focus_capabilities),
-    allowedEvaluatedMetrics: normalizeList(scenario?.allowedEvaluatedMetrics).length > 0
-      ? normalizeList(scenario?.allowedEvaluatedMetrics)
+    primaryCapabilityFocus: normalizeList(
+      canonicalTrainingIntent?.primaryCapabilityFocus || canonicalTrainingIntent?.primaryCapabilities || scenario?.focus_capabilities
+    ),
+    secondaryCapabilityFocus: normalizeList(
+      canonicalTrainingIntent?.secondaryCapabilityFocus || canonicalTrainingIntent?.secondaryCapabilities
+    ),
+    allowedEvaluatedMetrics: normalizeList(
+      canonicalTrainingIntent?.allowedEvaluatedMetrics || scenario?.allowedEvaluatedMetrics
+    ).length > 0
+      ? normalizeList(canonicalTrainingIntent?.allowedEvaluatedMetrics || scenario?.allowedEvaluatedMetrics)
       : [...DEFAULT_ALLOWED_METRICS],
+    excludedMetrics: normalizeList(canonicalTrainingIntent?.excludedMetrics),
+    rubricNotes: normalizeString(canonicalTrainingIntent?.rubricNotes),
   };
 
   const hcpProfile = {
-    role: String(scenario?.stakeholder || "HCP"),
-    specialty: String(scenario?.specialty || "general"),
-    careSetting: String(scenario?.context || scenario?.description || "clinical setting"),
+    name: normalizeString(canonicalHcpProfile?.name || scenario?.hcpName),
+    role: normalizeString(canonicalHcpProfile?.role || scenario?.stakeholder, "HCP"),
+    specialty: normalizeString(canonicalHcpProfile?.specialty || scenario?.specialty, "general"),
+    careSetting: normalizeString(
+      canonicalHcpProfile?.careSetting || canonicalHcpProfile?.setting || scenario?.context || scenario?.description,
+      "clinical setting"
+    ),
+    baselineCommunicationStyle: normalizeString(
+      canonicalHcpProfile?.baselineCommunicationStyle || canonicalHcpProfile?.communicationStyle || scenario?.hcpMood
+    ),
+    baselineOpennessResistance: normalizeString(
+      canonicalHcpProfile?.baselineOpennessResistance || canonicalHcpProfile?.baselineState || scenario?.baselineOpennessResistance
+    ),
+    knownConstraints: normalizeList(canonicalHcpProfile?.knownConstraints || scenario?.knownConstraints || scenario?.challenges),
   };
 
   const sceneSetup = {
-    openingLine: String(scenario?.opening_scene || scenario?.openingScene || ""),
-    currentContext: String(scenario?.context || scenario?.description || ""),
+    openingEnvironment: normalizeString(canonicalSceneSetup?.openingEnvironment || scenario?.openingEnvironment),
+    timePressure: normalizeString(canonicalSceneSetup?.timePressure || scenario?.timePressure),
+    currentClinicalOperationalContext: normalizeString(
+      canonicalSceneSetup?.currentClinicalOperationalContext || canonicalSceneSetup?.currentContext || scenario?.context || scenario?.description
+    ),
+    currentContext: normalizeString(
+      canonicalSceneSetup?.currentClinicalOperationalContext || canonicalSceneSetup?.currentContext || scenario?.context || scenario?.description
+    ),
+    visitObjective: normalizeString(
+      canonicalSceneSetup?.visitObjective || scenario?.visitObjective || scenario?.objective?.[0] || scenario?.objective
+    ),
+    whatRepKnowsAtStart: normalizeList(canonicalSceneSetup?.whatRepKnowsAtStart || scenario?.whatRepKnowsAtStart),
+    whatRepDoesNotKnowAtStart: normalizeList(canonicalSceneSetup?.whatRepDoesNotKnowAtStart || scenario?.whatRepDoesNotKnowAtStart),
+    openingLine: normalizeString(canonicalSceneSetup?.openingLine || scenario?.opening_scene || scenario?.openingScene),
+    openingCueSet: normalizeCueSet(canonicalSceneSetup?.openingCueSet || scenario?.openingCueSet),
+    enforcementCriteria: canonicalSceneSetup?.enforcementCriteria || scenario?.enforcementCriteria || {},
   };
 
   const hcpStateModel = {
-    startingState: String(scenario?.startingState || "neutral"),
-    allowedTransitions: scenario?.allowedTransitions && typeof scenario.allowedTransitions === "object"
-      ? scenario.allowedTransitions
+    startingState: normalizeString(
+      canonicalStateModel?.startingState || canonicalSceneSetup?.openingState || scenario?.startingState || scenario?.openingState,
+      "neutral"
+    ),
+    allowedTransitions: canonicalStateModel?.allowedTransitions && typeof canonicalStateModel.allowedTransitions === "object"
+      ? canonicalStateModel.allowedTransitions
+      : scenario?.allowedTransitions && typeof scenario.allowedTransitions === "object"
+        ? scenario.allowedTransitions
+        : {},
+    transitionTriggers: canonicalStateModel?.transitionTriggers && typeof canonicalStateModel.transitionTriggers === "object"
+      ? canonicalStateModel.transitionTriggers
       : {},
-    prohibitedTransitions: Array.isArray(scenario?.prohibitedTransitions) ? scenario.prohibitedTransitions : [],
+    prohibitedTransitions: Array.isArray(canonicalStateModel?.prohibitedTransitions)
+      ? canonicalStateModel.prohibitedTransitions
+      : Array.isArray(scenario?.prohibitedTransitions)
+        ? scenario.prohibitedTransitions
+        : [],
   };
 
   const deterministicCueLibrary = Array.isArray(scenario?.deterministicCueLibrary)
     ? scenario.deterministicCueLibrary
-    : [];
+    : Array.isArray(scenario?.cueLibrary)
+      ? scenario.cueLibrary
+      : [];
 
   const dialogueResponseRules = scenario?.dialogueResponseRules && typeof scenario.dialogueResponseRules === "object"
     ? scenario.dialogueResponseRules
@@ -250,21 +340,56 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
     ? scenario.metricEvidenceMap
     : {};
 
-  const metricApplicabilityMap = normalizeMetricApplicability(
-    scenario?.metricApplicabilityMap || scenario?.trainingIntent?.metricApplicability || {}
-  );
+  const metricApplicabilityMap = normalizeMetricApplicability(canonicalMetricApplicability);
 
+  const canReference = normalizeList(
+    canonicalFeedbackContract?.whatFeedbackCanReference || canonicalFeedbackContract?.allowedReferences
+  );
+  const cannotInfer = normalizeList(
+    canonicalFeedbackContract?.whatFeedbackCannotInfer || canonicalFeedbackContract?.prohibitedReferences
+  );
   const feedbackContract = {
-    whatFeedbackCanReference: normalizeList(
-      scenario?.feedbackContract?.whatFeedbackCanReference
-    ).length > 0
-      ? normalizeList(scenario?.feedbackContract?.whatFeedbackCanReference)
-      : [...DEFAULT_FEEDBACK_EVIDENCE],
-    whatFeedbackCannotInfer: normalizeList(
-      scenario?.feedbackContract?.whatFeedbackCannotInfer
-    ).length > 0
-      ? normalizeList(scenario?.feedbackContract?.whatFeedbackCannotInfer)
-      : [...DEFAULT_PROHIBITED_FEEDBACK_INFERENCE],
+    whatFeedbackCanReference: canReference.length > 0 ? canReference : [...DEFAULT_FEEDBACK_EVIDENCE],
+    whatFeedbackCannotInfer: cannotInfer.length > 0 ? cannotInfer : [...DEFAULT_PROHIBITED_FEEDBACK_INFERENCE],
+    requiredEvidenceLanguage: normalizeList(canonicalFeedbackContract?.requiredEvidenceLanguage),
+    prohibitedLanguage: normalizeList(canonicalFeedbackContract?.prohibitedLanguage),
+  };
+
+  const contractProvenance = {
+    canonicalIdentityUsed: Boolean(canonicalIdentity?.scenarioId || canonicalIdentity?.title),
+    canonicalTrainingIntentUsed: Boolean(
+      canonicalTrainingIntent?.primaryCapabilityFocus || canonicalTrainingIntent?.primaryCapabilities || canonicalTrainingIntent?.metricApplicability
+    ),
+    canonicalHcpProfileUsed: Boolean(
+      canonicalHcpProfile?.role || canonicalHcpProfile?.careSetting || canonicalHcpProfile?.baselineCommunicationStyle
+    ),
+    canonicalSceneSetupUsed: Boolean(
+      canonicalSceneSetup?.openingLine
+      || canonicalSceneSetup?.openingCueSet
+      || canonicalSceneSetup?.currentClinicalOperationalContext
+      || canonicalSceneSetup?.timePressure
+    ),
+    canonicalStateModelUsed: Boolean(canonicalStateModel?.startingState || canonicalStateModel?.allowedTransitions),
+  };
+
+  const contractCompleteness = {
+    sceneAnchors: {
+      openingLine: Boolean(sceneSetup.openingLine),
+      openingEnvironment: Boolean(sceneSetup.openingEnvironment),
+      openingCueSet: sceneSetup.openingCueSet.length > 0,
+      timePressure: Boolean(sceneSetup.timePressure),
+      currentClinicalOperationalContext: Boolean(sceneSetup.currentClinicalOperationalContext),
+      visitObjective: Boolean(sceneSetup.visitObjective),
+    },
+    hcpAnchors: {
+      baselineCommunicationStyle: Boolean(hcpProfile.baselineCommunicationStyle),
+      baselineOpennessResistance: Boolean(hcpProfile.baselineOpennessResistance),
+      knownConstraints: hcpProfile.knownConstraints.length > 0,
+    },
+    stateAnchors: {
+      startingState: Boolean(hcpStateModel.startingState),
+      allowedTransitions: Object.keys(hcpStateModel.allowedTransitions).length > 0,
+    },
   };
 
   return {
@@ -278,6 +403,8 @@ export function normalizeScenarioRuntimeContract(scenario = {}) {
     metricEvidenceMap,
     metricApplicabilityMap,
     feedbackContract,
+    contractProvenance,
+    contractCompleteness,
   };
 }
 
@@ -290,6 +417,14 @@ export function validateScenarioRuntimeContract(contract = {}) {
   if (!Array.isArray(normalized.hcpStateModel.prohibitedTransitions)) issues.push("invalid_prohibited_transitions");
   if (!Array.isArray(normalized.feedbackContract.whatFeedbackCanReference)) issues.push("invalid_feedback_can_reference");
   if (!Array.isArray(normalized.feedbackContract.whatFeedbackCannotInfer)) issues.push("invalid_feedback_cannot_infer");
+  if (!normalized.sceneSetup.openingLine) issues.push("missing_scene_opening_line");
+  if (!normalized.sceneSetup.currentClinicalOperationalContext) issues.push("missing_scene_context_anchor");
+  if (!normalized.sceneSetup.timePressure) issues.push("missing_scene_time_pressure_anchor");
+  if (!Array.isArray(normalized.sceneSetup.openingCueSet) || normalized.sceneSetup.openingCueSet.length === 0) {
+    issues.push("missing_scene_opening_cues");
+  }
+  if (!normalized.hcpProfile.baselineCommunicationStyle) issues.push("missing_hcp_communication_style");
+  if (!normalized.hcpStateModel.startingState) issues.push("missing_hcp_starting_state");
 
   return { valid: issues.length === 0, issues, contract: normalized };
 }

@@ -776,6 +776,9 @@ export function applyEscalationPresentation({
       })
   );
   if (escalationStage === 'open') return { cueText, dialogueText: normalizedDialogue };
+  if (Number(turnNumber) === 1) {
+    return { cueText, dialogueText: normalizedDialogue };
+  }
 
   const orientation = profile.orientation || 'balanced';
   const styleSeed = {
