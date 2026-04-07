@@ -99,9 +99,9 @@ test('conversational realism hard-compresses formal terminal evidence expansion'
     terminalBehavior: true,
   });
 
-  assert.equal(result.text, 'One point: how does that affect durability for stable patients?');
+  assert.equal(result.text, "I'm about to move on. How does that affect durability for stable patients?");
   assert.doesNotMatch(result.text, /To directly address|specifically elaborate|treatment regimens/i);
-  assert.ok(result.text.split(/\s+/).length <= 10);
+  assert.ok(result.text.split(/\s+/).length <= 13);
   assert.equal(result.metadata.lockstep.aligned, true);
   assert.equal(result.metadata.terminalCompressionApplied, true);
 });
@@ -113,7 +113,7 @@ test('terminal compression keeps pressured asks short by concern family', () => 
       concernFamily: 'workflow',
       cueCategory: 'terminal_exit',
     }),
-    'One point: what would my team actually do first?'
+    "I'm about to move on. What would my team actually do first?"
   );
 });
 

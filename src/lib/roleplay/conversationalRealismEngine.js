@@ -11,7 +11,7 @@ const PRESSURE_CATEGORIES = new Set([
 ]);
 
 const SOFT_COLLABORATIVE_PATTERN = /\b(i can stay with this|happy to|let'?s explore|we can talk through|i'?m open to discussing)\b/i;
-const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me)\b/i;
+const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me|move on)\b/i;
 const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
 
 function isHighPressureState({ cueCategory = '', interactionMode = '', engagementTier = '', semanticStage = '', terminalBehavior = false } = {}) {
@@ -23,11 +23,11 @@ function isHighPressureState({ cueCategory = '', interactionMode = '', engagemen
 function compressFormalQuestionToSingleAsk({ text = '', concernFamily = 'general', cueCategory = 'neutral_attentive' } = {}) {
   const value = normalizeHcpSpokenRealism(text);
   const isTerminal = cueCategory === 'terminal_exit';
-  const terminalLead = isTerminal ? 'One point: ' : '';
+  const terminalLead = isTerminal ? "I'm about to move on. " : '';
 
   if (concernFamily === 'workflow' || /workflow|staff|team|clinic flow|practical/i.test(value)) {
     return isTerminal
-      ? 'One point: what would my team actually do first?'
+      ? "I'm about to move on. What would my team actually do first?"
       : 'Then give me one step. What would my team do first?';
   }
   if (concernFamily === 'access' || /access|coverage|payer|prior auth|copay/i.test(value)) {
