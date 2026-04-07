@@ -95,8 +95,15 @@ test("normalizeHcpDialoguePunctuation corrects malformed 'On great question' ope
 test("normalizeHcpDialoguePunctuation joins dependent prefaces before questions", () => {
   const input = "Before we discuss further. Can you specifically address how the data you shared last week applies to the long-term durability of treatments for my stable HIV patients?";
   const output = normalizeHcpDialoguePunctuation(input);
-  assert.equal(output, "Before we discuss further, can you specifically address how the data you shared last week applies to the long-term durability of treatments for my stable HIV patients?");
+  assert.equal(output, "Before we go further, can you tie that data back to long-term durability for my stable HIV patients?");
   assert.doesNotMatch(output, /Before we discuss further\.\s+Can/i);
+});
+
+test("normalizeHcpDialoguePunctuation shortens over-formal workflow recall questions", () => {
+  const input = "Before we discuss new data, can you specifically address how the treatment options you mentioned last week would impact the workflow for my stable, suppressed patients?";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "Before we get into new data, can you walk me through how that would actually change my workflow for stable patients?");
+  assert.doesNotMatch(output, /treatment options you mentioned last week/i);
 });
 
 test("normalizeHcpDialoguePunctuation is deterministic for repeated runs", () => {

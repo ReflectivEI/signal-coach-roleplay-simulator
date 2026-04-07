@@ -189,7 +189,23 @@ test('shared roleplay turn validation flags bullet-style rep notes as non-conver
   assert.equal(validation.nonConversationalInput.stage, 'soft_coach');
   assert.match(validation.coaching.tip, /notes, not a conversation/i);
   assert.match(validation.coaching.suggestion, /complete sentence/i);
+  assert.match(validation.coaching.suggestion, /Try saying it as/i);
   assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_conversational_input_detected'));
+});
+
+test('shared roleplay turn validation flags note heading plus action tail as non-conversational', () => {
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'How does this change the decision for stable HIV patients?',
+    repMessage: 'Durability and convenience benefits. Define clear optimization criteria and implement quarterly review.',
+    previousRepMessages: [],
+  });
+
+  assert.equal(validation.valid, true);
+  assert.equal(validation.softInvalid, true);
+  assert.equal(validation.nonConversationalInput.detected, true);
+  assert.deepEqual(validation.nonConversationalInput.reasons, ['note_heading_with_action_tail']);
+  assert.match(validation.nonConversationalInput.spokenRewriteSuggestion, /defining clear optimization criteria and implementing quarterly review/i);
+  assert.match(validation.coaching.suggestion, /Respond in a complete sentence/i);
 });
 
 test('shared roleplay turn validation escalates repeated note-style input to hard invalid', () => {
@@ -209,6 +225,7 @@ test('shared roleplay turn validation escalates repeated note-style input to har
   assert.equal(validation.blockStateAdvance, true);
   assert.equal(validation.nonConversationalInput.detected, true);
   assert.equal(validation.nonConversationalInput.stage, 'hard_block');
+  assert.match(validation.nonConversationalInput.spokenRewriteSuggestion, /Try saying it as/i);
   assert.equal(validation.coaching.escalationLabel, 'Turn blocked');
   assert.ok(validation.telemetryEvents.some((event) => event.eventType === 'non_conversational_input_detected'));
 });

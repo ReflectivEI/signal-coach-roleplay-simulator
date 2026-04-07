@@ -154,6 +154,69 @@ function mergeDependentClauseFragments(sentences = []) {
   }, []);
 }
 
+function normalizeFormalRecallPhrases(text = '') {
+  return String(text || '')
+    .replace(/\bBefore we discuss further,\s*/gi, 'Before we go further, ')
+    .replace(/\bBefore we discuss further\.\s*/gi, 'Before we go further. ')
+    .replace(/\bBefore we discuss new data,\s*/gi, 'Before we get into new data, ')
+    .replace(/\bBefore we discuss new data\.\s*/gi, 'Before we get into new data. ')
+    .replace(/\bBefore we discuss more data,\s*/gi, 'Before we get into more data, ')
+    .replace(/\bBefore we discuss more data\.\s*/gi, 'Before we get into more data. ')
+    .replace(/\bthe treatment options you (?:mentioned|shared|reviewed|discussed) last week\b/gi, 'that')
+    .replace(/\bthe data you (?:mentioned|shared|reviewed|discussed) last week\b/gi, 'that data')
+    .replace(/\bthe evidence you (?:mentioned|shared|reviewed|discussed) last week\b/gi, 'that evidence')
+    .replace(/\bwould impact\b/gi, 'would change')
+    .replace(/\bspecifically address how\b/gi, 'tie back how')
+    .replace(/\bapplies to the long-term durability of treatments for\b/gi, 'ties to long-term durability for')
+    .replace(/\bapply to the long-term durability of treatments for\b/gi, 'tie to long-term durability for')
+    .replace(/\bhow that data ties to\b/gi, 'how that data ties back to')
+    .replace(/\bhow that ties to\b/gi, 'how that ties back to')
+    .replace(/\bworkflow for my stable, suppressed patients\b/gi, 'workflow for stable patients')
+    .replace(/\bworkflow for my stable patients\b/gi, 'workflow for stable patients')
+    .replace(/\bCan you tie back how\b/g, 'Can you tie that back to how')
+    .replace(/\bcan you tie back how\b/g, 'can you tie that back to how')
+    .replace(/\bcan you tie that back to how that data ties back to\b/gi, 'can you tie that data back to')
+    .replace(/\bcan you tie that back to how that evidence ties back to\b/gi, 'can you tie that evidence back to')
+    .replace(/\bcan you tie that back to how that would actually change\b/gi, 'can you walk me through how that would actually change')
+    .replace(/\bCan you specifically address\b/g, 'Can you tie that back to')
+    .replace(/\bcan you specifically address\b/g, 'can you tie that back to')
+    .replace(/\bhow that would change the workflow\b/gi, 'how that would actually change the workflow')
+    .replace(/\bcan you tie that back to how that would actually change\b/gi, 'can you walk me through how that would actually change')
+    .replace(/\bthe workflow for stable patients\b/gi, 'my workflow for stable patients')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function repairSpokenPrefaceQuestionJoin(text = '') {
+  return String(text || '').replace(
+    /^(Before we (?:go further|get into (?:new|more) data))\.\s+(Can|Could|Would|What|How|Which|When|Where|Why)\b/,
+    (_match, preface, starter) => `${preface}, ${lowercaseQuestionStarter(starter)}`
+  );
+}
+
+function splitOverlongHcpQuestion(text = '') {
+  const value = String(text || '').trim();
+  if (!value || value.split(/\s+/).length <= 25) return value;
+
+  return value
+    .replace(
+      /^(Before we (?:go further|get into (?:new|more) data),)\s+can you tie that back to how ([^?]{18,160})\?$/i,
+      (_match, preface, ask) => `${preface} help me make this practical. How ${ask.trim()}?`
+    )
+    .replace(
+      /^(Before we (?:go further|get into (?:new|more) data),)\s+can you tie that back to ([^?]{18,160})\?$/i,
+      (_match, preface, ask) => `${preface} help me make this practical. How does ${ask.trim()}?`
+    )
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export function normalizeHcpSpokenRealism(dialogue) {
+  const normalized = normalizeDialogueSentenceBoundaries(dialogue);
+  if (!normalized) return normalized;
+  return repairSpokenPrefaceQuestionJoin(normalizeDialogueSentenceBoundaries(splitOverlongHcpQuestion(normalizeFormalRecallPhrases(normalized))));
+}
+
 export function normalizeDialogueSentenceBoundaries(dialogue) {
   if (!dialogue) return dialogue;
 

@@ -5,6 +5,7 @@ import {
   detectDialogueBoundaryIssues,
   formatHcpSentence,
   normalizeDialogueSentenceBoundaries,
+  normalizeHcpSpokenRealism,
 } from '../src/lib/roleplay/dialogueGrammar.js';
 
 test('normalizeDialogueSentenceBoundaries repairs comma splice between independent clauses', () => {
@@ -70,6 +71,17 @@ test('formatHcpSentence composes preface plus ask deterministically without chan
   });
   assert.equal(first, 'Before we discuss further, can you address the durability point?');
   assert.equal(second, first);
+});
+
+test('normalizeHcpSpokenRealism converts formal recall questions into shorter spoken HCP flow', () => {
+  assert.equal(
+    normalizeHcpSpokenRealism('Before we discuss further. Can you specifically address how the data you shared last week applies to the long-term durability of treatments for my stable HIV patients?'),
+    'Before we go further, can you tie that data back to long-term durability for my stable HIV patients?'
+  );
+  assert.equal(
+    normalizeHcpSpokenRealism('Before we discuss new data, can you specifically address how the treatment options you mentioned last week would impact the workflow for my stable, suppressed patients?'),
+    'Before we get into new data, can you walk me through how that would actually change my workflow for stable patients?'
+  );
 });
 
 test('detectDialogueBoundaryIssues reports sentence-boundary defects and ignores valid joins', () => {

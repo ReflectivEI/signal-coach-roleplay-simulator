@@ -17,7 +17,7 @@ Core responsibilities
 ******************************************************************************************/
 
 import { scenarios } from './hcpDialogueEngine.jsx'
-import { normalizeDialogueSentenceBoundaries } from '../../lib/roleplay/dialogueGrammar.js'
+import { normalizeHcpSpokenRealism } from '../../lib/roleplay/dialogueGrammar.js'
 import { extractScenarioOwnedOpeningTurn } from './openingTurnAuthority.js'
 
 /******************************************************************************************
@@ -1641,7 +1641,7 @@ PUNCTUATION NORMALIZATION
 ******************************************************************************************/
 
 export function normalizeHcpDialoguePunctuation(dialogue) {
-  return normalizeDialogueSentenceBoundaries(dialogue)
+  return normalizeHcpSpokenRealism(dialogue)
 }
 
 /******************************************************************************************

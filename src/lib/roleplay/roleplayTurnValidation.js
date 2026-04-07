@@ -106,6 +106,7 @@ function hasNonsenseOrEvasiveOpening(repMessage = "") {
 const SHORT_SPOKEN_ACKNOWLEDGEMENT_PATTERN = /^(absolutely|yes|yeah|yep|sure|understood|got it|that makes sense|fair point|i hear you|i understand|okay|ok)([.!?]*)$/i;
 const SPOKEN_SENTENCE_SIGNAL_PATTERN = /\b(i|we|you|your|our|let'?s|that|this|it|they|my|the team|hcp|doctor)\b/i;
 const FINITE_OR_IMPERATIVE_VERB_PATTERN = /\b(am|is|are|was|were|be|being|been|have|has|had|do|does|did|can|could|will|would|should|may|might|must|need|needs|needed|want|wants|wanted|think|thinks|thought|hear|heard|understand|understood|see|seeing|saw|show|shows|showed|support|supports|supported|change|changes|changed|matter|matters|apply|applies|applied|start|starts|started|assign|assigns|assigned|own|owns|owned|run|runs|ran|pilot|pilots|piloted|implement|implements|implemented|standardize|standardizes|standardized|standardise|standardises|standardised|check|checks|checked|verify|verifies|verified|route|routes|routed|submit|submits|submitted|schedule|schedules|scheduled|review|reviews|reviewed|use|uses|used|build|builds|built|track|tracks|tracked|focus|focuses|focused|connect|connects|connected|answer|answers|answered|ask|asks|asked|address|addresses|addressed|give|gives|gave|tell|tells|told|walk|walks|walked)\b/i;
+const NOTE_HEADING_VERB_PATTERN = /\b(am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|need|needs|needed|want|wants|wanted|think|thinks|hear|heard|understand|understood|show|shows|showed|support|supports|supported|change|changes|changed|matter|matters|apply|applies|applied|start|starts|started|assign|assigns|assigned|own|owns|owned|run|runs|ran|pilot|pilots|piloted|implement|implements|implemented|standardize|standardizes|standardized|standardise|standardises|standardised|check|checks|checked|verify|verifies|verified|route|routes|routed|submit|submits|submitted|schedule|schedules|scheduled|review|reviews|reviewed|use|uses|used|build|builds|built|track|tracks|tracked|focus|focuses|focused|connect|connects|connected|answer|answers|answered|ask|asks|asked|address|addresses|addressed|give|gives|gave|tell|tells|told|walk|walks|walked)\b/i;
 const NOTE_FRAGMENT_NOUN_PATTERN = /\b(benefits?|durability|convenience|reluctance|awareness|perception|priorities|barriers?|criteria|candidacy|resistance|workflow|process|optimization|patients?|data|evidence|outcomes?|objective|challenge|focus|recommendation|coverage|access|adherence|screening|monitoring)\b/i;
 
 function splitNoteLikeSegments(value = "") {
@@ -113,6 +114,66 @@ function splitNoteLikeSegments(value = "") {
     .split(/[;•\n]+|(?:\s+-\s+)|(?:,\s+)|(?:\.\s+)/)
     .map((segment) => segment.trim())
     .filter(Boolean);
+}
+
+function normalizeNoteSegmentForSpeech(segment = "") {
+  return String(segment || "")
+    .replace(/^(?:[-*•]|\d+[.)])\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.!?]+$/, "")
+    .replace(/^([A-Z])/, (match) => match.toLowerCase());
+}
+
+function startsWithActionVerb(segment = "") {
+  return /^(define|implement|start|use|review|check|verify|route|submit|schedule|track|focus|connect|answer|address|give|walk|assign|pilot|standardize|standardise|build)\b/i.test(String(segment || "").trim());
+}
+
+function convertActionFragmentToGerund(segment = "") {
+  return String(segment || "").trim()
+    .replace(/^define\b/i, "defining")
+    .replace(/^implement\b/i, "implementing")
+    .replace(/^start\b/i, "starting")
+    .replace(/^use\b/i, "using")
+    .replace(/^review\b/i, "reviewing")
+    .replace(/^check\b/i, "checking")
+    .replace(/^verify\b/i, "verifying")
+    .replace(/^route\b/i, "routing")
+    .replace(/^submit\b/i, "submitting")
+    .replace(/^schedule\b/i, "scheduling")
+    .replace(/^track\b/i, "tracking")
+    .replace(/^focus\b/i, "focusing")
+    .replace(/^connect\b/i, "connecting")
+    .replace(/^answer\b/i, "answering")
+    .replace(/^address\b/i, "addressing")
+    .replace(/^give\b/i, "giving")
+    .replace(/^walk\b/i, "walking")
+    .replace(/^assign\b/i, "assigning")
+    .replace(/^pilot\b/i, "piloting")
+    .replace(/^standardize\b/i, "standardizing")
+    .replace(/^standardise\b/i, "standardising")
+    .replace(/^build\b/i, "building")
+    .replace(/\band implement\b/i, "and implementing")
+    .replace(/\band define\b/i, "and defining")
+    .replace(/\band start\b/i, "and starting")
+    .replace(/\band review\b/i, "and reviewing");
+}
+
+function buildSpokenRewriteSuggestion(repMessage = "") {
+  const segments = splitNoteLikeSegments(repMessage)
+    .map(normalizeNoteSegmentForSpeech)
+    .filter(Boolean)
+    .slice(0, 3);
+  if (!segments.length) return "Respond in a complete sentence as you would say it to the HCP.";
+
+  const [first, second] = segments;
+  if (second && startsWithActionVerb(second)) {
+    return `Try saying it as: "I think the point is ${first}, and I would make it practical by ${convertActionFragmentToGerund(second)}."`;
+  }
+  if (second) {
+    return `Try saying it as: "I think the key issue is ${first}, and I would connect it to ${second}."`;
+  }
+  return `Try saying it as: "I think the key issue is ${first}, and I would connect that to one practical next step."`;
 }
 
 function detectNonConversationalShape(repMessage = "") {
@@ -135,6 +196,15 @@ function detectNonConversationalShape(repMessage = "") {
   const hasFiniteVerb = FINITE_OR_IMPERATIVE_VERB_PATTERN.test(raw) && !/^\w+\s+to\s+\w+/i.test(raw);
   const hasMultipleShortPhrases = segments.length >= 2 && shortSegmentCount >= 2 && !hasSpokenSignal && !startsWithImperative && !hasFiniteVerb;
   if (hasMultipleShortPhrases) reasons.push("multiple_short_note_phrases");
+  const firstSegment = segments[0] || "";
+  const nounHeadingWithActionTail = segments.length >= 2
+    && tokenizeMeaningful(firstSegment).length <= 6
+    && segments.slice(1).some((segment) => tokenizeMeaningful(segment).length <= 9)
+    && !hasSpokenSignal
+    && NOTE_FRAGMENT_NOUN_PATTERN.test(firstSegment)
+    && !NOTE_HEADING_VERB_PATTERN.test(firstSegment)
+    && segments.slice(1).some(startsWithActionVerb);
+  if (nounHeadingWithActionTail) reasons.push("note_heading_with_action_tail");
   const lacksSentenceStructure = tokens.length >= 4 && !hasSpokenSignal && !startsWithImperative && !hasFiniteVerb;
   if (lacksSentenceStructure) reasons.push("lacks_spoken_sentence_structure");
 
@@ -155,7 +225,7 @@ function detectNonConversationalShape(repMessage = "") {
 function detectNonConversationalInput({ repMessage = "", allPreviousRepMessages = [] } = {}) {
   const current = detectNonConversationalShape(repMessage);
   if (!current.detected) {
-    return { detected: false, repeatCount: 0, stage: "none", reasons: [] };
+    return { detected: false, repeatCount: 0, stage: "none", reasons: [], spokenRewriteSuggestion: "" };
   }
 
   const previousMessages = Array.isArray(allPreviousRepMessages) ? allPreviousRepMessages : [];
@@ -168,6 +238,7 @@ function detectNonConversationalInput({ repMessage = "", allPreviousRepMessages 
     repeatCount,
     stage,
     reasons: current.reasons,
+    spokenRewriteSuggestion: buildSpokenRewriteSuggestion(repMessage),
   };
 }
 
@@ -391,11 +462,13 @@ function buildNonAdaptiveRepetitionCoaching(nonAdaptiveRepetition = {}) {
 }
 
 function buildNonConversationalInputCoaching(nonConversationalInput = {}) {
+  const baseSuggestion = "Respond in a complete sentence as you would say it to the HCP.";
+  const spokenRewrite = String(nonConversationalInput.spokenRewriteSuggestion || "").trim();
   return {
     shouldShow: true,
     label: "Use spoken language",
     tip: "This reads like notes, not a conversation.",
-    suggestion: "Respond in a complete sentence as you would say it to the HCP.",
+    suggestion: spokenRewrite ? `${baseSuggestion} ${spokenRewrite}` : baseSuggestion,
     severity: nonConversationalInput.stage === "hard_block" ? "high" : "medium",
     escalationLabel: nonConversationalInput.stage === "hard_block" ? "Turn blocked" : "Conversation note",
   };
@@ -606,6 +679,7 @@ export function validateRoleplayRepTurn({
       repeatCount: nonConversationalInput.repeatCount || 0,
       stage: nonConversationalInput.stage || "none",
       reasons: Array.isArray(nonConversationalInput.reasons) ? nonConversationalInput.reasons : [],
+      spokenRewriteSuggestion: nonConversationalInput.spokenRewriteSuggestion || "",
     },
     coaching: nonConversationalInput.detected
         ? buildNonConversationalInputCoaching(nonConversationalInput)
