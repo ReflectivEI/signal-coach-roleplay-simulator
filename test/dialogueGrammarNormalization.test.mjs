@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  compressHcpDialogueForState,
   detectDialogueBoundaryIssues,
   formatHcpSentence,
   normalizeDialogueSentenceBoundaries,
@@ -82,6 +83,48 @@ test('normalizeHcpSpokenRealism converts formal recall questions into shorter sp
     normalizeHcpSpokenRealism('Before we discuss new data, can you specifically address how the treatment options you mentioned last week would impact the workflow for my stable, suppressed patients?'),
     'Before we get into new data, can you walk me through how that would actually change my workflow for stable patients?'
   );
+});
+
+test('compressHcpDialogueForState shortens evidence asks as pressure increases while preserving durability ask', () => {
+  const input = 'Before we discuss new data, can you specifically address how the treatment options you mentioned last week impact the long-term durability for my stable patients, which was my primary concern?';
+  const neutral = compressHcpDialogueForState(input, { cueCategory: 'neutral_attentive', concernFamily: 'evidence' });
+  const focused = compressHcpDialogueForState(input, { cueCategory: 'focused_narrowing', concernFamily: 'evidence' });
+  const hard = compressHcpDialogueForState(input, { cueCategory: 'hard_escalation', concernFamily: 'evidence' });
+
+  assert.equal(neutral, 'Before we get into new data, can you tie that to durability for my stable patients, which was my primary concern?');
+  assert.equal(focused, 'Before we get into new data, can you tie that to durability for my stable patients?');
+  assert.equal(hard, 'Can you tie that to durability for my stable patients?');
+  assert.ok(hard.split(/\s+/).length < focused.split(/\s+/).length);
+  assert.match(hard, /durability/i);
+});
+
+test('compressHcpDialogueForState makes workflow escalation more direct without dropping ownership ask', () => {
+  const input = 'I can stay with this if we make it concrete. What is the first step my staff would own?';
+  assert.equal(
+    compressHcpDialogueForState(input, { cueCategory: 'focused_narrowing', concernFamily: 'workflow' }),
+    'Okay, make it concrete. What would my staff do first?'
+  );
+  assert.equal(
+    compressHcpDialogueForState(input, { cueCategory: 'hard_escalation', concernFamily: 'workflow' }),
+    'Then give me one step. What would my staff own first?'
+  );
+});
+
+test('compressHcpDialogueForState keeps access and screening asks intact while normalizing sentence flow', () => {
+  assert.equal(
+    compressHcpDialogueForState('Given the access delays. What is one workable step?', { cueCategory: 'time_constrained', concernFamily: 'access' }),
+    'Given the access delays, what is one workable step?'
+  );
+  assert.equal(
+    compressHcpDialogueForState('From a screening perspective. How would I identify the right patients?', { cueCategory: 'focused_narrowing', concernFamily: 'screening' }),
+    'From a screening perspective, how would I identify the right patients?'
+  );
+});
+
+test('compressHcpDialogueForState keeps terminal exits short without adding a new ask', () => {
+  const output = compressHcpDialogueForState('I need to pause here if we cannot get to the workflow answer.', { cueCategory: 'terminal_exit', concernFamily: 'workflow' });
+  assert.equal(output, 'I need to pause here.');
+  assert.doesNotMatch(output, /\?/);
 });
 
 test('detectDialogueBoundaryIssues reports sentence-boundary defects and ignores valid joins', () => {

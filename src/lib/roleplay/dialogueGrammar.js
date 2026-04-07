@@ -90,6 +90,9 @@ function repairSentenceBoundaryJoins(text = '') {
     .replace(
       /([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b(\s+(?:i|we|you|they|he|she|it|there|this|that)\b)?/gi,
       (match, prefix, starter, subjectToken = '') => {
+        if (DEPENDENT_PREFACE_PATTERN.test(String(prefix || '').trim())) {
+          return `${prefix.trim()}, ${lowercaseQuestionStarter(starter)}${subjectToken || ''}`;
+        }
         if (AUXILIARY_QUESTION_STARTER_PATTERN.test(starter) && !String(subjectToken || '').trim()) {
           return match;
         }
@@ -166,6 +169,8 @@ function normalizeFormalRecallPhrases(text = '') {
     .replace(/\bthe data you (?:mentioned|shared|reviewed|discussed) last week\b/gi, 'that data')
     .replace(/\bthe evidence you (?:mentioned|shared|reviewed|discussed) last week\b/gi, 'that evidence')
     .replace(/\bwould impact\b/gi, 'would change')
+    .replace(/\bimpact the long-term durability for\b/gi, 'affects durability for')
+    .replace(/\bimpact the long-term durability of treatments for\b/gi, 'affects durability for')
     .replace(/\bspecifically address how\b/gi, 'tie back how')
     .replace(/\bapplies to the long-term durability of treatments for\b/gi, 'ties to long-term durability for')
     .replace(/\bapply to the long-term durability of treatments for\b/gi, 'tie to long-term durability for')
@@ -178,6 +183,8 @@ function normalizeFormalRecallPhrases(text = '') {
     .replace(/\bcan you tie that back to how that data ties back to\b/gi, 'can you tie that data back to')
     .replace(/\bcan you tie that back to how that evidence ties back to\b/gi, 'can you tie that evidence back to')
     .replace(/\bcan you tie that back to how that would actually change\b/gi, 'can you walk me through how that would actually change')
+    .replace(/\bcan you tie that back to how that affects durability for\b/gi, 'can you tie that to durability for')
+    .replace(/\bcan you tie that back to how that impact durability for\b/gi, 'can you tie that to durability for')
     .replace(/\bCan you specifically address\b/g, 'Can you tie that back to')
     .replace(/\bcan you specifically address\b/g, 'can you tie that back to')
     .replace(/\bhow that would change the workflow\b/gi, 'how that would actually change the workflow')
@@ -215,6 +222,106 @@ export function normalizeHcpSpokenRealism(dialogue) {
   const normalized = normalizeDialogueSentenceBoundaries(dialogue);
   if (!normalized) return normalized;
   return repairSpokenPrefaceQuestionJoin(normalizeDialogueSentenceBoundaries(splitOverlongHcpQuestion(normalizeFormalRecallPhrases(normalized))));
+}
+
+function compressWorkflowOwnershipQuestion(text = '', cueCategory = '') {
+  const value = String(text || '');
+  if (!/focused_narrowing|non_adaptive_impatience|time_constrained|hard_escalation/.test(cueCategory)) return value;
+
+  let compressed = value
+    .replace(
+      /^I can stay with this if we make it concrete\. What is the first step my staff would own\?$/i,
+      cueCategory === 'hard_escalation'
+        ? 'Then give me one step. What would my staff own first?'
+        : 'Okay, make it concrete. What would my staff do first?'
+    )
+    .replace(
+      /^I am open to the idea, but it has to be practical\. What is the smallest workflow change you would recommend first\?$/i,
+      cueCategory === 'hard_escalation'
+        ? 'Make it practical. What is the smallest workflow change?'
+        : 'I am open to it, but make it practical. What is the smallest workflow change?'
+    )
+    .replace(/\bWhat is the first step my staff would own\?/i, 'What would my staff own first?')
+    .replace(/\bWhat is the first practical step here\?/i, cueCategory === 'hard_escalation' ? 'What is the practical step?' : 'What is the first practical step?');
+
+  if (cueCategory === 'time_constrained') {
+    compressed = compressed
+      .replace(/^I am open to it, but make it practical\./i, 'I am open to it, but keep it practical.')
+      .replace(/\bWhat is the smallest workflow change\?/i, 'What is the smallest workflow change we could actually run?');
+  }
+
+  return compressed;
+}
+
+function compressEvidenceQuestion(text = '', cueCategory = '') {
+  const value = String(text || '');
+  let compressed = value
+    .replace(/,?\s+which was my primary concern\??/gi, '')
+    .replace(/,?\s+which is my primary concern\??/gi, '')
+    .replace(/\bwhat you showed last week\b/gi, 'last week’s data')
+    .replace(/\bthat data you shared\b/gi, 'that data');
+
+  if (/focused_narrowing|non_adaptive_impatience|time_constrained|hard_escalation/.test(cueCategory)) {
+    compressed = compressed
+      .replace(
+        /^Before we get into new data, can you tie that data back to long-term durability for my stable HIV patients\?$/i,
+        cueCategory === 'hard_escalation'
+          ? 'Can you connect last week’s data to durability for my stable patients?'
+          : 'Before we get into new data, can you tie that data to durability for my stable patients?'
+      )
+      .replace(
+        /^Before we go further, can you tie that data back to long-term durability for my stable HIV patients\?$/i,
+        'Before we go further, can you tie that data to durability for my stable patients?'
+      )
+      .replace(/\blong-term durability for my stable HIV patients\b/gi, 'durability for my stable patients')
+      .replace(/\blong-term durability for my stable patients\b/gi, 'durability for my stable patients');
+  }
+
+  if (cueCategory === 'hard_escalation') {
+    compressed = compressed
+      .replace(/^I hear the setup, but I need the evidence answer: /i, '')
+      .replace(/^Before we get into new data, /i, '')
+      .replace(/^Before we go further, /i, '');
+  }
+
+  return compressed;
+}
+
+function compressTerminalDialogue(text = '') {
+  return String(text || '')
+    .replace(/^I need to pause here if we cannot get to the ([^.?!]+) answer\.?$/i, 'I need to pause here.')
+    .replace(/^I need to stop here if we cannot get to the ([^.?!]+) answer\.?$/i, 'I need to stop here.')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+export function compressHcpDialogueForState(dialogue, {
+  cueCategory = 'neutral_attentive',
+  concernFamily = 'general',
+} = {}) {
+  const normalized = normalizeHcpSpokenRealism(dialogue);
+  if (!normalized) return normalized;
+  if (cueCategory === 'neutral_attentive') return normalized;
+
+  let compressed = normalized
+    .replace(/\bCan you specifically address\b/gi, 'Can you tie that back to')
+    .replace(/\bthe treatment options you mentioned last week\b/gi, 'what you showed last week')
+    .replace(/\bthe data you shared last week\b/gi, 'that data')
+    .replace(/,?\s+as that(?:'s| is) (?:the )?(?:key factor|primary concern)[^?.!]*([?.!])/gi, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  if (concernFamily === 'workflow' || /workflow|staff|practical step|clinic flow/i.test(compressed)) {
+    compressed = compressWorkflowOwnershipQuestion(compressed, cueCategory);
+  }
+  if (concernFamily === 'evidence' || /evidence|data|proof|durability|decision/i.test(compressed)) {
+    compressed = compressEvidenceQuestion(compressed, cueCategory);
+  }
+  if (cueCategory === 'terminal_exit') {
+    compressed = compressTerminalDialogue(compressed);
+  }
+
+  return normalizeHcpSpokenRealism(compressed);
 }
 
 export function normalizeDialogueSentenceBoundaries(dialogue) {

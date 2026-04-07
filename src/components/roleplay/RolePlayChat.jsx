@@ -125,6 +125,7 @@ import { detectStructuredScenarioContentLeak, repairStructuredScenarioContentLea
 import { resolveActiveHcpAskState } from "@/lib/roleplay/activeHcpAskState";
 import { buildRoleplayScenarioExecutionContract } from "@/lib/roleplay/scenarioExecutionContract";
 import { selectStateAlignedHcpCue } from "@/lib/roleplay/hcpCueStateAlignment";
+import { compressHcpDialogueForState } from "@/lib/roleplay/dialogueGrammar";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
 
 function buildRuntimeScenarioView(scenario = {}, runtimeContract = {}) {
@@ -5321,6 +5322,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenarioId: scenario?.id || scenario?.scenarioId || scenario?.title || "scenario",
       turnNumber: nextTurnNumber,
     });
+    const stateCompressedHcpDialogue = compressHcpDialogueForState(nextHcpDialogue, {
+      cueCategory: hcpCueStateAlignment.cueCategory,
+      concernFamily: hcpCueStateAlignment.concernFamily || conversationIntelligenceState?.turnInterpretation?.concernFamily || primaryConcern,
+    });
+    if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue) {
+      finalHcpReactionContract = {
+        ...finalHcpReactionContract,
+        selectedDialogueText: stateCompressedHcpDialogue,
+        finalDialogueBeforeStateCompression: nextHcpDialogue,
+      };
+      nextHcpDialogue = stateCompressedHcpDialogue;
+    }
     contextualCue = hardenTextSurface(hcpCueStateAlignment.cueText || contextualCue);
     finalHcpReactionContract = {
       ...finalHcpReactionContract,
