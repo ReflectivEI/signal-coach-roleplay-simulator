@@ -51,8 +51,8 @@ function deriveCueCategory({
     return "hard_escalation";
   }
   if (repeatedWithoutAdapting) return "non_adaptive_impatience";
-  if (/impatient|constrained|boundary|resistant/.test(stateText)) return "focused_narrowing";
   if (timePressure || HIGH_PRESSURE_PATTERN.test(dialogueText) || /time/.test(stateText)) return "time_constrained";
+  if (/impatient|constrained|boundary|resistant/.test(stateText)) return "focused_narrowing";
   if (ciProgression === "partial" || validationOutput?.softInvalid) return "focused_narrowing";
   return "neutral_attentive";
 }

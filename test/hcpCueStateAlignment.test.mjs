@@ -74,6 +74,24 @@ test('hard escalation cues do not preserve soft body-language descriptors', () =
   assert.doesNotMatch(aligned.cueText, /warm|receptive|relaxed|open/i);
 });
 
+test('explicit time pressure derives time-constrained cues ahead of generic narrowing', () => {
+  const aligned = selectStateAlignedHcpCue({
+    preferStateDerived: true,
+    activeHcpAsk: evidenceAsk,
+    concernFamily: 'evidence',
+    hcpState: 'engaged',
+    decayTier: 'constrained',
+    timePressure: true,
+    dialogueText: 'We have 20 minutes, so give me the single proof point that changes this decision.',
+    scenarioId: 'evidence_time_pressure',
+    turnNumber: 1,
+  });
+
+  assert.equal(aligned.cueCategory, 'time_constrained');
+  assert.match(aligned.cueText, /schedule|time pressure|proof point/i);
+  assert.doesNotMatch(aligned.cueText, /door|ending|exchange is over/i);
+});
+
 test('terminal state derives exit cues aligned with terminal dialogue or imminent exit', () => {
   const aligned = selectStateAlignedHcpCue({
     existingCueText: 'The HCP stays attentive, waiting for the response to connect.',
