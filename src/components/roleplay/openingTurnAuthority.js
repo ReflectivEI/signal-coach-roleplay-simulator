@@ -78,6 +78,31 @@ function hasNaturalAcknowledgment(dialogueText = '') {
   return /^(hi|hello|hey|good morning|good afternoon|good evening)\b[\s,.!]/i.test(String(dialogueText || '').trim());
 }
 
+function normalizeReplaySurface(value = '') {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripOpeningAcknowledgment(value = '') {
+  return String(value || '')
+    .replace(/^(hi|hello|hey|good morning|good afternoon|good evening)\b[\s,.!]*/i, '')
+    .trim();
+}
+
+function tokenOverlapRatio(a = '', b = '') {
+  const tokensA = new Set(normalizeReplaySurface(a).split(/\s+/).filter((token) => token.length > 2));
+  const tokensB = new Set(normalizeReplaySurface(b).split(/\s+/).filter((token) => token.length > 2));
+  if (!tokensA.size || !tokensB.size) return 0;
+  let overlap = 0;
+  tokensA.forEach((token) => {
+    if (tokensB.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(tokensA.size, tokensB.size);
+}
+
 function scenarioExplicitlySkipsGreeting(openingScene = '') {
   return /\b(no greeting|without greeting|does not acknowledge|doesn't acknowledge|ignores the rep|cuts off the rep|refuses to engage)\b/i.test(String(openingScene || ''));
 }
@@ -179,4 +204,31 @@ export function extractScenarioOwnedOpeningTurn(scenario = {}) {
 export function hasScenarioOwnedOpeningTurn(scenario = {}) {
   const openingTurn = extractScenarioOwnedOpeningTurn(scenario);
   return Boolean(normalizeText(openingTurn.cueText) || normalizeText(openingTurn.dialogueText));
+}
+
+export function detectOpeningSceneDialogueReplay({ dialogueText = '', scenario = {} } = {}) {
+  const candidate = normalizeText(dialogueText);
+  const openingDialogue = normalizeText(extractScenarioOwnedOpeningTurn(scenario)?.dialogueText || '');
+  if (!candidate || !openingDialogue) {
+    return { replayed: false, similarity: 0, openingDialogue };
+  }
+
+  const normalizedCandidate = normalizeReplaySurface(candidate);
+  const normalizedOpening = normalizeReplaySurface(openingDialogue);
+  const normalizedOpeningWithoutGreeting = normalizeReplaySurface(stripOpeningAcknowledgment(openingDialogue));
+  const similarity = Math.max(
+    tokenOverlapRatio(candidate, openingDialogue),
+    tokenOverlapRatio(stripOpeningAcknowledgment(candidate), stripOpeningAcknowledgment(openingDialogue))
+  );
+  const enoughOpeningSignal = normalizedOpeningWithoutGreeting.split(/\s+/).filter(Boolean).length >= 4;
+  const exactReplay = normalizedOpening && normalizedCandidate.includes(normalizedOpening);
+  const nearReplay = enoughOpeningSignal
+    && normalizedOpeningWithoutGreeting
+    && normalizedCandidate.includes(normalizedOpeningWithoutGreeting);
+
+  return {
+    replayed: exactReplay || nearReplay || similarity >= 0.82,
+    similarity,
+    openingDialogue,
+  };
 }

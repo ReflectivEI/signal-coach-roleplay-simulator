@@ -2001,7 +2001,9 @@ export function buildHCPDialoguePrompt({
 
   prompt += '\nSCENARIO: "' + sanitize(scenario.title || '') + '"'
   prompt += '\nSCENARIO DESCRIPTION: ' + sanitize(runtimeVisibleScenarioContext)
-  prompt += '\nOPENING SCENE: ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
+  prompt += isOpening
+    ? '\nOPENING SCENE: ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
+    : '\nOPENING CONTEXT (CONSUMED - DO NOT REPEAT AS SPOKEN DIALOGUE): ' + sanitize(scenario.opening_scene || scenario.openingScene || '')
   prompt += '\nHCP TYPE: ' + sanitize(scenario.hcp_category || 'Physician')
   prompt += '\nSPECIALTY: ' + sanitize(scenario.specialty || 'General Medicine')
   prompt += '\nDISEASE STATE: ' + sanitize(scenario.disease_state || 'General')
@@ -2144,7 +2146,7 @@ export function buildHCPDialoguePrompt({
   if (sanitizedHistoryText) {
     prompt += '\nCONVERSATION HISTORY:\n' + sanitize(sanitizedHistoryText)
     prompt +=
-      '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue. Keep wording natural and avoid templated repetition.'
+      '\n\nRespond directly to what the rep just said, staying true to your locked state, tone, and cue. Keep wording natural and avoid templated repetition. The opening context has already been consumed; preserve its concern/posture but do not repeat or paraphrase its spoken opening line.'
   } else {
     prompt += hasScenarioOwnedOpeningAuthority
       ? '\n\nOPENING TURN CONTRACT: This is the first HCP turn. The scenario-owned opening beat is authoritative. Output exactly the ROLEPLAY_OPENING_DIALOGUE_EXACT line and nothing else.'

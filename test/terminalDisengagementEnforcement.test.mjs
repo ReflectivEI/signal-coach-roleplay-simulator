@@ -45,6 +45,13 @@ test("HCP dialogue strips simulator meta-discourse before final turn output", ()
   assert.match(SOURCE, /nextHcpDialogue = stripSimulatorMetaDialogue\(nextHcpDialogue\);/);
 });
 
+test("final HCP dialogue repairs consumed opening-scene replay", () => {
+  assert.match(SOURCE, /detectOpeningSceneDialogueReplay/);
+  assert.match(SOURCE, /opening_scene_dialogue_replay_repaired/);
+  assert.match(SOURCE, /openingReplayCheck\.replayed/);
+  assert.match(SOURCE, /!isFirstHcpResponse/);
+});
+
 test("HCP dialogue surface hardening repairs malformed preference fragments", () => {
   assert.match(SOURCE, /function hardenTextSurface/);
   assert.match(SOURCE, /I\(\?:'d\| would\) like\) on/);

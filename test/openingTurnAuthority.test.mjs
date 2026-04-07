@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { extractScenarioOwnedOpeningTurn } from "../src/components/roleplay/openingTurnAuthority.js";
+import {
+  detectOpeningSceneDialogueReplay,
+  extractScenarioOwnedOpeningTurn,
+} from "../src/components/roleplay/openingTurnAuthority.js";
 import { buildHCPDialoguePrompt, buildHCPProfile, buildTurnSimulationBundle } from "../src/components/roleplay/hcpSimulationEngine.jsx";
 import { buildHcpReactionContract } from "../src/components/roleplay/hcpReactionIntegrity.js";
 import { ALL_SCENARIOS } from "../src/lib/roleplay-v2/scenarioCatalog.js";
@@ -102,6 +105,46 @@ test("opening prompt carries deterministic scenario-owned authority marker", () 
   assert.match(prompt, /ROLEPLAY_OPENING_DIALOGUE_EXACT: Hi\. I can give you a minute/);
   assert.match(prompt, /OPENING TURN CONTRACT/);
   assert.doesNotMatch(prompt, /That is interesting, but my biggest issue is prior auth delays, not outcomes/);
+});
+
+test("non-opening prompt retires opening scene as spoken dialogue source", () => {
+  const prompt = buildHCPDialoguePrompt({
+    scenario: {
+      id: "committee_opening_retirement",
+      title: "Formulary Review",
+      description: "Committee is time-limited and evidence-focused.",
+      openingScene: "The P&T committee members are reviewing budget reports. The pharmacy director looks up. 'We have three formulary requests today. You have 20 minutes.'",
+      hcp_category: "Non-Prescribing Influencer",
+      specialty: "Cardiology",
+      disease_state: "Cardiology",
+    },
+    hcpProfile: profile,
+    historyText: "HCP: Hi there. We have three formulary requests today. You have 20 minutes.\nSales Rep: I'd like to discuss outcomes data.",
+    isOpening: false,
+  });
+
+  assert.match(prompt, /OPENING CONTEXT \(CONSUMED - DO NOT REPEAT AS SPOKEN DIALOGUE\)/);
+  assert.match(prompt, /opening context has already been consumed/i);
+  assert.doesNotMatch(prompt, /OPENING TURN CONTRACT/);
+});
+
+test("opening scene replay detector catches literal replay but allows live continuation", () => {
+  const scenario = {
+    id: "committee_opening_replay_guard",
+    openingScene: "The P&T committee members are reviewing budget reports. The pharmacy director looks up. 'We have three formulary requests today. You have 20 minutes.'",
+  };
+
+  const replay = detectOpeningSceneDialogueReplay({
+    scenario,
+    dialogueText: "Hi there. We have three formulary requests today. You have 20 minutes.",
+  });
+  const continuation = detectOpeningSceneDialogueReplay({
+    scenario,
+    dialogueText: "Understood. Given the time, what is the single most relevant outcomes point you want this committee to focus on?",
+  });
+
+  assert.equal(replay.replayed, true);
+  assert.equal(continuation.replayed, false);
 });
 
 test("turn simulation bundle exposes scenario-owned opening cue and dialogue", () => {

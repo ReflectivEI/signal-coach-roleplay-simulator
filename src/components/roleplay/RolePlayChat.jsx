@@ -115,6 +115,7 @@ import {
   buildLatestAskProgressionDialogue,
   classifyLatestAskProgression,
 } from "./latestAskProgression";
+import { detectOpeningSceneDialogueReplay } from "./openingTurnAuthority";
 import { validateRoleplayRepTurn } from "@/lib/roleplay/roleplayTurnValidation";
 import { detectStructuredScenarioContentLeak } from "@/lib/roleplay/structuredScenarioLeakGuard";
 import { recordSimulatorTelemetry } from "@/lib/roleplay-v2/simulatorTelemetry";
@@ -5069,6 +5070,34 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     nextHcpDialogue = latestAskProtectedDialogue || hcpReactionContract.selectedDialogueText || nextHcpDialogue;
     nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
     nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
+
+    const openingReplayCheck = detectOpeningSceneDialogueReplay({
+      dialogueText: nextHcpDialogue,
+      scenario,
+    });
+    if (
+      openingReplayCheck.replayed
+      && !isFirstHcpResponse
+      && !isTerminalClosureDialogue(nextHcpDialogue)
+    ) {
+      usedDeterministicFallback = true;
+      nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
+        fallbackResponse: chooseConcernSpecificVariant({
+          concern: primaryConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:opening-replay-repair`,
+          recentDialogues: recentHcpDialogues,
+        }),
+        concern: primaryConcern,
+        includeWarmth: false,
+        scenarioContext: visibleScenarioGroundingText,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+      emitPlannerTrace("opening_scene_dialogue_replay_repaired", {
+        turnNumber: nextTurnNumber,
+        activeConcern: primaryConcern,
+        similarity: openingReplayCheck.similarity,
+      });
+    }
 
     const structuredScenarioLeakCheck = detectStructuredScenarioContentLeak({
       dialogueText: nextHcpDialogue,
