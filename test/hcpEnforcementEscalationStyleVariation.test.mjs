@@ -93,7 +93,7 @@ test('style variation remains presentation-only: classification/escalation/coach
     cueText: 'HCP expression hardens.',
     dialogueText: 'Please answer now.',
     escalationStage: 'high_pressure',
-    profile: { orientation: 'analytical' },
+    profile: { orientation: 'operational' },
     domainAssessment: { scenarioDomain: 'oncology' },
     activeConcern: 'workflow',
   });
@@ -110,15 +110,17 @@ test('style variation remains presentation-only: classification/escalation/coach
   assert.equal(before.coaching, INTERVENTION_DECISIONS.REQUIRE_REANCHOR_TO_CONSTRAINT);
   assert.equal(typeof presentationA.dialogueText, 'string');
   assert.equal(typeof presentationB.dialogueText, 'string');
-  assert.match(presentationA.dialogueText.toLowerCase(), /(non-specific|without specificity)/);
-  assert.match(presentationB.dialogueText.toLowerCase(), /(non-specific|without specificity)/);
+  assert.match(presentationA.dialogueText.toLowerCase(), /(workflow|practical|team)/);
+  assert.match(presentationB.dialogueText.toLowerCase(), /(evidence|data)/);
+  assert.doesNotMatch(presentationA.dialogueText.toLowerCase(), /(non-specific|without specificity|workflow decisions)/);
+  assert.doesNotMatch(presentationB.dialogueText.toLowerCase(), /(non-specific|without specificity|evidence judgment)/);
 });
 
 test('assertTemplateEquivalence throws on semantic divergence and variant-cap violations', () => {
   assert.throws(() => {
     assertTemplateEquivalence('disengaging', {
       balanced: [
-        'I need one exact answer now or we should pause here.',
+        'I can keep going if you make this more specific.',
         '',
       ],
     });

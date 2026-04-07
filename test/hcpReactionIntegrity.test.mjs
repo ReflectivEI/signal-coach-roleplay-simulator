@@ -481,7 +481,7 @@ test('opening exchange remains deterministic but persona/scenario-aware for iden
 
   for (let i = 0; i < outputs.length; i += 1) {
     assert.match(outputs[i].selectedDialogueText.toLowerCase(), scenarios[i].expected);
-    assert.ok(!/I need one exact operational answer now or we should pause here\./i.test(outputs[i].selectedDialogueText));
+    assert.ok(!/one exact operational answer|pause here/i.test(outputs[i].selectedDialogueText));
     assert.ok(['open', 'focused'].includes(outputs[i].enforcementTrace.escalationStage));
   }
 
@@ -495,7 +495,7 @@ test('opening guardrail enforces stage-based turn-1 safety unless scenario expli
     turnNumber: 1,
     hcpState: 'neutral',
     cueText: 'The HCP asks for one concise point.',
-    dialogueText: 'I need one exact operational answer now or we should pause here.',
+    dialogueText: 'I can keep going if you make this about one practical workflow step.',
     activeConcern: 'workflow',
     repMessage: 'Can we discuss the practical implementation?',
     priorEnforcementTrace: { escalationStage: 'high_pressure' },
@@ -507,13 +507,13 @@ test('opening guardrail enforces stage-based turn-1 safety unless scenario expli
     turnNumber: 1,
     hcpState: 'neutral',
     cueText: 'The HCP asks for one concise point.',
-    dialogueText: 'I need one exact operational answer now or we should pause here.',
+    dialogueText: 'I can keep going if you make this about one practical workflow step.',
     activeConcern: 'workflow',
     repMessage: 'Can we discuss the practical implementation?',
     priorEnforcementTrace: { escalationStage: 'high_pressure' },
   });
   assert.ok(['high_pressure', 'disengaging', 'firm', 'narrowed', 'focused', 'open'].includes(allowedInExplicitHighPressure.enforcementTrace.escalationStage));
-  assert.match(allowedInExplicitHighPressure.selectedDialogueText, /I need one exact operational answer now or we should pause here/i);
+  assert.match(allowedInExplicitHighPressure.selectedDialogueText, /practical workflow step/i);
 });
 
 test('turn-1 state gating is topic-agnostic and never emits hard-demand escalation for generic opener', () => {

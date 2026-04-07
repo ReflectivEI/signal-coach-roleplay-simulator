@@ -182,8 +182,8 @@ const LOW_VALUE_STOP_WORDS = new Set([
 ])
 
 export const TERMINAL_DISENGAGEMENT_LINES = [
-  'I have patients waiting, and this is not worth more time. Take care.',
-  "I need to get back to patients, and this isn't productive. Take care.",
+  "I need to get back to clinic, so let's stop here for now.",
+  "I'm going to pause us here and get back to patients.",
 ]
 
 /******************************************************************************************
