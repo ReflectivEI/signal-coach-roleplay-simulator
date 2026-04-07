@@ -106,7 +106,7 @@ test('compressHcpDialogueForState makes workflow escalation more direct without 
   );
   assert.equal(
     compressHcpDialogueForState(input, { cueCategory: 'hard_escalation', concernFamily: 'workflow' }),
-    'Then give me one step. What would my staff own first?'
+    'I can stay with this if we make it concrete. What would my staff own first?'
   );
 });
 

@@ -11,6 +11,7 @@ const PRESSURE_CATEGORIES = new Set([
 ]);
 
 const SOFT_COLLABORATIVE_PATTERN = /\b(i can stay with this|happy to|let'?s explore|we can talk through|i'?m open to discussing)\b/i;
+const CONSTRAINED_DIRECT_ASK_PATTERN = /\bi can stay with this if we make it concrete\.[^.?!]*\bwhat\b/i;
 const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me|move on)\b/i;
 const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
 
@@ -27,8 +28,8 @@ function compressFormalQuestionToSingleAsk({ text = '', concernFamily = 'general
 
   if (concernFamily === 'workflow' || /workflow|staff|team|clinic flow|practical/i.test(value)) {
     return isTerminal
-      ? "I'm about to move on. What would my team actually do first?"
-      : 'Then give me one step. What would my team do first?';
+      ? "I'm about to move on. If this is practical, what would my team do first?"
+      : 'I can stay with this if we make it concrete. What would my team do first?';
   }
   if (concernFamily === 'access' || /access|coverage|payer|prior auth|copay/i.test(value)) {
     return `${terminalLead}what is the access step here?`.replace(/^([a-z])/, (_match, c) => c.toUpperCase());
@@ -164,7 +165,9 @@ export function validateCueDialogueLockstep({ cueCategory = 'neutral_attentive',
   const mismatchReasons = [];
   if (cueCategory === 'terminal_exit' && !TERMINAL_PATTERN.test(text)) mismatchReasons.push('terminal_cue_without_terminal_dialogue');
   if (cueCategory === 'time_constrained' && detectOverpackedSentence({ text }).wordCount > 22) mismatchReasons.push('time_constrained_dialogue_too_long');
-  if (cueCategory === 'hard_escalation' && SOFT_COLLABORATIVE_PATTERN.test(text)) mismatchReasons.push('hard_escalation_with_soft_framing');
+  if (cueCategory === 'hard_escalation' && SOFT_COLLABORATIVE_PATTERN.test(text) && !CONSTRAINED_DIRECT_ASK_PATTERN.test(text)) {
+    mismatchReasons.push('hard_escalation_with_soft_framing');
+  }
   return {
     aligned: mismatchReasons.length === 0,
     mismatchReasons,

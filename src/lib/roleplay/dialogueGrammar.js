@@ -232,19 +232,19 @@ function compressWorkflowOwnershipQuestion(text = '', cueCategory = '') {
     .replace(
       /^I can stay with this if we make it concrete\. What is the first step my staff would own\?$/i,
       cueCategory === 'hard_escalation'
-        ? 'Then give me one step. What would my staff own first?'
+        ? 'I can stay with this if we make it concrete. What would my staff own first?'
         : 'Okay, make it concrete. What would my staff do first?'
     )
     .replace(
       /^Okay, make it concrete\. What would my staff own first\?$/i,
       cueCategory === 'hard_escalation'
-        ? 'Then give me one step. What would my staff own first?'
+        ? 'I can stay with this if we make it concrete. What would my staff own first?'
         : 'Okay, make it concrete. What would my staff own first?'
     )
     .replace(
       /^Okay, make it concrete\. What is the first step my staff would own\?$/i,
       cueCategory === 'hard_escalation'
-        ? 'Then give me one step. What would my staff own first?'
+        ? 'I can stay with this if we make it concrete. What would my staff own first?'
         : 'Okay, make it concrete. What would my staff do first?'
     )
     .replace(

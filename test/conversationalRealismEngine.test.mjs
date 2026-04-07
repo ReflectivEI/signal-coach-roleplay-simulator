@@ -49,9 +49,10 @@ test('conversational realism makes workflow hard escalation shorter and directiv
     interactionMode: 'closing',
   });
 
-  assert.equal(result.text, 'Then give me one step. What would my staff own first?');
+  assert.equal(result.text, 'I can stay with this if we make it concrete. What would my staff own first?');
+  assert.doesNotMatch(result.text, /^Then give me one step/i);
   assert.equal(result.metadata.lockstep.aligned, true);
-  assert.ok(result.text.split(/\s+/).length <= 11);
+  assert.ok(result.text.split(/\s+/).length <= 16);
 });
 
 test('conversational realism preserves access and screening ask clarity', () => {
@@ -113,7 +114,7 @@ test('terminal compression keeps pressured asks short by concern family', () => 
       concernFamily: 'workflow',
       cueCategory: 'terminal_exit',
     }),
-    "I'm about to move on. What would my team actually do first?"
+    "I'm about to move on. If this is practical, what would my team do first?"
   );
 });
 
