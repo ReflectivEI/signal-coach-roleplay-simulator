@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const SOURCE = fs.readFileSync(new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url), "utf8");
+const LATEST_ASK_PROGRESSION_SOURCE = fs.readFileSync(new URL("../src/components/roleplay/latestAskProgression.js", import.meta.url), "utf8");
 
 test("terminal disengagement phrases are recognized as closure signals", () => {
   assert.match(SOURCE, /i need to get back to patients/);
@@ -101,12 +102,12 @@ test("surface hardening prevents capitalized question words after comma joins", 
 });
 
 test("latest HCP ask progression gate prevents workflow ownership loops", () => {
-  assert.match(SOURCE, /function classifyLatestAskProgression/);
-  assert.match(SOURCE, /function buildLatestAskProgressionDialogue/);
-  assert.match(SOURCE, /latestHcpAskRequiresOwner/);
-  assert.match(SOURCE, /hasOwnershipDeflection/);
-  assert.match(SOURCE, /I heard the process change\. The missing piece is ownership/);
-  assert.match(SOURCE, /Fair, you may not know my staffing model/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function classifyLatestAskProgression/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /function buildLatestAskProgressionDialogue/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /latestHcpAskRequiresOwner/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /hasOwnershipDeflection/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /I heard the process change\. The missing piece is ownership/);
+  assert.match(LATEST_ASK_PROGRESSION_SOURCE, /Fair, you may not know my staffing model/);
   assert.match(SOURCE, /const latestAskBoundDialogue = buildLatestAskProgressionDialogue\(latestAskProgression\)/);
   assert.match(SOURCE, /&& !latestAskBoundDialogue[\s\S]*\) \{/);
 });
