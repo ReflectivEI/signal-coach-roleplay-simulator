@@ -5,15 +5,25 @@ import {
   applyConversationalRealism,
   assertLiveHcpRealismRenderInputs,
   compressByState,
+  derivePhraseExhaustionState,
+  deriveRealismMemory,
   detectOverpackedSentence,
+  detectGenericOperationalCrutch,
+  detectLateConversationGenericCollapse,
+  detectRepeatedTerminalAskShape,
+  detectRepeatedOperationalAskSkeleton,
+  detectStockTransitionReuse,
+  detectSyntheticShortHorizon,
   enforceTerminalCompression,
   enforcePostGenerationHcpRealism,
   HCP_REALISM_STATES,
   humanizeClinicalReferences,
   reduceFormalMetaLabeling,
+  reviseForBurdenRealism,
   validateCueDialogueLockstep,
   validateHcpRealismStateMachine,
   validateLiveHcpRealismRenderInputs,
+  spokenBelievabilityAudit,
   varyPressurePhrasing,
 } from '../src/lib/roleplay/conversationalRealismEngine.js';
 import { buildRoleplayScenarioExecutionContract } from '../src/lib/roleplay/scenarioExecutionContract.js';
@@ -384,7 +394,7 @@ test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing'
   });
 
   assert.equal(result.metadata.renderingSource, 'contract_derived_realism_profile');
-  assert.equal(result.text, 'Given the time, what would my team actually do first here, and how would that fit into clinic flow today?');
+  assert.equal(result.text, 'Given the time, what follow-through would my team need to absorb, and how would that fit into clinic flow over time?');
   assertRichHcpLine(result.text, 'unprofiled clinic/provider line');
   assert.doesNotMatch(result.text, /Dr\.|Maya|Patel|Internal Medicine|Urban Clinic/i);
 });
@@ -471,7 +481,7 @@ test('contract-derived bucket hardening does not alter scenario-specific profile
   });
 
   assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
-  assert.equal(result.text, 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?');
+  assert.equal(result.text, 'I remember that data, but before I ask staff to shift stable-patient follow-up. What burden would they absorb over the coming weeks?');
   assertRichHcpLine(result.text, 'profiled HIV workflow line');
 });
 
@@ -574,6 +584,210 @@ test('post-generation realism rewrites rubric-like HCP phrases before final retu
   assert.doesNotMatch(result.text, /You have covered the setup|decision-relevant evidence|Be specific about ownership/i);
 });
 
+test('spoken believability audit detects stock transition and repeated ask-shape reuse', () => {
+  const recent = [
+    'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?',
+    'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?',
+    'The clinic flow is still the issue. What would my team actually own first if we tried this next week?',
+  ];
+
+  assert.deepEqual(detectStockTransitionReuse({
+    reply: 'I remember that data, but I still need the practical piece for staff before I would change anything.',
+    recentHcpTurns: recent,
+  }), {
+    reused: true,
+    family: 'i remember that data',
+    recentCount: 1,
+  });
+
+  const askShape = detectRepeatedTerminalAskShape({
+    reply: 'If this is real, what would my team actually do differently next week?',
+    recentHcpTurns: recent,
+  });
+
+  assert.equal(askShape.repeated, true);
+  assert.equal(askShape.family, 'team_action_ask');
+});
+
+test('post-generation realism revises reused transition shapes into evolved scenario-bound pressure', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
+  const recent = ['Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?'];
+  const result = enforcePostGenerationHcpRealism({
+    reply: 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?',
+    scenarioExecutionContract: contract,
+    activeAskState,
+    concernFamily: 'workflow',
+    stateName: 'TIME_PRESSURE_DEFLECTION',
+    cueCategory: 'time_constrained',
+    recentHcpTurns: recent,
+  });
+
+  const audit = spokenBelievabilityAudit({
+    reply: recent[0],
+    scenarioExecutionContract: contract,
+    activeAskState,
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    recentHcpTurns: recent,
+  });
+
+  assert.equal(audit.stockTransition.reused, true);
+  assert.equal(result.metadata.revised, true);
+  assert.match(result.metadata.issues.join(' '), /stock_transition_reuse|recent_pattern_reuse|repeated_terminal_ask_shape/);
+  assert.notEqual(result.text, recent[0]);
+  assertRichHcpLine(result.text, 'post-generation reused transition rewrite');
+  assert.ok(wordCount(result.text) <= 25, `post-generation rewrite should stay at or below 25 words: ${result.text}`);
+  assert.doesNotMatch(result.text, /^Given the time investment required/i);
+});
+
+test('state-driven realism evolves repeated pressure across four turns without ask-shape loops', () => {
+  const cases = [
+    { id: 'hiv_pa_treat_switch_slowdown', family: 'workflow' },
+    { id: 'covid_pulm_np_postcovid_adherence', family: 'workflow' },
+    { id: 'card-formulary', family: 'evidence' },
+  ];
+
+  for (const item of cases) {
+    const contract = scenarioContractById(item.id);
+    const activeAskState = { ...contract.activeAsk, askText: contract.activeAsk.askText || 'live ask', concernFamily: item.family };
+    const turns = [];
+    for (let index = 0; index < 4; index += 1) {
+      const result = applyConversationalRealism({
+        text: 'Generic upstream draft.',
+        activeAskState,
+        concernFamily: item.family,
+        cueCategory: 'time_constrained',
+        timePressure: true,
+        recentHcpTurns: turns,
+        scenarioExecutionContract: contract,
+        requireContractBound: true,
+      });
+      assertRichHcpLine(result.text, `${item.id} turn ${index + 1}`);
+      assert.ok(wordCount(result.text) <= 25, `${item.id} turn ${index + 1} should stay at or below 25 words: ${result.text}`);
+      assert.ok(!turns.includes(result.text), `${item.id} repeated an HCP line on turn ${index + 1}: ${result.text}`);
+      turns.push(result.text);
+    }
+  }
+});
+
+test('realism memory tracks medium-range phrasing exhaustion beyond the last few turns', () => {
+  const recent = Array.from({ length: 30 }, (_item, index) => (
+    index % 2 === 0
+      ? 'Given the time, what would my team actually do differently next week?'
+      : 'I am still not hearing the operational step, and I cannot hand my team a concept. What would they do differently next week?'
+  ));
+
+  const memory = deriveRealismMemory({ recentHcpTurns: recent, concernFamily: 'workflow' });
+  const exhaustion = derivePhraseExhaustionState({ recentHcpTurns: recent, concernFamily: 'workflow' });
+  const collapse = detectLateConversationGenericCollapse({
+    reply: 'Given the time, I need one practical point. What would my team actually do differently?',
+    recentHcpTurns: recent,
+    concernFamily: 'workflow',
+  });
+
+  assert.equal(memory.turnCount, 30);
+  assert.ok(memory.exhausted.openingStructures.includes('given_time_opening'));
+  assert.ok(memory.exhausted.askStructures.includes('team_action_ask'));
+  assert.ok(exhaustion.exhausted.openingStructures.includes('still_not_hearing_opening'));
+  assert.equal(collapse.collapsed, true);
+  assert.match(collapse.reasons.join(' '), /late_generic_repair_crutch|late_repeated_ask_shape|late_repeated_opening_shape/);
+});
+
+test('post-generation realism re-anchors late collapsed workflow lines to scenario memory', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
+  const recent = Array.from({ length: 28 }, (_item, index) => (
+    index % 2 === 0
+      ? 'Given the time, what would my team actually do differently next week?'
+      : 'I am still not hearing the operational step, and I cannot hand my team a concept. What would they do differently next week?'
+  ));
+  const result = enforcePostGenerationHcpRealism({
+    reply: 'Given the time, I need one practical point. What would my team actually do differently?',
+    scenarioExecutionContract: contract,
+    activeAskState,
+    concernFamily: 'workflow',
+    stateName: 'SOFT_RESISTANCE',
+    cueCategory: 'time_constrained',
+    recentHcpTurns: recent,
+  });
+
+  assert.equal(result.metadata.lateCollapse.collapsed, true);
+  assert.equal(result.metadata.lateCollapse.memoryTurnCount, 28);
+  assertRichHcpLine(result.text, 'late collapsed workflow rewrite');
+  assert.ok(wordCount(result.text) <= 25, `late collapsed rewrite should stay at or below 25 words: ${result.text}`);
+  assert.match(result.text, /stable-patient|clinic|staff|patients|follow-through|burden/i);
+  assert.doesNotMatch(result.text, /^Given the time|I am still not hearing|something actionable|What would my team actually do differently/i);
+});
+
+test('operational burden audit rejects generic short-horizon workflow crutches', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const recent = ['Given the time, what would my team actually do differently next week?'];
+  const crutch = detectGenericOperationalCrutch({
+    reply: 'Given the time, what would my team actually do differently next week?',
+    concernFamily: 'workflow',
+  });
+  const skeleton = detectRepeatedOperationalAskSkeleton({
+    reply: 'Given the time, what would my team actually do differently next week?',
+    recentHcpTurns: recent,
+    concernFamily: 'workflow',
+  });
+  const horizon = detectSyntheticShortHorizon({
+    reply: 'Given the time, what would my team actually do differently next week?',
+    scenarioExecutionContract: contract,
+  });
+
+  assert.equal(crutch.crutch, true);
+  assert.match(crutch.issues.join(' '), /stock_time_opener|team_action_stub|generic_do_differently|short_horizon_next_week/);
+  assert.equal(skeleton.repeated, true);
+  assert.equal(horizon.synthetic, true);
+});
+
+test('burden realism revises operational pressure toward implementation lift over time', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
+  const revised = reviseForBurdenRealism({
+    scenarioExecutionContract: contract,
+    activeAskState,
+    recentHcpTurns: ['Given the time, what would my team actually do differently next week?'],
+  });
+
+  assertRichHcpLine(revised, 'burden realism rewrite');
+  assert.ok(wordCount(revised) <= 25, `burden realism rewrite should stay at or below 25 words: ${revised}`);
+  assert.match(revised, /time investment|required|absorb|follow-through|coming weeks|current process|burden/i);
+  assert.doesNotMatch(revised, /what would my team actually do differently next week/i);
+});
+
+test('long-horizon deterministic rewrite does not regress into explicit generic repair crutches', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
+  const turns = Array.from({ length: 24 }, (_item, index) => (
+    index % 2 === 0
+      ? 'Given the time, what would my team actually do differently next week?'
+      : 'I am still not hearing the operational step, and I cannot hand my team a concept. What would they do differently next week?'
+  ));
+
+  for (let index = 0; index < 60; index += 1) {
+    const result = enforcePostGenerationHcpRealism({
+      reply: index % 2 === 0
+        ? 'Given the time, I need one practical point. What would my team actually do differently?'
+        : 'I am still not hearing the operational step. What changes next week?',
+      scenarioExecutionContract: contract,
+      activeAskState,
+      concernFamily: 'workflow',
+      stateName: 'SOFT_RESISTANCE',
+      cueCategory: 'time_constrained',
+      recentHcpTurns: turns,
+    });
+
+    assertRichHcpLine(result.text, `long-horizon continuation turn ${index + 1}`);
+    assert.ok(wordCount(result.text) <= 25, `long-horizon continuation turn ${index + 1} should stay at or below 25 words: ${result.text}`);
+    assert.match(result.text, /stable-patient|clinic|staff|patients|follow-through|burden/i);
+    assert.doesNotMatch(result.text, /^(Given the time,|I am still not hearing)|\bI need something actionable\b|\bWhat changes next week\b/i);
+    turns.push(result.text);
+  }
+});
+
 test('conversational realism uses scenario-bound rich phrasing for workflow pressure', () => {
   const hiv = applyConversationalRealism({
     text: 'What is the first practical workflow step here?',
@@ -597,7 +811,7 @@ test('conversational realism uses scenario-bound rich phrasing for workflow pres
     scenarioContext: 'Cardiology Formulary Review. P&T committee with three formulary requests and 20 minutes.',
   }).text;
 
-  assert.equal(hiv, 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?');
+  assert.equal(hiv, 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?');
   assert.equal(covid, 'That\'s exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?');
   assert.equal(formulary, 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?');
   assertRichHcpLine(hiv, 'scenario-bound HIV line');

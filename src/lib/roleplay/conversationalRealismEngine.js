@@ -3,6 +3,8 @@ import { compressHcpDialogueForState, normalizeHcpSpokenRealism } from './dialog
 export const CONVERSATIONAL_REALISM_ENGINE_VERSION = 'conversational_realism_engine_v1';
 
 const HCP_DIALOGUE_MIN_WORDS = 20;
+const HCP_REALISM_MEMORY_TURN_LIMIT = 80;
+const HCP_PHRASE_EXHAUSTION_THRESHOLD = 2;
 
 export const HCP_REALISM_STATES = Object.freeze({
   OPENING_CONSTRAINT: Object.freeze({
@@ -100,23 +102,23 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
         evidence: 'Before we discuss new data, can you tie what you showed last week to long-term durability for stable patients and why that justifies switching?',
-        workflow: 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?',
+        workflow: 'I remember that data, but before I ask staff to shift stable-patient follow-up, what burden would they absorb over the coming weeks?',
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
         evidence: "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence actually justifies the switch?",
-        workflow: 'I remember that data, but the practical piece still matters before I change clinic flow. What would my team actually do differently next week?',
+        workflow: 'The practical piece still matters before I change clinic flow; what follow-through burden would staff carry over the coming weeks?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
         evidence: 'Before we move on, connect the data to durability for my stable patients in a way that changes the decision. What actually changes?',
-        workflow: 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?',
+        workflow: 'I remember that data, but before I ask staff to shift stable-patient follow-up, what burden would they absorb over the coming weeks?',
       }),
       SOFT_RESISTANCE: Object.freeze({
         evidence: "I'm still not hearing what changes for stable patients, and I do not want a broader data recap. What evidence justifies switching them?",
-        workflow: 'I am still not hearing the operational step, and I cannot hand my team a concept. What would they do differently next week?',
+        workflow: 'The stable-patient follow-through is still the issue; if we changed course, what extra lift would staff carry over the coming weeks?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
         evidence: 'If the data are strong enough, tie it to durability for stable patients and the decision in front of me. What is the proof point?',
-        workflow: 'If we did consider this, what would my team do differently next week, and how would that fit into current clinic flow?',
+        workflow: 'If we considered this, where would the follow-through burden sit once staff are using it in the current clinic flow?',
       }),
     }),
   }),
@@ -131,12 +133,16 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
         workflow: "That's exactly the issue, but I do not have bandwidth for theory right now. What would this look like in practice on day one?",
         evidence: 'Keep it tied to the antiviral window and the clinic process. What evidence changes the workflow before patients miss it?',
       }),
+      EVIDENCE_CHALLENGE: Object.freeze({
+        workflow: 'The clinic delay is the burden I am worried about; how would staff keep patients from missing the antiviral window during rollout?',
+        evidence: 'Keep it tied to the antiviral window and the clinic process. What evidence changes the workflow before patients miss it?',
+      }),
       SOFT_RESISTANCE: Object.freeze({
         workflow: "If it is not simple to operationalize, it is not happening in this clinic. What does my team do first on day one?",
         evidence: 'I am not asking for more theory while patients are missing the window. What proof changes what we do before day four?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        workflow: 'If we tried this, what would my team do first on day one, and how would it avoid adding another clinic step?',
+        workflow: 'Assume we try this next week: what would my team do first on day one, and how would it avoid another clinic step?',
         evidence: 'If the evidence supports it, what changes before day four, and how would my team act on that in clinic?',
       }),
     }),
@@ -201,12 +207,17 @@ function contractProfileWorkflowAskForBucket(bucket = 'clinic_team') {
   if (bucket === 'committee') return 'what should this committee do first, and what would that change operationally';
   if (bucket === 'access_process') return 'what would we change first in our process, and how would it reduce the delay';
   if (bucket === 'screening_evaluation') return 'what would we do first here, and which patients would that help us identify';
-  return 'what would my team actually do first here, and how would that fit into clinic flow today';
+  return 'what follow-through would my team need to absorb, and how would that fit into clinic flow over time';
 }
 
 function capitalizeQuestion(value = '') {
   const text = String(value || '').trim().replace(/\?*$/, '');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}?`;
+}
+
+function capitalizeSentenceStart(value = '') {
+  const text = String(value || '').trim();
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
 function countWords(value = '') {
@@ -229,6 +240,7 @@ function cleanScenarioPressureFragment(value = '') {
 
 function deriveScenarioPressureClause(scenarioExecutionContract = {}, bucket = 'clinic_team') {
   const challenge = cleanScenarioPressureFragment(scenarioExecutionContract?.constraints?.challenges?.[0]);
+  if (/stable.*(?:suppressed|patient)|suppressed.*patient/.test(challenge)) return 'the stable-patient optimization';
   if (challenge) return `the ${challenge} issue`;
   if (bucket === 'committee') return 'this committee decision';
   if (bucket === 'access_process') return 'the access delay';
@@ -247,6 +259,54 @@ function buildRepeatedStateDrivenLine({ concernFamily = 'general', scenarioExecu
   if (bucket === 'screening_evaluation') return `I do not need another setup; ${pressureClause} still needs a patient boundary. Who would we identify first today?`;
   if (concernFamily === 'evidence') return `I do not need another setup; ${pressureClause} still needs a proof point. What evidence changes the clinical decision today?`;
   return `I do not need another setup; ${pressureClause} still needs a practical step. What would my team do first?`;
+}
+
+function buildLateStageDecisionLine({ concernFamily = 'general', scenarioExecutionContract = null, recentHcpTurns = [] } = {}) {
+  const bucket = deriveContractProfileBucket(scenarioExecutionContract || {});
+  const pressureClause = deriveScenarioPressureClause(scenarioExecutionContract || {}, bucket);
+  const pressureStart = capitalizeSentenceStart(pressureClause);
+  const memory = deriveRealismMemory({ recentHcpTurns, concernFamily });
+  const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
+  const candidates = (() => {
+    if (bucket === 'committee' || concernFamily === 'evidence') {
+      return [
+        `${pressureStart} is still unresolved for this decision; what evidence offsets that enough to keep the recommendation moving today?`,
+        `If ${pressureClause.replace(/ issue$/i, '')} still outweighs the benefit, this may need to wait; what evidence changes that decision today?`,
+        `The decision is not moving on a summary now; connect ${pressureClause.replace(/^the /i, '')} to the evidence threshold this committee can use today.`,
+      ];
+    }
+    if (bucket === 'access_process' || concernFamily === 'access') {
+      return [
+        `${pressureStart} is still unresolved in our process; what changes the handoff enough to reduce the delay today?`,
+        `If ${pressureClause} keeps slowing the process, this may need to wait; what handoff change reduces the delay today?`,
+        `The access issue is not a concept problem now; show me the process handoff that reduces the delay without adding churn.`,
+      ];
+    }
+    if (bucket === 'screening_evaluation' || concernFamily === 'screening') {
+      return [
+        `${pressureStart} is still unresolved for us; who would we identify first without adding another screening step today?`,
+        `If ${pressureClause} still adds ambiguity, this may need to wait; who would we identify first without another screening step?`,
+        `The screening boundary still is not usable enough; tell me which patients we would identify first without widening the workup.`,
+      ];
+    }
+    return [
+      `${pressureStart} is still unresolved for clinic flow; what changes for staff without adding another step in clinic next week?`,
+      `If ${pressureClause} still adds work, this may need to wait; what would staff absorb without another clinic step next week?`,
+      `The clinic issue is not solved by another overview now; show me the staff handoff that would fit without adding steps.`,
+      `I am weighing whether this belongs in our current process; what changes for patients without pushing more work onto staff?`,
+    ];
+  })();
+  return candidates.find((candidate) => {
+    const signature = normalizeDialogueSignature(candidate);
+    if (recentSignatures.has(signature)) return false;
+    const opening = openingStructureFamily(candidate);
+    const askShape = terminalAskShapeFamily(candidate);
+    const angle = operationalAngleFamily(candidate);
+    if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
+    if (askShape && memory.exhausted.askStructures.includes(askShape)) return false;
+    if (angle && memory.exhausted.operationalAngles.includes(angle)) return false;
+    return true;
+  }) || candidates.find((candidate) => !recentSignatures.has(normalizeDialogueSignature(candidate))) || candidates[candidates.length - 1];
 }
 
 function buildStateDrivenRealismExpansion({ concernFamily = 'general', stateName = 'OPENING_CONSTRAINT', repeated = false, scenarioExecutionContract = null } = {}) {
@@ -322,8 +382,43 @@ function selectProfileByState(contract = {}) {
   const scenarioId = contract?.scenarioIdentity?.scenarioId || contract?.scenarioId || '';
   const scenarioProfile = SCENARIO_REALISM_PROFILES[scenarioId];
   return scenarioProfile
-    ? { ...scenarioProfile, profileSource: 'scenario_realism_profile' }
-    : buildContractDerivedRealismProfile(contract);
+    ? { ...scenarioProfile, profileSource: 'scenario_realism_profile', contract }
+    : { ...buildContractDerivedRealismProfile(contract), contract };
+}
+
+function selectRecentSafeProfileLine({ profile, stateName, concernFamily, recentHcpTurns = [] } = {}) {
+  const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
+  const memory = deriveRealismMemory({ recentHcpTurns, concernFamily });
+  const candidateStates = [...new Set([
+    stateName,
+    'SOFT_RESISTANCE',
+    'OPERATIONAL_CHALLENGE',
+    'EVIDENCE_CHALLENGE',
+    'PARTIAL_ENGAGEMENT',
+    'TIME_PRESSURE_DEFLECTION',
+  ])];
+  const candidates = [];
+  for (const candidateState of candidateStates) {
+    const lines = profile.lines[candidateState] || {};
+    const line = lines[concernFamily] || lines[profile.defaultConcernFamily] || lines.workflow || lines.evidence;
+    if (line && !candidates.includes(line)) candidates.push(line);
+  }
+  return candidates.find((line) => {
+    if (recentSignatures.has(normalizeDialogueSignature(line))) return false;
+    const opening = openingStructureFamily(line);
+    const askShape = terminalAskShapeFamily(line);
+    const angle = operationalAngleFamily(line);
+    const threshold = thresholdPostureFamily(line);
+    if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
+    if (askShape && memory.exhausted.askStructures.includes(askShape)) return false;
+    if (angle && memory.exhausted.operationalAngles.includes(angle)) return false;
+    if (threshold && memory.exhausted.thresholdPostures.includes(threshold)) return false;
+    return true;
+  })
+    || candidates.find((line) => !recentSignatures.has(normalizeDialogueSignature(line)))
+    || buildRepeatedStateDrivenLine({ concernFamily, scenarioExecutionContract: profile.contract })
+    || candidates[0]
+    || '';
 }
 
 function deriveStateNameFromStructuredInputs({ cueCategory = '', timePressure = false, terminalBehavior = false, activeAskState = {}, concernFamily = 'general' } = {}) {
@@ -365,8 +460,9 @@ function applyStateDrivenRealism({
   if (!selectedBase) return null;
   const selectedSignature = normalizeDialogueSignature(selectedBase);
   const repeated = normalizeRecentTurns(recentHcpTurns).some((turn) => normalizeDialogueSignature(turn) === selectedSignature);
-  const repeatLines = profile.lines.SOFT_RESISTANCE || profile.lines.OPERATIONAL_CHALLENGE || {};
-  const repeatBase = repeatLines[resolvedConcern] || repeatLines[profile.defaultConcernFamily] || repeatLines.workflow || repeatLines.evidence || selectedBase;
+  const repeatBase = repeated
+    ? selectRecentSafeProfileLine({ profile, stateName: 'SOFT_RESISTANCE', concernFamily: resolvedConcern, recentHcpTurns })
+    : selectedBase;
   const selected = enforceStateDrivenDialogueRichness({
     text: repeated ? repeatBase : selectedBase,
     concernFamily: resolvedConcern,
@@ -426,6 +522,8 @@ const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done
 const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
 const RUBRIC_LANGUAGE_PATTERN = /\b(you have covered the setup|be specific about ownership|decision-relevant evidence|usable point before we move on|state the proof point|next turn should)\b/i;
 const TOO_IDEAL_PATTERN = /\b(i can stay with this if we make it concrete|happy to keep going|let'?s explore|we can talk through)\b/i;
+const STOCK_TRANSITION_PATTERN = /^(i remember that data|that'?s exactly the issue|let me stop you there|given the time|at this point i need|i am still not hearing|i do not need another)/i;
+const TERMINAL_ASK_SHAPE_PATTERN = /\b(what would (?:my|the) team (?:actually )?(?:do|own)|what would actually change|what changes (?:the|this)|what single data point|what is the realistic first step)\b/i;
 
 function normalizeRuntimeText(...values) {
   return values.map((value) => String(value || '').toLowerCase()).join(' ');
@@ -488,7 +586,7 @@ function selectScenarioGroundedHcpLine({
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
         return "I'm about to move on, but if this is real, tell me what my team would do differently next week.";
       }
-      return "I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?";
+      return 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?';
     }
   }
 
@@ -590,17 +688,147 @@ function normalizeRecentTurns(recentHcpTurns = []) {
   return (Array.isArray(recentHcpTurns) ? recentHcpTurns : [])
     .map((turn) => String(turn?.hcpDialogueBefore || turn?.hcpDialogue || turn || '').trim())
     .filter(Boolean)
-    .slice(-4);
+    .slice(-HCP_REALISM_MEMORY_TURN_LIMIT);
 }
 
 function phraseFamilyForText(text = '', concernFamily = 'general') {
   const value = String(text || '').toLowerCase();
-  if (/durability|evidence|proof|data|decision/.test(value)) return 'evidenceAsk';
   if (/workflow|staff|team|practical|own first|do first/.test(value)) return 'workflowAsk';
+  if (/durability|evidence|proof|data|decision/.test(value)) return 'evidenceAsk';
   if (/access|coverage|payer|prior|auth|copay/.test(value)) return 'accessAsk';
   if (/screen|candidacy|criteria|patient selection|resistance/.test(value)) return 'screeningAsk';
   if (/pause here|stop here|wrap|get back/.test(value)) return 'closingThreshold';
   return `${concernFamily || 'general'}Ask`;
+}
+
+function countByFamily(values = [], familySelector = () => '') {
+  return values.reduce((counts, value) => {
+    const family = familySelector(value);
+    if (!family) return counts;
+    counts[family] = (counts[family] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function exhaustedFamiliesFromCounts(counts = {}, threshold = HCP_PHRASE_EXHAUSTION_THRESHOLD) {
+  return Object.entries(counts)
+    .filter(([, count]) => count >= threshold)
+    .map(([family]) => family);
+}
+
+function openingStructureFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/^i remember that data/.test(text)) return 'remember_data_opening';
+  if (/^that'?s exactly the issue/.test(text)) return 'exact_issue_opening';
+  if (/^let me stop you there/.test(text)) return 'stop_you_there_opening';
+  if (/^given the time/.test(text)) return 'given_time_opening';
+  if (/^i am still not hearing/.test(text)) return 'still_not_hearing_opening';
+  if (/^i do not need another/.test(text)) return 'no_more_overview_opening';
+  if (/^if\b/.test(text)) return 'conditional_if_opening';
+  if (/^before\b/.test(text)) return 'before_redirect_opening';
+  return text.split(/\s+/).slice(0, 3).join('_');
+}
+
+function challengeVerbFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/\btie\b|\bconnect\b/.test(text)) return 'connect_challenge';
+  if (/\bjustify|\boffset|\btrust\b/.test(text)) return 'threshold_challenge';
+  if (/\bown|\babsorb|\bdo differently|\bdo first/.test(text)) return 'ownership_challenge';
+  if (/\breduce|\bdelay|\bhandoff/.test(text)) return 'process_challenge';
+  if (/\bidentify|\bscreen/.test(text)) return 'identification_challenge';
+  if (/\bchange|\bchanges/.test(text)) return 'change_challenge';
+  return '';
+}
+
+function operationalAngleFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/\bstable[- ]patient|stable patients|switching|durability/.test(text)) return 'stable_patient_continuity';
+  if (/\bstaff|team|nurse|ma|front desk/.test(text)) return 'staff_burden';
+  if (/\bclinic flow|workflow|clinic step|current clinic/.test(text)) return 'workflow_interruption';
+  if (/\bown|ownership|follow-through|absorb/.test(text)) return 'ownership_followthrough';
+  if (/\bday one|next week|right now|today/.test(text)) return 'immediate_applicability';
+  if (/\bcoverage|payer|prior auth|authorization|admin|handoff|process delay|access delay/.test(text)) return 'payer_admin_process';
+  if (/\bcommittee|formulary|recommendation|decision point|review/.test(text)) return 'committee_review';
+  if (/\bidentify|screening|patient boundary|eligible|candidate/.test(text)) return 'screening_boundary';
+  if (/\badds? work|adding another|burden shifts|extra step/.test(text)) return 'burden_shift';
+  return '';
+}
+
+function thresholdPostureFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/\bmay need to wait|revisit|pause here|move on/.test(text)) return 'revisit_later_threshold';
+  if (/\bnot happening|cannot hand|cannot ask|not moving/.test(text)) return 'implementation_threshold';
+  if (/\bif\b.*\bstill\b/.test(text)) return 'conditional_threshold';
+  if (/\bwhat evidence offsets|what evidence changes|what should influence/.test(text)) return 'evidence_threshold';
+  return '';
+}
+
+function redirectionShapeFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/\bbut\b.*\bneed\b/.test(text)) return 'selective_acknowledgement';
+  if (/\bnot\b.*\boverview|not a broader|not a general/.test(text)) return 'relevance_challenge';
+  if (/\bwhat would|what should|who would/.test(text)) return 'direct_question';
+  if (/\bif\b.*\bthen|\bif\b.*\bmay need/.test(text)) return 'conditional_continuation';
+  if (/\bmove on|pause|wait|revisit/.test(text)) return 'wrap_up_pressure';
+  return '';
+}
+
+export function deriveRealismMemory({ recentHcpTurns = [], concernFamily = 'general' } = {}) {
+  const turns = normalizeRecentTurns(recentHcpTurns);
+  const openingStructures = countByFamily(turns, openingStructureFamily);
+  const challengeVerbs = countByFamily(turns, challengeVerbFamily);
+  const askStructures = countByFamily(turns, terminalAskShapeFamily);
+  const operationalAngles = countByFamily(turns, operationalAngleFamily);
+  const thresholdPostures = countByFamily(turns, thresholdPostureFamily);
+  const redirectionShapes = countByFamily(turns, redirectionShapeFamily);
+  const phraseFamilies = countByFamily(turns, (turn) => phraseFamilyForText(turn, concernFamily));
+  return {
+    turnCount: turns.length,
+    turns,
+    openingStructures,
+    challengeVerbs,
+    askStructures,
+    operationalAngles,
+    thresholdPostures,
+    redirectionShapes,
+    phraseFamilies,
+    exhausted: {
+      openingStructures: exhaustedFamiliesFromCounts(openingStructures),
+      challengeVerbs: exhaustedFamiliesFromCounts(challengeVerbs),
+      askStructures: exhaustedFamiliesFromCounts(askStructures),
+      operationalAngles: exhaustedFamiliesFromCounts(operationalAngles),
+      thresholdPostures: exhaustedFamiliesFromCounts(thresholdPostures),
+      redirectionShapes: exhaustedFamiliesFromCounts(redirectionShapes),
+      phraseFamilies: exhaustedFamiliesFromCounts(phraseFamilies),
+    },
+  };
+}
+
+export function derivePhraseExhaustionState({ recentHcpTurns = [], concernFamily = 'general' } = {}) {
+  const memory = deriveRealismMemory({ recentHcpTurns, concernFamily });
+  return {
+    exhausted: memory.exhausted,
+    turnCount: memory.turnCount,
+  };
+}
+
+export function detectLateConversationGenericCollapse({ reply = '', recentHcpTurns = [], concernFamily = 'general' } = {}) {
+  const memory = deriveRealismMemory({ recentHcpTurns, concernFamily });
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const reasons = [];
+  if (memory.turnCount >= 20 && countWords(reply) < HCP_DIALOGUE_MIN_WORDS) reasons.push('late_short_line');
+  if (memory.turnCount >= 20 && /\b(i need something actionable|what changes next week|i'?m still not hearing|given the time|if this is relevant|what would my team actually do differently)\b/i.test(text)) {
+    reasons.push('late_generic_repair_crutch');
+  }
+  const askShape = terminalAskShapeFamily(reply);
+  if (memory.turnCount >= 20 && askShape && (memory.askStructures[askShape] || 0) >= HCP_PHRASE_EXHAUSTION_THRESHOLD) reasons.push('late_repeated_ask_shape');
+  const opening = openingStructureFamily(reply);
+  if (memory.turnCount >= 20 && opening && (memory.openingStructures[opening] || 0) >= HCP_PHRASE_EXHAUSTION_THRESHOLD) reasons.push('late_repeated_opening_shape');
+  return {
+    collapsed: reasons.length > 0,
+    reasons,
+    memory,
+  };
 }
 
 export function detectOverpackedSentence({ text } = {}) {
@@ -719,6 +947,207 @@ export function assessRecentPatternReuse({ reply = '', recentHcpTurns = [] } = {
   return { repeated: repeatedExact || repeatedFamilyCount >= 2, repeatedExact, repeatedFamilyCount, phraseFamily: currentFamily };
 }
 
+function stockTransitionFamily(value = '') {
+  const match = normalizeHcpSpokenRealism(value).match(STOCK_TRANSITION_PATTERN);
+  return match?.[1]?.toLowerCase() || '';
+}
+
+export function detectStockTransitionReuse({ reply = '', recentHcpTurns = [] } = {}) {
+  const current = stockTransitionFamily(reply);
+  if (!current) return { reused: false, family: '', recentCount: 0 };
+  const recentCount = normalizeRecentTurns(recentHcpTurns).filter((turn) => stockTransitionFamily(turn) === current).length;
+  return { reused: recentCount > 0, family: current, recentCount };
+}
+
+function terminalAskShapeFamily(value = '') {
+  const text = normalizeHcpSpokenRealism(value).toLowerCase();
+  if (/what would (?:my|the) team (?:actually )?(?:do|own)/i.test(text)) return 'team_action_ask';
+  if (/what single data point/i.test(text)) return 'single_data_point_ask';
+  if (/what would actually change|what changes (?:the|this)/i.test(text)) return 'what_changes_ask';
+  if (/what is the realistic first step/i.test(text)) return 'realistic_first_step_ask';
+  return TERMINAL_ASK_SHAPE_PATTERN.test(text) ? 'terminal_ask_shape' : '';
+}
+
+export function detectRepeatedTerminalAskShape({ reply = '', recentHcpTurns = [] } = {}) {
+  const family = terminalAskShapeFamily(reply);
+  if (!family) return { repeated: false, family: '', recentCount: 0 };
+  const recentCount = normalizeRecentTurns(recentHcpTurns).filter((turn) => terminalAskShapeFamily(turn) === family).length;
+  return { repeated: recentCount > 0, family, recentCount };
+}
+
+export function detectGenericOperationalCrutch({ reply = '', concernFamily = 'general' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const operational = concernFamily === 'workflow' || /workflow|staff|team|operational|implementation|clinic flow|practice/.test(text);
+  const issues = [];
+  if (!operational) return { crutch: false, issues, skeleton: '' };
+  if (/^given the time\b/.test(text)) issues.push('stock_time_opener');
+  if (/\bwhat would my team (?:actually )?(?:do|own|do differently)/.test(text)) issues.push('team_action_stub');
+  if (/\bdo differently\b/.test(text)) issues.push('generic_do_differently');
+  if (/\bnext week\b/.test(text)) issues.push('short_horizon_next_week');
+  if (/\bin practice\b|\bday one\b/.test(text) && !/post-?covid|antiviral|day four|day 4/.test(text)) issues.push('portable_practice_horizon');
+  const skeleton = [
+    /^given the time\b/.test(text) ? 'time_opener' : '',
+    /what would my team/.test(text) ? 'team_ask' : '',
+    /do differently/.test(text) ? 'do_differently' : '',
+    /next week/.test(text) ? 'short_horizon' : '',
+  ].filter(Boolean).join('+');
+  return {
+    crutch: issues.length >= 2 || skeleton === 'time_opener+team_ask+do_differently+short_horizon',
+    issues,
+    skeleton,
+  };
+}
+
+export function detectSyntheticShortHorizon({ reply = '', scenarioExecutionContract = null } = {}) {
+  if (!scenarioExecutionContract?.scenarioIdentity?.scenarioId) return { synthetic: false, issues: [] };
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const context = normalizeRuntimeText(
+    scenarioExecutionContract?.scenarioIdentity?.title,
+    scenarioExecutionContract?.scenarioIdentity?.scenarioId,
+    scenarioExecutionContract?.openingState?.openingScene,
+    ...(scenarioExecutionContract?.constraints?.challenges || []),
+  );
+  const scenarioSupportsDayOne = /post-?covid|antiviral|day four|day 4|callback|window/.test(context);
+  const issues = [];
+  if (/\bnext week\b/.test(text) && !/next week|weekly|follow-up list/.test(context)) issues.push('unsupported_next_week');
+  if (/\bday one\b/.test(text) && !scenarioSupportsDayOne) issues.push('unsupported_day_one');
+  return { synthetic: issues.length > 0, issues };
+}
+
+export function deriveImplementationBurdenLexicon({ scenarioExecutionContract = null, activeAskState = null } = {}) {
+  const bucket = deriveContractProfileBucket(scenarioExecutionContract || {});
+  const pressure = deriveScenarioPressureClause(scenarioExecutionContract || {}, bucket);
+  const ask = cleanScenarioPressureFragment(activeAskState?.askText || scenarioExecutionContract?.activeAsk?.askText || '');
+  if (bucket === 'committee') return { bucket, burden: 'review threshold', horizon: 'during committee review', owner: 'this committee', pressure, ask };
+  if (bucket === 'access_process') return { bucket, burden: 'admin back-and-forth', horizon: 'within the current process', owner: 'our process', pressure, ask };
+  if (bucket === 'screening_evaluation') return { bucket, burden: 'screening lift', horizon: 'as patients are identified', owner: 'we', pressure, ask };
+  if (/stable|suppressed|durability|switch/.test(`${pressure} ${ask}`)) {
+    return { bucket, burden: 'follow-through burden', horizon: 'over the coming weeks', owner: 'staff', pressure, ask };
+  }
+  return { bucket, burden: 'extra lift', horizon: 'as this gets adopted', owner: 'staff', pressure, ask };
+}
+
+export function detectRepeatedOperationalAskSkeleton({ reply = '', recentHcpTurns = [], concernFamily = 'general' } = {}) {
+  const current = detectGenericOperationalCrutch({ reply, concernFamily });
+  if (!current.skeleton) return { repeated: false, skeleton: '', recentCount: 0, current };
+  const recentCount = normalizeRecentTurns(recentHcpTurns)
+    .filter((turn) => detectGenericOperationalCrutch({ reply: turn, concernFamily }).skeleton === current.skeleton).length;
+  return {
+    repeated: recentCount > 0 && current.crutch,
+    skeleton: current.skeleton,
+    recentCount,
+    current,
+  };
+}
+
+export function reviseForBurdenRealism({ scenarioExecutionContract = null, activeAskState = null, recentHcpTurns = [] } = {}) {
+  const lexicon = deriveImplementationBurdenLexicon({ scenarioExecutionContract, activeAskState });
+  const memory = deriveRealismMemory({ recentHcpTurns, concernFamily: activeAskState?.concernFamily || 'workflow' });
+  const candidates = (() => {
+    if (lexicon.bucket === 'committee') {
+      return [
+        `This cannot stay abstract for review; what threshold would change the recommendation without creating more committee churn today?`,
+        `If the review burden shifts downstream, I need the adoption criteria, not another summary of the evidence package for this committee today.`,
+      ];
+    }
+    if (lexicon.bucket === 'access_process') {
+      return [
+        `If this adds admin back-and-forth, it will stall; who carries the handoff inside our process once coverage questions start for patients?`,
+        `The access issue is the downstream burden; show me what changes in our process without creating another payer loop.`,
+      ];
+    }
+    if (lexicon.bucket === 'screening_evaluation') {
+      return [
+        `If this adds screening lift, it needs a clear boundary; who would we identify first once this is in workflow?`,
+        `The identification step still has to fit clinic reality; which patients would we flag without widening the workup?`,
+      ];
+    }
+    return [
+      `Given the time investment required, what would ${lexicon.owner} need to absorb differently ${lexicon.horizon} if we changed follow-up now?`,
+      `If this shifts the ${lexicon.burden}, I need to know who carries it and how it fits the current process.`,
+      `The burden is not the concept; it is what ${lexicon.owner} must carry ${lexicon.horizon} without adding steps.`,
+    ];
+  })();
+  const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
+  return candidates.find((candidate) => {
+    if (recentSignatures.has(normalizeDialogueSignature(candidate))) return false;
+    const angle = operationalAngleFamily(candidate);
+    const opening = openingStructureFamily(candidate);
+    if (angle && memory.exhausted.operationalAngles.includes(angle)) return false;
+    if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
+    return true;
+  }) || candidates.find((candidate) => !recentSignatures.has(normalizeDialogueSignature(candidate))) || candidates[candidates.length - 1];
+}
+
+export function deriveScenarioLexiconHints({ scenarioExecutionContract = null, activeAskState = null } = {}) {
+  const bucket = deriveContractProfileBucket(scenarioExecutionContract || {});
+  const challenges = (scenarioExecutionContract?.constraints?.challenges || []).map(cleanScenarioPressureFragment).filter(Boolean);
+  const keyMessages = (scenarioExecutionContract?.constraints?.keyMessages || []).map(cleanScenarioPressureFragment).filter(Boolean);
+  const ask = cleanScenarioPressureFragment(activeAskState?.askText || scenarioExecutionContract?.activeAsk?.askText || '');
+  return {
+    bucket,
+    primaryPressure: challenges[0] || ask || '',
+    actionHint: keyMessages[0] || '',
+    askHint: ask,
+  };
+}
+
+export function spokenBelievabilityAudit({
+  reply = '',
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  concernFamily = 'general',
+  cueCategory = 'neutral_attentive',
+  interactionMode = '',
+  engagementTier = '',
+  semanticStage = '',
+  recentHcpTurns = [],
+} = {}) {
+  const generic = assessGenericness({ reply, scenarioExecutionContract, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const phraseQuality = assessHumanPhraseQuality({ reply });
+  const tooIdeal = assessTooIdeal({ reply, cueCategory, interactionMode, engagementTier, semanticStage });
+  const repetition = assessRecentPatternReuse({ reply, recentHcpTurns });
+  const stockTransition = detectStockTransitionReuse({ reply, recentHcpTurns });
+  const terminalAskShape = detectRepeatedTerminalAskShape({ reply, recentHcpTurns });
+  const lateCollapse = detectLateConversationGenericCollapse({ reply, recentHcpTurns, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const operationalCrutch = detectGenericOperationalCrutch({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const shortHorizon = detectSyntheticShortHorizon({ reply, scenarioExecutionContract });
+  const operationalAskSkeleton = detectRepeatedOperationalAskSkeleton({ reply, recentHcpTurns, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const lexicon = deriveScenarioLexiconHints({ scenarioExecutionContract, activeAskState });
+  const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
+  const portablePolish = STOCK_TRANSITION_PATTERN.test(reply) && !lexicon.primaryPressure && !lexicon.askHint;
+  const issues = [
+    ...generic.issues,
+    ...phraseQuality.issues,
+    ...tooIdeal.issues,
+    ...(repetition.repeated ? ['recent_pattern_reuse'] : []),
+    ...(stockTransition.reused ? ['stock_transition_reuse'] : []),
+    ...(terminalAskShape.repeated ? ['repeated_terminal_ask_shape'] : []),
+    ...lateCollapse.reasons,
+    ...(operationalCrutch.crutch ? ['generic_operational_crutch'] : []),
+    ...shortHorizon.issues,
+    ...(operationalAskSkeleton.repeated ? ['repeated_operational_ask_skeleton'] : []),
+    ...(portablePolish ? ['portable_professional_polish'] : []),
+    ...(wordCountIssue ? ['outside_word_band'] : []),
+  ];
+  return {
+    believable: issues.length === 0,
+    issues,
+    generic,
+    phraseQuality,
+    tooIdeal,
+    repetition,
+    stockTransition,
+    terminalAskShape,
+    lateCollapse,
+    operationalCrutch,
+    shortHorizon,
+    operationalAskSkeleton,
+    lexicon,
+    wordCountIssue,
+  };
+}
+
 export function reviseForStateBoundRealism({
   reply = '',
   scenarioExecutionContract = null,
@@ -726,13 +1155,14 @@ export function reviseForStateBoundRealism({
   concernFamily = 'general',
   stateName = 'OPENING_CONSTRAINT',
   repeated = false,
+  recentHcpTurns = [],
 } = {}) {
   const profile = scenarioExecutionContract ? selectProfileByState(scenarioExecutionContract) : null;
   const resolvedConcern = activeAskState?.concernFamily || scenarioExecutionContract?.activeAsk?.concernFamily || concernFamily || profile?.defaultConcernFamily || 'workflow';
-  const stateLines = repeated
-    ? (profile?.lines?.SOFT_RESISTANCE || profile?.lines?.OPERATIONAL_CHALLENGE || profile?.lines?.EVIDENCE_CHALLENGE || {})
-    : (profile?.lines?.[stateName] || profile?.lines?.OPERATIONAL_CHALLENGE || profile?.lines?.EVIDENCE_CHALLENGE || {});
-  const stateBoundLine = stateLines[resolvedConcern] || stateLines[profile?.defaultConcernFamily] || stateLines.workflow || stateLines.evidence || reply;
+  const stateLines = profile?.lines?.[stateName] || profile?.lines?.OPERATIONAL_CHALLENGE || profile?.lines?.EVIDENCE_CHALLENGE || {};
+  const stateBoundLine = repeated && profile
+    ? selectRecentSafeProfileLine({ profile, stateName: 'SOFT_RESISTANCE', concernFamily: resolvedConcern, recentHcpTurns })
+    : (stateLines[resolvedConcern] || stateLines[profile?.defaultConcernFamily] || stateLines.workflow || stateLines.evidence || reply);
   return enforceStateDrivenDialogueRichness({
     text: stateBoundLine,
     concernFamily: resolvedConcern,
@@ -786,22 +1216,42 @@ export function enforcePostGenerationHcpRealism({
   semanticStage = '',
   recentHcpTurns = [],
 } = {}) {
-  const generic = assessGenericness({ reply, scenarioExecutionContract, concernFamily: activeAskState?.concernFamily || concernFamily });
-  const phraseQuality = assessHumanPhraseQuality({ reply });
-  const tooIdeal = assessTooIdeal({ reply, cueCategory, interactionMode, engagementTier, semanticStage });
-  const repetition = assessRecentPatternReuse({ reply, recentHcpTurns });
-  const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
-  const needsRevision = generic.generic || !phraseQuality.natural || tooIdeal.tooIdeal || repetition.repeated;
-  const revised = needsRevision
-    ? reviseForStateBoundRealism({
+  const audit = spokenBelievabilityAudit({
+    reply,
+    scenarioExecutionContract,
+    activeAskState,
+    concernFamily,
+    cueCategory,
+    interactionMode,
+    engagementTier,
+    semanticStage,
+    recentHcpTurns,
+  });
+  const needsRevision = audit.issues.some((issue) => issue !== 'outside_word_band');
+  const operationalConcern = (activeAskState?.concernFamily || concernFamily) === 'workflow';
+  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated)
+    ? reviseForBurdenRealism({
+      scenarioExecutionContract,
+      activeAskState,
+      recentHcpTurns,
+    })
+    : audit.terminalAskShape.repeated || audit.lateCollapse.collapsed
+    ? buildLateStageDecisionLine({
+      concernFamily: activeAskState?.concernFamily || concernFamily,
+      scenarioExecutionContract,
+      recentHcpTurns,
+    })
+    : needsRevision
+      ? reviseForStateBoundRealism({
       reply,
       scenarioExecutionContract,
       activeAskState,
       concernFamily,
       stateName,
-      repeated: repetition.repeated,
-    })
-    : normalizeHcpSpokenRealism(reply);
+      repeated: audit.repetition.repeated || audit.stockTransition.reused || audit.terminalAskShape.repeated,
+      recentHcpTurns,
+      })
+      : normalizeHcpSpokenRealism(reply);
   const finalText = enforceWordBand({
     reply: revised,
     scenarioExecutionContract,
@@ -813,8 +1263,19 @@ export function enforcePostGenerationHcpRealism({
     text: finalText,
     metadata: {
       revised: finalText !== normalizeHcpSpokenRealism(reply),
-      issues: [...generic.issues, ...phraseQuality.issues, ...tooIdeal.issues, ...(repetition.repeated ? ['recent_pattern_reuse'] : []), ...(wordCountIssue ? ['outside_word_band'] : [])],
+      issues: audit.issues,
       wordCount: countWords(finalText),
+      stockTransition: audit.stockTransition,
+      terminalAskShape: audit.terminalAskShape,
+      lateCollapse: {
+        collapsed: audit.lateCollapse.collapsed,
+        reasons: audit.lateCollapse.reasons,
+        memoryTurnCount: audit.lateCollapse.memory.turnCount,
+      },
+      operationalCrutch: audit.operationalCrutch,
+      shortHorizon: audit.shortHorizon,
+      operationalAskSkeleton: audit.operationalAskSkeleton,
+      lexicon: audit.lexicon,
     },
   };
 }
