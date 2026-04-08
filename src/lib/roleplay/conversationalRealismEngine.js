@@ -126,23 +126,23 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     defaultConcernFamily: 'workflow',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        workflow: "That's exactly the issue, but I do not have bandwidth for theory right now. What would this look like in practice on day one?",
+        workflow: 'Patients are already close to missing the window, so who on staff catches this, and what extra step lands during callbacks?',
         evidence: 'I need this tied to the antiviral window, not a general outcomes story. What proof point changes what we do before day four?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        workflow: "That's exactly the issue, but I do not have bandwidth for theory right now. What would this look like in practice on day one?",
+        workflow: 'I need to picture the callback handoff: who picks up the patient, and what slows the antiviral decision before day four?',
         evidence: 'Keep it tied to the antiviral window and the clinic process. What evidence changes the workflow before patients miss it?',
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
-        workflow: 'The clinic delay is the burden I am worried about; how would staff keep patients from missing the antiviral window during rollout?',
+        workflow: 'Patients are already close to missing the window, so who on staff catches this, and what extra step lands during callbacks?',
         evidence: 'Keep it tied to the antiviral window and the clinic process. What evidence changes the workflow before patients miss it?',
       }),
       SOFT_RESISTANCE: Object.freeze({
-        workflow: "If it is not simple to operationalize, it is not happening in this clinic. What does my team do first on day one?",
+        workflow: 'If this adds another clinic step, who carries it when patients are near day four, and what gets dropped first?',
         evidence: 'I am not asking for more theory while patients are missing the window. What proof changes what we do before day four?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        workflow: 'Assume we try this next week: what would my team do first on day one, and how would it avoid another clinic step?',
+        workflow: 'If we tried this, I need to know which staff member catches the delay and what changes during the callback rush.',
         evidence: 'If the evidence supports it, what changes before day four, and how would my team act on that in clinic?',
       }),
     }),
@@ -152,23 +152,23 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
         evidence: 'Let me stop you there: this comes down to evidence and time. What single data point should actually influence this committee decision?',
-        workflow: 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?',
+        workflow: 'This should not go anywhere until we know who on the committee carries the added review work and what slows decisions.',
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
         evidence: 'Let me stop you there: this comes down to evidence and time. What single data point should actually influence this committee decision?',
-        workflow: 'If the committee moves forward, I need the operational implication too. What is the realistic first step for my team?',
+        workflow: 'If the committee moves forward, which staff member carries the review work, and what slows the decision process down here?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
         evidence: 'Given the time constraints, what single data point should actually influence this decision, not just support a broader review?',
-        workflow: 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?',
+        workflow: 'This should not go anywhere until we know who on the committee carries the added review work and what slows decisions.',
       }),
       SOFT_RESISTANCE: Object.freeze({
         evidence: 'I need one decision-relevant data point, not a broader review or summary. What should actually influence this committee decision today?',
-        workflow: 'If this is moving forward, I need a real operational next step. What is the first step my team would actually take?',
+        workflow: 'If this moves forward, who carries the extra review work, and where does it slow the committee down first today?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
         evidence: 'If we consider it, what single data point should influence the committee decision, and why should we trust that threshold?',
-        workflow: 'If the committee considers it, what would the first operational step be, and who would need to own it?',
+        workflow: 'If the committee considers it, I need to know who carries the review work and what changes before the vote.',
       }),
     }),
   }),
@@ -584,17 +584,17 @@ function selectScenarioGroundedHcpLine({
     }
     if (expressionConcern === 'workflow') {
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
-        return "I'm about to move on, but if this is real, tell me what my team would do differently next week.";
+        return "I'm about to move on, but who on staff carries the extra work if we changed follow-up for stable patients now?";
       }
-      return 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?';
+      return 'I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?';
     }
   }
 
   if (scenarioArchetype === 'post_covid_antiviral_adherence') {
     if (cueCategory === 'terminal_exit' || terminalBehavior) {
-      return "I'm watching the clock, and if this is not simple to operationalize, it is not happening in this clinic.";
+      return 'If this adds another clinic step, who carries it when patients are near day four, and what gets dropped first?';
     }
-    return "That's exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?";
+    return 'Patients are already close to missing the window, so who on staff catches this, and what extra step lands during callbacks?';
   }
 
   if (scenarioArchetype === 'cardiology_formulary_review') {
@@ -608,7 +608,7 @@ function selectScenarioGroundedHcpLine({
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
         return "I'm about to move on, but if we move forward, what is the first realistic step my team would need to own?";
       }
-      return 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?';
+      return 'This should not go anywhere until we know who on the committee carries the added review work and what slows decisions.';
     }
   }
 
@@ -693,7 +693,7 @@ function normalizeRecentTurns(recentHcpTurns = []) {
 
 function phraseFamilyForText(text = '', concernFamily = 'general') {
   const value = String(text || '').toLowerCase();
-  if (/workflow|staff|team|practical|own first|do first/.test(value)) return 'workflowAsk';
+  if (/workflow|staff|team|nurse|ma\b|front desk|handoff|callback|extra step|added work|clinic step|committee review|formulary team|practical|own first|do first/.test(value)) return 'workflowAsk';
   if (/durability|evidence|proof|data|decision/.test(value)) return 'evidenceAsk';
   if (/access|coverage|payer|prior|auth|copay/.test(value)) return 'accessAsk';
   if (/screen|candidacy|criteria|patient selection|resistance/.test(value)) return 'screeningAsk';
@@ -805,6 +805,35 @@ export function reduceAbstractOperationalNouns({ reply = '', concernFamily = 'ge
     .replace(/\s{2,}/g, ' ')
     .trim();
   return normalizeHcpSpokenRealism(text);
+}
+
+export function scoreSpokenRealismShape({ reply = '', concernFamily = 'general' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const actorMatches = text.match(/\b(nurses?|staff|front desk|ma\b|team member|who on my team|which staff member|who carries|who handles|patients?)\b/g) || [];
+  const frictionMatches = text.match(/\b(extra steps?|slow(?:s|ed)? down|back-and-forth|replaces|simplifies|gets harder|adds lift|carry|carries|picks this up|handoff|coverage side|payer loop|busy|normal day|routine visits|during follow-up)\b/g) || [];
+  const cognitionMatches = text.match(/\b(i need to picture|i am trying to picture|trying to picture|walk me through|help me understand|i need to understand|where does this land|which staff member)\b/g) || [];
+  const abstractMatches = text.match(/\b(follow-through|implementation|workflow fit|process alignment|operational step|decision-relevant evidence|broad overview|realistic first step)\b/g) || [];
+  const symmetry = detectSymmetricalOperationalStructure({ reply, concernFamily }).symmetrical ? 1 : 0;
+  const genericCrutch = detectGenericOperationalCrutch({ reply, concernFamily }).crutch ? 1 : 0;
+  const wordCount = countWords(reply);
+  const wordBandPenalty = wordCount < HCP_DIALOGUE_MIN_WORDS || wordCount > 25 ? 2 : 0;
+  const score = (actorMatches.length * 2)
+    + (frictionMatches.length * 2)
+    + cognitionMatches.length
+    - (abstractMatches.length * 2)
+    - (symmetry * 3)
+    - (genericCrutch * 3)
+    - wordBandPenalty;
+  return {
+    score,
+    actorCount: actorMatches.length,
+    frictionCount: frictionMatches.length,
+    cognitionCount: cognitionMatches.length,
+    abstractCount: abstractMatches.length,
+    symmetry: Boolean(symmetry),
+    genericCrutch: Boolean(genericCrutch),
+    wordCount,
+  };
 }
 
 export function deriveRealismMemory({ recentHcpTurns = [], concernFamily = 'general' } = {}) {
@@ -1097,14 +1126,14 @@ export function reviseForBurdenRealism({ scenarioExecutionContract = null, activ
       ];
     }
     return [
-      `Given the time investment required, what would ${lexicon.owner} need to absorb differently ${lexicon.horizon} if we changed follow-up now?`,
-      `If this adds lift, I need to picture who carries it when the clinic is already moving.`,
-      `The burden is not the concept; it is what ${lexicon.owner} must carry ${lexicon.horizon} without adding steps.`,
+      `I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?`,
+      `If this adds lift, who carries it when the clinic is already moving, and what gets harder for staff during follow-up?`,
       `Walk me through where this lands for staff once patients are already stable and the schedule is full.`,
+      `If we changed follow-up now, which staff member handles the extra work when the clinic is already full?`,
     ];
   })();
   const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
-  const selected = candidates.find((candidate) => {
+  const viable = candidates.filter((candidate) => {
     const reduced = reduceAbstractOperationalNouns({ reply: candidate, concernFamily: activeAskState?.concernFamily || 'workflow' });
     if (recentSignatures.has(normalizeDialogueSignature(candidate))) return false;
     if (detectSymmetricalOperationalStructure({ reply: reduced, concernFamily: activeAskState?.concernFamily || 'workflow' }).symmetrical) return false;
@@ -1113,7 +1142,16 @@ export function reviseForBurdenRealism({ scenarioExecutionContract = null, activ
     if (angle && memory.exhausted.operationalAngles.includes(angle)) return false;
     if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
     return true;
-  }) || candidates.find((candidate) => !recentSignatures.has(normalizeDialogueSignature(candidate))) || candidates[candidates.length - 1];
+  });
+  const selected = (viable.length > 0 ? viable : candidates)
+    .map((candidate, index) => ({
+      candidate,
+      index,
+      score: scoreSpokenRealismShape({ reply: candidate, concernFamily: activeAskState?.concernFamily || 'workflow' }).score,
+    }))
+    .sort((left, right) => (right.score - left.score) || (left.index - right.index))[0]?.candidate
+    || candidates.find((candidate) => !recentSignatures.has(normalizeDialogueSignature(candidate)))
+    || candidates[candidates.length - 1];
   return reduceAbstractOperationalNouns({ reply: selected, concernFamily: activeAskState?.concernFamily || 'workflow' });
 }
 
@@ -1152,6 +1190,7 @@ export function spokenBelievabilityAudit({
   const shortHorizon = detectSyntheticShortHorizon({ reply, scenarioExecutionContract });
   const operationalAskSkeleton = detectRepeatedOperationalAskSkeleton({ reply, recentHcpTurns, concernFamily: activeAskState?.concernFamily || concernFamily });
   const symmetry = detectSymmetricalOperationalStructure({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const shapeScore = scoreSpokenRealismShape({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
   const lexicon = deriveScenarioLexiconHints({ scenarioExecutionContract, activeAskState });
   const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
   const portablePolish = STOCK_TRANSITION_PATTERN.test(reply) && !lexicon.primaryPressure && !lexicon.askHint;
@@ -1167,6 +1206,7 @@ export function spokenBelievabilityAudit({
     ...shortHorizon.issues,
     ...(operationalAskSkeleton.repeated ? ['repeated_operational_ask_skeleton'] : []),
     ...symmetry.issues,
+    ...((activeAskState?.concernFamily || concernFamily) === 'workflow' && shapeScore.score < 2 ? ['weak_actor_friction_shape'] : []),
     ...(portablePolish ? ['portable_professional_polish'] : []),
     ...(wordCountIssue ? ['outside_word_band'] : []),
   ];
@@ -1184,6 +1224,7 @@ export function spokenBelievabilityAudit({
     shortHorizon,
     operationalAskSkeleton,
     symmetry,
+    shapeScore,
     lexicon,
     wordCountIssue,
   };
@@ -1270,7 +1311,8 @@ export function enforcePostGenerationHcpRealism({
   });
   const needsRevision = audit.issues.some((issue) => issue !== 'outside_word_band');
   const operationalConcern = (activeAskState?.concernFamily || concernFamily) === 'workflow';
-  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical)
+  const weakWorkflowShape = operationalConcern && audit.shapeScore?.score < 2;
+  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical || weakWorkflowShape)
     ? reviseForBurdenRealism({
       scenarioExecutionContract,
       activeAskState,
@@ -1317,6 +1359,7 @@ export function enforcePostGenerationHcpRealism({
       shortHorizon: audit.shortHorizon,
       operationalAskSkeleton: audit.operationalAskSkeleton,
       symmetry: audit.symmetry,
+      shapeScore: audit.shapeScore,
       lexicon: audit.lexicon,
     },
   };

@@ -22,6 +22,7 @@ import {
   reduceFormalMetaLabeling,
   reduceAbstractOperationalNouns,
   reviseForBurdenRealism,
+  scoreSpokenRealismShape,
   validateCueDialogueLockstep,
   validateHcpRealismStateMachine,
   validateLiveHcpRealismRenderInputs,
@@ -614,9 +615,10 @@ test('spoken believability audit detects stock transition and repeated ask-shape
 test('post-generation realism revises reused transition shapes into evolved scenario-bound pressure', () => {
   const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
   const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
-  const recent = ['Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?'];
+  const crutchLine = 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?';
+  const recent = [crutchLine];
   const result = enforcePostGenerationHcpRealism({
-    reply: 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?',
+    reply: crutchLine,
     scenarioExecutionContract: contract,
     activeAskState,
     concernFamily: 'workflow',
@@ -626,7 +628,7 @@ test('post-generation realism revises reused transition shapes into evolved scen
   });
 
   const audit = spokenBelievabilityAudit({
-    reply: recent[0],
+    reply: crutchLine,
     scenarioExecutionContract: contract,
     activeAskState,
     concernFamily: 'workflow',
@@ -637,7 +639,7 @@ test('post-generation realism revises reused transition shapes into evolved scen
   assert.equal(audit.stockTransition.reused, true);
   assert.equal(result.metadata.revised, true);
   assert.match(result.metadata.issues.join(' '), /stock_transition_reuse|recent_pattern_reuse|repeated_terminal_ask_shape/);
-  assert.notEqual(result.text, recent[0]);
+  assert.notEqual(result.text, crutchLine);
   assertRichHcpLine(result.text, 'post-generation reused transition rewrite');
   assert.ok(wordCount(result.text) <= 25, `post-generation rewrite should stay at or below 25 words: ${result.text}`);
   assert.doesNotMatch(result.text, /^Given the time investment required/i);
@@ -718,7 +720,7 @@ test('post-generation realism re-anchors late collapsed workflow lines to scenar
   assert.equal(result.metadata.lateCollapse.memoryTurnCount, 28);
   assertRichHcpLine(result.text, 'late collapsed workflow rewrite');
   assert.ok(wordCount(result.text) <= 25, `late collapsed rewrite should stay at or below 25 words: ${result.text}`);
-  assert.match(result.text, /stable-patient|clinic|staff|patients|follow-through|burden/i);
+  assert.match(result.text, /stable-patient|clinic|staff|patients|added work|extra step|nurses|normal day|routine visits/i);
   assert.doesNotMatch(result.text, /^Given the time|I am still not hearing|something actionable|What would my team actually do differently/i);
 });
 
@@ -756,6 +758,22 @@ test('operational structure audit rejects balanced consultant-style workflow cla
   assert.doesNotMatch(reduced, /follow-through|how would that fit into clinic flow/i);
 });
 
+test('spoken realism shape scoring prefers actor and friction over polished abstraction', () => {
+  const polished = scoreSpokenRealismShape({
+    reply: 'Given the time, what follow-through would my team need to absorb, and how would that fit into clinic flow over time?',
+    concernFamily: 'workflow',
+  });
+  const actorBased = scoreSpokenRealismShape({
+    reply: 'I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?',
+    concernFamily: 'workflow',
+  });
+
+  assert.ok(actorBased.score > polished.score, `actor/friction line should score higher than polished abstraction: ${actorBased.score} vs ${polished.score}`);
+  assert.ok(actorBased.actorCount >= 1);
+  assert.ok(actorBased.frictionCount >= 1);
+  assert.equal(polished.symmetry, true);
+});
+
 test('burden realism revises operational pressure toward implementation lift over time', () => {
   const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
   const activeAskState = { ...contract.activeAsk, askText: 'workflow next step ask', concernFamily: 'workflow' };
@@ -767,8 +785,8 @@ test('burden realism revises operational pressure toward implementation lift ove
 
   assertRichHcpLine(revised, 'burden realism rewrite');
   assert.ok(wordCount(revised) <= 25, `burden realism rewrite should stay at or below 25 words: ${revised}`);
-  assert.match(revised, /time investment|required|absorb|follow-through|coming weeks|current process|burden/i);
-  assert.doesNotMatch(revised, /what would my team actually do differently next week/i);
+  assert.match(revised, /staff|nurses|team|who|extra step|added work|gets harder|routine visits|clinic/i);
+  assert.doesNotMatch(revised, /what would my team actually do differently next week|follow-through|workflow fit|process alignment/i);
 });
 
 test('long-horizon deterministic rewrite does not regress into explicit generic repair crutches', () => {
@@ -795,7 +813,7 @@ test('long-horizon deterministic rewrite does not regress into explicit generic 
 
     assertRichHcpLine(result.text, `long-horizon continuation turn ${index + 1}`);
     assert.ok(wordCount(result.text) <= 25, `long-horizon continuation turn ${index + 1} should stay at or below 25 words: ${result.text}`);
-    assert.match(result.text, /stable-patient|clinic|staff|patients|follow-through|burden/i);
+    assert.match(result.text, /stable-patient|clinic|staff|patients|added work|extra step|nurses|normal day|routine visits/i);
     assert.doesNotMatch(result.text, /^(Given the time,|I am still not hearing)|\bI need something actionable\b|\bWhat changes next week\b/i);
     turns.push(result.text);
   }
@@ -824,9 +842,9 @@ test('conversational realism uses scenario-bound rich phrasing for workflow pres
     scenarioContext: 'Cardiology Formulary Review. P&T committee with three formulary requests and 20 minutes.',
   }).text;
 
-  assert.equal(hiv, 'Given the time investment required, what would staff need to absorb differently over the coming weeks if we changed follow-up now?');
-  assert.equal(covid, 'That\'s exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?');
-  assert.equal(formulary, 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?');
+  assert.equal(hiv, 'I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?');
+  assert.equal(covid, 'Patients are already close to missing the window, so who on staff catches this, and what extra step lands during callbacks?');
+  assert.equal(formulary, 'This should not go anywhere until we know who on the committee carries the added review work and what slows decisions.');
   assertRichHcpLine(hiv, 'scenario-bound HIV line');
   assertRichHcpLine(covid, 'scenario-bound COVID line');
   assertRichHcpLine(formulary, 'scenario-bound formulary line');
