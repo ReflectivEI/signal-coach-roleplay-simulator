@@ -13,12 +13,14 @@ import {
   detectRepeatedTerminalAskShape,
   detectRepeatedOperationalAskSkeleton,
   detectStockTransitionReuse,
+  detectSymmetricalOperationalStructure,
   detectSyntheticShortHorizon,
   enforceTerminalCompression,
   enforcePostGenerationHcpRealism,
   HCP_REALISM_STATES,
   humanizeClinicalReferences,
   reduceFormalMetaLabeling,
+  reduceAbstractOperationalNouns,
   reviseForBurdenRealism,
   validateCueDialogueLockstep,
   validateHcpRealismStateMachine,
@@ -394,7 +396,7 @@ test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing'
   });
 
   assert.equal(result.metadata.renderingSource, 'contract_derived_realism_profile');
-  assert.equal(result.text, 'Given the time, what follow-through would my team need to absorb, and how would that fit into clinic flow over time?');
+  assert.equal(result.text, 'Given the time, who on my team would handle the added work, and what changes in their day over time?');
   assertRichHcpLine(result.text, 'unprofiled clinic/provider line');
   assert.doesNotMatch(result.text, /Dr\.|Maya|Patel|Internal Medicine|Urban Clinic/i);
 });
@@ -741,6 +743,17 @@ test('operational burden audit rejects generic short-horizon workflow crutches',
   assert.match(crutch.issues.join(' '), /stock_time_opener|team_action_stub|generic_do_differently|short_horizon_next_week/);
   assert.equal(skeleton.repeated, true);
   assert.equal(horizon.synthetic, true);
+});
+
+test('operational structure audit rejects balanced consultant-style workflow clauses', () => {
+  const structured = 'Given the time, what follow-through would my team need to absorb, and how would that fit into clinic flow over time?';
+  const audit = detectSymmetricalOperationalStructure({ reply: structured, concernFamily: 'workflow' });
+  const reduced = reduceAbstractOperationalNouns({ reply: structured, concernFamily: 'workflow' });
+
+  assert.equal(audit.symmetrical, true);
+  assert.match(audit.issues.join(' '), /balanced_abstract_fit_clause|absorb_plus_fit_clause|abstract_noun_balanced_pair/);
+  assert.equal(reduced, 'Given the time, who on my team would handle the added work, and what changes in their day over time?');
+  assert.doesNotMatch(reduced, /follow-through|how would that fit into clinic flow/i);
 });
 
 test('burden realism revises operational pressure toward implementation lift over time', () => {

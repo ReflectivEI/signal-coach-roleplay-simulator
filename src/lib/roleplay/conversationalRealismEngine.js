@@ -106,7 +106,7 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
         evidence: "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence actually justifies the switch?",
-        workflow: 'The practical piece still matters before I change clinic flow; what follow-through burden would staff carry over the coming weeks?',
+        workflow: 'The practical piece still matters before I change clinic flow; who on staff ends up carrying this over the coming weeks?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
         evidence: 'Before we move on, connect the data to durability for my stable patients in a way that changes the decision. What actually changes?',
@@ -114,11 +114,11 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
       }),
       SOFT_RESISTANCE: Object.freeze({
         evidence: "I'm still not hearing what changes for stable patients, and I do not want a broader data recap. What evidence justifies switching them?",
-        workflow: 'The stable-patient follow-through is still the issue; if we changed course, what extra lift would staff carry over the coming weeks?',
+        workflow: 'Stable patients are not a quick switch; if we changed course, what extra lift would nurses or staff carry afterward?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
         evidence: 'If the data are strong enough, tie it to durability for stable patients and the decision in front of me. What is the proof point?',
-        workflow: 'If we considered this, where would the follow-through burden sit once staff are using it in the current clinic flow?',
+        workflow: 'If we considered this, I am trying to picture the staff day: who handles the extra work once patients are already stable?',
       }),
     }),
   }),
@@ -207,7 +207,7 @@ function contractProfileWorkflowAskForBucket(bucket = 'clinic_team') {
   if (bucket === 'committee') return 'what should this committee do first, and what would that change operationally';
   if (bucket === 'access_process') return 'what would we change first in our process, and how would it reduce the delay';
   if (bucket === 'screening_evaluation') return 'what would we do first here, and which patients would that help us identify';
-  return 'what follow-through would my team need to absorb, and how would that fit into clinic flow over time';
+  return 'who on my team would handle the added work, and what changes in their day over time';
 }
 
 function capitalizeQuestion(value = '') {
@@ -773,6 +773,40 @@ function redirectionShapeFamily(value = '') {
   return '';
 }
 
+export function detectSymmetricalOperationalStructure({ reply = '', concernFamily = 'general' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const operational = concernFamily === 'workflow' || /workflow|clinic flow|process|implementation|operational|staff|team/.test(text);
+  const issues = [];
+  if (!operational) return { symmetrical: false, issues };
+  if (/\bwhat (?:follow-through|implementation|operational|workflow)\b[^?]*, and how would that (?:fit|work)/i.test(text)) issues.push('balanced_abstract_fit_clause');
+  if (/\bwhat .* would .* absorb[^?]*, and how would that fit into/i.test(text)) issues.push('absorb_plus_fit_clause');
+  if (/\bhow would that (?:fit|work) (?:in|into) (?:clinic flow|workflow|practice|process)/i.test(text)) issues.push('abstract_fit_question');
+  if (/\b(follow-through|implementation|workflow fit|process alignment|operational step)\b/i.test(text) && /\band how would\b/i.test(text)) issues.push('abstract_noun_balanced_pair');
+  return {
+    symmetrical: issues.length > 0,
+    issues,
+  };
+}
+
+export function reduceAbstractOperationalNouns({ reply = '', concernFamily = 'general' } = {}) {
+  let text = normalizeHcpSpokenRealism(reply);
+  if (concernFamily !== 'workflow' && !/workflow|clinic flow|staff|team|implementation|operational/i.test(text)) return text;
+  text = text
+    .replace(/what follow-through would my team need to absorb, and how would that fit into clinic flow over time\?/i, 'who on my team would handle the added work, and what changes in their day over time?')
+    .replace(/what follow-through burden would staff carry/i, 'who on staff ends up carrying this')
+    .replace(/where would the follow-through burden sit/i, 'who would end up carrying the extra work')
+    .replace(/the follow-through burden/gi, 'the extra work')
+    .replace(/operational step/gi, 'staff handoff')
+    .replace(/workflow fit/gi, 'where this lands for staff')
+    .replace(/process alignment/gi, 'who handles the handoff')
+    .replace(/implementation burden/gi, 'extra lift')
+    .replace(/how would that fit into clinic flow over time\?/i, 'where does that land for staff over time?')
+    .replace(/how would that work in practice\?/i, 'who handles it when the clinic is busy?')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return normalizeHcpSpokenRealism(text);
+}
+
 export function deriveRealismMemory({ recentHcpTurns = [], concernFamily = 'general' } = {}) {
   const turns = normalizeRecentTurns(recentHcpTurns);
   const openingStructures = countByFamily(turns, openingStructureFamily);
@@ -1064,19 +1098,23 @@ export function reviseForBurdenRealism({ scenarioExecutionContract = null, activ
     }
     return [
       `Given the time investment required, what would ${lexicon.owner} need to absorb differently ${lexicon.horizon} if we changed follow-up now?`,
-      `If this shifts the ${lexicon.burden}, I need to know who carries it and how it fits the current process.`,
+      `If this adds lift, I need to picture who carries it when the clinic is already moving.`,
       `The burden is not the concept; it is what ${lexicon.owner} must carry ${lexicon.horizon} without adding steps.`,
+      `Walk me through where this lands for staff once patients are already stable and the schedule is full.`,
     ];
   })();
   const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
-  return candidates.find((candidate) => {
+  const selected = candidates.find((candidate) => {
+    const reduced = reduceAbstractOperationalNouns({ reply: candidate, concernFamily: activeAskState?.concernFamily || 'workflow' });
     if (recentSignatures.has(normalizeDialogueSignature(candidate))) return false;
+    if (detectSymmetricalOperationalStructure({ reply: reduced, concernFamily: activeAskState?.concernFamily || 'workflow' }).symmetrical) return false;
     const angle = operationalAngleFamily(candidate);
     const opening = openingStructureFamily(candidate);
     if (angle && memory.exhausted.operationalAngles.includes(angle)) return false;
     if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
     return true;
   }) || candidates.find((candidate) => !recentSignatures.has(normalizeDialogueSignature(candidate))) || candidates[candidates.length - 1];
+  return reduceAbstractOperationalNouns({ reply: selected, concernFamily: activeAskState?.concernFamily || 'workflow' });
 }
 
 export function deriveScenarioLexiconHints({ scenarioExecutionContract = null, activeAskState = null } = {}) {
@@ -1113,6 +1151,7 @@ export function spokenBelievabilityAudit({
   const operationalCrutch = detectGenericOperationalCrutch({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
   const shortHorizon = detectSyntheticShortHorizon({ reply, scenarioExecutionContract });
   const operationalAskSkeleton = detectRepeatedOperationalAskSkeleton({ reply, recentHcpTurns, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const symmetry = detectSymmetricalOperationalStructure({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
   const lexicon = deriveScenarioLexiconHints({ scenarioExecutionContract, activeAskState });
   const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
   const portablePolish = STOCK_TRANSITION_PATTERN.test(reply) && !lexicon.primaryPressure && !lexicon.askHint;
@@ -1127,6 +1166,7 @@ export function spokenBelievabilityAudit({
     ...(operationalCrutch.crutch ? ['generic_operational_crutch'] : []),
     ...shortHorizon.issues,
     ...(operationalAskSkeleton.repeated ? ['repeated_operational_ask_skeleton'] : []),
+    ...symmetry.issues,
     ...(portablePolish ? ['portable_professional_polish'] : []),
     ...(wordCountIssue ? ['outside_word_band'] : []),
   ];
@@ -1143,6 +1183,7 @@ export function spokenBelievabilityAudit({
     operationalCrutch,
     shortHorizon,
     operationalAskSkeleton,
+    symmetry,
     lexicon,
     wordCountIssue,
   };
@@ -1229,7 +1270,7 @@ export function enforcePostGenerationHcpRealism({
   });
   const needsRevision = audit.issues.some((issue) => issue !== 'outside_word_band');
   const operationalConcern = (activeAskState?.concernFamily || concernFamily) === 'workflow';
-  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated)
+  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical)
     ? reviseForBurdenRealism({
       scenarioExecutionContract,
       activeAskState,
@@ -1275,6 +1316,7 @@ export function enforcePostGenerationHcpRealism({
       operationalCrutch: audit.operationalCrutch,
       shortHorizon: audit.shortHorizon,
       operationalAskSkeleton: audit.operationalAskSkeleton,
+      symmetry: audit.symmetry,
       lexicon: audit.lexicon,
     },
   };
