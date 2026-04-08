@@ -7,6 +7,7 @@ import {
   compressByState,
   detectOverpackedSentence,
   enforceTerminalCompression,
+  enforcePostGenerationHcpRealism,
   HCP_REALISM_STATES,
   humanizeClinicalReferences,
   reduceFormalMetaLabeling,
@@ -22,6 +23,14 @@ function scenarioContractById(id) {
   const scenario = ALL_SCENARIOS.find((item) => item.id === id);
   assert.ok(scenario, `missing scenario fixture ${id}`);
   return buildRoleplayScenarioExecutionContract(scenario);
+}
+
+function wordCount(value) {
+  return String(value || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function assertRichHcpLine(value, label = 'HCP line') {
+  assert.ok(wordCount(value) >= 20, `${label} should preserve at least 20 spoken words: ${value}`);
 }
 
 test('HCP realism state machine exposes required deterministic state contract', () => {
@@ -83,7 +92,6 @@ test('conversational realism makes workflow hard escalation shorter and directiv
   assert.equal(result.text, 'I can stay with this if we make it concrete. What would my staff own first?');
   assert.doesNotMatch(result.text, /^Then give me one step/i);
   assert.equal(result.metadata.lockstep.aligned, true);
-  assert.ok(result.text.split(/\s+/).length <= 16);
 });
 
 test('conversational realism preserves access and screening ask clarity', () => {
@@ -131,9 +139,9 @@ test('conversational realism hard-compresses formal terminal evidence expansion'
     terminalBehavior: true,
   });
 
-  assert.equal(result.text, "I'm about to move on. How does that affect durability for stable patients?");
+  assert.equal(result.text, "I'm about to move on, but I need the durability point. What evidence actually justifies switching stable patients right now?");
   assert.doesNotMatch(result.text, /To directly address|specifically elaborate|treatment regimens/i);
-  assert.ok(result.text.split(/\s+/).length <= 13);
+  assertRichHcpLine(result.text, 'terminal evidence pressure line');
   assert.equal(result.metadata.lockstep.aligned, true);
   assert.equal(result.metadata.terminalCompressionApplied, true);
 });
@@ -205,8 +213,9 @@ test('conversational realism restores stable HIV evidence richness instead of ge
 
   assert.equal(
     result.text,
-    'Given how little time we have, what specific evidence actually justifies switching stable patients?'
+    'Given how little time we have, what specific evidence actually justifies switching stable patients? Tie it to the decision in front of me.'
   );
+  assertRichHcpLine(result.text, 'stable HIV evidence pressure line');
   assert.equal(result.metadata.concernFamily, 'evidence');
   assert.equal(result.metadata.scenarioArchetype, 'stable_hiv_optimization');
   assert.doesNotMatch(result.text, /I can stay with this|make it concrete|What would my team do first/i);
@@ -228,7 +237,8 @@ test('state-driven realism uses active ask state over generic text without phras
     scenarioExecutionContract: contract,
   });
 
-  assert.equal(result.text, 'Given how little time we have, what specific evidence actually justifies switching stable patients?');
+  assert.equal(result.text, 'Before we get into new data, can you tie what you showed last week to long-term durability for stable patients and why that justifies switching?');
+  assertRichHcpLine(result.text, 'state-driven active ask line');
   assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
   assert.equal(result.metadata.stateName, 'TIME_PRESSURE_DEFLECTION');
   assert.equal(result.metadata.concernFamily, 'evidence');
@@ -374,7 +384,8 @@ test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing'
   });
 
   assert.equal(result.metadata.renderingSource, 'contract_derived_realism_profile');
-  assert.equal(result.text, 'Given the time, what would my team actually do first here?');
+  assert.equal(result.text, 'Given the time, what would my team actually do first here, and how would that fit into clinic flow today?');
+  assertRichHcpLine(result.text, 'unprofiled clinic/provider line');
   assert.doesNotMatch(result.text, /Dr\.|Maya|Patel|Internal Medicine|Urban Clinic/i);
 });
 
@@ -396,7 +407,8 @@ test('contract-derived realism uses committee bucket for unprofiled formulary co
     requireContractBound: true,
   });
 
-  assert.equal(result.text, 'Given the time, what evidence changes the decision for this committee?');
+  assert.equal(result.text, 'Given the time, I need the decision point, not a broad overview. What evidence changes the decision for this committee?');
+  assertRichHcpLine(result.text, 'unprofiled committee line');
   assert.doesNotMatch(result.text, /Pharmacy Director|Committee Chair|Regional Formulary Review/i);
 });
 
@@ -418,7 +430,8 @@ test('contract-derived realism uses process bucket for unprofiled access/admin c
     requireContractBound: true,
   });
 
-  assert.equal(result.text, 'Given the time, what access step changes the delay in our process?');
+  assert.equal(result.text, 'Given the time, I need the process step, not a broad access discussion. What access step changes the delay in our process?');
+  assertRichHcpLine(result.text, 'unprofiled access/admin line');
   assert.doesNotMatch(result.text, /Access Coordinator|Reimbursement Team Lead|Prior Authorization Delay Review/i);
 });
 
@@ -440,7 +453,8 @@ test('contract-derived realism uses evaluation bucket for unprofiled screening a
     requireContractBound: true,
   });
 
-  assert.equal(result.text, 'Given the time, who would we identify first here?');
+  assert.equal(result.text, 'Given the time, I need the patient boundary, not a broad screening discussion. Who would we identify first here today?');
+  assertRichHcpLine(result.text, 'unprofiled screening/diagnosis line');
   assert.doesNotMatch(result.text, /Genetics NP|Diagnostic Intake Lead|Rare Disease Diagnosis Journey/i);
 });
 
@@ -457,7 +471,107 @@ test('contract-derived bucket hardening does not alter scenario-specific profile
   });
 
   assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
-  assert.equal(result.text, 'I remember that data, but I need something actionable. What would my team actually do differently next week?');
+  assert.equal(result.text, 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?');
+  assertRichHcpLine(result.text, 'profiled HIV workflow line');
+});
+
+test('state-driven HCP realism preserves a 20-word spoken floor across profiled and contract-derived scenarios', () => {
+  const cases = [
+    {
+      label: 'stable HIV profiled workflow',
+      contract: scenarioContractById('hiv_pa_treat_switch_slowdown'),
+      family: 'workflow',
+    },
+    {
+      label: 'cardiology profiled evidence',
+      contract: scenarioContractById('card-formulary'),
+      family: 'evidence',
+    },
+    {
+      label: 'unprofiled clinic workflow',
+      contract: buildRoleplayScenarioExecutionContract({
+        id: 'unprofiled-clinic-richness-floor-test',
+        title: 'Clinic Workflow Capacity Review',
+        specialty: 'Internal Medicine',
+        stakeholder: 'Clinic Director - Primary Care Lead',
+        openingScene: 'The clinic director has two minutes and asks what the team would do first.',
+      }),
+      family: 'workflow',
+    },
+    {
+      label: 'unprofiled access process',
+      contract: buildRoleplayScenarioExecutionContract({
+        id: 'unprofiled-access-richness-floor-test',
+        title: 'Access Delay Review',
+        specialty: 'Access Operations',
+        stakeholder: 'Access Coordinator - Reimbursement Team Lead',
+        openingScene: 'The access lead asks what step reduces the delay.',
+      }),
+      family: 'access',
+    },
+  ];
+
+  for (const item of cases) {
+    const result = applyConversationalRealism({
+      text: 'Generic upstream draft.',
+      activeAskState: { ...item.contract.activeAsk, askText: item.contract.activeAsk.askText || 'live ask', concernFamily: item.family },
+      concernFamily: item.family,
+      cueCategory: 'time_constrained',
+      timePressure: true,
+      scenarioExecutionContract: item.contract,
+      requireContractBound: true,
+    });
+    assertRichHcpLine(result.text, item.label);
+  }
+});
+
+test('state-driven HCP realism varies repeated lines without dropping below the richness floor', () => {
+  const contract = scenarioContractById('hiv_pa_treat_switch_slowdown');
+  const activeAskState = { ...contract.activeAsk, concernFamily: 'workflow', askText: 'workflow next step ask' };
+  const first = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState,
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+  const second = applyConversationalRealism({
+    text: 'Generic upstream draft.',
+    activeAskState,
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    recentHcpTurns: [first.text],
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.notEqual(second.text, first.text);
+  assert.equal(second.metadata.repeatedStateDrivenLine, true);
+  assertRichHcpLine(first.text, 'first state-driven HCP line');
+  assertRichHcpLine(second.text, 'repeat-varied state-driven HCP line');
+});
+
+test('post-generation realism rewrites rubric-like HCP phrases before final return', () => {
+  const contract = scenarioContractById('card-formulary');
+  const activeAskState = { ...contract.activeAsk, askText: 'committee evidence threshold ask', concernFamily: 'evidence' };
+  const result = enforcePostGenerationHcpRealism({
+    reply: 'You have covered the setup; now I need the decision-relevant evidence. Be specific about ownership.',
+    scenarioExecutionContract: contract,
+    activeAskState,
+    concernFamily: 'evidence',
+    stateName: 'TIME_PRESSURE_DEFLECTION',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+  });
+
+  assert.equal(result.metadata.revised, true);
+  assert.match(result.metadata.issues.join(' '), /rubric_language|state_label_language/);
+  assertRichHcpLine(result.text, 'post-generation rewritten HCP line');
+  assert.ok(wordCount(result.text) <= 25, `post-generation line should stay at or below 25 words: ${result.text}`);
+  assert.doesNotMatch(result.text, /You have covered the setup|decision-relevant evidence|Be specific about ownership/i);
 });
 
 test('conversational realism uses scenario-bound rich phrasing for workflow pressure', () => {
@@ -483,9 +597,12 @@ test('conversational realism uses scenario-bound rich phrasing for workflow pres
     scenarioContext: 'Cardiology Formulary Review. P&T committee with three formulary requests and 20 minutes.',
   }).text;
 
-  assert.equal(hiv, 'I remember that data, but I need something actionable. What would my team actually do differently next week?');
+  assert.equal(hiv, 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?');
   assert.equal(covid, 'That\'s exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?');
-  assert.equal(formulary, 'What is the realistic first step for my team?');
+  assert.equal(formulary, 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?');
+  assertRichHcpLine(hiv, 'scenario-bound HIV line');
+  assertRichHcpLine(covid, 'scenario-bound COVID line');
+  assertRichHcpLine(formulary, 'scenario-bound formulary line');
   assert.notEqual(hiv, covid);
   assert.notEqual(covid, formulary);
   assert.doesNotMatch(`${hiv} ${covid} ${formulary}`, /I can stay with this if we make it concrete/i);

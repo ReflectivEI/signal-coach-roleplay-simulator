@@ -2,6 +2,8 @@ import { compressHcpDialogueForState, normalizeHcpSpokenRealism } from './dialog
 
 export const CONVERSATIONAL_REALISM_ENGINE_VERSION = 'conversational_realism_engine_v1';
 
+const HCP_DIALOGUE_MIN_WORDS = 20;
+
 export const HCP_REALISM_STATES = Object.freeze({
   OPENING_CONSTRAINT: Object.freeze({
     behavioralIntent: 'establish_control_and_frame_scope',
@@ -97,24 +99,24 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     defaultConcernFamily: 'evidence',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        evidence: 'Given how little time we have, what specific evidence actually justifies switching stable patients?',
-        workflow: 'I remember that data, but I need something actionable. What would my team actually do differently next week?',
+        evidence: 'Before we discuss new data, can you tie what you showed last week to long-term durability for stable patients and why that justifies switching?',
+        workflow: 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?',
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
-        evidence: "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence justifies the switch?",
-        workflow: 'I remember that data, but the practical piece still matters. What would my team actually do differently next week?',
+        evidence: "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence actually justifies the switch?",
+        workflow: 'I remember that data, but the practical piece still matters before I change clinic flow. What would my team actually do differently next week?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        evidence: 'Before we move on, connect the data to durability for my stable patients. What actually changes?',
-        workflow: 'I remember that data, but I need something actionable. What would my team actually do differently next week?',
+        evidence: 'Before we move on, connect the data to durability for my stable patients in a way that changes the decision. What actually changes?',
+        workflow: 'I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?',
       }),
       SOFT_RESISTANCE: Object.freeze({
-        evidence: "I'm still not hearing what changes for stable patients. What evidence justifies switching them?",
-        workflow: 'I am still not hearing the operational step. What would my team do differently next week?',
+        evidence: "I'm still not hearing what changes for stable patients, and I do not want a broader data recap. What evidence justifies switching them?",
+        workflow: 'I am still not hearing the operational step, and I cannot hand my team a concept. What would they do differently next week?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        evidence: 'If the data are strong enough, tie it to durability for stable patients. What is the proof point?',
-        workflow: 'If we did consider this, what would my team do differently next week?',
+        evidence: 'If the data are strong enough, tie it to durability for stable patients and the decision in front of me. What is the proof point?',
+        workflow: 'If we did consider this, what would my team do differently next week, and how would that fit into current clinic flow?',
       }),
     }),
   }),
@@ -122,20 +124,20 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     defaultConcernFamily: 'workflow',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        workflow: "That's exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?",
-        evidence: 'I need this tied to the antiviral window. What proof point changes what we do before day four?',
+        workflow: "That's exactly the issue, but I do not have bandwidth for theory right now. What would this look like in practice on day one?",
+        evidence: 'I need this tied to the antiviral window, not a general outcomes story. What proof point changes what we do before day four?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        workflow: "That's exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?",
-        evidence: 'Keep it tied to the antiviral window. What evidence changes the workflow before patients miss it?',
+        workflow: "That's exactly the issue, but I do not have bandwidth for theory right now. What would this look like in practice on day one?",
+        evidence: 'Keep it tied to the antiviral window and the clinic process. What evidence changes the workflow before patients miss it?',
       }),
       SOFT_RESISTANCE: Object.freeze({
-        workflow: "If it is not simple to operationalize, it is not happening. What does my team do first?",
-        evidence: 'I am not asking for more theory. What proof changes what we do before day four?',
+        workflow: "If it is not simple to operationalize, it is not happening in this clinic. What does my team do first on day one?",
+        evidence: 'I am not asking for more theory while patients are missing the window. What proof changes what we do before day four?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        workflow: 'If we tried this, what would my team do first on day one?',
-        evidence: 'If the evidence supports it, what changes before day four?',
+        workflow: 'If we tried this, what would my team do first on day one, and how would it avoid adding another clinic step?',
+        evidence: 'If the evidence supports it, what changes before day four, and how would my team act on that in clinic?',
       }),
     }),
   }),
@@ -143,24 +145,24 @@ const SCENARIO_REALISM_PROFILES = Object.freeze({
     defaultConcernFamily: 'evidence',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        evidence: 'Let me stop you there: this comes down to evidence. What single data point should influence this decision?',
-        workflow: 'If we move forward, what is the realistic first step for my team?',
+        evidence: 'Let me stop you there: this comes down to evidence and time. What single data point should actually influence this committee decision?',
+        workflow: 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?',
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
-        evidence: 'Let me stop you there: this comes down to evidence. What single data point should influence this decision?',
-        workflow: 'If the committee moves forward, what is the realistic first step for my team?',
+        evidence: 'Let me stop you there: this comes down to evidence and time. What single data point should actually influence this committee decision?',
+        workflow: 'If the committee moves forward, I need the operational implication too. What is the realistic first step for my team?',
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        evidence: 'Given the time constraints, what single data point should actually influence this decision?',
-        workflow: 'If we move forward, what is the realistic first step for my team?',
+        evidence: 'Given the time constraints, what single data point should actually influence this decision, not just support a broader review?',
+        workflow: 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?',
       }),
       SOFT_RESISTANCE: Object.freeze({
-        evidence: 'I need one decision-relevant data point, not a broader review. What should influence this decision?',
-        workflow: 'If this is moving forward, what is the first step my team would actually take?',
+        evidence: 'I need one decision-relevant data point, not a broader review or summary. What should actually influence this committee decision today?',
+        workflow: 'If this is moving forward, I need a real operational next step. What is the first step my team would actually take?',
       }),
       PARTIAL_ENGAGEMENT: Object.freeze({
-        evidence: 'If we consider it, what single data point should influence the committee decision?',
-        workflow: 'If the committee considers it, what would the first operational step be?',
+        evidence: 'If we consider it, what single data point should influence the committee decision, and why should we trust that threshold?',
+        workflow: 'If the committee considers it, what would the first operational step be, and who would need to own it?',
       }),
     }),
   }),
@@ -196,15 +198,80 @@ function contractProfileSettingForBucket(bucket = 'clinic_team') {
 }
 
 function contractProfileWorkflowAskForBucket(bucket = 'clinic_team') {
-  if (bucket === 'committee') return 'what should this committee do first';
-  if (bucket === 'access_process') return 'what would we change first in our process';
-  if (bucket === 'screening_evaluation') return 'what would we do first here';
-  return 'what would my team actually do first here';
+  if (bucket === 'committee') return 'what should this committee do first, and what would that change operationally';
+  if (bucket === 'access_process') return 'what would we change first in our process, and how would it reduce the delay';
+  if (bucket === 'screening_evaluation') return 'what would we do first here, and which patients would that help us identify';
+  return 'what would my team actually do first here, and how would that fit into clinic flow today';
 }
 
 function capitalizeQuestion(value = '') {
   const text = String(value || '').trim().replace(/\?*$/, '');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}?`;
+}
+
+function countWords(value = '') {
+  return String(value || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+function normalizeDialogueSignature(value = '') {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function cleanScenarioPressureFragment(value = '') {
+  return String(value || '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\b(limited|inconsistent|competing|need|lack of|reluctance to|perception of)\b/gi, '')
+    .replace(/[^a-z0-9,\s-]/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function deriveScenarioPressureClause(scenarioExecutionContract = {}, bucket = 'clinic_team') {
+  const challenge = cleanScenarioPressureFragment(scenarioExecutionContract?.constraints?.challenges?.[0]);
+  if (challenge) return `the ${challenge} issue`;
+  if (bucket === 'committee') return 'this committee decision';
+  if (bucket === 'access_process') return 'the access delay';
+  if (bucket === 'screening_evaluation') return 'the patient identification step';
+  return 'the clinic issue';
+}
+
+function buildRepeatedStateDrivenLine({ concernFamily = 'general', scenarioExecutionContract = null } = {}) {
+  const bucket = deriveContractProfileBucket(scenarioExecutionContract || {});
+  const pressureClause = deriveScenarioPressureClause(scenarioExecutionContract || {}, bucket);
+  if (bucket === 'committee') {
+    if (concernFamily === 'workflow') return `I do not need another overview; ${pressureClause} still needs an operational step. What would the team own first?`;
+    return `I do not need another overview; ${pressureClause} still needs a decision point. What evidence changes the recommendation today?`;
+  }
+  if (bucket === 'access_process') return `I do not need another overview; ${pressureClause} still needs a process step. What would reduce the delay next?`;
+  if (bucket === 'screening_evaluation') return `I do not need another setup; ${pressureClause} still needs a patient boundary. Who would we identify first today?`;
+  if (concernFamily === 'evidence') return `I do not need another setup; ${pressureClause} still needs a proof point. What evidence changes the clinical decision today?`;
+  return `I do not need another setup; ${pressureClause} still needs a practical step. What would my team do first?`;
+}
+
+function buildStateDrivenRealismExpansion({ concernFamily = 'general', stateName = 'OPENING_CONSTRAINT', repeated = false, scenarioExecutionContract = null } = {}) {
+  if (repeated) {
+    return buildRepeatedStateDrivenLine({ concernFamily, scenarioExecutionContract });
+  }
+  if (stateName === 'TIME_PRESSURE_DEFLECTION') {
+    if (concernFamily === 'evidence') return 'I need the proof point tied to the actual decision.';
+    if (concernFamily === 'access') return 'I need the process change tied to the actual delay.';
+    if (concernFamily === 'screening') return 'I need the patient boundary tied to action.';
+    return 'I need to hear who owns it.';
+  }
+  if (stateName === 'SOFT_RESISTANCE') return 'That is the part I still need answered before I can stay with this.';
+  if (stateName === 'PARTIAL_ENGAGEMENT') return 'That would tell me whether this is worth continuing.';
+  if (concernFamily === 'evidence') return 'Tie it to the decision in front of me.';
+  if (concernFamily === 'access') return 'Tie it to the actual access barrier.';
+  if (concernFamily === 'screening') return 'Tie it to the patient boundary.';
+  return 'Tie it to what changes in practice.';
+}
+
+function enforceStateDrivenDialogueRichness({ text = '', concernFamily = 'general', stateName = 'OPENING_CONSTRAINT', repeated = false, scenarioExecutionContract = null } = {}) {
+  const normalized = normalizeHcpSpokenRealism(text);
+  const withRepeatVariation = repeated ? buildStateDrivenRealismExpansion({ concernFamily, stateName, repeated: true, scenarioExecutionContract }) : normalized;
+  if (countWords(withRepeatVariation) >= HCP_DIALOGUE_MIN_WORDS) return normalizeHcpSpokenRealism(withRepeatVariation);
+  return normalizeHcpSpokenRealism(`${withRepeatVariation} ${buildStateDrivenRealismExpansion({ concernFamily, stateName, scenarioExecutionContract })}`);
 }
 
 function buildContractDerivedRealismProfile(contract = {}) {
@@ -218,22 +285,22 @@ function buildContractDerivedRealismProfile(contract = {}) {
     defaultConcernFamily: contract?.activeAsk?.concernFamily || contract?.openingState?.primaryConcernFamily || 'workflow',
     lines: Object.freeze({
       TIME_PRESSURE_DEFLECTION: Object.freeze({
-        evidence: `Given the time, what evidence changes the decision ${setting}?`,
+        evidence: `Given the time, I need the decision point, not a broad overview. What evidence changes the decision ${setting}?`,
         workflow: `Given the time, ${workflowAsk}?`,
-        access: `Given the time, what access step changes the delay ${setting}?`,
-        screening: `Given the time, who would we identify first ${setting}?`,
+        access: `Given the time, I need the process step, not a broad access discussion. What access step changes the delay ${setting}?`,
+        screening: `Given the time, I need the patient boundary, not a broad screening discussion. Who would we identify first ${setting} today?`,
       }),
       EVIDENCE_CHALLENGE: Object.freeze({
-        evidence: `What evidence changes the decision ${setting}?`,
+        evidence: `I need the decision point, not a broad overview. What evidence changes the decision ${setting}?`,
         workflow: workflowQuestion,
-        access: `What access step changes the delay ${setting}?`,
-        screening: `Who would we identify first ${setting}?`,
+        access: `I need the process step, not a broad access discussion. What access step changes the delay ${setting}?`,
+        screening: `I need the patient boundary, not a broad screening discussion. Who would we identify first ${setting} today?`,
       }),
       OPERATIONAL_CHALLENGE: Object.freeze({
-        evidence: `What evidence changes the practical decision ${setting}?`,
+        evidence: `I need the evidence tied to an actual next step. What evidence changes the practical decision ${setting}?`,
         workflow: workflowQuestion,
-        access: `What access step changes the delay ${setting}?`,
-        screening: `Who would we identify first ${setting}?`,
+        access: `I need the process step tied to the barrier. What access step changes the delay ${setting}?`,
+        screening: `I need the patient boundary tied to action. Who would we identify first ${setting} today?`,
       }),
       SOFT_RESISTANCE: Object.freeze({
         evidence: `I still need the decision-relevant evidence ${setting}. What changes the decision?`,
@@ -277,6 +344,7 @@ function applyStateDrivenRealism({
   cueCategory = 'neutral_attentive',
   terminalBehavior = false,
   timePressure = false,
+  recentHcpTurns = [],
 } = {}) {
   if (!scenarioExecutionContract?.scenarioIdentity?.scenarioId) return null;
   const profile = selectProfileByState(scenarioExecutionContract);
@@ -293,8 +361,19 @@ function applyStateDrivenRealism({
   });
   const state = HCP_REALISM_STATES[stateName] || HCP_REALISM_STATES.OPENING_CONSTRAINT;
   const stateLines = profile.lines[stateName] || profile.lines.OPERATIONAL_CHALLENGE || profile.lines.EVIDENCE_CHALLENGE || {};
-  const selected = stateLines[resolvedConcern] || stateLines[profile.defaultConcernFamily] || stateLines.workflow || stateLines.evidence;
-  if (!selected) return null;
+  const selectedBase = stateLines[resolvedConcern] || stateLines[profile.defaultConcernFamily] || stateLines.workflow || stateLines.evidence;
+  if (!selectedBase) return null;
+  const selectedSignature = normalizeDialogueSignature(selectedBase);
+  const repeated = normalizeRecentTurns(recentHcpTurns).some((turn) => normalizeDialogueSignature(turn) === selectedSignature);
+  const repeatLines = profile.lines.SOFT_RESISTANCE || profile.lines.OPERATIONAL_CHALLENGE || {};
+  const repeatBase = repeatLines[resolvedConcern] || repeatLines[profile.defaultConcernFamily] || repeatLines.workflow || repeatLines.evidence || selectedBase;
+  const selected = enforceStateDrivenDialogueRichness({
+    text: repeated ? repeatBase : selectedBase,
+    concernFamily: resolvedConcern,
+    stateName,
+    repeated: false,
+    scenarioExecutionContract,
+  });
   return {
     text: selected,
     metadata: {
@@ -303,6 +382,7 @@ function applyStateDrivenRealism({
       concernFamily: resolvedConcern,
       scenarioId: scenarioExecutionContract.scenarioIdentity.scenarioId,
       source: profile.profileSource || 'scenario_realism_profile',
+      repeatedStateDrivenLine: repeated,
     },
   };
 }
@@ -344,6 +424,8 @@ const SOFT_COLLABORATIVE_PATTERN = /\b(i can stay with this|happy to|let'?s expl
 const CONSTRAINED_DIRECT_ASK_PATTERN = /\bi can stay with this if we make it concrete\.[^.?!]*\bwhat\b/i;
 const TERMINAL_PATTERN = /\b(pause here|stop here|get back to clinic|we are done|ending|wrap|one point|then show me|move on)\b/i;
 const FORMAL_EXPANSION_PATTERN = /\b(to directly address|to address your follow-up|can you specifically elaborate|supports the long-term durability|treatment regimens)\b/i;
+const RUBRIC_LANGUAGE_PATTERN = /\b(you have covered the setup|be specific about ownership|decision-relevant evidence|usable point before we move on|state the proof point|next turn should)\b/i;
+const TOO_IDEAL_PATTERN = /\b(i can stay with this if we make it concrete|happy to keep going|let'?s explore|we can talk through)\b/i;
 
 function normalizeRuntimeText(...values) {
   return values.map((value) => String(value || '').toLowerCase()).join(' ');
@@ -372,7 +454,7 @@ function deriveExpressionConcernFamily({ concernFamily = 'general', activeAsk = 
 }
 
 function isGenericCompressedAsk(text = '') {
-  return /\b(make it concrete|make it practical|what would my (?:team|staff) do first|what evidence point changes the decision|how does that change the decision)\b/i.test(text);
+  return /\b(make it concrete|make it practical|what would my (?:team|staff) do first|what evidence point changes the decision|how does that (?:change|affect) (?:the decision|durability))\b/i.test(text);
 }
 
 function selectScenarioGroundedHcpLine({
@@ -395,24 +477,24 @@ function selectScenarioGroundedHcpLine({
   if (scenarioArchetype === 'stable_hiv_optimization') {
     if (expressionConcern === 'evidence') {
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
-        return "I'm about to move on. If this changes durability for stable patients, what is the evidence point?";
+        return "I'm about to move on, but I need the durability point. What evidence actually justifies switching stable patients right now?";
       }
       if (cueCategory === 'time_constrained' || timePressure) {
-        return 'Given how little time we have, what specific evidence actually justifies switching stable patients?';
+        return 'Given how little time we have, what specific evidence actually justifies switching stable patients? Tie it to the decision in front of me.';
       }
-      return "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence justifies the switch?";
+      return "I remember that data, but let me be direct: if I'm changing anything for stable patients, what evidence actually justifies the switch now?";
     }
     if (expressionConcern === 'workflow') {
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
-        return "I'm about to move on. If this is real, what would my team do differently next week?";
+        return "I'm about to move on, but if this is real, tell me what my team would do differently next week.";
       }
-      return "I remember that data, but I need something actionable. What would my team actually do differently next week?";
+      return "I remember that data, but I need something actionable before I ask staff to change anything. What would my team actually do differently next week?";
     }
   }
 
   if (scenarioArchetype === 'post_covid_antiviral_adherence') {
     if (cueCategory === 'terminal_exit' || terminalBehavior) {
-      return "I'm watching the clock. If this is not simple to operationalize, it's not happening.";
+      return "I'm watching the clock, and if this is not simple to operationalize, it is not happening in this clinic.";
     }
     return "That's exactly the issue, but I do not have bandwidth for theory. What would this look like in practice on day one?";
   }
@@ -420,15 +502,15 @@ function selectScenarioGroundedHcpLine({
   if (scenarioArchetype === 'cardiology_formulary_review') {
     if (expressionConcern === 'evidence') {
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
-        return "I'm about to move on. What single data point should influence this decision?";
+        return "I'm about to move on, so give me the decision point. What single data point should influence this committee now?";
       }
-      return 'Let me stop you there: this comes down to evidence. What single data point should influence this decision?';
+      return 'Let me stop you there: this comes down to evidence and time. What single data point should actually influence this committee decision?';
     }
     if (expressionConcern === 'workflow') {
       if (cueCategory === 'terminal_exit' || terminalBehavior) {
-        return "I'm about to move on. If we move forward, what is the first step for my team?";
+        return "I'm about to move on, but if we move forward, what is the first realistic step my team would need to own?";
       }
-      return 'What is the realistic first step for my team?';
+      return 'If we move forward, I need more than a broad implementation idea. What is the realistic first step for my team?';
     }
   }
 
@@ -599,11 +681,149 @@ export function varyPressurePhrasing({ text, concernFamily = 'general', recentHc
   };
 }
 
+export function assessGenericness({ reply = '', scenarioExecutionContract = null, concernFamily = 'general' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply);
+  const bucket = scenarioExecutionContract ? deriveContractProfileBucket(scenarioExecutionContract) : 'unknown';
+  const issues = [];
+  if (/^given the time, what would my team actually do first here\?$/i.test(text)) issues.push('portable_generic_workflow_ask');
+  if (/^what evidence point changes the decision\?$/i.test(text)) issues.push('portable_generic_evidence_ask');
+  if (bucket !== 'unknown' && concernFamily !== 'general' && !phraseFamilyForText(text, concernFamily).includes(concernFamily === 'evidence' ? 'evidence' : concernFamily)) {
+    issues.push('weak_concern_binding');
+  }
+  return { generic: issues.length > 0, issues, bucket };
+}
+
+export function assessHumanPhraseQuality({ reply = '' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply);
+  const issues = [];
+  if (RUBRIC_LANGUAGE_PATTERN.test(text)) issues.push('rubric_language');
+  if (/\bconcern family|semantic progression|engagement tier|decision-relevant evidence\b/i.test(text)) issues.push('state_label_language');
+  return { natural: issues.length === 0, issues };
+}
+
+export function assessTooIdeal({ reply = '', cueCategory = 'neutral_attentive', interactionMode = '', engagementTier = '', semanticStage = '' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply);
+  const pressure = isHighPressureState({ cueCategory, interactionMode, engagementTier, semanticStage });
+  const issues = [];
+  if (pressure && TOO_IDEAL_PATTERN.test(text) && !CONSTRAINED_DIRECT_ASK_PATTERN.test(text)) issues.push('too_cooperative_for_pressure');
+  if (pressure && /\b(let'?s|happy to|we can)\b/i.test(text)) issues.push('overly_collaborative_under_pressure');
+  return { tooIdeal: issues.length > 0, issues };
+}
+
+export function assessRecentPatternReuse({ reply = '', recentHcpTurns = [] } = {}) {
+  const signature = normalizeDialogueSignature(reply);
+  const recent = normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn));
+  const repeatedExact = Boolean(signature && recent.includes(signature));
+  const currentFamily = phraseFamilyForText(reply);
+  const repeatedFamilyCount = normalizeRecentTurns(recentHcpTurns).filter((turn) => phraseFamilyForText(turn) === currentFamily).length;
+  return { repeated: repeatedExact || repeatedFamilyCount >= 2, repeatedExact, repeatedFamilyCount, phraseFamily: currentFamily };
+}
+
+export function reviseForStateBoundRealism({
+  reply = '',
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  concernFamily = 'general',
+  stateName = 'OPENING_CONSTRAINT',
+  repeated = false,
+} = {}) {
+  const profile = scenarioExecutionContract ? selectProfileByState(scenarioExecutionContract) : null;
+  const resolvedConcern = activeAskState?.concernFamily || scenarioExecutionContract?.activeAsk?.concernFamily || concernFamily || profile?.defaultConcernFamily || 'workflow';
+  const stateLines = repeated
+    ? (profile?.lines?.SOFT_RESISTANCE || profile?.lines?.OPERATIONAL_CHALLENGE || profile?.lines?.EVIDENCE_CHALLENGE || {})
+    : (profile?.lines?.[stateName] || profile?.lines?.OPERATIONAL_CHALLENGE || profile?.lines?.EVIDENCE_CHALLENGE || {});
+  const stateBoundLine = stateLines[resolvedConcern] || stateLines[profile?.defaultConcernFamily] || stateLines.workflow || stateLines.evidence || reply;
+  return enforceStateDrivenDialogueRichness({
+    text: stateBoundLine,
+    concernFamily: resolvedConcern,
+    stateName,
+    repeated: false,
+    scenarioExecutionContract,
+  });
+}
+
+export function enforceWordBand({
+  reply = '',
+  min = HCP_DIALOGUE_MIN_WORDS,
+  max = 25,
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  concernFamily = 'general',
+  stateName = 'OPENING_CONSTRAINT',
+} = {}) {
+  let text = normalizeHcpSpokenRealism(reply);
+  if (countWords(text) < min) {
+    text = enforceStateDrivenDialogueRichness({ text, concernFamily: activeAskState?.concernFamily || concernFamily, stateName, scenarioExecutionContract });
+  }
+  if (countWords(text) <= max) return text;
+
+  const compressed = text
+    .replace(/\bactually\b/gi, '')
+    .replace(/\bright now\b/gi, '')
+    .replace(/\bin front of me\b/gi, '')
+    .replace(/\bnot a broad (?:overview|discussion|review or summary),?\s*/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (countWords(compressed) >= min && countWords(compressed) <= max) return normalizeHcpSpokenRealism(compressed);
+  return normalizeHcpSpokenRealism(reviseForStateBoundRealism({
+    reply: text,
+    scenarioExecutionContract,
+    activeAskState,
+    concernFamily,
+    stateName,
+  }));
+}
+
+export function enforcePostGenerationHcpRealism({
+  reply = '',
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  concernFamily = 'general',
+  stateName = 'OPENING_CONSTRAINT',
+  cueCategory = 'neutral_attentive',
+  interactionMode = '',
+  engagementTier = '',
+  semanticStage = '',
+  recentHcpTurns = [],
+} = {}) {
+  const generic = assessGenericness({ reply, scenarioExecutionContract, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const phraseQuality = assessHumanPhraseQuality({ reply });
+  const tooIdeal = assessTooIdeal({ reply, cueCategory, interactionMode, engagementTier, semanticStage });
+  const repetition = assessRecentPatternReuse({ reply, recentHcpTurns });
+  const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
+  const needsRevision = generic.generic || !phraseQuality.natural || tooIdeal.tooIdeal || repetition.repeated;
+  const revised = needsRevision
+    ? reviseForStateBoundRealism({
+      reply,
+      scenarioExecutionContract,
+      activeAskState,
+      concernFamily,
+      stateName,
+      repeated: repetition.repeated,
+    })
+    : normalizeHcpSpokenRealism(reply);
+  const finalText = enforceWordBand({
+    reply: revised,
+    scenarioExecutionContract,
+    activeAskState,
+    concernFamily,
+    stateName,
+  });
+  return {
+    text: finalText,
+    metadata: {
+      revised: finalText !== normalizeHcpSpokenRealism(reply),
+      issues: [...generic.issues, ...phraseQuality.issues, ...tooIdeal.issues, ...(repetition.repeated ? ['recent_pattern_reuse'] : []), ...(wordCountIssue ? ['outside_word_band'] : [])],
+      wordCount: countWords(finalText),
+    },
+  };
+}
+
 export function validateCueDialogueLockstep({ cueCategory = 'neutral_attentive', interactionMode = '', engagementTier = '', semanticStage = '', finalText = '' } = {}) {
   const text = String(finalText || '').trim();
   const mismatchReasons = [];
   if (cueCategory === 'terminal_exit' && !TERMINAL_PATTERN.test(text)) mismatchReasons.push('terminal_cue_without_terminal_dialogue');
-  if (cueCategory === 'time_constrained' && detectOverpackedSentence({ text }).wordCount > 22) mismatchReasons.push('time_constrained_dialogue_too_long');
+  if (cueCategory === 'time_constrained' && detectOverpackedSentence({ text }).wordCount > 25) mismatchReasons.push('time_constrained_dialogue_too_long');
   if (cueCategory === 'hard_escalation' && SOFT_COLLABORATIVE_PATTERN.test(text) && !CONSTRAINED_DIRECT_ASK_PATTERN.test(text)) {
     mismatchReasons.push('hard_escalation_with_soft_framing');
   }
@@ -642,6 +862,7 @@ export function applyConversationalRealism({
     cueCategory: resolvedCueCategory,
     terminalBehavior,
     timePressure,
+    recentHcpTurns,
   });
   if (stateDriven) {
     if (requireContractBound) {
@@ -651,7 +872,19 @@ export function applyConversationalRealism({
         stateDrivenResult: stateDriven,
       });
     }
-    const finalStateText = normalizeHcpSpokenRealism(stateDriven.text);
+    const postGenerated = enforcePostGenerationHcpRealism({
+      reply: stateDriven.text,
+      scenarioExecutionContract,
+      activeAskState,
+      concernFamily: stateDriven.metadata.concernFamily,
+      stateName: stateDriven.metadata.stateName,
+      cueCategory: resolvedCueCategory,
+      interactionMode,
+      engagementTier,
+      semanticStage,
+      recentHcpTurns,
+    });
+    const finalStateText = normalizeHcpSpokenRealism(postGenerated.text);
     return {
       text: finalStateText,
       metadata: {
@@ -675,6 +908,8 @@ export function applyConversationalRealism({
         terminalCompressionApplied: false,
         conversationIntelligenceProgression: conversationIntelligence?.turnInterpretation?.progression || null,
         renderingSource: stateDriven.metadata.source,
+        repeatedStateDrivenLine: stateDriven.metadata.repeatedStateDrivenLine,
+        postGenerationRealism: postGenerated.metadata,
       },
     };
   }
@@ -726,9 +961,31 @@ export function applyConversationalRealism({
       concernFamily: expressionConcernFamily,
       cueCategory: resolvedCueCategory,
     });
+  const legacyStateName = deriveStateNameFromStructuredInputs({
+    cueCategory: resolvedCueCategory,
+    timePressure,
+    terminalBehavior,
+    activeAskState: activeAskState || { askText: activeAsk, concernFamily: expressionConcernFamily },
+    concernFamily: expressionConcernFamily,
+  });
+  const shouldEnforcePostGeneration = Boolean(scenarioExecutionContract || activeAskState || activeAsk || scenarioContext);
+  const postGenerated = shouldEnforcePostGeneration
+    ? enforcePostGenerationHcpRealism({
+      reply: finalText,
+      scenarioExecutionContract,
+      activeAskState,
+      concernFamily: expressionConcernFamily,
+      stateName: legacyStateName,
+      cueCategory: resolvedCueCategory,
+      interactionMode,
+      engagementTier,
+      semanticStage,
+      recentHcpTurns,
+    })
+    : { text: finalText, metadata: { revised: false, issues: [], wordCount: countWords(finalText), skipped: 'no_state_binding_context' } };
 
   return {
-    text: normalizeHcpSpokenRealism(finalText),
+    text: normalizeHcpSpokenRealism(postGenerated.text),
     metadata: {
       version: CONVERSATIONAL_REALISM_ENGINE_VERSION,
       cueCategory: resolvedCueCategory,
@@ -736,11 +993,18 @@ export function applyConversationalRealism({
       scenarioArchetype: deriveScenarioArchetype({ scenarioContext, activeAsk, text }),
       phraseFamily: varied.phraseFamily,
       repeatedFamilyCount: varied.repeatedFamilyCount,
-      lockstep,
-      overpacked: detectOverpackedSentence({ text: finalText }),
+      lockstep: validateCueDialogueLockstep({
+        cueCategory: resolvedCueCategory,
+        interactionMode,
+        engagementTier,
+        semanticStage,
+        finalText: postGenerated.text,
+      }),
+      overpacked: detectOverpackedSentence({ text: postGenerated.text }),
       activeAskPresent: Boolean(String(activeAsk || '').trim()),
       terminalCompressionApplied: terminalCompressed !== spoken || finalText !== varied.text,
       conversationIntelligenceProgression: conversationIntelligence?.turnInterpretation?.progression || null,
+      postGenerationRealism: postGenerated.metadata,
     },
   };
 }
