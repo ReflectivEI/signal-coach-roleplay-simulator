@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  detectInternalNarrationLeak,
   deriveHcpCueState,
+  reviseCueForObservableBehavior,
   selectStateAlignedHcpCue,
 } from '../src/lib/roleplay/hcpCueStateAlignment.js';
 
@@ -23,8 +25,9 @@ test('neutral state derives an attentive cue tied to the active concern family',
 
   assert.equal(aligned.cueCategory, 'neutral_attentive');
   assert.equal(aligned.concernFamily, 'evidence');
-  assert.match(aligned.cueText, /evidence|data|proof point/i);
+  assert.match(aligned.cueText, /chart|data|decision/i);
   assert.doesNotMatch(aligned.cueText, /door|ending|exchange is over/i);
+  assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
 
 test('repeated non-adaptation derives increasing impatience cues without becoming terminal early', () => {
@@ -46,8 +49,9 @@ test('repeated non-adaptation derives increasing impatience cues without becomin
 
   assert.equal(aligned.cueCategory, 'non_adaptive_impatience');
   assert.equal(aligned.terminalCue, false);
-  assert.match(aligned.cueText, /not adapt|not helping|repeated setup|practical ask/i);
+  assert.match(aligned.cueText, /clinic list|setup pass|less patient/i);
   assert.doesNotMatch(aligned.cueText, /receptive|relaxed|warm/i);
+  assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
 
 test('hard escalation cues do not preserve soft body-language descriptors', () => {
@@ -70,8 +74,9 @@ test('hard escalation cues do not preserve soft body-language descriptors', () =
 
   assert.equal(aligned.cueCategory, 'hard_escalation');
   assert.equal(aligned.replacedExistingCue, true);
-  assert.match(aligned.cueText, /clipped attention|less willing|direct answer|proof-point/i);
+  assert.match(aligned.cueText, /chart|clipped|detour/i);
   assert.doesNotMatch(aligned.cueText, /warm|receptive|relaxed|open/i);
+  assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
 
 test('explicit time pressure derives time-constrained cues ahead of generic narrowing', () => {
@@ -88,8 +93,9 @@ test('explicit time pressure derives time-constrained cues ahead of generic narr
   });
 
   assert.equal(aligned.cueCategory, 'time_constrained');
-  assert.match(aligned.cueText, /schedule|time pressure|proof point/i);
+  assert.match(aligned.cueText, /schedule|chart|concise point/i);
   assert.doesNotMatch(aligned.cueText, /door|ending|exchange is over/i);
+  assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
 
 test('terminal state derives exit cues aligned with terminal dialogue or imminent exit', () => {
@@ -108,7 +114,20 @@ test('terminal state derives exit cues aligned with terminal dialogue or imminen
 
   assert.equal(aligned.cueCategory, 'terminal_exit');
   assert.equal(aligned.terminalCue, true);
-  assert.match(aligned.cueText, /turns back|door|ending/i);
+  assert.match(aligned.cueText, /turns back|door|gathers/i);
+  assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
+});
+
+test('cue narration leak guard rewrites internal ask labels into observable behavior', () => {
+  const cue = reviseCueForObservableBehavior({
+    cueText: 'The HCP checks the schedule briefly, then returns to the evidence ask for one decision-relevant point.',
+    cueCategory: 'time_constrained',
+    concernFamily: 'evidence',
+  });
+
+  assert.equal(detectInternalNarrationLeak(cue), false);
+  assert.match(cue, /schedule|chart/i);
+  assert.doesNotMatch(cue, /returns to the evidence ask|decision-relevant point/i);
 });
 
 test('cue derivation is deterministic for the same state inputs', () => {

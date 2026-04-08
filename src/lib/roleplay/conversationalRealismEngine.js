@@ -1,4 +1,9 @@
-import { compressHcpDialogueForState, normalizeHcpSpokenRealism } from './dialogueGrammar.js';
+import {
+  compressHcpDialogueForState,
+  detectClauseStitchFailure,
+  normalizeHcpSpokenRealism,
+  reviseForSentenceIntegrity,
+} from './dialogueGrammar.js';
 
 export const CONVERSATIONAL_REALISM_ENGINE_VERSION = 'conversational_realism_engine_v1';
 
@@ -795,6 +800,9 @@ export function reduceAbstractOperationalNouns({ reply = '', concernFamily = 'ge
     .replace(/what follow-through would my team need to absorb, and how would that fit into clinic flow over time\?/i, 'who on my team would handle the added work, and what changes in their day over time?')
     .replace(/what follow-through burden would staff carry/i, 'who on staff ends up carrying this')
     .replace(/where would the follow-through burden sit/i, 'who would end up carrying the extra work')
+    .replace(/what burden would (?:they|staff|my team) absorb over the coming weeks\?/i, 'which staff member would pick this up once it reaches follow-up?')
+    .replace(/what changes in their day over time\?/i, 'what extra step shows up during a normal clinic day?')
+    .replace(/who on staff ends up carrying this over the coming weeks\?/i, 'who on staff picks this up once it is in motion?')
     .replace(/the follow-through burden/gi, 'the extra work')
     .replace(/operational step/gi, 'staff handoff')
     .replace(/workflow fit/gi, 'where this lands for staff')
@@ -807,6 +815,18 @@ export function reduceAbstractOperationalNouns({ reply = '', concernFamily = 'ge
   return normalizeHcpSpokenRealism(text);
 }
 
+export function detectSyntheticBurdenLanguage({ reply = '', concernFamily = 'general' } = {}) {
+  const text = normalizeHcpSpokenRealism(reply).toLowerCase();
+  const operational = concernFamily === 'workflow' || /workflow|clinic|staff|team|nurse|implementation|burden|follow-up/.test(text);
+  const issues = [];
+  if (!operational) return { synthetic: false, issues };
+  if (/\bwhat burden would (?:they|staff|my team) absorb\b/.test(text)) issues.push('abstract_burden_absorb_question');
+  if (/\bwhat changes in (?:their|my team'?s) day over time\b/.test(text)) issues.push('abstract_day_over_time_question');
+  if (/\bwho on staff ends up carrying this\b/.test(text)) issues.push('abstract_carrying_this_phrase');
+  if (/\badded work over time\b/.test(text)) issues.push('abstract_added_work_over_time');
+  return { synthetic: issues.length > 0, issues };
+}
+
 export function scoreSpokenRealismShape({ reply = '', concernFamily = 'general' } = {}) {
   const text = normalizeHcpSpokenRealism(reply).toLowerCase();
   const actorMatches = text.match(/\b(nurses?|staff|front desk|ma\b|team member|who on my team|which staff member|who carries|who handles|patients?)\b/g) || [];
@@ -815,6 +835,7 @@ export function scoreSpokenRealismShape({ reply = '', concernFamily = 'general' 
   const abstractMatches = text.match(/\b(follow-through|implementation|workflow fit|process alignment|operational step|decision-relevant evidence|broad overview|realistic first step)\b/g) || [];
   const symmetry = detectSymmetricalOperationalStructure({ reply, concernFamily }).symmetrical ? 1 : 0;
   const genericCrutch = detectGenericOperationalCrutch({ reply, concernFamily }).crutch ? 1 : 0;
+  const syntheticBurden = detectSyntheticBurdenLanguage({ reply, concernFamily }).synthetic ? 1 : 0;
   const wordCount = countWords(reply);
   const wordBandPenalty = wordCount < HCP_DIALOGUE_MIN_WORDS || wordCount > 25 ? 2 : 0;
   const score = (actorMatches.length * 2)
@@ -823,6 +844,7 @@ export function scoreSpokenRealismShape({ reply = '', concernFamily = 'general' 
     - (abstractMatches.length * 2)
     - (symmetry * 3)
     - (genericCrutch * 3)
+    - (syntheticBurden * 3)
     - wordBandPenalty;
   return {
     score,
@@ -832,6 +854,7 @@ export function scoreSpokenRealismShape({ reply = '', concernFamily = 'general' 
     abstractCount: abstractMatches.length,
     symmetry: Boolean(symmetry),
     genericCrutch: Boolean(genericCrutch),
+    syntheticBurden: Boolean(syntheticBurden),
     wordCount,
   };
 }
@@ -1127,15 +1150,15 @@ export function reviseForBurdenRealism({ scenarioExecutionContract = null, activ
     }
     return [
       `I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?`,
-      `If this adds lift, who carries it when the clinic is already moving, and what gets harder for staff during follow-up?`,
+      `If this adds lift for staff, I need to know who carries it and what gets harder during follow-up visits.`,
       `Walk me through where this lands for staff once patients are already stable and the schedule is full.`,
-      `If we changed follow-up now, which staff member handles the extra work when the clinic is already full?`,
+      `If we changed follow-up now, which staff member handles the extra work while the clinic is already full with stable patients?`,
     ];
   })();
   const recentSignatures = new Set(normalizeRecentTurns(recentHcpTurns).map((turn) => normalizeDialogueSignature(turn)));
   const viable = candidates.filter((candidate) => {
     const reduced = reduceAbstractOperationalNouns({ reply: candidate, concernFamily: activeAskState?.concernFamily || 'workflow' });
-    if (recentSignatures.has(normalizeDialogueSignature(candidate))) return false;
+    if (recentSignatures.has(normalizeDialogueSignature(candidate)) || recentSignatures.has(normalizeDialogueSignature(reduced))) return false;
     if (detectSymmetricalOperationalStructure({ reply: reduced, concernFamily: activeAskState?.concernFamily || 'workflow' }).symmetrical) return false;
     const angle = operationalAngleFamily(candidate);
     const opening = openingStructureFamily(candidate);
@@ -1143,7 +1166,12 @@ export function reviseForBurdenRealism({ scenarioExecutionContract = null, activ
     if (opening && memory.exhausted.openingStructures.includes(opening)) return false;
     return true;
   });
-  const selected = (viable.length > 0 ? viable : candidates)
+  const nonRecentCandidates = candidates.filter((candidate) => {
+    const reduced = reduceAbstractOperationalNouns({ reply: candidate, concernFamily: activeAskState?.concernFamily || 'workflow' });
+    return !recentSignatures.has(normalizeDialogueSignature(candidate)) && !recentSignatures.has(normalizeDialogueSignature(reduced));
+  });
+  const selectedPool = viable.length > 0 ? viable : (nonRecentCandidates.length > 0 ? nonRecentCandidates : candidates);
+  const selected = selectedPool
     .map((candidate, index) => ({
       candidate,
       index,
@@ -1190,6 +1218,8 @@ export function spokenBelievabilityAudit({
   const shortHorizon = detectSyntheticShortHorizon({ reply, scenarioExecutionContract });
   const operationalAskSkeleton = detectRepeatedOperationalAskSkeleton({ reply, recentHcpTurns, concernFamily: activeAskState?.concernFamily || concernFamily });
   const symmetry = detectSymmetricalOperationalStructure({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const syntheticBurden = detectSyntheticBurdenLanguage({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
+  const sentenceIntegrity = detectClauseStitchFailure(reply);
   const shapeScore = scoreSpokenRealismShape({ reply, concernFamily: activeAskState?.concernFamily || concernFamily });
   const lexicon = deriveScenarioLexiconHints({ scenarioExecutionContract, activeAskState });
   const wordCountIssue = countWords(reply) < HCP_DIALOGUE_MIN_WORDS || countWords(reply) > 25;
@@ -1206,6 +1236,8 @@ export function spokenBelievabilityAudit({
     ...shortHorizon.issues,
     ...(operationalAskSkeleton.repeated ? ['repeated_operational_ask_skeleton'] : []),
     ...symmetry.issues,
+    ...syntheticBurden.issues,
+    ...sentenceIntegrity,
     ...((activeAskState?.concernFamily || concernFamily) === 'workflow' && shapeScore.score < 2 ? ['weak_actor_friction_shape'] : []),
     ...(portablePolish ? ['portable_professional_polish'] : []),
     ...(wordCountIssue ? ['outside_word_band'] : []),
@@ -1224,6 +1256,8 @@ export function spokenBelievabilityAudit({
     shortHorizon,
     operationalAskSkeleton,
     symmetry,
+    syntheticBurden,
+    sentenceIntegrity,
     shapeScore,
     lexicon,
     wordCountIssue,
@@ -1312,7 +1346,7 @@ export function enforcePostGenerationHcpRealism({
   const needsRevision = audit.issues.some((issue) => issue !== 'outside_word_band');
   const operationalConcern = (activeAskState?.concernFamily || concernFamily) === 'workflow';
   const weakWorkflowShape = operationalConcern && audit.shapeScore?.score < 2;
-  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical || weakWorkflowShape)
+  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical || audit.syntheticBurden.synthetic || weakWorkflowShape)
     ? reviseForBurdenRealism({
       scenarioExecutionContract,
       activeAskState,
@@ -1336,7 +1370,7 @@ export function enforcePostGenerationHcpRealism({
       })
       : normalizeHcpSpokenRealism(reply);
   const finalText = enforceWordBand({
-    reply: revised,
+    reply: reviseForSentenceIntegrity(revised),
     scenarioExecutionContract,
     activeAskState,
     concernFamily,
@@ -1359,6 +1393,8 @@ export function enforcePostGenerationHcpRealism({
       shortHorizon: audit.shortHorizon,
       operationalAskSkeleton: audit.operationalAskSkeleton,
       symmetry: audit.symmetry,
+      syntheticBurden: audit.syntheticBurden,
+      sentenceIntegrity: audit.sentenceIntegrity,
       shapeScore: audit.shapeScore,
       lexicon: audit.lexicon,
     },

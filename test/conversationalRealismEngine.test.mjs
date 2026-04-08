@@ -14,6 +14,7 @@ import {
   detectRepeatedOperationalAskSkeleton,
   detectStockTransitionReuse,
   detectSymmetricalOperationalStructure,
+  detectSyntheticBurdenLanguage,
   detectSyntheticShortHorizon,
   enforceTerminalCompression,
   enforcePostGenerationHcpRealism,
@@ -397,7 +398,7 @@ test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing'
   });
 
   assert.equal(result.metadata.renderingSource, 'contract_derived_realism_profile');
-  assert.equal(result.text, 'Given the time, who on my team would handle the added work, and what changes in their day over time?');
+  assert.equal(result.text, 'I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?');
   assertRichHcpLine(result.text, 'unprofiled clinic/provider line');
   assert.doesNotMatch(result.text, /Dr\.|Maya|Patel|Internal Medicine|Urban Clinic/i);
 });
@@ -484,7 +485,7 @@ test('contract-derived bucket hardening does not alter scenario-specific profile
   });
 
   assert.equal(result.metadata.renderingSource, 'scenario_realism_profile');
-  assert.equal(result.text, 'I remember that data, but before I ask staff to shift stable-patient follow-up. What burden would they absorb over the coming weeks?');
+  assert.equal(result.text, 'I need to picture the handoff: which staff member picks this up, and what extra step shows up during routine visits?');
   assertRichHcpLine(result.text, 'profiled HIV workflow line');
 });
 
@@ -562,7 +563,7 @@ test('state-driven HCP realism varies repeated lines without dropping below the 
   });
 
   assert.notEqual(second.text, first.text);
-  assert.equal(second.metadata.repeatedStateDrivenLine, true);
+  assert.equal(second.metadata.postGenerationRealism.revised, true);
   assertRichHcpLine(first.text, 'first state-driven HCP line');
   assertRichHcpLine(second.text, 'repeat-varied state-driven HCP line');
 });
@@ -754,7 +755,7 @@ test('operational structure audit rejects balanced consultant-style workflow cla
 
   assert.equal(audit.symmetrical, true);
   assert.match(audit.issues.join(' '), /balanced_abstract_fit_clause|absorb_plus_fit_clause|abstract_noun_balanced_pair/);
-  assert.equal(reduced, 'Given the time, who on my team would handle the added work, and what changes in their day over time?');
+  assert.equal(reduced, 'Given the time, who on my team would handle the added work, and what extra step shows up during a normal clinic day?');
   assert.doesNotMatch(reduced, /follow-through|how would that fit into clinic flow/i);
 });
 
@@ -772,6 +773,22 @@ test('spoken realism shape scoring prefers actor and friction over polished abst
   assert.ok(actorBased.actorCount >= 1);
   assert.ok(actorBased.frictionCount >= 1);
   assert.equal(polished.symmetry, true);
+});
+
+test('synthetic burden audit rejects abstract absorb-over-time phrasing', () => {
+  const synthetic = detectSyntheticBurdenLanguage({
+    reply: 'Before I ask staff to shift stable-patient follow-up, what burden would they absorb over the coming weeks?',
+    concernFamily: 'workflow',
+  });
+  const audit = spokenBelievabilityAudit({
+    reply: 'Stable patients are not a quick switch; if we changed course. What extra lift would nurses or staff carry afterward?',
+    concernFamily: 'workflow',
+    activeAskState: { concernFamily: 'workflow', askText: 'What would staff have to do?' },
+  });
+
+  assert.equal(synthetic.synthetic, true);
+  assert.match(synthetic.issues.join(' '), /abstract_burden_absorb_question/);
+  assert.match(audit.issues.join(' '), /semicolon_if_clause_split_before_question|unsafe_semicolon_dependent_split/);
 });
 
 test('burden realism revises operational pressure toward implementation lift over time', () => {

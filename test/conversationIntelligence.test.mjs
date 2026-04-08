@@ -130,6 +130,27 @@ test('conversation intelligence treats relevant check-backs as progress without 
   assert.equal(intelligence.coachingPriority.shouldShow, false);
 });
 
+test('conversation intelligence suppresses evidence coaching overfire on aligned narrowing questions', () => {
+  const repMessage = 'Understood. Before we go further, which part matters most in your decision here, durability or workflow burden?';
+  const validation = validateRoleplayRepTurn({
+    latestHcpAsk: 'Can you tie the data to durability for my stable HIV patients and why it changes the decision?',
+    repMessage,
+    previousRepMessages: [],
+  });
+  const intelligence = deriveConversationIntelligenceState({
+    scenarioExecutionContract: buildRoleplayScenarioExecutionContract(evidenceScenario),
+    latestHcpAsk: 'Can you tie the data to durability for my stable HIV patients and why it changes the decision?',
+    repMessage,
+    validationOutput: validation,
+    turnNumber: 2,
+  });
+
+  assert.equal(validation.latestAskProgression.status, 'evidence_clarification');
+  assert.equal(intelligence.adaptationSignals.clarified_before_advancing, true);
+  assert.equal(intelligence.coachingPriority.issue, 'maintain_progress');
+  assert.equal(intelligence.coachingPriority.shouldShow, false);
+});
+
 test('conversation intelligence identifies evidence setup without decision linkage', () => {
   const repMessage = 'The outcomes data are strong and I wanted to follow up on what we reviewed last week.';
   const validation = validateRoleplayRepTurn({

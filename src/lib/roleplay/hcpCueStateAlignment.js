@@ -4,6 +4,7 @@ const TERMINAL_DIALOGUE_PATTERN = /\b(pause here|get back to clinic|stop here|wr
 const TERMINAL_CUE_PATTERN = /\b(door|leav|ending|exchange is over|wrap|front desk|turns back toward|patient room|gathers the chart)\b/i;
 const SOFT_CUE_PATTERN = /\b(open|receptive|warm|relaxed|inviting|thoughtful|leans in|steady eye contact)\b/i;
 const HIGH_PRESSURE_PATTERN = /\b(time|minutes|clock|schedule|busy|short-staffed|bandwidth|next patient|clinic flow|protect clinic)\b/i;
+const INTERNAL_NARRATION_PATTERN = /\b(returns? to the (?:evidence|workflow|access|screening) ask|keeps the time pressure visible|decision-relevant point|usable step|proof point|current ask|directly useful point)\b/i;
 
 function normalizeText(value = "") {
   return String(value || "").trim();
@@ -222,6 +223,58 @@ function selectCueFromPool({ cueCategory, concernFamily, seed }) {
   return familyPool[deterministicIndex(seed, familyPool.length)] || familyPool[0] || "";
 }
 
+export function detectInternalNarrationLeak(cueText = "") {
+  return INTERNAL_NARRATION_PATTERN.test(String(cueText || ""));
+}
+
+export function reviseCueForObservableBehavior({ cueText = "", cueCategory = "neutral_attentive", concernFamily = "general" } = {}) {
+  const cue = normalizeText(cueText);
+  if (!detectInternalNarrationLeak(cue)) return cue;
+  const replacements = {
+    evidence: {
+      neutral_attentive: "The HCP keeps the chart open and watches for the data to land in the decision.",
+      focused_narrowing: "The HCP taps the data page once, keeping the conversation narrowed to the decision in front of them.",
+      non_adaptive_impatience: "The HCP keeps a finger on the data page, visibly less patient with another setup pass.",
+      time_constrained: "The HCP checks the schedule, then rests a hand on the chart while leaving room for one concise point.",
+      hard_escalation: "The HCP holds the chart still and waits, expression clipped, no longer following another detour.",
+      terminal_exit: "The HCP gathers the chart and turns back toward the next task.",
+    },
+    workflow: {
+      neutral_attentive: "The HCP keeps the clinic list nearby, watching for how the work would actually land on staff.",
+      focused_narrowing: "The HCP glances at the clinic list, then waits for a practical staff-level answer.",
+      non_adaptive_impatience: "The HCP keeps a hand on the clinic list, visibly less patient with another setup pass.",
+      time_constrained: "The HCP checks the schedule, then rests a hand on the callback list.",
+      hard_escalation: "The HCP holds the clinic list still, expression clipped, no longer following another detour.",
+      terminal_exit: "The HCP gathers the workflow notes and turns back toward the clinic flow.",
+    },
+    access: {
+      neutral_attentive: "The HCP keeps the coverage notes in view, watching for where the paperwork would actually move.",
+      focused_narrowing: "The HCP glances at the coverage notes, then waits for a workable administrative step.",
+      non_adaptive_impatience: "The HCP keeps the coverage notes in hand, visibly less patient with another setup pass.",
+      time_constrained: "The HCP checks the next appointment, then keeps the coverage notes in hand.",
+      hard_escalation: "The HCP holds the coverage notes still, expression clipped, no longer following another detour.",
+      terminal_exit: "The HCP gathers the coverage notes and turns back toward the next task.",
+    },
+    screening: {
+      neutral_attentive: "The HCP keeps the patient list nearby, watching for a boundary they could apply in clinic.",
+      focused_narrowing: "The HCP glances at the patient list, then waits for a usable selection boundary.",
+      non_adaptive_impatience: "The HCP keeps a hand on the patient list, visibly less patient with another setup pass.",
+      time_constrained: "The HCP checks the schedule, then taps the patient list once.",
+      hard_escalation: "The HCP holds the patient list still, expression clipped, no longer following another detour.",
+      terminal_exit: "The HCP gathers the patient list and turns back toward the next task.",
+    },
+    general: {
+      neutral_attentive: "The HCP keeps a professional posture, watching for the answer to connect to the conversation.",
+      focused_narrowing: "The HCP narrows their gaze and waits, leaving little room for a detour.",
+      non_adaptive_impatience: "The HCP keeps their posture tight, visibly less patient with another setup pass.",
+      time_constrained: "The HCP checks the schedule, then looks back with a tighter expression.",
+      hard_escalation: "The HCP holds still, expression clipped, no longer following another detour.",
+      terminal_exit: "The HCP gathers the chart and turns back toward the next task.",
+    },
+  };
+  return replacements[concernFamily]?.[cueCategory] || replacements.general[cueCategory] || replacements.general.neutral_attentive;
+}
+
 function cueContradictsState({ cueText = "", cueCategory = "", dialogueText = "", terminal = false } = {}) {
   const cue = String(cueText || "");
   if (!cue) return true;
@@ -326,7 +379,11 @@ export function selectStateAlignedHcpCue({
     dialogueText,
     terminal: cueState.terminalCue || terminal,
   });
-  const selectedCueText = normalizeText(shouldReplaceExisting ? generatedCueText : existingCueText) || generatedCueText;
+  const selectedCueText = reviseCueForObservableBehavior({
+    cueText: normalizeText(shouldReplaceExisting ? generatedCueText : existingCueText) || generatedCueText,
+    cueCategory: cueState.cueCategory,
+    concernFamily: cueState.concernFamily,
+  });
 
   return {
     ...cueState,

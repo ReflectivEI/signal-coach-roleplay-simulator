@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 
 import {
   compressHcpDialogueForState,
+  detectClauseStitchFailure,
   detectDialogueBoundaryIssues,
   formatHcpSentence,
   normalizeDialogueSentenceBoundaries,
   normalizeHcpSpokenRealism,
+  reviseForSentenceIntegrity,
 } from '../src/lib/roleplay/dialogueGrammar.js';
 
 test('normalizeDialogueSentenceBoundaries repairs comma splice between independent clauses', () => {
@@ -130,4 +132,19 @@ test('compressHcpDialogueForState keeps terminal exits short without adding a ne
 test('detectDialogueBoundaryIssues reports sentence-boundary defects and ignores valid joins', () => {
   assert.deepEqual(detectDialogueBoundaryIssues('We reviewed endpoints, we need one action now.'), ['comma_splice']);
   assert.deepEqual(detectDialogueBoundaryIssues('Because we reviewed endpoints, we can proceed.'), []);
+});
+
+test('sentence integrity repair fixes dependent burden clause stitching without changing intent', () => {
+  assert.deepEqual(
+    detectClauseStitchFailure('Stable patients are not a quick switch; if we changed course. What extra lift would nurses or staff carry afterward?'),
+    ['semicolon_if_clause_split_before_question', 'conditional_clause_split_before_question', 'unsafe_semicolon_dependent_split'],
+  );
+  assert.equal(
+    normalizeHcpSpokenRealism('before I ask staff to shift stable-patient follow-up. What burden would they absorb over the coming weeks?'),
+    'Before I ask staff to shift stable-patient follow-up, what burden would they absorb over the coming weeks?',
+  );
+  assert.equal(
+    reviseForSentenceIntegrity('Stable patients are not a quick switch; if we changed course. What extra lift would nurses or staff carry afterward?'),
+    'Stable patients are not a quick switch; if we changed course, what extra lift would nurses or staff carry afterward?',
+  );
 });

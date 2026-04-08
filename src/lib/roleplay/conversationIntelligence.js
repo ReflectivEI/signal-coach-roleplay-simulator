@@ -198,6 +198,16 @@ function chooseCoachingPriority({ progression, concernFamily, adaptationSignals,
     };
   }
   if (progression !== "progress" && concernFamily === "workflow" && communicationQualities.practicality !== "high") {
+    if (adaptationSignals.clarified_before_advancing || adaptationSignals.addressed_active_ask) {
+      return {
+        issue: "maintain_progress",
+        capability: "conversation_management",
+        severity: "low",
+        reason: "The response is directionally aligned and keeps the HCP's concern in view.",
+        nextAction: "Keep the next turn concrete and tied to the HCP's active concern.",
+        shouldShow: false,
+      };
+    }
     return {
       issue: "specificity",
       capability: "conversation_management",
@@ -208,6 +218,16 @@ function chooseCoachingPriority({ progression, concernFamily, adaptationSignals,
     };
   }
   if (concernFamily === "evidence" && communicationQualities.evidence_linkage !== "high") {
+    if (adaptationSignals.clarified_before_advancing || adaptationSignals.addressed_active_ask) {
+      return {
+        issue: "maintain_progress",
+        capability: "value_connection",
+        severity: "low",
+        reason: "The response is directionally aligned and keeps the evidence concern in view.",
+        nextAction: "Use the answer to connect the proof point to the decision.",
+        shouldShow: false,
+      };
+    }
     return {
       issue: "evidence_translation",
       capability: "value_connection",

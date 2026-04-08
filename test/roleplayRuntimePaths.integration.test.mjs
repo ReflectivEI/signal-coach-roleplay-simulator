@@ -354,3 +354,16 @@ test("live RolePlayChat final HCP render is hard-gated to contract-bound state",
   assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*scenarioExecutionContract:\s*roleplayTurnValidationContext\.scenarioExecutionContract \|\| null/);
   assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*requireContractBound:\s*true/);
 });
+
+test("live RolePlayChat resets scenario-bound realism memory on scenario changes", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /recentDialoguePhrasesRef\.current\s*=\s*\[\]/);
+  assert.match(source, /recentCueHistoryRef\.current\s*=\s*\[\]/);
+  assert.match(source, /lastSubmittedTurnKeyRef\.current\s*=\s*""/);
+  assert.match(source, /loggedTurnKeysRef\.current\s*=\s*new Set\(\)/);
+  assert.match(source, /processedTurnKeysRef\.current\s*=\s*new Set\(\)/);
+});

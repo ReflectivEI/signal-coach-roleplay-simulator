@@ -201,6 +201,60 @@ function repairSpokenPrefaceQuestionJoin(text = '') {
   );
 }
 
+export function detectBrokenDependency(text = '') {
+  const value = String(text || '').trim();
+  const issues = [];
+  if (/(^|[.!?]\s+)(before\s+(?:i|we)\s+[^.!?]{2,110})\.\s+(who|what|when|where|why|how|which|can|could|would)\b/i.test(value)) {
+    issues.push('dependent_preface_split_before_question');
+  }
+  if (/;\s*if\s+[^.!?]{2,90}\.\s+(who|what|when|where|why|how|which|can|could|would)\b/i.test(value)) {
+    issues.push('semicolon_if_clause_split_before_question');
+  }
+  if (/\bif\s+we\s+changed\s+course\.\s+(who|what|when|where|why|how|which|can|could|would)\b/i.test(value)) {
+    issues.push('conditional_clause_split_before_question');
+  }
+  return [...new Set(issues)];
+}
+
+export function detectUnsafePunctuationSplit(text = '') {
+  const value = String(text || '').trim();
+  const issues = [];
+  if (/;\s*(if|because|while|when|before|after|once)\b[^.!?]{2,110}\.\s+(who|what|when|where|why|how|which|can|could|would)\b/i.test(value)) {
+    issues.push('unsafe_semicolon_dependent_split');
+  }
+  if (/(^|[.!?]\s+)(given\s+[^.!?]{2,90}|from\s+(?:a|an|the|our|your)\s+[^.!?]{2,80}\s+perspective)\.\s+(who|what|when|where|why|how|which|can|could|would)\b/i.test(value)) {
+    issues.push('unsafe_dependent_period_split');
+  }
+  return [...new Set(issues)];
+}
+
+export function detectClauseStitchFailure(text = '') {
+  return [...new Set([...detectBrokenDependency(text), ...detectUnsafePunctuationSplit(text)])];
+}
+
+export function reviseForSentenceIntegrity(text = '') {
+  let value = String(text || '').trim();
+  if (!value) return value;
+
+  value = value
+    .replace(
+      /(^|[.!?]\s+)(before\s+(?:i|we)\s+[^.!?]{2,110})\.\s+(Who|What|When|Where|Why|How|Which|Can|Could|Would)\b/gi,
+      (_match, prefix, preface, starter) => `${prefix}${preface}, ${lowercaseQuestionStarter(starter)}`
+    )
+    .replace(
+      /;\s*(if\s+[^.!?]{2,90})\.\s+(Who|What|When|Where|Why|How|Which|Can|Could|Would)\b/gi,
+      (_match, condition, starter) => `; ${condition}, ${lowercaseQuestionStarter(starter)}`
+    )
+    .replace(
+      /\b(if\s+we\s+changed\s+course)\.\s+(Who|What|When|Where|Why|How|Which|Can|Could|Would)\b/gi,
+      (_match, condition, starter) => `${condition}, ${lowercaseQuestionStarter(starter)}`
+    )
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  return value;
+}
+
 function splitOverlongHcpQuestion(text = '') {
   const value = String(text || '').trim();
   if (!value || value.split(/\s+/).length <= 25) return value;
@@ -221,7 +275,7 @@ function splitOverlongHcpQuestion(text = '') {
 export function normalizeHcpSpokenRealism(dialogue) {
   const normalized = normalizeDialogueSentenceBoundaries(dialogue);
   if (!normalized) return normalized;
-  return repairSpokenPrefaceQuestionJoin(normalizeDialogueSentenceBoundaries(splitOverlongHcpQuestion(normalizeFormalRecallPhrases(normalized))));
+  return repairSpokenPrefaceQuestionJoin(normalizeDialogueSentenceBoundaries(reviseForSentenceIntegrity(splitOverlongHcpQuestion(normalizeFormalRecallPhrases(normalized)))));
 }
 
 function compressWorkflowOwnershipQuestion(text = '', cueCategory = '') {

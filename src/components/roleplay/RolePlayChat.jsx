@@ -2726,6 +2726,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const controller = sessionControllerRef.current;
     runtimeScenarioContractRef.current = validateScenarioRuntimeContract(scenario).contract;
     canonicalHcpIdentityRef.current = resolveCanonicalHcpIdentity(scenario);
+    recentDialoguePhrasesRef.current = [];
+    recentCueHistoryRef.current = [];
+    lastSafeDialogueRef.current = "I need one practical next step that fits our current workflow.";
+    lastSubmittedTurnKeyRef.current = "";
+    loggedTurnKeysRef.current = new Set();
+    processedTurnKeysRef.current = new Set();
     controller.state = SessionState.ACTIVE;
     controller.isActive = true;
     controller.isProcessingTurn = false;
