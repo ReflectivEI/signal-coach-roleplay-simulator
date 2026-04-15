@@ -1,6 +1,6 @@
 # Signal Coach Core
 
-Standalone Role Play Simulator frontend built from the Base44 behavioral SOT and wired to a dedicated backend worker.
+Standalone Role Play Simulator built as an independent frontend plus dedicated backend worker.
 
 ## Local development
 
@@ -38,17 +38,11 @@ npm run build
 ## Runtime model
 
 - Built-in scenarios come from the local SOT catalog in the frontend.
-- Custom scenarios are stored in browser local storage.
+- Custom scenarios are persisted through the worker and cached locally as a fallback.
+- Completed simulator sessions are persisted through the worker.
 - HCP generation, coaching support, and structured review generation run through the worker.
-- The worker lives in `worker/src/index.js` and exposes `/health` and `/api/llm/invoke`.
+- The worker lives in `worker/src/index.js` and exposes `/health`, `/api/llm/invoke`, `/api/scenarios`, and `/api/roleplay/sessions`.
 
 ## Important
 
-This app is intentionally standalone.
-
-- No Base44 SDK
-- No Base44 auth
-- No Base44 entities/functions
-- No dependency on the enterprise platform
-
-Once this simulator is stable on its own, it can be integrated into the enterprise site as a separate proven subsystem.
+This app is intentionally standalone and can be integrated later as a separate subsystem once stabilized.
