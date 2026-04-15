@@ -10,6 +10,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
+import { maybeReviseStrongRepReply } from "@/lib/qaRepProxy";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -25,6 +26,8 @@ HCP PERSONA: ${scenario.persona}
 CURRENT BEHAVIOR STATE: ${currentBehaviorState}
 CURRENT JOURNEY STATE: ${currentJourneyState}
 INTERACTION PRESSURES: ${(scenario.interactionPressure || []).join(", ") || "none"}
+OPENING SCENE: ${scenario.openingScene || ""}
+KEY CHALLENGES: ${(scenario.keyChallenges || []).join(" | ") || "none"}
 
 CONVERSATION SO FAR:
 ${turns.map((t) => `${t.speaker.toUpperCase()}: ${t.text}`).join("\n")}
@@ -41,7 +44,14 @@ Generate the rep's next response (1-2 sentences) that:
 - If the HCP asks a direct operational or clinical question, answer it directly first instead of defaulting to more discovery
 - If the HCP asks a direct workflow, burden, value, or clinical-impact question, your next reply must begin with a direct declarative answer, not a question
 - If the HCP names a specific subgroup, exclusion criterion, evidence gap, renal issue, safety concern, or workflow step, reference that exact issue directly instead of saying "what specific aspects" or "help me understand"
+- If there is no HCP reply yet, treat the opening scene as the active concern and respond to the exact issue already on the table instead of starting with detached discovery
+- On the first turn of a skeptical clinical-value scenario, lead with the specific evidence gap in the opening scene before any narrow follow-up
+- Respect the scenario key challenges; if they say exploring the concern is more credible than defending the data, do not jump into a rebuttal or rescue claim
 - In a skeptical clinical-value exchange, the first clause of your reply must name the exact issue the HCP raised (for example: renal impairment, excluded patients, real-world fit, subgroup mismatch)
+- In a skeptical clinical-value exchange, if the HCP repeats the same evidence-fit concern, stop broadening discovery and answer the concern directly in plain clinician language before asking anything else
+- When the objection is subgroup mismatch, excluded patients, comorbidities, renal impairment, workflow friction, or real-world fit, prefer one short declarative response over a question
+- In a repeated objection cycle, your reply should do three things in order: name the exact mismatch, state the practical implication, and offer one concrete next step or clarifier
+- Do not introduce a new efficacy, safety, or pharmacokinetic claim just to rescue the conversation if the HCP is challenging fit or trial design
 - If the HCP asks what changes, what gets added, what staff has to do, or what the point is, give one direct answer before asking anything else
 - In a pressured interaction, do not open with "help me understand" or another broad discovery move when the HCP is asking for the bottom line
 - Do not use vague empathy wrappers like "I sense", "it sounds like", or "you're not convinced" when the HCP has already stated the concrete issue
@@ -225,11 +235,23 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       onProgress(`Turn ${i + 1}/${maxTurns} — generating rep message…`);
       const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
       const repTextRaw = await retryWithBackoff(() => withTimeout(
-        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.4 }),
+        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.1 }),
         `${scenario.title} rep turn ${i + 1}`,
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
-      const repText = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
+      const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
+      const repText = personaKey === "strong_rep"
+        ? await retryWithBackoff(() => withTimeout(
+          maybeReviseStrongRepReply({
+            scenario,
+            turns,
+            currentBehaviorState,
+            currentJourneyState,
+            draft: repDraft,
+          }),
+          `${scenario.title} rep revision ${i + 1}`,
+        ))
+        : repDraft;
 
       const repTurnObj = {
         id: crypto.randomUUID(),
