@@ -350,6 +350,51 @@ function inferConcernTags(text: string): string[] {
   return tags;
 }
 
+function isGenericProductPitch(repMessage: string): boolean {
+  const normalized = String(repMessage || "").toLowerCase();
+  if (!normalized) return false;
+
+  const productPitchMarkers = [
+    /our product/,
+    /mechanism of action/,
+    /clinical trial/,
+    /response rate/,
+    /efficacy/,
+    /adverse events?/,
+    /pharmacokinetics?/,
+    /once-daily dosing/,
+    /tolerability profile/,
+    /leave you (?:some )?information/,
+    /benefits? for your patients/,
+    /ideal treatment option/,
+    /significant reduction/,
+    /latest clinical trial/,
+  ];
+
+  const productPitchCount = productPitchMarkers.filter((pattern) => pattern.test(normalized)).length;
+  const hasQuestion = normalized.includes("?");
+
+  return productPitchCount >= 2 || (productPitchCount >= 1 && !hasQuestion);
+}
+
+function ignoredDirectConcern(repMessage: string, latestConcern: string): boolean {
+  const concernText = String(latestConcern || "").toLowerCase();
+  const repText = String(repMessage || "").toLowerCase();
+  const concernTags = inferConcernTags(concernText);
+  const repTags = inferConcernTags(repText);
+  const sharedTags = concernTags.filter((tag) => repTags.includes(tag));
+  const directOperationalAsk =
+    /what'?s the one thing|what specifically|what changes|what gets added|what staff|prior auth|workflow|extra step|bottom line/.test(concernText);
+  const directClinicalAsk =
+    /renal|guideline|patient population|subgroup|what outcomes|cost|readmissions|justify the cost/.test(concernText);
+
+  if ((directOperationalAsk || directClinicalAsk) && sharedTags.length === 0) {
+    return true;
+  }
+
+  return false;
+}
+
 function inferResponseAlignment(repMessage: string, latestConcern: string): BehaviorSignals["response_alignment"] {
   const repTags = inferConcernTags(repMessage);
   const concernTags = inferConcernTags(latestConcern);
@@ -424,24 +469,36 @@ function normalizeBehaviorSignals(
   const inferredObjectionType = inferObjectionType(latestConcern);
   const inferredEngagement = inferEngagementLevel(hcpReply);
   const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
+  const genericPitch = isGenericProductPitch(repMessage);
+  const talkedPastConcern = ignoredDirectConcern(repMessage, latestConcern);
+  const forceWeakAlignment = genericPitch || talkedPastConcern;
+  const forceRepDominant = genericPitch;
 
   return {
-    question_type: rawSignals?.question_type && rawSignals.question_type !== "none"
-      ? rawSignals.question_type
-      : inferredQuestionType,
-    response_alignment: rawSignals?.response_alignment === "strong"
-      ? "strong"
-      : inferredAlignment,
+    question_type: forceRepDominant
+      ? inferredQuestionType
+      : rawSignals?.question_type && rawSignals.question_type !== "none"
+        ? rawSignals.question_type
+        : inferredQuestionType,
+    response_alignment: forceWeakAlignment
+      ? "weak"
+      : rawSignals?.response_alignment === "strong"
+        ? "strong"
+        : inferredAlignment,
     objection_type: rawSignals?.objection_type && rawSignals.objection_type !== "none"
       ? rawSignals.objection_type
       : inferredObjectionType,
     engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"
       ? rawSignals.engagement_level
       : inferredEngagement,
-    control_pattern: rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
-    listening_pattern: rawSignals?.listening_pattern === "responsive"
-      ? "responsive"
-      : inferredListening,
+    control_pattern: forceRepDominant
+      ? "rep_dominant"
+      : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
+    listening_pattern: forceWeakAlignment
+      ? "missed"
+      : rawSignals?.listening_pattern === "responsive"
+        ? "responsive"
+        : inferredListening,
     commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
       ? rawSignals.commitment_attempt
       : inferredCommitmentAttempt,

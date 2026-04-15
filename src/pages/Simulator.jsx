@@ -413,6 +413,8 @@ export default function Simulator() {
               volatilityState={volatilityState}
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
+              lastNudge={lastNudge}
+              realtimeFeedback={realtimeFeedback}
             />
           </div>
         </div>
@@ -440,6 +442,8 @@ export default function Simulator() {
               volatilityState={volatilityState}
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
+              lastNudge={lastNudge}
+              realtimeFeedback={realtimeFeedback}
             />
           </motion.div>
         )}

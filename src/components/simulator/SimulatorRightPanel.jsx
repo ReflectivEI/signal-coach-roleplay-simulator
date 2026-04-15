@@ -121,12 +121,40 @@ export default function SimulatorRightPanel({
   hcpPrediction = null,
   volatilityState = null,
   lastSignals = {},
-  focusCapabilities = []
+  focusCapabilities = [],
+  lastNudge = null,
+  realtimeFeedback = null
 }) {
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
+  const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
+    title: "Live coaching",
+    capabilityName: "Live coaching",
+    guidance: realtimeFeedback.guidance,
+  } : null);
 
   return (
     <div className="space-y-4">
+
+      {/* Live Coaching */}
+      {liveCoaching &&
+      <LightSection icon={Zap} title="Live Coaching">
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-primary/8 border border-primary/25">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-primary/80">
+                {liveCoaching.capabilityName || liveCoaching.title || "Live coaching"}
+              </p>
+              <p className="mt-2 text-xs leading-relaxed text-foreground/90">
+                {liveCoaching.guidance}
+              </p>
+            </div>
+            {realtimeFeedback?.timestamp &&
+            <p className="text-[11px] text-muted-foreground/70">
+                Updated {new Date(realtimeFeedback.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            }
+          </div>
+        </LightSection>
+      }
 
       {/* HCP State */}
        <DarkSection icon={Eye} title="HCP State">
