@@ -1,6 +1,6 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 
-const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational/i;
+const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 
@@ -30,9 +30,9 @@ function extractIssueLabel(text = "") {
   const normalized = String(text).toLowerCase();
   if (/renal impairment|renal function/.test(normalized)) return "renal impairment";
   if (/guideline/.test(normalized)) return "guideline fit";
-  if (/cost savings|readmissions|expenditure|economic/.test(normalized)) return "cost impact";
+  if (/cost savings|readmissions|expenditure|economic|cost-effectiveness|justify the cost|cost justification|metrics|specific outcomes|what outcomes|worth the spend/.test(normalized)) return "cost impact";
   if (/subgroup|patient population|excluded/.test(normalized)) return "patient-fit gap";
-  if (/workflow|staff|added step|operational/.test(normalized)) return "workflow burden";
+  if (/workflow|staff|added step|operational|prior auth|prior authorization/.test(normalized)) return "workflow burden";
   return "the gap you're pointing to";
 }
 
@@ -42,8 +42,19 @@ function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBeha
   const isClinicalSkepticism = /clinical_value|skeptical|clinical_evaluation/i.test(familyText);
   const repeatedConcern = hasRepeatedObjection(turns);
   const directDemand = DIRECT_ANSWER_TRIGGER.test(activeConcernText);
+  const firstRepTurn = turns.filter((turn) => turn?.speaker === "rep").length === 0;
+  const issueLabel = extractIssueLabel(activeConcernText);
   const draftTooLoose = BROAD_DISCOVERY_PATTERN.test(String(draft || "").trim()) || ABSTRACT_QA_LANGUAGE_PATTERN.test(String(draft || "").trim());
-  return isClinicalSkepticism && (repeatedConcern || directDemand) && draftTooLoose;
+  const highValueIssue = issueLabel === "guideline fit" || issueLabel === "cost impact" || issueLabel === "renal impairment";
+  if (!isClinicalSkepticism) {
+    return false;
+  }
+
+  if (firstRepTurn && highValueIssue) {
+    return true;
+  }
+
+  return (repeatedConcern || directDemand) && draftTooLoose;
 }
 
 function buildDeterministicEvidenceFitReply({ scenario, turns }) {
@@ -59,7 +70,11 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "cost impact") {
-    return "You're not asking for a general value story, you're asking what this changes on cost and readmissions in the patients you manage. Which cost driver matters most when you decide whether a therapy is worth the spend?";
+    if (/specific outcomes|what outcomes/.test(activeConcernText.toLowerCase())) {
+      return "You're asking which outcomes would actually justify the spend, not for a generic value claim. Which outcome carries the most weight for you when you decide whether a therapy is worth adding?";
+    }
+
+    return "You're not asking for a general value story, you're asking what changes on cost and readmissions in the patients you manage. Which cost measure carries the most weight when you decide whether a therapy earns its place?";
   }
 
   if (issueLabel === "patient-fit gap") {
@@ -67,7 +82,7 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "workflow burden") {
-    return "You're pointing to the extra work this creates in the real workflow, not just whether the therapy works on paper. Where would that burden hit your team first?";
+    return "You're pointing to the extra work this creates for the team, not just whether the therapy works on paper. Where do the prior auth steps start to break down in your workflow now?";
   }
 
   return `You're pointing to a real evidence-fit gap, not a surface objection. Where does ${issueLabel} show up most in the patients or decisions you're making now?`;
