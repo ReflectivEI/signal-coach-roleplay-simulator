@@ -73,9 +73,15 @@ function shouldUseDeterministicCommitmentRewrite({ scenario, turns, draft }) {
   const stillProfiling =
     /what specific patient|describe the specific|what would need to happen|better understand what you're looking for|ideal patient profile|patient profile|good fit|perfect fit|minimum criteria|example of a patient profile|what would that patient need to look like/.test(draftText) ||
     (draftText.includes("?") && /patient|fit|profile|criteria/.test(draftText));
-  const passiveMaybeSignal = /right patient|ideal patient|meaning to try it|haven't had one|not ready yet|committee|bring it up|process/.test(activeConcernText);
+  const passiveMaybeSignal = /right patient|ideal patient|meaning to try it|haven't had one|not ready yet|committee|bring it up|process|need more data|still not convinced|not the right fit|perfect fit/.test(activeConcernText);
+  const workflowDeferralDrift =
+    /show you a simpler prior auth process|reduce that burden on your staff|bare minimum reduction in prior auth steps|worthwhile for your staff|simplifies it enough|extra step for my staff|prior auth process|one thing that needs to fit with your existing workflow|fits with what you're doing now/.test(draftText);
+  const workflowDeferralSignal = /prior auth|staff|workflow|extra step|burden/.test(activeConcernText);
 
-  return isCommitmentStage && repTurns >= 1 && (repeatedConcern || passiveMaybeSignal) && stillProfiling;
+  return isCommitmentStage && (
+    ((repeatedConcern || passiveMaybeSignal) && stillProfiling) ||
+    ((repeatedConcern || workflowDeferralSignal) && workflowDeferralDrift)
+  );
 }
 
 function buildDeterministicEvidenceFitReply({ scenario, turns }) {
@@ -123,13 +129,24 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
 
   if (/right patient|ideal patient|meaning to try it|haven't had one/.test(activeConcernText)) {
     if (repTurns <= 1) {
-      return "When you say 'the right patient,' what would that patient need to look like for you to feel comfortable trying this? If we can define that clearly, we can make the next step much more concrete.";
+      return "It sounds like the hesitation isn't interest, it's not wanting to force a fit that doesn't hold up in your real patients. If someone came close over the next couple of weeks, would you be open to flagging that chart so we can pressure-test it together?";
     }
-    return "It sounds like the blocker isn't interest, it's defining what 'the right patient' means in your practice. Would you be open to picking one patient type you'd actually consider over the next few weeks so we can make this concrete?";
+    return "It sounds like the blocker isn't interest, it's getting from theory to one real patient you'd actually act on. Would you be open to choosing one patient type you'd realistically consider next so the follow-up is concrete instead of open-ended?";
+  }
+
+  if (/need more data|still not convinced|not the right fit|perfect fit/.test(activeConcernText)) {
+    return "It sounds like the hesitation is still active, even if the interest is there. Would you be open to naming the one evidence gap that has to get resolved before this moves from 'maybe' to a real next step?";
   }
 
   if (/committee|bring it up|process/.test(activeConcernText)) {
-    return "It sounds like the issue isn't whether you support it, it's what part of the process you can actually own next. What's the most concrete step you could realistically take from your seat this month?";
+    return "It sounds like the issue isn't support, it's what you can actually own before the committee meets. What's one concrete step you could take this month so this doesn't just sit until the next meeting?";
+  }
+
+  if (/prior auth|staff|workflow|extra step|burden/.test(activeConcernText)) {
+    if (repTurns <= 1) {
+      return "It sounds like the blocker isn't interest, it's not wanting to hand your staff one more loose end. Before this goes any further, what's the one workflow condition that would have to be true for you to feel comfortable moving one case forward?";
+    }
+    return "It sounds like staff burden is still the real stop sign here. Would you be open to naming the one workflow requirement that has to be met before you'd take a concrete next step from your side?";
   }
 
   return "It sounds like the conversation is close to alignment, but the next step still isn't defined. Would you be open to naming the smallest concrete action that would move this forward from here?";
