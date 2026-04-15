@@ -2,6 +2,7 @@ import { invokeWorkerText } from "./../services/workerClient.js";
 
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
+const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 
 function getLastHcpText(turns = []) {
   for (let i = turns.length - 1; i >= 0; i -= 1) {
@@ -14,6 +15,62 @@ function getLastHcpText(turns = []) {
 
 function getActiveConcernText(turns = [], scenario = {}) {
   return getLastHcpText(turns) || String(scenario?.openingScene || "").trim();
+}
+
+function getLastRepText(turns = []) {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    if (turns[i]?.speaker === "rep" && typeof turns[i]?.text === "string") {
+      return turns[i].text.trim();
+    }
+  }
+  return "";
+}
+
+function extractIssueLabel(text = "") {
+  const normalized = String(text).toLowerCase();
+  if (/renal impairment|renal function/.test(normalized)) return "renal impairment";
+  if (/guideline/.test(normalized)) return "guideline fit";
+  if (/cost savings|readmissions|expenditure|economic/.test(normalized)) return "cost impact";
+  if (/subgroup|patient population|excluded/.test(normalized)) return "patient-fit gap";
+  if (/workflow|staff|added step|operational/.test(normalized)) return "workflow burden";
+  return "the gap you're pointing to";
+}
+
+function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBehaviorState, currentJourneyState, draft }) {
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const familyText = `${scenario?.journeyStage || ""} ${currentBehaviorState || ""} ${currentJourneyState || ""} ${(scenario?.interactionPressure || []).join(" ")}`;
+  const isClinicalSkepticism = /clinical_value|skeptical|clinical_evaluation/i.test(familyText);
+  const repeatedConcern = hasRepeatedObjection(turns);
+  const directDemand = DIRECT_ANSWER_TRIGGER.test(activeConcernText);
+  const draftTooLoose = BROAD_DISCOVERY_PATTERN.test(String(draft || "").trim()) || ABSTRACT_QA_LANGUAGE_PATTERN.test(String(draft || "").trim());
+  return isClinicalSkepticism && (repeatedConcern || directDemand) && draftTooLoose;
+}
+
+function buildDeterministicEvidenceFitReply({ scenario, turns }) {
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const issueLabel = extractIssueLabel(activeConcernText);
+
+  if (issueLabel === "renal impairment") {
+    return "You're right that the trial doesn't answer the renal impairment question cleanly for the patients you see. Before I try to bridge that gap, where does renal function change the decision most in your real patients?";
+  }
+
+  if (issueLabel === "guideline fit") {
+    return "You're saying the evidence may be interesting, but it still doesn't clear the guideline bar you use in practice. What would you need to see before this feels usable in a real patient decision?";
+  }
+
+  if (issueLabel === "cost impact") {
+    return "You're not asking for a general value story, you're asking what this changes on cost and readmissions in the patients you manage. Which cost driver matters most when you decide whether a therapy is worth the spend?";
+  }
+
+  if (issueLabel === "patient-fit gap") {
+    return "You're saying the study population doesn't match the patients driving your decisions. Which patients are missing from the evidence as you look at it?";
+  }
+
+  if (issueLabel === "workflow burden") {
+    return "You're pointing to the extra work this creates in the real workflow, not just whether the therapy works on paper. Where would that burden hit your team first?";
+  }
+
+  return `You're pointing to a real evidence-fit gap, not a surface objection. Where does ${issueLabel} show up most in the patients or decisions you're making now?`;
 }
 
 function hasRepeatedObjection(turns = []) {
@@ -54,6 +111,16 @@ export async function maybeReviseStrongRepReply({
   currentJourneyState,
   draft,
 }) {
+  if (shouldUseDeterministicEvidenceFitRewrite({
+    scenario,
+    turns,
+    currentBehaviorState,
+    currentJourneyState,
+    draft,
+  })) {
+    return buildDeterministicEvidenceFitReply({ scenario, turns });
+  }
+
   if (!needsAnswerFirstRevision({
     scenario,
     turns,
@@ -96,6 +163,101 @@ Return ONLY the revised rep reply as plain text.`;
   const revised = await invokeWorkerText({
     prompt: revisionPrompt,
     max_tokens: 140,
+    temperature: 0.1,
+  });
+
+  return String(revised || draft).trim();
+}
+
+function needsConcreteLanguageRevision({ scenario, draft }) {
+  const familyText = `${scenario?.journeyStage || ""} ${(scenario?.interactionPressure || []).join(" ")}`;
+  const clinicalValueLike = /clinical_value|skeptical|evidence|access_barrier|operational/i.test(familyText);
+  if (!clinicalValueLike) {
+    return false;
+  }
+
+  return ABSTRACT_QA_LANGUAGE_PATTERN.test(String(draft || "").trim());
+}
+
+export async function maybeConcreteifyStrongRepReply({
+  scenario,
+  turns,
+  currentBehaviorState,
+  currentJourneyState,
+  draft,
+}) {
+  if (!needsConcreteLanguageRevision({ scenario, draft })) {
+    return draft;
+  }
+
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const revisionPrompt = `
+You are revising a pharma rep QA proxy reply so it sounds concrete, specific, and spoken, not abstract.
+
+SCENARIO: ${scenario?.title || ""}
+OBJECTIVE: ${scenario?.objective || ""}
+CURRENT BEHAVIOR STATE: ${currentBehaviorState || ""}
+CURRENT JOURNEY STATE: ${currentJourneyState || ""}
+ACTIVE HCP CONCERN: ${activeConcernText}
+KEY CHALLENGES: ${Array.isArray(scenario?.keyChallenges) ? scenario.keyChallenges.join(" | ") : "none"}
+
+CURRENT DRAFT:
+${draft}
+
+Revise the draft with these rules:
+- Keep it to 1-2 sentences.
+- Use concrete patient-fit, workflow, or evidence-gap language.
+- Name the exact issue instead of using abstract summary phrases.
+- Ban phrases like "critical consideration," "significant limitation," "primary concern," "specific patient population," "treatment landscape," or "our discussion should focus."
+- Make it sound like a real rep speaking to a clinician in the moment.
+- If the scenario key challenges say exploring is more credible than defending, do not add a rescue claim.
+- Do not add hype, broad discovery, or abstract framing.
+
+Return ONLY the revised rep reply as plain text.`;
+
+  const revised = await invokeWorkerText({
+    prompt: revisionPrompt,
+    max_tokens: 140,
+    temperature: 0.1,
+  });
+
+  return String(revised || draft).trim();
+}
+
+export async function maybeDeRepeatStrongRepReply({
+  scenario,
+  turns,
+  currentBehaviorState,
+  currentJourneyState,
+  draft,
+}) {
+  const lastRepText = getLastRepText(turns);
+  if (!lastRepText || lastRepText !== String(draft || "").trim()) {
+    return draft;
+  }
+
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const revisionPrompt = `
+You are revising a pharma rep QA proxy reply because it repeats the exact same sentence the rep already used on the prior turn.
+
+SCENARIO: ${scenario?.title || ""}
+CURRENT BEHAVIOR STATE: ${currentBehaviorState || ""}
+CURRENT JOURNEY STATE: ${currentJourneyState || ""}
+ACTIVE HCP CONCERN: ${activeConcernText}
+PREVIOUS REP LINE: ${lastRepText}
+
+Revise the new reply with these rules:
+- Keep it to 1-2 sentences.
+- Do not repeat the previous rep line.
+- Stay in the same strategy lane: specific, grounded, clinician-facing.
+- Move the conversation one step forward with a narrower clarifier, practical implication, or next-step question.
+- Do not become more abstract, more generic, or more salesy.
+
+Return ONLY the revised rep reply as plain text.`;
+
+  const revised = await invokeWorkerText({
+    prompt: revisionPrompt,
+    max_tokens: 120,
     temperature: 0.1,
   });
 

@@ -10,7 +10,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { maybeReviseStrongRepReply } from "@/lib/qaRepProxy";
+import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply } from "@/lib/qaRepProxy";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -240,18 +240,39 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-      const repText = personaKey === "strong_rep"
-        ? await retryWithBackoff(() => withTimeout(
+      let repText = repDraft;
+      if (personaKey === "strong_rep") {
+        repText = await retryWithBackoff(() => withTimeout(
           maybeReviseStrongRepReply({
             scenario,
             turns,
             currentBehaviorState,
             currentJourneyState,
-            draft: repDraft,
+            draft: repText,
           }),
           `${scenario.title} rep revision ${i + 1}`,
-        ))
-        : repDraft;
+        ));
+        repText = await retryWithBackoff(() => withTimeout(
+          maybeConcreteifyStrongRepReply({
+            scenario,
+            turns,
+            currentBehaviorState,
+            currentJourneyState,
+            draft: repText,
+          }),
+          `${scenario.title} rep concrete revision ${i + 1}`,
+        ));
+        repText = await retryWithBackoff(() => withTimeout(
+          maybeDeRepeatStrongRepReply({
+            scenario,
+            turns,
+            currentBehaviorState,
+            currentJourneyState,
+            draft: repText,
+          }),
+          `${scenario.title} rep dedupe revision ${i + 1}`,
+        ));
+      }
 
       const repTurnObj = {
         id: crypto.randomUUID(),

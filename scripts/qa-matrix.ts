@@ -6,7 +6,7 @@ import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { maybeReviseStrongRepReply } from "../src/lib/qaRepProxy.js";
+import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply } from "../src/lib/qaRepProxy.js";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -189,15 +189,30 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       temperature: 0.1,
     }), `${scenario.title} rep turn ${i + 1}`));
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    const repText = personaKey === "strong_rep"
-      ? await retry(() => withTimeout(maybeReviseStrongRepReply({
+    let repText = repDraft;
+    if (personaKey === "strong_rep") {
+      repText = await retry(() => withTimeout(maybeReviseStrongRepReply({
         scenario,
         turns,
         currentBehaviorState,
         currentJourneyState,
-        draft: repDraft,
-      }), `${scenario.title} rep revision ${i + 1}`))
-      : repDraft;
+        draft: repText,
+      }), `${scenario.title} rep revision ${i + 1}`));
+      repText = await retry(() => withTimeout(maybeConcreteifyStrongRepReply({
+        scenario,
+        turns,
+        currentBehaviorState,
+        currentJourneyState,
+        draft: repText,
+      }), `${scenario.title} rep concrete revision ${i + 1}`));
+      repText = await retry(() => withTimeout(maybeDeRepeatStrongRepReply({
+        scenario,
+        turns,
+        currentBehaviorState,
+        currentJourneyState,
+        draft: repText,
+      }), `${scenario.title} rep dedupe revision ${i + 1}`));
+    }
 
     const repTurnObj = {
       id: crypto.randomUUID(),
