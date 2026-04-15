@@ -246,16 +246,35 @@ export default function SessionSummaryModal({
 
   if (!review) return null;
 
-  // Build insight lookup
-  const allInsights = [
-    ...(review.capabilityInsights || []),
-    ...(review.strengths || []).map(s => ({ ...s, _legacy: true })),
-    ...(review.improvementAreas || []).map(s => ({ ...s, _legacy: true })),
-    ...(review.missedOpportunities || []).map(s => ({ ...s, _legacy: true })),
-  ];
+  // Build insight lookup, preserving the full forensic capability insight as the source of truth.
+  // Legacy guidance objects can fill gaps, but should never overwrite the richer review object.
   const insightByCapability = {};
-  for (const insight of allInsights) {
-    if (insight.capabilityId) insightByCapability[insight.capabilityId] = insight;
+  for (const insight of (review.capabilityInsights || [])) {
+    if (insight?.capabilityId) {
+      insightByCapability[insight.capabilityId] = insight;
+    }
+  }
+
+  const legacyInsights = [
+    ...(review.strengths || []),
+    ...(review.improvementAreas || []),
+    ...(review.missedOpportunities || []),
+  ];
+
+  for (const legacy of legacyInsights) {
+    if (!legacy?.capabilityId) continue;
+    const existing = insightByCapability[legacy.capabilityId] || {};
+    insightByCapability[legacy.capabilityId] = {
+      ...legacy,
+      ...existing,
+      capabilityId: existing.capabilityId || legacy.capabilityId,
+      capabilityName: existing.capabilityName || legacy.capabilityName,
+      observationLevel: existing.observationLevel || legacy.observationLevel,
+      title: existing.title || legacy.title,
+      guidance: existing.guidance || legacy.guidance,
+      relatedTurnIds: existing.relatedTurnIds?.length ? existing.relatedTurnIds : legacy.relatedTurnIds,
+      exampleRewrite: existing.exampleRewrite || legacy.exampleRewrite,
+    };
   }
 
   const briefRationale = review.briefRationale || review.overallSummary?.[0] || "";

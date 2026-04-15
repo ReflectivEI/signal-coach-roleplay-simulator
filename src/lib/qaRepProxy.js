@@ -77,10 +77,16 @@ function shouldUseDeterministicCommitmentRewrite({ scenario, turns, draft }) {
   const workflowDeferralDrift =
     /show you a simpler prior auth process|reduce that burden on your staff|bare minimum reduction in prior auth steps|worthwhile for your staff|simplifies it enough|extra step for my staff|prior auth process|one thing that needs to fit with your existing workflow|fits with what you're doing now/.test(draftText);
   const workflowDeferralSignal = /prior auth|staff|workflow|extra step|burden/.test(activeConcernText);
+  const accessWorkflowExplorationDrift =
+    /what's the biggest|what specifically made it tough|can you walk me through|walk me through what you know|how many prior auths|what specific data point|what specifically|what part of the process|what would change the formulary|what would need to fit|understand what specific steps|what do you think is involved/.test(draftText);
+  const accessWorkflowSignal =
+    /prior auth|staff|workflow|extra step|burden|formulary|non-preferred|review process|process|committee|p&t|approved|patient outcomes|reconsidered|concrete/.test(activeConcernText);
+  const lateEnoughForAction = repTurns >= 1;
 
   return isCommitmentStage && (
     ((repeatedConcern || passiveMaybeSignal) && stillProfiling) ||
-    ((repeatedConcern || workflowDeferralSignal) && workflowDeferralDrift)
+    ((repeatedConcern || workflowDeferralSignal) && workflowDeferralDrift) ||
+    (lateEnoughForAction && accessWorkflowSignal && accessWorkflowExplorationDrift)
   );
 }
 
@@ -138,6 +144,13 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
     return "It sounds like the hesitation is still active, even if the interest is there. Would you be open to naming the one evidence gap that has to get resolved before this moves from 'maybe' to a real next step?";
   }
 
+  if (/formulary|non-preferred|review process|reconsidered|concrete|take back to the formulary team|exact steps/.test(activeConcernText)) {
+    if (repTurns <= 1) {
+      return "It sounds like the blocker isn't interest, it's needing something concrete to move the formulary conversation. If I gave you one specific item to bring back, what would make it useful enough to carry forward internally?";
+    }
+    return "It sounds like the path is clear enough to define a real next step now. Would you be open to agreeing on the one concrete item you can bring to the next formulary discussion so this actually moves?";
+  }
+
   if (/committee|bring it up|process/.test(activeConcernText)) {
     return "It sounds like the issue isn't support, it's what you can actually own before the committee meets. What's one concrete step you could take this month so this doesn't just sit until the next meeting?";
   }
@@ -146,7 +159,7 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
     if (repTurns <= 1) {
       return "It sounds like the blocker isn't interest, it's not wanting to hand your staff one more loose end. Before this goes any further, what's the one workflow condition that would have to be true for you to feel comfortable moving one case forward?";
     }
-    return "It sounds like staff burden is still the real stop sign here. Would you be open to naming the one workflow requirement that has to be met before you'd take a concrete next step from your side?";
+    return "It sounds like staff burden is still the real stop sign here. Would you be open to naming the one workflow requirement that has to be met before you'd take one concrete next step from your side?";
   }
 
   return "It sounds like the conversation is close to alignment, but the next step still isn't defined. Would you be open to naming the smallest concrete action that would move this forward from here?";
