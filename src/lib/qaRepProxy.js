@@ -1,6 +1,6 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 
-const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes/i;
+const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 
@@ -66,6 +66,10 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "guideline fit") {
+    if (/own patient population|my patient population|not just some study/.test(activeConcernText.toLowerCase())) {
+      return "You're saying the guideline story still doesn't match the patients you actually treat. Which patient type falls outside the guideline cleanly enough that you stop and reconsider the usual approach?";
+    }
+
     return "You're saying the evidence may be interesting, but it still doesn't clear the guideline bar you use in practice. What would you need to see before this feels usable in a real patient decision?";
   }
 
@@ -78,6 +82,10 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "patient-fit gap") {
+    if (/own patient population|my patient population|not just some study/.test(activeConcernText.toLowerCase())) {
+      return "You're saying the study still doesn't reflect the patients who force you off the usual guideline path. Which patient type is most likely to make you pause and rethink the standard approach?";
+    }
+
     return "You're saying the study population doesn't match the patients driving your decisions. Which patients are missing from the evidence as you look at it?";
   }
 

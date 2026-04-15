@@ -316,6 +316,109 @@ Return ONLY the recalibrated HCP line.`;
   return String(rewritten || hcpReply).trim();
 }
 
+function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): string {
+  for (let i = transcript.length - 1; i >= 0; i -= 1) {
+    if (transcript[i]?.speaker === "hcp" && transcript[i]?.text) {
+      return String(transcript[i].text).toLowerCase();
+    }
+  }
+  return String(scenario?.openingScene || "").toLowerCase();
+}
+
+function detectQuestionType(repMessage: string): BehaviorSignals["question_type"] {
+  const text = String(repMessage || "").trim().toLowerCase();
+  if (!text) return "none";
+  if (/don't you|wouldn't you|isn't it|aren't you|right\?$/i.test(text)) return "leading";
+  if (!text.includes("?")) return "none";
+  if (/^(what|how|where|which|walk me through|tell me about|can you walk me through|can you tell me about)/i.test(text)) {
+    return "open_ended";
+  }
+  if (/^(can you|could you|would you)/i.test(text) && !/yes or no/.test(text)) {
+    return "open_ended";
+  }
+  return "closed_ended";
+}
+
+function inferConcernTags(text: string): string[] {
+  const normalized = String(text || "").toLowerCase();
+  const tags: string[] = [];
+  if (/guideline/.test(normalized)) tags.push("guideline");
+  if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
+  if (/patient population|typical patient|subgroup|patients who/.test(normalized)) tags.push("patient_fit");
+  if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
+  if (/prior auth|staff|workflow|form|operational/.test(normalized)) tags.push("workflow");
+  return tags;
+}
+
+function inferResponseAlignment(repMessage: string, latestConcern: string): BehaviorSignals["response_alignment"] {
+  const repTags = inferConcernTags(repMessage);
+  const concernTags = inferConcernTags(latestConcern);
+  const shared = concernTags.filter((tag) => repTags.includes(tag));
+  if (shared.length >= 1) {
+    return "strong";
+  }
+  if (/you'?re saying|you'?re right|when you say|what would you need to see|which patient type|where does .* decision|what outcome carries/i.test(repMessage)) {
+    return "partial";
+  }
+  return "weak";
+}
+
+function inferListeningPattern(repMessage: string, latestConcern: string): BehaviorSignals["listening_pattern"] {
+  const alignment = inferResponseAlignment(repMessage, latestConcern);
+  if (alignment === "strong") return "responsive";
+  if (alignment === "partial") return "partially_responsive";
+  return "missed";
+}
+
+function inferObjectionType(latestConcern: string): BehaviorSignals["objection_type"] {
+  if (/prior auth|workflow|staff|operational|form/.test(latestConcern)) return "workflow";
+  if (/cost|spend|readmissions|hospitalizations|metrics|value/.test(latestConcern)) return "budget";
+  if (/guideline|renal|patient population|subgroup|study|data/.test(latestConcern)) return "clinical";
+  return "none";
+}
+
+function inferEngagementLevel(hcpReply: string): BehaviorSignals["engagement_level"] {
+  const text = String(hcpReply || "").toLowerCase();
+  if (/\?$/.test(text) || /\bwhat\b|\bhow\b|\bwhich\b|\bwhere\b/.test(text)) return "high";
+  if (/that's a start|i need to see|i've got a patient|that was a tough case|that still/i.test(text)) return "moderate";
+  return "low";
+}
+
+function normalizeBehaviorSignals(
+  rawSignals: BehaviorSignals,
+  repMessage: string,
+  transcript: ConversationTurn[],
+  scenario: any,
+  hcpReply: string
+): BehaviorSignals {
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const inferredQuestionType = detectQuestionType(repMessage);
+  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern);
+  const inferredListening = inferListeningPattern(repMessage, latestConcern);
+  const inferredObjectionType = inferObjectionType(latestConcern);
+  const inferredEngagement = inferEngagementLevel(hcpReply);
+
+  return {
+    question_type: rawSignals?.question_type && rawSignals.question_type !== "none"
+      ? rawSignals.question_type
+      : inferredQuestionType,
+    response_alignment: rawSignals?.response_alignment === "strong"
+      ? "strong"
+      : inferredAlignment,
+    objection_type: rawSignals?.objection_type && rawSignals.objection_type !== "none"
+      ? rawSignals.objection_type
+      : inferredObjectionType,
+    engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"
+      ? rawSignals.engagement_level
+      : inferredEngagement,
+    control_pattern: rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
+    listening_pattern: rawSignals?.listening_pattern === "responsive"
+      ? "responsive"
+      : inferredListening,
+    commitment_attempt: rawSignals?.commitment_attempt || "none",
+  };
+}
+
 export async function generateHcpResponse(
   scenario: any,
   transcript: ConversationTurn[],
@@ -533,7 +636,13 @@ Return ONLY valid JSON:
     nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
     nextJourneyState: result.nextJourneyState || currentJourneyState,
     activeCues,
-    behaviorSignals: result.behaviorSignals || {},
+    behaviorSignals: normalizeBehaviorSignals(
+      result.behaviorSignals || {},
+      repMessage,
+      transcript,
+      scenario,
+      hcpReply,
+    ),
     coachingNudge: result.coachingNudge || null,
     volatilityState: volatility
   };
