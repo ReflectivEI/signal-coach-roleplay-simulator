@@ -251,11 +251,11 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
 
   let review;
   try {
-    review = await withTimeout(
+    review = await retry(() => withTimeout(
       generateSessionReview(scenario, turns, allSignals, stateHistory, volatilityEvents),
       `${scenario.title} session review`,
-      60000,
-    );
+      90000,
+    ));
   } catch (error) {
     review = {
       capabilityInsights,
@@ -315,6 +315,8 @@ async function main() {
       assertions: result.assertions,
       capabilityLevels: result.capabilityLevels,
       briefRationale: result.review?.briefRationale || "",
+      qaFallback: Boolean(result.review?.qaFallback),
+      qaFallbackReason: result.review?.qaFallbackReason || "",
       firstCue: result.turns.find((turn) => turn.speaker === "hcp")?.cues?.[0]?.label || "",
       lastHcpReply: [...result.turns].reverse().find((turn) => turn.speaker === "hcp")?.text || "",
       transcript: results.length === 1

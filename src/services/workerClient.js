@@ -14,6 +14,7 @@
  * @property {boolean} [roleplay]
  * @property {string} [provider]
  * @property {string} [model]
+ * @property {number} [timeout_ms]
  */
 
 /**
@@ -90,12 +91,12 @@ async function requestWorkerJson(url, { method = "GET", body } = {}) {
 /**
  * @param {WorkerTextRequest} [options]
  */
-export async function invokeWorkerText({ prompt, max_tokens = 900, temperature = 0.2, roleplay = false, provider, model } = {}) {
+export async function invokeWorkerText({ prompt, max_tokens = 900, temperature = 0.2, roleplay = false, provider, model, timeout_ms } = {}) {
   const response = await fetchWithTimeout(workerInvokeUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, max_tokens, temperature, roleplay, provider, model }),
-  }, DEFAULT_WORKER_TIMEOUT_MS, "Worker text invoke");
+  }, timeout_ms || DEFAULT_WORKER_TIMEOUT_MS, "Worker text invoke");
 
   const data = await parseWorkerResponse(response);
   const text = typeof data?.response === "string"
@@ -110,12 +111,12 @@ export async function invokeWorkerText({ prompt, max_tokens = 900, temperature =
 /**
  * @param {WorkerJsonRequest} [options]
  */
-export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model } = {}) {
+export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model, timeout_ms } = {}) {
   const response = await fetchWithTimeout(workerInvokeUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ prompt, response_json_schema, max_tokens, temperature, roleplay, provider, model }),
-  }, DEFAULT_WORKER_TIMEOUT_MS, "Worker JSON invoke");
+  }, timeout_ms || DEFAULT_WORKER_TIMEOUT_MS, "Worker JSON invoke");
 
   const data = await parseWorkerResponse(response);
   const payload = data?.response;

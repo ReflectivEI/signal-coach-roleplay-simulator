@@ -2,7 +2,7 @@
  * Session Review Generator
  * =========================
  * Full forensic coaching debrief — restored from simulatorEngine.ts original.
- * Uses claude_sonnet_4_6. DO NOT downgrade model or simplify prompt.
+ * Uses the worker's configured review-capable model. Do not simplify the prompt.
  */
 
 import { invokeWorkerJson } from "@/services/workerClient";
@@ -482,7 +482,7 @@ Return ONLY valid JSON with this exact structure:
     prompt,
     max_tokens: 2600,
     temperature: 0.2,
-    model: "claude_sonnet_4_6",
+    timeout_ms: 90000,
     response_json_schema: {
       type: "object",
       properties: {

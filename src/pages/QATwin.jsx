@@ -303,11 +303,11 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   let review;
   try {
     onProgress("Generating full end-of-session review…");
-    review = await withTimeout(
+    review = await retryWithBackoff(() => withTimeout(
       generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents),
       `${scenario.title} session review`,
-      60000,
-    );
+      90000,
+    ));
   } catch (error) {
     const briefRationale = missed.length > 0
       ? `Deterministic QA fallback: ${missed.length} capability gap(s) detected — ${missed.join(", ")}. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "No effective signals detected."} Volatility events: ${volEvents.length}.`
