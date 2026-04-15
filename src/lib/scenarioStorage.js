@@ -55,18 +55,37 @@ function normalizeCustomScenario(scenario) {
   };
 }
 
+function sortScenariosByRecency(scenarios) {
+  return [...scenarios].sort((left, right) => {
+    const leftTime = new Date(left?.updatedAt || left?.createdAt || 0).getTime();
+    const rightTime = new Date(right?.updatedAt || right?.createdAt || 0).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+function dedupeById(scenarios) {
+  const seen = new Set();
+  return scenarios.filter((scenario) => {
+    const id = scenario?.id;
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 async function loadWorkerCustomScenarios() {
   try {
     const scenarios = await listWorkerScenarios();
     if (Array.isArray(scenarios) && scenarios.length >= 0) {
-      writeCustomScenarios(scenarios);
-      return scenarios.map(normalizeCustomScenario);
+      const normalized = dedupeById(sortScenariosByRecency(scenarios.map(normalizeCustomScenario)));
+      writeCustomScenarios(normalized);
+      return normalized;
     }
   } catch {
-    return readCustomScenarios().map(normalizeCustomScenario);
+    return dedupeById(sortScenariosByRecency(readCustomScenarios().map(normalizeCustomScenario)));
   }
 
-  return readCustomScenarios().map(normalizeCustomScenario);
+  return dedupeById(sortScenariosByRecency(readCustomScenarios().map(normalizeCustomScenario)));
 }
 
 export function listBuiltInScenarios() {
@@ -79,7 +98,7 @@ export async function listCustomScenarios() {
 
 export async function listAllScenarios() {
   const customScenarios = await listCustomScenarios();
-  return [...listBuiltInScenarios(), ...customScenarios];
+  return dedupeById([...listBuiltInScenarios(), ...customScenarios]);
 }
 
 export async function listPublishedScenarios() {
@@ -104,13 +123,12 @@ export async function createCustomScenario(scenario) {
 
   try {
     const saved = await createWorkerScenario(nextScenario);
-    const next = [saved, ...readCustomScenarios().filter((item) => item.id !== saved.id)];
+    const next = dedupeById(sortScenariosByRecency([saved, ...readCustomScenarios().filter((item) => item.id !== saved.id)]));
     writeCustomScenarios(next);
     return saved;
   } catch {
     const scenarios = readCustomScenarios();
-    scenarios.unshift(nextScenario);
-    writeCustomScenarios(scenarios);
+    writeCustomScenarios(dedupeById(sortScenariosByRecency([nextScenario, ...scenarios])));
     return nextScenario;
   }
 }
@@ -118,18 +136,18 @@ export async function createCustomScenario(scenario) {
 export async function updateCustomScenario(id, patch) {
   try {
     const saved = await updateWorkerScenario(id, patch);
-    const next = readCustomScenarios().map((scenario) => (
+    const next = sortScenariosByRecency(readCustomScenarios().map((scenario) => (
       scenario.id === id ? saved : scenario
-    ));
+    )));
     writeCustomScenarios(next);
     return saved;
   } catch {
     const scenarios = readCustomScenarios();
-    const next = scenarios.map((scenario) => (
+    const next = sortScenariosByRecency(scenarios.map((scenario) => (
       scenario.id === id
         ? { ...scenario, ...patch, updatedAt: new Date().toISOString() }
         : scenario
-    ));
+    )));
     writeCustomScenarios(next);
     return next.find((scenario) => scenario.id === id) || null;
   }

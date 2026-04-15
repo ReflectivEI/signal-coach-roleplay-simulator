@@ -10,8 +10,13 @@ function HcpCueStrip({ cue }) {
   return (
     <div className="mb-2 ml-10">
       <p className="text-primary/60 text-xs leading-relaxed italic">
-        ◆ {cue}
+        ◆ {cue.label}
       </p>
+      {cue.description && (
+        <p className="text-primary/45 text-[11px] leading-relaxed mt-0.5">
+          {cue.description}
+        </p>
+      )}
     </div>
   );
 }
@@ -39,7 +44,7 @@ function RepCoachingTip({ nudge }) {
 function MessageBubble({ turn }) {
   const isRep = turn.speaker === "rep";
   const isHcp = turn.speaker === "hcp";
-  const cue = turn.cues?.[0] ? turn.cues[0].label : null;
+  const cue = turn.cues?.[0] || null;
   const nudge = turn.nudge || null;
 
   return (

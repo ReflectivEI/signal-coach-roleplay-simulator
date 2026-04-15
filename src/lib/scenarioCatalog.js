@@ -4,7 +4,6 @@ export const ALL_SCENARIOS = [
   // ── INITIAL ACCESS (3) ──
   {
     title: "The Gatekeeper Filter",
-    conversationStartType: "hcp_initiated",
     coreTension: "Rep is trying to establish first real access in a practice that routes everything through staff before the physician sees anyone.",
     description: "A treating clinician's office filters every rep interaction through an MA. The physician has agreed to a brief meeting but is visibly reluctant and preoccupied.",
     stakeholder: "Primary Care Physician",
@@ -22,7 +21,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Warm Intro That Turns Cold",
-    conversationStartType: "hcp_initiated",
     coreTension: "A colleague referral creates an expectation mismatch — the HCP expected a peer conversation and got a sales visit.",
     description: "An influential physician was referred by a colleague but wasn't told what the conversation was about. The warmth of the referral has already dissipated.",
     stakeholder: "Community Cardiologist",
@@ -40,7 +38,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The No-Show Follow-Up",
-    conversationStartType: "hcp_initiated",
     coreTension: "Rep finally gets access after being cancelled or avoided three times.",
     description: "A specialist agreed to a brief meeting after multiple cancellations. The bar to earn engagement is high.",
     stakeholder: "Specialist Physician",
@@ -59,7 +56,6 @@ export const ALL_SCENARIOS = [
   // ── DISCOVERY (3) ──
   {
     title: "The Undefined Patient Profile",
-    conversationStartType: "hcp_initiated",
     coreTension: "Rep can't establish who this HCP actually prescribes for — discovery is wide open.",
     description: "A newer clinician is open to the conversation but hasn't clearly defined their patient criteria.",
     stakeholder: "Hospitalist / Early Career Physician",
@@ -77,7 +73,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Assumed Priority",
-    conversationStartType: "hcp_initiated",
     coreTension: "Rep enters discovery with a fixed hypothesis. The HCP has different priorities entirely.",
     description: "A specialist has a well-established practice and clear opinions. The rep's pre-call assumptions don't match the HCP's actual decision criteria.",
     stakeholder: "Endocrinologist",
@@ -95,7 +90,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Protocol Lock",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP is genuinely satisfied with their current protocol. No strong objections, no curiosity.",
     description: "A clinician's current approach works well enough. The rep must discover what, if anything, is genuinely underserved.",
     stakeholder: "Pulmonologist",
@@ -114,7 +108,6 @@ export const ALL_SCENARIOS = [
   // ── CLINICAL VALUE (3) ──
   {
     title: "The Data That Doesn't Land",
-    conversationStartType: "hcp_initiated",
     coreTension: "A thought leader has read the trial and disagrees with the rep's framing.",
     description: "A nationally recognized specialist challenges the trial design and questions whether the data applies to their patient population.",
     stakeholder: "Pulmonologist / KOL",
@@ -132,7 +125,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Guideline Anchor",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP won't prescribe outside guidelines. The product is appropriate but not yet explicitly guideline-endorsed.",
     description: "A community physician applies guidelines rigidly and will not move until they see explicit guidance from a major society.",
     stakeholder: "Internal Medicine Physician",
@@ -150,7 +142,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Cost-Effectiveness Filter",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP accepts the clinical data but runs every prescription decision through a cost-effectiveness lens.",
     description: "A value-driven clinician is not questioning efficacy — they're asking whether the outcome justifies the cost.",
     stakeholder: "Internal Medicine / Hospital Medicine Physician",
@@ -169,7 +160,6 @@ export const ALL_SCENARIOS = [
   // ── OBJECTION HANDLING (3) ──
   {
     title: "The Prior Auth Reflex",
-    conversationStartType: "hcp_initiated",
     coreTension: "Every access concern becomes a prior auth conversation before the clinical value has been established.",
     description: "A treating clinician raises prior auth at the start as a reason not to engage.",
     stakeholder: "Rheumatologist",
@@ -187,7 +177,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Unexpected Safety Flag",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP raises a safety concern the rep wasn't expecting.",
     description: "A specialist brings up a case they heard about at a conference — an adverse event the rep hasn't encountered in their training.",
     stakeholder: "Neurologist",
@@ -205,7 +194,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Competitive Defender",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP has a loyal relationship with a competitor product and filters every conversation through that lens.",
     description: "A specialist has been using a competitor therapy for years.",
     stakeholder: "Oncologist",
@@ -224,7 +212,6 @@ export const ALL_SCENARIOS = [
   // ── ADOPTION & IMPLEMENTATION (3) ──
   {
     title: "The Reluctant Early Adopter",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP is genuinely interested but won't act until someone else does first.",
     description: "A clinician acknowledges the clinical case but is waiting for peer adoption before prescribing.",
     stakeholder: "Nephrologist",
@@ -242,7 +229,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Workflow Bottleneck",
-    conversationStartType: "hcp_initiated",
     coreTension: "The product fits clinically but the practice workflow doesn't support it.",
     description: "A clinician is supportive of the therapy but the practice's workflow creates a real barrier.",
     stakeholder: "Dermatologist",
@@ -260,7 +246,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Reversal After First Patient",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP tried the therapy with one patient, something went wrong, and they are now recalibrating.",
     description: "A clinician who was an early adopter experienced a difficult first case and has paused all new starts.",
     stakeholder: "Hematologist",
@@ -279,7 +264,6 @@ export const ALL_SCENARIOS = [
   // ── ACCESS & FORMULARY (1) ──
   {
     title: "The Formulary Firewall",
-    conversationStartType: "hcp_initiated",
     coreTension: "The product has clinical support from the prescriber but is blocked at the formulary level.",
     description: "A clinician who wants to prescribe runs into a hard formulary exclusion.",
     stakeholder: "Specialist Physician + P&T Committee Influencer",
@@ -298,7 +282,6 @@ export const ALL_SCENARIOS = [
   // ── COMMITMENT & CLOSE (3) ──
   {
     title: "The Perpetual Maybe",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP agrees in principle but never commits to a specific next step.",
     description: "A clinician consistently says the right things but has been in the same place for three visits.",
     stakeholder: "Gastroenterologist",
@@ -316,7 +299,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Handoff Risk",
-    conversationStartType: "hcp_initiated",
     coreTension: "HCP is ready to move but believes the final decision belongs to someone else.",
     description: "A senior clinician who influenced the decision process now defers the actual commitment to a committee.",
     stakeholder: "Senior Physician / Department Head",
@@ -334,7 +316,6 @@ export const ALL_SCENARIOS = [
   },
   {
     title: "The Split Decision",
-    conversationStartType: "hcp_initiated",
     coreTension: "Two partners in the same practice have opposite views and the rep is in the room with both of them.",
     description: "A joint meeting surfaces a real disagreement between two physicians.",
     stakeholder: "Two-Physician Practice Group",

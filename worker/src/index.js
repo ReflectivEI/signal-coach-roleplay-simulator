@@ -42,6 +42,272 @@ function createId(prefix, label = "") {
   return `${prefix}-${slugify(label) || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const allowedJourneyStages = new Set([
+  "initial_access",
+  "discovery",
+  "clinical_value",
+  "objection_handling",
+  "access_formulary",
+  "adoption_implementation",
+  "commitment_close",
+]);
+
+const journeyStateForStage = {
+  initial_access: "early_discovery",
+  discovery: "early_discovery",
+  clinical_value: "clinical_evaluation",
+  objection_handling: "objection_phase",
+  access_formulary: "access_formulary",
+  adoption_implementation: "adoption_commitment",
+  commitment_close: "adoption_commitment",
+};
+
+const allowedJourneyStates = new Set([
+  "early_discovery",
+  "clinical_evaluation",
+  "objection_phase",
+  "access_formulary",
+  "adoption_commitment",
+]);
+
+const allowedHcpRoleTypes = new Set([
+  "treating_clinician",
+  "influencer",
+  "thought_leader",
+]);
+
+const allowedDecisionOrientations = new Set([
+  "patient_centric",
+  "evidence_driven",
+  "risk_averse",
+  "guideline_anchored",
+]);
+
+const allowedPersonas = new Set([
+  "skeptical_specialist",
+  "time_constrained_community_doctor",
+  "cost_focused_decision_maker",
+  "curious_uncertain_adopter",
+]);
+
+const allowedBehaviorStates = new Set([
+  "closed",
+  "neutral",
+  "open",
+  "openness",
+  "curiosity",
+  "resistance",
+  "frustration",
+  "time_pressure",
+]);
+
+const allowedInteractionPressures = new Set([
+  "time_constrained",
+  "operationally_constrained",
+  "skeptical_resistant",
+  "competitive_bias",
+  "safety_concern",
+  "access_barrier",
+  "curious_uncertain",
+]);
+
+const allowedFocusCapabilities = new Set([
+  "question_quality",
+  "listening_responsiveness",
+  "making_it_matter",
+  "customer_engagement_signals",
+  "objection_navigation",
+  "conversation_control_structure",
+  "adaptability",
+  "commitment_gaining",
+]);
+
+const allowedTurnSpeakers = new Set([
+  "rep",
+  "hcp",
+  "system",
+]);
+
+const MAX_SCENARIO_COUNT = 100;
+const MAX_SESSION_COUNT = 200;
+const MAX_TRANSCRIPT_TURNS = 60;
+const MAX_SIGNAL_ITEMS = 60;
+
+function safeBoolean(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
+}
+
+function asIsoDate(value, fallback = new Date().toISOString()) {
+  const candidate = safeString(value);
+  if (!candidate) return fallback;
+  const parsed = new Date(candidate);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed.toISOString();
+}
+
+function asLimitedText(value, maxLength = 600) {
+  return safeString(value).slice(0, maxLength);
+}
+
+function asStringArray(value, maxItems = 12, maxLength = 240) {
+  return uniqueStrings(value).map((item) => item.slice(0, maxLength)).slice(0, maxItems);
+}
+
+function asObject(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
+}
+
+function uniqueStrings(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map((value) => safeString(value)).filter(Boolean))];
+}
+
+function normalizeScenarioPayload(body = {}, existingScenario = null) {
+  const journeyStage = allowedJourneyStages.has(body.journeyStage)
+    ? body.journeyStage
+    : existingScenario?.journeyStage || "discovery";
+
+  const journeyStateCandidate = safeString(body.journeyState) || journeyStateForStage[journeyStage];
+  const journeyState = allowedJourneyStates.has(journeyStateCandidate)
+    ? journeyStateCandidate
+    : journeyStateForStage[journeyStage];
+
+  const hcpRoleType = allowedHcpRoleTypes.has(body.hcpRoleType)
+    ? body.hcpRoleType
+    : existingScenario?.hcpRoleType || "treating_clinician";
+
+  const decisionOrientation = allowedDecisionOrientations.has(body.decisionOrientation)
+    ? body.decisionOrientation
+    : existingScenario?.decisionOrientation || "patient_centric";
+
+  const persona = allowedPersonas.has(body.persona)
+    ? body.persona
+    : existingScenario?.persona || "curious_uncertain_adopter";
+
+  const startingBehaviorState = allowedBehaviorStates.has(body.startingBehaviorState)
+    ? body.startingBehaviorState
+    : existingScenario?.startingBehaviorState || "neutral";
+
+  const interactionPressure = uniqueStrings(body.interactionPressure).filter((value) => allowedInteractionPressures.has(value));
+  const suggestedFocusCapabilities = uniqueStrings(body.suggestedFocusCapabilities).filter((value) => allowedFocusCapabilities.has(value));
+  const keyChallenges = uniqueStrings(body.keyChallenges);
+
+  return {
+    ...existingScenario,
+    ...body,
+    title: safeString(body.title, existingScenario?.title || "Untitled Scenario"),
+    coreTension: safeString(body.coreTension, existingScenario?.coreTension || ""),
+    description: safeString(body.description, existingScenario?.description || ""),
+    stakeholder: safeString(body.stakeholder, existingScenario?.stakeholder || ""),
+    objective: safeString(body.objective, existingScenario?.objective || ""),
+    context: safeString(body.context, existingScenario?.context || ""),
+    openingScene: safeString(body.openingScene, existingScenario?.openingScene || ""),
+    visualScene: safeString(body.visualScene, existingScenario?.visualScene || ""),
+    journeyStage,
+    journeyState,
+    hcpRoleType,
+    decisionOrientation,
+    persona,
+    startingBehaviorState,
+    interactionPressure,
+    suggestedFocusCapabilities,
+    keyChallenges,
+    isBuiltIn: false,
+    isPublished: body?.isPublished ?? existingScenario?.isPublished ?? true,
+  };
+}
+
+function normalizeTranscriptTurn(turn = {}, index = 0) {
+  const speaker = allowedTurnSpeakers.has(turn?.speaker) ? turn.speaker : "system";
+  const cueItems = Array.isArray(turn?.cues) ? turn.cues : [];
+
+  return {
+    id: safeString(turn?.id) || createId(`turn-${speaker}`, `${index + 1}`),
+    speaker,
+    text: asLimitedText(turn?.text, 1000),
+    timestamp: asIsoDate(turn?.timestamp),
+    cues: cueItems.slice(0, 3).map((cue, cueIndex) => ({
+      id: safeString(cue?.id) || createId("cue", `${index + 1}-${cueIndex + 1}`),
+      label: asLimitedText(cue?.label, 160),
+      description: asLimitedText(cue?.description, 260),
+      source: asLimitedText(cue?.source, 60),
+    })).filter((cue) => cue.label),
+    nudge: turn?.nudge && typeof turn.nudge === "object"
+      ? {
+          title: asLimitedText(turn.nudge?.title, 120),
+          guidance: asLimitedText(turn.nudge?.guidance, 240),
+          capabilityId: asLimitedText(turn.nudge?.capabilityId, 80),
+          capabilityName: asLimitedText(turn.nudge?.capabilityName, 120),
+        }
+      : null,
+  };
+}
+
+function normalizeSignalItem(signal = {}) {
+  return {
+    question_type: asLimitedText(signal?.question_type, 80),
+    response_alignment: asLimitedText(signal?.response_alignment, 80),
+    objection_type: asLimitedText(signal?.objection_type, 80),
+    engagement_level: asLimitedText(signal?.engagement_level, 80),
+    control_pattern: asLimitedText(signal?.control_pattern, 80),
+    listening_pattern: asLimitedText(signal?.listening_pattern, 80),
+    commitment_attempt: asLimitedText(signal?.commitment_attempt, 80),
+  };
+}
+
+function normalizeSessionPayload(body = {}, existingSession = null) {
+  const transcript = (Array.isArray(body?.transcript) ? body.transcript : existingSession?.transcript || [])
+    .slice(-MAX_TRANSCRIPT_TURNS)
+    .map(normalizeTranscriptTurn)
+    .filter((turn) => turn.text);
+
+  const signals = (Array.isArray(body?.signals) ? body.signals : existingSession?.signals || [])
+    .slice(-MAX_SIGNAL_ITEMS)
+    .map((signal) => normalizeSignalItem(asObject(signal)));
+
+  const journeyStateCandidate = safeString(body?.currentJourneyState || body?.journeyState || existingSession?.currentJourneyState);
+  const currentJourneyState = allowedJourneyStates.has(journeyStateCandidate)
+    ? journeyStateCandidate
+    : existingSession?.currentJourneyState || "early_discovery";
+
+  const behaviorStateCandidate = safeString(body?.currentBehaviorState || body?.behaviorState || existingSession?.currentBehaviorState);
+  const currentBehaviorState = allowedBehaviorStates.has(behaviorStateCandidate)
+    ? behaviorStateCandidate
+    : existingSession?.currentBehaviorState || "neutral";
+
+  return {
+    ...existingSession,
+    id: safeString(body?.id, existingSession?.id || ""),
+    scenarioId: safeString(body?.scenarioId, existingSession?.scenarioId || ""),
+    scenarioTitle: safeString(body?.scenarioTitle, existingSession?.scenarioTitle || "Untitled Scenario"),
+    currentJourneyState,
+    currentBehaviorState,
+    coachingNudgesEnabled: safeBoolean(
+      body?.coachingNudgesEnabled ?? body?.coachingEnabled,
+      existingSession?.coachingNudgesEnabled ?? true,
+    ),
+    isComplete: safeBoolean(body?.isComplete, existingSession?.isComplete ?? false),
+    turnCount: Math.max(
+      0,
+      Math.min(
+        100,
+        Number.isFinite(Number(body?.turnCount))
+          ? Number(body.turnCount)
+          : existingSession?.turnCount ?? transcript.filter((turn) => turn.speaker === "rep").length,
+      ),
+    ),
+    transcript,
+    signals,
+    review: body?.review && typeof body.review === "object" ? body.review : existingSession?.review || null,
+    summary: asStringArray(body?.summary || existingSession?.summary || [], 8, 240),
+    createdAt: asIsoDate(body?.createdAt || existingSession?.createdAt),
+    endedAt: body?.endedAt ? asIsoDate(body.endedAt) : existingSession?.endedAt || null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function getKv(env) {
   return env?.APP_DATA_KV || null;
 }
@@ -249,14 +515,12 @@ async function handleScenarios(request, env) {
   if (request.method === "POST") {
     const scenarios = await readCollection(env, key);
     const scenario = {
-      ...body,
+      ...normalizeScenarioPayload(body),
       id: safeString(body.id) || createId("custom", body.title),
-      isBuiltIn: false,
-      isPublished: body?.isPublished ?? true,
       createdAt: body?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    const next = [scenario, ...scenarios.filter((item) => item.id !== scenario.id)];
+    const next = [scenario, ...scenarios.filter((item) => item.id !== scenario.id)].slice(0, MAX_SCENARIO_COUNT);
     await writeCollection(env, key, next);
     return json({ success: true, scenario }, { status: 201 }, request);
   }
@@ -268,10 +532,8 @@ async function handleScenarios(request, env) {
       return json({ error: "Scenario not found" }, { status: 404 }, request);
     }
     const scenario = {
-      ...scenarios[index],
-      ...body,
+      ...normalizeScenarioPayload(body, scenarios[index]),
       id: scenarios[index].id,
-      isBuiltIn: false,
       updatedAt: new Date().toISOString(),
     };
     scenarios[index] = scenario;
@@ -294,21 +556,49 @@ async function handleSessions(request, env) {
 
   if (request.method === "GET") {
     const sessions = await readCollection(env, key);
+    const url = new URL(request.url);
+    const requestedId = safeString(url.searchParams.get("id"));
+    if (requestedId) {
+      const session = sessions.find((item) => item.id === requestedId) || null;
+      return json({ session }, {}, request);
+    }
     return json({ sessions }, {}, request);
   }
 
   if (request.method === "POST") {
     const body = await request.json().catch(() => ({}));
     const sessions = await readCollection(env, key);
-    const session = {
+    const existingSession = sessions.find((item) => item.id === body?.id) || null;
+    const session = normalizeSessionPayload({
       ...body,
       id: safeString(body.id) || createId("session", body.scenarioTitle || body.scenarioId),
-      createdAt: body?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    const next = [session, ...sessions.filter((item) => item.id !== session.id)].slice(0, 200);
+      createdAt: body?.createdAt || existingSession?.createdAt || new Date().toISOString(),
+    }, existingSession);
+    const next = [session, ...sessions.filter((item) => item.id !== session.id)].slice(0, MAX_SESSION_COUNT);
     await writeCollection(env, key, next);
     return json({ success: true, session }, { status: 201 }, request);
+  }
+
+  if (request.method === "PUT") {
+    const body = await request.json().catch(() => ({}));
+    const sessions = await readCollection(env, key);
+    const index = sessions.findIndex((item) => item.id === body.id);
+    if (index < 0) {
+      return json({ error: "Session not found" }, { status: 404 }, request);
+    }
+
+    const session = normalizeSessionPayload(body, sessions[index]);
+    sessions[index] = session;
+    await writeCollection(env, key, sessions);
+    return json({ success: true, session }, {}, request);
+  }
+
+  if (request.method === "DELETE") {
+    const body = await request.json().catch(() => ({}));
+    const sessions = await readCollection(env, key);
+    const next = sessions.filter((item) => item.id !== body.id);
+    await writeCollection(env, key, next);
+    return json({ success: true }, {}, request);
   }
 
   return json({ error: "Method not allowed" }, { status: 405 }, request);

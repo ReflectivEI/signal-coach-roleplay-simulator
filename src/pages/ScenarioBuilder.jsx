@@ -44,6 +44,10 @@ const behaviorStates = [
   { value: "closed", label: "Closed" },
   { value: "neutral", label: "Neutral" },
   { value: "open", label: "Open" },
+  { value: "curiosity", label: "Curiosity" },
+  { value: "resistance", label: "Resistance" },
+  { value: "frustration", label: "Frustration" },
+  { value: "time_pressure", label: "Time Pressure" },
 ];
 
 const pressures = [
@@ -56,7 +60,10 @@ const pressures = [
   { value: "access_barrier", label: "Access Barrier" },
 ];
 
-function Field({ label, hint, children }) {
+/**
+ * @param {{ label: string; hint?: string; children: any }} props
+ */
+function Field({ label, hint = "", children }) {
   return (
     <div>
       <label className="text-xs font-medium text-foreground block mb-1.5">{label}</label>
@@ -172,10 +179,10 @@ SCHEMA RULES:
 - visualScene: 2 sentences max. Observable rep-facing opening scene.
 - keyChallenges: Exactly 3.
 - suggestedFocusCapabilities: Pick 2-3 from this exact list: ${capabilityIds}
-- journeyStage: one of: initial_access, discovery, clinical_value, objection_handling, adoption_implementation, commitment_close
+- journeyStage: one of: initial_access, discovery, clinical_value, objection_handling, access_formulary, adoption_implementation, commitment_close
 - hcpRoleType: one of: treating_clinician, influencer, thought_leader
 - decisionOrientation: one of: patient_centric, evidence_driven, risk_averse, guideline_anchored
-- startingBehaviorState: one of: closed, neutral, open
+- startingBehaviorState: one of: closed, neutral, open, curiosity, resistance, frustration, time_pressure
 - interactionPressure: array, each value from: time_constrained, skeptical_resistant, curious_uncertain, operationally_constrained, competitive_bias, safety_concern, access_barrier
 
 Return ONLY valid JSON:
@@ -333,7 +340,7 @@ Return ONLY valid JSON:
           <div className="rounded-xl border border-border/60 bg-surface p-6 space-y-5">
             <h3 className="font-semibold text-primary">Opening Scene *</h3>
             <Field label="" hint="The first thing the HCP says. Sets the opening tone and challenge.">
-              <Input value={form.openingScene} onChange={set("openingScene")} placeholder={`e.g. "I only have a minute. What makes this worth the added burden?"`} multiline />
+              <Input value={form.openingScene} onChange={set("openingScene")} placeholder={`e.g. "I only have a minute. What extra steps does this actually create for my staff?"`} multiline />
             </Field>
             <Field label="Visual Scene">
               <Input value={form.visualScene} onChange={set("visualScene")} placeholder="Rep-facing observational scene" multiline />

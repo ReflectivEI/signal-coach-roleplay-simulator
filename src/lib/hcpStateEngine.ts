@@ -128,12 +128,13 @@ function buildPrediction(
 ): { nextLikelyBehavior: string; riskLevel: RiskLevel } {
   // Risk is determined by openness + trajectory direction
   let riskLevel: RiskLevel;
-  if (openness === "closed" && trajectory === "declining") riskLevel = "high";
-  else if (openness === "closed" || trajectory === "declining") riskLevel = "high";
-  else if (openness === "neutral" && trajectory === "stalled") riskLevel = "moderate";
-  else if (openness === "neutral" && trajectory === "improving") riskLevel = "low";
-  else if (openness === "open" && trajectory !== "declining") riskLevel = "low";
-  else riskLevel = "moderate";
+  if (openness === "closed" || trajectory === "declining") {
+    riskLevel = "high";
+  } else if (openness === "neutral" && trajectory === "stalled") {
+    riskLevel = "moderate";
+  } else {
+    riskLevel = "low";
+  }
 
   // Time pressure amplifies risk
   if (pressures.includes("time_constrained") && riskLevel === "moderate") riskLevel = "high";

@@ -1,7 +1,17 @@
 import { Link } from "react-router-dom";
 import { Zap } from "lucide-react";
 
-export default function EnterpriseBanner({ title, subtitle, statLeft, statRight, ctaLabel, ctaTo }) {
+/**
+ * @param {{
+ *   title: string;
+ *   subtitle?: string;
+ *   statLeft?: { value: string | number; label: string; sub?: string };
+ *   statRight?: { value: string | number; label: string; sub?: string };
+ *   ctaLabel?: string;
+ *   ctaTo?: string;
+ * }} props
+ */
+export default function EnterpriseBanner({ title, subtitle = "", statLeft, statRight, ctaLabel = "", ctaTo = "" }) {
   return (
     <div className="rounded-2xl overflow-hidden mb-8"
       style={{

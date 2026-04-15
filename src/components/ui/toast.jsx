@@ -3,22 +3,30 @@ import { cva } from "class-variance-authority";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ToastProvider = React.forwardRef(({ ...props }, ref) => (
+/** @typedef {React.HTMLAttributes<HTMLDivElement>} DivProps */
+/** @typedef {DivProps & { variant?: "default" | "destructive" }} ToastProps */
+/** @typedef {React.ButtonHTMLAttributes<HTMLButtonElement>} ButtonProps */
+
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
+const ToastProviderImpl = ({ ...props }, ref) => (
   <div
     ref={ref}
     className="fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]"
     {...props}
   />
-));
+);
+const ToastProvider = React.forwardRef(ToastProviderImpl);
 ToastProvider.displayName = "ToastProvider";
 
-const ToastViewport = React.forwardRef(({ ...props }, ref) => (
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
+const ToastViewportImpl = ({ ...props }, ref) => (
   <div
     ref={ref}
     className="fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]"
     {...props}
   />
-));
+);
+const ToastViewport = React.forwardRef(ToastViewportImpl);
 ToastViewport.displayName = "ToastViewport";
 
 const toastVariants = cva(
@@ -37,7 +45,8 @@ const toastVariants = cva(
   }
 );
 
-const Toast = React.forwardRef(({ className, variant, ...props }, ref) => {
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, ToastProps>} */
+const ToastImpl = ({ className, variant, ...props }, ref) => {
   return (
     <div
       ref={ref}
@@ -45,10 +54,12 @@ const Toast = React.forwardRef(({ className, variant, ...props }, ref) => {
       {...props}
     />
   );
-});
+};
+const Toast = React.forwardRef(ToastImpl);
 Toast.displayName = "Toast";
 
-const ToastAction = React.forwardRef(({ className, ...props }, ref) => (
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
+const ToastActionImpl = ({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
@@ -57,10 +68,12 @@ const ToastAction = React.forwardRef(({ className, ...props }, ref) => (
     )}
     {...props}
   />
-));
+);
+const ToastAction = React.forwardRef(ToastActionImpl);
 ToastAction.displayName = "ToastAction";
 
-const ToastClose = React.forwardRef(({ className, ...props }, ref) => (
+/** @type {React.ForwardRefRenderFunction<HTMLButtonElement, ButtonProps>} */
+const ToastCloseImpl = ({ className, ...props }, ref) => (
   <button
     ref={ref}
     className={cn(
@@ -72,25 +85,30 @@ const ToastClose = React.forwardRef(({ className, ...props }, ref) => (
   >
     <X className="h-4 w-4" />
   </button>
-));
+);
+const ToastClose = React.forwardRef(ToastCloseImpl);
 ToastClose.displayName = "ToastClose";
 
-const ToastTitle = React.forwardRef(({ className, ...props }, ref) => (
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
+const ToastTitleImpl = ({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn("text-sm font-semibold", className)}
     {...props}
   />
-));
+);
+const ToastTitle = React.forwardRef(ToastTitleImpl);
 ToastTitle.displayName = "ToastTitle";
 
-const ToastDescription = React.forwardRef(({ className, ...props }, ref) => (
+/** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
+const ToastDescriptionImpl = ({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn("text-sm opacity-90", className)}
     {...props}
   />
-));
+);
+const ToastDescription = React.forwardRef(ToastDescriptionImpl);
 ToastDescription.displayName = "ToastDescription";
 
 export {

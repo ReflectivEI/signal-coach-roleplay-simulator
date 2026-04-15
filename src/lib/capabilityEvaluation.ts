@@ -7,8 +7,6 @@
 
 import { BehaviorSignals, ObservationLevel } from "./simulatorEngine";
 
-export type ObservationLevel = "effective" | "developing" | "missed";
-
 export interface CapabilityDriver {
   capability: string;
   assessment: ObservationLevel;

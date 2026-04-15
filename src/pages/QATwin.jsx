@@ -3,6 +3,8 @@ import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "@/lib/capabilityEvaluation";
 import { initializeConversation } from "@/lib/conversationInit";
+import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
+import { generateSessionReview } from "@/lib/sessionReview";
 import { ArrowLeft, Play, Square, Zap, CheckCircle2, AlertCircle, Download } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,6 +24,7 @@ OBJECTIVE: ${scenario.objective}
 HCP PERSONA: ${scenario.persona}
 CURRENT BEHAVIOR STATE: ${currentBehaviorState}
 CURRENT JOURNEY STATE: ${currentJourneyState}
+INTERACTION PRESSURES: ${(scenario.interactionPressure || []).join(", ") || "none"}
 
 CONVERSATION SO FAR:
 ${turns.map((t) => `${t.speaker.toUpperCase()}: ${t.text}`).join("\n")}
@@ -31,6 +34,22 @@ Generate the rep's next response (1-2 sentences) that:
 - Does NOT pitch or lead with product claims
 - Directly responds to the last HCP message
 - Sounds natural and professional
+- Uses only one question maximum
+- Avoids stacked or compound questions
+- If the HCP is time-constrained, closed, resistant, or operationally pressured, keep the response concise and tightly relevant
+- In high-pressure scenarios, earn the next turn by showing understanding before broadening discovery
+- If the HCP asks a direct operational or clinical question, answer it directly first instead of defaulting to more discovery
+- If the HCP asks a direct workflow, burden, value, or clinical-impact question, your next reply must begin with a direct declarative answer, not a question
+- If the HCP names a specific subgroup, exclusion criterion, evidence gap, renal issue, safety concern, or workflow step, reference that exact issue directly instead of saying "what specific aspects" or "help me understand"
+- In a skeptical clinical-value exchange, the first clause of your reply must name the exact issue the HCP raised (for example: renal impairment, excluded patients, real-world fit, subgroup mismatch)
+- If the HCP asks what changes, what gets added, what staff has to do, or what the point is, give one direct answer before asking anything else
+- In a pressured interaction, do not open with "help me understand" or another broad discovery move when the HCP is asking for the bottom line
+- Do not use vague empathy wrappers like "I sense", "it sounds like", or "you're not convinced" when the HCP has already stated the concrete issue
+- Do not begin with generic summary lines like "You've expressed concerns..." or "You've said..." when the concrete issue is already on the table
+- In high-pressure or access-barrier scenarios, prefer one clear answer and only add a short follow-up if the HCP has room for it
+- In a time-pressured exchange, it is better to give one crisp answer with no question than a thoughtful question that delays the answer
+- If the HCP repeats the same concern twice, stop widening the conversation and address the concern head-on
+- Do not ask another broad question when the HCP is clearly asking for the bottom line
 
 Return ONLY the rep's reply as plain text.`,
   },
@@ -73,6 +92,21 @@ Generate the rep's next response (1-2 sentences) that:
 Return ONLY the rep's reply as plain text.`,
   },
 };
+
+const QA_STEP_TIMEOUT_MS = 45000;
+
+async function withTimeout(promise, label, timeoutMs = QA_STEP_TIMEOUT_MS) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 function runAssertions(scenario, turns, allSignals, review) {
   const assertions = [];
@@ -183,24 +217,17 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   let repTurnIds = [];
   let currentBehaviorState = convInit.initialBehaviorState;
   let currentJourneyState = scenario.journeyState;
+  /** @type {"stable" | "slightly_disrupted" | "disrupted"} */
   let currentVolatilityProfile = "stable";
-
-  if (convInit.startType === "hcp_initiated" && convInit.hcpOpeningText) {
-    turns.push({
-      id: crypto.randomUUID(),
-      speaker: "hcp",
-      text: convInit.hcpOpeningText,
-      timestamp: new Date().toISOString(),
-      cues: [],
-      nudge: null,
-    });
-  }
 
   for (let i = 0; i < maxTurns; i++) {
     try {
       onProgress(`Turn ${i + 1}/${maxTurns} — generating rep message…`);
       const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
-      const repTextRaw = await retryWithBackoff(() => invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.4 }));
+      const repTextRaw = await retryWithBackoff(() => withTimeout(
+        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.4 }),
+        `${scenario.title} rep turn ${i + 1}`,
+      ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repText = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
 
@@ -217,7 +244,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
 
       onProgress(`Turn ${i + 1}/${maxTurns} — generating HCP response…`);
       const conversationHistory = turns.map((t) => ({ id: t.id, speaker: t.speaker, text: t.text, timestamp: t.timestamp }));
-      const response = await retryWithBackoff(() => generateHcpResponse(
+      const response = await retryWithBackoff(() => withTimeout(generateHcpResponse(
         scenario,
         conversationHistory,
         currentBehaviorState,
@@ -227,7 +254,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
         allSignals,
         i,
         currentVolatilityProfile,
-      ));
+      ), `${scenario.title} hcp turn ${i + 1}`));
 
       const hcpTurnObj = {
         id: crypto.randomUUID(),
@@ -256,6 +283,12 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
 
   onProgress("Running deterministic capability evaluation…");
 
+  const stateHistory = computeHcpStateHistory(
+    allSignals,
+    scenario.persona,
+    scenario.interactionPressure || [],
+    scenario.startingBehaviorState,
+  );
   const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
   const capabilityLevels = runCapabilityEvaluationEngine(allSignals, scenario.suggestedFocusCapabilities || []);
   const capabilityInsights = Object.entries(capabilityLevels).map(([id, level]) => ({
@@ -266,11 +299,29 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
 
   const missed = Object.entries(capabilityLevels).filter(([, v]) => v === "missed").map(([k]) => k.replace(/_/g, " "));
   const effective = Object.entries(capabilityLevels).filter(([, v]) => v === "effective").map(([k]) => k.replace(/_/g, " "));
-  const briefRationale = missed.length > 0
-    ? `Deterministic assessment: ${missed.length} capability gap(s) detected — ${missed.join(", ")}. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "No effective signals detected."} Volatility events: ${volEvents.length}.`
-    : `Deterministic assessment: No missed capabilities detected. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "All capabilities at developing level."} Volatility events: ${volEvents.length}.`;
 
-  const review = { capabilityInsights, briefRationale, volatilityEvents: volEvents };
+  let review;
+  try {
+    onProgress("Generating full end-of-session review…");
+    review = await withTimeout(
+      generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents),
+      `${scenario.title} session review`,
+      60000,
+    );
+  } catch (error) {
+    const briefRationale = missed.length > 0
+      ? `Deterministic QA fallback: ${missed.length} capability gap(s) detected — ${missed.join(", ")}. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "No effective signals detected."} Volatility events: ${volEvents.length}.`
+      : `Deterministic QA fallback: No missed capabilities detected. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "All capabilities at developing level."} Volatility events: ${volEvents.length}.`;
+
+    review = {
+      capabilityInsights,
+      briefRationale,
+      volatilityEvents: volEvents,
+      qaFallback: true,
+      qaFallbackReason: error instanceof Error ? error.message : String(error),
+    };
+  }
+
   const assertions = runAssertions(scenario, turns, allSignals, review);
   return { scenario, turns, allSignals, review, assertions, sessionId: session.id };
 }

@@ -74,6 +74,97 @@ CAPABILITY EVALUATION RULES (deterministic — apply strictly using canonical me
    missed: no meaningful next-step attempt — conversation ends without clarity or customer commitment
 `;
 
+const DEFAULT_OVERALL_GUIDANCE = "This analysis is based on observable behaviors during the interaction and is intended to support development, not scoring.";
+
+function asNonEmptyString(value: unknown, fallback = ""): string {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function asStringArray(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean);
+}
+
+function normalizeCapabilityInsights(
+  rawInsights: any[],
+  deterministicAssessment: Record<string, string>
+) {
+  const rawById = new Map(
+    (Array.isArray(rawInsights) ? rawInsights : [])
+      .filter((item) => item?.capabilityId)
+      .map((item) => [item.capabilityId, item])
+  );
+
+  return SIGNAL_INTELLIGENCE_CAPABILITIES.map((capability) => {
+    const raw = rawById.get(capability.id) || {};
+    return {
+      capabilityId: capability.id,
+      capabilityName: capability.metric,
+      observationLevel: deterministicAssessment[capability.id] || raw.observationLevel || "developing",
+      whatHappened: asNonEmptyString(raw.whatHappened),
+      transcriptEvidence: asNonEmptyString(raw.transcriptEvidence),
+      whyItMattered: asNonEmptyString(raw.whyItMattered),
+      pattern: asNonEmptyString(raw.pattern),
+      whatGoodLooksLike: asNonEmptyString(raw.whatGoodLooksLike),
+      exampleRewrite: asNonEmptyString(raw.exampleRewrite),
+      nextTimeAction: asNonEmptyString(raw.nextTimeAction),
+      relatedTurnIds: asStringArray(raw.relatedTurnIds, []),
+    };
+  });
+}
+
+function normalizeGuidanceItems(rawItems: any[], normalizedInsights: any[], targetLevel: string) {
+  const insightById = new Map(normalizedInsights.map((item) => [item.capabilityId, item]));
+  const items = Array.isArray(rawItems) ? rawItems : [];
+
+  return items
+    .filter((item) => item?.capabilityId)
+    .map((item) => {
+      const insight = insightById.get(item.capabilityId) || {};
+      return {
+        capabilityId: item.capabilityId,
+        capabilityName: insight.capabilityName || item.capabilityName || item.capabilityId,
+        observationLevel: targetLevel,
+        title: asNonEmptyString(item.title, insight.capabilityName || item.capabilityId),
+        guidance: asNonEmptyString(item.guidance, insight.nextTimeAction || insight.whyItMattered),
+        relatedTurnIds: asStringArray(item.relatedTurnIds, insight.relatedTurnIds || []),
+        exampleRewrite: asNonEmptyString(item.exampleRewrite, insight.exampleRewrite || ""),
+      };
+    });
+}
+
+function normalizeSessionReviewShape(
+  result: any,
+  deterministicAssessment: Record<string, string>,
+  volatilityEvents: VolatilityEvent[]
+): SessionReview {
+  const normalizedInsights = normalizeCapabilityInsights(result?.capabilityInsights || [], deterministicAssessment);
+
+  return {
+    briefRationale: asNonEmptyString(result?.briefRationale),
+    didWell: asNonEmptyString(result?.didWell),
+    biggestGap: asNonEmptyString(result?.biggestGap),
+    nextAdjustment: asNonEmptyString(result?.nextAdjustment),
+    capabilityInsights: normalizedInsights,
+    volatilityEvents,
+    signalResponseAlignment: asStringArray(result?.signalResponseAlignment),
+    overallSummary: asStringArray(result?.overallSummary),
+    strengthsProse: asStringArray(result?.strengthsProse),
+    developProse: asStringArray(result?.developProse),
+    actionPlanProse: asStringArray(result?.actionPlanProse),
+    strengths: normalizeGuidanceItems(result?.strengths || [], normalizedInsights, "effective"),
+    improvementAreas: normalizeGuidanceItems(result?.improvementAreas || [], normalizedInsights, "developing"),
+    missedOpportunities: normalizeGuidanceItems(result?.missedOpportunities || [], normalizedInsights, "missed"),
+    suggestedReframes: normalizeGuidanceItems(result?.suggestedReframes || [], normalizedInsights, "developing"),
+    overallGuidance: asStringArray(result?.overallGuidance, [DEFAULT_OVERALL_GUIDANCE]).length
+      ? asStringArray(result?.overallGuidance, [DEFAULT_OVERALL_GUIDANCE])
+      : [DEFAULT_OVERALL_GUIDANCE],
+  };
+}
+
 export async function generateSessionReview(
   scenario: any,
   transcript: ConversationTurn[],
@@ -101,7 +192,7 @@ export async function generateSessionReview(
       improvementAreas: [],
       missedOpportunities: [],
       suggestedReframes: [],
-      overallGuidance: ["This analysis is based on observable behaviors during the interaction and is intended to support development, not scoring."]
+      overallGuidance: [DEFAULT_OVERALL_GUIDANCE]
     };
   }
 
@@ -414,22 +505,5 @@ Return ONLY valid JSON with this exact structure:
     }
   });
 
-  return {
-    briefRationale: result.briefRationale || "",
-    didWell: result.didWell || "",
-    biggestGap: result.biggestGap || "",
-    nextAdjustment: result.nextAdjustment || "",
-    capabilityInsights: result.capabilityInsights || [],
-    volatilityEvents,
-    signalResponseAlignment: result.signalResponseAlignment || [],
-    overallSummary: result.overallSummary || [],
-    strengthsProse: result.strengthsProse || [],
-    developProse: result.developProse || [],
-    actionPlanProse: result.actionPlanProse || [],
-    strengths: result.strengths || [],
-    improvementAreas: result.improvementAreas || [],
-    missedOpportunities: result.missedOpportunities || [],
-    suggestedReframes: result.suggestedReframes || [],
-    overallGuidance: result.overallGuidance || ["This analysis is based on observable behaviors during the interaction and is intended to support development, not scoring."]
-  } as SessionReview;
+  return normalizeSessionReviewShape(result, deterministicAssessment, volatilityEvents);
 }

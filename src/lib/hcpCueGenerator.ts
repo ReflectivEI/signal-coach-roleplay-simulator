@@ -129,6 +129,88 @@ export interface HcpCueInputs {
   scenario?: { title?: string; journeyStage?: string }; // For deterministic seeding
 }
 
+const BANNED_CUE_TERMS = [
+  "skeptical",
+  "resistant",
+  "time-constrained",
+  "time constrained",
+  "behavior state",
+  "journey stage",
+  "interaction pressure",
+  "burden",
+];
+
+const PRESSURE_DESCRIPTION_BANK: Record<string, string> = {
+  time_constrained: "Their attention is split by the clock, so the next move has to stay tight and relevant.",
+  operationally_constrained: "Workflow noise is competing with the conversation, so vague framing will lose momentum fast.",
+  skeptical_resistant: "They are evaluating credibility in real time, so unsupported claims will harden the tone.",
+  access_barrier: "Operational friction is already top of mind, so the next question should separate workflow from clinical value.",
+  safety_concern: "Risk is sitting close to the surface, so the next response has to acknowledge it before moving forward.",
+  curious_uncertain: "There is room to deepen the conversation here, but only if the rep keeps it specific and grounded.",
+  default: "The HCP is signaling how they are receiving the conversation, so the next response should match that energy.",
+};
+
+const BEHAVIOR_DESCRIPTION_BANK: Record<string, string> = {
+  open: "The HCP is visibly receptive, so a specific question can deepen the exchange without forcing it.",
+  openness: "The HCP is visibly receptive, so a specific question can deepen the exchange without forcing it.",
+  neutral: "The HCP is still deciding how much to give you, so relevance has to be earned in the next turn.",
+  closed: "The HCP is holding distance, so the next move needs to show understanding before trying to advance.",
+  resistance: "The HCP is signaling pushback, so the next response should explore the concern instead of arguing with it.",
+  frustration: "The HCP is showing strain, so the next move should lower friction rather than add more explanation.",
+  curiosity: "The HCP is leaning in, so a focused follow-up can build useful momentum.",
+  time_pressure: "The HCP is visibly managing time, so the next response should be concise and purposeful.",
+};
+
+function cleanCueText(text: string): string {
+  return String(text || "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^◆\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isValidObservedCue(text: string): boolean {
+  const cue = cleanCueText(text).toLowerCase();
+  if (!cue || cue.length < 8) return false;
+  if (cue.split(" ").length > 12) return false;
+  if (BANNED_CUE_TERMS.some((term) => cue.includes(term))) return false;
+  return true;
+}
+
+export function buildCueDescription(
+  behaviorState: string,
+  interactionPressures: string[] = [],
+  cueLabel = ""
+): string {
+  const normalizedCue = cueLabel.toLowerCase();
+  const behaviorDescription = BEHAVIOR_DESCRIPTION_BANK[behaviorState];
+  const pressureDescription = interactionPressures
+    .map((pressure) => PRESSURE_DESCRIPTION_BANK[pressure])
+    .find(Boolean);
+
+  if (/(cross|narrow|tighten|unmoved|glance at watch|clock|jaw|reserved|skeptical)/i.test(normalizedCue)) {
+    return pressureDescription || BEHAVIOR_DESCRIPTION_BANK.resistance || PRESSURE_DESCRIPTION_BANK.default;
+  }
+
+  if (/(leans forward|pen hovering|full attention|welcoming|motion you in|encouragingly)/i.test(normalizedCue)) {
+    return BEHAVIOR_DESCRIPTION_BANK.curiosity || behaviorDescription || PRESSURE_DESCRIPTION_BANK.default;
+  }
+
+  if (["open", "openness", "curiosity"].includes(behaviorState)) {
+    return behaviorDescription || pressureDescription || PRESSURE_DESCRIPTION_BANK.default;
+  }
+
+  if (["closed", "resistance", "frustration", "time_pressure"].includes(behaviorState)) {
+    return pressureDescription || behaviorDescription || PRESSURE_DESCRIPTION_BANK.default;
+  }
+
+  if (behaviorDescription && pressureDescription) {
+    return `${behaviorDescription} ${pressureDescription}`;
+  }
+
+  return behaviorDescription || pressureDescription || PRESSURE_DESCRIPTION_BANK.default;
+}
+
 /**
  * generateHcpCue
  *
@@ -176,4 +258,18 @@ export function generateHcpCue(inputs: HcpCueInputs): string {
     // Anchor is an action — use "as"
     return `${action}, ${anchor && anchor.length > 0 ? "as they are " + anchor : "maintaining focus"}.`;
   }
+}
+
+export function resolveObservedCue(
+  candidateCue: string,
+  inputs: HcpCueInputs
+): { label: string; description: string; source: "hcp_context" } {
+  const fallback = generateHcpCue(inputs);
+  const label = isValidObservedCue(candidateCue) ? cleanCueText(candidateCue) : fallback;
+
+  return {
+    label,
+    description: buildCueDescription(inputs.behaviorState, inputs.interactionPressures, label),
+    source: "hcp_context",
+  };
 }

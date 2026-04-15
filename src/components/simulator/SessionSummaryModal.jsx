@@ -21,7 +21,16 @@ const CAP_SUBLABELS = {
 
 // ─── Context cards (top info bar) ────────────────────────────────────────────
 
-function ContextCard({ icon: Icon, title, alwaysExpanded, children, tip }) {
+/**
+ * @param {{
+ *   icon: any;
+ *   title: string;
+ *   alwaysExpanded?: boolean;
+ *   children: any;
+ *   tip?: string;
+ * }} props
+ */
+function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip = "" }) {
   const [open, setOpen] = useState(!!alwaysExpanded);
   return (
     <div className="bg-[hsl(222_52%_18%)] border border-border/60 rounded-xl overflow-hidden flex-1 min-w-0">
@@ -213,6 +222,17 @@ function CapabilityRow({ cap, insight }) {
 
 // ─── Main Modal ────────────────────────────────────────────────────────────────
 
+/**
+ * @param {{
+ *   review: any;
+ *   scenario: any;
+ *   sessionTurnCount: number;
+ *   onClose: () => void;
+ *   onExport: () => void;
+ *   onNewSession: () => void;
+ *   onRegenerate?: () => void;
+ * }} props
+ */
 export default function SessionSummaryModal({
   review,
   scenario,
@@ -220,7 +240,7 @@ export default function SessionSummaryModal({
   onClose,
   onExport,
   onNewSession,
-  onRegenerate
+  onRegenerate = () => {}
 }) {
   const [overallOpen, setOverallOpen] = useState(true);
 

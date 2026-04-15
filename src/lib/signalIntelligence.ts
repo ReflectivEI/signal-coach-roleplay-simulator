@@ -256,6 +256,7 @@ export const JOURNEY_STAGE_LABELS: Record<string, string> = {
   clinical_value: "Clinical Value",
   objection_handling: "Objection Handling",
   adoption_implementation: "Adoption & Implementation",
+  access_formulary: "Access & Formulary",
   commitment_close: "Commitment & Close"
 };
 

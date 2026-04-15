@@ -1,12 +1,10 @@
 /**
- * Simulator Engine (Refactored)
- * =============================
- * Core HCP response generation, volatility, and review logic.
- * Evaluation and behavior prediction logic extracted to separate modules.
+ * Simulator Engine
+ * ================
+ * Shared types plus deterministic volatility/event logic for the standalone simulator.
+ * Runtime generation lives in `hcpResponseGenerator.ts` and `sessionReview.ts`.
  */
 
-import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
-import { runCapabilityEvaluationEngine } from "./capabilityEvaluation";
 import { predictHcpBehavior } from "./hcpBehaviorPrediction";
 
 // ─── TYPE DEFINITIONS ──────────────────────────────────────────────────────
@@ -15,7 +13,7 @@ export interface HcpCue {
   id: string;
   label: string;
   description: string;
-  source: "behavior_state" | "interaction_pressure" | "journey_state" | "conversation_shift";
+  source: "behavior_state" | "interaction_pressure" | "journey_state" | "conversation_shift" | "hcp_context";
 }
 
 export interface BehaviorSignals {
@@ -345,58 +343,4 @@ export function computeVolatilityEvents(
   }
 
   return events;
-}
-
-// ─── HCP RESPONSE GENERATION (stubs for now, replaced by actual LLM calls) ──
-
-export async function generateHcpResponse(
-  scenario: any,
-  transcript: ConversationTurn[],
-  currentBehaviorState: string,
-  currentJourneyState: string,
-  coachingEnabled: boolean,
-  repMessage: string,
-  allPriorSignals: BehaviorSignals[] = [],
-  turnCount: number = 0,
-  previousVolatilityProfile: VolatilityProfile = "stable"
-): Promise<SimulatorResponse> {
-  // Stub: actual implementation remains in simulatorEngine.ts LLM integration
-  // This is called from pages/Simulator and talks to Claude
-  return {
-    hcpReply: "I'd need to see your full implementation here — this is a stub.",
-    nextBehaviorState: currentBehaviorState,
-    nextJourneyState: currentJourneyState,
-    activeCues: [],
-    behaviorSignals: {},
-    coachingNudge: null,
-    volatilityState: computeVolatility(scenario, allPriorSignals, turnCount, previousVolatilityProfile)
-  };
-}
-
-export async function generateSessionReview(
-  scenario: any,
-  transcript: ConversationTurn[],
-  allSignals: BehaviorSignals[],
-  stateHistory: { turn: number; score: number; openness: string }[] = [],
-  volatilityEvents: VolatilityEvent[] = []
-): Promise<SessionReview> {
-  // Stub: actual implementation in lib/sessionReview.ts
-  return {
-    briefRationale: "Review stub",
-    didWell: "",
-    biggestGap: "",
-    nextAdjustment: "",
-    capabilityInsights: [],
-    volatilityEvents,
-    signalResponseAlignment: [],
-    overallSummary: [],
-    strengthsProse: [],
-    developProse: [],
-    actionPlanProse: [],
-    strengths: [],
-    improvementAreas: [],
-    missedOpportunities: [],
-    suggestedReframes: [],
-    overallGuidance: []
-  };
 }

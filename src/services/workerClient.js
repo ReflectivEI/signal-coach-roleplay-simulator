@@ -1,13 +1,71 @@
-const workerBaseUrl = (import.meta.env.VITE_ROLEPLAY_WORKER_URL ?? "").replace(/\/+$/, "");
+/// <reference types="vite/client" />
+
+/**
+ * @typedef {Object} WorkerRequestJsonOptions
+ * @property {string} [method]
+ * @property {unknown} [body]
+ */
+
+/**
+ * @typedef {Object} WorkerTextRequest
+ * @property {string} [prompt]
+ * @property {number} [max_tokens]
+ * @property {number} [temperature]
+ * @property {boolean} [roleplay]
+ * @property {string} [provider]
+ * @property {string} [model]
+ */
+
+/**
+ * @typedef {WorkerTextRequest & {
+ *   response_json_schema?: unknown
+ * }} WorkerJsonRequest
+ */
+
+const runtimeWorkerBaseUrl =
+  import.meta.env.VITE_ROLEPLAY_WORKER_URL ??
+  (typeof process !== "undefined" ? process.env.VITE_ROLEPLAY_WORKER_URL : "") ??
+  "";
+const workerBaseUrl = runtimeWorkerBaseUrl.replace(/\/+$/, "");
+const isBrowserRuntime = typeof window !== "undefined";
+const defaultNodeWorkerBaseUrl = "http://127.0.0.1:8787";
+const resolvedWorkerBaseUrl = workerBaseUrl || (!isBrowserRuntime ? defaultNodeWorkerBaseUrl : "");
 const workerInvokePath = "/api/llm/invoke";
 const workerHealthPath = "/health";
 const workerScenariosPath = "/api/scenarios";
 const workerSessionsPath = "/api/roleplay/sessions";
 
-const workerInvokeUrl = import.meta.env.DEV && workerBaseUrl ? workerInvokePath : `${workerBaseUrl}${workerInvokePath}`;
-const workerHealthUrl = import.meta.env.DEV && workerBaseUrl ? workerHealthPath : `${workerBaseUrl}${workerHealthPath}`;
-const workerScenariosUrl = import.meta.env.DEV && workerBaseUrl ? workerScenariosPath : `${workerBaseUrl}${workerScenariosPath}`;
-const workerSessionsUrl = import.meta.env.DEV && workerBaseUrl ? workerSessionsPath : `${workerBaseUrl}${workerSessionsPath}`;
+const useBrowserProxyPaths = import.meta.env.DEV && isBrowserRuntime && !workerBaseUrl;
+
+const workerInvokeUrl = useBrowserProxyPaths ? workerInvokePath : `${resolvedWorkerBaseUrl}${workerInvokePath}`;
+const workerHealthUrl = useBrowserProxyPaths ? workerHealthPath : `${resolvedWorkerBaseUrl}${workerHealthPath}`;
+const workerScenariosUrl = useBrowserProxyPaths ? workerScenariosPath : `${resolvedWorkerBaseUrl}${workerScenariosPath}`;
+const workerSessionsUrl = useBrowserProxyPaths ? workerSessionsPath : `${resolvedWorkerBaseUrl}${workerSessionsPath}`;
+const DEFAULT_WORKER_TIMEOUT_MS = 35000;
+const HEALTH_TIMEOUT_MS = 8000;
+
+function timeoutError(label, timeoutMs) {
+  return new Error(`${label} timed out after ${timeoutMs}ms`);
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TIMEOUT_MS, label = "Worker request") {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw timeoutError(label, timeoutMs);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 async function parseWorkerResponse(response) {
   if (!response.ok) {
@@ -16,21 +74,28 @@ async function parseWorkerResponse(response) {
   return response.json();
 }
 
+/**
+ * @param {string} url
+ * @param {WorkerRequestJsonOptions} [options]
+ */
 async function requestWorkerJson(url, { method = "GET", body } = {}) {
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  }, DEFAULT_WORKER_TIMEOUT_MS, `${method} ${url}`);
   return parseWorkerResponse(response);
 }
 
-export async function invokeWorkerText({ prompt, max_tokens = 900, temperature = 0.2, roleplay = false, provider } = {}) {
-  const response = await fetch(workerInvokeUrl, {
+/**
+ * @param {WorkerTextRequest} [options]
+ */
+export async function invokeWorkerText({ prompt, max_tokens = 900, temperature = 0.2, roleplay = false, provider, model } = {}) {
+  const response = await fetchWithTimeout(workerInvokeUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, max_tokens, temperature, roleplay, provider }),
-  });
+    body: JSON.stringify({ prompt, max_tokens, temperature, roleplay, provider, model }),
+  }, DEFAULT_WORKER_TIMEOUT_MS, "Worker text invoke");
 
   const data = await parseWorkerResponse(response);
   const text = typeof data?.response === "string"
@@ -42,12 +107,15 @@ export async function invokeWorkerText({ prompt, max_tokens = 900, temperature =
   return text.trim();
 }
 
-export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider } = {}) {
-  const response = await fetch(workerInvokeUrl, {
+/**
+ * @param {WorkerJsonRequest} [options]
+ */
+export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model } = {}) {
+  const response = await fetchWithTimeout(workerInvokeUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, response_json_schema, max_tokens, temperature, roleplay, provider }),
-  });
+    body: JSON.stringify({ prompt, response_json_schema, max_tokens, temperature, roleplay, provider, model }),
+  }, DEFAULT_WORKER_TIMEOUT_MS, "Worker JSON invoke");
 
   const data = await parseWorkerResponse(response);
   const payload = data?.response;
@@ -69,6 +137,8 @@ export async function generateRealtimeFeedback(payload) {
     ``,
     `CONTEXT:`,
     `- Rep's response: "${payload.repResponse}"`,
+    `- HCP's last reply: "${payload.hcpLastReply || "Unknown"}"`,
+    `- Active HCP cue: ${payload.hcpCue || "None provided"}`,
     `- HCP current behavior: ${payload.hcpBehavior}`,
     `- Journey stage: ${payload.journeyState}`,
     `- Scenario: ${payload.scenario?.title || "Unknown"}`,
@@ -83,16 +153,24 @@ export async function generateRealtimeFeedback(payload) {
     `7. Adaptability - Does the rep adjust to the HCP's state?`,
     `8. Commitment Gaining - Are next steps clear?`,
     ``,
-    `Provide ONE specific, actionable coaching tip (one sentence max) that would improve this response. Focus on what the rep did well first, then what to improve.`,
-    `Format: "Strength: [what they did well]. Next: [specific action to improve]."`,
+    `Provide ONE specific, actionable coaching tip that would improve this response.`,
+    `Hard rules:`,
+    `- under 22 words total`,
+    `- one sentence only`,
+    `- specific to what the rep just said`,
+    `- specific to the HCP's current state`,
+    `- no generic praise`,
+    `- no summary`,
+    `- no filler words like "consider" or "try to"`,
+    `Format: "[what to do next], because [specific HCP signal or risk]."`,
   ].join("\n");
 
-  return invokeWorkerText({ prompt, max_tokens: 120, temperature: 0.2 });
+  return invokeWorkerText({ prompt, max_tokens: 60, temperature: 0.1 });
 }
 
 export async function checkWorkerHealth() {
   try {
-    const response = await fetch(workerHealthUrl, { method: "GET" });
+    const response = await fetchWithTimeout(workerHealthUrl, { method: "GET" }, HEALTH_TIMEOUT_MS, "Worker health check");
     if (!response.ok) return "degraded";
     const data = await response.json().catch(() => null);
     if (data?.ready === false || data?.status === "degraded") return "degraded";
@@ -126,7 +204,21 @@ export async function listWorkerSessions() {
   return Array.isArray(data?.sessions) ? data.sessions : [];
 }
 
+export async function getWorkerSession(id) {
+  const data = await requestWorkerJson(`${workerSessionsUrl}?id=${encodeURIComponent(id)}`);
+  return data?.session ?? null;
+}
+
 export async function createWorkerSession(payload) {
   const data = await requestWorkerJson(workerSessionsUrl, { method: "POST", body: payload });
   return data?.session ?? null;
+}
+
+export async function updateWorkerSession(id, patch) {
+  const data = await requestWorkerJson(workerSessionsUrl, { method: "PUT", body: { id, ...patch } });
+  return data?.session ?? null;
+}
+
+export async function deleteWorkerSession(id) {
+  await requestWorkerJson(workerSessionsUrl, { method: "DELETE", body: { id } });
 }

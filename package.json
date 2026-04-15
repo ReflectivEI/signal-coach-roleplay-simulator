@@ -9,6 +9,8 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
+    "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
     "worker:deploy": "wrangler deploy --config wrangler.toml"

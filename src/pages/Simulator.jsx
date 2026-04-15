@@ -53,7 +53,7 @@ export default function Simulator() {
   const [allSignals, setAllSignals] = useState([]);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
-  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState("stable");
+  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */ ("stable"));
   const [repTurnIds, setRepTurnIds] = useState([]);
   const [conversationInit, setConversationInit] = useState(null);
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
@@ -95,19 +95,8 @@ export default function Simulator() {
     const newSession = createLocalSession(scData, convInit);
     setSession(newSession);
 
-    if (convInit.startType === "hcp_initiated" && convInit.hcpOpeningText) {
-      setTurns([{
-        id: crypto.randomUUID(),
-        speaker: "hcp",
-        text: convInit.hcpOpeningText,
-        timestamp: new Date().toISOString(),
-        cues: [],
-        nudge: null,
-      }]);
-    } else {
-      setTurns([]);
-      setHasRepSpoken(false);
-    }
+    setTurns([]);
+    setHasRepSpoken(false);
 
     const initCues = [];
     if (scData.startingBehaviorState === "time_pressure" || scData.interactionPressure?.includes("time_constrained")) {
@@ -126,7 +115,7 @@ export default function Simulator() {
       initCues.push({ id: "cue_init_5", label: "Maintains steady, evaluative eye contact", description: "The HCP is sizing up your credibility before engaging — lead with context, not claims.", source: "interaction_pressure" });
     }
     if (initCues.length === 0) {
-      initCues.push({ id: "cue_init_6", label: "Neutral posture, waiting for you", description: convInit.startType === "rep_initiated" ? "The HCP is watching how you open — your first move sets the frame." : "The HCP has spoken first — your response establishes the dynamic.", source: "journey_state" });
+      initCues.push({ id: "cue_init_6", label: "Neutral posture, waiting for you", description: "The HCP is watching how you open — your first move sets the frame.", source: "journey_state" });
     }
     setActiveCues(initCues);
     setIsInitializing(false);
@@ -150,8 +139,11 @@ export default function Simulator() {
 
     if (coachingEnabled) {
       try {
+        const lastHcpTurn = [...turns].reverse().find((turn) => turn.speaker === "hcp");
         const guidance = await generateRealtimeFeedback({
           repResponse: repText,
+          hcpLastReply: lastHcpTurn?.text || "",
+          hcpCue: activeCues?.[0]?.label || "",
           hcpBehavior: session?.currentBehaviorState,
           journeyState: session?.currentJourneyState,
           scenario,
