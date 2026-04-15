@@ -6,7 +6,7 @@ import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply } from "../src/lib/qaRepProxy.js";
+import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "../src/lib/qaRepProxy.js";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -90,6 +90,9 @@ Generate the rep's next response (1-2 sentences) that:
 - In a time-pressured exchange, it is better to give one crisp answer with no question than a thoughtful question that delays the answer
 - If the HCP repeats the same concern twice, stop widening the conversation and address the concern head-on
 - Do not ask another broad question when the HCP is clearly asking for the bottom line
+- In commitment-close or adoption-commitment scenarios, stop reopening discovery after the core blocker is clear
+- Once the HCP has repeated a vague blocker like "right patient", "not yet", or "I need to see more", pivot toward a proportionate next-step ask
+- In close-stage scenarios, prefer a smallest-next-step question such as whether the HCP would be open to defining one patient type, reviewing one case, or taking one concrete action they can own
 
 Return ONLY the rep's reply as plain text.`,
   },
@@ -212,6 +215,13 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
         currentJourneyState,
         draft: repText,
       }), `${scenario.title} rep dedupe revision ${i + 1}`));
+      repText = await retry(() => withTimeout(maybeTightenSpokenRepReply({
+        scenario,
+        turns,
+        currentBehaviorState,
+        currentJourneyState,
+        draft: repText,
+      }), `${scenario.title} rep spoken-tightening ${i + 1}`));
     }
 
     const repTurnObj = {

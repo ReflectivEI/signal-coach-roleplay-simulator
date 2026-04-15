@@ -10,7 +10,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply } from "@/lib/qaRepProxy";
+import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "@/lib/qaRepProxy";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -60,6 +60,9 @@ Generate the rep's next response (1-2 sentences) that:
 - In a time-pressured exchange, it is better to give one crisp answer with no question than a thoughtful question that delays the answer
 - If the HCP repeats the same concern twice, stop widening the conversation and address the concern head-on
 - Do not ask another broad question when the HCP is clearly asking for the bottom line
+- In commitment-close or adoption-commitment scenarios, stop reopening discovery after the core blocker is clear
+- Once the HCP has repeated a vague blocker like "right patient", "not yet", or "I need to see more", pivot toward a proportionate next-step ask
+- In close-stage scenarios, prefer a smallest-next-step question such as whether the HCP would be open to defining one patient type, reviewing one case, or taking one concrete action they can own
 
 Return ONLY the rep's reply as plain text.`,
   },
@@ -271,6 +274,16 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
             draft: repText,
           }),
           `${scenario.title} rep dedupe revision ${i + 1}`,
+        ));
+        repText = await retryWithBackoff(() => withTimeout(
+          maybeTightenSpokenRepReply({
+            scenario,
+            turns,
+            currentBehaviorState,
+            currentJourneyState,
+            draft: repText,
+          }),
+          `${scenario.title} rep spoken-tightening ${i + 1}`,
         ));
       }
 

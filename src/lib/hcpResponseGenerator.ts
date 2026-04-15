@@ -384,6 +384,32 @@ function inferEngagementLevel(hcpReply: string): BehaviorSignals["engagement_lev
   return "low";
 }
 
+function inferCommitmentAttempt(
+  repMessage: string,
+  transcript: ConversationTurn[],
+  scenario: any
+): BehaviorSignals["commitment_attempt"] {
+  const text = String(repMessage || "").toLowerCase();
+  const repTurns = transcript.filter((turn) => turn?.speaker === "rep").length;
+  const lateEnoughForAsk =
+    repTurns >= 2 ||
+    ["commitment_close", "access_formulary", "adoption_implementation"].includes(String(scenario?.journeyStage || "")) ||
+    String(scenario?.journeyState || "").includes("commitment");
+
+  if (/\bcan we\b|\bwould you be open to\b|\bnext step\b|\bset up\b|\bfollow-up\b|\breview together\b|\bbring this to\b|\bpilot\b|\btry this with\b|\bidentify a patient\b/.test(text)) {
+    return "clear";
+  }
+
+  if (
+    lateEnoughForAsk &&
+    /\bwhat would you need to see\b|\bwhich patient type\b|\bwhat outcome carries the most weight\b|\bwhere does .* break down\b|\bwhat specifically would you need to see\b|\bwhat would make this feel usable\b/.test(text)
+  ) {
+    return "weak";
+  }
+
+  return "none";
+}
+
 function normalizeBehaviorSignals(
   rawSignals: BehaviorSignals,
   repMessage: string,
@@ -397,6 +423,7 @@ function normalizeBehaviorSignals(
   const inferredListening = inferListeningPattern(repMessage, latestConcern);
   const inferredObjectionType = inferObjectionType(latestConcern);
   const inferredEngagement = inferEngagementLevel(hcpReply);
+  const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
 
   return {
     question_type: rawSignals?.question_type && rawSignals.question_type !== "none"
@@ -415,7 +442,9 @@ function normalizeBehaviorSignals(
     listening_pattern: rawSignals?.listening_pattern === "responsive"
       ? "responsive"
       : inferredListening,
-    commitment_attempt: rawSignals?.commitment_attempt || "none",
+    commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
+      ? rawSignals.commitment_attempt
+      : inferredCommitmentAttempt,
   };
 }
 

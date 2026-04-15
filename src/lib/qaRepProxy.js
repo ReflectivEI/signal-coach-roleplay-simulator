@@ -3,6 +3,7 @@ import { invokeWorkerText } from "./../services/workerClient.js";
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
+const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track|minimal disruption|incorporated into your existing workflow|in order to|would likely be|that would help/i;
 
 function getLastHcpText(turns = []) {
   for (let i = turns.length - 1; i >= 0; i -= 1) {
@@ -57,6 +58,26 @@ function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBeha
   return (repeatedConcern || directDemand) && draftTooLoose;
 }
 
+function shouldUseDeterministicCommitmentRewrite({ scenario, turns, draft }) {
+  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const isCommitmentStage = /commitment_close|adoption_commitment|access_formulary/.test(stageText);
+  if (!isCommitmentStage) {
+    return false;
+  }
+
+  const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
+  const repeatedConcern = hasRepeatedObjection(turns);
+  const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+  const draftText = String(draft || "").toLowerCase();
+
+  const stillProfiling =
+    /what specific patient|describe the specific|what would need to happen|better understand what you're looking for|ideal patient profile|patient profile|good fit|perfect fit|minimum criteria|example of a patient profile|what would that patient need to look like/.test(draftText) ||
+    (draftText.includes("?") && /patient|fit|profile|criteria/.test(draftText));
+  const passiveMaybeSignal = /right patient|ideal patient|meaning to try it|haven't had one|not ready yet|committee|bring it up|process/.test(activeConcernText);
+
+  return isCommitmentStage && repTurns >= 1 && (repeatedConcern || passiveMaybeSignal) && stillProfiling;
+}
+
 function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   const activeConcernText = getActiveConcernText(turns, scenario);
   const issueLabel = extractIssueLabel(activeConcernText);
@@ -94,6 +115,24 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   return `You're pointing to a real evidence-fit gap, not a surface objection. Where does ${issueLabel} show up most in the patients or decisions you're making now?`;
+}
+
+function buildDeterministicCommitmentReply({ scenario, turns }) {
+  const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
+  const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+
+  if (/right patient|ideal patient|meaning to try it|haven't had one/.test(activeConcernText)) {
+    if (repTurns <= 1) {
+      return "When you say 'the right patient,' what would that patient need to look like for you to feel comfortable trying this? If we can define that clearly, we can make the next step much more concrete.";
+    }
+    return "It sounds like the blocker isn't interest, it's defining what 'the right patient' means in your practice. Would you be open to picking one patient type you'd actually consider over the next few weeks so we can make this concrete?";
+  }
+
+  if (/committee|bring it up|process/.test(activeConcernText)) {
+    return "It sounds like the issue isn't whether you support it, it's what part of the process you can actually own next. What's the most concrete step you could realistically take from your seat this month?";
+  }
+
+  return "It sounds like the conversation is close to alignment, but the next step still isn't defined. Would you be open to naming the smallest concrete action that would move this forward from here?";
 }
 
 function hasRepeatedObjection(turns = []) {
@@ -134,6 +173,14 @@ export async function maybeReviseStrongRepReply({
   currentJourneyState,
   draft,
 }) {
+  if (shouldUseDeterministicCommitmentRewrite({
+    scenario,
+    turns,
+    draft,
+  })) {
+    return buildDeterministicCommitmentReply({ scenario, turns });
+  }
+
   if (shouldUseDeterministicEvidenceFitRewrite({
     scenario,
     turns,
@@ -275,6 +322,57 @@ Revise the new reply with these rules:
 - Stay in the same strategy lane: specific, grounded, clinician-facing.
 - Move the conversation one step forward with a narrower clarifier, practical implication, or next-step question.
 - Do not become more abstract, more generic, or more salesy.
+
+Return ONLY the revised rep reply as plain text.`;
+
+  const revised = await invokeWorkerText({
+    prompt: revisionPrompt,
+    max_tokens: 120,
+    temperature: 0.1,
+  });
+
+  return String(revised || draft).trim();
+}
+
+export async function maybeTightenSpokenRepReply({
+  scenario,
+  turns,
+  currentBehaviorState,
+  currentJourneyState,
+  draft,
+}) {
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const isPressureContext = /clinical_value|skeptical|operational|access_barrier|workflow/i.test(
+    `${scenario?.journeyStage || ""} ${(scenario?.interactionPressure || []).join(" ")} ${currentBehaviorState || ""} ${currentJourneyState || ""}`
+  );
+  if (!isPressureContext) {
+    return draft;
+  }
+
+  const wordCount = String(draft || "").trim().split(/\s+/).filter(Boolean).length;
+  const needsTightening = OVER_EXPLANATORY_PATTERN.test(String(draft || "").trim()) || wordCount > 28;
+  if (!needsTightening) {
+    return draft;
+  }
+
+  const revisionPrompt = `
+You are tightening one pharma rep QA proxy line so it sounds more spoken and less explanatory.
+
+SCENARIO: ${scenario?.title || ""}
+CURRENT BEHAVIOR STATE: ${currentBehaviorState || ""}
+CURRENT JOURNEY STATE: ${currentJourneyState || ""}
+ACTIVE HCP CONCERN: ${activeConcernText}
+
+CURRENT DRAFT:
+${draft}
+
+Rules:
+- Keep the same core meaning.
+- Make it shorter, sharper, and more spoken.
+- Do not sound like a slide deck, workflow memo, or polished explanation.
+- Prefer one concrete answer and, if needed, one short follow-up.
+- Remove phrases like "would be", "which can be", "ensure they're on track", "minimal disruption", or similar consultant phrasing.
+- Keep it clinician-facing and realistic.
 
 Return ONLY the revised rep reply as plain text.`;
 
