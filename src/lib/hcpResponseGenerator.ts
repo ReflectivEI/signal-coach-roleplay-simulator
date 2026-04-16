@@ -21,6 +21,7 @@ import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
 import { buildDialogueDirectivePrompt } from "./hcpDialogueDirectives";
 import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
+import { applyHcpResponseSurface } from "./hcpResponseSurface";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -771,6 +772,13 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
+  hcpReply = applyHcpResponseSurface({
+    hcpReply,
+    scenario,
+    turn: turnDirectives,
+    profile: runtimeProfile,
+  });
+
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
     .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])

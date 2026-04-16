@@ -7,15 +7,18 @@
  */
 
 import { deriveConcernFamily } from "./hcpTurnDirectives";
+import { deriveFamilyTemperamentControls } from "./hcpFamilyProfiles";
 
 export interface HcpRuntimeProfile {
   concernFamily: "evidence" | "workflow" | "access" | "screening" | "time" | "general";
+  familyKey: string;
   warmth: "guarded" | "professional" | "measured" | "open";
   directness: "high" | "medium" | "low";
   brevity: "tight" | "concise" | "moderate";
   patienceThreshold: "low" | "medium" | "high";
   responseMode: "directive" | "clarifying" | "exploratory" | "closing";
   toneNotes: string[];
+  familyNotes: string[];
 }
 
 export function deriveHcpRuntimeProfile({
@@ -28,6 +31,7 @@ export function deriveHcpRuntimeProfile({
   predictedBehaviorState?: string;
 }): HcpRuntimeProfile {
   const concernFamily = deriveConcernFamily(scenario) as HcpRuntimeProfile["concernFamily"];
+  const familyControls = deriveFamilyTemperamentControls(scenario);
   const pressures = scenario?.interactionPressure || [];
   const persona = String(scenario?.persona || "").toLowerCase();
   const state = String(predictedBehaviorState || behaviorState || "").toLowerCase();
@@ -43,16 +47,31 @@ export function deriveHcpRuntimeProfile({
   if (["open", "openness", "curiosity"].includes(state) || persona.includes("curious")) warmth = "open";
   else if (state === "neutral") warmth = "measured";
   else if (highPressure || persona.includes("skeptical")) warmth = "guarded";
+  if (familyControls.warmthBias < 0 && warmth === "open") warmth = "measured";
+  else if (familyControls.warmthBias < 0 && warmth === "measured") warmth = "professional";
+  else if (familyControls.warmthBias < 0 && warmth === "professional") warmth = "guarded";
+  else if (familyControls.warmthBias > 0 && warmth === "guarded") warmth = "professional";
+  else if (familyControls.warmthBias > 0 && warmth === "professional") warmth = "measured";
 
   let directness: HcpRuntimeProfile["directness"] = highPressure ? "high" : "medium";
   if (persona.includes("skeptical") || concernFamily === "evidence" || concernFamily === "access") directness = "high";
   if (warmth === "open" && !highPressure) directness = "medium";
+  if (familyControls.directnessBias > 0 && directness === "medium") directness = "high";
+  else if (familyControls.directnessBias < 0 && directness === "high") directness = "medium";
 
   let brevity: HcpRuntimeProfile["brevity"] = highPressure ? "tight" : "concise";
   if (warmth === "open" && !highPressure) brevity = "moderate";
+  if (familyControls.brevityBias > 0 && brevity === "moderate") brevity = "concise";
+  else if (familyControls.brevityBias > 0 && brevity === "concise") brevity = "tight";
+  else if (familyControls.brevityBias < 0 && brevity === "tight") brevity = "concise";
+  else if (familyControls.brevityBias < 0 && brevity === "concise") brevity = "moderate";
 
   let patienceThreshold: HcpRuntimeProfile["patienceThreshold"] = highPressure ? "low" : "medium";
   if (warmth === "open" && !highPressure) patienceThreshold = "high";
+  if (familyControls.patienceBias > 0 && patienceThreshold === "low") patienceThreshold = "medium";
+  else if (familyControls.patienceBias > 0 && patienceThreshold === "medium") patienceThreshold = "high";
+  else if (familyControls.patienceBias < 0 && patienceThreshold === "high") patienceThreshold = "medium";
+  else if (familyControls.patienceBias < 0 && patienceThreshold === "medium") patienceThreshold = "low";
 
   let responseMode: HcpRuntimeProfile["responseMode"] = "clarifying";
   if (state === "terminal_exit") responseMode = "closing";
@@ -80,12 +99,14 @@ export function deriveHcpRuntimeProfile({
 
   return {
     concernFamily,
+    familyKey: familyControls.familyKey,
     warmth,
     directness,
     brevity,
     patienceThreshold,
     responseMode,
     toneNotes,
+    familyNotes: familyControls.notes,
   };
 }
 
@@ -93,11 +114,13 @@ export function buildRuntimeProfilePrompt(profile: HcpRuntimeProfile): string {
   return [
     `RUNTIME HCP PROFILE:`,
     `- Concern family: ${profile.concernFamily}`,
+    `- Scenario family: ${profile.familyKey}`,
     `- Warmth: ${profile.warmth}`,
     `- Directness: ${profile.directness}`,
     `- Brevity: ${profile.brevity}`,
     `- Patience threshold: ${profile.patienceThreshold}`,
     `- Response mode: ${profile.responseMode}`,
     ...profile.toneNotes.map((note) => `- ${note}`),
+    ...profile.familyNotes.map((note) => `- ${note}`),
   ].join("\n");
 }
