@@ -137,6 +137,16 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
     }
   }
 
+  if (turn.closeMode && turn.escalationStage !== "disengaging" && !/\bif\b.*\bcan\b|\bif\b.*\bshow\b|\bif\b.*\bkeep\b|\bif\b.*\bworkable\b/i.test(output)) {
+    if (turn.concernFamily === "evidence") {
+      output = `If you can make the proof point concrete, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "access") {
+      output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "workflow") {
+      output = `If this stays workable for staff, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    }
+  }
+
   if (turn.closeMode && !/next step|one step|one patient|one case|one action|open to|would you be open/i.test(output)) {
     if (turn.concernFamily === "evidence") {
       output = `${output.replace(/[.?!]+$/, "")} What single data point would change that?`;
@@ -191,6 +201,12 @@ export function applyHcpResponseSurface({
     output = output
       .replace(/\bwhat happens after that\b/gi, "what happens next")
       .replace(/\bwho carries that forward\b/gi, "who picks that up");
+  }
+
+  if (turn.closeMode && turn.responseShape === "conditional_close") {
+    output = output
+      .replace(/\bwhat next step would make this real\b/gi, "what one next step would make this real")
+      .replace(/\bwhat first step would actually make this workable\b/gi, "what one step would actually make this workable");
   }
 
   return ensureTerminalPunctuation(output);

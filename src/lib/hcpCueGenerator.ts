@@ -110,22 +110,32 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     evidence: [
       "Leans slightly toward the study printout, pen hovering over the highlighted data.",
       "Keeps the marked-up trial page open and looks up with steady attention.",
+      "Leaves the trial abstract open and studies you with measured attention.",
+      "Keeps the evidence slide in view, posture open enough to hear the next point.",
     ],
     workflow: [
       "Turns back toward you with the workflow notes still open on the desk.",
       "Keeps the clinic notes nearby, posture open enough to keep listening.",
+      "Leaves the callback list open and gives you a measured look to continue.",
+      "Keeps one hand on the workflow sheet, leaving a small opening for the next point.",
     ],
     access: [
       "Keeps the coverage notes open, attention visibly with you.",
       "Looks up from the formulary sheet and leaves the conversation space open.",
+      "Leaves the access notes open and looks back as if one useful answer could move this forward.",
+      "Keeps the prior-auth sheet in view, posture open enough to keep listening.",
     ],
     screening: [
       "Leans toward the chart, giving the selection question full attention.",
       "Keeps the patient list open and looks back with measured interest.",
+      "Leaves the case notes open and studies you as if the next detail matters.",
+      "Keeps the chart visible and leans in just enough to stay with the selection question.",
     ],
     time: [
       "Gives a quick nod and leaves a small opening for the next point.",
       "Keeps one hand near the schedule but stays with you for the answer.",
+      "Looks back briefly from the clock, leaving room for one concise answer.",
+      "Keeps a hand near the chart stack but gives you a short opening to continue.",
     ],
     general: [
       "Leans in slightly, attention fully with you.",
@@ -136,14 +146,20 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     evidence: [
       "Keeps the study printout open, eyes moving once across the highlighted data.",
       "Leaves the journal page in view and looks back with a measured expression.",
+      "Keeps the trial summary visible, eyes settling back on you without softening.",
+      "Leaves the data page open and looks back with professional reserve.",
     ],
     workflow: [
       "Keeps the workflow notes nearby, looking up without losing the thread.",
       "Leaves the clinic list open and settles back into a professional posture.",
+      "Keeps the intake notes in view and looks back without changing pace.",
+      "Leaves the workflow sheet open, expression steady and professional.",
     ],
     access: [
       "Keeps the coverage notes in view, pen still against the page.",
       "Leaves the formulary sheet open and looks back without changing posture.",
+      "Keeps the prior-auth notes visible, expression measured.",
+      "Leaves the access paperwork open and looks back without giving away the answer.",
     ],
     screening: [
       "Keeps the patient list open, attention settling on the chart in front of them.",
@@ -152,6 +168,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     time: [
       "Checks the schedule once, then returns attention to you.",
       "Glances toward the clock and comes back with a brief nod.",
+      "Looks once at the next room, then back with a neutral expression.",
+      "Checks the chart stack and returns attention to you without opening more space.",
     ],
     general: [
       "Maintains a professional posture, attention fixed on the exchange.",
@@ -162,6 +180,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     evidence: [
       "Narrows their gaze at the study printout, expression measured.",
       "Keeps a finger on the data page and looks back with a tighter expression.",
+      "Looks down at the marked-up data, then back with a narrower expression.",
+      "Keeps the evidence page pinned under one hand, attention tightening around the proof point.",
     ],
     workflow: [
       "Keeps a hand on the workflow notes, posture tightening.",
@@ -170,6 +190,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     access: [
       "Glances at the coverage notes, then looks back with a tighter expression.",
       "Keeps the formulary sheet in view, posture closed down around the question.",
+      "Looks down at the prior-auth note, then back with a more exacting stare.",
+      "Keeps the access paperwork under one hand, expression narrowing around the blocker.",
     ],
     screening: [
       "Keeps the patient list open, eyes narrowing at the selection question.",
@@ -178,6 +200,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     time: [
       "Checks the clock, then looks back with very little room for a detour.",
       "Keeps their eyes on you for a beat, expression tightening around the ask.",
+      "Glances at the next room, then comes back with almost no room for a detour.",
+      "Checks the schedule and looks back as if only one useful point will fit here.",
     ],
     general: [
       "Holds steady eye contact, expression narrowing.",
@@ -196,6 +220,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     access: [
       "Checks the clock, coverage notes still in hand.",
       "Glances toward the door, formulary sheet still open on the desk.",
+      "Looks toward the hallway, prior-auth notes still under one hand.",
+      "Checks the schedule, access paperwork still open in front of them.",
     ],
     screening: [
       "Checks the schedule, then taps the patient list once.",
@@ -204,6 +230,8 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     time: [
       "Checks the clock, then looks back with a tighter expression.",
       "Glances toward the next room and comes back ready for one concise point.",
+      "Looks at the schedule, then back with very little space left in the exchange.",
+      "Checks the next patient slot, attention returning only for the short version.",
     ],
     general: [
       "Checks the clock, then looks back with a tighter expression.",
@@ -321,6 +349,42 @@ const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Parti
       ],
     },
   },
+  immunology: {
+    focused_narrowing: {
+      screening: [
+        "Keeps the patient chart open, expression tightening around the patient-fit question.",
+        "Looks down at the criteria notes, then back with a more exacting expression.",
+      ],
+      evidence: [
+        "Keeps the study summary pinned under one hand, eyes narrowing at the claim.",
+        "Looks from the data sheet back to you without softening the expression.",
+      ],
+    },
+    neutral_attentive: {
+      workflow: [
+        "Keeps the clinic notes in view and looks back with measured reserve.",
+        "Leaves the intake sheet open, attention steady but guarded.",
+      ],
+    },
+  },
+  pulmonology: {
+    focused_narrowing: {
+      workflow: [
+        "Keeps the follow-up notes open, expression tightening around the practical step.",
+        "Looks down at the monitoring note, then back with a narrower focus.",
+      ],
+      screening: [
+        "Keeps the patient list visible, eyes narrowing at the selection boundary.",
+        "Looks back from the chart with a more exacting expression around who really fits.",
+      ],
+    },
+    time_constrained: {
+      workflow: [
+        "Checks the schedule, follow-up notes still open on the desk.",
+        "Glances toward the next room, workflow notes still under one hand.",
+      ],
+    },
+  },
   rare: {
     neutral_attentive: {
       screening: [
@@ -352,7 +416,7 @@ const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string> = {
   access: "They are locked on the access step that actually slows care down.",
   screening: "They are holding on the patient-selection boundary, not a generic statement.",
   time: "They are signaling limited availability, so the next move needs real economy.",
-  general: "They are signaling how tight the conversation window is right now.",
+  general: "They are signaling the conversation has to earn its relevance quickly.",
 };
 
 function normalizeText(...values: unknown[]): string {
@@ -419,9 +483,10 @@ function hasAny(text: string, patterns: string[]): boolean {
 }
 
 function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+  const journeyStage = String(inputs.scenario?.journeyStage || "").toLowerCase();
   const scenarioConcern = deriveConcernFamily({
     title: inputs.scenario?.title,
-    journeyStage: inputs.scenario?.journeyStage,
+    journeyStage,
     objective: inputs.scenario?.objective,
     description: inputs.scenario?.description,
     openingScene: inputs.scenario?.openingScene,
@@ -434,13 +499,22 @@ function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
   const reply = normalizeText(inputs.hcpReply).toLowerCase();
   const scenarioText = normalizeText(
     inputs.scenario?.title,
-    inputs.scenario?.journeyStage,
+    journeyStage,
     inputs.scenario?.objective,
     inputs.scenario?.description,
     inputs.scenario?.openingScene,
     inputs.scenario?.visualScene,
     Array.isArray(inputs.scenario?.keyChallenges) ? inputs.scenario?.keyChallenges.join(" ") : ""
   ).toLowerCase();
+
+  if (journeyStage === "initial_access") {
+    const initialAccessText = `${reply} ${scenarioText}`;
+    if (/\b(form|intake|schedule|clock|patient waiting|brief|quick|minutes)\b/.test(initialAccessText)) return "time";
+    if (/\b(workflow|staff|callback|handoff|clinic|room turnover|front desk|process)\b/.test(initialAccessText)) return "workflow";
+    if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(initialAccessText)) return "access";
+    if (/\b(chart|patient list|case file|selection|screen|screening|identify)\b/.test(initialAccessText)) return "screening";
+    return "general";
+  }
 
   for (const pressure of inputs.interactionPressures || []) {
     const mapped = PRESSURE_TO_CONCERN[pressure];
@@ -480,6 +554,17 @@ function deriveCueCategory(inputs: HcpCueInputs): CueCategory {
   }
   if (["open", "openness", "curiosity"].includes(behavior)) return "receptive_attentive";
   return "neutral_attentive";
+}
+
+function inferConcernFamilyFromCueLabel(cueLabel = ""): ConcernFamily | null {
+  const cue = normalizeCueFingerprint(cueLabel);
+  if (!cue) return null;
+  if (/\b(clock|schedule|door|doorway|next room|patient slot|brief)\b/.test(cue)) return "time";
+  if (/\b(formulary|coverage|prior-auth|prior auth|access paperwork)\b/.test(cue)) return "access";
+  if (/\b(forms|intake|workflow|callback|clinic list|notes|chart stack)\b/.test(cue)) return "workflow";
+  if (/\b(chart|patient list|case file|patient notes)\b/.test(cue)) return "screening";
+  if (/\b(study|trial|data|printout|journal)\b/.test(cue)) return "evidence";
+  return null;
 }
 
 function cueContradictsCategory(cueText: string, cueCategory: CueCategory): boolean {
@@ -591,8 +676,15 @@ export function buildCueDescription(
     behaviorState,
     interactionPressures,
   });
+  const cueLabelConcern = inferConcernFamilyFromCueLabel(cueLabel);
+  const finalConcernFamily =
+    derivedConcernFamily === "evidence" && cueLabelConcern && cueLabelConcern !== "evidence"
+      ? cueLabelConcern
+      : cueLabelConcern && derivedConcernFamily === "general"
+        ? cueLabelConcern
+        : derivedConcernFamily;
 
-  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${CONCERN_DESCRIPTION_BANK[derivedConcernFamily]}`.trim();
+  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${CONCERN_DESCRIPTION_BANK[finalConcernFamily]}`.trim();
 }
 
 export function resolveObservedCue(

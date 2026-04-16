@@ -55,18 +55,28 @@ export function deriveScenarioDomain(scenario: any = {}): string {
 }
 
 export function deriveConcernFamily(scenario: any = {}): SharedConcernFamily {
+  const journeyStage = String(scenario.journeyStage || "").toLowerCase();
+  const pressures = scenario.interactionPressure || [];
   const text = [
-    scenario.journeyStage,
+    journeyStage,
     scenario.decisionOrientation,
     scenario.objective,
     scenario.description,
     scenario.context,
-    ...(scenario.interactionPressure || []),
+    ...pressures,
     ...(scenario.keyChallenges || []),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+
+  if (journeyStage === "initial_access") {
+    if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
+    if (/\b(workflow|staff|handoff|process|clinic|operational|implementation|callback)\b/.test(text)) return "workflow";
+    if (/\b(time|minutes|schedule|patient waiting|quick|brief)\b/.test(text) || pressures.includes("time_constrained")) return "time";
+    if (/\b(screen|screening|candidate|eligibility|identify|selection|criteria)\b/.test(text)) return "screening";
+    return "general";
+  }
 
   if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
   if (/\b(workflow|staff|handoff|process|clinic|operational|implementation|callback)\b/.test(text)) return "workflow";
@@ -188,6 +198,7 @@ function buildDirectiveLines({
 
   if (closeMode) {
     lines.push("- This is a close-stage interaction: keep the blocker narrow and move toward one smallest next-step frame.");
+    lines.push("- If the HCP shows any openness, it should sound conditional and earned, not suddenly warm or broadly collaborative.");
   }
   if (objectionMode) {
     lines.push("- This is an objection-stage interaction: repeat or sharpen the SAME objection instead of introducing a new one.");
