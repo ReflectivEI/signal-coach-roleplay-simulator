@@ -217,7 +217,7 @@ function buildDirectiveLines({
   } else if (responseShape === "conditional_close") {
     lines.push("- Signal the conversation window is closing and allow only one final concise, relevant move.");
   } else if (responseShape === "partial_agreement") {
-    lines.push("- Allow conditional openness, but keep one unresolved condition active.");
+    lines.push("- Allow conditional openness, but keep one unresolved condition active and make the openness sound earned, not generous.");
   }
 
   if (domain === "oncology" && concernFamily === "evidence") {

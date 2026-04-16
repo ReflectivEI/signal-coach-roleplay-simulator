@@ -383,6 +383,21 @@ function normalizeCueFingerprint(text: string): string {
   return normalizeCueSentence(text).toLowerCase();
 }
 
+function cueSequenceSignature(text: string): string {
+  const cue = normalizeCueFingerprint(text);
+  if (!cue) return "generic";
+  if (/\bclock|schedule|patient slot|brief|quick|next room\b/.test(cue)) return "time_window";
+  if (/\bdoor|doorway|hall|hallway\b/.test(cue)) return "doorway_pull";
+  if (/\bstudy|trial|data|printout|journal\b/.test(cue)) return "evidence_anchor";
+  if (/\bworkflow|callback|clinic list|notes\b/.test(cue)) return "workflow_anchor";
+  if (/\bcoverage|formulary|prior-auth|prior auth\b/.test(cue)) return "access_anchor";
+  if (/\bchart|patient list|case file|patient notes\b/.test(cue)) return "chart_anchor";
+  if (/\bjaw|clipped|holds eye contact|holds still\b/.test(cue)) return "hard_boundary";
+  if (/\bnod|leans|open|receptive\b/.test(cue)) return "receptive_space";
+  if (/\bgaze|looks back|expression narrowing|narrowing\b/.test(cue)) return "narrow_focus";
+  return cue.split(/\s+/).slice(0, 3).join("_");
+}
+
 function deterministicIndex(seed = "", modulo = 1): number {
   const text = String(seed || "");
   if (!text || modulo <= 1) return 0;
@@ -512,20 +527,41 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
   const recentCueFingerprints = new Set(
     (inputs.recentCueLabels || []).map((label) => normalizeCueFingerprint(label)).filter(Boolean)
   );
-  const seedIndex = deterministicIndex(seed, pool.length);
+  const recentCueSignatures = (inputs.recentCueLabels || [])
+    .map((label) => cueSequenceSignature(label))
+    .filter(Boolean)
+    .slice(-4);
+  const recentSignatureSet = new Set(recentCueSignatures);
+  const lastSignature = recentCueSignatures[recentCueSignatures.length - 1] || "";
+  const secondToLastSignature = recentCueSignatures[recentCueSignatures.length - 2] || "";
+  const rotationOffset = (inputs.recentCueLabels || []).length % Math.max(1, pool.length);
+  const seedIndex = (deterministicIndex(seed, pool.length) + rotationOffset) % Math.max(1, pool.length);
   let derived = pool[seedIndex] || pool[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+
   for (let offset = 0; offset < pool.length; offset += 1) {
     const nextCue = pool[(seedIndex + offset) % pool.length];
-    if (!recentCueFingerprints.has(normalizeCueFingerprint(nextCue))) {
+    const fingerprint = normalizeCueFingerprint(nextCue);
+    const signature = cueSequenceSignature(nextCue);
+    let score = 0;
+
+    if (recentCueFingerprints.has(fingerprint)) score += 100;
+    if (signature === lastSignature) score += 40;
+    if (signature === secondToLastSignature) score += 20;
+    if (recentSignatureSet.has(signature)) score += 10;
+
+    if (score < bestScore) {
+      bestScore = score;
       derived = nextCue;
-      break;
     }
   }
   const cleanedCandidate = cleanCueText(candidateCue);
   const useCandidate =
     isValidObservedCue(cleanedCandidate) &&
     !cueContradictsCategory(cleanedCandidate, cueCategory) &&
-    !recentCueFingerprints.has(normalizeCueFingerprint(cleanedCandidate));
+    !recentCueFingerprints.has(normalizeCueFingerprint(cleanedCandidate)) &&
+    cueSequenceSignature(cleanedCandidate) !== lastSignature &&
+    cueSequenceSignature(cleanedCandidate) !== secondToLastSignature;
 
   return {
     cueCategory,

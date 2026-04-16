@@ -207,9 +207,11 @@ Assistant:`
           Ask About This Scenario
         </span>
       </div>
-      <div className="min-h-[80px] max-h-48 overflow-y-auto px-4 py-3 space-y-2">
+      <div className="min-h-[96px] max-h-48 overflow-y-auto px-4 py-4 space-y-2">
         {messages.length === 0 ? (
-          <p className="text-xs text-white italic">Ask anything about the scenario before you start — strategy, objections, opening moves.</p>
+          <p className="text-xs leading-relaxed" style={{ color: "rgba(229, 238, 239, 0.92)" }}>
+            Ask anything about the scenario before you start — strategy, objections, opening moves.
+          </p>
         ) : (
           messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -233,13 +235,20 @@ Assistant:`
         )}
         <div ref={bottomRef} />
       </div>
-      <div className="border-t border-border/30 px-3 py-2.5 flex items-center gap-2 bg-surface/40">
+      <div
+        className="border-t px-3 py-3 flex items-center gap-2"
+        style={{
+          borderColor: "rgba(148, 163, 184, 0.26)",
+          background: "rgba(221, 226, 234, 0.96)",
+        }}
+      >
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
           placeholder="e.g. How should I open this conversation?"
-          className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground/50 outline-none"
+          className="flex-1 bg-transparent text-xs outline-none placeholder:text-slate-500"
+          style={{ color: "hsl(222 30% 24%)" }}
         />
         <button
           onClick={send}

@@ -1,12 +1,18 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Stethoscope, Loader2, Lightbulb } from "lucide-react";
+import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
-import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 
 // HCP cues are single-line observable behavioral signals aligned with dialogue
 function HcpCueStrip({ cue }) {
   if (!cue) return null;
+  const rawLabel = typeof cue.label === "string" ? cue.label.trim() : "";
+  const normalizedLabel = rawLabel
+    ? rawLabel.replace(/^[a-z]/, (letter) => letter.toUpperCase()).replace(/[.?!]$/, "")
+    : "";
+  const cueText = normalizedLabel.toLowerCase().startsWith("the hcp")
+    ? `${normalizedLabel}.`
+    : `The HCP ${normalizedLabel.charAt(0).toLowerCase()}${normalizedLabel.slice(1)}.`;
   return (
     <div
       className="inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug"
@@ -16,28 +22,8 @@ function HcpCueStrip({ cue }) {
         color: "hsl(356 32% 43%)",
       }}
     >
-      {cue.label}
+      {cueText}
     </div>
-  );
-}
-
-// Coaching tip section with capability header
-function RepCoachingTip({ nudge }) {
-  if (!nudge) return null;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 2 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, delay: 0.08 }}
-      className="inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] leading-snug"
-      style={{
-        background: "rgba(255, 248, 223, 0.96)",
-        borderColor: "rgba(215, 186, 98, 0.48)",
-        color: "hsl(40 46% 38%)",
-      }}
-    >
-      {nudge.guidance}
-    </motion.div>
   );
 }
 
@@ -45,7 +31,6 @@ function MessageBubble({ turn }) {
   const isRep = turn.speaker === "rep";
   const isHcp = turn.speaker === "hcp";
   const cue = turn.cues?.[0] || null;
-  const nudge = turn.nudge || null;
 
   return (
     <div>
@@ -69,7 +54,7 @@ function MessageBubble({ turn }) {
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
           {isHcp && cue && <HcpCueStrip cue={cue} />}
-          <div className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed max-w-fit" style={{
+          <div className="px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit" style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
             color: isRep ? "white" : "hsl(222 30% 28%)",
             border: isRep ? "1px solid rgba(74, 163, 170, 0.34)" : "1px solid rgba(193, 203, 219, 0.72)",
@@ -77,7 +62,6 @@ function MessageBubble({ turn }) {
           }}>
             {turn.text}
           </div>
-          {isRep && nudge && <RepCoachingTip nudge={nudge} />}
         </div>
       </motion.div>
     </div>

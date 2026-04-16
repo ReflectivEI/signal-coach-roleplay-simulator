@@ -44,20 +44,26 @@ function NotObservedMarker() {
 function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip = "" }) {
   const [open, setOpen] = useState(!!alwaysExpanded);
   return (
-    <div className="bg-[hsl(222_52%_18%)] border border-border/60 rounded-xl overflow-hidden flex-1 min-w-0">
+    <div
+      className="rounded-xl overflow-hidden flex-1 min-w-0"
+      style={{
+        background: "linear-gradient(180deg, rgba(20,31,56,0.98) 0%, rgba(20,46,62,0.98) 100%)",
+        border: "1px solid rgba(98, 165, 170, 0.26)",
+      }}
+    >
       <button
         className="w-full flex items-center gap-2 px-4 py-3 text-left"
         onClick={() => !alwaysExpanded && setOpen(o => !o)}
       >
-        <Icon className="w-3.5 h-3.5 text-primary shrink-0" />
-        <span className="text-xs font-semibold text-foreground uppercase tracking-widest flex-1">{title}</span>
+        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
+        <span className="text-xs font-semibold uppercase tracking-widest flex-1" style={{ color: "rgba(173, 240, 231, 0.90)" }}>{title}</span>
         {!alwaysExpanded && (
-          <span className="text-xs text-primary/70 font-medium mr-1">Click for Details</span>
+          <span className="text-xs font-medium mr-1" style={{ color: "rgba(121, 214, 202, 0.78)" }}>Click for Details</span>
         )}
         {!alwaysExpanded && (
           open
-            ? <ChevronUp className="w-3 h-3 text-muted-foreground" />
-            : <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            ? <ChevronUp className="w-3 h-3" style={{ color: "rgba(222, 235, 237, 0.72)" }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: "rgba(222, 235, 237, 0.72)" }} />
         )}
       </button>
       <AnimatePresence>
@@ -69,12 +75,12 @@ function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip 
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-4 pb-4 space-y-2 border-t border-border/40">
+            <div className="px-4 pb-4 space-y-2 border-t" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
               {children}
               {tip && (
-                <p className="text-xs text-primary/70 flex items-start gap-1.5 mt-2">
-                  <span className="text-signal-watch font-bold shrink-0">💡 Tip:</span>
-                  <span className="text-signal-watch/80">{tip}</span>
+                <p className="text-xs flex items-start gap-1.5 mt-2">
+                  <span className="font-bold shrink-0" style={{ color: "rgba(255, 221, 118, 0.96)" }}>💡 Tip:</span>
+                  <span style={{ color: "rgba(255, 235, 169, 0.88)" }}>{tip}</span>
                 </p>
               )}
             </div>
@@ -82,10 +88,10 @@ function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip 
         )}
       </AnimatePresence>
       {!open && tip && (
-        <div className="px-4 pb-3 border-t border-border/20 pt-2">
+        <div className="px-4 pb-3 border-t pt-2" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
           <p className="text-xs flex items-start gap-1">
-            <span className="text-signal-watch font-bold shrink-0">💡 Tip:</span>
-            <span className="text-signal-watch/80">{tip}</span>
+            <span className="font-bold shrink-0" style={{ color: "rgba(255, 221, 118, 0.96)" }}>💡 Tip:</span>
+            <span style={{ color: "rgba(255, 235, 169, 0.88)" }}>{tip}</span>
           </p>
         </div>
       )}
@@ -385,9 +391,9 @@ export default function SessionSummaryModal({
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-b" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(90deg, hsl(224 50% 15%) 0%, hsl(214 54% 21%) 36%, hsl(186 44% 20%) 100%)" }}>
               <div className="border-r" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <ContextCard icon={Target} title="HCP Profile" alwaysExpanded>
-                  <p className="text-xs text-foreground/80 leading-relaxed mt-2">{scenario.stakeholder}</p>
+                  <p className="text-xs leading-relaxed mt-2" style={{ color: "rgba(244,249,249,0.94)" }}>{scenario.stakeholder}</p>
                   {scenario.context && (
-                    <p className="text-xs text-muted-foreground leading-relaxed">{scenario.context}</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "rgba(220,236,236,0.72)" }}>{scenario.context}</p>
                   )}
                 </ContextCard>
               </div>
@@ -397,9 +403,9 @@ export default function SessionSummaryModal({
                   title="Rep Objectives"
                   tip={scenario.keyChallenges?.[0] ? `Acknowledge ${scenario.keyChallenges[0].toLowerCase().slice(0, 40)}…` : undefined}
                 >
-                  <p className="text-xs text-foreground/80 leading-relaxed mt-2">{scenario.objective}</p>
+                  <p className="text-xs leading-relaxed mt-2" style={{ color: "rgba(244,249,249,0.94)" }}>{scenario.objective}</p>
                   {scenario.coreTension && (
-                    <p className="text-xs text-muted-foreground leading-relaxed italic mt-1">{scenario.coreTension}</p>
+                    <p className="text-xs leading-relaxed italic mt-1" style={{ color: "rgba(220,236,236,0.72)" }}>{scenario.coreTension}</p>
                   )}
                 </ContextCard>
               </div>
@@ -409,7 +415,7 @@ export default function SessionSummaryModal({
                   title="Opening Scene"
                   tip="Preview the HCP's setting and opening beat before starting."
                 >
-                  <p className="text-xs text-foreground/80 leading-relaxed italic mt-2">"{scenario.openingScene}"</p>
+                  <p className="text-xs leading-relaxed italic mt-2" style={{ color: "rgba(244,249,249,0.94)" }}>"{scenario.openingScene}"</p>
                 </ContextCard>
               </div>
               <div>
@@ -420,8 +426,8 @@ export default function SessionSummaryModal({
                 >
                   <div className="mt-2 space-y-1">
                     {(scenario.keyChallenges || []).map((c, i) => (
-                      <p key={i} className="text-xs text-foreground/80 leading-relaxed flex gap-1.5">
-                        <span className="text-muted-foreground shrink-0">·</span>{c}
+                      <p key={i} className="text-xs leading-relaxed flex gap-1.5" style={{ color: "rgba(244,249,249,0.94)" }}>
+                        <span className="shrink-0" style={{ color: "rgba(121, 214, 202, 0.78)" }}>·</span>{c}
                       </p>
                     ))}
                   </div>

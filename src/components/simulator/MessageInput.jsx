@@ -16,9 +16,14 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
   useEffect(() => {
     if (!disabled && shouldRestoreFocusRef.current) {
       shouldRestoreFocusRef.current = false;
-      window.setTimeout(() => {
-        textareaRef.current?.focus({ preventScroll: true });
-      }, 0);
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          if (!textareaRef.current) return;
+          textareaRef.current.focus({ preventScroll: true });
+          const end = textareaRef.current.value.length;
+          textareaRef.current.setSelectionRange(end, end);
+        });
+      });
     }
   }, [disabled]);
 

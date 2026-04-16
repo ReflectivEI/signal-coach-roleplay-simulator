@@ -49,6 +49,11 @@ function applyGlobalSpokenRewrites(text = ""): string {
     output = output.replace(pattern, replacement);
   });
 
+  output = output.replace(
+    /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should)\b/g,
+    "$1. $2"
+  );
+
   return normalizeText(output);
 }
 
@@ -65,19 +70,35 @@ function applyDomainCadence(text: string, domain: string, concernFamily: string)
   if (domain === "hiv") {
     output = output
       .replace(/\bwhat access bottleneck are you actually trying to solve\b/gi, "what bottleneck are you solving")
-      .replace(/\bwho owns the next practical step\b/gi, "who owns the next step");
+      .replace(/\bwho owns the next practical step\b/gi, "who owns the next step")
+      .replace(/\bwhat extra steps does that actually add\b/gi, "what extra step does that add")
+      .replace(/\bwhat happens after that\b/gi, "what happens next");
   }
 
   if (domain === "cardiology") {
     output = output
       .replace(/\bwhat changes in routine care\b/gi, "what changes")
-      .replace(/\bwhat changes before the patient leaves\b/gi, "what changes before discharge");
+      .replace(/\bwhat changes before the patient leaves\b/gi, "what changes before discharge")
+      .replace(/\bwhat slows things down for staff\b/gi, "what slows things down")
+      .replace(/\bwhat does that add for the team\b/gi, "what does that add");
   }
 
   if (domain === "rare" && concernFamily === "screening") {
     output = output
       .replace(/\bwhat would actually identify the right patient\b/gi, "what would actually identify the right patient")
       .replace(/\bpractical workup relevance\b/gi, "practical workup value");
+  }
+
+  if (domain === "immunology") {
+    output = output
+      .replace(/\bwhat patient type are you actually talking about\b/gi, "which patient type are you talking about")
+      .replace(/\bwhat changes in day-to-day practice\b/gi, "what changes in practice");
+  }
+
+  if (domain === "pulmonology") {
+    output = output
+      .replace(/\bwhat changes in follow-up\b/gi, "what changes in follow-up")
+      .replace(/\bwhat gets added for staff\b/gi, "what gets added");
   }
 
   return normalizeText(output);
@@ -104,11 +125,25 @@ function applyShapeCompression(text: string, turn: HcpTurnDirectiveSet, profile:
 function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): string {
   let output = text;
 
+  if (turn.closeMode && turn.responseShape === "partial_agreement" && !/\bif you can|if that can|if this can|i could look at|i can look at|i’d look at|i'd look at|i'm open to\b/i.test(output)) {
+    if (turn.concernFamily === "evidence") {
+      output = `If you can show me what changes practice, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "access") {
+      output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "workflow") {
+      output = `If this does not add another staff step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+    } else {
+      output = `If you can keep this practical, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    }
+  }
+
   if (turn.closeMode && !/next step|one step|one patient|one case|one action|open to|would you be open/i.test(output)) {
     if (turn.concernFamily === "evidence") {
       output = `${output.replace(/[.?!]+$/, "")} What single data point would change that?`;
     } else if (turn.concernFamily === "workflow" || turn.concernFamily === "access") {
       output = `${output.replace(/[.?!]+$/, "")} What first step would actually make this workable?`;
+    } else {
+      output = `${output.replace(/[.?!]+$/, "")} What next step would make this real?`;
     }
   }
 
@@ -144,6 +179,18 @@ export function applyHcpResponseSurface({
     turn.escalationStage !== "baseline"
   ) {
     output = trimToSentences(`${output.replace(/[.?!]+$/, "")} Keep it brief.`, 1);
+  }
+
+  if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
+    output = output
+      .replace(/\bwhat are you solving here\b/gi, "what are you solving")
+      .replace(/\bwho exactly owns that step\b/gi, "who owns that step");
+  }
+
+  if (turn.phase === "implementation_commitment" && turn.concernFamily === "workflow") {
+    output = output
+      .replace(/\bwhat happens after that\b/gi, "what happens next")
+      .replace(/\bwho carries that forward\b/gi, "who picks that up");
   }
 
   return ensureTerminalPunctuation(output);
