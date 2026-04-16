@@ -299,7 +299,13 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       repTurnIds.push(repTurnObj.id);
 
       onProgress(`Turn ${i + 1}/${maxTurns} — generating HCP response…`);
-      const conversationHistory = turns.map((t) => ({ id: t.id, speaker: t.speaker, text: t.text, timestamp: t.timestamp }));
+      const conversationHistory = turns.map((t) => ({
+        id: t.id,
+        speaker: t.speaker,
+        text: t.text,
+        timestamp: t.timestamp,
+        cues: t.cues || [],
+      }));
       const response = await retryWithBackoff(() => withTimeout(generateHcpResponse(
         scenario,
         conversationHistory,

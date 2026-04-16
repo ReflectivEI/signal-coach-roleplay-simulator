@@ -150,6 +150,7 @@ export default function Simulator() {
       speaker: t.speaker,
       text: t.text,
       timestamp: t.timestamp,
+      cues: t.cues || [],
     }));
 
     const response = await generateHcpResponse(

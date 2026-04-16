@@ -6,6 +6,8 @@
  * explicit runtime concepts instead of leaving them implicit in prompts.
  */
 
+import { deriveConcernFamily } from "./hcpTurnDirectives";
+
 export interface HcpRuntimeProfile {
   concernFamily: "evidence" | "workflow" | "access" | "screening" | "time" | "general";
   warmth: "guarded" | "professional" | "measured" | "open";
@@ -14,27 +16,6 @@ export interface HcpRuntimeProfile {
   patienceThreshold: "low" | "medium" | "high";
   responseMode: "directive" | "clarifying" | "exploratory" | "closing";
   toneNotes: string[];
-}
-
-function deriveConcernFamily(scenario: any = {}): HcpRuntimeProfile["concernFamily"] {
-  const text = [
-    scenario.journeyStage,
-    scenario.decisionOrientation,
-    scenario.title,
-    scenario.description,
-    scenario.objective,
-    ...(scenario.interactionPressure || []),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
-  if (/\b(workflow|staff|handoff|process|clinic|operational|implementation)\b/.test(text)) return "workflow";
-  if (/\b(screen|screening|candidate|eligibility|identify|selection)\b/.test(text)) return "screening";
-  if (/\b(evidence|trial|study|guideline|data|proof|subgroup|threshold)\b/.test(text)) return "evidence";
-  if (/\b(time|minutes|schedule|patient waiting|quick|brief)\b/.test(text)) return "time";
-  return "general";
 }
 
 export function deriveHcpRuntimeProfile({
@@ -46,7 +27,7 @@ export function deriveHcpRuntimeProfile({
   behaviorState: string;
   predictedBehaviorState?: string;
 }): HcpRuntimeProfile {
-  const concernFamily = deriveConcernFamily(scenario);
+  const concernFamily = deriveConcernFamily(scenario) as HcpRuntimeProfile["concernFamily"];
   const pressures = scenario?.interactionPressure || [];
   const persona = String(scenario?.persona || "").toLowerCase();
   const state = String(predictedBehaviorState || behaviorState || "").toLowerCase();

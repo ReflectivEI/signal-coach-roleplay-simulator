@@ -240,6 +240,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       speaker: turn.speaker,
       text: turn.text,
       timestamp: turn.timestamp,
+      cues: turn.cues || [],
     }));
 
     const response = await retry(() => withTimeout(generateHcpResponse(

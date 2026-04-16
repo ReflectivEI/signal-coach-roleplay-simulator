@@ -13,6 +13,8 @@
  * - cue text is not duplicated from product labels
  */
 
+import { deriveConcernFamily, deriveScenarioDomain } from "./hcpTurnDirectives";
+
 export interface HcpCueInputs {
   hcpReply: string;
   behaviorState: string;
@@ -262,6 +264,79 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
   },
 };
 
+const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Partial<Record<ConcernFamily, string[]>>>>>> = {
+  oncology: {
+    focused_narrowing: {
+      evidence: [
+        "Keeps one finger on the study printout, eyes narrowing at the data.",
+        "Looks from the marked-up trial page back to you without relaxing her expression.",
+      ],
+    },
+    time_constrained: {
+      evidence: [
+        "Checks the clock, then taps the data page once with her pen.",
+        "Glances toward the doorway, trial printout still open beneath one hand.",
+      ],
+    },
+    hard_escalation: {
+      evidence: [
+        "Sets the printout flat on the desk, jaw tightening slightly.",
+        "Holds the data page still, expression clipped around the ask.",
+      ],
+    },
+  },
+  hiv: {
+    focused_narrowing: {
+      workflow: [
+        "Glances at the callback list, then looks back with a tighter expression.",
+        "Keeps one hand on the workflow notes, posture narrowing around the question.",
+      ],
+      access: [
+        "Looks down at the prior-auth note, then back at you without softening.",
+        "Keeps the access paperwork in view, expression tightening around the bottleneck.",
+      ],
+    },
+    time_constrained: {
+      workflow: [
+        "Checks the schedule, then rests a hand on the callback list.",
+        "Glances toward the next room, workflow notes still open beneath one hand.",
+      ],
+    },
+  },
+  cardiology: {
+    focused_narrowing: {
+      access: [
+        "Looks down at the discharge paperwork, then back with a tighter expression.",
+        "Keeps the formulary notes open, posture closing down around the practical ask.",
+      ],
+      workflow: [
+        "Glances at the discharge summary, then looks back with a narrower focus.",
+        "Keeps one hand on the med list, eyes fixed on the next step.",
+      ],
+    },
+    time_constrained: {
+      access: [
+        "Checks the clock, discharge paperwork still open on the desk.",
+        "Glances toward the hallway, formulary notes still in front of her.",
+      ],
+    },
+  },
+  rare: {
+    neutral_attentive: {
+      screening: [
+        "Keeps the case file open, eyes moving once over the patient notes.",
+        "Leaves the chart visible on the desk and looks back with measured focus.",
+      ],
+    },
+    focused_narrowing: {
+      screening: [
+        "Looks down at the case notes, then back with a more exacting expression.",
+        "Keeps the patient file open, eyes narrowing at the identification question.",
+      ],
+    },
+  },
+};
+
 const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string> = {
   receptive_attentive: "The HCP is leaving space for the conversation to move forward, so the next turn should stay specific and relevant.",
   neutral_attentive: "The HCP is still evaluating the exchange, so the next turn needs to earn more of their attention.",
@@ -328,7 +403,19 @@ function hasAny(text: string, patterns: string[]): boolean {
   return patterns.some((pattern) => value.includes(pattern));
 }
 
-function deriveConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+  const scenarioConcern = deriveConcernFamily({
+    title: inputs.scenario?.title,
+    journeyStage: inputs.scenario?.journeyStage,
+    objective: inputs.scenario?.objective,
+    description: inputs.scenario?.description,
+    openingScene: inputs.scenario?.openingScene,
+    visualScene: inputs.scenario?.visualScene,
+    interactionPressure: inputs.interactionPressures || [],
+    keyChallenges: inputs.scenario?.keyChallenges || [],
+  }) as ConcernFamily;
+  if (scenarioConcern && scenarioConcern !== "general") return scenarioConcern;
+
   const reply = normalizeText(inputs.hcpReply).toLowerCase();
   const scenarioText = normalizeText(
     inputs.scenario?.title,
@@ -401,8 +488,18 @@ export function isValidObservedCue(text: string): boolean {
 
 function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCategory: CueCategory; concernFamily: ConcernFamily; label: string } {
   const cueCategory = deriveCueCategory(inputs);
-  const concernFamily = deriveConcernFamily(inputs);
-  const pool = CUE_POOLS[cueCategory]?.[concernFamily] || CUE_POOLS[cueCategory].general;
+  const concernFamily = deriveCueConcernFamily(inputs);
+  const domain = deriveScenarioDomain({
+    title: inputs.scenario?.title,
+    stakeholder: inputs.scenario?.objective,
+    context: inputs.scenario?.description,
+    description: normalizeText(inputs.scenario?.openingScene, inputs.scenario?.visualScene),
+  });
+  const domainPool =
+    DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.[concernFamily]
+    || DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.general
+    || [];
+  const pool = [...domainPool, ...(CUE_POOLS[cueCategory]?.[concernFamily] || CUE_POOLS[cueCategory].general)];
   const seed = [
     inputs.scenario?.id || inputs.scenario?.title || "scenario",
     inputs.scenario?.journeyStage || "",
@@ -453,7 +550,7 @@ export function buildCueDescription(
     behaviorState,
     interactionPressures,
   });
-  const derivedConcernFamily = concernFamily || deriveConcernFamily({
+  const derivedConcernFamily = concernFamily || deriveCueConcernFamily({
     hcpReply: cueLabel,
     behaviorState,
     interactionPressures,

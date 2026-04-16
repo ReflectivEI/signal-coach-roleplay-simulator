@@ -20,6 +20,7 @@ import { resolveObservedCue } from "./hcpCueGenerator";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
 import { buildDialogueDirectivePrompt } from "./hcpDialogueDirectives";
 import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
+import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -546,6 +547,14 @@ export async function generateHcpResponse(
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
+  const turnDirectives = deriveHcpTurnDirectives({
+    scenario,
+    currentBehaviorState,
+    currentJourneyState,
+    predictionState: prediction.predictedBehaviorState,
+    allPriorSignals,
+    turnCount,
+  });
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
     behaviorState: currentBehaviorState,
@@ -561,7 +570,9 @@ export async function generateHcpResponse(
     ["closed", "resistance", "frustration", "time_pressure"].includes(currentBehaviorState) ||
     volatility.profile !== "stable";
   const responseTokenBudget =
-    runtimeProfile.brevity === "tight" ? 380
+    turnDirectives.targetWordBudget <= 22 ? 300
+    : turnDirectives.targetWordBudget <= 28 ? 340
+    : runtimeProfile.brevity === "tight" ? 380
     : isHighPressureTurn ? 420
     : runtimeProfile.brevity === "moderate" ? 600
     : 560;
@@ -622,6 +633,8 @@ ${runtimeProfileBlock}
 
 ${dialogueDirectiveBlock}
 
+${buildTurnDirectivePrompt(turnDirectives)}
+
 ${volatilityBlock}
 
 ${CAPABILITY_RULES}
@@ -662,11 +675,14 @@ INSTRUCTIONS:
 13. Never let a pressured or guarded HCP suddenly sound casual, socially loose, or unconstrained
 14. In time-pressured or operationally constrained scenarios, brevity and directness matter more than polish
 15. Keep the HCP reply to 1-2 sentences maximum
-16. If pressure is high, target under 30 spoken words
-17. If pressure is moderate or low, target under 45 spoken words
+16. If pressure is high, target under ${Math.min(30, turnDirectives.targetWordBudget)} spoken words
+17. If pressure is moderate or low, target under ${Math.max(32, turnDirectives.targetWordBudget)} spoken words
 18. Respect the runtime HCP profile above for warmth, directness, patience, and response mode
 19. If the runtime profile says directive, answer in a direct clinician voice rather than exploratory language
 20. If the runtime profile says guarded, keep the tone professional but with visible constraint
+21. Follow the turn-shape directive above exactly; do not drift into a different conversation shape
+22. If repeated misses are active, do not introduce a new concern family — stay on the same blocker and sharpen it
+23. In objection-stage and close-stage scenarios, transitions must be deterministic and narrow, not open-ended by default
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -760,7 +776,7 @@ Return ONLY valid JSON:
     .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])
     .map((cue: any) => cue?.label)
     .filter(Boolean)
-    .slice(-3);
+    .slice(-8);
   const cue = resolveObservedCue(result.hcpCue || "", {
     hcpReply,
     behaviorState: result.nextBehaviorState || currentBehaviorState,

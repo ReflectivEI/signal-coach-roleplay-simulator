@@ -1,3 +1,5 @@
+import { deriveConcernFamily, deriveScenarioDomain } from "./hcpTurnDirectives";
+
 /**
  * HCP Dialogue Directives
  * =======================
@@ -5,52 +7,9 @@
  * scenario/domain/persona/concern-family specific dialogue guidance.
  */
 
-function normalizeText(...values: unknown[]): string {
-  return values
-    .flat()
-    .map((value) => String(value ?? "").trim())
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-export function deriveScenarioDomain(scenario: any = {}): string {
-  const text = normalizeText(
-    scenario.title,
-    scenario.stakeholder,
-    scenario.context,
-    scenario.description,
-  ).toLowerCase();
-
-  if (text.includes("oncolog")) return "oncology";
-  if (text.includes("cardio")) return "cardiology";
-  if (text.includes("infectious") || text.includes("hiv")) return "hiv";
-  if (text.includes("neuro")) return "neurology";
-  if (text.includes("immun")) return "immunology";
-  if (text.includes("rare")) return "rare";
-  return "general";
-}
-
-function concernFamilyFromScenario(scenario: any = {}): string {
-  const text = normalizeText(
-    scenario.journeyStage,
-    scenario.decisionOrientation,
-    scenario.objective,
-    scenario.description,
-    ...(scenario.interactionPressure || []),
-  ).toLowerCase();
-
-  if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
-  if (/\b(workflow|staff|handoff|process|clinic|operational|implementation)\b/.test(text)) return "workflow";
-  if (/\b(screen|screening|candidate|eligibility|identify|selection)\b/.test(text)) return "screening";
-  if (/\b(evidence|trial|study|guideline|data|proof|subgroup|threshold)\b/.test(text)) return "evidence";
-  return "general";
-}
-
 export function buildDialogueDirectivePrompt(scenario: any = {}, behaviorState = "", predictedBehaviorState = ""): string {
   const domain = deriveScenarioDomain(scenario);
-  const concernFamily = concernFamilyFromScenario(scenario);
+  const concernFamily = deriveConcernFamily(scenario);
   const pressures = scenario.interactionPressure || [];
   const state = String(predictedBehaviorState || behaviorState || "").toLowerCase();
 
