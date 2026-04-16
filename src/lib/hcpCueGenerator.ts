@@ -385,6 +385,70 @@ const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Parti
       ],
     },
   },
+  rheumatology: {
+    focused_narrowing: {
+      access: [
+        "Keeps the prior-auth note in view, expression tightening around the staff step.",
+        "Looks down at the access paperwork, then back with a more exacting stare.",
+      ],
+      workflow: [
+        "Keeps one hand on the clinic notes, posture tightening around what this adds for staff.",
+        "Looks toward the intake sheet, then back with a narrower focus on the workflow step.",
+      ],
+    },
+    time_constrained: {
+      access: [
+        "Checks the schedule, prior-auth notes still open in front of them.",
+        "Glances toward the doorway, access paperwork still under one hand.",
+      ],
+    },
+  },
+  dermatology: {
+    focused_narrowing: {
+      workflow: [
+        "Keeps the monitoring note open, expression tightening around who would own the follow-up.",
+        "Looks down at the workflow sheet, then back with a more exacting expression.",
+      ],
+    },
+    neutral_attentive: {
+      workflow: [
+        "Leaves the follow-up notes open and looks back with measured reserve.",
+        "Keeps the clinic list visible, attention steady but guarded.",
+      ],
+    },
+  },
+  nephrology: {
+    focused_narrowing: {
+      general: [
+        "Keeps the protocol notes open, expression narrowing around who would go first.",
+        "Looks down at the patient list, then back with a more exacting expression.",
+      ],
+    },
+  },
+  neurology: {
+    focused_narrowing: {
+      evidence: [
+        "Keeps the conference note in view, expression tightening around the unresolved signal.",
+        "Looks down at the case summary, then back without relaxing the expression.",
+      ],
+    },
+  },
+  hematology: {
+    focused_narrowing: {
+      workflow: [
+        "Keeps the case notes open, posture tightening around what happened with that first patient.",
+        "Looks down at the chart, then back with a more exacting expression around the next case.",
+      ],
+    },
+  },
+  endocrinology: {
+    focused_narrowing: {
+      screening: [
+        "Keeps the patient notes open, expression narrowing around which patients really stay on therapy.",
+        "Looks down at the chart, then back with a tighter focus on who truly fits.",
+      ],
+    },
+  },
   rare: {
     neutral_attentive: {
       screening: [
@@ -460,6 +524,17 @@ function cueSequenceSignature(text: string): string {
   if (/\bnod|leans|open|receptive\b/.test(cue)) return "receptive_space";
   if (/\bgaze|looks back|expression narrowing|narrowing\b/.test(cue)) return "narrow_focus";
   return cue.split(/\s+/).slice(0, 3).join("_");
+}
+
+function cueFrameSignature(text: string): string {
+  const cue = normalizeCueFingerprint(text);
+  if (!cue) return "generic_frame";
+  if (/\bchecks? the clock|schedule|next room|patient slot\b/.test(cue)) return "time_frame";
+  if (/\bglances? toward the door|doorway|hall|hallway\b/.test(cue)) return "door_frame";
+  if (/\blooks down at|keeps .* open|leaves .* open|keeps one hand on\b/.test(cue)) return "anchor_frame";
+  if (/\bexpression tightening|narrowing|more exacting\b/.test(cue)) return "narrow_frame";
+  if (/\blooks back\b/.test(cue)) return "lookback_frame";
+  return cueSequenceSignature(cue);
 }
 
 function deterministicIndex(seed = "", modulo = 1): number {
@@ -616,9 +691,16 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     .map((label) => cueSequenceSignature(label))
     .filter(Boolean)
     .slice(-4);
+  const recentCueFrames = (inputs.recentCueLabels || [])
+    .map((label) => cueFrameSignature(label))
+    .filter(Boolean)
+    .slice(-6);
   const recentSignatureSet = new Set(recentCueSignatures);
+  const recentFrameSet = new Set(recentCueFrames);
   const lastSignature = recentCueSignatures[recentCueSignatures.length - 1] || "";
   const secondToLastSignature = recentCueSignatures[recentCueSignatures.length - 2] || "";
+  const lastFrame = recentCueFrames[recentCueFrames.length - 1] || "";
+  const secondToLastFrame = recentCueFrames[recentCueFrames.length - 2] || "";
   const rotationOffset = (inputs.recentCueLabels || []).length % Math.max(1, pool.length);
   const seedIndex = (deterministicIndex(seed, pool.length) + rotationOffset) % Math.max(1, pool.length);
   let derived = pool[seedIndex] || pool[0];
@@ -628,12 +710,16 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     const nextCue = pool[(seedIndex + offset) % pool.length];
     const fingerprint = normalizeCueFingerprint(nextCue);
     const signature = cueSequenceSignature(nextCue);
+    const frame = cueFrameSignature(nextCue);
     let score = 0;
 
     if (recentCueFingerprints.has(fingerprint)) score += 100;
     if (signature === lastSignature) score += 40;
     if (signature === secondToLastSignature) score += 20;
     if (recentSignatureSet.has(signature)) score += 10;
+    if (frame === lastFrame) score += 35;
+    if (frame === secondToLastFrame) score += 15;
+    if (recentFrameSet.has(frame)) score += 8;
 
     if (score < bestScore) {
       bestScore = score;
@@ -646,7 +732,8 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     !cueContradictsCategory(cleanedCandidate, cueCategory) &&
     !recentCueFingerprints.has(normalizeCueFingerprint(cleanedCandidate)) &&
     cueSequenceSignature(cleanedCandidate) !== lastSignature &&
-    cueSequenceSignature(cleanedCandidate) !== secondToLastSignature;
+    cueSequenceSignature(cleanedCandidate) !== secondToLastSignature &&
+    cueFrameSignature(cleanedCandidate) !== lastFrame;
 
   return {
     cueCategory,

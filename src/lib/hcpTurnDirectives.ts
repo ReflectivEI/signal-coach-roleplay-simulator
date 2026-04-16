@@ -48,6 +48,11 @@ export function deriveScenarioDomain(scenario: any = {}): string {
   if (text.includes("infectious") || text.includes("hiv")) return "hiv";
   if (text.includes("neuro")) return "neurology";
   if (text.includes("immun")) return "immunology";
+  if (text.includes("endocrin")) return "endocrinology";
+  if (text.includes("nephro")) return "nephrology";
+  if (text.includes("dermat")) return "dermatology";
+  if (text.includes("hemat")) return "hematology";
+  if (text.includes("rheumat")) return "rheumatology";
   if (text.includes("rare")) return "rare";
   if (text.includes("rheumat")) return "immunology";
   if (text.includes("pulmon")) return "pulmonology";
@@ -239,6 +244,24 @@ function buildDirectiveLines({
   }
   if (domain === "cardiology" && (concernFamily === "access" || concernFamily === "workflow")) {
     lines.push("- In cardiology operational mode, stay grounded in discharge flow, formulary burden, and what changes before the patient leaves.");
+  }
+  if (domain === "rheumatology" && (concernFamily === "access" || concernFamily === "workflow")) {
+    lines.push("- In rheumatology access/workflow mode, stay grounded in prior auth workload, staff strain, and what step actually lands on the team.");
+  }
+  if (domain === "dermatology" && concernFamily === "workflow") {
+    lines.push("- In dermatology workflow mode, stay grounded in monitoring burden, staff ownership, and what a smaller practice can realistically absorb.");
+  }
+  if (domain === "nephrology" && concernFamily === "general") {
+    lines.push("- In nephrology adoption mode, sound cautious about who goes first and what threshold would justify changing course.");
+  }
+  if (domain === "neurology" && concernFamily === "evidence") {
+    lines.push("- In neurology safety/evidence mode, stay exacting about unresolved risk signals and what would need verification before moving on.");
+  }
+  if (domain === "hematology" && concernFamily === "workflow") {
+    lines.push("- In hematology post-adoption mode, stay focused on the difficult first case, what happened, and why confidence has narrowed.");
+  }
+  if (domain === "endocrinology" && concernFamily === "screening") {
+    lines.push("- In endocrinology discovery mode, stay practical about which patients actually stay on therapy and where current thinking breaks down.");
   }
 
   return lines;

@@ -340,6 +340,69 @@ Return ONLY the recalibrated HCP line.`;
   return String(rewritten || hcpReply).trim();
 }
 
+async function rewriteForContinuityVariation({
+  hcpReply,
+  transcript,
+  scenario,
+  behaviorState,
+  currentJourneyState,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  scenario: any;
+  behaviorState: string;
+  currentJourneyState: string;
+}): Promise<string> {
+  const previousHcpLine = getLastHcpReplyText(transcript);
+  const prompt = `You are rewriting one HCP line in a pharma role-play simulator.
+
+Goal:
+- keep the SAME blocker, pressure, and stance
+- do NOT repeat the same HCP line verbatim
+- restate the same unresolved concern in a fresh but still natural way
+
+Hard constraints:
+- one sentence preferred
+- stay spoken and clinician-realistic
+- do not soften the objection
+- do not introduce a new concern family
+- stay aligned with the opening-scene reality
+
+Scenario: ${scenario.title}
+Opening Scene: ${scenario.visualScene || scenario.openingScene || "not provided"}
+Journey Stage: ${scenario.journeyStage}
+Journey State: ${currentJourneyState}
+Behavior State: ${behaviorState}
+Previous HCP line:
+${previousHcpLine}
+
+Current repeated line:
+${hcpReply}
+
+Return ONLY the rewritten HCP line.`;
+
+  const rewritten = await invokeWorkerText({
+    prompt,
+    max_tokens: 90,
+    temperature: 0.1,
+  });
+
+  return String(rewritten || hcpReply).trim();
+}
+
+function needsContinuityVariationRewrite({
+  hcpReply,
+  transcript,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+}): boolean {
+  const previousHcpLine = getLastHcpReplyText(transcript);
+  const current = String(hcpReply || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const previous = String(previousHcpLine || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return Boolean(current && previous && current === previous);
+}
+
 function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): string {
   for (let i = transcript.length - 1; i >= 0; i -= 1) {
     if (transcript[i]?.speaker === "hcp" && transcript[i]?.text) {
@@ -347,6 +410,51 @@ function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): str
     }
   }
   return String(scenario?.openingScene || "").toLowerCase();
+}
+
+function getLastHcpReplyText(transcript: ConversationTurn[]): string {
+  for (let i = transcript.length - 1; i >= 0; i -= 1) {
+    if (transcript[i]?.speaker === "hcp" && transcript[i]?.text) {
+      return String(transcript[i].text).trim();
+    }
+  }
+  return "";
+}
+
+function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: any): string {
+  const hcpTurns = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-4)
+    .map((turn) => String(turn.text).trim());
+
+  const recentConcerns = hcpTurns.map((line) => inferConcernTags(line)).flat();
+  const concernCounts = recentConcerns.reduce<Record<string, number>>((acc, tag) => {
+    acc[tag] = (acc[tag] || 0) + 1;
+    return acc;
+  }, {});
+  const dominantConcern = Object.entries(concernCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "none";
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const repeatedLatest = hcpTurns.filter((line) => {
+    const tags = inferConcernTags(line);
+    const latestTags = inferConcernTags(latestConcern);
+    return latestTags.some((tag) => tags.includes(tag));
+  }).length;
+
+  const summaryLines = [
+    "LONGER MEMORY CONTINUITY:",
+    `- Dominant unresolved concern: ${dominantConcern}`,
+    `- Latest concern text: ${latestConcern || "none"}`,
+    `- Repeated latest-concern count in recent HCP turns: ${repeatedLatest}`,
+  ];
+
+  if (hcpTurns.length) {
+    summaryLines.push(`- Recent HCP trajectory: ${hcpTurns.join(" | ")}`);
+  }
+
+  summaryLines.push("- Do not introduce a new blocker unless the rep clearly resolved the current one.");
+  summaryLines.push("- Keep the HCP's agenda continuous across turns: same problem, sharper wording, narrower condition.");
+
+  return summaryLines.join("\n");
 }
 
 function detectQuestionType(repMessage: string): BehaviorSignals["question_type"] {
@@ -607,6 +715,9 @@ Curveball Active This Turn: ${volatility.curveballActive}
 ${volatility.curveballType ? `Curveball Type: ${volatility.curveballType}` : ""}
 ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volatility.curveballTriggerSignal}` : ""}
 `;
+  const continuityBlock = `
+${summarizeConcernContinuity(transcript, scenario)}
+`;
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -637,6 +748,8 @@ ${dialogueDirectiveBlock}
 ${buildTurnDirectivePrompt(turnDirectives)}
 
 ${volatilityBlock}
+
+${continuityBlock}
 
 ${CAPABILITY_RULES}
 
@@ -684,6 +797,8 @@ INSTRUCTIONS:
 21. Follow the turn-shape directive above exactly; do not drift into a different conversation shape
 22. If repeated misses are active, do not introduce a new concern family — stay on the same blocker and sharpen it
 23. In objection-stage and close-stage scenarios, transitions must be deterministic and narrow, not open-ended by default
+24. Across 5-8 exchanges, preserve continuity of the HCP's agenda; the wording may change, but the unresolved blocker should remain recognizable until it is actually addressed
+25. If the HCP has repeated the same concern family recently, sharpen or narrow that same concern instead of inventing a new one
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -772,12 +887,50 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
+  if (needsContinuityVariationRewrite({
+    hcpReply,
+    transcript,
+  })) {
+    try {
+      hcpReply = await rewriteForContinuityVariation({
+        hcpReply,
+        transcript,
+        scenario,
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        currentJourneyState: result.nextJourneyState || currentJourneyState,
+      });
+    } catch {
+      // Fall back to the original line if the refinement call fails.
+    }
+  }
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
     turn: turnDirectives,
     profile: runtimeProfile,
   });
+  if (needsContinuityVariationRewrite({
+    hcpReply,
+    transcript,
+  })) {
+    try {
+      hcpReply = await rewriteForContinuityVariation({
+        hcpReply,
+        transcript,
+        scenario,
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        currentJourneyState: result.nextJourneyState || currentJourneyState,
+      });
+      hcpReply = applyHcpResponseSurface({
+        hcpReply,
+        scenario,
+        turn: turnDirectives,
+        profile: runtimeProfile,
+      });
+    } catch {
+      // Fall back to the surfaced line if the refinement call fails.
+    }
+  }
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")

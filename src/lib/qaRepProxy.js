@@ -1,6 +1,11 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population/i;
+const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what's the relevance|what is the relevance/i;
+const EXPECTATION_MISMATCH_PATTERN = /dr\.|patel|case discussion|case consult|referral|thought this was|was going to be|was supposed to be/i;
+const ACCESS_PROCESS_DEMAND_PATTERN = /formulary|committee|review process|step therapy|non-preferred|what would move|what would change|take back|carry forward|prior auth|prior authorization|what staff|what gets added|what step/i;
+const WORKFLOW_DEMAND_PATTERN = /workflow|staff|monitoring|follow-up|what happens next|who picks that up|who owns that|extra step|what does that add/i;
+const WORKFLOW_REDISCOVERY_PATTERN = /what's a typical day|how do you currently|where do you think we could make the biggest impact|fit into your existing workflow|what part of the follow-up|what part of the monitoring|what would actually land on your team/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track|minimal disruption|incorporated into your existing workflow|in order to|would likely be|that would help/i;
@@ -90,6 +95,84 @@ function shouldUseDeterministicCommitmentRewrite({ scenario, turns, draft }) {
   );
 }
 
+function shouldUseDeterministicFamilyAnswerRewrite({ scenario, turns, draft }) {
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const activeConcernText = getActiveConcernText(turns, scenario);
+  const repeatedConcern = hasRepeatedObjection(turns);
+  const draftText = String(draft || "").trim();
+  const draftTooLoose = BROAD_DISCOVERY_PATTERN.test(draftText) || ABSTRACT_QA_LANGUAGE_PATTERN.test(draftText);
+
+  if (stage === "initial_access") {
+    return (INITIAL_ACCESS_DIRECT_ASK_PATTERN.test(activeConcernText) || repeatedConcern) && draftTooLoose;
+  }
+
+  if (stage === "access_formulary") {
+    return (ACCESS_PROCESS_DEMAND_PATTERN.test(activeConcernText) || repeatedConcern) && draftTooLoose;
+  }
+
+  if (stage === "adoption_implementation") {
+    return (WORKFLOW_DEMAND_PATTERN.test(activeConcernText) || repeatedConcern) && (draftTooLoose || WORKFLOW_REDISCOVERY_PATTERN.test(draftText));
+  }
+
+  return false;
+}
+
+function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
+  const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+
+  if (stage === "initial_access") {
+    if (EXPECTATION_MISMATCH_PATTERN.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return "You're right, this did not land like the case discussion you expected. I only want to see whether one practical issue is worth your time, and if it is not, we can stop there.";
+      }
+      return "You're right, this did not land like the case discussion you expected. I only wanted to see whether one practical issue is slowing care enough to matter in your clinic.";
+    }
+    if (/what'?s this about|what is this about|why are you here|why are we talking/.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return "This is still about whether one practical barrier is slowing care enough to matter in your clinic. If there is one, which step would you want fixed first?";
+      }
+      return "This is about whether one practical barrier is slowing care enough to be worth your time. If there is one, where does it hit your team first?";
+    }
+    if (/make this quick|short version|few minutes|patient waiting|brief/.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return "The short version is I'm trying to pin down one barrier worth solving, not pitch at you. Which step is still costing your team the most time right now?";
+      }
+      return "The short version is I'm trying to see whether one access or workflow step is getting in the way of care. If it is, which step is costing your team the most time right now?";
+    }
+    return "This is about whether there's one practical issue worth solving in your clinic, not a broad product discussion. If there is, where does it show up first?";
+  }
+
+  if (stage === "access_formulary") {
+    if (/formulary|committee|review process|take back|carry forward|non-preferred|step therapy/.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return "It sounds like the real question now is what would be concrete enough to carry into that review, not another general value point. What one item would actually make it easier for you to move this forward internally?";
+      }
+      return "It sounds like the real issue is what would be concrete enough to move a formulary conversation, not another general value story. What one item would actually be worth taking back to that review?";
+    }
+    if (repTurns >= 2) {
+      return "It sounds like the blocker is still the access step itself, not the clinical rationale. What one process condition would have to change before you'd move this forward?";
+    }
+    return "It sounds like the blocker is the access step itself, not whether the therapy works on paper. Which part of that process is stopping movement right now?";
+  }
+
+  if (stage === "adoption_implementation") {
+    if (/staff|workflow|monitoring|follow-up|what happens next|who picks that up|who owns that/.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return "It sounds like staff burden is still the only real blocker here. What one workflow condition would have to be true before you'd try this with one patient?";
+      }
+      if (repTurns >= 1) {
+        return "It sounds like the real issue is whether this creates another staff handoff, not whether the idea makes sense. Which step would actually force a new handoff in your workflow?";
+      }
+      return "It sounds like the real issue is whether this creates another staff handoff, not whether the idea makes sense. Where would that extra step actually land first for your team?";
+    }
+    return "It sounds like the main question is whether this is workable in practice, not whether the idea makes sense. What step would create the most friction for your team right now?";
+  }
+
+  return "Let me keep this on the one practical issue that matters here. Where does it start to break down for your team now?";
+}
+
 function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   const activeConcernText = getActiveConcernText(turns, scenario);
   const issueLabel = extractIssueLabel(activeConcernText);
@@ -142,6 +225,10 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
 
   if (/need more data|still not convinced|not the right fit|perfect fit/.test(activeConcernText)) {
     return "It sounds like the hesitation is still active, even if the interest is there. Would you be open to naming the one evidence gap that has to get resolved before this moves from 'maybe' to a real next step?";
+  }
+
+  if (/proof point|concrete outcome|single data point|patient outcome|concrete/i.test(activeConcernText)) {
+    return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. Would a concrete shift in symptoms, hospital use, or treatment choice be the kind of threshold you'd actually act on?";
   }
 
   if (/formulary|non-preferred|review process|reconsidered|concrete|take back to the formulary team|exact steps/.test(activeConcernText)) {
@@ -203,6 +290,14 @@ export async function maybeReviseStrongRepReply({
   currentJourneyState,
   draft,
 }) {
+  if (shouldUseDeterministicFamilyAnswerRewrite({
+    scenario,
+    turns,
+    draft,
+  })) {
+    return buildDeterministicFamilyAnswerReply({ scenario, turns });
+  }
+
   if (shouldUseDeterministicCommitmentRewrite({
     scenario,
     turns,
@@ -267,6 +362,22 @@ Return ONLY the revised rep reply as plain text.`;
   });
 
   return String(revised || draft).trim();
+}
+
+export function maybeEnforceFamilyAnswerReply({
+  scenario,
+  turns,
+  draft,
+}) {
+  if (shouldUseDeterministicFamilyAnswerRewrite({
+    scenario,
+    turns,
+    draft,
+  })) {
+    return buildDeterministicFamilyAnswerReply({ scenario, turns });
+  }
+
+  return draft;
 }
 
 function needsConcreteLanguageRevision({ scenario, draft }) {

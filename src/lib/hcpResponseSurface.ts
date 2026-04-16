@@ -101,6 +101,45 @@ function applyDomainCadence(text: string, domain: string, concernFamily: string)
       .replace(/\bwhat gets added for staff\b/gi, "what gets added");
   }
 
+  if (domain === "rheumatology") {
+    output = output
+      .replace(/\bwhat does that add for the team\b/gi, "what does that add for staff")
+      .replace(/\bwhat extra step does that add\b/gi, "what extra step does that add for staff")
+      .replace(/\bwhat happens next\b/gi, "what happens after that")
+      .replace(/\bwho owns that step\b/gi, "who picks that up");
+  }
+
+  if (domain === "dermatology") {
+    output = output
+      .replace(/\bwhat extra step does that add\b/gi, "what step does that add")
+      .replace(/\bwhat happens next\b/gi, "what happens after that")
+      .replace(/\bwho picks that up\b/gi, "who would own that");
+  }
+
+  if (domain === "nephrology") {
+    output = output
+      .replace(/\bwhat would change your mind\b/gi, "what would move you")
+      .replace(/\bwhat one next step would make this real\b/gi, "what one step would make this real");
+  }
+
+  if (domain === "neurology") {
+    output = output
+      .replace(/\bwhat proof point would change that\b/gi, "what would settle that")
+      .replace(/\bwhat changes practice\b/gi, "what actually changes practice");
+  }
+
+  if (domain === "hematology") {
+    output = output
+      .replace(/\bwhat happens next\b/gi, "what happens with the next case")
+      .replace(/\bwhat one next step would make this real\b/gi, "what one next step would make you comfortable trying again");
+  }
+
+  if (domain === "endocrinology") {
+    output = output
+      .replace(/\bwhich patient type are you talking about\b/gi, "which patients are you talking about")
+      .replace(/\bwhat changes in practice\b/gi, "what changes once they leave the office");
+  }
+
   return normalizeText(output);
 }
 
@@ -161,6 +200,33 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
     output = `That still doesn't answer it. ${output}`;
   }
 
+  if (turn.closeMode && turn.escalationStage !== "disengaging") {
+    output = output
+      .replace(/\bI'?m open to hearing more\b/gi, "I can hear one more practical point")
+      .replace(/\bI'?m willing to keep talking\b/gi, "I can stay with this if it stays concrete")
+      .replace(/\bI'?m interested\b/gi, "I'm interested if it stays usable");
+  }
+
+  return normalizeText(output);
+}
+
+function applyContinuityPressure(text: string, turn: HcpTurnDirectiveSet, profile: HcpRuntimeProfile): string {
+  let output = normalizeText(text);
+
+  if (turn.escalationStage === "high_pressure" || turn.escalationStage === "disengaging") {
+    output = output
+      .replace(/\bLet me step back\b/gi, "No, stay with it")
+      .replace(/\bBefore we get ahead of ourselves\b/gi, "Before we go further")
+      .replace(/\bI'm trying to understand\b/gi, "I'm looking at")
+      .replace(/\bI'm still trying to understand\b/gi, "I'm still looking at");
+  }
+
+  if (profile.directness === "high" && turn.concernFamily === "time") {
+    output = output
+      .replace(/\bWhat would you want me to focus on\b/gi, "What do you want me to focus on")
+      .replace(/\bCan you tell me\b/gi, "Tell me");
+  }
+
   return normalizeText(output);
 }
 
@@ -181,6 +247,7 @@ export function applyHcpResponseSurface({
   output = applyGlobalSpokenRewrites(output);
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
   output = applyLateStageNarrowing(output, turn);
+  output = applyContinuityPressure(output, turn, profile);
   output = applyShapeCompression(output, turn, profile);
 
   if (
