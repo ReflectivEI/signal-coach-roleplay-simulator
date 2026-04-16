@@ -45,28 +45,30 @@ export default function BuildYourOwnCard() {
   return (
     <Link
       to="/builder"
-      className="flex flex-col gap-3 rounded-2xl"
+      className="flex flex-col gap-[0.62rem] rounded-2xl h-full"
       style={{
-        padding: "0.85rem 1rem",
-        background: "hsl(0 60% 90%)",
-        border: "1.5px solid hsl(0 70% 70%)",
+        padding: "1rem 1rem 0.95rem",
+        background: "linear-gradient(135deg, hsl(351 79% 92%) 0%, hsl(6 85% 89%) 100%)",
+        border: "1.5px solid hsl(353 72% 74%)",
         animation: "glow-red 2s ease-in-out infinite",
         transition: "transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease",
+        minHeight: "118px",
+        justifyContent: "space-between",
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.background = "hsl(0 60% 86%)";
-        e.currentTarget.style.transform = "translateY(-3px)";
+        e.currentTarget.style.background = "linear-gradient(135deg, hsl(351 80% 90%) 0%, hsl(6 82% 86%) 100%)";
+        e.currentTarget.style.transform = "translateY(-4px) scale(1.01)";
         e.currentTarget.style.boxShadow = "0 8px 24px rgba(180,40,40,0.18)";
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.background = "hsl(0 60% 90%)";
+        e.currentTarget.style.background = "linear-gradient(135deg, hsl(351 79% 92%) 0%, hsl(6 85% 89%) 100%)";
         e.currentTarget.style.transform = "translateY(0)";
         e.currentTarget.style.boxShadow = "none";
       }}
     >
       {/* Title + Custom pill */}
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-bold leading-tight text-base" style={{ color: "hsl(0 65% 32%)" }}>
+      <div className="flex items-start justify-between gap-2 min-h-[38px]">
+        <span className="font-bold leading-[1.18] text-[0.985rem] tracking-[-0.01em] pr-1" style={{ color: "hsl(0 65% 32%)" }}>
           Build Your Own Scenario
         </span>
         {/* Pill: teal matching "Signal Intelligence™ Practice" banner */}
@@ -91,8 +93,8 @@ export default function BuildYourOwnCard() {
       </div>
 
       {/* Typing animation description + Create button */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold italic" style={{ color: "hsl(162 55% 32%)" }}>
+      <div className="flex items-center justify-between gap-2 mt-auto">
+        <span className="text-[0.8rem] font-semibold italic leading-snug" style={{ color: "hsl(162 55% 32%)" }}>
           {desc}
           {!descDone && (
             <span style={{ opacity: cursor ? 1 : 0 }}>|</span>

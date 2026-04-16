@@ -31,6 +31,9 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const difficulty = getDifficulty(scenario);
+  const displayTitle = scenario.title === "The Warm Intro That Turns Cold"
+    ? "Warm Intro Turns Cold"
+    : scenario.title.replace(/^The\s+/, "");
 
   const handleDelete = async (e) => {
     e.stopPropagation();
@@ -46,26 +49,32 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        className="h-full"
         style={{
-          background: "hsl(174 40% 97%)",
-          border: `1px solid ${hovered ? "hsl(162 50% 65%)" : "hsl(162 50% 80%)"}`,
-          borderRadius: "1rem",
+          background: "linear-gradient(180deg, hsl(186 24% 95%) 0%, hsl(174 28% 96%) 100%)",
+          border: `1.5px solid ${hovered ? "rgba(82, 163, 156, 0.95)" : "rgba(128, 191, 186, 0.82)"}`,
+          borderRadius: "1.1rem",
           boxShadow: hovered
-            ? "0 6px 20px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06)"
-            : "0 1px 3px rgba(0,0,0,0.04)",
-          transform: hovered ? "translateY(-2px)" : "translateY(0)",
-          transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
-          padding: "0.85rem 1rem",
+            ? "0 18px 34px rgba(8, 27, 47, 0.14), 0 6px 16px rgba(12, 39, 59, 0.08)"
+            : "0 2px 6px rgba(0,0,0,0.04)",
+          transform: hovered ? "translateY(-4px) scale(1.01)" : "translateY(0)",
+          transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease",
+          padding: "1rem 1rem 0.95rem",
           display: "flex",
           flexDirection: "column",
-          gap: "0.8rem",
+          gap: "0.62rem",
+          minHeight: "118px",
+          justifyContent: "space-between",
           position: "relative",
         }}
       >
         {/* Title + badge inline */}
-        <div className="flex items-start justify-between gap-2 min-h-0">
-          <h3 className="font-bold leading-tight text-base" style={{ color: "#1a1a1a" }}>
-            {scenario.title}
+        <div className="flex items-start justify-between gap-2 min-h-[38px]">
+          <h3
+            className="font-bold leading-[1.18] text-[0.985rem] tracking-[-0.01em] pr-1 line-clamp-2"
+            style={{ color: "#1a1a1a" }}
+          >
+            {displayTitle}
           </h3>
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 mt-0.5 ${difficulty.cls}`}>
             {difficulty.label}
@@ -73,17 +82,15 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 mt-auto">
           <button
             onClick={() => setShowDetail(true)}
             className="py-1 px-4 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap"
             style={{
-              border: "1.5px solid hsl(174 60% 32%)",
-              color: "hsl(174 60% 32%)",
-              background: "transparent",
+              border: "1.5px solid hsl(178 49% 42%)",
+              color: "hsl(178 49% 35%)",
+              background: hovered ? "rgba(170, 231, 223, 0.32)" : "rgba(255,255,255,0.42)",
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "hsl(174 60% 95%)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
           >
             Expand for Details
           </button>
@@ -91,12 +98,12 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             onClick={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
             className="py-1 px-4 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
             style={{
-              background: "white",
-              color: "hsl(222 40% 20%)",
+              background: hovered
+                ? "linear-gradient(135deg, hsl(222 46% 19%), hsl(176 45% 30%))"
+                : "white",
+              color: hovered ? "white" : "hsl(222 40% 20%)",
               border: "1.5px solid hsl(222 40% 20%)"
             }}
-            onMouseEnter={e => { e.currentTarget.style.background = "hsl(222 40% 95%)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "white"; }}
           >
             Start Scenario →
           </button>

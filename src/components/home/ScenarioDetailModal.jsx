@@ -298,8 +298,11 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 40 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="relative w-full sm:max-w-2xl max-h-[94vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl"
-          style={{ border: "1px solid #e2e8f0" }}
+          className="relative w-full sm:max-w-[980px] max-h-[94vh] overflow-y-auto rounded-t-2xl sm:rounded-[28px] bg-white shadow-2xl"
+          style={{
+            border: "1px solid rgba(11, 58, 73, 0.16)",
+            boxShadow: "0 30px 80px rgba(15, 23, 42, 0.22)",
+          }}
         >
         {/* Drag pill on mobile */}
         <div className="sm:hidden flex justify-center pt-3 pb-1">
@@ -307,7 +310,13 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
         </div>
 
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 px-6 py-5 flex items-start justify-between gap-3" style={{ background: "hsl(174 40% 14%)", borderBottom: "1px solid hsl(174 40% 20%)" }}>
+        <div
+          className="sticky top-0 z-10 px-6 py-5 flex items-start justify-between gap-3"
+          style={{
+            background: "linear-gradient(135deg, hsl(223 47% 18%) 0%, hsl(214 53% 24%) 55%, hsl(176 59% 30%) 100%)",
+            borderBottom: "1px solid rgba(95, 220, 197, 0.16)",
+          }}
+        >
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="font-semibold text-white text-lg leading-snug">{scenario.title}</h2>
@@ -321,18 +330,33 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           </button>
         </div>
 
-        <div className="px-6 py-6 space-y-6">
+        <div
+          className="px-6 py-6 space-y-6"
+          style={{ background: "linear-gradient(180deg, #f9fbfc 0%, #f1f7f7 100%)" }}
+        >
 
           {/* HCP Profile + Objective banners */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-lg p-4" style={{ background: "hsl(174 40% 16%)", border: "1px solid hsl(174 40% 24%)" }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(180deg, hsl(223 44% 18%) 0%, hsl(219 39% 15%) 100%)",
+                border: "1px solid rgba(100, 223, 201, 0.16)",
+              }}
+            >
               <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>HCP Profile</p>
               <p className="text-sm text-white font-semibold leading-snug mb-1.5">{scenario.stakeholder}</p>
               {contextDetail && (
                 <p className="text-xs text-white leading-relaxed">{contextDetail}</p>
               )}
             </div>
-            <div className="rounded-lg p-4" style={{ background: "hsl(174 40% 16%)", border: "1px solid hsl(174 40% 24%)" }}>
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 48% 23%) 100%)",
+                border: "1px solid rgba(100, 223, 201, 0.16)",
+              }}
+            >
               <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>Objective</p>
               <p className="text-xs text-white leading-relaxed">{scenario.objective}</p>
             </div>
@@ -342,17 +366,33 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           <OpeningSceneBlock scenario={scenario} />
 
           {/* Tactical Focus + Key Challenges */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-lg p-4" style={{ background: "hsl(222 30% 15%)", border: "1px solid hsl(222 30% 24%)" }}>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(180deg, hsl(223 35% 17%) 0%, hsl(221 33% 15%) 100%)",
+                border: "1px solid rgba(39, 63, 103, 0.35)",
+              }}
+            >
               <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Tactical Focus</p>
               <p className="text-sm text-white leading-relaxed">{scenario.description}</p>
             </div>
-            <div className="rounded-lg p-4" style={{ background: "hsl(222 30% 15%)", border: "1px solid hsl(222 30% 24%)" }}>
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(135deg, hsl(223 35% 17%) 0%, hsl(176 40% 23%) 100%)",
+                border: "1px solid rgba(58, 123, 121, 0.30)",
+              }}
+            >
               <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Key Challenges</p>
               <ul className="space-y-2">
                 {challenges.map((c, i) => (
-                  <li key={i} className="text-sm text-white flex gap-2 leading-relaxed justify-center">
-                    <span className="shrink-0 mt-1" style={{ width: 5, height: 5, borderRadius: "50%", background: "hsl(162 60% 55%)" }} />{c}
+                  <li key={i} className="text-sm text-white flex items-start gap-2.5 leading-relaxed">
+                    <span
+                      className="shrink-0"
+                      style={{ width: 5, height: 5, borderRadius: "50%", background: "hsl(162 60% 55%)", marginTop: 8 }}
+                    />
+                    <span>{c}</span>
                   </li>
                 ))}
               </ul>
@@ -360,10 +400,16 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           </div>
 
           {/* Scenario Variables + Signal Intelligence */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
             {/* Scenario Variables */}
-            <div className="rounded-lg p-4" style={{ background: "hsl(174 40% 97%)", border: "1.5px solid hsl(162 50% 80%)" }}>
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
+                border: "1.5px solid rgba(134, 209, 194, 0.70)",
+              }}
+            >
               <div className="flex items-center gap-2 mb-4">
                 <Brain className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
@@ -391,7 +437,13 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
             </div>
 
             {/* Signal Intelligence Focus */}
-            <div className="rounded-lg p-4" style={{ background: "hsl(174 40% 97%)", border: "1.5px solid hsl(162 50% 80%)" }}>
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
+                border: "1.5px solid rgba(134, 209, 194, 0.70)",
+              }}
+            >
               <div className="flex items-center gap-2 mb-4">
                 <Zap className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
                 <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>

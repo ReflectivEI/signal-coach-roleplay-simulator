@@ -1,133 +1,64 @@
 /**
  * HCP Cue Generator
  * =================
- * Generates context-aware, single-line observable HCP cues for dialogue.
- * Uses the same 3-part realism formula as opening scenes: HCP action + signal + environmental context.
- * Output: 1-line, observable, aligned with the HCP's spoken dialogue.
+ * Deterministic observable cue selection, aligned to:
+ * - Base44 behavioral SOT opening-scene formula
+ * - the stronger V2 HCP cue/state alignment path
  *
- * Anti-drift structure:
- * - Fixed formula: [observable action/signal] + [contextual environmental anchor]
- * - Deterministic: same dialogue + behavior state → same cue structure
- * - No label language in output (no "time-constrained", "skeptical", etc.)
- * - All cues are physically visible to the rep
+ * Goals:
+ * - cue is observable, not interpretive
+ * - cue aligns to the actual HCP line
+ * - cue aligns to the current HCP state / pressure
+ * - same inputs => same cue
+ * - cue text is not duplicated from product labels
  */
 
-// ─── CUE BANK BY BEHAVIOR STATE ────────────────────────────────────────────────
-// Each behavior state maps to observable physical/facial signals
-// Cues include optional environmental detail for realism grounding
-
-const CUE_ACTION_BANK: Record<string, string[]> = {
-  open: [
-    "leans slightly forward, eyes engaged",
-    "nods encouragingly and maintains direct eye contact",
-    "relaxes posture, gestures toward the chair across from them",
-    "settles back in their chair, genuinely listening",
-  ],
-  openness: [
-    "leans slightly forward, eyes engaged",
-    "nods encouragingly and maintains direct eye contact",
-  ],
-  neutral: [
-    "nods thoughtfully, pen pausing mid-note",
-    "glances up with steady, measured expression",
-    "maintains composed posture, listening intently",
-    "gives a single, brief nod of acknowledgment",
-  ],
-  closed: [
-    "leans back slightly, arms loosely crossed",
-    "glances down briefly before looking back up",
-    "pauses, studying your response carefully",
-    "shifts weight, expression reserved",
-  ],
-  resistance: [
-    "raises an eyebrow, expression skeptical",
-    "crosses arms, jaw tightens slightly",
-    "pauses, then continues with measured tone",
-    "holds steady eye contact, expression unmoved",
-  ],
-  frustration: [
-    "jaw tightens, glances toward the clock",
-    "shifts sharply in chair, expression compressed",
-    "sets pen down with subtle firmness",
-    "exhales, refocusing on the conversation",
-  ],
-  curiosity: [
-    "leans forward, pen hovering over notepad",
-    "eyes widen slightly, interest evident",
-    "sets pen down, giving full attention",
-    "nods slowly, processing your words",
-  ],
-  time_pressure: [
-    "glances at the clock, then back to you",
-    "adjusts in seat, checking the time again",
-    "nods quickly, ready to move forward",
-    "stands briefly, checking the doorway",
-  ],
-};
-
-// ─── ENVIRONMENTAL CONTEXT ANCHORS ─────────────────────────────────────────────
-// Brief office/staff cues that add realism without being intrusive
-// Tied to interaction pressures where relevant
-
-const CONTEXT_ANCHOR_BANK: Record<string, string[]> = {
-  time_constrained: [
-    "glancing at the clock briefly",
-    "keeping one eye toward the door",
-    "checking the schedule on their screen",
-    "pausing as a nurse passes in the hallway",
-  ],
-  operationally_constrained: [
-    "a chart stack visible at the edge of the desk",
-    "glancing toward a knock on the door",
-    "adjusting their position as someone passes nearby",
-    "refocusing after a brief interruption",
-  ],
-  skeptical_resistant: [
-    "eyes drifting briefly to the open trial data",
-    "glancing at the annotated printout before responding",
-    "maintaining measured eye contact",
-    "tapping pen thoughtfully on the desk",
-  ],
-  access_barrier: [
-    "prior auth stack partially visible nearby",
-    "formulary reminder visible above the monitor",
-    "coverage worksheet on the desk surface",
-  ],
-  safety_concern: [
-    "referencing a recent conference abstract nearby",
-    "glancing at highlighted passages before speaking",
-    "hand near a medical journal on the desk",
-  ],
-  curious_uncertain: [
-    "pausing to consider your point",
-    "glancing toward a patient note momentarily",
-    "leaning in slightly as if reconsidering",
-  ],
-  default: [
-    "maintaining steady attention",
-    "focused on the conversation",
-    "fully present in the moment",
-  ],
-};
-
-// ─── DETERMINISTIC SEED PICKER ────────────────────────────────────────────────
-
-function pick<T>(arr: T[], seed: string): T {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash * 31 + seed.charCodeAt(i)) & 0xffffffff;
-  }
-  return arr[Math.abs(hash) % arr.length];
-}
-
-// ─── CUE GENERATION ───────────────────────────────────────────────────────────
-
 export interface HcpCueInputs {
-  hcpReply: string; // The HCP's dialogue to align with
-  behaviorState: string; // Current HCP behavior state
-  interactionPressures?: string[]; // Pressure context (for environmental anchoring)
-  scenario?: { title?: string; journeyStage?: string }; // For deterministic seeding
+  hcpReply: string;
+  behaviorState: string;
+  interactionPressures?: string[];
+  scenario?: {
+    id?: string;
+    title?: string;
+    journeyStage?: string;
+    objective?: string;
+    description?: string;
+    openingScene?: string;
+    visualScene?: string;
+    keyChallenges?: string[];
+  };
 }
+
+type CueCategory =
+  | "receptive_attentive"
+  | "neutral_attentive"
+  | "focused_narrowing"
+  | "time_constrained"
+  | "hard_escalation"
+  | "terminal_exit";
+
+type ConcernFamily =
+  | "evidence"
+  | "workflow"
+  | "access"
+  | "screening"
+  | "time"
+  | "general";
+
+const TERMINAL_DIALOGUE_PATTERN =
+  /\b(need to run|have to run|got to go|we should stop|we can stop there|we are done|i have to get back|next patient|wrap this up|that is all i have time for)\b/i;
+
+const HIGH_PRESSURE_DIALOGUE_PATTERN =
+  /\b(quick|be brief|make this quick|short version|not much time|patient waiting|keep this tight|to the point)\b/i;
+
+const DIRECT_BOUNDARY_PATTERN =
+  /\b(what is this about|what exactly|be specific|get to the point|what does that change|what is the bottleneck|what is the threshold|what problem are you solving)\b/i;
+
+const HARD_ESCALATION_PATTERN =
+  /\b(not interested|this is not relevant|that is not helpful|you are not answering|this is going nowhere|i do not have patience for this)\b/i;
+
+const OBSERVABLE_VERB_PATTERN =
+  /\b(glances?|checks?|leans?|nods?|rests?|holds?|taps?|turns?|gathers?|keeps?|sets?|looks?|studies?|shifts?)\b/i;
 
 const BANNED_CUE_TERMS = [
   "skeptical",
@@ -138,28 +69,225 @@ const BANNED_CUE_TERMS = [
   "journey stage",
   "interaction pressure",
   "burden",
+  "workload",
+  "credibility",
+  "decision relevance",
 ];
 
-const PRESSURE_DESCRIPTION_BANK: Record<string, string> = {
-  time_constrained: "Their attention is split by the clock, so the next move has to stay tight and relevant.",
-  operationally_constrained: "Workflow noise is competing with the conversation, so vague framing will lose momentum fast.",
-  skeptical_resistant: "They are evaluating credibility in real time, so unsupported claims will harden the tone.",
-  access_barrier: "Operational friction is already top of mind, so the next question should separate workflow from clinical value.",
-  safety_concern: "Risk is sitting close to the surface, so the next response has to acknowledge it before moving forward.",
-  curious_uncertain: "There is room to deepen the conversation here, but only if the rep keeps it specific and grounded.",
-  default: "The HCP is signaling how they are receiving the conversation, so the next response should match that energy.",
+const CONCERN_KEYWORDS: Record<ConcernFamily, string[]> = {
+  evidence: ["data", "study", "trial", "evidence", "proof", "subgroup", "threshold", "guideline", "journal"],
+  workflow: ["workflow", "staff", "handoff", "process", "step", "clinic", "callback", "room", "flow"],
+  access: ["access", "coverage", "copay", "prior auth", "formulary", "payer", "benefits", "paperwork"],
+  screening: ["screen", "screening", "candidate", "eligibility", "criteria", "identify", "selection"],
+  time: ["time", "clock", "schedule", "patient waiting", "brief", "quick", "minutes"],
+  general: [],
 };
 
-const BEHAVIOR_DESCRIPTION_BANK: Record<string, string> = {
-  open: "The HCP is visibly receptive, so a specific question can deepen the exchange without forcing it.",
-  openness: "The HCP is visibly receptive, so a specific question can deepen the exchange without forcing it.",
-  neutral: "The HCP is still deciding how much to give you, so relevance has to be earned in the next turn.",
-  closed: "The HCP is holding distance, so the next move needs to show understanding before trying to advance.",
-  resistance: "The HCP is signaling pushback, so the next response should explore the concern instead of arguing with it.",
-  frustration: "The HCP is showing strain, so the next move should lower friction rather than add more explanation.",
-  curiosity: "The HCP is leaning in, so a focused follow-up can build useful momentum.",
-  time_pressure: "The HCP is visibly managing time, so the next response should be concise and purposeful.",
+const PRESSURE_TO_CONCERN: Record<string, ConcernFamily> = {
+  time_constrained: "time",
+  operationally_constrained: "workflow",
+  skeptical_resistant: "evidence",
+  access_barrier: "access",
+  safety_concern: "evidence",
+  curious_uncertain: "general",
 };
+
+const JOURNEY_TO_CONCERN: Record<string, ConcernFamily> = {
+  initial_access: "time",
+  discovery: "screening",
+  clinical_value: "evidence",
+  objection_handling: "workflow",
+  adoption_implementation: "workflow",
+  access_formulary: "access",
+  commitment_close: "general",
+};
+
+const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
+  receptive_attentive: {
+    evidence: [
+      "Leans slightly toward the study printout, pen hovering over the highlighted data.",
+      "Keeps the marked-up trial page open and looks up with steady attention.",
+    ],
+    workflow: [
+      "Turns back toward you with the workflow notes still open on the desk.",
+      "Keeps the clinic notes nearby, posture open enough to keep listening.",
+    ],
+    access: [
+      "Keeps the coverage notes open, attention visibly with you.",
+      "Looks up from the formulary sheet and leaves the conversation space open.",
+    ],
+    screening: [
+      "Leans toward the chart, giving the selection question full attention.",
+      "Keeps the patient list open and looks back with measured interest.",
+    ],
+    time: [
+      "Gives a quick nod and leaves a small opening for the next point.",
+      "Keeps one hand near the schedule but stays with you for the answer.",
+    ],
+    general: [
+      "Leans in slightly, attention fully with you.",
+      "Keeps a steady, receptive posture as you continue.",
+    ],
+  },
+  neutral_attentive: {
+    evidence: [
+      "Keeps the study printout open, eyes moving once across the highlighted data.",
+      "Leaves the journal page in view and looks back with a measured expression.",
+    ],
+    workflow: [
+      "Keeps the workflow notes nearby, looking up without losing the thread.",
+      "Leaves the clinic list open and settles back into a professional posture.",
+    ],
+    access: [
+      "Keeps the coverage notes in view, pen still against the page.",
+      "Leaves the formulary sheet open and looks back without changing posture.",
+    ],
+    screening: [
+      "Keeps the patient list open, attention settling on the chart in front of them.",
+      "Leaves the chart visible on the desk and looks up with measured focus.",
+    ],
+    time: [
+      "Checks the schedule once, then returns attention to you.",
+      "Glances toward the clock and comes back with a brief nod.",
+    ],
+    general: [
+      "Maintains a professional posture, attention fixed on the exchange.",
+      "Gives a brief nod and holds steady eye contact.",
+    ],
+  },
+  focused_narrowing: {
+    evidence: [
+      "Narrows their gaze at the study printout, expression measured.",
+      "Keeps a finger on the data page and looks back with a tighter expression.",
+    ],
+    workflow: [
+      "Keeps a hand on the workflow notes, posture tightening.",
+      "Glances at the clinic list, then looks back with a narrower focus.",
+    ],
+    access: [
+      "Glances at the coverage notes, then looks back with a tighter expression.",
+      "Keeps the formulary sheet in view, posture closed down around the question.",
+    ],
+    screening: [
+      "Keeps the patient list open, eyes narrowing at the selection question.",
+      "Looks back from the chart with a more exacting expression.",
+    ],
+    time: [
+      "Checks the clock, then looks back with very little room for a detour.",
+      "Keeps their eyes on you for a beat, expression tightening around the ask.",
+    ],
+    general: [
+      "Holds steady eye contact, expression narrowing.",
+      "Goes still for a beat, leaving little room for a detour.",
+    ],
+  },
+  time_constrained: {
+    evidence: [
+      "Checks the clock, then taps the marked-up study printout once.",
+      "Glances toward the doorway, then back to the data page in front of them.",
+    ],
+    workflow: [
+      "Checks the doorway, then rests a hand on the callback list.",
+      "Looks toward the hall, clinic notes still open beneath one hand.",
+    ],
+    access: [
+      "Checks the clock, coverage notes still in hand.",
+      "Glances toward the door, formulary sheet still open on the desk.",
+    ],
+    screening: [
+      "Checks the schedule, then taps the patient list once.",
+      "Glances toward the doorway, chart still open in front of them.",
+    ],
+    time: [
+      "Checks the clock, then looks back with a tighter expression.",
+      "Glances toward the next room and comes back ready for one concise point.",
+    ],
+    general: [
+      "Checks the clock, then looks back with a tighter expression.",
+      "Glances toward the doorway, posture still signaling limited time.",
+    ],
+  },
+  hard_escalation: {
+    evidence: [
+      "Holds the study page still, jaw set.",
+      "Sets the printout flat on the desk, expression clipped.",
+    ],
+    workflow: [
+      "Sets the workflow notes flat on the desk, expression clipped.",
+      "Holds still over the clinic list, jaw tightening slightly.",
+    ],
+    access: [
+      "Keeps the coverage notes in hand, posture closed.",
+      "Sets the formulary sheet down with a clipped expression.",
+    ],
+    screening: [
+      "Holds the patient list still, expression clipped.",
+      "Sets the chart flat and looks back without softening.",
+    ],
+    time: [
+      "Goes still for a beat, jaw set, eyes already on the clock.",
+      "Looks back with a clipped expression, one hand still on the schedule.",
+    ],
+    general: [
+      "Goes still for a beat, jaw set.",
+      "Holds eye contact with a clipped, closed expression.",
+    ],
+  },
+  terminal_exit: {
+    evidence: [
+      "Gathers the study printout and turns back toward the next task.",
+      "Closes the journal page and shifts back toward the door.",
+    ],
+    workflow: [
+      "Gathers the workflow notes and turns back toward clinic flow.",
+      "Steps back toward the desk, callback list still in hand.",
+    ],
+    access: [
+      "Gathers the coverage notes and turns back toward the next task.",
+      "Closes the formulary sheet and shifts back toward the doorway.",
+    ],
+    screening: [
+      "Gathers the chart and turns back toward the next task.",
+      "Closes the patient list and steps back toward the desk.",
+    ],
+    time: [
+      "Turns back toward the next patient slot, conversation space closing.",
+      "Steps back toward the door, eyes already on the next room.",
+    ],
+    general: [
+      "Gathers the chart and turns back toward the next task.",
+      "Steps back toward the door, conversation space clearly closing.",
+    ],
+  },
+};
+
+const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string> = {
+  receptive_attentive: "The HCP is leaving space for the conversation to move forward, so the next turn should stay specific and relevant.",
+  neutral_attentive: "The HCP is still evaluating the exchange, so the next turn needs to earn more of their attention.",
+  focused_narrowing: "The HCP is narrowing the exchange around one issue, so the next response should answer that issue directly.",
+  time_constrained: "Time is visibly limiting the exchange, so the next move has to stay tight and immediately useful.",
+  hard_escalation: "Patience is tightening, so another detour will harden the conversation further.",
+  terminal_exit: "The interaction is closing, so only a concise, relevant final move has any room left.",
+};
+
+const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string> = {
+  evidence: "They are holding on the proof point, not general framing.",
+  workflow: "They are watching for what this changes in clinic flow, not a broad concept.",
+  access: "They are locked on the access step that actually slows care down.",
+  screening: "They are holding on the patient-selection boundary, not a generic statement.",
+  time: "They are signaling limited availability, so the next move needs real economy.",
+  general: "They are signaling how tight the conversation window is right now.",
+};
+
+function normalizeText(...values: unknown[]): string {
+  return values
+    .flat()
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function cleanCueText(text: string): string {
   return String(text || "")
@@ -169,107 +297,161 @@ function cleanCueText(text: string): string {
     .trim();
 }
 
+function deterministicIndex(seed = "", modulo = 1): number {
+  const text = String(seed || "");
+  if (!text || modulo <= 1) return 0;
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0) % modulo;
+}
+
+function pick<T>(arr: T[], seed: string): T {
+  return arr[deterministicIndex(seed, arr.length)];
+}
+
+function hasAny(text: string, patterns: string[]): boolean {
+  const value = text.toLowerCase();
+  return patterns.some((pattern) => value.includes(pattern));
+}
+
+function deriveConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+  const reply = normalizeText(inputs.hcpReply).toLowerCase();
+  const scenarioText = normalizeText(
+    inputs.scenario?.title,
+    inputs.scenario?.journeyStage,
+    inputs.scenario?.objective,
+    inputs.scenario?.description,
+    inputs.scenario?.openingScene,
+    inputs.scenario?.visualScene,
+    Array.isArray(inputs.scenario?.keyChallenges) ? inputs.scenario?.keyChallenges.join(" ") : ""
+  ).toLowerCase();
+
+  for (const pressure of inputs.interactionPressures || []) {
+    const mapped = PRESSURE_TO_CONCERN[pressure];
+    if (mapped) return mapped;
+  }
+
+  const combined = `${reply} ${scenarioText}`;
+  for (const family of Object.keys(CONCERN_KEYWORDS) as ConcernFamily[]) {
+    if (family === "general") continue;
+    if (hasAny(combined, CONCERN_KEYWORDS[family])) return family;
+  }
+
+  const journeyMapped = JOURNEY_TO_CONCERN[String(inputs.scenario?.journeyStage || "").toLowerCase()];
+  return journeyMapped || "general";
+}
+
+function deriveCueCategory(inputs: HcpCueInputs): CueCategory {
+  const reply = normalizeText(inputs.hcpReply).toLowerCase();
+  const behavior = String(inputs.behaviorState || "").toLowerCase();
+  const pressures = inputs.interactionPressures || [];
+
+  if (TERMINAL_DIALOGUE_PATTERN.test(reply)) return "terminal_exit";
+  if (HARD_ESCALATION_PATTERN.test(reply) || ["frustration"].includes(behavior)) return "hard_escalation";
+  if (
+    pressures.includes("time_constrained") ||
+    behavior === "time_pressure" ||
+    HIGH_PRESSURE_DIALOGUE_PATTERN.test(reply)
+  ) {
+    return "time_constrained";
+  }
+  if (
+    ["closed", "resistance"].includes(behavior) ||
+    pressures.includes("skeptical_resistant") ||
+    DIRECT_BOUNDARY_PATTERN.test(reply)
+  ) {
+    return "focused_narrowing";
+  }
+  if (["open", "openness", "curiosity"].includes(behavior)) return "receptive_attentive";
+  return "neutral_attentive";
+}
+
+function cueContradictsCategory(cueText: string, cueCategory: CueCategory): boolean {
+  const cue = cleanCueText(cueText).toLowerCase();
+  if (!cue) return true;
+  if (cueCategory === "terminal_exit") return !/\b(gathers|turns back|steps back|closes the|door)\b/i.test(cue);
+  if (cueCategory === "time_constrained") return !/\b(clock|schedule|door|doorway|hall|next room|patient slot)\b/i.test(cue);
+  if (cueCategory === "hard_escalation") return !/\b(jaw|clipped|holds still|sets|still)\b/i.test(cue);
+  return false;
+}
+
 export function isValidObservedCue(text: string): boolean {
-  const cue = cleanCueText(text).toLowerCase();
-  if (!cue || cue.length < 8) return false;
-  if (cue.split(" ").length > 12) return false;
-  if (BANNED_CUE_TERMS.some((term) => cue.includes(term))) return false;
+  const cue = cleanCueText(text);
+  const lower = cue.toLowerCase();
+  if (!cue || cue.length < 14) return false;
+  if (cue.split(/\s+/).length > 20) return false;
+  if (!OBSERVABLE_VERB_PATTERN.test(cue)) return false;
+  if (BANNED_CUE_TERMS.some((term) => lower.includes(term))) return false;
   return true;
+}
+
+function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCategory: CueCategory; concernFamily: ConcernFamily; label: string } {
+  const cueCategory = deriveCueCategory(inputs);
+  const concernFamily = deriveConcernFamily(inputs);
+  const pool = CUE_POOLS[cueCategory]?.[concernFamily] || CUE_POOLS[cueCategory].general;
+  const seed = [
+    inputs.scenario?.id || inputs.scenario?.title || "scenario",
+    inputs.scenario?.journeyStage || "",
+    cueCategory,
+    concernFamily,
+    inputs.behaviorState,
+    normalizeText(inputs.hcpReply),
+  ].join(":");
+
+  const derived = pick(pool, seed);
+  const cleanedCandidate = cleanCueText(candidateCue);
+  const useCandidate = isValidObservedCue(cleanedCandidate) && !cueContradictsCategory(cleanedCandidate, cueCategory);
+
+  return {
+    cueCategory,
+    concernFamily,
+    label: useCandidate ? cleanedCandidate : derived,
+  };
+}
+
+export function generateHcpCue(inputs: HcpCueInputs): string {
+  return selectStateAlignedCue(inputs).label;
 }
 
 export function buildCueDescription(
   behaviorState: string,
   interactionPressures: string[] = [],
-  cueLabel = ""
+  cueLabel = "",
+  category?: CueCategory,
+  concernFamily?: ConcernFamily
 ): string {
-  const normalizedCue = cueLabel.toLowerCase();
-  const behaviorDescription = BEHAVIOR_DESCRIPTION_BANK[behaviorState];
-  const pressureDescription = interactionPressures
-    .map((pressure) => PRESSURE_DESCRIPTION_BANK[pressure])
-    .find(Boolean);
-
-  if (/(cross|narrow|tighten|unmoved|glance at watch|clock|jaw|reserved|skeptical)/i.test(normalizedCue)) {
-    return pressureDescription || BEHAVIOR_DESCRIPTION_BANK.resistance || PRESSURE_DESCRIPTION_BANK.default;
-  }
-
-  if (/(leans forward|pen hovering|full attention|welcoming|motion you in|encouragingly)/i.test(normalizedCue)) {
-    return BEHAVIOR_DESCRIPTION_BANK.curiosity || behaviorDescription || PRESSURE_DESCRIPTION_BANK.default;
-  }
-
-  if (["open", "openness", "curiosity"].includes(behaviorState)) {
-    return behaviorDescription || pressureDescription || PRESSURE_DESCRIPTION_BANK.default;
-  }
-
-  if (["closed", "resistance", "frustration", "time_pressure"].includes(behaviorState)) {
-    return pressureDescription || behaviorDescription || PRESSURE_DESCRIPTION_BANK.default;
-  }
-
-  if (behaviorDescription && pressureDescription) {
-    return `${behaviorDescription} ${pressureDescription}`;
-  }
-
-  return behaviorDescription || pressureDescription || PRESSURE_DESCRIPTION_BANK.default;
-}
-
-/**
- * generateHcpCue
- *
- * Creates a single-line observable cue aligned with the HCP's dialogue.
- * Formula: [Observable action/signal] + [optional contextual anchor]
- *
- * Rules:
- * - 1 sentence only
- * - Observable by the rep
- * - No label language (no "closed", "frustrated", etc.)
- * - Deterministic: same inputs → same cue
- * - Contextual to the dialogue and behavior state
- */
-export function generateHcpCue(inputs: HcpCueInputs): string {
-  const {
-    hcpReply,
+  const derivedCategory = category || deriveCueCategory({
+    hcpReply: cueLabel,
     behaviorState,
-    interactionPressures = [],
-    scenario = {},
-  } = inputs;
+    interactionPressures,
+  });
+  const derivedConcernFamily = concernFamily || deriveConcernFamily({
+    hcpReply: cueLabel,
+    behaviorState,
+    interactionPressures,
+  });
 
-  // ── Select action/signal from behavior state bank ──
-  const actionBank = CUE_ACTION_BANK[behaviorState] || CUE_ACTION_BANK["neutral"];
-  const seed = scenario?.title || hcpReply;
-  const action = pick(actionBank, seed + "_action");
-
-  // ── Select contextual anchor if pressures exist ──
-  let anchor = "";
-  for (const p of interactionPressures) {
-    const anchorBank = CONTEXT_ANCHOR_BANK[p];
-    if (anchorBank) {
-      anchor = pick(anchorBank, seed + "_" + p);
-      break;
-    }
-  }
-  if (!anchor) {
-    anchor = pick(CONTEXT_ANCHOR_BANK["default"], seed + "_default");
-  }
-
-  // ── Assembly: [action], [anchor] ──
-  if (anchor.toLowerCase().includes("visible") || anchor.toLowerCase().includes("stack")) {
-    // Anchor is a visual detail — use comma
-    return `${action}, ${anchor}.`;
-  } else {
-    // Anchor is an action — use "as"
-    return `${action}, ${anchor && anchor.length > 0 ? "as they are " + anchor : "maintaining focus"}.`;
-  }
+  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${CONCERN_DESCRIPTION_BANK[derivedConcernFamily]}`.trim();
 }
 
 export function resolveObservedCue(
   candidateCue: string,
   inputs: HcpCueInputs
 ): { label: string; description: string; source: "hcp_context" } {
-  const fallback = generateHcpCue(inputs);
-  const label = isValidObservedCue(candidateCue) ? cleanCueText(candidateCue) : fallback;
+  const selected = selectStateAlignedCue(inputs, candidateCue);
 
   return {
-    label,
-    description: buildCueDescription(inputs.behaviorState, inputs.interactionPressures, label),
+    label: selected.label,
+    description: buildCueDescription(
+      inputs.behaviorState,
+      inputs.interactionPressures || [],
+      selected.label,
+      selected.cueCategory,
+      selected.concernFamily
+    ),
     source: "hcp_context",
   };
 }

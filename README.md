@@ -3,7 +3,7 @@
 Standalone Role Play Simulator built as an independent frontend plus dedicated backend worker.
 
 Production worker target:
-`https://reflectivai-api-parity-v2.tonyabdelmalak.workers.dev`
+`https://reflectivai-rps-api.tonyabdelmalak.workers.dev`
 
 ## Local development
 

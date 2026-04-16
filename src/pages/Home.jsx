@@ -42,39 +42,65 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen font-inter" style={{ background: "#f8fafb" }}>
+    <div
+      className="min-h-screen font-inter"
+      style={{
+        background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)",
+      }}
+    >
 
       {/* Top nav — clean white */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-3.5 flex items-center justify-between">
+      <div
+        className="sticky top-0 z-10 backdrop-blur-xl"
+        style={{
+          background: "rgba(255,255,255,0.84)",
+          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
+          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
+        }}
+      >
+        <div className="max-w-[1420px] mx-auto px-5 xl:px-6 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-              style={{ background: "hsl(174 40% 12%)" }}>
-              <Zap className="w-3.5 h-3.5" style={{ color: "hsl(174 60% 65%)" }} />
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{
+                background: "linear-gradient(145deg, hsl(223 56% 18%), hsl(182 48% 23%))",
+                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.14)",
+              }}
+            >
+              <Zap className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
             </div>
             <div>
-              <span className="font-semibold text-slate-800 text-sm">Signal Intelligence</span>
-              <span className="text-slate-400 text-sm ml-1.5">Coaching Simulator</span>
+              <span className="font-semibold text-[1.02rem]" style={{ color: "hsl(222 48% 22%)" }}>Signal Intelligence</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <Link to="/library" className="text-sm text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            <Link to="/library" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
               <BookOpen className="w-3.5 h-3.5" />
               Library
             </Link>
-            <Link to="/builder" className="text-sm text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            <Link to="/builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
               <Plus className="w-3.5 h-3.5" />
               Build Scenario
             </Link>
-            <Link to="/capabilities" className="text-sm text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            <Link to="/capabilities" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
               <Brain className="w-3.5 h-3.5" />
               Capabilities
             </Link>
-            <Link to="/qa" className="text-sm text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            <Link to="/qa" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
               <FlaskConical className="w-3.5 h-3.5" />
               QA Twin
             </Link>
-            <Link to="/admin" className="text-sm text-slate-500 hover:text-slate-800 transition-colors flex items-center gap-1.5">
+            <Link to="/admin" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
               <Settings className="w-3.5 h-3.5" />
               Admin
             </Link>
@@ -82,13 +108,22 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="w-full px-6 py-8">
+      <div className="w-full max-w-[1480px] mx-auto px-5 xl:px-6 py-8 space-y-8">
 
         {/* Hero header */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}
-          className="rounded-2xl overflow-hidden mb-8"
-          style={{ background: "hsl(174 40% 11%)", border: "1px solid hsl(174 40% 18%)" }}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 px-7 py-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-[28px] overflow-hidden"
+          style={{
+            background: "linear-gradient(92deg, hsl(224 50% 15%) 0%, hsl(214 54% 21%) 42%, hsl(186 44% 20%) 100%)",
+            border: "1px solid rgba(31, 58, 107, 0.42)",
+            boxShadow: "0 24px 54px rgba(9, 20, 43, 0.14)",
+          }}
+        >
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 px-7 py-6"
+            style={{ borderBottom: "1px solid rgba(89, 125, 175, 0.38)" }}>
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest mb-1.5" style={{ color: "hsl(162 60% 55%)" }}>
                 Signal Intelligence™ Practice
@@ -100,41 +135,61 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <Link to="/builder"
-                className="px-4 py-2 rounded-lg text-sm font-semibold transition-colors whitespace-nowrap text-white"
-                style={{ background: "hsl(162 55% 38%)" }}
+                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-white"
+                style={{
+                  background: "linear-gradient(135deg, hsl(163 53% 42%), hsl(174 58% 34%))",
+                  boxShadow: "0 12px 24px rgba(14, 135, 122, 0.22)",
+                }}
                 onMouseEnter={e => { e.currentTarget.style.background = "hsl(162 55% 32%)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "hsl(162 55% 38%)"; }}
               >
                 + New Scenario
               </Link>
-              <div className="px-4 py-2 rounded-lg text-center" style={{ background: "hsl(174 40% 16%)", border: "1px solid hsl(174 40% 22%)" }}>
+              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
                 <div className="text-xl font-bold text-white">{scenarios.length || 19}</div>
-                <div className="text-xs text-slate-400 uppercase tracking-wider">Scenarios</div>
+                <div className="text-xs text-slate-300 uppercase tracking-wider">Scenarios</div>
               </div>
-              <div className="px-4 py-2 rounded-lg text-center" style={{ background: "hsl(174 40% 16%)", border: "1px solid hsl(174 40% 22%)" }}>
+              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
                 <div className="text-xl font-bold text-white">8</div>
-                <div className="text-xs text-slate-400 uppercase tracking-wider">Capabilities</div>
+                <div className="text-xs text-slate-300 uppercase tracking-wider">Capabilities</div>
               </div>
             </div>
           </div>
         </motion.div>
 
         {/* Filters container — styled like Opening Scene */}
-        <div className="rounded-xl px-5 py-4 mb-4" style={{ background: "hsl(174 40% 97%)", border: "1px solid hsl(162 50% 80%)" }}>
+        <div
+          className="rounded-[26px] px-5 py-5"
+          style={{
+            background: "linear-gradient(268deg, hsl(186 44% 20%) 0%, hsl(210 45% 25%) 48%, hsl(223 45% 18%) 100%)",
+            border: "1px solid rgba(47, 86, 129, 0.42)",
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.08)",
+          }}
+        >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(162 55% 38%)" }} />
-              <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>Training Scenarios</h2>
+              <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 62% 74%)" }} />
+              <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 62% 82%)" }}>Training Scenarios</h2>
             </div>
-            <Link to="/builder" className="text-xs font-medium flex items-center gap-1 transition-colors" style={{ color: "hsl(162 55% 40%)" }}>
+            <Link to="/builder" className="text-xs font-medium flex items-center gap-1 transition-colors" style={{ color: "hsl(174 70% 86%)" }}>
               Create custom <ChevronRight className="w-3 h-3" />
             </Link>
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
+          <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>
+            Filter the grid by scenario family, HCP role, journey stage, or interaction pressure without changing the simulator logic underneath.
+          </p>
         </div>
 
         {/* Grid container — navy background */}
-        <div className="rounded-2xl p-5" style={{ background: "hsl(222 47% 10%)", border: "1px solid hsl(222 30% 20%)" }}>
+        <div
+          className="rounded-[28px] p-5"
+          style={{
+            background: "linear-gradient(132deg, hsl(223 46% 17%) 0%, hsl(213 40% 22%) 52%, hsl(181 37% 23%) 100%)",
+            border: "1px solid rgba(78, 139, 146, 0.42)",
+            boxShadow: "0 22px 48px rgba(13, 19, 36, 0.10)",
+          }}
+        >
           {loading ? (
             <div className="grid grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
@@ -146,7 +201,7 @@ export default function Home() {
               No scenarios match the selected filters.
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 xl:gap-5">
               {/* Build Your Own card — first position */}
               <BuildYourOwnCard />
               {filtered.map((scenario, i) => (
@@ -163,7 +218,14 @@ export default function Home() {
         </div>
 
         {/* Capabilities strip */}
-        <div className="mt-14 pt-8 rounded-2xl px-8 py-8" style={{ background: "hsl(222 40% 12%)", border: "1px solid hsl(222 30% 20%)" }}>
+        <div
+          className="rounded-[28px] px-8 py-8"
+          style={{
+            background: "linear-gradient(180deg, hsl(223 42% 12%) 0%, hsl(222 40% 13%) 100%)",
+            border: "1px solid rgba(39, 63, 103, 0.65)",
+            boxShadow: "0 20px 42px rgba(15, 23, 42, 0.08)",
+          }}
+        >
           <div className="flex items-center gap-2 mb-6">
             <BookOpen className="w-4 h-4" style={{ color: "hsl(162 60% 55%)" }} />
             <span className="text-sm font-semibold text-white">8 Signal Intelligence Capabilities</span>
@@ -171,9 +233,17 @@ export default function Home() {
               View all →
             </Link>
           </div>
-          <div className="grid grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             {SIGNAL_INTELLIGENCE_CAPABILITIES.map((cap) => (
-              <div key={cap.id} className="rounded-xl p-4" style={{ cursor: "pointer", border: "1px solid hsl(174 50% 30% / 0.5)", background: "hsl(222 40% 14%)" }}>
+              <div
+                key={cap.id}
+                className="rounded-2xl p-4 transition-transform duration-200"
+                style={{
+                  cursor: "pointer",
+                  border: "1px solid rgba(87, 214, 186, 0.22)",
+                  background: "linear-gradient(180deg, rgba(19, 30, 53, 0.96) 0%, rgba(20, 29, 45, 0.98) 100%)",
+                }}
+              >
                 <div className="text-sm font-semibold mb-2 leading-snug" style={{ color: "hsl(162 60% 55%)" }}>{cap.metric}</div>
                 <div className="text-xs text-white leading-relaxed">{cap.definition}</div>
               </div>

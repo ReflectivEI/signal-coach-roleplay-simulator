@@ -710,7 +710,16 @@ Return ONLY valid JSON:
     hcpReply,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
     interactionPressures: scenario.interactionPressure || [],
-    scenario: { title: scenario.title, journeyStage: scenario.journeyStage },
+    scenario: {
+      id: scenario.id,
+      title: scenario.title,
+      journeyStage: scenario.journeyStage,
+      objective: scenario.objective,
+      description: scenario.description,
+      openingScene: scenario.openingScene,
+      visualScene: scenario.visualScene,
+      keyChallenges: scenario.keyChallenges,
+    },
   });
   const activeCues = cue.label ? [{
     id: `cue_${Date.now()}`,

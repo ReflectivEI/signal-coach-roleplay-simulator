@@ -25,7 +25,7 @@ function CapabilityCard({ cap, index }) {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: index * 0.04 }}
-      className="rounded-2xl border transition-all duration-200 overflow-hidden hover:translate-y-[-10px]"
+      className="rounded-2xl border transition-all duration-200 overflow-hidden hover:translate-y-[-6px] h-full flex flex-col"
       style={{
         background: expanded ? "hsl(174 40% 97%)" : "#fff",
         borderColor: "hsl(174 45% 32%)",
@@ -33,7 +33,7 @@ function CapabilityCard({ cap, index }) {
       }}
     >
       {/* Card header */}
-      <div className="p-5">
+      <div className="p-5 flex-1 min-h-[176px]">
         <div className="flex items-start gap-3 mb-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
             style={{ background: "hsl(174 40% 93%)" }}>
@@ -52,7 +52,7 @@ function CapabilityCard({ cap, index }) {
       {/* Expand / collapse toggle */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-2.5 border-t text-xs font-medium transition-colors"
+        className="w-full flex items-center justify-between px-5 py-2.5 border-t text-xs font-medium transition-colors mt-auto"
         style={{
           borderColor: expanded ? "hsl(174 40% 88%)" : "hsl(215 20% 93%)",
           color: expanded ? "hsl(174 55% 38%)" : "hsl(215 16% 47%)",
@@ -119,17 +119,30 @@ export default function Capabilities() {
     <div className="min-h-screen font-inter" style={{ background: "#f8fafb" }}>
 
       {/* Top nav — clean white bar */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div
+        className="sticky top-0 z-10 backdrop-blur-xl"
+        style={{
+          background: "rgba(255,255,255,0.84)",
+          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
+          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
+        }}
+      >
         <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center gap-3">
-          <Link to="/" className="text-slate-400 hover:text-slate-700 transition-colors">
+          <Link
+            to="/"
+            className="transition-colors"
+            style={{ color: "hsl(222 52% 24%)" }}
+            onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}
+          >
             <ArrowLeft className="w-4 h-4" />
           </Link>
-          <div className="w-px h-4 bg-slate-200" />
+          <div className="w-px h-4" style={{ background: "rgba(38, 67, 117, 0.14)" }} />
           <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 55% 38%)" }}>
             Signal Intelligence
           </span>
-          <span className="text-slate-300 text-xs mx-1">/</span>
-          <span className="text-sm font-medium text-slate-600">Behavioral Metrics</span>
+          <span className="text-xs mx-1" style={{ color: "rgba(38, 67, 117, 0.28)" }}>/</span>
+          <span className="text-sm font-medium" style={{ color: "hsl(222 38% 31%)" }}>Behavioral Metrics</span>
         </div>
       </div>
 

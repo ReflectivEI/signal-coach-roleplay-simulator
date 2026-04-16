@@ -610,7 +610,7 @@ function handleHealth(env, request) {
     status: "ok",
     ready: true,
     timestamp: new Date().toISOString(),
-    service: "reflectivai-api-parity-v2",
+    service: "reflectivai-rps-api",
     provider: provider || "mock",
     storage: {
       provider: getKv(env) ? "cloudflare_kv" : "memory_fallback",

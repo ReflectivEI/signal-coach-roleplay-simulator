@@ -8,15 +8,14 @@ import { generateOpeningScene } from "@/lib/openingSceneEngine";
 import MessageList from "@/components/simulator/MessageList";
 import MessageInput from "@/components/simulator/MessageInput";
 import SimulatorRightPanel from "@/components/simulator/SimulatorRightPanel";
-import OpeningSceneBanner from "@/components/simulator/OpeningSceneBanner";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
-import { ArrowLeft, Square, Lightbulb, LightbulbOff, ChevronDown, Target, Sun, Moon } from "lucide-react";
+import { ArrowLeft, Square, Lightbulb, LightbulbOff, ChevronDown, Target } from "lucide-react";
 import { JOURNEY_STATE_LABELS, PERSONA_LABELS } from "@/lib/signalIntelligence";
 import { computeHcpState, computeHcpStateHistory } from "@/lib/hcpStateEngine";
-import { useTheme } from "@/lib/ThemeContext";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
 import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
+import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 
 function createLocalSession(scData, convInit) {
   return {
@@ -33,7 +32,6 @@ function createLocalSession(scData, convInit) {
 
 export default function Simulator() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
   const urlParams = new URLSearchParams(window.location.search);
   const scenarioId = urlParams.get("scenarioId");
 
@@ -99,24 +97,13 @@ export default function Simulator() {
     setHasRepSpoken(false);
 
     const initCues = [];
-    if (scData.startingBehaviorState === "time_pressure" || scData.interactionPressure?.includes("time_constrained")) {
-      initCues.push({ id: "cue_init_1", label: "Glances at watch, shifts weight", description: "The HCP is physically signaling limited availability — keep it tight and purposeful.", source: "interaction_pressure" });
-    }
-    if (scData.interactionPressure?.includes("operationally_constrained") || scData.interactionPressure?.includes("access_barrier")) {
-      initCues.push({ id: "cue_init_2", label: "Eyes briefly drift to screen", description: "A pending workflow task is competing for attention — acknowledge it or lose the conversation.", source: "interaction_pressure" });
-    }
-    if (scData.startingBehaviorState === "closed" || scData.startingBehaviorState === "resistance") {
-      initCues.push({ id: "cue_init_3", label: "Arms crossed, posture pulled back", description: "The HCP's body language is closed — a direct pitch will land on a wall. Start with a question.", source: "behavior_state" });
-    }
-    if (scData.startingBehaviorState === "curiosity" || scData.startingBehaviorState === "open") {
-      initCues.push({ id: "cue_init_4", label: "Leans slightly forward, pen ready", description: "The HCP is open and primed — a specific, relevant question will create momentum.", source: "behavior_state" });
-    }
-    if (scData.interactionPressure?.includes("skeptical_resistant")) {
-      initCues.push({ id: "cue_init_5", label: "Maintains steady, evaluative eye contact", description: "The HCP is sizing up your credibility before engaging — lead with context, not claims.", source: "interaction_pressure" });
-    }
-    if (initCues.length === 0) {
-      initCues.push({ id: "cue_init_6", label: "Neutral posture, waiting for you", description: "The HCP is watching how you open — your first move sets the frame.", source: "journey_state" });
-    }
+    const openingCue = resolveObservedCue("", {
+      hcpReply: scData.openingScene || scData.visualScene || scData.description || "",
+      behaviorState: scData.startingBehaviorState || "neutral",
+      interactionPressures: scData.interactionPressure || [],
+      scenario: scData,
+    });
+    initCues.push({ id: "cue_init_1", ...openingCue });
     setActiveCues(initCues);
     setIsInitializing(false);
   };
@@ -308,7 +295,7 @@ export default function Simulator() {
 
   if (isInitializing) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
         <div className="text-center space-y-3">
           <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin mx-auto" />
           <p className="text-sm text-muted-foreground">Initializing scenario...</p>
@@ -318,37 +305,37 @@ export default function Simulator() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col font-inter">
-      <div className="border-b border-border/40 bg-surface/80 backdrop-blur-sm shrink-0 z-10">
+    <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+      <div
+        className="shrink-0 z-10 backdrop-blur-xl"
+        style={{
+          background: "linear-gradient(92deg, hsl(224 50% 15%) 0%, hsl(214 54% 21%) 42%, hsl(186 44% 20%) 100%)",
+          borderBottom: "1px solid rgba(89, 125, 175, 0.24)",
+        }}
+      >
         <div className="flex items-center justify-between px-5 py-3.5 gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors shrink-0 p-1">
+            <button
+              onClick={() => navigate("/")}
+              className="transition-colors shrink-0 p-1"
+              style={{ color: "rgba(244,249,249,0.92)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 62%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "rgba(244,249,249,0.92)"; }}
+            >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div className="w-px h-5 bg-border/30 shrink-0" />
+            <div className="w-px h-5 shrink-0" style={{ background: "rgba(255,255,255,0.18)" }} />
             <div className="min-w-0">
-              <h1 className="font-semibold text-foreground text-sm truncate leading-snug">{scenario?.title}</h1>
+              <h1 className="font-semibold text-sm truncate leading-snug" style={{ color: "rgba(255,255,255,0.96)" }}>{scenario?.title}</h1>
               <div className="flex items-center gap-1.5 mt-1">
-                <Target className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground truncate">{PERSONA_LABELS[scenario?.persona] || scenario?.persona}</span>
-                <span className="text-muted-foreground/40 text-xs">·</span>
-                <span className="text-xs text-muted-foreground">{JOURNEY_STATE_LABELS[session?.currentJourneyState]}</span>
+                <Target className="w-3 h-3 shrink-0" style={{ color: "rgba(220, 236, 236, 0.72)" }} />
+                <span className="text-xs truncate" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{PERSONA_LABELS[scenario?.persona] || scenario?.persona}</span>
+                <span className="text-xs" style={{ color: "rgba(255,255,255,0.24)" }}>·</span>
+                <span className="text-xs" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{JOURNEY_STATE_LABELS[session?.currentJourneyState]}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-              style={{
-                background: theme === "light" ? "hsl(174 45% 90%)" : "hsl(222 30% 18%)",
-                border: theme === "light" ? "1px solid hsl(174 60% 70%)" : "1px solid hsl(222 30% 28%)",
-                color: theme === "light" ? "hsl(174 45% 30%)" : "hsl(215 20% 55%)",
-              }}
-              title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-            >
-              {theme === "light" ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
-            </button>
             <button
               onClick={() => setCoachingEnabled(!coachingEnabled)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
@@ -368,11 +355,11 @@ export default function Simulator() {
             <button
               onClick={handleEndSession}
               disabled={isReviewing || turns.filter((t) => t.speaker === "rep").length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:cursor-not-allowed"
               style={{
-                background: "hsl(0 52% 87% / 0.08)",
-                border: "1px solid hsl(0 52% 87% / 0.3)",
-                color: "hsl(0 52% 87%)",
+                background: turns.filter((t) => t.speaker === "rep").length === 0 ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.08)",
+                border: turns.filter((t) => t.speaker === "rep").length === 0 ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(255,255,255,0.18)",
+                color: turns.filter((t) => t.speaker === "rep").length === 0 ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.92)",
               }}
             >
               {isReviewing ? (
@@ -380,19 +367,21 @@ export default function Simulator() {
               ) : (
                 <Square className="w-3 h-3" />
               )}
-              <span className="hidden sm:inline">{isReviewing ? "Reviewing..." : "End Session"}</span>
+              <span className="hidden sm:inline">{isReviewing ? "Generating Feedback..." : "End Session & Get Feedback"}</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <div className="flex-1 flex flex-col overflow-hidden border-l-2" style={{ borderColor: "hsl(222 30% 18%)" }}>
-          <OpeningSceneBanner
-            scenario={scenario}
-            conversationInit={hasRepSpoken ? { ...conversationInit, openingGuidance: [] } : conversationInit}
-          />
-
+      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+        <div
+          className="flex-1 flex flex-col overflow-hidden rounded-[28px]"
+          style={{
+            background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+            border: "1px solid rgba(125, 173, 190, 0.26)",
+            boxShadow: "0 18px 40px rgba(14, 24, 43, 0.06)",
+          }}
+        >
           <MessageList turns={turns} isLoading={isLoading} realtimeFeedback={realtimeFeedback} />
 
           <MessageInput
@@ -402,19 +391,28 @@ export default function Simulator() {
           />
         </div>
 
-        <div className="hidden lg:flex w-80 xl:w-96 border-l border-border/25 flex-col overflow-y-auto bg-surface/50">
+        <div
+          className="hidden lg:flex w-80 xl:w-96 flex-col overflow-y-auto rounded-[28px]"
+          style={{
+            background: "linear-gradient(180deg, hsl(224 41% 14%) 0%, hsl(214 43% 18%) 52%, hsl(184 37% 21%) 100%)",
+            border: "1px solid rgba(80, 143, 149, 0.28)",
+            boxShadow: "0 18px 40px rgba(14, 24, 43, 0.14)",
+          }}
+        >
           <div className="p-5 space-y-4">
             <SimulatorRightPanel
               cues={activeCues}
               journeyState={session?.currentJourneyState}
               behaviorState={session?.currentBehaviorState}
               interactionPressures={scenario?.interactionPressure || []}
-              hcpPrediction={hcpPrediction}
-              volatilityState={volatilityState}
+              hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
               realtimeFeedback={realtimeFeedback}
+              scenario={scenario}
+              conversationInit={conversationInit}
+              hasRepSpoken={hasRepSpoken}
             />
           </div>
         </div>
@@ -438,12 +436,14 @@ export default function Simulator() {
               journeyState={session?.currentJourneyState}
               behaviorState={session?.currentBehaviorState}
               interactionPressures={scenario?.interactionPressure || []}
-              hcpPrediction={hcpPrediction}
-              volatilityState={volatilityState}
+              hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
               realtimeFeedback={realtimeFeedback}
+              scenario={scenario}
+              conversationInit={conversationInit}
+              hasRepSpoken={hasRepSpoken}
             />
           </motion.div>
         )}
