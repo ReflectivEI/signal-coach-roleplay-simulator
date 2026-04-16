@@ -19,6 +19,17 @@ const CAP_SUBLABELS = {
   question_quality: "Did the rep notice what mattered?",
 };
 
+function NotObservedMarker() {
+  return (
+    <p
+      className="text-sm font-semibold italic"
+      style={{ color: "hsl(222 52% 24%)" }}
+    >
+      Not Observed (N/O)
+    </p>
+  );
+}
+
 // ─── Context cards (top info bar) ────────────────────────────────────────────
 
 /**
@@ -112,11 +123,21 @@ function CapabilityRow({ cap, insight }) {
   const [open, setOpen] = useState(false);
   const colors = CAP_COLORS[cap.id] || { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" };
   const sublabel = CAP_SUBLABELS[cap.id];
+  const hasStructuredContent = Boolean(
+    insight?.whatHappened ||
+    insight?.transcriptEvidence ||
+    insight?.whyItMattered ||
+    insight?.pattern ||
+    insight?.whatGoodLooksLike ||
+    insight?.exampleRewrite ||
+    insight?.nextTimeAction
+  );
 
   return (
     <div className="border-b border-border/30 last:border-0">
       <button
-        className="w-full flex items-center gap-3 py-3.5 px-4 text-left hover:bg-surface/40 transition-colors"
+        className="w-full flex items-center gap-3 py-3.5 px-4 text-left transition-colors"
+        style={{ background: open ? "rgba(37,124,123,0.06)" : "transparent" }}
         onClick={() => setOpen(o => !o)}
       >
         {/* Colored capability name pill */}
@@ -131,7 +152,7 @@ function CapabilityRow({ cap, insight }) {
         {!sublabel && <span className="flex-1" />}
 
         {/* Analyze button */}
-        <span className={`text-xs font-semibold px-3 py-1 rounded-md border shrink-0 ${colors.text} ${colors.bg} border-${colors.border} transition-opacity`}>
+        <span className={`text-xs font-semibold px-3 py-1 rounded-md border shrink-0 ${colors.text} ${colors.bg} ${colors.border} transition-opacity`}>
           Analyze
         </span>
 
@@ -150,7 +171,7 @@ function CapabilityRow({ cap, insight }) {
             transition={{ duration: 0.25 }}
             className="overflow-hidden"
           >
-            <div className="pb-5 px-4 space-y-4 border-t border-border/20 pt-4">
+            <div className="pb-5 px-4 space-y-4 border-t pt-4" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(250,252,253,0.98) 0%, rgba(244,248,250,0.98) 100%)" }}>
 
               {insight.whatHappened && (
                 <DeepDiveBlock number="1" title="What Happened (Observed Behavior)">
@@ -193,6 +214,8 @@ function CapabilityRow({ cap, insight }) {
                 </DeepDiveBlock>
               )}
 
+              {!hasStructuredContent && <NotObservedMarker />}
+
               {insight.relatedTurnIds?.length > 0 && (
                 <div className="pt-2 border-t border-border/30">
                   <p className="text-xs text-muted-foreground/60 font-mono">
@@ -210,8 +233,8 @@ function CapabilityRow({ cap, insight }) {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="pb-4 px-4 pt-3 border-t border-border/20">
-              <p className="text-sm text-muted-foreground italic">No transcript evidence recorded for this capability.</p>
+            <div className="pb-4 px-4 pt-3 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(250,252,253,0.98) 0%, rgba(244,248,250,0.98) 100%)" }}>
+              <NotObservedMarker />
             </div>
           </motion.div>
         )}
@@ -294,14 +317,38 @@ export default function SessionSummaryModal({
         initial={{ opacity: 0, scale: 0.97, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="relative w-full max-w-5xl bg-card rounded-2xl border border-border/60 shadow-2xl flex flex-col"
+        className="relative w-full max-w-5xl rounded-2xl border shadow-2xl flex flex-col overflow-hidden"
+        style={{
+          background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,248,250,0.98) 100%)",
+          borderColor: "rgba(152, 160, 171, 0.40)",
+        }}
       >
         {/* ── Top bar ── */}
-        <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between shrink-0">
+        <div
+          className="px-6 py-5 border-b flex items-center justify-between shrink-0"
+          style={{
+            background: "linear-gradient(92deg, hsl(224 50% 15%) 0%, hsl(214 54% 21%) 42%, hsl(186 44% 20%) 100%)",
+            borderColor: "rgba(89, 125, 175, 0.24)",
+          }}
+        >
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-base font-semibold text-foreground">{scenario?.title || "Session Feedback"}</h2>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.24em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                End & Get Feedback
+              </p>
+              <h2 className="text-lg font-semibold" style={{ color: "rgba(255,255,255,0.98)" }}>
+                {scenario?.title || "Session Feedback"}
+              </h2>
+            </div>
             {scenario?.journeyStage && (
-              <span className="text-xs font-medium px-2 py-0.5 rounded border border-signal-watch/40 text-signal-watch bg-signal-watch/10 capitalize">
+              <span
+                className="text-xs font-medium px-2 py-0.5 rounded border capitalize"
+                style={{
+                  borderColor: "rgba(255, 196, 122, 0.48)",
+                  background: "rgba(255, 196, 122, 0.12)",
+                  color: "rgba(255, 225, 181, 0.96)",
+                }}
+              >
                 {scenario.journeyStage.replace(/_/g, " ")}
               </span>
             )}
@@ -310,13 +357,22 @@ export default function SessionSummaryModal({
             {onRegenerate && (
               <button
                 onClick={onRegenerate}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent border border-border/60 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors"
+                style={{
+                  background: "rgba(255,255,255,0.08)",
+                  borderColor: "rgba(255,255,255,0.18)",
+                  color: "rgba(255,255,255,0.90)",
+                }}
               >
                 <RefreshCw className="w-3 h-3" />
                 Regenerate
               </button>
             )}
-            <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors ml-1">
+            <button
+              onClick={onClose}
+              className="transition-colors ml-1"
+              style={{ color: "rgba(255,255,255,0.78)" }}
+            >
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -326,8 +382,8 @@ export default function SessionSummaryModal({
 
           {/* ── Context Cards Row ── */}
           {scenario && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-b border-border/60 bg-[hsl(222_47%_14%)]">
-              <div className="border-r border-border/40">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-0 border-b" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(90deg, hsl(224 50% 15%) 0%, hsl(214 54% 21%) 36%, hsl(186 44% 20%) 100%)" }}>
+              <div className="border-r" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <ContextCard icon={Target} title="HCP Profile" alwaysExpanded>
                   <p className="text-xs text-foreground/80 leading-relaxed mt-2">{scenario.stakeholder}</p>
                   {scenario.context && (
@@ -335,7 +391,7 @@ export default function SessionSummaryModal({
                   )}
                 </ContextCard>
               </div>
-              <div className="border-r border-border/40">
+              <div className="border-r" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <ContextCard
                   icon={FileText}
                   title="Rep Objectives"
@@ -347,7 +403,7 @@ export default function SessionSummaryModal({
                   )}
                 </ContextCard>
               </div>
-              <div className="border-r border-border/40">
+              <div className="border-r" style={{ borderColor: "rgba(255,255,255,0.12)" }}>
                 <ContextCard
                   icon={MessageSquare}
                   title="Opening Scene"
@@ -377,17 +433,18 @@ export default function SessionSummaryModal({
           <div className="px-6 py-5 space-y-0">
 
             {/* ── Overall collapsible header ── */}
-            <div className="border border-border/50 rounded-xl overflow-hidden mb-0">
+            <div className="rounded-xl overflow-hidden mb-0" style={{ border: "1px solid rgba(152, 160, 171, 0.30)", background: "rgba(255,255,255,0.72)" }}>
               <button
-                className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-surface/40 transition-colors"
+                className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
+                style={{ background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)" }}
                 onClick={() => setOverallOpen(o => !o)}
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-primary font-bold text-sm">⬥</span>
+                    <span className="font-bold text-sm" style={{ color: "hsl(177 49% 36%)" }}>⬥</span>
                     <span className="text-sm font-semibold text-foreground">Overall: N/A</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="text-xs mt-0.5" style={{ color: "hsl(215 18% 46%)" }}>
                     Capability feedback analysis by behavioral metric — click any metric below to analyze.
                   </p>
                 </div>
@@ -406,7 +463,7 @@ export default function SessionSummaryModal({
                     transition={{ duration: 0.25 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-5 py-5 space-y-5 border-t border-border/40">
+                    <div className="px-5 py-5 space-y-5 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
                      <OverallBlock label="1) Brief Rationale">
                        <p>{briefRationale || <span className="text-muted-foreground italic">Generating…</span>}</p>
                      </OverallBlock>
@@ -426,7 +483,7 @@ export default function SessionSummaryModal({
                      <OverallBlock label="4) Signal–Response Alignment">
                        {review.signalResponseAlignment?.length > 0
                          ? review.signalResponseAlignment.map((p, i) => <p key={i} className="leading-relaxed">{p}</p>)
-                         : <span className="text-muted-foreground italic">Generating…</span>}
+                         : <NotObservedMarker />}
                      </OverallBlock>
 
                      <OverallBlock label="5) Specific Action Items">
@@ -436,7 +493,7 @@ export default function SessionSummaryModal({
                      </OverallBlock>
 
                      {review.overallGuidance?.[0] && (
-                       <p className="text-xs text-muted-foreground/40 leading-relaxed pt-3 border-t border-border/30">
+                       <p className="text-xs leading-relaxed pt-3 border-t" style={{ color: "hsl(215 14% 58%)", borderColor: "rgba(152, 160, 171, 0.18)" }}>
                          {review.overallGuidance[0]}
                        </p>
                      )}
@@ -446,7 +503,7 @@ export default function SessionSummaryModal({
               </AnimatePresence>
 
               {/* ── Capability rows — always visible below the overall header ── */}
-              <div className="divide-y divide-border/30 border-t border-border/40">
+              <div className="divide-y border-t" style={{ borderColor: "rgba(152, 160, 171, 0.22)" }}>
                 {SIGNAL_INTELLIGENCE_CAPABILITIES.map(cap => (
                   <CapabilityRow
                     key={cap.id}
@@ -462,7 +519,13 @@ export default function SessionSummaryModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border/60 flex items-center justify-between gap-3 shrink-0 bg-surface/50">
+        <div
+          className="px-6 py-4 border-t flex items-center justify-between gap-3 shrink-0"
+          style={{
+            borderColor: "rgba(152, 160, 171, 0.24)",
+            background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)",
+          }}
+        >
           <button
             onClick={onExport}
             className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"

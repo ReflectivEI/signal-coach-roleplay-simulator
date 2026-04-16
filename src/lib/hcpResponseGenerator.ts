@@ -18,6 +18,8 @@ import { computeVolatility } from "./simulatorEngine";
 import { predictHcpBehavior } from "./hcpBehaviorPrediction";
 import { resolveObservedCue } from "./hcpCueGenerator";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
+import { buildDialogueDirectivePrompt } from "./hcpDialogueDirectives";
+import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -166,6 +168,11 @@ async function rewriteForSpokenNaturalness({
   behaviorState: string;
   prediction: any;
 }): Promise<string> {
+  const runtimeProfile = deriveHcpRuntimeProfile({
+    scenario,
+    behaviorState,
+    predictedBehaviorState: prediction?.predictedBehaviorState,
+  });
   const prompt = `You are refining one HCP line in a pharma role-play simulator.
 
 Your job:
@@ -193,6 +200,8 @@ Journey Stage: ${scenario.journeyStage}
 Behavior State: ${behaviorState}
 Predicted HCP State: ${prediction.predictedBehaviorState}
 Interaction Pressures: ${(scenario.interactionPressure || []).join(", ") || "none"}
+${buildRuntimeProfilePrompt(runtimeProfile)}
+${buildDialogueDirectivePrompt(scenario, behaviorState, prediction?.predictedBehaviorState)}
 
 Original line:
 ${hcpReply}
@@ -217,6 +226,10 @@ async function rewriteForSpokenStyle({
   scenario: any;
   behaviorState: string;
 }): Promise<string> {
+  const runtimeProfile = deriveHcpRuntimeProfile({
+    scenario,
+    behaviorState,
+  });
   const prompt = `You are rewriting one HCP line in a pharma role-play simulator so it sounds less like a chatbot and more like a real clinician.
 
 Keep:
@@ -250,6 +263,8 @@ Opening Scene: ${scenario.visualScene || scenario.openingScene || "not provided"
 Persona: ${scenario.persona}
 Behavior State: ${behaviorState}
 Interaction Pressures: ${(scenario.interactionPressure || []).join(", ") || "none"}
+${buildRuntimeProfilePrompt(runtimeProfile)}
+${buildDialogueDirectivePrompt(scenario, behaviorState, behaviorState)}
 
 Original line:
 ${hcpReply}
@@ -278,6 +293,11 @@ async function rewriteForContextConsistency({
   currentJourneyState: string;
   prediction: any;
 }): Promise<string> {
+  const runtimeProfile = deriveHcpRuntimeProfile({
+    scenario,
+    behaviorState,
+    predictedBehaviorState: prediction?.predictedBehaviorState,
+  });
   const prompt = `You are recalibrating one HCP line in a pharma role-play simulator.
 
 Your job:
@@ -301,6 +321,8 @@ Journey State: ${currentJourneyState}
 Behavior State: ${behaviorState}
 Predicted HCP State: ${prediction.predictedBehaviorState}
 Interaction Pressures: ${(scenario.interactionPressure || []).join(", ") || "none"}
+${buildRuntimeProfilePrompt(runtimeProfile)}
+${buildDialogueDirectivePrompt(scenario, behaviorState, prediction?.predictedBehaviorState)}
 
 Original line:
 ${hcpReply}
@@ -524,6 +546,11 @@ export async function generateHcpResponse(
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
+  const runtimeProfile = deriveHcpRuntimeProfile({
+    scenario,
+    behaviorState: currentBehaviorState,
+    predictedBehaviorState: prediction.predictedBehaviorState,
+  });
   const volatility = computeVolatility(scenario, windowSignals, turnCount, previousVolatilityProfile);
   const interactionPressures = scenario.interactionPressure || [];
   const isHighPressureTurn =
@@ -533,7 +560,11 @@ export async function generateHcpResponse(
     interactionPressures.includes("safety_concern") ||
     ["closed", "resistance", "frustration", "time_pressure"].includes(currentBehaviorState) ||
     volatility.profile !== "stable";
-  const responseTokenBudget = isHighPressureTurn ? 420 : 560;
+  const responseTokenBudget =
+    runtimeProfile.brevity === "tight" ? 380
+    : isHighPressureTurn ? 420
+    : runtimeProfile.brevity === "moderate" ? 600
+    : 560;
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -542,6 +573,17 @@ Predicted Resistance: ${prediction.predictedResistanceLevel}
 Predicted Engagement Pattern: ${prediction.predictedEngagementPattern}
 ${prediction.predictedDrivers.length ? `Predicted Drivers:\n${prediction.predictedDrivers.map(d => `  - ${d}`).join("\n")}` : ""}
 ${prediction.predictedObjections.length ? `Predicted Objection Themes:\n${prediction.predictedObjections.map(o => `  - ${o}`).join("\n")}` : ""}
+`;
+
+  const runtimeProfileBlock = `
+${buildRuntimeProfilePrompt(runtimeProfile)}
+`;
+  const dialogueDirectiveBlock = `
+${buildDialogueDirectivePrompt(
+    scenario,
+    currentBehaviorState,
+    prediction.predictedBehaviorState,
+  )}
 `;
 
   const volatilityBlock = `
@@ -575,6 +617,10 @@ REP'S LATEST MESSAGE:
 ${repMessage}
 
 ${predictionBlock}
+
+${runtimeProfileBlock}
+
+${dialogueDirectiveBlock}
 
 ${volatilityBlock}
 
@@ -618,6 +664,9 @@ INSTRUCTIONS:
 15. Keep the HCP reply to 1-2 sentences maximum
 16. If pressure is high, target under 30 spoken words
 17. If pressure is moderate or low, target under 45 spoken words
+18. Respect the runtime HCP profile above for warmth, directness, patience, and response mode
+19. If the runtime profile says directive, answer in a direct clinician voice rather than exploratory language
+20. If the runtime profile says guarded, keep the tone professional but with visible constraint
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -706,10 +755,17 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
+  const recentCueLabels = transcript
+    .filter((turn: any) => turn?.speaker === "hcp")
+    .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])
+    .map((cue: any) => cue?.label)
+    .filter(Boolean)
+    .slice(-3);
   const cue = resolveObservedCue(result.hcpCue || "", {
     hcpReply,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
     interactionPressures: scenario.interactionPressure || [],
+    recentCueLabels,
     scenario: {
       id: scenario.id,
       title: scenario.title,

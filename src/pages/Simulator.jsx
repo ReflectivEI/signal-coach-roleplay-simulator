@@ -378,7 +378,7 @@ export default function Simulator() {
           className="flex-1 flex flex-col overflow-hidden rounded-[28px]"
           style={{
             background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
-            border: "1px solid rgba(125, 173, 190, 0.26)",
+            border: "1px solid rgba(152, 160, 171, 0.68)",
             boxShadow: "0 18px 40px rgba(14, 24, 43, 0.06)",
           }}
         >

@@ -17,6 +17,7 @@ export interface HcpCueInputs {
   hcpReply: string;
   behaviorState: string;
   interactionPressures?: string[];
+  recentCueLabels?: string[];
   scenario?: {
     id?: string;
     title?: string;
@@ -297,6 +298,16 @@ function cleanCueText(text: string): string {
     .trim();
 }
 
+function normalizeCueSentence(text: string): string {
+  const cleaned = cleanCueText(text).replace(/[.?!]+$/g, "").trim();
+  if (!cleaned) return "";
+  return `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}.`;
+}
+
+function normalizeCueFingerprint(text: string): string {
+  return normalizeCueSentence(text).toLowerCase();
+}
+
 function deterministicIndex(seed = "", modulo = 1): number {
   const text = String(seed || "");
   if (!text || modulo <= 1) return 0;
@@ -401,14 +412,28 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     normalizeText(inputs.hcpReply),
   ].join(":");
 
-  const derived = pick(pool, seed);
+  const recentCueFingerprints = new Set(
+    (inputs.recentCueLabels || []).map((label) => normalizeCueFingerprint(label)).filter(Boolean)
+  );
+  const seedIndex = deterministicIndex(seed, pool.length);
+  let derived = pool[seedIndex] || pool[0];
+  for (let offset = 0; offset < pool.length; offset += 1) {
+    const nextCue = pool[(seedIndex + offset) % pool.length];
+    if (!recentCueFingerprints.has(normalizeCueFingerprint(nextCue))) {
+      derived = nextCue;
+      break;
+    }
+  }
   const cleanedCandidate = cleanCueText(candidateCue);
-  const useCandidate = isValidObservedCue(cleanedCandidate) && !cueContradictsCategory(cleanedCandidate, cueCategory);
+  const useCandidate =
+    isValidObservedCue(cleanedCandidate) &&
+    !cueContradictsCategory(cleanedCandidate, cueCategory) &&
+    !recentCueFingerprints.has(normalizeCueFingerprint(cleanedCandidate));
 
   return {
     cueCategory,
     concernFamily,
-    label: useCandidate ? cleanedCandidate : derived,
+    label: normalizeCueSentence(useCandidate ? cleanedCandidate : derived),
   };
 }
 

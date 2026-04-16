@@ -77,9 +77,6 @@ function MessageBubble({ turn }) {
           }}>
             {turn.text}
           </div>
-          <span className="text-xs mt-0.5" style={{ color: "hsl(215 18% 50%)" }}>
-            {new Date(turn.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
           {isRep && nudge && <RepCoachingTip nudge={nudge} />}
         </div>
       </motion.div>
@@ -95,14 +92,7 @@ export default function MessageList({ turns, isLoading, realtimeFeedback }) {
   }, [turns, isLoading]);
 
   return (
-    <div
-      className="mx-4 my-4 px-6 py-6 flex-1 overflow-y-auto space-y-3 rounded-[24px]"
-      style={{
-        background: "linear-gradient(180deg, rgba(253,254,255,0.96) 0%, rgba(244,249,249,0.98) 100%)",
-        border: "1px solid rgba(125, 173, 190, 0.24)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72)",
-      }}
-    >
+    <div className="px-6 py-6 flex-1 overflow-y-auto space-y-3">
       {turns.length === 0 && !isLoading && (
         <div className="py-12 text-center flex flex-col items-center justify-center h-full gap-3">
           <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(145deg, hsl(223 46% 19%), hsl(176 45% 30%))", border: "1px solid rgba(46, 124, 121, 0.24)" }}>
