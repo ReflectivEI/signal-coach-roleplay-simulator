@@ -390,6 +390,84 @@ Return ONLY the rewritten HCP line.`;
   return String(rewritten || hcpReply).trim();
 }
 
+function normalizeLineForContinuity(text = ""): string {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function meaningfulContinuityTokens(text = ""): string[] {
+  const stopwords = new Set([
+    "the", "a", "an", "and", "or", "but", "if", "is", "it", "this", "that", "to", "of", "for", "in",
+    "on", "at", "we", "you", "your", "my", "me", "i", "am", "are", "was", "were", "be", "been",
+    "with", "do", "does", "did", "have", "has", "had", "can", "could", "would", "should", "will",
+    "still", "just", "not", "one", "more", "what", "how", "why", "where", "when", "who"
+  ]);
+
+  return normalizeLineForContinuity(text)
+    .split(" ")
+    .filter((token) => token.length > 2 && !stopwords.has(token));
+}
+
+function continuityOverlapScore(a = "", b = ""): number {
+  const aTokens = new Set(meaningfulContinuityTokens(a));
+  const bTokens = new Set(meaningfulContinuityTokens(b));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let shared = 0;
+  aTokens.forEach((token) => {
+    if (bTokens.has(token)) shared += 1;
+  });
+  return shared / Math.max(aTokens.size, bTokens.size);
+}
+
+function startsWithSameFrame(a = "", b = ""): boolean {
+  const aHead = meaningfulContinuityTokens(a).slice(0, 4).join(" ");
+  const bHead = meaningfulContinuityTokens(b).slice(0, 4).join(" ");
+  return Boolean(aHead && bHead && aHead === bHead);
+}
+
+function deterministicContinuityVariation({
+  hcpReply,
+  transcript,
+  scenario,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  scenario: any;
+}): string {
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const concernTags = inferConcernTags(`${hcpReply} ${latestConcern}`);
+  const text = String(hcpReply || "").trim().replace(/[.?!]+$/, "");
+
+  if (!text) return hcpReply;
+
+  if (concernTags.includes("workflow")) {
+    if (/prior auth|prior authorization/i.test(text)) {
+      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")} now falls back on staff.`;
+    }
+    if (/staff|team|workflow|handoff|callback/i.test(text)) {
+      return `${text} That's still landing on the team.`;
+    }
+    return `${text} That's still the workflow problem.`;
+  }
+
+  if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
+    return `${text} That still does not change the decision threshold.`;
+  }
+
+  if (concernTags.includes("cost_value")) {
+    return `${text} I still need the part that changes the value equation.`;
+  }
+
+  if (concernTags.includes("renal")) {
+    return `${text} I still do not know what that means in the renal patients I manage.`;
+  }
+
+  return `${text} That still does not answer the blocker I'm holding on.`;
+}
+
 function needsContinuityVariationRewrite({
   hcpReply,
   transcript,
@@ -400,7 +478,19 @@ function needsContinuityVariationRewrite({
   const previousHcpLine = getLastHcpReplyText(transcript);
   const current = String(hcpReply || "").replace(/\s+/g, " ").trim().toLowerCase();
   const previous = String(previousHcpLine || "").replace(/\s+/g, " ").trim().toLowerCase();
-  return Boolean(current && previous && current === previous);
+  if (!current || !previous) return false;
+
+  if (current === previous) return true;
+
+  const currentTags = inferConcernTags(current);
+  const previousTags = inferConcernTags(previous);
+  const sharedTags = currentTags.filter((tag) => previousTags.includes(tag));
+  const overlap = continuityOverlapScore(current, previous);
+
+  if (sharedTags.length >= 1 && overlap >= 0.72) return true;
+  if (sharedTags.length >= 1 && startsWithSameFrame(current, previous)) return true;
+
+  return false;
 }
 
 function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): string {
@@ -900,7 +990,11 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
     } catch {
-      // Fall back to the original line if the refinement call fails.
+      hcpReply = deterministicContinuityVariation({
+        hcpReply,
+        transcript,
+        scenario,
+      });
     }
   }
   hcpReply = applyHcpResponseSurface({
@@ -928,7 +1022,16 @@ Return ONLY valid JSON:
         profile: runtimeProfile,
       });
     } catch {
-      // Fall back to the surfaced line if the refinement call fails.
+      hcpReply = applyHcpResponseSurface({
+        hcpReply: deterministicContinuityVariation({
+          hcpReply,
+          transcript,
+          scenario,
+        }),
+        scenario,
+        turn: turnDirectives,
+        profile: runtimeProfile,
+      });
     }
   }
 

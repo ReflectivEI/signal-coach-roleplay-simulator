@@ -1,8 +1,9 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|moderate renal impairment|renal impairment|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population/i;
-const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what's the relevance|what is the relevance/i;
+const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what's the relevance|what is the relevance|what specific barrier|what barrier are you looking for|what makes you think|what specific access step|what specific change/i;
 const EXPECTATION_MISMATCH_PATTERN = /dr\.|patel|case discussion|case consult|referral|thought this was|was going to be|was supposed to be/i;
+const INITIAL_ACCESS_OPERATIONAL_HELP_PATTERN = /prior auth|prior authorization|streamline|staff|workflow|paperwork|callbacks|extra step|operational/i;
 const ACCESS_PROCESS_DEMAND_PATTERN = /formulary|committee|review process|step therapy|non-preferred|what would move|what would change|take back|carry forward|prior auth|prior authorization|what staff|what gets added|what step/i;
 const WORKFLOW_DEMAND_PATTERN = /workflow|staff|monitoring|follow-up|what happens next|who picks that up|who owns that|extra step|what does that add/i;
 const WORKFLOW_REDISCOVERY_PATTERN = /what's a typical day|how do you currently|where do you think we could make the biggest impact|fit into your existing workflow|what part of the follow-up|what part of the monitoring|what would actually land on your team/i;
@@ -41,6 +42,77 @@ function extractIssueLabel(text = "") {
   if (/subgroup|patient population|excluded/.test(normalized)) return "patient-fit gap";
   if (/workflow|staff|added step|operational|prior auth|prior authorization/.test(normalized)) return "workflow burden";
   return "the gap you're pointing to";
+}
+
+function deriveProofPointCategory({ scenario, activeConcernText = "", turns = [] }) {
+  const text = [
+    activeConcernText,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.context,
+    getLastRepText(turns),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/hospital|readmission|admission|er|ed\b|acute|discharge/.test(text)) {
+    return "keeping the right patient out of the hospital";
+  }
+  if (/symptom|flare|control|exacerbation|disease activity|quality of life/.test(text)) {
+    return "a patient-level symptom or flare reduction you would actually notice";
+  }
+  if (/prior auth|workflow|staff|handoff|approval|access|paperwork|callback/.test(text)) {
+    return "one operational change that clearly cuts staff work or speeds approval";
+  }
+  if (/guideline|treatment choice|switch|decision|line of therapy|selection|subgroup/.test(text)) {
+    return "one proof point that would actually change treatment choice for a real patient";
+  }
+  if (/screen|screening|eligible|candidate|identify/.test(text)) {
+    return "one sign that helps you identify the right patient earlier";
+  }
+  return "one outcome you can tie to a real patient decision";
+}
+
+function deriveInitialAccessBarrier(scenario = {}, activeConcernText = "") {
+  const text = [
+    activeConcernText,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.context,
+    scenario?.openingScene,
+    ...(scenario?.interactionPressure || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/prior auth|prior authorization|coverage|access|formulary|approval/.test(text)) {
+    return "prior auth work and approval delays";
+  }
+  if (/staff|workflow|handoff|callback|operational|follow-up/.test(text)) {
+    return "the staff handoff that slows the start of care";
+  }
+  if (/screen|screening|identify|candidate|selection/.test(text)) {
+    return "missing the right patient early enough to act";
+  }
+  return "one access or workflow step that is slowing care";
+}
+
+function deriveInitialAccessOperationalChange(scenario = {}, activeConcernText = "") {
+  const barrier = deriveInitialAccessBarrier(scenario, activeConcernText);
+
+  if (/prior auth|approval|coverage|access/.test(barrier)) {
+    return "a shorter approval path, fewer callbacks, and one cleaner handoff before staff has to chase the case again";
+  }
+  if (/staff handoff|workflow|handoff|callback/.test(barrier)) {
+    return "one cleaner handoff, fewer back-and-forth steps, and less staff rework before the patient can move forward";
+  }
+  if (/patient early enough|identify/.test(barrier)) {
+    return "a faster way to flag the right patient before the visit turns into another missed opportunity";
+  }
+
+  return "one cleaner operational step so the case does not bounce back through the office twice";
 }
 
 function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBehaviorState, currentJourneyState, draft }) {
@@ -104,7 +176,12 @@ function shouldUseDeterministicFamilyAnswerRewrite({ scenario, turns, draft }) {
   const draftTooLoose = BROAD_DISCOVERY_PATTERN.test(draftText) || ABSTRACT_QA_LANGUAGE_PATTERN.test(draftText);
 
   if (stage === "initial_access") {
-    return (INITIAL_ACCESS_DIRECT_ASK_PATTERN.test(activeConcernText) || EXPECTATION_MISMATCH_PATTERN.test(activeConcernText) || repeatedConcern) && draftTooLoose;
+    return (
+      INITIAL_ACCESS_DIRECT_ASK_PATTERN.test(activeConcernText) ||
+      EXPECTATION_MISMATCH_PATTERN.test(activeConcernText) ||
+      INITIAL_ACCESS_OPERATIONAL_HELP_PATTERN.test(activeConcernText) ||
+      repeatedConcern
+    ) && draftTooLoose;
   }
 
   if (stage === "access_formulary") {
@@ -122,27 +199,44 @@ function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
   const stage = String(scenario?.journeyStage || "").toLowerCase();
   const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
   const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+  const initialAccessBarrier = deriveInitialAccessBarrier(scenario, activeConcernText);
+  const initialAccessChange = deriveInitialAccessOperationalChange(scenario, activeConcernText);
 
   if (stage === "initial_access") {
+    if (INITIAL_ACCESS_OPERATIONAL_HELP_PATTERN.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return `Then the practical value has to be operational, not promotional. The concrete change would have to be ${initialAccessChange}.`;
+      }
+      return `Then the only reason to keep talking is if this helps with the prior auth work itself, not if it adds to it. The concrete value would have to be ${initialAccessChange}.`;
+    }
     if (EXPECTATION_MISMATCH_PATTERN.test(activeConcernText)) {
       if (repTurns >= 2) {
         return "You're right, this did not land like the case discussion you expected. The only reason I'm here is to see whether one practical barrier is getting in the way of care, and if it is not, we can stop there.";
       }
       return "You're right, this did not land like the case discussion you expected. The only reason I'm here is to see whether one practical barrier is slowing care enough to matter in your clinic.";
     }
+    if (/what specific barrier|what barrier are you looking for|what makes you think/.test(activeConcernText)) {
+      if (repTurns >= 2) {
+        return `The barrier I'm pressure-testing is ${initialAccessBarrier}. If that is not the issue in your clinic, I'll stop there instead of forcing a longer discussion.`;
+      }
+      return `The barrier I'm pressure-testing is ${initialAccessBarrier}, because that is the kind of bottleneck that can quietly slow care before anyone means for it to.`;
+    }
+    if (/what specific access step|what specific change/.test(activeConcernText)) {
+      return `The specific change would have to be ${initialAccessChange}. If it does not do that, it is not worth another minute of your time.`;
+    }
     if (/what'?s this about|what is this about|why are you here|why are we talking/.test(activeConcernText)) {
       if (repTurns >= 2) {
-        return "This is still about whether one practical barrier is slowing care enough to matter in your clinic. If it is there, which step would you want fixed first?";
+        return `This is still about whether ${initialAccessBarrier} is slowing care enough to matter in your clinic. If that is not the issue here, we can stop there.`;
       }
-      return "This is about whether one practical barrier is slowing care enough to be worth your time. If it is there, where does it hit your team first?";
+      return `This is about whether ${initialAccessBarrier} is slowing care enough to be worth your time. If that is not actually happening here, this is not worth another minute.`;
     }
     if (/make this quick|short version|few minutes|patient waiting|brief/.test(activeConcernText)) {
       if (repTurns >= 2) {
-        return "The short version is I'm trying to pin down one barrier worth solving, not pitch at you. Which step is still costing your team the most time right now?";
+        return `The short version is I'm trying to see whether ${initialAccessBarrier} is the thing slowing care, not pitch at you. If it is not, we can stop right there.`;
       }
-      return "The short version is I'm trying to see whether one access or workflow step is getting in the way of care. If it is, which step is costing your team the most time right now?";
+      return `The short version is I'm trying to see whether ${initialAccessBarrier} is getting in the way of care. If it is not, this should end quickly.`;
     }
-    return "This is about whether there's one practical issue worth solving in your clinic, not a broad product discussion. If there is, where does it show up first?";
+    return `This is about whether ${initialAccessBarrier} is worth solving in your clinic, not a broad product discussion.`;
   }
 
   if (stage === "access_formulary") {
@@ -216,6 +310,11 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
 function buildDeterministicCommitmentReply({ scenario, turns }) {
   const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
   const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+  const proofPointCategory = deriveProofPointCategory({ scenario, activeConcernText, turns });
+  const hospitalFocused = /hospital|readmission|admission|ed\b|er\b/.test(activeConcernText);
+  const treatmentChoiceFocused = /treatment choice|decision|switch|line of therapy|selection/.test(activeConcernText);
+  const symptomFocused = /symptom|flare|control|quality of life/.test(activeConcernText);
+  const specificMetricAsk = /specific hospitalization rate|what one metric|what metric|what reduction|how much of a reduction|what number/.test(activeConcernText);
 
   if (/right patient|ideal patient|meaning to try it|haven't had one/.test(activeConcernText)) {
     if (repTurns <= 1) {
@@ -229,10 +328,32 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
   }
 
   if (/proof point|concrete outcome|single data point|patient outcome|concrete/i.test(activeConcernText)) {
-    if (repTurns <= 1) {
-      return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. The most concrete threshold would usually be a change in treatment choice, hospital use, or symptom control in the patients you manage.";
+    if (specificMetricAsk && hospitalFocused) {
+      if (repTurns <= 2) {
+        return "I'm not going to invent a hospitalization number you can't use. The proof point has to be a hospitalization change large enough to alter a real treatment decision in the patients you actually manage.";
+      }
+      return "I'm not going to make up a hospitalization rate just to fill the space. The metric has to be a hospitalization change you would actually trust enough to change treatment choice for a real patient.";
     }
-    return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. The strongest proof point would be one outcome that changes treatment choice or keeps a patient out of the hospital.";
+
+    if (hospitalFocused) {
+      if (repTurns <= 1) {
+        return "Then the proof point has to be a hospitalization signal in the patients you actually manage, not a broad headline from a slide. If that signal would not change who you treat or how urgently you act, it is not enough.";
+      }
+      return "Then the proof point has to be a hospitalization signal you would actually use in practice, not a pooled efficacy claim. If it would not change treatment choice for the patient in front of you, it is still too soft.";
+    }
+
+    if (treatmentChoiceFocused) {
+      return "Then the proof point has to show a real change in treatment choice for a patient you would otherwise manage differently. If it does not move that decision, it is still not concrete enough.";
+    }
+
+    if (symptomFocused) {
+      return "Then the proof point has to show a symptom or flare change you would actually notice in the patient, not just a statistical win on paper. If it would not change follow-up or treatment choice, it is still not enough.";
+    }
+
+    if (repTurns <= 1) {
+      return `It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. The most useful place to start would be ${proofPointCategory}.`;
+    }
+    return `It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. If we keep this concrete, the proof point should be ${proofPointCategory}, because that is what would actually justify a next step.`;
   }
 
   if (/formulary|non-preferred|review process|reconsidered|concrete|take back to the formulary team|exact steps/.test(activeConcernText)) {
