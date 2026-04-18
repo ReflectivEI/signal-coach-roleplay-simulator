@@ -569,7 +569,51 @@ function inferConcernTags(text: string): string[] {
   if (/patient population|typical patient|subgroup|patients who/.test(normalized)) tags.push("patient_fit");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|staff|workflow|form|operational/.test(normalized)) tags.push("workflow");
+  if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
   return tags;
+}
+
+function isPremiseChallenge(text: string): boolean {
+  return /what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|what do you want me to know|relevance|what makes you think/i.test(String(text || "").toLowerCase());
+}
+
+function repAddressesPremiseChallenge(repMessage: string, latestConcern: string): boolean {
+  const repText = String(repMessage || "").toLowerCase();
+  const concernText = String(latestConcern || "").toLowerCase();
+  if (!isPremiseChallenge(concernText)) return false;
+
+  return /you asked|you requested|you wanted|you said yes|you told me to|you asked me to bring|you asked me to follow up|following up|follow up on|follow-up on|left with you last week|study you asked|copy you asked/i.test(repText);
+}
+
+function hcpStillRepeatsPremiseChallenge(hcpReply: string): boolean {
+  const text = String(hcpReply || "").toLowerCase();
+  return /what'?s the point|why are you here|what is this about|what'?s this about|why are we talking|what do you want me to know/i.test(text);
+}
+
+function deterministicPremiseCorrectionRewrite({
+  hcpReply,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): string {
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const concernTags = inferConcernTags(`${latestConcern} ${scenario?.objective || ""} ${scenario?.description || ""}`);
+  const concernFamily = concernTags.includes("workflow")
+    ? "workflow"
+    : concernTags.includes("patient_fit") || concernTags.includes("guideline") || concernTags.includes("cost_value")
+      ? "evidence"
+      : "general";
+
+  if (concernFamily === "workflow") {
+    return "Fine. Then keep it to one practical point. What changes for my staff or approval flow if this actually moves?";
+  }
+  if (concernFamily === "evidence") {
+    return "Fine. Then keep it to one useful point. What changes for my patients or my treatment decision?";
+  }
+  return "Fine. Then keep it to one practical point. What changes for me if this is worth continuing?";
 }
 
 function isGenericProductPitch(repMessage: string): boolean {
@@ -602,6 +646,9 @@ function isGenericProductPitch(repMessage: string): boolean {
 function ignoredDirectConcern(repMessage: string, latestConcern: string): boolean {
   const concernText = String(latestConcern || "").toLowerCase();
   const repText = String(repMessage || "").toLowerCase();
+  if (repAddressesPremiseChallenge(repText, concernText)) {
+    return false;
+  }
   const concernTags = inferConcernTags(concernText);
   const repTags = inferConcernTags(repText);
   const sharedTags = concernTags.filter((tag) => repTags.includes(tag));
@@ -618,6 +665,9 @@ function ignoredDirectConcern(repMessage: string, latestConcern: string): boolea
 }
 
 function inferResponseAlignment(repMessage: string, latestConcern: string): BehaviorSignals["response_alignment"] {
+  if (repAddressesPremiseChallenge(repMessage, latestConcern)) {
+    return "strong";
+  }
   const repTags = inferConcernTags(repMessage);
   const concernTags = inferConcernTags(latestConcern);
   const shared = concernTags.filter((tag) => repTags.includes(tag));
@@ -889,6 +939,7 @@ INSTRUCTIONS:
 23. In objection-stage and close-stage scenarios, transitions must be deterministic and narrow, not open-ended by default
 24. Across 5-8 exchanges, preserve continuity of the HCP's agenda; the wording may change, but the unresolved blocker should remain recognizable until it is actually addressed
 25. If the HCP has repeated the same concern family recently, sharpen or narrow that same concern instead of inventing a new one
+26. If the HCP questioned why the rep is there and the rep directly corrected that premise (for example: requested follow-up, requested study, agreed conversation), you MUST absorb that correction on the next turn and move to a narrower practical or decision-relevant condition. Do NOT keep asking why the rep is there after the premise has been directly answered.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -996,6 +1047,13 @@ Return ONLY valid JSON:
         scenario,
       });
     }
+  }
+  if (repAddressesPremiseChallenge(repMessage, getLatestHcpConcern(transcript, scenario)) && hcpStillRepeatsPremiseChallenge(hcpReply)) {
+    hcpReply = deterministicPremiseCorrectionRewrite({
+      hcpReply,
+      scenario,
+      transcript,
+    });
   }
   hcpReply = applyHcpResponseSurface({
     hcpReply,
