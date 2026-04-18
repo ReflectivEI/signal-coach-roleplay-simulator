@@ -6,6 +6,7 @@ const EXPECTATION_MISMATCH_PATTERN = /dr\.|patel|case discussion|case consult|re
 const ACCESS_PROCESS_DEMAND_PATTERN = /formulary|committee|review process|step therapy|non-preferred|what would move|what would change|take back|carry forward|prior auth|prior authorization|what staff|what gets added|what step/i;
 const WORKFLOW_DEMAND_PATTERN = /workflow|staff|monitoring|follow-up|what happens next|who picks that up|who owns that|extra step|what does that add/i;
 const WORKFLOW_REDISCOVERY_PATTERN = /what's a typical day|how do you currently|where do you think we could make the biggest impact|fit into your existing workflow|what part of the follow-up|what part of the monitoring|what would actually land on your team/i;
+const CLOSE_PROOF_POINT_PATTERN = /proof point|concrete outcome|single data point|patient outcome|concrete|metric|what changes my patient outcome|what changes for my patients/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track|minimal disruption|incorporated into your existing workflow|in order to|would likely be|that would help/i;
@@ -103,7 +104,7 @@ function shouldUseDeterministicFamilyAnswerRewrite({ scenario, turns, draft }) {
   const draftTooLoose = BROAD_DISCOVERY_PATTERN.test(draftText) || ABSTRACT_QA_LANGUAGE_PATTERN.test(draftText);
 
   if (stage === "initial_access") {
-    return (INITIAL_ACCESS_DIRECT_ASK_PATTERN.test(activeConcernText) || repeatedConcern) && draftTooLoose;
+    return (INITIAL_ACCESS_DIRECT_ASK_PATTERN.test(activeConcernText) || EXPECTATION_MISMATCH_PATTERN.test(activeConcernText) || repeatedConcern) && draftTooLoose;
   }
 
   if (stage === "access_formulary") {
@@ -125,15 +126,15 @@ function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
   if (stage === "initial_access") {
     if (EXPECTATION_MISMATCH_PATTERN.test(activeConcernText)) {
       if (repTurns >= 2) {
-        return "You're right, this did not land like the case discussion you expected. I only want to see whether one practical issue is worth your time, and if it is not, we can stop there.";
+        return "You're right, this did not land like the case discussion you expected. The only reason I'm here is to see whether one practical barrier is getting in the way of care, and if it is not, we can stop there.";
       }
-      return "You're right, this did not land like the case discussion you expected. I only wanted to see whether one practical issue is slowing care enough to matter in your clinic.";
+      return "You're right, this did not land like the case discussion you expected. The only reason I'm here is to see whether one practical barrier is slowing care enough to matter in your clinic.";
     }
     if (/what'?s this about|what is this about|why are you here|why are we talking/.test(activeConcernText)) {
       if (repTurns >= 2) {
-        return "This is still about whether one practical barrier is slowing care enough to matter in your clinic. If there is one, which step would you want fixed first?";
+        return "This is still about whether one practical barrier is slowing care enough to matter in your clinic. If it is there, which step would you want fixed first?";
       }
-      return "This is about whether one practical barrier is slowing care enough to be worth your time. If there is one, where does it hit your team first?";
+      return "This is about whether one practical barrier is slowing care enough to be worth your time. If it is there, where does it hit your team first?";
     }
     if (/make this quick|short version|few minutes|patient waiting|brief/.test(activeConcernText)) {
       if (repTurns >= 2) {
@@ -228,7 +229,10 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
   }
 
   if (/proof point|concrete outcome|single data point|patient outcome|concrete/i.test(activeConcernText)) {
-    return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. Would a concrete shift in symptoms, hospital use, or treatment choice be the kind of threshold you'd actually act on?";
+    if (repTurns <= 1) {
+      return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. The most concrete threshold would usually be a change in treatment choice, hospital use, or symptom control in the patients you manage.";
+    }
+    return "It sounds like this only moves if the proof point changes something you can actually see in a patient, not just on a slide. The strongest proof point would be one outcome that changes treatment choice or keeps a patient out of the hospital.";
   }
 
   if (/formulary|non-preferred|review process|reconsidered|concrete|take back to the formulary team|exact steps/.test(activeConcernText)) {
@@ -369,6 +373,13 @@ export function maybeEnforceFamilyAnswerReply({
   turns,
   draft,
 }) {
+  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const activeConcernText = getActiveConcernText(turns, scenario).toLowerCase();
+
+  if (/commitment_close|adoption_commitment/.test(stageText) && CLOSE_PROOF_POINT_PATTERN.test(activeConcernText)) {
+    return buildDeterministicCommitmentReply({ scenario, turns });
+  }
+
   if (shouldUseDeterministicFamilyAnswerRewrite({
     scenario,
     turns,

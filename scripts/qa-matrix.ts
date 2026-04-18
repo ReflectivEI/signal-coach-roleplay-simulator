@@ -91,12 +91,14 @@ Generate the rep's next response (1-2 sentences) that:
 - If the HCP repeats the same concern twice, stop widening the conversation and address the concern head-on
 - Do not ask another broad question when the HCP is clearly asking for the bottom line
 - In initial-access scenarios, if the HCP asks "what's this about?" or signals they only have a minute, answer that directly in one sentence before asking anything
+- In referral or expectation-mismatch openings, acknowledge the mismatch directly and state why this conversation matters before asking anything
 - In access/formulary scenarios, if the HCP asks what would change, what would move the review, or what they could take back, answer that exact process question before broadening
 - In adoption/implementation scenarios, if the HCP asks what staff would have to do or who would own the next step, answer that workflow question first instead of reopening discovery
 - If the HCP clearly wants the short version, do not greet, reset, or ask a polite opener first
 - In commitment-close or adoption-commitment scenarios, stop reopening discovery after the core blocker is clear
 - Once the HCP has repeated a vague blocker like "right patient", "not yet", or "I need to see more", pivot toward a proportionate next-step ask
 - In close-stage scenarios, prefer a smallest-next-step question such as whether the HCP would be open to defining one patient type, reviewing one case, or taking one concrete action they can own
+- In close-stage scenarios, if the HCP asks for one concrete proof point, offer one plausible proof-point category first instead of asking the HCP to invent it from scratch
 
 Return ONLY the rep's reply as plain text.`,
   },
