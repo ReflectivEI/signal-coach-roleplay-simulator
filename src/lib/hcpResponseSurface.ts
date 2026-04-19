@@ -50,9 +50,13 @@ function applyGlobalSpokenRewrites(text = ""): string {
   });
 
   output = output.replace(
-    /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should)\b/g,
+    /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should|Keep|Stay|Show|Tell|Give)\b/g,
     "$1. $2"
   );
+  output = output.replace(/\b(now|here|there)\s+(Keep|Stay|Show|Tell|Give)\b/g, "$1. $2");
+  output = output.replace(/,\s*(now|here|there)\.\s*(Keep|Stay|Show|Tell|Give)\b/g, ". $2");
+  output = output.replace(/\b(now|here|there)\s+(Keep it brief|Keep this brief|Keep it tight)\b/gi, "$1. $2");
+  output = output.replace(/,\s*now\s+(Keep it brief|Keep this brief|Keep it tight)\.?$/gi, ". $1.");
 
   return normalizeText(output);
 }

@@ -453,6 +453,10 @@ function deterministicContinuityVariation({
     return `${text} That's still the workflow problem.`;
   }
 
+  if (concernTags.includes("access")) {
+    return `${text} That still leaves the access step unresolved.`;
+  }
+
   if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
     return `${text} That still does not change the decision threshold.`;
   }
@@ -568,7 +572,8 @@ function inferConcernTags(text: string): string[] {
   if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
   if (/patient population|typical patient|subgroup|patients who/.test(normalized)) tags.push("patient_fit");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
-  if (/prior auth|staff|workflow|form|operational/.test(normalized)) tags.push("workflow");
+  if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
+  if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
   if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
   return tags;
 }
@@ -583,6 +588,16 @@ function repAddressesPremiseChallenge(repMessage: string, latestConcern: string)
   if (!isPremiseChallenge(concernText)) return false;
 
   return /you asked|you requested|you wanted|you said yes|you told me to|you asked me to bring|you asked me to follow up|following up|follow up on|follow-up on|left with you last week|study you asked|copy you asked/i.test(repText);
+}
+
+function repAddressesRecentPremiseChallenge(repMessage: string, transcript: ConversationTurn[]): boolean {
+  const recentHcpPremise = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-3)
+    .some((turn) => isPremiseChallenge(String(turn.text || "")));
+
+  if (!recentHcpPremise) return false;
+  return /you asked|you requested|you wanted|you said yes|you told me to|you asked me to bring|you asked me to follow up|following up|follow up on|follow-up on|left with you last week|study you asked|copy you asked|you agreed|agreed to a brief follow-up|agreed to meet/i.test(String(repMessage || "").toLowerCase());
 }
 
 function hcpStillRepeatsPremiseChallenge(hcpReply: string): boolean {
@@ -609,6 +624,9 @@ function deterministicPremiseCorrectionRewrite({
 
   if (concernFamily === "workflow") {
     return "Fine. Then keep it to one practical point. What changes for my staff or approval flow if this actually moves?";
+  }
+  if (concernTags.includes("access")) {
+    return "Fine. Then keep it to one practical point. What changes in the access step or approval path if this actually moves?";
   }
   if (concernFamily === "evidence") {
     return "Fine. Then keep it to one useful point. What changes for my patients or my treatment decision?";
@@ -688,7 +706,8 @@ function inferListeningPattern(repMessage: string, latestConcern: string): Behav
 }
 
 function inferObjectionType(latestConcern: string): BehaviorSignals["objection_type"] {
-  if (/prior auth|workflow|staff|operational|form/.test(latestConcern)) return "workflow";
+  if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(latestConcern)) return "access";
+  if (/workflow|staff|operational|handoff|callback|monitoring|follow-up|form/.test(latestConcern)) return "workflow";
   if (/cost|spend|readmissions|hospitalizations|metrics|value/.test(latestConcern)) return "budget";
   if (/guideline|renal|patient population|subgroup|study|data/.test(latestConcern)) return "clinical";
   return "none";
@@ -735,6 +754,7 @@ function normalizeBehaviorSignals(
   hcpReply: string
 ): BehaviorSignals {
   const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const premiseCorrected = repAddressesRecentPremiseChallenge(repMessage, transcript);
   const inferredQuestionType = detectQuestionType(repMessage);
   const inferredAlignment = inferResponseAlignment(repMessage, latestConcern);
   const inferredListening = inferListeningPattern(repMessage, latestConcern);
@@ -743,7 +763,7 @@ function normalizeBehaviorSignals(
   const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
   const genericPitch = isGenericProductPitch(repMessage);
   const talkedPastConcern = ignoredDirectConcern(repMessage, latestConcern);
-  const forceWeakAlignment = genericPitch || talkedPastConcern;
+  const forceWeakAlignment = !premiseCorrected && (genericPitch || talkedPastConcern);
   const forceRepDominant = genericPitch;
 
   return {
@@ -754,6 +774,8 @@ function normalizeBehaviorSignals(
         : inferredQuestionType,
     response_alignment: forceWeakAlignment
       ? "weak"
+      : premiseCorrected
+        ? "strong"
       : rawSignals?.response_alignment === "strong"
         ? "strong"
         : inferredAlignment,
@@ -768,6 +790,8 @@ function normalizeBehaviorSignals(
       : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
     listening_pattern: forceWeakAlignment
       ? "missed"
+      : premiseCorrected
+        ? "responsive"
       : rawSignals?.listening_pattern === "responsive"
         ? "responsive"
         : inferredListening,
