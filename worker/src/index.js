@@ -4,6 +4,7 @@ const memoryState = {
   scenarios: [],
   sessions: [],
 };
+const groqKeyCooldowns = new Map();
 
 function json(data, init = {}, request) {
   const headers = new Headers(init.headers || {});
@@ -388,6 +389,40 @@ function getGroqCandidateKeys(keys) {
   return Array.isArray(keys?.groqApiKeys) ? keys.groqApiKeys.filter(Boolean) : [];
 }
 
+function getGroqCooldown(key) {
+  const cooldownUntil = groqKeyCooldowns.get(key);
+  if (!cooldownUntil) return 0;
+  if (cooldownUntil <= Date.now()) {
+    groqKeyCooldowns.delete(key);
+    return 0;
+  }
+  return cooldownUntil;
+}
+
+function setGroqCooldown(key, retryAfterSeconds) {
+  const fallbackMs = 8000;
+  const retryMs = Number.isFinite(Number(retryAfterSeconds))
+    ? Math.max(1000, Math.ceil(Number(retryAfterSeconds) * 1000))
+    : fallbackMs;
+  groqKeyCooldowns.set(key, Date.now() + retryMs);
+}
+
+function rankGroqKeys(groqKeys = []) {
+  const now = Date.now();
+  return groqKeys
+    .map((key, index) => ({
+      key,
+      index,
+      cooldownUntil: getGroqCooldown(key),
+    }))
+    .sort((a, b) => {
+      const aReady = a.cooldownUntil <= now ? 0 : 1;
+      const bReady = b.cooldownUntil <= now ? 0 : 1;
+      if (aReady !== bReady) return aReady - bReady;
+      return a.cooldownUntil - b.cooldownUntil;
+    });
+}
+
 async function invokeGroqWithFailover({
   llmUrl,
   payload,
@@ -395,9 +430,23 @@ async function invokeGroqWithFailover({
   controller,
 }) {
   const errors = [];
+  const rankedKeys = rankGroqKeys(groqKeys);
 
-  for (let index = 0; index < groqKeys.length; index += 1) {
-    const apiKey = groqKeys[index];
+  for (let position = 0; position < rankedKeys.length; position += 1) {
+    const { key: apiKey, index } = rankedKeys[position];
+    const cooldownUntil = getGroqCooldown(apiKey);
+    if (cooldownUntil > Date.now()) {
+      errors.push({
+        status: 429,
+        details: "Key is cooling down after rate limit.",
+        keyIndex: index,
+        rateLimited: true,
+        retryAfterSeconds: Math.ceil((cooldownUntil - Date.now()) / 1000),
+        skipped: true,
+      });
+      continue;
+    }
+
     const response = await fetch(llmUrl, {
       method: "POST",
       headers: {
@@ -409,12 +458,16 @@ async function invokeGroqWithFailover({
     });
 
     if (response.ok) {
+      groqKeyCooldowns.delete(apiKey);
       const data = await response.json();
       return { response, data, keyIndex: index };
     }
 
     const errorText = await response.text();
     const rateLimit = extractRateLimitSignal(errorText);
+    if (response.status === 429 || rateLimit) {
+      setGroqCooldown(apiKey, rateLimit?.retryAfterSeconds);
+    }
     errors.push({
       status: response.status,
       details: errorText,
