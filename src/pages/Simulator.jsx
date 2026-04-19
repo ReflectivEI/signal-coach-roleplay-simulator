@@ -16,6 +16,7 @@ import { computeHcpState, computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
 import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
+import { toast } from "@/components/ui/use-toast";
 
 function createLocalSession(scData, convInit) {
   return {
@@ -57,6 +58,7 @@ export default function Simulator() {
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
   const [realtimeFeedback, setRealtimeFeedback] = useState(null);
   const [reviewStage, setReviewStage] = useState("");
+  const [lastRuntimeError, setLastRuntimeError] = useState("");
 
   useEffect(() => {
     if (scenarioId) void initSession();
@@ -112,6 +114,7 @@ export default function Simulator() {
     if (!session || !scenario || isLoading) return;
     setIsLoading(true);
     setLastNudge(null);
+    setLastRuntimeError("");
     setHasRepSpoken(true);
 
     const repTurnObj = {
@@ -153,66 +156,77 @@ export default function Simulator() {
       cues: t.cues || [],
     }));
 
-    const response = await generateHcpResponse(
-      scenario,
-      conversationHistory,
-      session.currentBehaviorState,
-      session.currentJourneyState,
-      coachingEnabled,
-      repText,
-      allSignals,
-      session.turnCount,
-      currentVolatilityProfile,
-    );
+    try {
+      const response = await generateHcpResponse(
+        scenario,
+        conversationHistory,
+        session.currentBehaviorState,
+        session.currentJourneyState,
+        coachingEnabled,
+        repText,
+        allSignals,
+        session.turnCount,
+        currentVolatilityProfile,
+      );
 
-    setTurns((prev) => {
-      const updated = [...prev];
-      const repIdx = updated.findLastIndex((t) => t.speaker === "rep");
-      if (repIdx !== -1 && coachingEnabled && response.coachingNudge) {
-        updated[repIdx] = { ...updated[repIdx], nudge: response.coachingNudge };
+      setTurns((prev) => {
+        const updated = [...prev];
+        const repIdx = updated.findLastIndex((t) => t.speaker === "rep");
+        if (repIdx !== -1 && coachingEnabled && response.coachingNudge) {
+          updated[repIdx] = { ...updated[repIdx], nudge: response.coachingNudge };
+        }
+        return [...updated, {
+          id: crypto.randomUUID(),
+          speaker: "hcp",
+          text: response.hcpReply,
+          timestamp: new Date().toISOString(),
+          cues: response.activeCues || [],
+          nudge: null,
+        }];
+      });
+
+      setActiveCues(response.activeCues || []);
+      setLastSignals(response.behaviorSignals || {});
+      const updatedSignals = [...allSignals, response.behaviorSignals || {}];
+      setAllSignals(updatedSignals);
+
+      const updatedRepTurnIds = [...repTurnIds, repTurnObj.id];
+      setRepTurnIds(updatedRepTurnIds);
+
+      if (response.volatilityState) {
+        setVolatilityState(response.volatilityState);
+        setCurrentVolatilityProfile(response.volatilityState.profile);
       }
-      return [...updated, {
-        id: crypto.randomUUID(),
-        speaker: "hcp",
-        text: response.hcpReply,
-        timestamp: new Date().toISOString(),
-        cues: response.activeCues || [],
-        nudge: null,
-      }];
-    });
 
-    setActiveCues(response.activeCues || []);
-    setLastSignals(response.behaviorSignals || {});
-    const updatedSignals = [...allSignals, response.behaviorSignals || {}];
-    setAllSignals(updatedSignals);
+      const prediction = computeHcpState(
+        updatedSignals,
+        scenario.persona,
+        scenario.interactionPressure || [],
+        scenario.startingBehaviorState,
+      );
+      setHcpPrediction(prediction);
+      if (coachingEnabled && response.coachingNudge) {
+        setLastNudge(response.coachingNudge);
+      }
 
-    const updatedRepTurnIds = [...repTurnIds, repTurnObj.id];
-    setRepTurnIds(updatedRepTurnIds);
-
-    if (response.volatilityState) {
-      setVolatilityState(response.volatilityState);
-      setCurrentVolatilityProfile(response.volatilityState.profile);
+      const updatedSession = {
+        ...session,
+        currentJourneyState: response.nextJourneyState,
+        currentBehaviorState: response.nextBehaviorState,
+        turnCount: session.turnCount + 2,
+      };
+      setSession(updatedSession);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "HCP response failed.";
+      setLastRuntimeError(message);
+      toast({
+        title: "HCP response failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    const prediction = computeHcpState(
-      updatedSignals,
-      scenario.persona,
-      scenario.interactionPressure || [],
-      scenario.startingBehaviorState,
-    );
-    setHcpPrediction(prediction);
-    if (coachingEnabled && response.coachingNudge) {
-      setLastNudge(response.coachingNudge);
-    }
-
-    const updatedSession = {
-      ...session,
-      currentJourneyState: response.nextJourneyState,
-      currentBehaviorState: response.nextBehaviorState,
-      turnCount: session.turnCount + 2,
-    };
-    setSession(updatedSession);
-    setIsLoading(false);
   }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile]);
 
   const handleEndSession = async () => {
@@ -431,6 +445,18 @@ export default function Simulator() {
             boxShadow: "0 18px 40px rgba(14, 24, 43, 0.06)",
           }}
         >
+          {lastRuntimeError ? (
+            <div
+              className="mx-6 mt-4 rounded-2xl border px-4 py-3 text-sm"
+              style={{
+                background: "rgba(255, 244, 244, 0.92)",
+                borderColor: "rgba(191, 132, 145, 0.46)",
+                color: "hsl(356 32% 34%)",
+              }}
+            >
+              {lastRuntimeError}
+            </div>
+          ) : null}
           <MessageList turns={turns} isLoading={isLoading} realtimeFeedback={realtimeFeedback} />
 
           <MessageInput

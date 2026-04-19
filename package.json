@@ -13,7 +13,9 @@
     "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
-    "worker:deploy": "wrangler deploy --config wrangler.toml"
+    "worker:deploy": "wrangler deploy --config wrangler.toml",
+    "frontend:deploy": "wrangler pages deploy dist --project-name signal-coach-roleplay-simulator",
+    "deploy:full": "npm run build && npm run worker:deploy && npm run frontend:deploy"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
