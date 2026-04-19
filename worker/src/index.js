@@ -334,18 +334,25 @@ async function writeCollection(env, key, value) {
 function getLlmProvider(env, requestedProvider) {
   const openaiApiKey = env?.OPENAI_API_KEY;
   const groqApiKey = env?.GROQ_API_KEY;
+  const groqApiKeys = [
+    env?.GROQ_API_KEY,
+    env?.GROQ_API_KEY_SB_2,
+    env?.GROQ_API_KEY_SB_3,
+    env?.GROQ_API_KEY_SB_4,
+    env?.GROQ_API_KEY_SB_5,
+  ].filter(Boolean);
 
   const provider = requestedProvider === "openai"
     ? "openai"
     : requestedProvider === "groq"
       ? "groq"
-      : groqApiKey
+      : groqApiKeys.length
         ? "groq"
         : openaiApiKey
           ? "openai"
           : null;
 
-  return { provider, openaiApiKey, groqApiKey };
+  return { provider, openaiApiKey, groqApiKey, groqApiKeys };
 }
 
 function modelForProvider(provider, requestedModel) {
@@ -361,6 +368,82 @@ function llmUrlForProvider(provider) {
 
 function apiKeyForProvider(provider, keys) {
   return provider === "groq" ? keys.groqApiKey : keys.openaiApiKey;
+}
+
+function extractRateLimitSignal(errorText = "") {
+  const text = String(errorText || "");
+  if (!/rate limit|rate_limit|rate_limit_exceeded|tokens per minute|tpm/i.test(text)) {
+    return null;
+  }
+
+  const retryMatch = text.match(/try again in ([0-9.]+)s/i);
+  const retryAfterSeconds = retryMatch ? Number(retryMatch[1]) : null;
+  return {
+    rateLimited: true,
+    retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : null,
+  };
+}
+
+function getGroqCandidateKeys(keys) {
+  return Array.isArray(keys?.groqApiKeys) ? keys.groqApiKeys.filter(Boolean) : [];
+}
+
+async function invokeGroqWithFailover({
+  llmUrl,
+  payload,
+  groqKeys,
+  controller,
+}) {
+  const errors = [];
+
+  for (let index = 0; index < groqKeys.length; index += 1) {
+    const apiKey = groqKeys[index];
+    const response = await fetch(llmUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return { response, data, keyIndex: index };
+    }
+
+    const errorText = await response.text();
+    const rateLimit = extractRateLimitSignal(errorText);
+    errors.push({
+      status: response.status,
+      details: errorText,
+      keyIndex: index,
+      rateLimited: Boolean(rateLimit),
+      retryAfterSeconds: rateLimit?.retryAfterSeconds ?? null,
+    });
+
+    if (!(response.status === 429 || rateLimit)) {
+      return {
+        response,
+        data: null,
+        keyIndex: index,
+        terminalError: {
+          status: response.status,
+          details: errorText,
+        },
+        errors,
+      };
+    }
+  }
+
+  return {
+    response: null,
+    data: null,
+    keyIndex: -1,
+    exhausted: true,
+    errors,
+  };
 }
 
 function buildMessages({ prompt, roleplay = false, response_json_schema }) {
@@ -441,6 +524,7 @@ async function handleLlmInvoke(request, env) {
   const model = modelForProvider(provider, requestedModel);
   const llmUrl = llmUrlForProvider(provider);
   const apiKey = apiKeyForProvider(provider, providerKeys);
+  const groqKeys = getGroqCandidateKeys(providerKeys);
   const messages = buildMessages({ prompt, roleplay, response_json_schema });
 
   const payload = { model, messages, temperature, max_tokens };
@@ -451,27 +535,75 @@ async function handleLlmInvoke(request, env) {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(llmUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
+    let data;
+    let usedKeyIndex = 0;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return json({
-        error: "LLM_SERVICE_UNAVAILABLE",
-        details: errorText,
-        provider,
-        model,
-      }, { status: response.status }, request);
+    if (provider === "groq" && groqKeys.length > 1) {
+      const failoverResult = await invokeGroqWithFailover({
+        llmUrl,
+        payload,
+        groqKeys,
+        controller,
+      });
+
+      if (failoverResult?.terminalError) {
+        return json({
+          error: "LLM_SERVICE_UNAVAILABLE",
+          details: failoverResult.terminalError.details,
+          provider,
+          model,
+          keyIndex: failoverResult.keyIndex,
+          keyPoolSize: groqKeys.length,
+        }, { status: failoverResult.terminalError.status }, request);
+      }
+
+      if (failoverResult?.exhausted) {
+        const lastError = failoverResult.errors[failoverResult.errors.length - 1];
+        return json({
+          error: "LLM_SERVICE_UNAVAILABLE",
+          details: lastError?.details || "All Groq keys exhausted by rate limits.",
+          provider,
+          model,
+          keyIndex: lastError?.keyIndex ?? -1,
+          keyPoolSize: groqKeys.length,
+          failoverExhausted: true,
+          keyErrors: failoverResult.errors.map((entry) => ({
+            status: entry.status,
+            keyIndex: entry.keyIndex,
+            rateLimited: entry.rateLimited,
+            retryAfterSeconds: entry.retryAfterSeconds,
+          })),
+        }, { status: lastError?.status || 429 }, request);
+      }
+
+      data = failoverResult.data;
+      usedKeyIndex = failoverResult.keyIndex;
+    } else {
+      const response = await fetch(llmUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return json({
+          error: "LLM_SERVICE_UNAVAILABLE",
+          details: errorText,
+          provider,
+          model,
+          keyIndex: provider === "groq" ? 0 : null,
+          keyPoolSize: provider === "groq" ? groqKeys.length || 1 : null,
+        }, { status: response.status }, request);
+      }
+
+      data = await response.json();
     }
 
-    const data = await response.json();
     const content = data?.choices?.[0]?.message?.content ?? "";
     let parsedResponse = content;
 
@@ -487,6 +619,8 @@ async function handleLlmInvoke(request, env) {
       response: parsedResponse,
       provider,
       model,
+      keyIndex: provider === "groq" ? usedKeyIndex : null,
+      keyPoolSize: provider === "groq" ? groqKeys.length || 1 : null,
       usage: data?.usage || { prompt_tokens: 0, completion_tokens: 0 },
     }, {}, request);
   } catch (error) {
@@ -605,7 +739,7 @@ async function handleSessions(request, env) {
 }
 
 function handleHealth(env, request) {
-  const { provider, openaiApiKey, groqApiKey } = getLlmProvider(env);
+  const { provider, openaiApiKey, groqApiKey, groqApiKeys } = getLlmProvider(env);
   return json({
     status: "ok",
     ready: true,
@@ -618,6 +752,9 @@ function handleHealth(env, request) {
     providersConfigured: {
       openai: Boolean(openaiApiKey),
       groq: Boolean(groqApiKey),
+    },
+    keyPools: {
+      groq: groqApiKeys?.length || 0,
     },
     endpoints: ["/health", "/api/llm/invoke", "/api/scenarios", "/api/roleplay/sessions"],
   }, {}, request);
