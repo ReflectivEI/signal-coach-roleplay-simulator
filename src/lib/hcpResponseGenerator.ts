@@ -440,6 +440,7 @@ function deterministicContinuityVariation({
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const concernTags = inferConcernTags(`${hcpReply} ${latestConcern}`);
   const text = String(hcpReply || "").trim().replace(/[.?!]+$/, "");
+  const normalizedText = text.toLowerCase();
 
   if (!text) return hcpReply;
   if (/that still does not change the decision threshold/i.test(text)) {
@@ -469,6 +470,15 @@ function deterministicContinuityVariation({
   }
 
   if (concernTags.includes("renal")) {
+    if (
+      /renal (?:impairment|function|patients?)/i.test(text) &&
+      /(still does not address|still doesn't address|still does not tell me|still doesn't tell me|does not apply cleanly|doesn't apply cleanly|not enough for my patients)/i.test(text)
+    ) {
+      return "That still doesn't address what this means for the renal patients I manage.";
+    }
+    if (/what (?:that|this) means in the renal patients i manage|renal patients i manage/i.test(normalizedText)) {
+      return `${text}.`;
+    }
     return `${text} I still do not know what that means in the renal patients I manage.`;
   }
 
@@ -573,7 +583,7 @@ function inferConcernTags(text: string): string[] {
   const tags: string[] = [];
   if (/guideline/.test(normalized)) tags.push("guideline");
   if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
-  if (/patient population|typical patient|subgroup|patients who/.test(normalized)) tags.push("patient_fit");
+  if (/patient population|typical patient|subgroup|patients who|right patient|ideal patient|perfect fit|patient profile|matching chart|flagging the chart|flag the chart|real patient type|patient type/.test(normalized)) tags.push("patient_fit");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
@@ -676,7 +686,7 @@ function ignoredDirectConcern(repMessage: string, latestConcern: string): boolea
   const directOperationalAsk =
     /what'?s the one thing|what specifically|what changes|what gets added|what staff|prior auth|workflow|extra step|bottom line/.test(concernText);
   const directClinicalAsk =
-    /renal|guideline|patient population|subgroup|what outcomes|cost|readmissions|justify the cost/.test(concernText);
+    /renal|guideline|patient population|subgroup|right patient|ideal patient|perfect fit|patient profile|patient type|what outcomes|cost|readmissions|justify the cost/.test(concernText);
 
   if ((directOperationalAsk || directClinicalAsk) && sharedTags.length === 0) {
     return true;
@@ -712,7 +722,7 @@ function inferObjectionType(latestConcern: string): BehaviorSignals["objection_t
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(latestConcern)) return "access";
   if (/workflow|staff|operational|handoff|callback|monitoring|follow-up|form/.test(latestConcern)) return "workflow";
   if (/cost|spend|readmissions|hospitalizations|metrics|value/.test(latestConcern)) return "budget";
-  if (/guideline|renal|patient population|subgroup|study|data/.test(latestConcern)) return "clinical";
+  if (/guideline|renal|patient population|subgroup|right patient|ideal patient|perfect fit|patient profile|patient type|study|data/.test(latestConcern)) return "clinical";
   return "none";
 }
 
@@ -1059,6 +1069,8 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
+  let continuityAdjusted = false;
+
   if (needsContinuityVariationRewrite({
     hcpReply,
     transcript,
@@ -1071,12 +1083,14 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
+      continuityAdjusted = true;
     } catch {
       hcpReply = deterministicContinuityVariation({
         hcpReply,
         transcript,
         scenario,
       });
+      continuityAdjusted = true;
     }
   }
   if (repAddressesPremiseChallenge(repMessage, getLatestHcpConcern(transcript, scenario)) && hcpStillRepeatsPremiseChallenge(hcpReply)) {
@@ -1092,7 +1106,7 @@ Return ONLY valid JSON:
     turn: turnDirectives,
     profile: runtimeProfile,
   });
-  if (needsContinuityVariationRewrite({
+  if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
     transcript,
   })) {
@@ -1104,6 +1118,7 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
+      continuityAdjusted = true;
       hcpReply = applyHcpResponseSurface({
         hcpReply,
         scenario,
@@ -1111,6 +1126,7 @@ Return ONLY valid JSON:
         profile: runtimeProfile,
       });
     } catch {
+      continuityAdjusted = true;
       hcpReply = applyHcpResponseSurface({
         hcpReply: deterministicContinuityVariation({
           hcpReply,

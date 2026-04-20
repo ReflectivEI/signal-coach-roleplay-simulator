@@ -883,6 +883,36 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
     /make the proof point concrete|show me what changes practice|if you can make the proof point concrete|if that's the proof point|show me the subgroup|if you can make the proof point concrete, i can stay with|i can stay with|what one piece of evidence would be sufficient to shift|what would actually alter treatment approach|what would actually alter our current approach|more compelling reason to alter my treatment approach|one key metric|piece of evidence that would drive|show me the subgroup and the single data point|what single data point would change that|what single metric changes treatment choice|one metric that would demonstrate a significant enough reduction in complications|specific, compelling metric|one number|what'?s the one number|what one number/.test(
       activeConcernText,
     );
+  const isPerpetualMaybe =
+    /the perpetual maybe/i.test(String(scenario?.title || "")) ||
+    /meaning to try it with the right patient|haven't had one come through that fits perfectly/i.test(
+      String(scenario?.openingScene || "").toLowerCase(),
+    );
+
+  if (isPerpetualMaybe) {
+    if (
+      /right patient|ideal patient|perfect fit|haven't had one|meaning to try it|not the right fit|still not convinced|need more data/.test(
+        activeConcernText,
+      )
+    ) {
+      if (repTurns <= 1) {
+        return "It sounds like the blocker is not interest, it is that the right patient is still too vague to act on. By right patient, I mean the patient whose current course is still not good enough that you would seriously consider changing treatment, not a perfect theoretical fit. If someone like that comes through in the next two weeks, would you be open to flagging the chart so we can pressure-test it together?";
+      }
+      return "It sounds like the blocker is still not evidence in the abstract, it is that the right patient is not defined tightly enough to act on. By right patient, I mean the patient whose current course is still not good enough that you would genuinely consider a change this month, not someone who only fits on paper. If that patient shows up, would you be open to flagging the next matching chart and reviewing it together so the next step is concrete?";
+    }
+
+    if (
+      /proof point|concrete outcome|single data point|patient outcome|concrete|what changes practice|one key metric|piece of evidence|one number|specific, compelling metric|what single metric changes treatment choice/.test(
+        activeConcernText,
+      )
+    ) {
+      return "In this situation, the concrete move is not another broad proof point, it is getting specific enough about the right patient that you would actually act on the next real chart instead of waiting for a perfect fit. The practical next step is agreeing on that patient profile now and reviewing the next matching case when it comes through.";
+    }
+
+    if (/what would change that|what would actually alter treatment approach|what would alter our current approach/.test(activeConcernText)) {
+      return "What would change it is getting specific enough that 'the right patient' becomes one real patient type you would actually flag in the next couple of weeks, not a perfect case you keep waiting for. Once that profile is concrete enough that you would pull the next matching chart and review it, the conversation has moved from maybe to a real next step.";
+    }
+  }
 
   if (hcpTurns === 0 && (hospitalFocused || /hospital|change treatment choice/.test(proofPointCategory) || specificMetricAsk || concreteProofAsk)) {
     return "The proof point has to be concrete from the start: a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions. If the data cannot clear that bar, it still does not change treatment choice.";
@@ -1253,6 +1283,24 @@ export function maybeApplyHardFamilyAnswerReply({
 }) {
   const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
+  const isPerpetualMaybe =
+    /the perpetual maybe/i.test(String(scenario?.title || "")) ||
+    /meaning to try it with the right patient|haven't had one come through that fits perfectly/i.test(
+      String(scenario?.openingScene || "").toLowerCase(),
+    );
+
+  if (
+    isPerpetualMaybe &&
+    /commitment_close|adoption_commitment/.test(stageText) &&
+    (
+      /right patient|ideal patient|perfect fit|haven't had one|meaning to try it|not the right fit|still not convinced|need more data|what would change that|what would actually alter treatment approach|what would alter our current approach|proof point|concrete outcome|single data point|patient outcome|what changes practice|one key metric|piece of evidence|one number|specific, compelling metric|what single metric changes treatment choice/.test(
+        activeConcernText,
+      ) ||
+      hasRepeatedObjection(turns)
+    )
+  ) {
+    return buildDeterministicCommitmentReply({ scenario, turns });
+  }
 
   if (/clinical_value|clinical_evaluation/.test(stageText)) {
     if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(activeConcernText)) {
