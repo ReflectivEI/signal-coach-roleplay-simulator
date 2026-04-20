@@ -6,7 +6,7 @@ import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "../src/lib/qaRepProxy.js";
+import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "../src/lib/qaRepProxy.js";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -200,6 +200,16 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
     let repText = repDraft;
     if (personaKey === "strong_rep") {
+      repText = maybeApplyHardFamilyAnswerReply({
+        scenario,
+        turns,
+        draft: repText,
+      });
+      repText = maybeEnforceFamilyAnswerReply({
+        scenario,
+        turns,
+        draft: repText,
+      });
       repText = await retry(() => withTimeout(maybeReviseStrongRepReply({
         scenario,
         turns,
@@ -228,6 +238,11 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
         currentJourneyState,
         draft: repText,
       }), `${scenario.title} rep spoken-tightening ${i + 1}`));
+      repText = maybeApplyHardFamilyAnswerReply({
+        scenario,
+        turns,
+        draft: repText,
+      });
       repText = maybeEnforceFamilyAnswerReply({
         scenario,
         turns,

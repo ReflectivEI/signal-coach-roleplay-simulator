@@ -24,6 +24,80 @@ function ensureTerminalPunctuation(text = ""): string {
   return /[.?!]$/.test(value) ? value : `${value}.`;
 }
 
+function enforceSentenceCase(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+  output = output.replace(/^([a-z])/, (_, letter) => letter.toUpperCase());
+  output = output.replace(/([.!?]\s+)([a-z])/g, (_, boundary, letter) => `${boundary}${letter.toUpperCase()}`);
+  return output;
+}
+
+function repairDanglingTail(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/,\s*what'?s\.$/i, ".")
+    .replace(/\s+what'?s\.$/i, ".")
+    .replace(/\s+(what|how|why|who|when|where)\.$/i, ".")
+    .replace(/\s+(what|how|why|who|when|where)\?$/i, ".")
+    .replace(/\s+\byou\.$/i, ".")
+    .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|it|they|them|we|i)\.$/i, ".")
+    .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.")
+    .replace(/\s+\b(what [^.?!]*?)\s+\bfor\./i, " $1?")
+    .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?");
+
+  output = output.replace(/\.\./g, ".");
+  return normalizeText(output);
+}
+
+function repairQuestionPunctuation(text = ""): string {
+  const parts = normalizeText(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.map((part) => {
+    const cleaned = part.replace(/\s+([.?!])$/, "$1");
+    if (/^(what|how|why|who|when|where|can|would|should|do|does|did|is|are|am|will|could)\b/i.test(cleaned) && /\.$/.test(cleaned)) {
+      return cleaned.replace(/\.$/, "?");
+    }
+    return cleaned;
+  }).join(" ");
+}
+
+function hasNaturalTimePressureDirective(text = ""): boolean {
+  const value = normalizeText(text);
+  return /\b(get to the point|short version|bottom line|one thing|only got a minute|only have a minute|few minutes|make this quick|keep this tight|brief version|quick version)\b/i.test(value);
+}
+
+function pickDeterministicTimeTail(seed = ""): string {
+  const options = [
+    "Give me the short version.",
+    "Get to the point.",
+    "Make it quick.",
+  ];
+  const key = normalizeText(seed);
+  const score = Array.from(key).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return options[score % options.length];
+}
+
+function enforceSentenceBoundaries(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output.replace(
+    /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(Keep it brief|Keep this brief|Keep it tight|Give me the short version|Get to the point|Make it quick)\b/gi,
+    "$1. $2"
+  );
+  output = output.replace(
+    /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
+    "$1. $2"
+  );
+
+  return normalizeText(output);
+}
+
 function applyGlobalSpokenRewrites(text = ""): string {
   let output = normalizeText(text);
   const rewrites: Array<[RegExp, string]> = [
@@ -49,6 +123,11 @@ function applyGlobalSpokenRewrites(text = ""): string {
     output = output.replace(pattern, replacement);
   });
 
+  output = output
+    .replace(/\bKeep it brief\b/gi, "Give me the short version")
+    .replace(/\bKeep this brief\b/gi, "Give me the short version")
+    .replace(/\bKeep it tight\b/gi, "Make it quick");
+
   output = output.replace(
     /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should|Keep|Stay|Show|Tell|Give)\b/g,
     "$1. $2"
@@ -58,7 +137,7 @@ function applyGlobalSpokenRewrites(text = ""): string {
   output = output.replace(/\b(now|here|there)\s+(Keep it brief|Keep this brief|Keep it tight)\b/gi, "$1. $2");
   output = output.replace(/,\s*now\s+(Keep it brief|Keep this brief|Keep it tight)\.?$/gi, ". $1.");
 
-  return normalizeText(output);
+  return enforceSentenceBoundaries(output);
 }
 
 function applyDomainCadence(text: string, domain: string, concernFamily: string): string {
@@ -257,9 +336,12 @@ export function applyHcpResponseSurface({
   if (
     scenario?.interactionPressure?.includes("time_constrained") &&
     !/clock|time|quick|brief|tight|patient|schedule|doorway|room/i.test(output) &&
+    !hasNaturalTimePressureDirective(output) &&
     turn.escalationStage !== "baseline"
   ) {
-    output = trimToSentences(`${output.replace(/[.?!]+$/, "")} Keep it brief.`, 1);
+    output = ensureTerminalPunctuation(output.replace(/[.?!]+$/, ""));
+    output = `${output} ${pickDeterministicTimeTail(`${turn.phase}|${turn.concernFamily}|${turn.domain}|${output}`)}`;
+    output = trimToSentences(enforceSentenceBoundaries(output), 2);
   }
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
@@ -280,5 +362,13 @@ export function applyHcpResponseSurface({
       .replace(/\bwhat first step would actually make this workable\b/gi, "what one step would actually make this workable");
   }
 
-  return ensureTerminalPunctuation(output);
+  return ensureTerminalPunctuation(
+    repairQuestionPunctuation(
+      repairDanglingTail(
+        enforceSentenceCase(
+          enforceSentenceBoundaries(output)
+        )
+      )
+    )
+  );
 }

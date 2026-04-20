@@ -10,7 +10,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "@/lib/qaRepProxy";
+import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "@/lib/qaRepProxy";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -245,6 +245,16 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
       let repText = repDraft;
       if (personaKey === "strong_rep") {
+        repText = maybeApplyHardFamilyAnswerReply({
+          scenario,
+          turns,
+          draft: repText,
+        });
+        repText = maybeEnforceFamilyAnswerReply({
+          scenario,
+          turns,
+          draft: repText,
+        });
         repText = await retryWithBackoff(() => withTimeout(
           maybeReviseStrongRepReply({
             scenario,
@@ -285,6 +295,16 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
           }),
           `${scenario.title} rep spoken-tightening ${i + 1}`,
         ));
+        repText = maybeApplyHardFamilyAnswerReply({
+          scenario,
+          turns,
+          draft: repText,
+        });
+        repText = maybeEnforceFamilyAnswerReply({
+          scenario,
+          turns,
+          draft: repText,
+        });
       }
 
       const repTurnObj = {

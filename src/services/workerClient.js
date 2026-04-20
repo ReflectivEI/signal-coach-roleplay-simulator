@@ -44,28 +44,52 @@ const workerScenariosUrl = useBrowserProxyPaths ? workerScenariosPath : `${resol
 const workerSessionsUrl = useBrowserProxyPaths ? workerSessionsPath : `${resolvedWorkerBaseUrl}${workerSessionsPath}`;
 const DEFAULT_WORKER_TIMEOUT_MS = 35000;
 const HEALTH_TIMEOUT_MS = 8000;
+const TRANSIENT_RETRY_DELAYS_MS = [400, 1200];
 
 function timeoutError(label, timeoutMs) {
   return new Error(`${label} timed out after ${timeoutMs}ms`);
 }
 
-async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TIMEOUT_MS, label = "Worker request") {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
-  try {
-    return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      throw timeoutError(label, timeoutMs);
+function isTransientWorkerError(error) {
+  const message = String(error?.message || "");
+  const code = String(error?.cause?.code || error?.code || "");
+  return (
+    error?.name === "AbortError" ||
+    message.includes("timed out after") ||
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    code === "ECONNRESET" ||
+    code === "ETIMEDOUT"
+  );
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TIMEOUT_MS, label = "Worker request") {
+  let lastError;
+
+  for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } catch (error) {
+      lastError = error?.name === "AbortError" ? timeoutError(label, timeoutMs) : error;
+      if (!isTransientWorkerError(lastError) || attempt === TRANSIENT_RETRY_DELAYS_MS.length) {
+        throw lastError;
+      }
+      await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt]);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw lastError;
 }
 
 async function parseWorkerResponse(response) {
