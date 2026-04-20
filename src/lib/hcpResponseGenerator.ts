@@ -22,6 +22,8 @@ import { buildDialogueDirectivePrompt } from "./hcpDialogueDirectives";
 import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
+import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
+import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -584,6 +586,7 @@ function inferConcernTags(text: string): string[] {
   if (/guideline/.test(normalized)) tags.push("guideline");
   if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
   if (/patient population|typical patient|subgroup|patients who|right patient|ideal patient|perfect fit|patient profile|matching chart|flagging the chart|flag the chart|real patient type|patient type|need more data|not convinced|not ready yet|still maybe|still a maybe|hesitation|waiting for the right patient/.test(normalized)) tags.push("patient_fit");
+  if (/\bscreen(?:ing)?\b|\bcandidate\b|\beligib(?:le|ility)\b|\bcriteria\b|\bpatient selection\b|\bwhich patients?\b|\bwhat type of patient\b|\bwhat kind of patient\b|\bhow do you decide\b|\bwho tends to\b|\bwhere do you draw the line\b|\bbest results in\b/.test(normalized)) tags.push("screening");
   if (/not ready to be first|first one|first in my group|what are others doing|others in my area|peer adoption|waiting for others|someone else does first|what are others in my area doing|what are others doing first/.test(normalized)) tags.push("adoption_caution");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
@@ -696,7 +699,11 @@ function ignoredDirectConcern(repMessage: string, latestConcern: string): boolea
   return false;
 }
 
-function inferResponseAlignment(repMessage: string, latestConcern: string): BehaviorSignals["response_alignment"] {
+function inferResponseAlignment(
+  repMessage: string,
+  latestConcern: string,
+  scenario?: any,
+): BehaviorSignals["response_alignment"] {
   if (repAddressesPremiseChallenge(repMessage, latestConcern)) {
     return "strong";
   }
@@ -706,20 +713,40 @@ function inferResponseAlignment(repMessage: string, latestConcern: string): Beha
   if (shared.length >= 1) {
     return "strong";
   }
+  if (isScreeningDiscoveryResponse(repMessage, scenario)) {
+    const screeningConcern =
+      concernTags.includes("screening") ||
+      concernTags.includes("patient_fit") ||
+      /\bwhat type of patient\b|\bbest results in\b|\bwho do you usually think of first\b|\bhow do you decide\b|\bwhere do you draw the line\b/.test(
+        String(latestConcern || "").toLowerCase()
+      );
+    if (screeningConcern) return "strong";
+  }
   if (/you'?re saying|you'?re right|when you say|what would you need to see|which patient type|where does .* decision|what outcome carries/i.test(repMessage)) {
     return "partial";
   }
   return "weak";
 }
 
-function inferListeningPattern(repMessage: string, latestConcern: string): BehaviorSignals["listening_pattern"] {
-  const alignment = inferResponseAlignment(repMessage, latestConcern);
+function isScreeningDiscoveryResponse(repMessage: string, scenario?: any): boolean {
+  const text = String(repMessage || "").toLowerCase();
+  if (!scenarioMatchesConcernFamily(scenario, "screening")) return false;
+  return /\bwhich patients?\b|\bwhat type of patient\b|\bwhat kind of patient\b|\bhow do you decide\b|\bwhat criteria\b|\bwhat usually makes a patient fit\b|\bwho tends to stay on therapy\b|\bwhere do you draw the line\b/.test(text);
+}
+
+function inferListeningPattern(
+  repMessage: string,
+  latestConcern: string,
+  scenario?: any,
+): BehaviorSignals["listening_pattern"] {
+  const alignment = inferResponseAlignment(repMessage, latestConcern, scenario);
   if (alignment === "strong") return "responsive";
   if (alignment === "partial") return "partially_responsive";
   return "missed";
 }
 
 function isHesitationToCommitmentScenario(scenario: any, latestConcern: string): boolean {
+  if (scenarioMatchesConcernFamily(scenario, "hesitation")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
   const state = String(scenario?.journeyState || "").toLowerCase();
@@ -739,6 +766,7 @@ function isHesitationToCommitmentScenario(scenario: any, latestConcern: string):
 }
 
 function isAdoptionCautionScenario(scenario: any, latestConcern: string): boolean {
+  if (scenarioMatchesConcernFamily(scenario, "adoption_caution")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
   const state = String(scenario?.journeyState || "").toLowerCase();
@@ -808,8 +836,8 @@ function normalizeBehaviorSignals(
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const premiseCorrected = repAddressesRecentPremiseChallenge(repMessage, transcript);
   const inferredQuestionType = detectQuestionType(repMessage);
-  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern);
-  const inferredListening = inferListeningPattern(repMessage, latestConcern);
+  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario);
+  const inferredListening = inferListeningPattern(repMessage, latestConcern, scenario);
   const inferredObjectionType = inferObjectionType(latestConcern, scenario);
   const inferredEngagement = inferEngagementLevel(hcpReply);
   const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
@@ -819,6 +847,7 @@ function normalizeBehaviorSignals(
   const forceRepDominant = genericPitch;
   const forceHesitationFamily = isHesitationToCommitmentScenario(scenario, latestConcern);
   const forceAdoptionCautionFamily = isAdoptionCautionScenario(scenario, latestConcern);
+  const screeningResponsive = isScreeningDiscoveryResponse(repMessage, scenario);
 
   return {
     question_type: forceRepDominant
@@ -829,6 +858,8 @@ function normalizeBehaviorSignals(
     response_alignment: forceWeakAlignment
       ? "weak"
       : premiseCorrected
+        ? "strong"
+      : screeningResponsive
         ? "strong"
       : rawSignals?.response_alignment === "strong"
         ? "strong"
@@ -847,6 +878,8 @@ function normalizeBehaviorSignals(
     listening_pattern: forceWeakAlignment
       ? "missed"
       : premiseCorrected
+        ? "responsive"
+      : screeningResponsive
         ? "responsive"
       : rawSignals?.listening_pattern === "responsive"
         ? "responsive"
@@ -922,6 +955,15 @@ ${prediction.predictedObjections.length ? `Predicted Objection Themes:\n${predic
   const runtimeProfileBlock = `
 ${buildRuntimeProfilePrompt(runtimeProfile)}
 `;
+  const hcpTurnCount = transcript.filter((turn) => turn?.speaker === "hcp").length;
+  const realismBackboneBlock = `
+${buildRealismBackbonePrompt({
+    scenario,
+    turn: turnDirectives,
+    profile: runtimeProfile,
+    hcpTurnCount,
+  })}
+`;
   const dialogueDirectiveBlock = `
 ${buildDialogueDirectivePrompt(
     scenario,
@@ -966,6 +1008,8 @@ ${repMessage}
 ${predictionBlock}
 
 ${runtimeProfileBlock}
+
+${realismBackboneBlock}
 
 ${dialogueDirectiveBlock}
 
@@ -1148,6 +1192,7 @@ Return ONLY valid JSON:
     scenario,
     turn: turnDirectives,
     profile: runtimeProfile,
+    hcpTurnCount,
   });
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
@@ -1167,6 +1212,7 @@ Return ONLY valid JSON:
         scenario,
         turn: turnDirectives,
         profile: runtimeProfile,
+        hcpTurnCount,
       });
     } catch {
       continuityAdjusted = true;
@@ -1179,6 +1225,7 @@ Return ONLY valid JSON:
         scenario,
         turn: turnDirectives,
         profile: runtimeProfile,
+        hcpTurnCount,
       });
     }
   }
@@ -1192,11 +1239,13 @@ Return ONLY valid JSON:
   const cue = resolveObservedCue(result.hcpCue || "", {
     hcpReply,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
+    hcpTurnCount,
     interactionPressures: scenario.interactionPressure || [],
     recentCueLabels,
     scenario: {
       id: scenario.id,
       title: scenario.title,
+      persona: scenario.persona,
       journeyStage: scenario.journeyStage,
       objective: scenario.objective,
       description: scenario.description,

@@ -2,8 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { X, MapPin, Send, Loader2, Brain, Zap, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import TermTooltip from "./TermTooltip";
-import { invokeWorkerText } from "@/services/workerClient";
+import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
+import { initializeConversation } from "@/lib/conversationInit";
 import {
   SIGNAL_INTELLIGENCE_CAPABILITIES,
   JOURNEY_STAGE_LABELS,
@@ -156,61 +156,103 @@ function OpeningSceneBlock({ scenario }) {
 
 // ── AI Coach ──────────────────────────────────────────────────────────────────
 function AiCoachSection({ scenario }) {
-  const [messages, setMessages] = useState([]);
+  const [hcpMessages, setHcpMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hcpState, setHcpState] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     if (bottomRef.current) bottomRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [hcpMessages, loading]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initHcpMode() {
+      const convInit = await initializeConversation(scenario);
+      if (cancelled) return;
+      setHcpState({
+        currentBehaviorState: convInit.initialBehaviorState,
+        currentJourneyState: scenario.journeyState,
+        currentVolatilityProfile: convInit.initialVolatilityProfile,
+        allSignals: [],
+      });
+    }
+
+    void initHcpMode();
+    return () => {
+      cancelled = true;
+    };
+  }, [scenario]);
 
   const send = async () => {
     const trimmed = input.trim();
     if (!trimmed || loading) return;
     setInput("");
     setLoading(true);
-    const userMsg = { role: "user", text: trimmed };
-    setMessages(prev => [...prev, userMsg]);
-    const history = [...messages, userMsg].map(m => `${m.role === "user" ? "Rep" : "Assistant"}: ${m.text}`).join("\n");
-    const result = await invokeWorkerText({
-      prompt: `You are a coaching assistant helping a pharma rep prepare for a training scenario. Answer their question specifically about this scenario. Be concise and practical (max 3 sentences).
 
-SCENARIO:
-Title: ${scenario.title}
-Description: ${scenario.description}
-Objective: ${scenario.objective}
-Core Tension: ${scenario.coreTension || ""}
-HCP: ${scenario.stakeholder}
-Context: ${scenario.context || ""}
-Key Challenges: ${(scenario.keyChallenges || []).join(", ")}
+    const repMsg = { role: "user", text: trimmed };
+    const nextMessages = [...hcpMessages, repMsg];
+    setHcpMessages(nextMessages);
 
-CONVERSATION:
-${history}
+    try {
+      const transcript = nextMessages.map((m, index) => ({
+        id: `practice_${index + 1}`,
+        speaker: m.role === "user" ? /** @type {"rep"} */ ("rep") : /** @type {"hcp"} */ ("hcp"),
+        text: m.text,
+        timestamp: new Date().toISOString(),
+      }));
 
-Rep: ${trimmed}
-Assistant:`
-    });
-    const reply = typeof result === "string" ? result : result?.toString() || "I'm not sure — try rephrasing.";
-    setMessages(prev => [...prev, { role: "assistant", text: reply }]);
-    setLoading(false);
+      const response = await generateHcpResponse(
+        scenario,
+        transcript,
+        hcpState?.currentBehaviorState || scenario.startingBehaviorState || "neutral",
+        hcpState?.currentJourneyState || scenario.journeyState,
+        false,
+        trimmed,
+        hcpState?.allSignals || [],
+        transcript.filter((turn) => turn.speaker === "rep").length,
+        hcpState?.currentVolatilityProfile || "stable",
+      );
+
+      setHcpMessages(prev => [...prev, { role: "assistant", text: response.hcpReply }]);
+      setHcpState(prev => ({
+        currentBehaviorState: response.nextBehaviorState,
+        currentJourneyState: response.nextJourneyState,
+        currentVolatilityProfile: response.volatilityState?.profile || prev?.currentVolatilityProfile || "stable",
+        allSignals: [...(prev?.allSignals || []), response.behaviorSignals],
+      }));
+    } catch (error) {
+      setHcpMessages(prev => [...prev, {
+        role: "assistant",
+        text: "I lost the thread there. Ask again in one concise line.",
+      }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
+  const messages = hcpMessages;
+  const emptyStateText = "Practice directly with the scenario HCP. Type exactly what you'd say to open or advance the conversation.";
+  const headerLabel = "Practice With This HCP";
+  const inputPlaceholder = "Type your rep message…";
+
   return (
     <div className="rounded-xl overflow-hidden" style={{ background: "hsl(222 30% 20%)", border: "1px solid hsl(174 60% 52% / 0.35)" }}>
       <div className="px-4 py-3 border-b border-border/30" style={{ background: "hsl(174 30% 18% / 0.5)" }}>
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(174 60% 52%)" }}>
-          Ask About This Scenario
+          {headerLabel}
         </span>
       </div>
       <div className="min-h-[96px] max-h-48 overflow-y-auto px-4 py-4 space-y-2">
         {messages.length === 0 ? (
           <p className="text-xs leading-relaxed" style={{ color: "rgba(229, 238, 239, 0.92)" }}>
-            Ask anything about the scenario before you start — strategy, objections, opening moves.
+            {emptyStateText}
           </p>
         ) : (
           messages.map((m, i) => (
@@ -246,7 +288,7 @@ Assistant:`
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKey}
-          placeholder="e.g. How should I open this conversation?"
+          placeholder={inputPlaceholder}
           className="flex-1 bg-transparent text-xs outline-none placeholder:text-slate-500"
           style={{ color: "hsl(222 30% 24%)" }}
         />

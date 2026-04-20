@@ -6,6 +6,7 @@
  */
 
 import { BehaviorSignals, ObservationLevel } from "./simulatorEngine";
+import { getScenarioCapabilityProfile, scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 
 export interface CapabilityDriver {
   capability: string;
@@ -18,9 +19,16 @@ interface EvaluationContext {
   scenario?: any;
 }
 
+function isScreeningScenario(context: EvaluationContext = {}): boolean {
+  const scenario = context.scenario || {};
+  if (scenarioMatchesConcernFamily(scenario, "screening")) return true;
+  return String(scenario?.journeyStage || "").toLowerCase() === "discovery";
+}
+
 function isHesitationToCommitmentScenario(context: EvaluationContext = {}): boolean {
   const scenario = context.scenario || {};
   const focusCapabilities = context.focusCapabilities || [];
+  if (scenarioMatchesConcernFamily(scenario, "hesitation")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
   const state = String(scenario?.journeyState || "").toLowerCase();
@@ -39,6 +47,7 @@ function isHesitationToCommitmentScenario(context: EvaluationContext = {}): bool
 function isAdoptionCautionScenario(context: EvaluationContext = {}): boolean {
   const scenario = context.scenario || {};
   const focusCapabilities = context.focusCapabilities || [];
+  if (scenarioMatchesConcernFamily(scenario, "adoption_caution")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
   const state = String(scenario?.journeyState || "").toLowerCase();
@@ -62,6 +71,15 @@ function hasHardObjectionSignals(signals: BehaviorSignals[]): boolean {
     signal.objection_type === "workflow" ||
     signal.objection_type === "budget"
   );
+}
+
+function hasDiscoveryQuestionPattern(signals: BehaviorSignals[]): boolean {
+  const openCount = signals.filter((signal) => signal.question_type === "open_ended").length;
+  const strongOrPartialCount = signals.filter(
+    (signal) => signal.response_alignment === "strong" || signal.response_alignment === "partial"
+  ).length;
+  return openCount >= Math.max(2, Math.ceil(signals.length * 0.4)) &&
+    strongOrPartialCount >= Math.max(2, Math.ceil(signals.length * 0.5));
 }
 
 // ─── CORE EVALUATION FUNCTION ──────────────────────────────────────────────
@@ -308,6 +326,28 @@ export function runCapabilityEvaluationEngine(
   }
 
   const context: EvaluationContext = { focusCapabilities, scenario };
+  if (isScreeningScenario(context)) {
+    const discoveryStrong =
+      hasDiscoveryQuestionPattern(signals) &&
+      result.listening_responsiveness !== "missed";
+
+    if (discoveryStrong && result.question_quality === "developing") {
+      result.question_quality = "effective";
+    }
+
+    if (discoveryStrong && result.customer_engagement_signals === "developing") {
+      result.customer_engagement_signals = "effective";
+    }
+
+    if (result.objection_navigation === "missed" && !hasHardObjectionSignals(signals)) {
+      result.objection_navigation = "developing";
+    }
+
+    if (result.commitment_gaining === "missed") {
+      result.commitment_gaining = "developing";
+    }
+  }
+
   if (isHesitationToCommitmentScenario(context)) {
     const strongClosePattern =
       result.question_quality === "effective" &&
@@ -340,6 +380,25 @@ export function runCapabilityEvaluationEngine(
       }
     } else if (!hasHardObjectionSignals(signals) && result.objection_navigation === "missed") {
       result.objection_navigation = "developing";
+    }
+  }
+
+  const profile = getScenarioCapabilityProfile(scenario);
+  if (profile) {
+    for (const capabilityId of profile.nonBlocking) {
+      if (result[capabilityId] === "missed") {
+        result[capabilityId] = "developing";
+      }
+    }
+
+    const primaryEffectiveCount = profile.primary.filter((capabilityId) => result[capabilityId] === "effective").length;
+    const primaryStrong = primaryEffectiveCount >= Math.max(1, profile.primary.length - 1);
+    if (primaryStrong) {
+      for (const capabilityId of profile.secondary) {
+        if (result[capabilityId] === "missed") {
+          result[capabilityId] = "developing";
+        }
+      }
     }
   }
 

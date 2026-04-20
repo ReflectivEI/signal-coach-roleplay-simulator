@@ -3,7 +3,6 @@ import { AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Trash2 } from "lucide-react";
 import ScenarioDetailModal from "./ScenarioDetailModal";
-import TermTooltip from "./TermTooltip";
 
 function getDifficulty(scenario) {
   const stage = scenario.journeyStage || "";

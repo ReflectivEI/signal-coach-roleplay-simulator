@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Mic } from "lucide-react";
+import { Send } from "lucide-react";
 
 export default function MessageInput({ onSend, disabled, placeholder = "Your response as the rep..." }) {
   const [value, setValue] = useState("");

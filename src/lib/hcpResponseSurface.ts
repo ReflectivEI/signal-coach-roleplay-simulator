@@ -1,5 +1,6 @@
 import { HcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { HcpTurnDirectiveSet } from "./hcpTurnDirectives";
+import { enforceSourceBackedRealismSurface } from "./hcpRealismBackbone";
 
 function normalizeText(value = ""): string {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -226,10 +227,39 @@ function applyDomainCadence(text: string, domain: string, concernFamily: string)
   return normalizeText(output);
 }
 
-function applyShapeCompression(text: string, turn: HcpTurnDirectiveSet, profile: HcpRuntimeProfile): string {
+function applyShapeCompression(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  profile: HcpRuntimeProfile,
+  scenario: any,
+  hcpTurnCount = 0,
+): string {
   let output = normalizeText(text);
+  const firstHcpTurn = hcpTurnCount === 0;
+  const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
+  const authoredOpeningScene = normalizeText(scenario?.openingScene || "");
+  const authoredOpeningSentenceCount =
+    authoredOpeningScene
+      .split(/[.?!]+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .length;
+  const preserveOpeningSentenceCount =
+    firstHcpTurn
+      ? Math.min(
+          3,
+          Math.max(
+            ["initial_access", "discovery", "clinical_value", "adoption_implementation", "commitment_close"].includes(journeyStage)
+              ? 2
+              : 1,
+            authoredOpeningSentenceCount || 1,
+          ),
+        )
+      : 0;
   const maxSentences =
-    turn.responseShape === "compressed_probe" || turn.responseShape === "conditional_close"
+    preserveOpeningSentenceCount > 0
+      ? preserveOpeningSentenceCount
+      : turn.responseShape === "compressed_probe" || turn.responseShape === "conditional_close"
       ? 1
       : turn.responseShape === "pushback" || profile.brevity === "tight"
         ? 1
@@ -237,15 +267,24 @@ function applyShapeCompression(text: string, turn: HcpTurnDirectiveSet, profile:
   output = trimToSentences(output, maxSentences);
 
   const words = output.split(/\s+/).filter(Boolean);
-  if (words.length > turn.targetWordBudget) {
-    output = `${words.slice(0, turn.targetWordBudget).join(" ").replace(/[,:;]+$/, "")}.`;
+  const effectiveWordBudget =
+    preserveOpeningSentenceCount > 0
+      ? Math.max(turn.targetWordBudget, preserveOpeningSentenceCount >= 3 ? 52 : 38)
+      : turn.targetWordBudget;
+  if (words.length > effectiveWordBudget) {
+    output = `${words.slice(0, effectiveWordBudget).join(" ").replace(/[,:;]+$/, "")}.`;
   }
 
   return ensureTerminalPunctuation(output);
 }
 
-function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): string {
+function applyLateStageNarrowing(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  hcpTurnCount = 0,
+): string {
   let output = text;
+  if (hcpTurnCount === 0) return normalizeText(output);
 
   if (turn.closeMode && turn.responseShape === "partial_agreement" && !/\bif you can|if that can|if this can|i could look at|i can look at|i’d look at|i'd look at|i'm open to\b/i.test(output)) {
     if (turn.concernFamily === "evidence") {
@@ -305,8 +344,14 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
   return normalizeText(output);
 }
 
-function applyContinuityPressure(text: string, turn: HcpTurnDirectiveSet, profile: HcpRuntimeProfile): string {
+function applyContinuityPressure(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  profile: HcpRuntimeProfile,
+  hcpTurnCount = 0,
+): string {
   let output = normalizeText(text);
+  if (hcpTurnCount === 0) return output;
 
   if (turn.escalationStage === "high_pressure" || turn.escalationStage === "disengaging") {
     output = output
@@ -318,8 +363,7 @@ function applyContinuityPressure(text: string, turn: HcpTurnDirectiveSet, profil
 
   if (profile.directness === "high" && turn.concernFamily === "time") {
     output = output
-      .replace(/\bWhat would you want me to focus on\b/gi, "What do you want me to focus on")
-      .replace(/\bCan you tell me\b/gi, "Tell me");
+      .replace(/\bWhat would you want me to focus on\b/gi, "What do you want me to focus on");
   }
 
   return normalizeText(output);
@@ -330,22 +374,32 @@ export function applyHcpResponseSurface({
   scenario,
   turn,
   profile,
+  hcpTurnCount = 0,
 }: {
   hcpReply: string;
   scenario: any;
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
+  hcpTurnCount?: number;
 }): string {
   let output = normalizeText(hcpReply);
   if (!output) return "";
+  output = enforceSourceBackedRealismSurface({
+    hcpReply: output,
+    scenario,
+    turn,
+    profile,
+    hcpTurnCount,
+  });
 
   output = applyGlobalSpokenRewrites(output);
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
-  output = applyLateStageNarrowing(output, turn);
-  output = applyContinuityPressure(output, turn, profile);
-  output = applyShapeCompression(output, turn, profile);
+  output = applyLateStageNarrowing(output, turn, hcpTurnCount);
+  output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
+  output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
 
   if (
+    hcpTurnCount > 0 &&
     scenario?.interactionPressure?.includes("time_constrained") &&
     !/clock|time|quick|brief|tight|patient|schedule|doorway|room/i.test(output) &&
     !hasNaturalTimePressureDirective(output) &&

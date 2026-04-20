@@ -13,16 +13,21 @@
  * - cue text is not duplicated from product labels
  */
 
+import { buildGlobalFirstTurnCue } from "./hcpRealismBackbone";
 import { deriveConcernFamily, deriveScenarioDomain } from "./hcpTurnDirectives";
+import { deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
+import { getScenarioConcernFamily } from "./scenarioFamilyRegistry";
 
 export interface HcpCueInputs {
   hcpReply: string;
   behaviorState: string;
+  hcpTurnCount?: number;
   interactionPressures?: string[];
   recentCueLabels?: string[];
   scenario?: {
     id?: string;
     title?: string;
+    persona?: string;
     journeyStage?: string;
     objective?: string;
     description?: string;
@@ -558,6 +563,12 @@ function hasAny(text: string, patterns: string[]): boolean {
 }
 
 function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+  const registeredConcern = getScenarioConcernFamily({
+    title: inputs.scenario?.title,
+  });
+  if (registeredConcern === "adoption_caution" || registeredConcern === "hesitation") return "general";
+  if (registeredConcern) return registeredConcern;
+
   const journeyStage = String(inputs.scenario?.journeyStage || "").toLowerCase();
   const scenarioConcern = deriveConcernFamily({
     title: inputs.scenario?.title,
@@ -569,7 +580,7 @@ function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
     interactionPressure: inputs.interactionPressures || [],
     keyChallenges: inputs.scenario?.keyChallenges || [],
   }) as ConcernFamily;
-  if ((scenarioConcern as unknown as string) === "adoption_caution") return "general";
+  if ((scenarioConcern as unknown as string) === "adoption_caution" || (scenarioConcern as unknown as string) === "hesitation") return "general";
   if (scenarioConcern && scenarioConcern !== "general") return scenarioConcern;
 
   const reply = normalizeText(inputs.hcpReply).toLowerCase();
@@ -665,12 +676,44 @@ export function isValidObservedCue(text: string): boolean {
 function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCategory: CueCategory; concernFamily: ConcernFamily; label: string } {
   const cueCategory = deriveCueCategory(inputs);
   const concernFamily = deriveCueConcernFamily(inputs);
+  const registeredConcern = getScenarioConcernFamily({
+    title: inputs.scenario?.title,
+  });
   const domain = deriveScenarioDomain({
     title: inputs.scenario?.title,
     stakeholder: inputs.scenario?.objective,
     context: inputs.scenario?.description,
     description: normalizeText(inputs.scenario?.openingScene, inputs.scenario?.visualScene),
   });
+  if ((inputs.hcpTurnCount || 0) === 0 && inputs.scenario?.title) {
+    const runtimeProfile = deriveHcpRuntimeProfile({
+      scenario: {
+        title: inputs.scenario?.title,
+        journeyStage: inputs.scenario?.journeyStage,
+        interactionPressure: inputs.interactionPressures || [],
+        persona: inputs.scenario?.persona || "",
+      },
+      behaviorState: inputs.behaviorState,
+    });
+    const firstTurnCue = buildGlobalFirstTurnCue({
+      scenario: {
+        title: inputs.scenario?.title,
+        journeyStage: inputs.scenario?.journeyStage,
+        openingScene: inputs.scenario?.openingScene,
+        visualScene: inputs.scenario?.visualScene,
+        interactionPressure: inputs.interactionPressures || [],
+      },
+      concernFamily: registeredConcern || concernFamily,
+      profile: runtimeProfile,
+    });
+    if (firstTurnCue && isValidObservedCue(firstTurnCue)) {
+      return {
+        cueCategory,
+        concernFamily,
+        label: normalizeCueSentence(firstTurnCue),
+      };
+    }
+  }
   const domainPool =
     DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.[concernFamily]
     || DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.general

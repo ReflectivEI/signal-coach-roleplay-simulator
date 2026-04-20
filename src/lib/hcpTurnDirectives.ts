@@ -1,5 +1,6 @@
 import { runCapabilityEvaluationEngine } from "./capabilityEvaluation";
 import { BehaviorSignals } from "./simulatorEngine";
+import { getScenarioConcernFamily } from "./scenarioFamilyRegistry";
 
 export type SharedConcernFamily =
   | "evidence"
@@ -62,6 +63,9 @@ export function deriveScenarioDomain(scenario: any = {}): string {
 }
 
 export function deriveConcernFamily(scenario: any = {}): SharedConcernFamily {
+  const registeredFamily = getScenarioConcernFamily(scenario);
+  if (registeredFamily) return registeredFamily;
+
   const journeyStage = String(scenario.journeyStage || "").toLowerCase();
   const pressures = scenario.interactionPressure || [];
   const text = [

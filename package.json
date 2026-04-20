@@ -9,6 +9,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "audit:openers": "npx vite-node scripts/audit-opening-realism.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
     "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
     "preview": "vite preview",

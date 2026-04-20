@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Download } from 'lucide-react';
+import { ArrowLeft, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ScenarioFilters, { applyScenarioFilters, DEFAULT_FILTERS } from '@/components/home/ScenarioFilters';
 import { listPublishedScenarios } from '@/lib/scenarioStorage';
