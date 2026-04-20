@@ -13,7 +13,7 @@
  * - cue text is not duplicated from product labels
  */
 
-import { buildGlobalFirstTurnCue } from "./hcpRealismBackbone";
+import { buildGlobalFirstTurnCue, detectOpeningAnchorType } from "./hcpRealismBackbone";
 import { deriveConcernFamily, deriveScenarioDomain } from "./hcpTurnDirectives";
 import { deriveHcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { getScenarioConcernFamily } from "./scenarioFamilyRegistry";
@@ -54,7 +54,7 @@ type ConcernFamily =
   | "general";
 
 const TERMINAL_DIALOGUE_PATTERN =
-  /\b(need to run|have to run|got to go|we should stop|we can stop there|we are done|i have to get back|next patient|wrap this up|that is all i have time for)\b/i;
+  /\b(need to run|have to run|got to go|we should stop|we can stop there|we are done|i have to get back|wrap this up|that is all i have time for)\b/i;
 
 const HIGH_PRESSURE_DIALOGUE_PATTERN =
   /\b(quick|be brief|make this quick|short version|not much time|patient waiting|keep this tight|to the point)\b/i;
@@ -488,6 +488,37 @@ const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string> = {
   general: "They are signaling the conversation has to earn its relevance quickly.",
 };
 
+function deriveAnchorAwareConcernDescription({
+  scenario,
+  concernFamily,
+}: {
+  scenario?: HcpCueInputs["scenario"];
+  concernFamily: ConcernFamily;
+}): string {
+  const anchor = detectOpeningAnchorType(
+    normalizeText(
+      scenario?.title,
+      scenario?.objective,
+      scenario?.description,
+      scenario?.openingScene,
+      scenario?.visualScene,
+      Array.isArray(scenario?.keyChallenges) ? scenario?.keyChallenges.join(" ") : ""
+    )
+  );
+
+  if (anchor === "cost_value") {
+    return "They still need a clear understanding of the total cost before they can judge whether it is worth it.";
+  }
+  if (anchor === "workflow") {
+    return "They are trying to understand exactly what changes for staff in the real workflow.";
+  }
+  if (anchor === "guideline" || anchor === "safety_flag") {
+    return "They are still deciding whether the evidence really applies to the patients they actually treat.";
+  }
+
+  return CONCERN_DESCRIPTION_BANK[concernFamily];
+}
+
 function normalizeText(...values: unknown[]): string {
   return values
     .flat()
@@ -795,7 +826,8 @@ export function buildCueDescription(
   interactionPressures: string[] = [],
   cueLabel = "",
   category?: CueCategory,
-  concernFamily?: ConcernFamily
+  concernFamily?: ConcernFamily,
+  scenario?: HcpCueInputs["scenario"]
 ): string {
   const derivedCategory = category || deriveCueCategory({
     hcpReply: cueLabel,
@@ -815,7 +847,10 @@ export function buildCueDescription(
         ? cueLabelConcern
         : derivedConcernFamily;
 
-  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${CONCERN_DESCRIPTION_BANK[finalConcernFamily]}`.trim();
+  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${deriveAnchorAwareConcernDescription({
+    scenario,
+    concernFamily: finalConcernFamily,
+  })}`.trim();
 }
 
 export function resolveObservedCue(
@@ -831,7 +866,8 @@ export function resolveObservedCue(
       inputs.interactionPressures || [],
       selected.label,
       selected.cueCategory,
-      selected.concernFamily
+      selected.concernFamily,
+      inputs.scenario
     ),
     source: "hcp_context",
   };

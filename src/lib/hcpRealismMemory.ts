@@ -64,6 +64,25 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     example: "The efficacy data is fine. My question is always the same: for the patients who would actually use this, does the outcome justify what we'd spend? Walk me through that.",
   },
   {
+    family: "evidence",
+    phase: "clinical_value",
+    directness: "high",
+    example: "If you can't walk me through total cost per patient, then I still don't have enough information to evaluate its value.",
+  },
+  {
+    family: "evidence",
+    phase: "clinical_value",
+    directness: "high",
+    pressure: "operationally_constrained",
+    example: "Don't give me another efficacy point. I need the total cost picture, including any testing or monitoring this adds.",
+  },
+  {
+    family: "evidence",
+    phase: "clinical_value",
+    directness: "high",
+    example: "If the cost side is unclear, then I still don't have enough information to evaluate its value.",
+  },
+  {
     family: "access",
     phase: "objection_resolution",
     directness: "high",

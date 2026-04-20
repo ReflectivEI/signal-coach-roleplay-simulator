@@ -19,8 +19,13 @@ const QA_CACHE_PATH = path.resolve(".qa-matrix-cache.json");
 const QA_FINGERPRINT_FILES = [
   "src/lib/qaRepProxy.js",
   "src/lib/hcpResponseGenerator.ts",
+  "src/lib/hcpCueGenerator.ts",
   "src/lib/hcpResponseSurface.ts",
+  "src/lib/hcpRealismBackbone.ts",
+  "src/lib/hcpRealismMemory.ts",
   "src/lib/hcpDialogueDirectives.ts",
+  "src/lib/hcpTurnDirectives.ts",
+  "src/lib/scenarioFamilyRegistry.ts",
   "src/lib/sessionReview.ts",
   "scripts/qa-matrix.ts",
 ];

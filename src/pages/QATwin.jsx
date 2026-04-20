@@ -524,10 +524,10 @@ function CapabilityHeatmap({ results }) {
   const capLabels = {
     question_quality: "Q. Quality",
     listening_responsiveness: "Listening",
-    making_it_matter: "Value",
-    customer_engagement_signals: "Engagement",
-    objection_navigation: "Objection",
-    conversation_control_structure: "Control",
+    making_it_matter: "Value Framing",
+    customer_engagement_signals: "Engagement Cues",
+    objection_navigation: "Objection Handling",
+    conversation_control_structure: "Control & Structure",
     adaptability: "Adaptability",
     commitment_gaining: "Commitment",
   };

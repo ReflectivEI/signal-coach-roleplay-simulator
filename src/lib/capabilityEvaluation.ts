@@ -19,6 +19,13 @@ interface EvaluationContext {
   scenario?: any;
 }
 
+function isEarlyDiscoveryScenario(context: EvaluationContext = {}): boolean {
+  const scenario = context.scenario || {};
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const state = String(scenario?.journeyState || "").toLowerCase();
+  return stage === "initial_access" || stage === "discovery" || state === "early_discovery";
+}
+
 function isScreeningScenario(context: EvaluationContext = {}): boolean {
   const scenario = context.scenario || {};
   if (scenarioMatchesConcernFamily(scenario, "screening")) return true;
@@ -326,6 +333,7 @@ export function runCapabilityEvaluationEngine(
   }
 
   const context: EvaluationContext = { focusCapabilities, scenario };
+  const earlyDiscovery = isEarlyDiscoveryScenario(context);
   if (isScreeningScenario(context)) {
     const discoveryStrong =
       hasDiscoveryQuestionPattern(signals) &&
@@ -399,6 +407,16 @@ export function runCapabilityEvaluationEngine(
           result[capabilityId] = "developing";
         }
       }
+    }
+  }
+
+  if (earlyDiscovery) {
+    if (result.commitment_gaining === "effective") {
+      result.commitment_gaining = "developing";
+    }
+
+    if (result.objection_navigation === "missed" && !hasHardObjectionSignals(signals)) {
+      result.objection_navigation = "developing";
     }
   }
 

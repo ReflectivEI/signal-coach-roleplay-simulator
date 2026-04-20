@@ -16,8 +16,57 @@ const CAP_COLORS = {
 };
 
 const CAP_SUBLABELS = {
-  question_quality: "Did the rep notice what mattered?",
+  question_quality: "Ground the exchange in what the HCP actually raised.",
+  listening_responsiveness: "Show that the rep heard the real issue, not just the topic.",
+  making_it_matter: "Connect the point to the HCP's real-world decision threshold.",
+  customer_engagement_signals: "Track whether the HCP is leaning in, narrowing, or pulling back.",
 };
+
+const LEVEL_TO_SCORE = {
+  effective: 5,
+  developing: 3,
+  missed: 1,
+};
+
+function splitParagraphs(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return String(value)
+    .split(/\n\s*\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildSpecificStrengthParagraph(insight) {
+  if (!insight) return "";
+  const evidence = insight.transcriptEvidence ? `"${insight.transcriptEvidence}"` : "";
+  const behavior = insight.whatHappened || insight.whatGoodLooksLike || "";
+  const impact = insight.whyItMattered || "";
+  if (!behavior && !impact && !evidence) return "";
+  return [behavior, evidence ? `For example: ${evidence}.` : "", impact]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildSpecificDevelopmentParagraph(insight) {
+  if (!insight) return "";
+  const evidence = insight.transcriptEvidence ? `"${insight.transcriptEvidence}"` : "";
+  const behavior = insight.whatHappened || "";
+  const impact = insight.whyItMattered || "";
+  const action = insight.nextTimeAction || insight.whatGoodLooksLike || "";
+  if (!behavior && !impact && !action && !evidence) return "";
+  return [behavior, evidence ? `For example: ${evidence}.` : "", impact, action]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function buildActionItemParagraph(insight) {
+  if (!insight?.nextTimeAction) return "";
+  const rewrite = insight.exampleRewrite ? ` Example phrasing: "${insight.exampleRewrite}".` : "";
+  return `${insight.nextTimeAction}${rewrite}`;
+}
 
 function NotObservedMarker() {
   return (
@@ -58,7 +107,7 @@ function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip 
         <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
         <span className="text-xs font-semibold uppercase tracking-widest flex-1" style={{ color: "rgba(173, 240, 231, 0.90)" }}>{title}</span>
         {!alwaysExpanded && (
-          <span className="text-xs font-medium mr-1" style={{ color: "rgba(121, 214, 202, 0.78)" }}>Click for Details</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] mr-1" style={{ color: "rgba(121, 214, 202, 0.78)" }}>Tap Header to Expand</span>
         )}
         {!alwaysExpanded && (
           open
@@ -129,6 +178,7 @@ function CapabilityRow({ cap, insight }) {
   const [open, setOpen] = useState(false);
   const colors = CAP_COLORS[cap.id] || { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" };
   const sublabel = CAP_SUBLABELS[cap.id];
+  const score = LEVEL_TO_SCORE[insight?.observationLevel] || 0;
   const hasStructuredContent = Boolean(
     insight?.whatHappened ||
     insight?.transcriptEvidence ||
@@ -149,6 +199,10 @@ function CapabilityRow({ cap, insight }) {
         {/* Colored capability name pill */}
         <span className={`text-xs font-semibold px-2.5 py-1 rounded-md ${colors.text} ${colors.bg} border ${colors.border} shrink-0`}>
           {cap.label}
+        </span>
+
+        <span className="text-xs font-medium text-muted-foreground shrink-0">
+          Score {score}/5
         </span>
 
         {/* Sublabel (Signal Awareness only) */}
@@ -271,8 +325,6 @@ export default function SessionSummaryModal({
   onNewSession,
   onRegenerate = () => {}
 }) {
-  const [overallOpen, setOverallOpen] = useState(true);
-
   if (!review) return null;
 
   // Build insight lookup, preserving the full forensic capability insight as the source of truth.
@@ -307,9 +359,44 @@ export default function SessionSummaryModal({
   }
 
   const briefRationale = review.briefRationale || review.overallSummary?.[0] || "";
-  const didWell = review.didWell || review.strengthsProse?.join("\n\n") || "";
-  const biggestGap = review.biggestGap || review.developProse?.join("\n\n") || "";
-  const nextAdjustment = review.nextAdjustment || review.actionPlanProse?.[0] || "";
+  const insights = SIGNAL_INTELLIGENCE_CAPABILITIES
+    .map((cap) => insightByCapability[cap.id])
+    .filter(Boolean);
+  const effectiveInsights = insights.filter((insight) => insight.observationLevel === "effective");
+  const growthInsights = insights.filter((insight) => insight.observationLevel !== "effective");
+  const overallScore = (
+    SIGNAL_INTELLIGENCE_CAPABILITIES.reduce((sum, cap) => {
+      const level = insightByCapability[cap.id]?.observationLevel;
+      return sum + (LEVEL_TO_SCORE[level] || 0);
+    }, 0) / SIGNAL_INTELLIGENCE_CAPABILITIES.length
+  ).toFixed(1);
+
+  const didWellParagraphs = effectiveInsights
+    .map(buildSpecificStrengthParagraph)
+    .filter(Boolean)
+    .slice(0, 3);
+  const didWellFallback = splitParagraphs(review.didWell || review.strengthsProse);
+
+  const biggestGapParagraphs = growthInsights
+    .map(buildSpecificDevelopmentParagraph)
+    .filter(Boolean)
+    .slice(0, 3);
+  const biggestGapFallback = splitParagraphs(review.biggestGap || review.developProse);
+
+  const signalAlignmentParagraphs = splitParagraphs(review.signalResponseAlignment);
+  const fallbackSignalAlignment = growthInsights
+    .map((insight) => {
+      if (!insight.transcriptEvidence || !insight.whyItMattered) return "";
+      return `The HCP signal "${insight.transcriptEvidence}" mattered because ${insight.whyItMattered}`;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const actionItemParagraphs = growthInsights
+    .map(buildActionItemParagraph)
+    .filter(Boolean)
+    .slice(0, 3);
+  const actionItemFallback = splitParagraphs(review.nextAdjustment || review.actionPlanProse);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8">
@@ -437,76 +524,48 @@ export default function SessionSummaryModal({
           )}
 
           <div className="px-6 py-5 space-y-0">
+            {onRegenerate && (
+              <div className="mb-4">
+                <button
+                  onClick={onRegenerate}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors"
+                  style={{
+                    background: "rgba(255,255,255,0.94)",
+                    borderColor: "rgba(152, 160, 171, 0.30)",
+                    color: "hsl(215 28% 26%)",
+                  }}
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  Regenerate Sections 2-5
+                </button>
+              </div>
+            )}
 
-            {/* ── Overall collapsible header ── */}
+            {/* ── Section 1: overall + 8 metrics ── */}
             <div className="rounded-xl overflow-hidden mb-0" style={{ border: "1px solid rgba(152, 160, 171, 0.30)", background: "rgba(255,255,255,0.72)" }}>
-              <button
-                className="w-full flex items-center justify-between px-5 py-4 text-left transition-colors"
+              <div
+                className="w-full flex items-center justify-between px-5 py-4 text-left"
                 style={{ background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)" }}
-                onClick={() => setOverallOpen(o => !o)}
               >
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-sm" style={{ color: "hsl(177 49% 36%)" }}>⬥</span>
-                    <span className="text-sm font-semibold text-foreground">Overall: N/A</span>
+                    <span className="text-sm font-semibold text-foreground">Overall: {overallScore}/5</span>
                   </div>
                   <p className="text-xs mt-0.5" style={{ color: "hsl(215 18% 46%)" }}>
                     Capability feedback analysis by behavioral metric — click any metric below to analyze.
                   </p>
                 </div>
-                {overallOpen
-                  ? <ChevronUp className="w-4 h-4 text-muted-foreground shrink-0" />
-                  : <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" />
-                }
-              </button>
+                <span className="text-xs font-semibold px-3 py-1 rounded-md border shrink-0 text-slate-600 bg-white/70 border-slate-200">
+                  Analyze
+                </span>
+              </div>
 
-              <AnimatePresence>
-                {overallOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="px-5 py-5 space-y-5 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
-                     <OverallBlock label="1) Brief Rationale">
-                       <p>{briefRationale || <span className="text-muted-foreground italic">Generating…</span>}</p>
-                     </OverallBlock>
-
-                     <OverallBlock label="2) Capabilities Done Well">
-                       {didWell
-                         ? (Array.isArray(didWell) ? didWell : [didWell]).map((p, i) => <p key={i}>{p}</p>)
-                         : <span className="text-muted-foreground italic">Generating…</span>}
-                     </OverallBlock>
-
-                     <OverallBlock label="3) Capabilities to Develop">
-                       {biggestGap
-                         ? (Array.isArray(biggestGap) ? biggestGap : [biggestGap]).map((p, i) => <p key={i}>{p}</p>)
-                         : <span className="text-muted-foreground italic">Generating…</span>}
-                     </OverallBlock>
-
-                     <OverallBlock label="4) Signal–Response Alignment">
-                       {review.signalResponseAlignment?.length > 0
-                         ? review.signalResponseAlignment.map((p, i) => <p key={i} className="leading-relaxed">{p}</p>)
-                         : <NotObservedMarker />}
-                     </OverallBlock>
-
-                     <OverallBlock label="5) Specific Action Items">
-                       {nextAdjustment
-                         ? (Array.isArray(nextAdjustment) ? nextAdjustment : [nextAdjustment]).map((p, i) => <p key={i}>{p}</p>)
-                         : <span className="text-muted-foreground italic">Generating…</span>}
-                     </OverallBlock>
-
-                     {review.overallGuidance?.[0] && (
-                       <p className="text-xs leading-relaxed pt-3 border-t" style={{ color: "hsl(215 14% 58%)", borderColor: "rgba(152, 160, 171, 0.18)" }}>
-                         {review.overallGuidance[0]}
-                       </p>
-                     )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <div className="px-5 py-5 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
+                <OverallBlock label="1) Brief Rationale">
+                  <p>{briefRationale || <span className="text-muted-foreground italic">Generating…</span>}</p>
+                </OverallBlock>
+              </div>
 
               {/* ── Capability rows — always visible below the overall header ── */}
               <div className="divide-y border-t" style={{ borderColor: "rgba(152, 160, 171, 0.22)" }}>
@@ -520,6 +579,37 @@ export default function SessionSummaryModal({
               </div>
             </div>
 
+            <div className="mt-6 space-y-6 rounded-xl border px-5 py-5" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
+              <OverallBlock label="2) Capabilities Done Well">
+                {(didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).length > 0
+                  ? (didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).map((p, i) => <p key={i}>{p}</p>)
+                  : <NotObservedMarker />}
+              </OverallBlock>
+
+              <OverallBlock label="3) Capabilities to Develop">
+                {(biggestGapParagraphs.length > 0 ? biggestGapParagraphs : biggestGapFallback).length > 0
+                  ? (biggestGapParagraphs.length > 0 ? biggestGapParagraphs : biggestGapFallback).map((p, i) => <p key={i}>{p}</p>)
+                  : <NotObservedMarker />}
+              </OverallBlock>
+
+              <OverallBlock label="4) Signal–Response Alignment">
+                {(signalAlignmentParagraphs.length > 0 ? signalAlignmentParagraphs : fallbackSignalAlignment).length > 0
+                  ? (signalAlignmentParagraphs.length > 0 ? signalAlignmentParagraphs : fallbackSignalAlignment).map((p, i) => <p key={i}>{p}</p>)
+                  : <NotObservedMarker />}
+              </OverallBlock>
+
+              <OverallBlock label="5) Specific Action Items">
+                {(actionItemParagraphs.length > 0 ? actionItemParagraphs : actionItemFallback).length > 0
+                  ? (actionItemParagraphs.length > 0 ? actionItemParagraphs : actionItemFallback).map((p, i) => <p key={i}>{p}</p>)
+                  : <NotObservedMarker />}
+              </OverallBlock>
+
+              {review.overallGuidance?.[0] && (
+                <p className="text-xs leading-relaxed pt-3 border-t" style={{ color: "hsl(215 14% 58%)", borderColor: "rgba(152, 160, 171, 0.18)" }}>
+                  {review.overallGuidance[0]}
+                </p>
+              )}
+            </div>
 
           </div>
         </div>

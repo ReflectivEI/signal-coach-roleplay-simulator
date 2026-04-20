@@ -15,6 +15,7 @@ import {
 import { runCapabilityEvaluationEngine } from "./capabilityEvaluation";
 import { predictHcpBehavior } from "./hcpBehaviorPrediction";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
+import { getScenarioCapabilityProfile } from "./scenarioFamilyRegistry";
 
 // Compact capability reference with full definition slice
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
@@ -311,6 +312,14 @@ export async function generateSessionReview(
   const focusCapsFormatted = focusCaps.length
     ? `Focus capabilities for this scenario (surface these FIRST, give deeper narrative): ${focusCaps.join(", ")}`
     : "No specific focus capabilities — evaluate all 8 with equal depth.";
+  const capabilityProfile = getScenarioCapabilityProfile(scenario);
+  const capabilityProfileBlock = capabilityProfile
+    ? `SCENARIO CAPABILITY PROFILE:
+- Primary capabilities: ${capabilityProfile.primary.join(", ")}
+- Secondary capabilities: ${capabilityProfile.secondary.join(", ")}
+- Non-blocking capabilities: ${capabilityProfile.nonBlocking.join(", ")}
+- Important: non-blocking capabilities should not be framed as the dominant success or failure story unless the transcript makes them clearly decisive.`
+    : "No scenario-specific capability profile provided.";
 
   const volatilityLog = volatilityEvents.length > 0
     ? volatilityEvents.map(e =>
@@ -354,6 +363,8 @@ Starting Behavior: ${scenario.startingBehaviorState}
 Pressures: ${(scenario.interactionPressure || []).join(", ") || "none"}
 Key Challenges: ${(scenario.keyChallenges || []).join(", ")}
 ${focusCapsFormatted}
+
+${capabilityProfileBlock}
 
 === DETERMINISTIC CAPABILITY PRE-ASSESSMENT (DO NOT CONTRADICT) ===
 ${assessmentSummary}
@@ -525,6 +536,11 @@ Known chains — if active in this session, BOTH capabilities must reference the
   - question_quality missed → making_it_matter typically degrades
   - conversation_control_structure missed → commitment_gaining typically degrades
   - adaptability missed → customer_engagement_signals typically degrades
+
+── STAGE-AWARE NARRATIVE GUARDRAILS ──
+- In initial_access or early_discovery scenarios, do NOT frame commitment_gaining as a major success unless the HCP explicitly owned a next step.
+- In discovery scenarios without a true objection signal, do NOT describe objection_navigation as the dominant failure.
+- Prioritize primary capabilities in the scenario capability profile when writing briefRationale, didWell, biggestGap, and nextAdjustment.
 
 ── TRACEABILITY ──
 - transcriptEvidence must be a direct quote or precise paraphrase — find the exact turn

@@ -1,6 +1,6 @@
 import { HcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { HcpTurnDirectiveSet } from "./hcpTurnDirectives";
-import { enforceSourceBackedRealismSurface } from "./hcpRealismBackbone";
+import { detectOpeningAnchorType, enforceSourceBackedRealismSurface } from "./hcpRealismBackbone";
 
 function normalizeText(value = ""): string {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -43,7 +43,7 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+(what|how|why|who|when|where)\.$/i, ".")
     .replace(/\s+(what|how|why|who|when|where)\?$/i, ".")
     .replace(/\s+\byou\.$/i, ".")
-    .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|it|they|them|we|i)\.$/i, ".")
+    .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|they|them|we|i)\.$/i, ".")
     .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.")
     .replace(/\s+\b(what [^.?!]*?)\s+\bfor\./i, " $1?")
     .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?");
@@ -69,14 +69,14 @@ function repairQuestionPunctuation(text = ""): string {
 
 function hasNaturalTimePressureDirective(text = ""): boolean {
   const value = normalizeText(text);
-  return /\b(get to the point|short version|bottom line|one thing|only got a minute|only have a minute|few minutes|make this quick|keep this tight|brief version|quick version)\b/i.test(value);
+  return /\b(get to the point|short version|bottom line|one thing|only got a minute|only have a minute|few minutes|give me the short version|brief version|quick version)\b/i.test(value);
 }
 
 function pickDeterministicTimeTail(seed = ""): string {
   const options = [
     "Give me the short version.",
     "Get to the point.",
-    "Make it quick.",
+    "Just give me the short version.",
   ];
   const key = normalizeText(seed);
   const score = Array.from(key).reduce((sum, char) => sum + char.charCodeAt(0), 0);
@@ -87,6 +87,10 @@ function enforceSentenceBoundaries(text = ""): string {
   let output = normalizeText(text);
   if (!output) return "";
 
+  output = output.replace(
+    /\b(I can look at it|I can stay with it|I can keep looking at it|I can keep looking)\s+(What|How|Why|Who|When|Where)\b/g,
+    "$1. $2"
+  );
   output = output.replace(
     /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(Keep it brief|Keep this brief|Keep it tight|Give me the short version|Get to the point|Make it quick)\b/gi,
     "$1. $2"
@@ -127,7 +131,7 @@ function applyGlobalSpokenRewrites(text = ""): string {
   output = output
     .replace(/\bKeep it brief\b/gi, "Give me the short version")
     .replace(/\bKeep this brief\b/gi, "Give me the short version")
-    .replace(/\bKeep it tight\b/gi, "Make it quick");
+    .replace(/\bKeep it tight\b/gi, "Give me the short version");
 
   output = output.replace(
     /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should|Keep|Stay|Show|Tell|Give)\b/g,
@@ -227,6 +231,153 @@ function applyDomainCadence(text: string, domain: string, concernFamily: string)
   return normalizeText(output);
 }
 
+function deterministicPick<T>(items: T[], seed = ""): T {
+  if (!items.length) throw new Error("deterministicPick requires at least one item");
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return items[(hash >>> 0) % items.length];
+}
+
+function buildCostValueSpecificLine({
+  turn,
+  scenario,
+  original,
+}: {
+  turn: HcpTurnDirectiveSet;
+  scenario: any;
+  original: string;
+}): string {
+  const seed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.responseShape}|${turn.escalationStage}|${original}`;
+
+  if (turn.escalationStage === "disengaging" || turn.responseShape === "conditional_close") {
+    return deterministicPick([
+      "If the cost side is still unclear, then I still don't have enough information to evaluate its value.",
+      "If you can't make the total-cost picture clear, then I still don't have enough to judge whether it's worth it.",
+      "At this point, if the spend still isn't clear, I still don't have enough information to make a value call.",
+    ], seed);
+  }
+
+  if (
+    turn.responseShape === "constraint_probe" ||
+    turn.responseShape === "decision_probe" ||
+    turn.escalationStage === "high_pressure"
+  ) {
+    return deterministicPick([
+      "If you can't walk me through total cost per patient, then I still don't have enough information to evaluate its value.",
+      "I don't need another efficacy point. I need the total cost picture, including any testing or monitoring this adds.",
+      "If the cost side is unclear, then I still don't have enough information to evaluate its value.",
+    ], seed);
+  }
+
+  return deterministicPick([
+    "If we're talking value, I need the total cost picture, not just the efficacy result.",
+    "The clinical result is only part of it. I still need to understand what we'd actually spend for the patients who'd use this.",
+    "Before this becomes a value discussion for me, I need the full cost picture for the patients who would actually be on it.",
+  ], seed);
+}
+
+function applyCostValueSpokenTightening(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  scenario: any,
+  hcpTurnCount: number,
+): string {
+  const output = normalizeText(text);
+  if (!output || hcpTurnCount === 0) return output;
+  const openingAnchorType = detectOpeningAnchorType(scenario?.openingScene || "");
+  if (openingAnchorType !== "cost_value") return output;
+
+  const normalized = output.toLowerCase();
+  const wordCount = output.split(/\s+/).filter(Boolean).length;
+  const tooFormal =
+    wordCount > 18 &&
+    /\bhow do you factor in\b|\bhow do you justify\b|\bhow do you expect me to reconcile\b|\bwhen calculating the overall cost\b|\boverall cost equation\b|\bdiagnostic workups\b|\bongoing management\b|\badditional expenditures\b|\badditional expenses\b|\bancillary tests\b|\bassociated with\b|\bintensified diagnostic\b|\bfollow-up regimen\b|\badditional expense per patient\b/i.test(output);
+
+  if (!tooFormal) return output;
+
+  const seed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.responseShape}|${turn.escalationStage}|${hcpTurnCount}|${output}`;
+
+  if (turn.escalationStage === "disengaging" || turn.responseShape === "conditional_close") {
+    return deterministicPick([
+      "If the all-in cost still isn't clear, then I still don't have enough information to decide if it's worth it.",
+      "If you still can't break out the full spend, then I still can't make a real value judgment on it.",
+      "If the total-cost picture is still fuzzy, then I still don't have enough to evaluate it properly.",
+    ], seed);
+  }
+
+  return deterministicPick([
+    "What am I supposed to do with the added testing and follow-up costs in that number?",
+    "Then walk me through the full spend, including the added testing and monitoring.",
+    "What does the all-in cost look like once you add the extra testing and follow-up?",
+    "If I'm counting the monitoring and added workups too, what does that cost per patient actually become?",
+  ], seed);
+}
+
+function buildWorkflowConditionalLine({
+  turn,
+  scenario,
+  original,
+  hcpTurnCount,
+}: {
+  turn: HcpTurnDirectiveSet;
+  scenario: any;
+  original: string;
+  hcpTurnCount: number;
+}): string {
+  const seed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.responseShape}|${turn.escalationStage}|${hcpTurnCount}|${original}`;
+  return deterministicPick([
+    "If this stays inside the current workflow, I can look at it.",
+    "If staff does not inherit another step, I can stay with it.",
+    "If this does not create another handoff for the team, I can keep looking at it.",
+    "If this does not turn into one more task for staff, I can stay with the discussion.",
+  ], seed);
+}
+
+function applyAnchorSpecificProgression(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  scenario: any,
+  hcpTurnCount = 0,
+): string {
+  const output = normalizeText(text);
+  if (!output || hcpTurnCount === 0) return output;
+
+  const openingAnchorType = detectOpeningAnchorType(scenario?.openingScene || "");
+
+  if (openingAnchorType === "cost_value") {
+    const genericValueLoop =
+      /\bhow can i assess the value\b|\bevaluate value\b|\bjustify the cost\b|\bworth the spend\b|\bwhat changes for my patients'? care\b|\bwhat changes practice\b/i.test(output);
+    const missingCostSpecificity =
+      !/\btotal cost\b|\bper patient\b|\btesting\b|\bmonitoring\b|\bformulary\b|\bbudget\b|\bwhat we'd spend\b|\bspend\b/i.test(output);
+
+    if (genericValueLoop || (turn.concernFamily === "evidence" && missingCostSpecificity)) {
+      return buildCostValueSpecificLine({
+        turn,
+        scenario,
+        original: output,
+      });
+    }
+  }
+
+  if (openingAnchorType === "workflow" || turn.concernFamily === "workflow") {
+    const repeatedWorkflowConditional =
+      /\bif this does not add another staff step, i can look at it\b|\bif this stays workable for staff, i can stay with it\b/i.test(output);
+    if (repeatedWorkflowConditional && hcpTurnCount > 1) {
+      return buildWorkflowConditionalLine({
+        turn,
+        scenario,
+        original: output,
+        hcpTurnCount,
+      });
+    }
+  }
+
+  return output;
+}
+
 function applyShapeCompression(
   text: string,
   turn: HcpTurnDirectiveSet,
@@ -292,7 +443,12 @@ function applyLateStageNarrowing(
     } else if (turn.concernFamily === "access") {
       output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
-      output = `If this does not add another staff step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = `${deterministicPick([
+        "If this does not add another staff step, I can look at it.",
+        "If this stays inside the current workflow, I can look at it.",
+        "If staff does not inherit another step, I can stay with it.",
+        "If this does not create another handoff for the team, I can keep looking at it.",
+      ], `${turn.phase}|${turn.concernFamily}|partial_agreement|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
       output = `If you can make the next step concrete enough to actually do, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
@@ -308,7 +464,12 @@ function applyLateStageNarrowing(
     } else if (turn.concernFamily === "access") {
       output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
-      output = `If this stays workable for staff, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = `${deterministicPick([
+        "If this stays workable for staff, I can stay with it.",
+        "If this stays inside the current workflow, I can stay with it.",
+        "If this does not add another staff step, I can stay with it.",
+        "If the team does not inherit another handoff, I can stay with it.",
+      ], `${turn.phase}|${turn.concernFamily}|close_mode|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
       output = `If this gets concrete enough to act on, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
@@ -393,6 +554,8 @@ export function applyHcpResponseSurface({
   });
 
   output = applyGlobalSpokenRewrites(output);
+  output = applyAnchorSpecificProgression(output, turn, scenario, hcpTurnCount);
+  output = applyCostValueSpokenTightening(output, turn, scenario, hcpTurnCount);
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
   output = applyLateStageNarrowing(output, turn, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);

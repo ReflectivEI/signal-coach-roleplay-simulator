@@ -2,6 +2,9 @@
 
 This repository treats the scenario catalog, taxonomy, HCP profile structure, mapping logic, and simulator behavior as the behavioral source of truth for the standalone role play simulator.
 
+Canonical framework, terminology, and implementation-boundary governance now live in:
+- [docs/CURRENT_CANONICAL_SOT_STANDALONE.md](/Users/anthonyabdelmalak/Desktop/New%20Folder%20With%20Items/signal-coach-core/docs/CURRENT_CANONICAL_SOT_STANDALONE.md)
+
 Behavioral invariants:
 
 - The simulator owns the canonical built-in scenario catalog in [src/lib/scenarioCatalog.js](/Users/anthonyabdelmalak/Desktop/New%20Folder%20With%20Items/signal-coach-core/src/lib/scenarioCatalog.js:1).

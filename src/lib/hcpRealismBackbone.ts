@@ -80,7 +80,7 @@ function applyGlobalOpeningSpeechCadence(
   return output;
 }
 
-type OpeningAnchorType =
+export type OpeningAnchorType =
   | "prior_auth"
   | "case_discussion"
   | "staff_gatekeeping"
@@ -99,7 +99,7 @@ type OpeningAnchorType =
   | "workflow"
   | "general";
 
-function detectOpeningAnchorType(openingScene = ""): OpeningAnchorType {
+export function detectOpeningAnchorType(openingScene = ""): OpeningAnchorType {
   const text = normalizeText(openingScene).toLowerCase();
   if (/prior auth reduction|prior auth|authorization/i.test(text)) return "prior_auth";
   if (/case discussion|don't usually meet with reps/i.test(text)) return "case_discussion";
@@ -164,7 +164,7 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
   const lower = normalizeText(openingScene).toLowerCase();
   switch (anchorType) {
     case "prior_auth":
-      return "My MA said this was about prior auth reduction. I've only got a couple minutes, so tell me what would actually make that easier on my staff.";
+      return "My MA said this was about prior auth reduction. I've only got a couple minutes, so tell me what you can actually do to make that easier on my staff.";
     case "case_discussion":
       return "Dr. Patel said I should talk with you, but I thought this was going to be a case discussion. I don't usually take rep visits, so tell me why this is worth the time.";
     case "staff_gatekeeping":
@@ -197,7 +197,7 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
       return "Clinically, I can see it. The problem is who actually owns the extra monitoring step in a practice like mine.";
     default:
       if (/few minutes|next patient|make it quick/.test(lower)) {
-        return "I've only got a minute, so give me one practical reason this matters right now.";
+        return "I've only got a minute, so give me the short version of why this matters right now.";
       }
       return null;
   }
@@ -232,9 +232,9 @@ export function buildGlobalFirstTurnCue({
   if (journeyStage === "initial_access") {
     if (concernFamily === "time" || pressures.includes("time_constrained") || anchorType === "prior_auth") {
       return deterministicPick([
-        "The HCP checks the next patient slot, attention returning only for the short version.",
-        "The HCP glances toward the next room and comes back ready for one concise point.",
-        "The HCP looks at the schedule, then back with very little space left in the exchange.",
+        "The HCP checks the next patient slot, then looks back expecting the short version.",
+        "The HCP glances toward the next room and comes back with time clearly tight.",
+        "The HCP looks at the schedule, then back with only a small window left for this.",
       ], `${title}|initial_access|time`);
     }
 
@@ -496,6 +496,10 @@ export function buildRealismBackbonePrompt({
   if (turn.concernFamily === "workflow" || turn.concernFamily === "access") {
     lines.push("- Do not use abstract burden phrasing alone; name the concrete step, owner, or delay.");
   }
+  if (openingAnchorType === "cost_value") {
+    lines.push("- In cost-value conversations, stay specific about total cost per patient, added testing or monitoring, and what would justify the spend.");
+    lines.push("- Do not fall back to generic 'value' language once the discussion tightens. Keep the HCP anchored to budget, formulary, or total-cost thresholds.");
+  }
 
   if (firstTurn) {
     lines.push("- First HCP turn must preserve the defining reason this meeting happened.");
@@ -523,6 +527,9 @@ export function buildRealismBackbonePrompt({
     }
     if (openingAnchorType === "workflow") {
       lines.push("- Preserve the concrete staff/monitoring ownership issue explicitly on the first turn.");
+    }
+    if (openingAnchorType === "cost_value") {
+      lines.push("- Preserve the cost-value threshold explicitly on the first turn.");
     }
   }
 
@@ -590,9 +597,9 @@ export function enforceSourceBackedRealismSurface({
   if (
     turn.concernFamily === "time" &&
     profile.directness === "high" &&
-    !/\bget to the point|short version|make it quick|30 seconds|one practical point\b/i.test(output)
+    !/\bget to the point|short version|give me the short version|30 seconds|one practical point\b/i.test(output)
   ) {
-    output = `${output.replace(/[.?!]+$/, "")} Get to the point.`;
+    output = `${output.replace(/[.?!]+$/, "")}. Give me the short version.`;
   }
 
   return output;

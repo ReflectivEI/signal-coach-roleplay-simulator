@@ -1,6 +1,6 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 
-const DIRECT_ANSWER_TRIGGER = /show me data|need data|specific data|evidence|moderate renal impairment|renal impairment|renal dosing|egfr|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population|what exactly|exact guideline language|one proof point|one key point|what specifically changes|what caused|what step gets added|biomarker|threshold|analysis|comorbidit/i;
+const DIRECT_ANSWER_TRIGGER = /show me data|need data|specific data|evidence|moderate renal impairment|renal impairment|renal dosing|egfr|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population|what exactly|exact guideline language|one proof point|one key point|what specifically changes|what caused|what step gets added|biomarker|threshold|analysis|comorbidit|total cost per patient|cost per patient|what's included|what is included|what does that include|break down/i;
 const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what'?s the one thing you need to know|one thing you need to know|what's the relevance|what is the relevance|relevant to my practice|relevant to my clinic|what makes this relevant|what sets your product apart|what's the one thing that could slow care|one thing that could slow care|what specific barrier|what barrier are you looking for|what makes you think|what specific access step|what specific change/i;
 const EXPECTATION_MISMATCH_PATTERN = /dr\.|patel|case discussion|case consult|referral|thought this was|was going to be|was supposed to be/i;
 const INITIAL_ACCESS_OPERATIONAL_HELP_PATTERN = /prior auth|prior authorization|streamline|staff|workflow|paperwork|callbacks|extra step|operational/i;
@@ -50,7 +50,7 @@ function extractIssueLabel(text = "") {
   const normalized = String(text).toLowerCase();
   if (/renal impairment|renal function|\brenal\b|kidney/.test(normalized)) return "renal impairment";
   if (/guideline/.test(normalized)) return "guideline fit";
-  if (/cost savings|readmissions|expenditure|economic|cost-effectiveness|justify the cost|cost justification|metrics|specific outcomes|what outcomes|worth the spend/.test(normalized)) return "cost impact";
+  if (/cost savings|readmissions|expenditure|economic|cost-effectiveness|justify the cost|cost justification|metrics|specific outcomes|what outcomes|worth the spend|total cost per patient|cost per patient|what's included|what is included|what does that include|break down|added testing|monitoring/.test(normalized)) return "cost impact";
   if (/subgroup|patient population|excluded/.test(normalized)) return "patient-fit gap";
   if (/workflow|staff|added step|operational|prior auth|prior authorization/.test(normalized)) return "workflow burden";
   return "the gap you're pointing to";
@@ -153,6 +153,9 @@ function deriveImplementationConcreteAnswer(activeConcernText = "", scenario = {
     .join(" ")
     .toLowerCase();
 
+  if (/how does that simplify handoffs|without adding more steps|without adding more clicks|how does that reduce steps|what exactly changes for staff/.test(text)) {
+    return "The workable version is one in-workflow update instead of a second follow-up list, callback, or duplicate handoff for staff";
+  }
   if (/who owns|who picks that up|staff member/.test(text)) {
     return "The step usually lands on the MA or prior auth support, which only helps if it removes a handoff instead of adding one";
   }
@@ -226,6 +229,203 @@ function deriveCommitmentDirectAnswer(activeConcernText = "", proofPointCategory
     return "The proof point has to remove a real operational barrier, not just sound directionally helpful";
   }
   return `The proof point has to change something you would actually use in practice, ideally ${proofPointCategory}`;
+}
+
+function deriveCostValueConcreteAnswer(activeConcernText = "", scenario = {}) {
+  const text = [activeConcernText, scenario?.objective, scenario?.description, scenario?.context]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/what's included|what is included|what does that include|what goes into that number|break down/.test(text)) {
+    return "The number has to include the drug cost, any administration cost, and any added testing or monitoring if you want a real value discussion";
+  }
+  if (/total cost per patient|overall cost of treatment per patient|cost per patient/.test(text)) {
+    return "The useful answer is the all-in cost per patient, including the drug, any administration, and any added testing or monitoring";
+  }
+  if (/formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(text)) {
+    return "The answer has to connect total cost per patient to the patient outcome that would actually justify the spend";
+  }
+
+  return "The useful answer is the all-in cost per patient, including the drug, any administration, and any added testing or monitoring";
+}
+
+function hasConcreteCostValueAnswer(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /all-in cost per patient|total cost per patient|drug cost, any administration, and any added testing or monitoring|full cost picture|cost picture/i.test(normalized);
+}
+
+function hasCostValueGapAdmission(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /gap i still need to close|still need to close|shouldn't pretend the value case is complete|still haven't answered the value question|still don't have a clean exact number|still need to break out/i.test(normalized);
+}
+
+function hasMonitoringCostRange(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /\$500 to \$2,000|500 to 2,000|range is still too broad|monitoring costs.*per patient per year|average added monitoring cost|added cost for monitoring/i.test(normalized);
+}
+
+function isCostValueConcernText(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit|what am i supposed to do with|what do i do with|how am i supposed to use that|incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|follow up costs|testing and monitoring|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring|average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|don't need another efficacy point|do not need another efficacy point|not another efficacy point|worth the spend|cost side|what we'd spend|does the outcome justify/i.test(normalized);
+}
+
+function isCostValueRedirectText(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /don't need another efficacy point|do not need another efficacy point|not another efficacy point|specific lab test and monitoring schedule|lab test and monitoring schedule|monitoring schedule|lab test schedule|added testing and monitoring|testing and monitoring cost|what's the exact cost per patient for the added testing and monitoring|exact cost per patient for the added testing and monitoring/i.test(normalized);
+}
+
+function getRecentHcpTexts(turns = [], limit = 4) {
+  return turns
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-limit)
+    .map((turn) => turn.text.trim())
+    .filter(Boolean);
+}
+
+function isCostValueThreadActive(turns = [], scenario = {}) {
+  const openingContext = [
+    scenario?.openingScene,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.context,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (isCostValueConcernText(openingContext)) {
+    return true;
+  }
+
+  return getRecentHcpTexts(turns, 5).some((text) => isCostValueConcernText(text));
+}
+
+function shouldHoldCostValueLane({ scenario, turns, activeConcernText = "", lastRepText = "", draft = "" }) {
+  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  if (!/clinical_value|clinical_evaluation/.test(stageText)) {
+    return false;
+  }
+
+  const costThreadActive = isCostValueThreadActive(turns, scenario);
+  const costConcern = isCostValueConcernText(activeConcernText);
+  const redirectedBackToCost = costThreadActive && isCostValueRedirectText(activeConcernText);
+  if (!costConcern && !redirectedBackToCost) {
+    return false;
+  }
+
+  return (
+    hasCostValueGapAdmission(lastRepText) ||
+    hasConcreteCostValueAnswer(lastRepText) ||
+    hasMonitoringCostRange(lastRepText) ||
+    hasConcreteCostValueAnswer(draft) ||
+    hasMonitoringCostRange(draft) ||
+    redirectedBackToCost ||
+    costThreadActive
+  );
+}
+
+function buildCostValueFollowThroughReply({ scenario, turns, activeConcernText = "" }) {
+  const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+  const normalized = String(activeConcernText || "").toLowerCase();
+  const lastRepText = normalizeForMatch(getLastRepText(turns));
+
+  if (/don't need another efficacy point|do not need another efficacy point|not another efficacy point/.test(normalized)) {
+    if (/full cost per patient|total cost per patient|all-in cost|value discussion is still incomplete|haven't given you enough information/.test(lastRepText)) {
+      return "Right, and that means I need to stay on the missing cost number, not circle back to efficacy. Until I can give you the full per-patient cost, including the added testing and monitoring, I still haven't answered the value question.";
+    }
+    return "Then I should stay on the cost question. If I can't break out the full cost per patient, including any added testing and monitoring, then I still haven't given you enough information to judge whether it's worth it.";
+  }
+
+  if (/average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring/.test(normalized)) {
+    if (/incremental spend per patient|added monitoring cost per patient|pin down cleanly|break out cleanly/.test(lastRepText)) {
+      return "Right now the unresolved number is the added monitoring cost per patient. I don't have that exact figure broken out cleanly yet, so the next useful move is bringing back that cost breakout instead of stretching the answer.";
+    }
+    return "If the real blocker is the added monitoring cost itself, then that's the number I still need to pin down cleanly. Until I can show that added cost per patient without hiding behind a broad range, I still haven't answered the cost question well enough.";
+  }
+
+  if (/what am i supposed to do with|what do i do with|how am i supposed to use that/.test(normalized)) {
+    return "If the all-in number still isn't useful, then I need to separate what the added testing and monitoring cost on top of the base treatment. If I can't show that cleanly, then I still haven't made the value discussion usable.";
+  }
+
+  if (/what's included|what is included|what does that include|what goes into that number|break down/.test(normalized)) {
+    return "If you need the useful breakdown, it has to separate the drug, any administration, and whatever testing or monitoring gets layered on top. If I can't break that out clearly, then I still haven't answered the value question.";
+  }
+
+  if (/incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|follow up costs|testing and monitoring/.test(normalized)) {
+    if (/incremental spend per patient|added monitoring cost per patient|break out cleanly/.test(lastRepText)) {
+      return "The unresolved piece is still the added testing and monitoring cost per patient. I don't have that exact incremental number broken out cleanly yet, so the next useful step is bringing back that cost breakout rather than broadening the value story.";
+    }
+    return repTurns >= 4
+      ? "If the blocker is the added testing and monitoring cost, then that's the number I still need to break out cleanly. Until I can show that incremental spend per patient, I still haven't answered the value question."
+      : "If the real blocker is the added testing and monitoring cost, then I need to separate that incremental spend from the base drug cost. Until I can show that cleanly, I still haven't answered the value question.";
+  }
+
+  if (/exact cost|total cost per patient|overall cost of treatment per patient|cost per patient/.test(normalized)) {
+    if (/full per-patient cost cleanly|gap i still need to close|haven't answered the value question/.test(lastRepText)) {
+      return "The unresolved issue is still the exact per-patient cost. I don't have that number broken out cleanly enough yet, so the next useful step is coming back with the full cost picture instead of pretending the value case is settled.";
+    }
+    return repTurns >= 4
+      ? "If you need the exact number, then that's the gap I still need to close. Until I can show the full per-patient cost cleanly, I shouldn't pretend the value case is complete."
+      : "If the blocker is the exact number, then I need to break out the drug cost from the added testing and monitoring cost. Until I can show that cleanly, I still haven't answered the value question.";
+  }
+
+  if (/formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(normalized)) {
+    return "Then I need to separate the drug cost, the added monitoring, and the overall budget impact. If I can't separate those cleanly, I still haven't earned a real formulary discussion.";
+  }
+
+  return "If the all-in cost is still the blocker, then I need to separate the drug cost from the added testing and monitoring cost. Until I can do that cleanly, the value discussion is still incomplete.";
+}
+
+function hasConcreteOperationalAnswer(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /one cleaner handoff|second callback list|duplicate entry|separate monitoring task|inside the current workflow|new staff task|new handoff|staff step|operational/i.test(normalized);
+}
+
+function buildOperationalFollowThroughReply({ activeConcernText = "", turns }) {
+  const normalized = String(activeConcernText || "").toLowerCase();
+  const repTurns = turns.filter((turn) => turn?.speaker === "rep").length;
+  const lastRepText = normalizeForMatch(getLastRepText(turns));
+
+  if (/if this does not add another staff step|if this doesn't add another staff step|if this stays inside the current workflow|if this does not create another handoff|if staff does not inherit another step|extra work for my team/.test(normalized)) {
+    if (/new handoff|new callback|new staff task|second callback|separate follow-up task|real workflow value/.test(lastRepText)) {
+      return "Then the standard has to stay concrete: no second handoff, no callback list, and no separate follow-up task for staff. If any one of those still shows up, then it still does not fit your workflow.";
+    }
+    return "Then the standard has to stay concrete: no second handoff, no callback list, and no separate follow-up task for staff. If any one of those still shows up, then it still does not fit your workflow.";
+  }
+
+  if (/reduce callbacks|callbacks|follow-up phone calls|follow up phone calls|specific step that reduces callbacks|discharge process/.test(normalized)) {
+    if (/cleaner handoff|back-and-forth steps|staff rework|workflow value/.test(lastRepText)) {
+      return "The step that should reduce callbacks is getting the needed information into the visit or discharge handoff before staff has to chase it later. If the team still has to make a second call to close the loop, then it still is not helping the workflow.";
+    }
+    return "The step that should reduce callbacks is getting the needed information into the visit or discharge handoff before staff has to chase it later. If the team still has to make a second call to fix the same issue, then it is not reducing rework.";
+  }
+
+  if (/how does it actually reduce|how does that actually reduce|how does this actually reduce|how does it actually get to me|point of care/.test(normalized)) {
+    if (repTurns >= 4) {
+      return "The only way it reduces rework is if the information reaches the visit before staff has to chase it down, re-enter it, or call back for it later. If that handoff still happens after the visit, then it isn't reducing rework.";
+    }
+    return "The useful answer is whether the information reaches the visit before staff has to chase it, re-enter it, or call back for it later. If it still lands after the visit, then it isn't helping the workflow.";
+  }
+
+  if (/reduce rework|staff rework|actually reduce/.test(normalized)) {
+    if (repTurns >= 4) {
+      return "If the real question is how it cuts rework, then I need to answer that directly: it only helps if it removes one repeat callback, one duplicate entry, or one back-and-forth handoff for staff. If it doesn't remove one of those, then it isn't helping the workflow.";
+    }
+    return "If the blocker is staff rework, then the useful answer is whether this removes a repeat callback, a duplicate entry, or a back-and-forth handoff. Which of those is the rework pain point in your clinic?";
+  }
+
+  if (/what step gets added|added step|what changes in my workflow|what specific workflow step|one step/.test(normalized)) {
+    if (repTurns >= 4) {
+      return "If you need the one exact step, then that's the gap I still have to answer cleanly. Until I can show whether this is a handoff change, a callback change, or no added step at all, I haven't really closed the workflow question.";
+    }
+    return "If the blocker is the one exact step, then the useful distinction is whether this changes the handoff, the callback list, or adds a separate staff task. Which of those is the part you need answered most directly?";
+  }
+
+  if (/what gets added|what staff|rework|handoff|workflow/.test(normalized)) {
+    return "If this still sounds too broad, then the next useful answer is whether staff picks up a new handoff, a second callback, or a separate follow-up task. If none of that changes, then that's the real workflow value.";
+  }
+
+  return "If the workflow question is still open, then the next useful answer is whether this creates a new handoff, a new callback, or a new staff task. If it does, then it still doesn't fit.";
 }
 
 function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBehaviorState, currentJourneyState, draft }) {
@@ -320,6 +520,12 @@ function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
   const initialAccessChange = deriveInitialAccessOperationalChange(scenario, activeConcernText);
 
   if (stage === "initial_access") {
+    if (/what'?s the one thing that'?s gonna change for me in the exam room|what's the one thing that's going to change for me in the exam room|what one thing changes for me in the exam room|what single change would make a tangible difference|what one thing changes in the exam room/.test(activeConcernText)) {
+      return "The one change that should matter in the room is fewer loose ends after the visit: less back-and-forth, fewer callbacks, and a cleaner handoff before staff has to chase the same issue later. If that does not change, then this is not helping your workflow.";
+    }
+    if (/discharge process|reduce callbacks|callbacks|follow-up phone calls|follow up phone calls|specific step that reduces callbacks|extra work for my team|extra work for staff|what extra work|what extra step|what does that add for my team/.test(activeConcernText)) {
+      return "The practical change has to happen before the patient leaves: the needed information or access step has to be handled in the visit or discharge handoff so staff is not calling the patient back later to fix it. If that second call still happens, then it is not helping the workflow.";
+    }
     if (/what makes you think .* is (still )?the issue here|why do you think .* is our problem|what makes you think .* is our problem|what makes you think staff handoff is still the issue here|what makes you think staff handoff is our problem/.test(activeConcernText)) {
       return `The reason to test ${initialAccessBarrier} first is that it is often the point where staff gets pulled into extra callbacks, rework, or handoffs before care can move forward. If that is not happening in your clinic, then I am on the wrong issue.`;
     }
@@ -394,7 +600,19 @@ function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
   }
 
   if (stage === "adoption_implementation") {
+    if (/if this does not add another staff step|if this doesn't add another staff step|i can look at it|i can stay with it/.test(activeConcernText)) {
+      if (repTurns >= 3) {
+        return "Then the answer has to stay operational: no second callback list, no duplicate entry, and no separate monitoring task after discharge. If staff still has to pick up a new handoff to keep this moving, then it still does not fit the workflow.";
+      }
+      return "Then the concrete standard is one in-workflow update instead of a second callback list, duplicate entry, or separate monitoring step for staff. If it still creates a new staff task after the visit, then it still does not solve the workflow issue.";
+    }
     if (/staff|workflow|monitoring|follow-up|what happens next|who picks that up|who owns that/.test(activeConcernText)) {
+      if (/how does that simplify handoffs|without adding more steps|without adding more clicks|how does that reduce steps|what exactly changes for staff/.test(activeConcernText)) {
+        if (repTurns >= 3) {
+          return "Concretely, the only workable version is one in-workflow update instead of a separate callback list, duplicate entry, or extra handoff for staff. If staff still has to create a second task to keep this moving, then it is still the wrong fit.";
+        }
+        return "Concretely, the only workable version is one in-workflow update instead of a separate callback list, duplicate entry, or extra handoff for staff. If it still creates another step after the visit, then it still does not solve the workflow issue.";
+      }
       if (repTurns >= 2) {
         return `${deriveImplementationConcreteAnswer(activeConcernText, scenario)}. If that does not hold, this is still a workflow problem.`;
       }
@@ -839,6 +1057,15 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "cost impact") {
+    if (/what's included|what is included|what does that include|what goes into that number|break down/.test(activeConcernText.toLowerCase())) {
+      return `${deriveCostValueConcreteAnswer(activeConcernText, scenario)}. If I cannot break that out clearly, then I still have not answered the value question in a way you can actually use.`;
+    }
+    if (/total cost per patient|overall cost of treatment per patient|cost per patient/.test(activeConcernText.toLowerCase())) {
+      return `${deriveCostValueConcreteAnswer(activeConcernText, scenario)}. If that cost picture is still vague, then I still have not given you what you need to evaluate value.`;
+    }
+    if (/formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText.toLowerCase())) {
+      return `${deriveCostValueConcreteAnswer(activeConcernText, scenario)}. If it does not change that real spend-versus-outcome decision, then it is still not enough.`;
+    }
     if (/specific outcomes|what outcomes/.test(activeConcernText.toLowerCase())) {
       return "You're asking which outcomes would actually justify the spend, not for a generic value claim. The answer has to be one outcome that changes whether the therapy earns a place in practice.";
     }
@@ -1142,6 +1369,17 @@ export async function maybeReviseStrongRepReply({
   const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
   const repeatedConcern = hasRepeatedObjection(turns);
+  const lastRepText = getLastRepText(turns);
+
+  if (shouldHoldCostValueLane({
+    scenario,
+    turns,
+    activeConcernText,
+    lastRepText,
+    draft,
+  })) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
 
   if (
     /clinical_value|clinical_evaluation/.test(stageText) &&
@@ -1238,6 +1476,71 @@ export function maybeEnforceFamilyAnswerReply({
 }) {
   const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
+  const lastRepText = getLastRepText(turns);
+
+  if (shouldHoldCostValueLane({
+    scenario,
+    turns,
+    activeConcernText,
+    lastRepText,
+    draft,
+  })) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /\bcost|spend|value|monitoring|testing|diagnostic|expense|budget\b/.test(activeConcernText) &&
+    hasCostValueGapAdmission(lastRepText)
+  ) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit|what am i supposed to do with|what do i do with|how am i supposed to use that|incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|testing and monitoring|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring|don't need another efficacy point|do not need another efficacy point|not another efficacy point/.test(activeConcernText) &&
+    hasConcreteCostValueAnswer(lastRepText)
+  ) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring/.test(activeConcernText) &&
+    (hasMonitoringCostRange(lastRepText) || hasCostValueGapAdmission(lastRepText) || hasConcreteCostValueAnswer(lastRepText))
+  ) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|exact total cost|comprehensive cost breakdown|overall expense per patient/.test(activeConcernText) &&
+    hasCostValueGapAdmission(lastRepText)
+  ) {
+    return "If you need the exact cost and I still can't break it out cleanly, then I still haven't closed the value question. Until I can show the full number clearly, I shouldn't act like the cost case is settled.";
+  }
+
+  if (
+    /initial_access|adoption_implementation/.test(stageText) &&
+    /what step gets added|added step|what changes in my workflow|what specific workflow step|what gets added|what staff|rework|handoff|workflow|actually reduce|how does it actually reduce|how does that actually reduce|how does this actually reduce|how does it actually get to me|point of care|i can look at it|i can stay with it/.test(activeConcernText) &&
+    hasConcreteOperationalAnswer(lastRepText)
+  ) {
+    return buildOperationalFollowThroughReply({ activeConcernText, turns });
+  }
+
+  if (
+    /adoption_implementation/.test(stageText) &&
+    /how does that simplify handoffs|without adding more steps|without adding more clicks|how does that reduce steps|what exactly changes for staff|what specifically changes in my workflow|what changes in my workflow|if this does not add another staff step|if this doesn't add another staff step|i can look at it|i can stay with it/.test(activeConcernText)
+  ) {
+    return buildDeterministicFamilyAnswerReply({ scenario, turns });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)
+  ) {
+    return buildDeterministicEvidenceFitReply({ scenario, turns });
+  }
 
   if (
     /commitment_close|adoption_commitment/.test(stageText) &&
@@ -1283,6 +1586,7 @@ export function maybeApplyHardFamilyAnswerReply({
 }) {
   const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
+  const lastRepText = getLastRepText(turns);
   const isPerpetualMaybe =
     /the perpetual maybe/i.test(String(scenario?.title || "")) ||
     /meaning to try it with the right patient|haven't had one come through that fits perfectly/i.test(
@@ -1302,7 +1606,44 @@ export function maybeApplyHardFamilyAnswerReply({
     return buildDeterministicCommitmentReply({ scenario, turns });
   }
 
+  if (shouldHoldCostValueLane({
+    scenario,
+    turns,
+    activeConcernText,
+    lastRepText,
+    draft,
+  })) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+  }
+
   if (/clinical_value|clinical_evaluation/.test(stageText)) {
+    if (
+      /\bcost|spend|value|monitoring|testing|diagnostic|expense|budget\b/.test(activeConcernText) &&
+      hasCostValueGapAdmission(lastRepText)
+    ) {
+      return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+    }
+    if (
+      /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|exact total cost|comprehensive cost breakdown|overall expense per patient/.test(activeConcernText) &&
+      hasCostValueGapAdmission(lastRepText)
+    ) {
+      return "If you need the exact cost and I still can't break it out cleanly, then I still haven't closed the value question. Until I can show the full number clearly, I shouldn't act like the cost case is settled.";
+    }
+    if (
+      /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit|what am i supposed to do with|what do i do with|how am i supposed to use that|incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|testing and monitoring|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring|don't need another efficacy point|do not need another efficacy point|not another efficacy point/.test(activeConcernText) &&
+      hasConcreteCostValueAnswer(lastRepText)
+    ) {
+      return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+    }
+    if (
+      /average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring/.test(activeConcernText) &&
+      (hasMonitoringCostRange(lastRepText) || hasCostValueGapAdmission(lastRepText) || hasConcreteCostValueAnswer(lastRepText))
+    ) {
+      return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
+    }
+    if (/total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)) {
+      return buildDeterministicEvidenceFitReply({ scenario, turns });
+    }
     if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(activeConcernText)) {
       return buildDeterministicEvidenceFitReply({ scenario, turns });
     }
@@ -1346,6 +1687,16 @@ export function maybeApplyHardFamilyAnswerReply({
     ) {
       return buildDeterministicEvidenceFitReply({ scenario, turns });
     }
+  }
+
+  if (
+    /adoption_implementation/.test(stageText) &&
+    /how does that simplify handoffs|without adding more steps|without adding more clicks|how does that reduce steps|what exactly changes for staff|what specifically changes in my workflow|what changes in my workflow|if this does not add another staff step|if this doesn't add another staff step|i can look at it|i can stay with it|reduce rework|staff rework|actually reduce|how does it actually reduce|how does that actually reduce|how does this actually reduce|how does it actually get to me|point of care/.test(activeConcernText)
+  ) {
+    if (hasConcreteOperationalAnswer(lastRepText)) {
+      return buildOperationalFollowThroughReply({ activeConcernText, turns });
+    }
+    return buildDeterministicFamilyAnswerReply({ scenario, turns });
   }
 
   if (/commitment_close|adoption_commitment/.test(stageText)) {
@@ -1440,6 +1791,19 @@ export async function maybeDeRepeatStrongRepReply({
     /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup data|real-world renal data|numbers for my patient population|threshold|closest renal-specific data|closest renal-specific outcome/.test(activeConcernText)
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
+    shouldHoldCostValueLane({
+      scenario,
+      turns,
+      activeConcernText,
+      lastRepText: getLastRepText(turns),
+      draft,
+    })
+  ) {
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
   }
 
   if (
