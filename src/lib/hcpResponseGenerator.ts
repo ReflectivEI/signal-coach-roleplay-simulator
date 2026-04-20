@@ -442,6 +442,9 @@ function deterministicContinuityVariation({
   const text = String(hcpReply || "").trim().replace(/[.?!]+$/, "");
 
   if (!text) return hcpReply;
+  if (/that still does not change the decision threshold/i.test(text)) {
+    return `${text}.`;
+  }
 
   if (concernTags.includes("workflow")) {
     if (/prior auth|prior authorization/i.test(text)) {
@@ -810,7 +813,8 @@ export async function generateHcpResponse(
   repMessage: string,
   allPriorSignals: BehaviorSignals[] = [],
   turnCount: number = 0,
-  previousVolatilityProfile: VolatilityProfile = "stable"
+  previousVolatilityProfile: VolatilityProfile = "stable",
+  responseTokenCap?: number,
 ): Promise<SimulatorResponse> {
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
@@ -849,6 +853,9 @@ export async function generateHcpResponse(
     : isHighPressureTurn ? 420
     : runtimeProfile.brevity === "moderate" ? 600
     : 560;
+  const finalResponseTokenBudget = typeof responseTokenCap === "number"
+    ? Math.min(responseTokenBudget, responseTokenCap)
+    : responseTokenBudget;
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -996,7 +1003,7 @@ Return ONLY valid JSON:
 
   const result = await invokeWorkerJson({
     prompt,
-    max_tokens: responseTokenBudget,
+    max_tokens: finalResponseTokenBudget,
     temperature: 0.2,
     response_json_schema: {
       type: "object",

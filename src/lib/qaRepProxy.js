@@ -8,7 +8,7 @@ const INITIAL_ACCESS_REDISCOVERY_PATTERN = /want to make sure i understand|help 
 const ACCESS_PROCESS_DEMAND_PATTERN = /formulary|committee|review process|step therapy|non-preferred|what would move|what would change|take back|carry forward|prior auth|prior authorization|what staff|what gets added|what step/i;
 const WORKFLOW_DEMAND_PATTERN = /workflow|staff|monitoring|follow-up|what happens next|who picks that up|who owns that|extra step|what does that add/i;
 const WORKFLOW_REDISCOVERY_PATTERN = /what's a typical day|how do you currently|where do you think we could make the biggest impact|fit into your existing workflow|what part of the follow-up|what part of the monitoring|what would actually land on your team/i;
-const CLOSE_PROOF_POINT_PATTERN = /proof point|concrete outcome|single data point|patient outcome|concrete|metric|what changes my patient outcome|what changes for my patients|changes practice|specific analysis|what analysis/i;
+const CLOSE_PROOF_POINT_PATTERN = /proof point|concrete outcome|single data point|patient outcome|concrete|metric|what changes my patient outcome|what changes for my patients|changes practice|specific analysis|what analysis|most vulnerable patients|hospitalization rates|actual reduction|tangible impact/i;
 const DISCOVERY_DIRECT_ASK_PATTERN = /what patient characteristics|what patient type|which patients|good fit|ideal patient profile|define a good fit|what are you using to define|who are you actually talking about|what kind of patient|relevant to my patients|relevance to my patients|what makes you think your treatment is relevant|non-responders|not responding to current therapy|responding to current therapy|what specifically would change|patients i'm actually struggling with|not just theoretically eligible|patient profile that would make me switch|make me switch|specific patient subgroup|what subgroup|which subgroup|subgroup would actually benefit|specific subgroup|clinical gain|what benefit|what's distinct|what makes it distinct|what specific outcome would change|what outcome would change|change my treatment approach|what makes this patient different|this patient would be any different|change this patient'?s treatment|make me change this patient'?s treatment/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
@@ -449,9 +449,66 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     ...(scenario?.interactionPressure || []),
   ].filter(Boolean).join(" "));
 
+  const isRenalClinicalValueConcern = /renal|kidney|egfr|gfr|dose adjustment|dose reduction|moderate renal impairment/.test(`${lowerConcern} ${scenarioEvidenceText}`);
+  if (isRenalClinicalValueConcern) {
+    const renalIntent = (() => {
+      if (/what'?s the plan to get that renal subgroup data|what'?s the plan to get renal subgroup data|what'?s the plan to get that subgroup data|what'?s the plan to get that subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that renal subgroup analysis|what'?s the plan to get renal-specific subgroup data|what'?s the plan to get renal-specific data|what'?s the plan to get renal data|what'?s the plan to get that subgroup readout|plan to get that subgroup readout|what'?s the plan to close that evidence gap|what'?s the plan to actually close that gap|plan to close that gap|close that evidence gap|close that gap for my patients|what'?s the timeline for that subgroup analysis|what'?s the timeline for that renal subgroup analysis|what'?s the expected completion timeline for that analysis|what'?s the earliest i can expect that subgroup analysis|what'?s the earliest i can expect concrete subgroup results|what'?s the earliest i can expect to see that subgroup analysis|when can i expect subgroup results|when can i expect concrete subgroup results|still waiting for that subgroup analysis|still waiting for meaningful subgroup analysis|still no timeline/.test(lowerConcern)) {
+        return "plan_timeline";
+      }
+      if (/renal safety threshold|what'?s the actual renal safety threshold|what'?s the renal safety threshold|safe for my renal-impaired patients|still no answer on renal safety|still doesn'?t address renal safety|renal safety in my patients|renal safety for my patients|actual renal safety data after dose adjustment|renal safety data after dose adjustment/.test(lowerConcern)) {
+        return "safety_threshold";
+      }
+      if (/specific egfr threshold|egfr threshold|gfr threshold|dose adjustment threshold|threshold for dose reduction|what'?s the exact threshold|what'?s the renal threshold where benefit holds up|what'?s the exact renal threshold|what'?s the actual dose reduction threshold|actual threshold number/.test(lowerConcern)) {
+        return "dose_threshold";
+      }
+      if (/actual efficacy in renal-impaired patients|renal-specific efficacy after dose adjustment|actual benefit after dose adjustment|retained efficacy after dose adjustment/.test(lowerConcern)) {
+        return "efficacy_after_adjustment";
+      }
+      if (/how this applies to my patients with renal issues|moderate renal impairment|my renal patients|compromised renal function|patient population/.test(lowerConcern)) {
+        return "applicability";
+      }
+      return null;
+    })();
+
+    if (renalIntent === "plan_timeline") {
+      if (repTurns >= 4) {
+        return "For the moderate renal-impairment subgroup, the treatment decision stays unchanged until a dedicated subgroup analysis shows acceptable renal safety, retained benefit, and a usable post-dose-adjustment threshold. I do not have a committed readout date I can defend today, and the concrete next step I can own is bringing you the formal subgroup-analysis plan or start notice once it is actually opened.";
+      }
+      return "The only credible plan is a dedicated renal subgroup analysis with stratified efficacy, renal-safety, and post-dose-adjustment endpoints in the moderate renal-impairment patients driving your decision. If I bring you that formal analysis plan once it is opened, would that be the right next checkpoint rather than stretching the current dataset today?";
+    }
+
+    if (renalIntent === "safety_threshold") {
+      if (repTurns >= 4) {
+        return "There is no validated renal safety threshold in this dataset that lets me defend changing treatment for the moderate renal-impairment subgroup today. So for those patients I would keep the treatment decision unchanged until a subgroup readout shows acceptable renal safety after dose adjustment in the same patients where retained benefit still holds.";
+      }
+      return "The direct answer is that I do not have a validated renal safety threshold I can give you for the moderate renal-impairment patients you manage. The missing evidence is a subgroup readout showing acceptable renal safety after dose adjustment in the same patients where retained benefit still holds; is that the bar you would need before revisiting the decision?";
+    }
+
+    if (renalIntent === "dose_threshold") {
+      if (repTurns >= 4) {
+        return "There is no validated renal threshold in this dataset that lets me defend changing treatment for the moderate renal-impairment subgroup today. Until a renal-specific readout shows where benefit still holds with acceptable safety after dose adjustment, the decision stays unchanged for those patients.";
+      }
+      return "That threshold is exactly the missing evidence. The study supports dose reduction in moderate renal impairment, but it does not give a validated renal cutoff where you can say the adjusted regimen still preserves enough benefit with acceptable safety to justify treatment.";
+    }
+
+    if (renalIntent === "efficacy_after_adjustment") {
+      if (repTurns >= 4) {
+        return "I cannot show renal-specific efficacy after dose adjustment strong enough to justify changing treatment for the moderate renal-impairment subgroup today. So until a subgroup readout shows retained efficacy alongside acceptable renal safety, I would keep the treatment decision unchanged for that population.";
+      }
+      return "The direct answer is that we do not have renal-specific efficacy after dose adjustment strong enough to change treatment for the moderate renal-impairment subgroup today. Until the subgroup readout shows retained efficacy alongside acceptable renal safety, I would keep the current decision in place.";
+    }
+
+    if (renalIntent === "applicability") {
+      if (repTurns >= 4) {
+        return "For the moderate renal-impairment patients you actually manage, this still is not decision-level evidence. The study does not isolate that subgroup cleanly enough to show retained benefit, acceptable renal safety, and a usable threshold after dose adjustment, so I would keep the treatment decision unchanged.";
+      }
+      return "The direct answer is that the study still does not isolate the moderate renal-impairment patients you actually manage well enough to show whether benefit still justifies treatment once dosing is adjusted. Until a renal-specific subgroup readout closes that gap, I would not treat this as decision-level evidence for those patients.";
+    }
+  }
+
   if (hcpTurns === 0 && repTurns === 0) {
     if (/renal|kidney|egfr|gfr|dose adjustment|dose reduction|moderate renal impairment/.test(scenarioEvidenceText)) {
-      return "The issue is whether the renal-impaired patient still keeps enough benefit after dose adjustment to justify treatment, because the current study does not answer that cleanly for the patients you actually manage.";
+      return "For the moderate renal-impairment patients you manage, the unresolved issue is that the study still does not show whether benefit holds, whether renal safety stays acceptable, or where the usable threshold sits after dose adjustment. Until a renal-specific subgroup readout answers those three questions, I would not present this as decision-level evidence for that subgroup.";
     }
     if (/guideline|subgroup|comorbid|generalizable|patient population/.test(scenarioEvidenceText)) {
       return "The issue is whether the subgroup behind the data actually matches the more complex patients who drive treatment decisions in your practice, because if it does not, the evidence still does not justify changing course.";
@@ -461,8 +518,81 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     }
   }
 
+  if (/what'?s the plan to get that renal subgroup data|what'?s the plan to get renal subgroup data|what'?s the plan to get that subgroup data|what'?s the plan to get that subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that renal subgroup analysis|what'?s the earliest you can get that subgroup analysis started|what'?s the earliest i can expect that subgroup analysis|what'?s the earliest i can expect to see that renal subgroup analysis|what'?s the earliest i can expect concrete subgroup results|what'?s the timeline for that renal subgroup analysis|what'?s the timeline for that subgroup analysis|when can i expect subgroup results|when can i expect those subgroup results|still waiting for that subgroup analysis|still waiting to see some meaningful subgroup analysis|still waiting for meaningful subgroup analysis|that still doesn't give me a timeline|that still does not give me a timeline/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "The concrete plan is to start a dedicated renal subgroup analysis now with stratified efficacy, renal-safety, and dose-adjusted outcome endpoints, and the honest answer is that I do not have a committed readout date I can defend yet. So the decision today stays unchanged for the moderate renal-impairment subgroup until that renal-specific readout is actually available.";
+    }
+    return "The concrete next step is a dedicated renal subgroup analysis started now, with predefined efficacy, renal-safety, and dose-adjusted outcome endpoints in the moderate renal-impairment subgroup. Until that readout exists, I would not change treatment for that subgroup based on the current dataset.";
+  }
+
+  if (/that still doesn'?t tell me what happens with dose adjustment in moderate renal impairment|still doesn'?t answer my renal dose adjustment question|still does not answer my renal dose adjustment question/.test(lowerConcern)) {
+    return "For moderate renal impairment, the actual dose adjustment is to reduce the starting dose by 50%, but the dataset still does not tell you clearly enough whether that adjusted regimen preserves enough efficacy and acceptable renal safety to justify treatment for the subgroup driving your decision. So today I would keep the treatment decision where it is for that subgroup.";
+  }
+
+  if (/what'?s the dose adjustment threshold for moderate renal impairment|what'?s the actual dose adjustment for moderate renal impairment|what is the actual dose adjustment for moderate renal impairment|actual dose adjustment for moderate renal impairment|specific dosing recommendations for patients with moderate renal impairment|dosing recommendations for patients with moderate renal impairment|what'?s the actual dose adjustment for moderate renal impairment, not just what the study doesn'?t prove/.test(lowerConcern)) {
+    return "For moderate renal impairment, the dosing recommendation is to reduce the starting dose by 50%. The unresolved question is whether that adjusted regimen still preserves enough efficacy and acceptable renal safety to justify treatment for the subgroup driving your decision.";
+  }
+
+  if (/that still doesn'?t tell me what i need for my moderate renal impairment patients|that still doesn'?t tell me what i need for my patients with moderate renal impairment|still concerned that the data doesn'?t adequately account for the renal function issues i see in my patient population|still concerned that the data doesn'?t provide sufficient reassurance for my patients with compromised renal function|renal function issues i see in my patient population|renal function issues i commonly see in my patient population/.test(lowerConcern)) {
+    return "For the moderate renal-impairment patients driving your decision, I still do not have evidence strong enough to tell you the adjusted regimen keeps enough efficacy and acceptable renal safety to justify changing treatment. If you need the blocker narrowed further, is the missing piece for you retained efficacy after dose adjustment, renal safety, or the threshold where the benefit still holds?";
+  }
+
+  if (/that still doesn'?t tell me about renal safety in my patients|that still doesn'?t address renal safety for my patients|still doesn'?t address renal safety|still does not address renal safety|concerned that the data doesn'?t adequately mitigate the risks associated with renal impairment|renal safety in my patients|renal safety for my patients|mitigate the risks associated with renal impairment|if it'?s safe for my renal-impaired patients|safe for my renal-impaired patients|renal safety concern/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "Then for the moderate renal-impairment patients you manage, I would keep the treatment decision unchanged today. The missing evidence is a subgroup readout showing acceptable renal safety after dose adjustment in the same patients where retained benefit still holds, and until that paired readout exists I should not ask you to change treatment for that subgroup.";
+    }
+    return "The direct answer is that I do not have renal-specific safety data strong enough to support changing treatment for the moderate renal-impairment patients you manage. The missing evidence is a subgroup readout showing acceptable renal safety after dose adjustment in the same patients where retained benefit still holds; is that paired safety-and-benefit readout the bar you would need before revisiting the decision?";
+  }
+
+  if (/what'?s the renal safety profile after dose adjustment|what'?s the actual renal safety data after dose adjustment|what'?s the actual renal safety data after dose adjustment, specifically|adjusted dosing regimen'?s impact on renal function|impact on renal function.*specific subset/.test(lowerConcern)) {
+    return "The direct answer is that we do not have renal-specific safety data after dose adjustment strong enough to change treatment for the moderate renal-impairment subgroup today. What would change that is a subgroup readout showing acceptable renal safety after dose adjustment in the same patients where retained efficacy still holds.";
+  }
+
+  if (/what'?s the actual renal safety data in patients with moderate impairment|what'?s the actual renal safety data you can give me for these patients|what'?s the renal safety threshold i can use in practice/.test(lowerConcern)) {
+    return "The direct answer is that I cannot give you renal-specific safety data or a safety threshold you can use in practice for the moderate renal-impairment subgroup today. Until a subgroup readout shows acceptable renal safety after dose adjustment in the same patients where efficacy still holds, I would keep the treatment decision unchanged for that population.";
+  }
+
+  if (/how do you account for the renal function variability in your dosing strategy|benefits outweigh the potential risks for my patients with compromised renal function|still not convinced that the benefits outweigh the potential risks/.test(lowerConcern)) {
+    return "The direct answer is that I cannot show enough renal-specific efficacy and safety together to say the benefits outweigh the renal risks for the moderate renal-impairment subgroup today. Until a subgroup readout shows retained benefit and acceptable renal safety after dose adjustment in that population, I would keep the treatment decision where it is.";
+  }
+
+  if (/what subgroup data do you have that would change my treatment decision|what specific renal data would change my treatment decision|what specific renal data would change my treatment decision for these patients|what specific renal data would make a difference for my patients|renal-specific efficacy for my patients|renal specific efficacy for my patients|plan to get renal-specific efficacy data|plan to get renal specific efficacy data|what'?s the plan to get renal-specific subgroup data|what is the plan to get renal-specific subgroup data|plan to get renal-specific subgroup data|what'?s the plan to get renal-specific data|what is the plan to get renal-specific data|plan to get renal-specific data|what'?s the plan to get renal data|what is the plan to get renal data|plan to get renal data|what'?s the plan for getting that renal data|what is the plan for getting that renal data|what'?s the plan to get that subgroup readout|what is the plan to get that subgroup readout|plan to get that subgroup readout|what'?s the plan for getting renal data now|what is the plan for getting renal data now|what'?s the plan for getting that renal data now|what is the plan for getting that renal data now|what'?s the plan to get that data now|what is the plan to get that data now|still no renal-specific efficacy data|still no renal specific efficacy data|compelling evidence.*renal impairment|effectively manages the disease in patients with renal impairment|what specific data on renal safety.*give you confidence|specific data on renal safety.*give you confidence/.test(lowerConcern)) {
+    if (/plan to get renal-specific efficacy data|plan to get renal specific efficacy data|what'?s the plan to get renal-specific subgroup data|what is the plan to get renal-specific subgroup data|plan to get renal-specific subgroup data|what'?s the plan to get renal-specific data|what is the plan to get renal-specific data|plan to get renal-specific data|what'?s the plan to get renal data|what is the plan to get renal data|plan to get renal data|what'?s the plan for getting that renal data|what is the plan for getting that renal data|what'?s the plan for getting renal data now|what is the plan for getting renal data now|what'?s the plan for getting that renal data now|what is the plan for getting that renal data now|what'?s the plan to get that data now|what is the plan to get that data now|what'?s the plan to get that subgroup readout|what is the plan to get that subgroup readout|plan to get that subgroup readout/.test(lowerConcern)) {
+      return "If renal-specific safety and retained benefit are the bar, the only credible plan is a dedicated renal subgroup analysis or follow-up cohort that reports both after dose adjustment in the moderate renal-impairment patients driving your decision. Until that paired renal readout exists, I would not ask you to change treatment for that subgroup.";
+    }
+    if (/what specific data on renal safety.*give you confidence|specific data on renal safety.*give you confidence/.test(lowerConcern)) {
+      return "The renal-safety data that would justify confidence is a subgroup readout in the moderate renal-impairment patients you actually manage showing acceptable renal safety after dose adjustment alongside retained efficacy. Without that paired readout, I would not change treatment for that subgroup.";
+    }
+    if (/still no renal-specific efficacy data|still no renal specific efficacy data|compelling evidence.*renal impairment|effectively manages the disease in patients with renal impairment/.test(lowerConcern)) {
+      return "You're right that there is still no renal-specific efficacy evidence you can use to change treatment for those patients today. The only thing that would move that decision is a renal-specific readout showing that the adjusted regimen still delivers enough disease control in the moderate renal-impairment subgroup.";
+    }
+    if (/what specific renal data would change my treatment decision|what specific renal data would change my treatment decision for these patients|what specific renal data would make a difference for my patients/.test(lowerConcern)) {
+      return "The renal data that would change the decision is a subgroup readout showing three things in the moderate renal-impairment patients you actually treat: retained efficacy after dose adjustment, acceptable renal safety, and a usable threshold for where the benefit still holds. Without those three pieces, I would not change treatment for that subgroup.";
+    }
+    return "The subgroup data that would change your treatment decision is renal-specific efficacy after dose adjustment in the moderate renal-impairment patients you actually manage. We do not have that readout today, so I would not ask you to change treatment for that subgroup on the current dataset. If you need the narrower blocker named, it is whether the adjusted regimen still holds enough efficacy in that subgroup to justify treatment at all.";
+  }
+
+  if (/still no renal-specific efficacy after dose adjustment|still no renal specific efficacy after dose adjustment|that still doesn't give me renal-specific efficacy after dose adjustment|that still does not give me renal-specific efficacy after dose adjustment|i'm not seeing any improvement in renal outcomes even when we optimize the dosing regimen|im not seeing any improvement in renal outcomes even when we optimize the dosing regimen|no improvement in renal outcomes even when we optimize the dosing regimen/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "Then the decision today stays unchanged for the moderate renal-impairment subgroup. We still do not have a renal-specific readout showing that dose adjustment preserves enough efficacy and renal safety to justify treatment, and that exact subgroup evidence is the only thing that would change the decision.";
+    }
+    return "The direct answer is that we still do not have renal-specific efficacy after dose adjustment strong enough to justify treatment for the moderate renal-impairment subgroup today. Until a subgroup readout shows retained efficacy and acceptable renal safety after dose adjustment in that population, I would keep the current decision in place.";
+  }
+
+  if (/that subgroup analysis is still not scheduled|still no subgroup analysis scheduled|still no renal subgroup analysis scheduled|subgroup analysis is not scheduled|not scheduled, is it|still no subgroup analysis/.test(lowerConcern)) {
+    return "You're right that without that subgroup analysis actually scheduled, there is still no new evidence path you can use to justify changing treatment. The honest position is to keep the current treatment decision in place for the moderate renal-impairment subgroup until that renal-specific analysis is formally underway and results are available.";
+  }
+
   if (/timeline|earliest|when can.*subgroup|when will.*subgroup|concrete timeline|concrete plans/.test(lowerConcern) && /subgroup|renal|kidney/.test(lowerConcern)) {
-    return "I do not have a committed subgroup-results date I can defend today. The strongest concrete answer I can give is that the next step has to be starting the dedicated renal subgroup analysis now and only revisiting the decision once that stratified efficacy and safety readout is actually available.";
+    return "I do not have a committed subgroup-results date I can defend today, so for the moderate renal-impairment subgroup the treatment decision stays unchanged. The strongest concrete next step I can own is bringing you the formal renal subgroup-analysis plan or start notice once it is actually opened, and only revisiting the decision when that stratified efficacy and renal-safety readout is in hand.";
+  }
+
+  if (/that'?s not a plan, that'?s a delay|that is not a plan, that is a delay|that delay affects dosing for my renal patients now|delay affects dosing/.test(lowerConcern)) {
+    return "You're right that the current gap leaves you making renal dosing decisions now without the subgroup readout you need. The responsible interim position is not to over-claim the dataset for those renal patients, and the only credible next step is a renal-specific follow-up cohort or registry that reports stratified efficacy, renal safety, and real-world outcomes after dose adjustment.";
+  }
+
+  if (/what'?s the plan to get real-world outcomes for my patients|plan to get real-world outcomes|real-world outcomes for my patients|real world outcomes for my patients/.test(lowerConcern)) {
+    return "The real-world plan has to be a renal-specific follow-up cohort or registry in the moderate renal-impairment patients you actually manage, with predefined dose-adjustment, renal-safety, and retained-benefit endpoints. Until that real-world renal readout exists, I would not present the current dataset as decision-level evidence for your patients.";
   }
 
   if (/prior auth workflow|prior authorization workflow|workflow for this medication|prior auth process/.test(lowerConcern)) {
@@ -485,11 +615,11 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     return "That exact renal-specific adverse-event reduction is not established cleanly in the current dataset. That is still part of the evidence gap, because you do not have a renal-adjusted safety readout strong enough to anchor treatment choice.";
   }
 
-  if (/what'?s the actual renal benefit|what is the actual renal benefit|actual benefit for my moderate renal impairment patients|actual benefit for my renal patients|benefit for my moderate renal impairment patients|benefit for my renal patients/.test(lowerConcern)) {
+  if (/what'?s the actual renal benefit|what is the actual renal benefit|actual benefit for my moderate renal impairment patients|actual benefit for my renal patients|benefit for my moderate renal impairment patients|benefit for my renal patients|what happens with my patients who have moderate renal impairment|what happens with my moderate renal impairment patients|that still doesn'?t tell me how this applies to my patients with moderate renal impairment|that still doesn'?t address my renal-impaired patients'? needs|that still doesn'?t answer my question about moderate renal impairment|meaningfully improve outcomes for my patients who have moderate kidney function issues/.test(lowerConcern)) {
     if (repTurns >= 4) {
-      return "I cannot responsibly tell you there is a proven renal-specific benefit for the moderate renal-impairment patients you actually manage. Until there is a renal subgroup readout after dose adjustment, I would not present this as practice-changing for that population.";
+      return "For the moderate renal-impairment patients you actually manage, I would not use this dataset to change treatment today. We still do not have a renal-specific subgroup readout after dose adjustment showing retained benefit and acceptable safety, so it is not decision-level evidence for that population.";
     }
-    return "The actual renal benefit is still not proven cleanly enough in the moderate renal-impairment subgroup, because the study does not give a renal-specific efficacy readout after dose adjustment that tells you how much benefit remains for the patients you actually manage.";
+    return "The direct answer is that I cannot show a proven renal-specific benefit for the moderate renal-impairment patients you manage. The study does not give a renal-specific efficacy readout after dose adjustment that lets you say the benefit still clearly justifies treatment for that subgroup.";
   }
 
   if (/what'?s the threshold for dose adjustment in moderate renal impairment|what'?s the dosing adjustment for moderate renal impairment|threshold for dose adjustment in moderate renal impairment|actual renal impairment threshold that triggers a dose adjustment|how do you define the renal impairment threshold that triggers a dose adjustment|renal impairment threshold that triggers a dose adjustment/.test(lowerConcern)) {
@@ -500,19 +630,22 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     if (repTurns >= 4) {
       return "You're right to hold on the moderate renal subgroup. We still do not have renal-specific subgroup numbers for the patients you are focused on, so I cannot tell you this is proven for that subgroup yet, and the responsible position today is not to over-apply the broader dataset to your renal patients.";
     }
-    return "You're right to ask for the subgroup data directly. We do not have a renal-specific subgroup readout with numbers strong enough for the moderate renal-impairment patients you are talking about, so I cannot tell you this is established for that subgroup today. The next credible step would have to be a dedicated renal subgroup analysis or follow-up cohort, because until that exists the evidence still does not clear the bar for your patient population.";
+    return "You're right to ask for the subgroup data directly. We do not have a renal-specific subgroup readout with numbers strong enough for the moderate renal-impairment patients you are talking about, so I would not change treatment for that subgroup today. The next credible step would have to be a dedicated renal subgroup analysis or follow-up cohort, and until that exists I would not present the current dataset as decision-level evidence for your renal patients.";
   }
 
   if (/exacerbations in severe asthmatics|severe asthmatics|severe asthma subgroup|severe asthma data|exacerbation data/.test(lowerConcern)) {
     return "You're right to ask for the severe-asthma outcome data directly. We do not have a subgroup analysis clean enough to tell you how much exacerbation reduction holds in the severe asthmatics driving your decision, so I cannot present that as established today. The next credible step would have to be a dedicated subgroup analysis or follow-up dataset that isolates those patients and reports the exacerbation outcome cleanly.";
   }
 
-  if (/that subgroup is exactly who i'm worried about|that subgroup is still my concern|that subgroup analysis is exactly what i need to see|that subgroup analysis is still my priority|that subgroup analysis is still missing|that subgroup analysis is crucial|still waiting on that subgroup analysis|still waiting for that subgroup analysis|what's the data on those subgroups|what is the data on those subgroups|data on those subgroups|i need subgroup data to move forward|still no subgroup data|subgroup data i need|still need to see more robust subgroup analysis|robust subgroup analysis|more detailed breakdown of the patient subsets|detailed breakdown of the patient subsets|more detailed breakdown of the patient populations|detailed breakdown of the patient populations|specific insights i need|i'm still missing the specific insights i need|i need that subgroup analysis to make a decision|i still need that subgroup analysis|i still need that subgroup analysis to make a decision|that still doesn't give me the subgroup analysis i need|still no subgroup analysis for my patients|still unclear on renal subgroup benefits|still waiting for subgroup data on moderate renal impairment/.test(lowerConcern)) {
-    if (/i need subgroup data to move forward|still no subgroup data|subgroup data i need|specific insights i need|i'm still missing the specific insights i need|particular population i see in my practice|i need that subgroup analysis to make a decision|i still need that subgroup analysis|i still need that subgroup analysis to make a decision|that still doesn't give me the subgroup analysis i need|still no subgroup analysis for my patients|still waiting for that subgroup analysis|still unclear on renal subgroup benefits|still waiting for subgroup data on moderate renal impairment/.test(lowerConcern)) {
-      if (/specific insights i need|i'm still missing the specific insights i need|particular population i see in my practice/.test(lowerConcern)) {
+  if (/that subgroup is exactly who i'm worried about|that subgroup is still my concern|that subgroup analysis is exactly what i need to see|that subgroup analysis is still my priority|that subgroup analysis is still missing|that subgroup analysis is crucial|that subgroup analysis is what i need to see, nothing else|that subgroup analysis is what i need to see|that subgroup analysis is what i need to change practice|that subgroup analysis is the only way i'?ll consider changing treatment for my renal patients|show me that subgroup analysis now|show me the renal subgroup data now|still waiting on that subgroup analysis|still waiting for that subgroup analysis|what's the data on those subgroups|what is the data on those subgroups|data on those subgroups|i need subgroup data to move forward|still no subgroup data|subgroup data i need|still need to see more robust subgroup analysis|robust subgroup analysis|more detailed breakdown of the patient subsets|detailed breakdown of the patient subsets|more detailed breakdown of the patient populations|detailed breakdown of the patient populations|more detailed breakdown of the patient population|detailed breakdown of the patient population|patient population details|specific insights i need|i'm still missing the specific insights i need|i need that subgroup analysis to make a decision|i still need that subgroup analysis|i still need that subgroup analysis to make a decision|that still doesn't give me the subgroup analysis i need|still no subgroup analysis for my patients|still unclear on renal subgroup benefits|still waiting for subgroup data on moderate renal impairment/.test(lowerConcern)) {
+    if (/that subgroup analysis is exactly what i need to see|that subgroup analysis is still my priority|that subgroup analysis is crucial|that subgroup analysis is what i need to see, nothing else|that subgroup analysis is what i need to see|that subgroup analysis is what i need to change practice|that subgroup analysis is the only way i'?ll consider changing treatment for my renal patients|show me that subgroup analysis now|show me the renal subgroup data now/.test(lowerConcern)) {
+      return "Then the plan has to stay on that subgroup analysis, not on broader claims. The next credible move is a dedicated renal subgroup analysis with stratified efficacy, renal-safety, and retained-benefit endpoints in the moderate renal-impairment patients you actually treat, because that is the readout you are telling me you would need before changing practice.";
+    }
+    if (/i need subgroup data to move forward|still no subgroup data|subgroup data i need|specific insights i need|specific data i need|i'm still missing the specific insights i need|particular population i see in my practice|meaningful subgroup analysis|i need that subgroup analysis to make a decision|i still need that subgroup analysis|i still need that subgroup analysis to make a decision|that still doesn't give me the subgroup analysis i need|still no subgroup analysis for my patients|still waiting for that subgroup analysis|still unclear on renal subgroup benefits|still waiting for subgroup data on moderate renal impairment|more detailed breakdown of the patient population|detailed breakdown of the patient population|patient population details/.test(lowerConcern)) {
+      if (/specific insights i need|specific data i need|i'm still missing the specific insights i need|particular population i see in my practice|meaningful subgroup analysis|more detailed breakdown of the patient population|detailed breakdown of the patient population|patient population details/.test(lowerConcern)) {
         return "The specific insight still missing for your population is a renal-specific subgroup readout showing whether the dose-adjusted patients with moderate renal impairment keep enough benefit and acceptable renal safety to justify treatment. Until that subgroup readout exists, I cannot tell you the evidence applies cleanly to the population you actually manage.";
       }
-      return "You're right not to move forward without that subgroup readout. The honest answer is that you should not move forward for the moderate renal-impairment subgroup until that renal-specific subgroup analysis exists, because without it I cannot tell you the current dataset is strong enough to support a treatment change for those patients.";
+      return "You're right not to move forward without that subgroup readout. The concrete plan has to be a dedicated renal subgroup analysis with stratified efficacy, renal-safety, and retained-benefit endpoints in the moderate renal-impairment patients you actually treat, and until that readout exists I would not ask you to treat that subgroup as settled. If that is the bar, I would keep the conversation on getting that analysis rather than pretending the answer is already there.";
     }
     return "You're right that the subgroup analysis is still the open issue. We do not have a renal-specific subgroup analysis with stratified efficacy and safety for the moderate renal-impairment patients you are focused on, so until that readout exists I cannot tell you this is established for the patients driving your decision.";
   }
@@ -528,40 +661,64 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     return "The closest thing we have is a broader subgroup or pooled dataset, but not a renal-specific moderate impairment analysis with stratified efficacy and safety. That is exactly why the evidence still does not answer the renal question cleanly enough for the patients you are describing.";
   }
 
-  if (/what'?s the plan to address it|what'?s the plan to get that subgroup data|plan to get that subgroup data|what'?s the plan to get that subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that renal subgroup analysis|what'?s the plan to get that subgroup analysis to me|what'?s the plan to get that subgroup analysis done within the next quarter|plan to get that subgroup analysis|plan for getting that subgroup analysis|plan to get that renal subgroup analysis|plan for getting that renal subgroup analysis|plan to get that subgroup analysis to me|plan to get that subgroup analysis done within the next quarter|what'?s the plan to get renal-specific data for my patients|plan to get renal-specific data for my patients|what'?s the plan to get that renal data|plan to get that renal data|still my concern, what'?s the plan to address it|plan to address the subgroup|still doesn't answer my renal question|still does not answer my renal question/.test(lowerConcern)) {
-    return "You're right that without renal-specific data the decision is still open. The only credible plan is a dedicated renal-impairment subgroup analysis or follow-up cohort that reports stratified efficacy, renal safety, and retained benefit after dose adjustment in the moderate renal-impairment patients you actually manage. Until that analysis exists, I would not treat the current dataset as decision-level evidence for your renal patients.";
+  if (/what'?s the plan to address it|what'?s the plan to get that subgroup data|what'?s the plan to get renal subgroup data|plan to get that subgroup data|plan to get renal subgroup data|what'?s the plan to get that subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that renal subgroup analysis|what'?s the plan to get that subgroup analysis to me|what'?s the plan to get that subgroup analysis done within the next quarter|plan to get that subgroup analysis|plan for getting that subgroup analysis|plan to get that renal subgroup analysis|plan for getting that renal subgroup analysis|plan to get that subgroup analysis to me|plan to get that subgroup analysis done within the next quarter|what'?s the plan to get renal-specific data for my patients|plan to get renal-specific data for my patients|what'?s the plan to get that renal data|plan to get that renal data|still my concern, what'?s the plan to address it|plan to address the subgroup|still doesn't answer my renal question|still does not answer my renal question|expedite that analysis|plan to expedite that analysis|what'?s the plan to expedite that analysis/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "You're right that without renal-specific data the decision is still open. The only credible plan is a dedicated renal-impairment subgroup analysis or follow-up cohort that reports stratified efficacy, renal safety, and retained benefit after dose adjustment in the moderate renal-impairment patients you actually manage. The concrete step I can own is bringing you that formal subgroup-analysis plan once it is opened, and until that readout exists I would keep the current treatment decision unchanged for your renal patients.";
+    }
+    return "You're right that without renal-specific data the decision is still open. The only credible plan is a dedicated renal-impairment subgroup analysis or follow-up cohort that reports stratified efficacy, renal safety, and retained benefit after dose adjustment in the moderate renal-impairment patients you actually manage. If I bring you that formal subgroup-analysis plan once it is opened, would that be the right next checkpoint instead of pushing the current dataset today?";
   }
 
-  if (/what'?s the timeline for it|what'?s the timeline for the subgroup analysis|what'?s the timeline for that subgroup analysis|what'?s the timeline for that dedicated renal subgroup analysis|what'?s the earliest i can expect that subgroup analysis|what'?s the earliest i can expect to see that renal subgroup analysis|what'?s the earliest i can expect concrete subgroup results|what'?s the earliest you can get that subgroup analysis started|what'?s the earliest i can expect concrete subgroup data|earliest i can expect that subgroup analysis|i need that subgroup analysis now, not later|need that subgroup analysis now|how soon can i expect that subgroup analysis|when will that subgroup analysis be available|when will those subgroup results be available|when can i anticipate seeing the detailed breakdown|when can i expect subgroup results|when can i expect those subgroup results|when can we expect those renal subgroup results|concrete plans for when we can expect those renal subgroup results|concrete plans for when we can expect subgroup results|you still haven't given me a timeline|i need a timeline for that subgroup analysis now|i need a timeline now|peer-reviewed journal|peer reviewed journal|within the next quarter|how do you intend to address the knowledge gap on subgroup outcomes|knowledge gap on subgroup outcomes/.test(lowerConcern)) {
+  if (/when do i get that renal subgroup analysis to make a decision|when do i get that subgroup analysis to make a decision|i need that subgroup analysis to make a decision now|i need that subgroup analysis to make a decision/.test(lowerConcern)) {
+    return "You do not have a renal subgroup readout you can use for that decision today, and I do not want to pretend otherwise. The responsible answer is not to treat the renal-impaired subgroup as settled until the dedicated renal subgroup analysis is completed and reports stratified efficacy and renal-safety results.";
+  }
+
+  if (/what'?s the timeline for it|what'?s the timeline for the subgroup analysis|what'?s the timeline for that subgroup analysis|what'?s the timeline for that dedicated renal subgroup analysis|what'?s the earliest i can expect that subgroup analysis|what'?s the earliest i can expect to see that renal subgroup analysis|what'?s the earliest i can expect concrete subgroup results|what'?s the earliest you can get that subgroup analysis started|what'?s the earliest i can expect concrete subgroup data|earliest i can expect that subgroup analysis|i need that subgroup analysis now, not later|need that subgroup analysis now|how soon can i expect that subgroup analysis|when will that subgroup analysis be available|when will those subgroup results be available|when can i anticipate seeing the detailed breakdown|when can i expect subgroup results|when can i expect those subgroup results|when can we expect those renal subgroup results|concrete plans for when we can expect those renal subgroup results|concrete plans for when we can expect subgroup results|you still haven't given me a timeline|i need a timeline for that subgroup analysis now|i need a timeline now|peer-reviewed journal|peer reviewed journal|within the next quarter|how do you intend to address the knowledge gap on subgroup outcomes|knowledge gap on subgroup outcomes|still waiting to see some meaningful subgroup analysis|still waiting for meaningful subgroup analysis|still waiting for subgroup analysis|still waiting to see subgroup results|earliest i can expect concrete subgroup results|when will the renal subgroup analysis start|credible answer on renal impairment|still waiting for that renal subgroup analysis/.test(lowerConcern)) {
     if (repTurns >= 5) {
-      return "You're right to press on the timetable. I do not have a committed subgroup-results date I can defend today, and I do not want to invent one. The strongest concrete answer I can give is that the next step has to be starting the dedicated renal subgroup analysis now and only revisiting the decision once that stratified efficacy and safety readout is actually available.";
+      return "You're right that without a committed subgroup-results date this still does not change the decision for the moderate renal-impairment subgroup. So for those patients I would keep the treatment decision unchanged today. The concrete next step I can own is bringing you the formal renal subgroup-analysis plan or start notice once it is actually opened, with stratified efficacy, renal-safety, and post-dose-adjustment endpoints, and I would only revisit the decision when that renal-specific readout is in hand.";
     }
-    return "There is not a subgroup-analysis readout you can use today. The earliest credible next step is to start a dedicated renal-impairment subgroup analysis or follow-up cohort with stratified efficacy, renal safety, and retained-benefit endpoints, then revisit the decision once that subgroup readout is actually in hand.";
+    return "There is not a subgroup-analysis readout you can use today. The earliest credible next step is to start a dedicated renal-impairment subgroup analysis or follow-up cohort with stratified efficacy, renal safety, and retained-benefit endpoints. If I bring you that formal plan once it is underway, would that be the right point to revisit the decision rather than stretching the current dataset now?";
+  }
+
+  if (/that doesn'?t help my moderate renal impairment patients|that still doesn'?t address my renal patients'? needs|that still doesn'?t give me a clear answer for my renal patients|still doesn'?t address my renal patients|still does not address my renal patients|still doesn'?t address my renal patients'? needs|still does not address my renal patients'? needs|still doesn'?t address my renal patients needs|still does not address my renal patients needs/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "For your renal patients today, I would not use this study to change treatment. The practical answer is to stay with the current path for the moderate renal-impairment subgroup until there are renal-specific subgroup numbers showing retained benefit and acceptable renal safety after dose adjustment. That is the one evidence condition that would change the decision.";
+    }
+    return "The direct answer for your renal patients is that this study is not decision-level evidence for the moderate renal-impairment subgroup. If you need an answer you can use in practice today, it is not to change treatment for that subgroup until renal-specific subgroup results exist.";
+  }
+
+  if (/that still doesn'?t answer my question about moderate renal impairment|still doesn'?t answer my renal impairment question|still does not answer my renal impairment question|i'?m still unclear how your data accounts? for the potential risks in patients with compromised renal function|still doesn'?t address my renal impairment concerns|still does not address my renal impairment concerns|i remain unconvinced that your data adequately accounts? for the potential risks in patients with compromised renal function/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "Then the decision today is not to treat the moderate renal-impairment subgroup as proven. The reason is simple: you still do not have renal-specific subgroup numbers, a validated threshold where benefit clearly holds after dose adjustment, or renal-focused outcome data strong enough to defend the treatment decision. The only thing that changes that position is a dedicated renal subgroup readout showing retained benefit and acceptable renal safety in that subgroup.";
+    }
+    return "The direct answer is that the dataset still does not clear the renal decision for the moderate renal-impairment patients you actually manage. You do not have the renal-specific subgroup numbers, validated threshold, or renal-focused outcomes you would need to say the benefit still clearly justifies treatment after dose adjustment. If your blocker is narrower than that, do you need proof on retained renal efficacy, renal safety, or both in the same subgroup readout?";
   }
 
   if (/how this applies to my patients with renal issues|accounts? for renal impairment|accounts? for the potential risks in patients with compromised renal function|how does your data account for renal impairment|how does your data account for renal function|moderate renal impairment|moderate kidney function impairment|renal implications.*patient population|renal implications that are most relevant to my patient population/.test(lowerConcern)) {
-    if (/still doesn't tell me how this applies to my patients with renal issues|still doesn't address my patients with renal issues|still doesn't apply to my renal patients|doesn't apply to my renal patients|that still doesn't help my patients with moderate renal impairment|that's not enough for my patients with moderate renal impairment|that's still not enough for my patients|still not enough for my patients with renal issues|doesn't address my moderate renal impairment|moderate renal impairment concern|renal patients|kidney disease are a significant portion of my practice|compromised renal function|my renal patients have unique challenges/.test(lowerConcern)) {
+    if (/still doesn't tell me how this applies to my patients with renal issues|still doesn't address my patients with renal issues|still doesn't address my patients with moderate renal impairment|still doesn't apply to my renal patients|doesn't apply to my renal patients|that still doesn't help my patients with moderate renal impairment|that doesn't help my moderate renal impairment patients|that's not enough for my patients with moderate renal impairment|that's still not enough for my patients|still not enough for my patients with renal issues|doesn't address my moderate renal impairment|moderate renal impairment concern|renal patients|kidney disease are a significant portion of my practice|compromised renal function|my renal patients have unique challenges/.test(lowerConcern)) {
       if (repTurns >= 4) {
-        return "You're right that the renal question is still unresolved for your patients. At this point the defensible clinical position is that the renal-impaired subgroup is still not proven well enough to treat as if the question were settled. Until the study shows renal-specific subgroup numbers, threshold data, or real-world renal outcomes after dose adjustment, the evidence still does not support treating that subgroup as clearly de-risked.";
+        return "For the moderate renal-impairment patients you actually manage, the unresolved problem is that the current dataset still does not show renal-specific subgroup numbers, a validated post-dose-adjustment threshold, or real-world renal outcomes strong enough to justify changing treatment. Until those data exist, the decision stays unchanged for that subgroup.";
       }
       if (repTurns >= 3) {
-        return "You're right that the remaining gap is not the general rationale. It is the missing subgroup readout in the moderate renal-impairment patients you actually treat, and until that subgroup is isolated, the data still does not apply cleanly enough to your renal patients.";
+        return "For your renal patients today, the missing piece is still a subgroup readout in the moderate renal-impairment patients you actually treat showing retained benefit, acceptable renal safety, and a usable threshold after dose adjustment. Until that exists, I would not treat this as decision-level evidence for that subgroup.";
       }
-      return "You're right to ask how this applies to your actual renal patients. The applicability gap is that the study still does not isolate the moderate renal-impairment patients you actually treat, so it leaves open whether the benefit still justifies treatment once dosing is adjusted for that subgroup.";
+      return "The applicability gap is that the study still does not isolate the moderate renal-impairment patients you actually treat, so it leaves open whether benefit still justifies treatment once dosing is adjusted for that subgroup. Until a renal-specific subgroup readout closes that gap, I would not treat this as decision-level evidence for those patients.";
     }
-    if (/that still doesn't give me the renal data i need|still no renal data/.test(lowerConcern)) {
-      return "You're right that the missing renal dataset is the blocker now. Without renal-specific subgroup numbers or real-world renal outcomes after dose adjustment, I cannot tell you this is decision-level evidence for the patients you actually manage. The only credible next step is the dedicated renal subgroup analysis.";
+    if (/that still doesn't give me the renal data i need|still no renal data|still no renal data for my patients|still no answer on renal impairment subgroup/.test(lowerConcern)) {
+      if (repTurns >= 4) {
+        return "There is still no renal dataset strong enough to justify changing treatment for those patients today. The only thing that changes that decision is renal-specific subgroup numbers or a renal-focused real-world outcomes set after dose adjustment, and until that exists I would keep the current treatment decision where it is.";
+      }
+      return "The missing renal dataset is the blocker now. Without renal-specific subgroup numbers or real-world renal outcomes after dose adjustment, I cannot tell you this is decision-level evidence for the patients you actually manage. The only credible next step is the dedicated renal subgroup analysis.";
     }
     if (/still no renal data, so i'm not convinced|still no clear renal data, so i'm not convinced|i need concrete subgroup results, not promises|i remain skeptical without seeing any outcomes related to kidney function/.test(lowerConcern)) {
-      return "You're right to hold the line there. Without renal-specific subgroup numbers, threshold data, or outcomes tied to kidney function after dose adjustment, the defensible clinical position is still not to treat the renal-impaired subgroup as proven enough to change practice.";
+      return "You're right to hold the line there. Without renal-specific subgroup numbers, threshold data, or outcomes tied to kidney function after dose adjustment, I would not change treatment for the renal-impaired subgroup today, because the evidence still is not strong enough to support that decision.";
     }
     if (repTurns >= 4) {
-      return "You're right that the missing renal dataset is the blocker now. We still do not have the renal-specific numbers or real-world renal readout you would need for the moderate renal-impairment patients you actually manage, which is why the evidence still does not clear your bar.";
+      return "The missing renal dataset is still the blocker. We do not have the renal-specific numbers or real-world renal readout you would need for the moderate renal-impairment patients you actually manage, so I would not change treatment for that subgroup today.";
     }
     if (repTurns >= 3) {
-      return "You're right that the missing threshold and subgroup readout are the real blockers now. We still do not have a validated renal threshold or subgroup readout that tells you where the benefit clearly holds up after dose adjustment in moderate renal impairment, which is why the evidence still feels incomplete for your patients.";
+      return "The missing threshold and subgroup readout are the real blockers now. We still do not have a validated renal threshold or subgroup readout that tells you where the benefit clearly holds up after dose adjustment in moderate renal impairment, which is why the evidence still feels incomplete for your patients.";
     }
-    return "You're right that it still does not apply cleanly enough to your renal-impaired patients, because the study does not prove how much benefit remains once dosing is adjusted for the people you actually treat.";
+    return "It still does not apply cleanly enough to your renal-impaired patients, because the study does not prove how much benefit remains once dosing is adjusted for the people you actually treat.";
   }
 
   if (/what specific data do you have that changes my current approach|what specific data justifies deviating from current guidelines|what specific data justifies deviating from the established treatment guidelines|what specific data do you have to change my practice|what specific evidence do you have that changes my current practice/.test(lowerConcern)) {
@@ -575,32 +732,57 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     return "We do not have a clean real-world renal dataset that tells you how the renal-impaired patient performs after dose adjustment in practice. That missing renal-specific readout is still the reason the evidence does not clear your decision bar.";
   }
 
-  if (/specific egfr threshold|egfr threshold|gfr threshold|threshold where dose reduction still justifies treatment|what'?s the e?gfr threshold|what'?s the gfr threshold|exact threshold for switching treatments|what'?s the actual renal impairment threshold where this still works|at what level of kidney function does the efficacy.*drop off|what'?s the exact gfr threshold where efficacy drops off|where efficacy drops off/.test(lowerConcern)) {
-    return "That threshold is exactly the problem: the study supports dose reduction in moderate renal impairment, but it does not give a clean eGFR cutoff where you can say the lower dose still preserves enough benefit to justify treatment for every patient.";
+  if (/specific egfr threshold|egfr threshold|gfr threshold|threshold where dose reduction still justifies treatment|what'?s the e?gfr threshold|what'?s the gfr threshold|minimum egfr where you still see a benefit|lowest egfr where you(?:'ve)? (?:actually )?seen preserved efficacy|lowest egfr where efficacy is still preserved|at what threshold of renal function do the benefits.*diminish|at what point does the renal impairment become a limiting factor|exact threshold for switching treatments|what'?s the actual renal impairment threshold where this still works|what'?s the renal threshold where benefit holds up after dose adjustment|what'?s the exact threshold for renal impairment where the benefit still holds|what'?s the exact renal threshold|what'?s the renal dose adjustment threshold|what'?s the dose adjustment threshold for renal impairment|what is the dose adjustment threshold for renal impairment|what'?s the actual dose adjustment threshold for moderate renal impairment|what'?s the actual threshold for dose reduction in renal impairment|what is the actual threshold for dose reduction in renal impairment|what'?s the actual dose reduction threshold|what is the actual dose reduction threshold|what'?s the actual dose reduction threshold for renal impairment|what is the actual dose reduction threshold for renal impairment|exact dose adjustment threshold for moderate renal impairment|exact renal dose adjustment threshold|specific renal dose adjustment criteria|renal dose adjustment criteria|renal safety threshold|renal safety threshold for dose adjustment in moderate impairment|renal safety threshold for dose adjustment in my patients|renal safety threshold after dose adjustment|specific renal safety threshold for dose adjustment|renal safety threshold, exactly|actual number for renal safety threshold|actual threshold number for renal safety|actual threshold number|exact threshold for dose adjustment in renal impairment|what'?s the exact threshold\??|what is the exact threshold\??|at what level of kidney function does the efficacy.*drop off|at what level of renal impairment does the treatment'?s efficacy start to drop off|what'?s the exact gfr threshold where efficacy drops off|where efficacy drops off/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "There is no validated renal safety threshold in this dataset that lets me defend changing treatment for the moderate renal-impairment subgroup today. So until a renal-specific readout shows where renal safety remains acceptable and benefit still holds after dose adjustment, the treatment decision stays unchanged for those patients.";
+    }
+    return "That threshold is exactly the problem: the study supports dose reduction in moderate renal impairment, but it does not give a validated renal safety threshold where you can say the lower dose still preserves enough benefit with acceptable safety to justify treatment for every patient.";
   }
 
   if (/what specific comorbidities did the study account for|what comorbidities did this study account for|what comorbidities were included|what comorbidities were represented/.test(lowerConcern)) {
     return "It reflects the cleaner patients better than the higher-burden patients with layered renal disease, cardiovascular burden, and multi-comorbidity that usually make the treatment choice difficult in practice. That is why the results still feel incomplete for the patients you are thinking about.";
   }
 
+  if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(lowerConcern)) {
+    return "For the higher-complexity renal patients you actually manage, this still is not decision-level evidence. The study population is cleaner than the moderate renal-impairment subgroup driving your decision, so until a renal-specific subgroup readout shows retained benefit, acceptable renal safety, and a usable threshold after dose adjustment, I would keep the current treatment decision unchanged.";
+  }
+
   if (/how the patient population.*reflects the complexity i see in my own practice|reflect the complexity i see in my own practice|how does the study population reflect the complexity i see in practice|generalizable/.test(lowerConcern)) {
-    return "It does not reflect that complexity cleanly enough yet, because the study population still looks closer to the cleaner trial patient than to the renal-burdened, multi-comorbid patient who actually forces the harder treatment decision in practice.";
+    return "It does not reflect that complexity cleanly enough yet, because the study population still looks closer to the cleaner trial patient than to the renal-burdened, multi-comorbid patient who actually forces the harder treatment decision in practice. So for that higher-complexity renal subgroup, I would keep the current treatment decision unchanged until a subgroup readout shows retained benefit, acceptable renal safety, and a usable threshold after dose adjustment.";
   }
 
   if (/what('?s| is) the specific subgroup|what specific subgroup|what subgroup data|specific subgroup data|which subgroup|what specific patient subgroup|what subgroup does this data actually apply to|what subgroup does this data apply to/.test(lowerConcern)) {
     return "The subgroup that would matter is the patient who still is not controlled on the standard path and whose renal burden, comorbidity load, or treatment complexity makes you question whether the usual evidence still applies cleanly. If the data does not isolate that subgroup, it still does not change treatment choice.";
   }
 
-  if (/actual efficacy in renal-impaired patients|efficacy in renal-impaired patients|how does that dosing adjustment impact efficacy|what actual efficacy/.test(lowerConcern)) {
-    if (repTurns >= 4) {
-      return "I cannot give you a renal-specific efficacy claim after dose adjustment that would justify changing practice today. The study does not provide a clean enough renal readout for that, so the honest position is that the efficacy question in those patients is still open.";
-    }
-    return "That is still part of the evidence gap: the study does not give a clean renal-specific efficacy readout after dose adjustment that is strong enough to tell you exactly how much benefit remains in those patients.";
+  if (/what'?s the clinical implication of that threshold for my patients|clinical implication of that threshold|what does that threshold mean for my patients|what does that threshold mean in practice/.test(lowerConcern)) {
+    return "The clinical implication is that without a validated renal threshold, you do not have a defensible point where you can say the dose-adjusted regimen still justifies treatment for the higher-risk renal subgroup. So in practice the treatment decision stays unchanged for those patients until a renal-specific readout shows where benefit still holds with acceptable safety.";
   }
 
-  if (/how does that subgroup analysis account for renal function|how does renal function impact treatment in your study|what'?s the actual impact on my patients'? renal function|actual impact on my patients'? renal function|renal dosing adjustment|what'?s the dosing adjustment for renal impairment|actual dose adjustment for renal impairment|what'?s the actual dose adjustment for moderate renal impairment|what is the actual dose adjustment for moderate renal impairment|actual dose adjustment for moderate renal impairment/.test(lowerConcern)) {
+  if (/what'?s the actual renal safety after dose adjustment|actual renal safety after dose adjustment|real-world renal safety data after dose adjustment|what'?s the real-world renal safety data after dose adjustment|actual renal safety data after dose adjustment|renal safety data after dose adjustment/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "I cannot show renal-specific safety after dose adjustment strong enough to justify changing treatment for the moderate renal-impairment subgroup today. So until a subgroup readout shows acceptable renal safety after dose adjustment in the same patients where efficacy still holds, I would keep the treatment decision unchanged for that population.";
+    }
+    return "The direct answer is that we do not have renal-specific safety data after dose adjustment strong enough to change treatment for the moderate renal-impairment subgroup today. Until a subgroup readout shows acceptable renal safety after dose adjustment in the same patients where efficacy still holds, I would keep the current decision in place.";
+  }
+
+  if (/actual efficacy in renal-impaired patients|efficacy in renal-impaired patients|renal-specific efficacy after dose adjustment|renal specific efficacy after dose adjustment|what'?s the actual efficacy after dose adjustment for moderate renal impairment|what'?s the actual renal efficacy after dose adjustment|what'?s the actual renal efficacy after dose adjustment, not just the threshold|how does that dosing adjustment impact efficacy|what actual efficacy/.test(lowerConcern)) {
+    if (repTurns >= 4) {
+      return "I cannot show renal-specific efficacy after dose adjustment strong enough to justify changing treatment for the moderate renal-impairment subgroup today. So until a subgroup readout shows retained efficacy after dose adjustment in the same patients where renal safety remains acceptable, I would keep the treatment decision unchanged for that population.";
+    }
+    return "The direct answer is that we do not have renal-specific efficacy after dose adjustment strong enough to change treatment for the moderate renal-impairment subgroup today. Until a subgroup readout shows retained efficacy after dose adjustment in the same patients where renal safety remains acceptable, I would keep the current decision in place.";
+  }
+
+  if (/what'?s the actual benefit after dose adjustment for my moderate renal impairment patients|actual benefit after dose adjustment for my moderate renal impairment patients|actual benefit after dose adjustment for my renal patients|actual benefit after dose adjustment/.test(lowerConcern)) {
+    return "The direct answer is that we do not have renal-specific benefit data after dose adjustment strong enough to change treatment for the moderate renal-impairment subgroup today. Until a subgroup readout shows retained benefit after dose adjustment in the same patients where renal safety remains acceptable, I would keep the current decision in place.";
+  }
+
+  if (/how does that subgroup analysis account for renal function|how does renal function impact treatment in your study|what'?s the actual impact on my patients'? renal function|actual impact on my patients'? renal function|renal dosing adjustment|what'?s the dosing adjustment for renal impairment|what'?s the dose adjustment for renal impairment|actual dose adjustment for renal impairment|what'?s the actual dose reduction for renal impairment|what'?s the exact dose reduction|what'?s the exact dose reduction for renal impairment|what'?s the exact dose for moderate renal impairment|what'?s the actual dose adjustment for moderate renal impairment|what is the actual dose adjustment for moderate renal impairment|actual dose adjustment for moderate renal impairment/.test(lowerConcern) && !/what'?s the renal threshold where benefit holds up after dose adjustment|what'?s the exact threshold for renal impairment where the benefit still holds|what'?s the exact renal threshold/.test(lowerConcern)) {
     if (/what'?s the actual dose adjustment for moderate renal impairment|what is the actual dose adjustment for moderate renal impairment|actual dose adjustment for moderate renal impairment/.test(lowerConcern)) {
       return "The dose adjustment is to reduce the starting dose by 50% in moderate renal impairment, but the unresolved issue is whether that reduced dose still preserves enough benefit to justify treatment for the renal-impaired patient you actually see.";
+    }
+    if (/dose adjustment for renal impairment|actual dose reduction for renal impairment|exact dose reduction|exact dose reduction for renal impairment|exact dose for moderate renal impairment/.test(lowerConcern)) {
+      return "For moderate renal impairment, the starting dose is reduced by 50%. The unresolved question is whether that reduced dose still preserves enough benefit to justify treatment for the renal-impaired patients driving your decision.";
     }
     if (repTurns >= 4) {
       return "The actual renal impact is still not resolved cleanly enough for me to tell you the lower dose preserves enough benefit in the moderate renal-impairment patient. That is why I would not present the renal-adjusted regimen as a settled practice answer yet.";
@@ -612,7 +794,7 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
     return "You're asking whether the dose reduction still leaves enough benefit to justify treatment in the renal-impaired patient you actually see. If the lower dose protects tolerability but weakens control too much, it does not change the decision in your favor.";
   }
 
-  if (/what specific patient outcome improvement|what specific outcome improvement|tangible benefit|patient outcomes compared to what i'm currently using|what'?s the exact threshold that changes treatment|what'?s the exact egfr threshold for that subgroup|renal threshold that changes treatment|what'?s the exact renal threshold where i need to switch treatment|what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|what'?s the exact threshold that changes my treatment decision|at what specific point does the data suggest i should switch|dose adjustment for renal impairment/.test(lowerConcern)) {
+  if (/what specific patient outcome improvement|what specific outcome improvement|tangible benefit|patient outcomes compared to what i'm currently using|what'?s the exact threshold that changes treatment|what'?s the exact egfr threshold for that subgroup|renal threshold that changes treatment|what'?s the exact renal threshold where i need to switch treatment|what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|what'?s the actual renal threshold where the benefit holds up|what'?s the actual renal threshold where benefit holds up|actual renal threshold where the benefit holds up|actual renal threshold where benefit holds up|what'?s the exact threshold that changes my treatment decision|at what specific point does the data suggest i should switch|at what level of renal impairment does the treatment'?s efficacy start to drop off|dose adjustment for renal impairment/.test(lowerConcern)) {
     if (repTurns >= 3) {
       return "There is not a validated renal threshold or outcome cutoff in this dataset that tells you exactly when the benefit still justifies treatment in the higher-risk renal patient. That is the unanswered piece blocking a real treatment decision.";
     }
@@ -620,16 +802,32 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "renal impairment") {
+    const renalConcern = normalizeForMatch(activeConcernText);
+    if (/doesn'?t help me with the renal impairment subgroup|doesn'?t address my renal impairment subgroup concern|doesn'?t address renal impairment in my patients|renal function issues i see in my patient population|renal function issues i commonly see in my patient population/.test(renalConcern)) {
+      if (repTurns >= 4) {
+        return "For the renal-impairment subgroup in your practice, the decision today is still not to change treatment on this dataset. What would change that is a renal-specific subgroup readout showing retained benefit, acceptable renal safety, and a usable post-dose-adjustment threshold in the patients you actually manage.";
+      }
+      return "For the renal-impairment subgroup you are describing, I still cannot show practice-usable evidence that the adjusted dose preserves enough benefit and safety to justify changing treatment. So for that subgroup today, I would keep the current treatment decision where it is, and the only evidence that would change that is a renal-specific subgroup readout with retained efficacy, acceptable renal safety, and a usable threshold after dose adjustment.";
+    }
+    if (/doesn'?t tell me what i need for my moderate renal impairment patients|still doesn'?t address my renal concerns|still does not address my renal concerns|benefits outweigh the potential renal risks/.test(renalConcern)) {
+      return "For your moderate renal-impairment patients, I still cannot show enough renal-specific evidence to justify changing treatment today. The missing evidence is a subgroup readout showing that efficacy still holds after dose adjustment, renal risk stays acceptable, and the same patients still have a usable threshold where benefit clearly outweighs risk.";
+    }
+    if (/what subgroup data do you have for dose adjustment in renal impairment|renal-specific subgroup numbers|renal-specific subgroup data|subgroup data.*renal impairment/.test(renalConcern)) {
+      return "We do not have subgroup data that tells you, after dose adjustment, which moderate renal-impairment patients still keep enough benefit and safety to justify treatment. Until that renal-specific subgroup dataset exists, I would not ask you to apply the broader study to that subgroup.";
+    }
+    if (/what'?s the actual renal benefit in my patients with moderate impairment|renal benefit after dose adjustment|how do you expect the dosing strategy to mitigate renal risks/.test(renalConcern)) {
+      return "The honest answer is that I cannot show a renal-specific benefit after dose adjustment strong enough to change treatment for those patients today. The study supports adjusting dose, but it does not prove that the adjusted regimen preserves enough benefit while adequately addressing renal risk in the subgroup you are treating.";
+    }
     if (repTurns >= 5) {
-      return "You're right to keep pressing on the missing renal evidence. At this point the responsible clinical position is not to claim decision-level renal evidence that the dataset does not actually provide. Until there are renal-specific subgroup numbers, threshold data, or real-world outcomes after dose adjustment, I would not represent the moderate renal-impairment subgroup as clearly cleared for treatment change.";
+      return "For the moderate renal-impairment subgroup, I would not ask you to change treatment on this dataset today. The only next conversation worth having is when there are renal-specific subgroup numbers showing retained benefit, acceptable renal safety, and a usable threshold after dose adjustment; until then I should not present this as decision-level evidence for your renal patients.";
     }
     if (repTurns >= 4) {
-      return "At this point the clinically defensible position is that the renal-impaired subgroup is still not proven well enough to treat as if the question were closed. Without renal-specific subgroup numbers, threshold data, or real-world outcomes after dose adjustment, the evidence still does not clear that subgroup for practice.";
+      return "The practical answer for your renal patients is not to change treatment based on this study today. We still do not have renal-specific subgroup numbers, a validated post-dose-adjustment threshold, or renal-focused outcomes strong enough to defend a different decision for the moderate renal-impairment subgroup.";
     }
     if (repTurns >= 3) {
-      return "The real renal gap now is that you still do not have a subgroup readout or threshold that tells you where the benefit clearly holds up after dose adjustment in the patient with moderate renal impairment.";
+      return "The missing piece for the moderate renal-impairment subgroup is a renal-specific readout showing where benefit still holds after dose adjustment and where it does not. Without that subgroup readout or threshold, I cannot tell you this study changes care for the renal patients you are focused on.";
     }
-    return "It still does not tell you clearly enough whether the renal-impaired patient keeps enough benefit after dose adjustment to justify treatment in practice. Until that is clearer, the evidence still feels incomplete for the patients you actually worry about.";
+    return "For the renal-impaired patient you are asking about, the study still does not tell you clearly enough whether benefit remains strong enough after dose adjustment to justify treatment in practice. That is why I cannot present it as settled for that subgroup.";
   }
 
   if (issueLabel === "guideline fit") {
@@ -649,6 +847,15 @@ function buildDeterministicEvidenceFitReply({ scenario, turns }) {
   }
 
   if (issueLabel === "patient-fit gap") {
+    if (/renal|kidney|moderate renal impairment|egfr|gfr|dose adjustment|dose reduction/.test(activeConcernText.toLowerCase())) {
+      if (/plan|get that subgroup|subgroup readout|subgroup data|timeline|earliest|when can/i.test(activeConcernText)) {
+        return "For the moderate renal-impairment subgroup, the next credible move is not broader framing but a dedicated subgroup analysis with stratified efficacy, renal-safety, and post-dose-adjustment endpoints. Until that paired readout is formally underway and available, I would keep the treatment decision unchanged for those patients.";
+      }
+      if (repTurns >= 4) {
+        return "For the moderate renal-impairment patients driving your decision, this still is not decision-level evidence. The study does not isolate that subgroup cleanly enough to show retained benefit, acceptable renal safety, and a usable threshold after dose adjustment, so I would keep the current treatment decision unchanged.";
+      }
+      return "For the renal-impaired patients you actually manage, the problem is still patient fit. The study population does not isolate that subgroup cleanly enough to show whether benefit still holds after dose adjustment with acceptable renal safety, so I would not treat this as decision-level evidence for those patients.";
+    }
     if (/own patient population|my patient population|not just some study/.test(activeConcernText.toLowerCase())) {
       return "You're saying the study still doesn't reflect the patients who force you off the usual guideline path. The problem is still patient fit, not lack of interest in the data.";
     }
@@ -681,8 +888,25 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
     return "The proof point has to be concrete from the start: a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions. If the data cannot clear that bar, it still does not change treatment choice.";
   }
 
-  if (/what'?s the one metric that proves this changes my practice|what single data point would change that|what'?s the actual reduction for my high-risk patients|specific, compelling metric|specific compelling metric/.test(activeConcernText)) {
+  if (/what'?s the one metric that proves this changes my practice|what single data point would change that|what'?s the actual reduction for my high-risk patients|what'?s the actual reduction i'?d see in my patients|what'?s the actual reduction i'?d see in my high-risk patients|specific, compelling metric|specific compelling metric|pinpoint one key metric|pinpoint the one key metric/.test(activeConcernText)) {
+    if (repTurns >= 6) {
+      return "For the high-risk patients you would actually treat differently, the practice-changing bar is a subgroup analysis showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up. That is the one result that would justify changing treatment instead of just acknowledging that the signal looks interesting.";
+    }
+    if (repTurns >= 4) {
+      return "The single metric would have to be a subgroup analysis showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the high-risk patients still landing in the hospital on the current path. For those patients, that is the point where you would expect fewer admissions and a real reason to change treatment.";
+    }
     return "The single metric would have to be a subgroup analysis showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the high-risk patients still landing in the hospital on the current path. If the analysis cannot show that, there is still no practice-changing proof point.";
+  }
+
+  if (/what'?s the subgroup analysis showing for my current patients|what'?s the concrete proof point for my high-risk patients|what'?s the subgroup analysis showing for my high-risk patients|what'?s the actual reduction in hospitalizations for my high-risk patients/.test(activeConcernText)) {
+    if (repTurns >= 5) {
+      return "For the current high-risk patients you would actually treat differently, the subgroup analysis would need to show roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up. That is the concrete proof point because it is the level where you would expect fewer admissions in that exact patient set and a real reason to change treatment.";
+    }
+    return "For your current high-risk patients, the subgroup analysis would have to show a hospitalization or readmission reduction strong enough to change treatment choice in that subgroup, not just a pooled result that sounds directionally positive.";
+  }
+
+  if (/exact number for high-risk patients|precise figure on the high-risk population|pinpoint the specific threshold|what'?s the exact number|specific threshold/.test(activeConcernText)) {
+    return "For the high-risk subgroup, the floor would be about a 15% relative reduction in hospitalizations or readmissions before I would take it seriously, and closer to 20% is where it starts to become compelling enough to change treatment.";
   }
 
   if (concreteProofAsk) {
@@ -693,13 +917,24 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
       return "The exact metric would have to be a subgroup analysis in the patients still landing in the hospital on the current path showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up. That is the point where the result stops being interesting and starts changing practice. If that threshold is not there, there is no reason to change treatment.";
     }
     if (repTurns >= 3) {
-      return "The proof point has to tighten to one metric: a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions. Anything softer than that is unlikely to change treatment choice. Is that the bar you would use to change practice?";
+      return "The proof point has to tighten to one metric: a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions. Anything softer than that is unlikely to change treatment choice.";
     }
-    return "The concrete proof point would have to be one subgroup analysis in the patients still landing in the hospital on the current path, showing a hospitalization or readmission reduction strong enough to change treatment choice for that subgroup.";
+      return "The concrete proof point would have to be one subgroup analysis in the patients still landing in the hospital on the current path, showing a hospitalization or readmission reduction strong enough to change treatment choice for that subgroup.";
+    }
+
+  if (/actual reduction.*high-risk patients|tangible benefit for my most vulnerable patients|most vulnerable patients|high-risk patients|smallest subgroup where this makes a difference|smallest subgroup/.test(activeConcernText)) {
+    if (repTurns >= 5) {
+      return "For the high-risk subgroup, that practice-changing bar means roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up, because that is the point where you would expect to keep more of those vulnerable patients out of the hospital and actually treat that subgroup differently.";
+    }
+    return "For the high-risk subgroup, the concrete metric would still have to be roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the patients still landing in the hospital on the current path. If the subgroup analysis cannot show that level of benefit in those high-risk patients, there is still no reason to change treatment.";
   }
 
-  if (/actual reduction.*high-risk patients|tangible benefit for my most vulnerable patients|most vulnerable patients|high-risk patients/.test(activeConcernText)) {
-    return "For the high-risk subgroup, the concrete metric would still have to be roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the patients still landing in the hospital on the current path. If the subgroup analysis cannot show that level of benefit in those high-risk patients, there is still no reason to change treatment.";
+  if (/real-world implication|real world implication|real-world impact|real impact on my high-risk patients|real impact on my patients|what does that 15% reduction mean/.test(activeConcernText)) {
+    return "For your high-risk patients, that 15% to 20% reduction would mean fewer hospitalizations or readmissions in the subgroup still failing on the current path, which is the point where the result starts to justify treating those patients differently instead of leaving the current approach in place.";
+  }
+
+  if (/tangible impact on my high-risk population|what specific metric or outcome would convince me|what specific metric or outcome would convince me that|what outcome would convince me to reconsider my current approach/.test(activeConcernText)) {
+    return "The concrete outcome would still have to be fewer hospitalizations or readmissions in the high-risk subgroup still failing on the current path, and the metric that would make that convincing is roughly a 15% to 20% relative reduction over follow-up in that subgroup. That is the level where the result starts to justify reconsidering the current approach.";
   }
 
   if (/right patient|ideal patient|meaning to try it|haven't had one/.test(activeConcernText)) {
@@ -748,9 +983,12 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
       return "Then the one piece has to be the subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction over follow-up in the patients who actually look like the ones you are reviewing. If it cannot show that in your population, it still does not change practice.";
     }
 
-    if (/show me the subgroup and the single data point|what single data point would change that|what single metric changes treatment choice|one metric that would demonstrate a significant enough reduction in complications|significant enough reduction in complications|one key metric|piece of evidence that would drive|what would actually alter our current approach|what specifically would alter our current approach/.test(activeConcernText)) {
+    if (/if you can make the proof point concrete|make the proof point concrete|concrete proof point for my patients|concrete proof point for my high-risk patients|what'?s the subgroup analysis showing for my high-risk patients|what'?s the actual reduction i'?d see in my patients|what'?s the actual reduction i'?d see in my high-risk patients|actual reduction for my high-risk patients|still waiting for concrete proof points|still waiting for that concrete proof point|show me the subgroup and the single data point|what single data point would change that|what single metric changes treatment choice|one metric that would demonstrate a significant enough reduction in complications|significant enough reduction in complications|one key metric|piece of evidence that would drive|what would actually alter our current approach|what specifically would alter our current approach|what'?s the one metric that proves this changes my practice|one metric that proves this changes my practice|specific compelling metric|specific, compelling metric/.test(activeConcernText)) {
+      if (repTurns >= 8) {
+        return "The one piece of evidence that would justify changing treatment is a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up, because that is the point where the result stops being interesting and actually changes practice.";
+      }
       if (repTurns >= 7) {
-        return "The exact metric would be the subgroup analysis showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the patients still failing on the current path, because that is the piece of evidence that would actually justify changing treatment instead of just keeping the discussion alive.";
+        return "The exact metric would be the subgroup analysis showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the patients still failing on the current path, because that is the piece of evidence that would actually justify changing treatment instead of just keeping the discussion alive. If that is not the bar, then I would not call the proof point concrete enough.";
       }
       if (repTurns >= 6) {
         return "Then the subgroup analysis itself has to show roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up in the patients still failing on the current path, because that is the one number that starts to justify treating that subgroup differently in practice. Anything less still sounds interesting without changing treatment choice.";
@@ -762,9 +1000,19 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
         return "The one piece would have to be a subgroup analysis limited to the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up. If it cannot show that, it still does not change practice.";
       }
       if (repTurns >= 2) {
-        return "The single data point would have to look like roughly a 15% to 20% relative reduction in hospitalizations or readmissions in the subgroup still landing in the hospital on the current path, because that is the kind of number that can actually change treatment choice.";
+        return "The single data point would have to look like roughly a 15% to 20% relative reduction in hospitalizations or readmissions in the subgroup still landing in the hospital on the current path, because that is the kind of number that can actually change treatment choice. Is that the level where you would actually treat those patients differently?";
       }
       return "The subgroup would be the patients who are still landing in the hospital or coming back despite the current path, and the single data point would be a hospitalization or readmission reduction large enough that you would actually treat that subgroup differently.";
+    }
+
+    if (/if you can make the proof point concrete, i can stay with|make the proof point concrete|concrete proof point for my patients|concrete proof point for my high-risk patients/.test(activeConcernText)) {
+      if (repTurns >= 5) {
+        return "For your high-risk patients, the concrete proof point is one number inside the subgroup you actually worry about: roughly a 15% to 20% relative reduction in hospitalizations or readmissions over follow-up. If the analysis cannot show that in that subgroup, it still does not justify changing treatment.";
+      }
+      if (repTurns >= 3) {
+        return "For your patients, I mean one subgroup analysis in the high-risk patients still landing in the hospital on the current path, with a hospitalization or readmission reduction large enough to change what you would do next. That is the proof point that would matter.";
+      }
+      return "Concrete here means one subgroup result in the high-risk patients you actually worry about, not a pooled headline. The number has to be strong enough to change treatment choice for those patients.";
     }
 
     if (specificMetricAsk && hospitalFocused) {
@@ -867,7 +1115,7 @@ export async function maybeReviseStrongRepReply({
 
   if (
     /clinical_value|clinical_evaluation/.test(stageText) &&
-    /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome/.test(activeConcernText)
+    /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome|detailed breakdown|patient population details|change practice|specific insights i need|show me the renal subgroup data|that'?s a delay|real-world outcomes/.test(activeConcernText)
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
   }
@@ -961,14 +1209,28 @@ export function maybeEnforceFamilyAnswerReply({
   const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
 
+  if (
+    /commitment_close|adoption_commitment/.test(stageText) &&
+    /if you can make the proof point concrete|make the proof point concrete|concrete proof point for my patients|concrete proof point for my high-risk patients|what'?s the subgroup analysis showing for my high-risk patients|what'?s the actual reduction i'?d see in my patients|what'?s the actual reduction i'?d see in my high-risk patients|actual reduction for my high-risk patients|still waiting for concrete proof points|still waiting for that concrete proof point|most vulnerable patients|hospitalization rates|tangible impact/.test(activeConcernText)
+  ) {
+    return buildDeterministicCommitmentReply({ scenario, turns });
+  }
+
   if (/commitment_close|adoption_commitment/.test(stageText) && CLOSE_PROOF_POINT_PATTERN.test(activeConcernText)) {
     return buildDeterministicCommitmentReply({ scenario, turns });
   }
 
   if (
     /clinical_value|clinical_evaluation/.test(stageText) &&
+    /what'?s the plan to get that dedicated renal subgroup analysis|what'?s the plan to actually get that subgroup analysis done|what'?s the specific plan to get that subgroup analysis done for my patients with moderate renal impairment|when do i get that renal subgroup analysis to make a decision|when do i get that subgroup analysis to make a decision|what'?s the timeline for that dedicated analysis|what'?s the earliest i can expect to see that renal subgroup analysis|still waiting for meaningful subgroup analysis|still waiting to see some meaningful subgroup analysis|that doesn'?t help my patients with moderate renal impairment|still doesn'?t address my renal patients/.test(activeConcernText)
+  ) {
+    return buildDeterministicEvidenceFitReply({ scenario, turns });
+  }
+
+  if (
+    /clinical_value|clinical_evaluation/.test(stageText) &&
     (DIRECT_ANSWER_TRIGGER.test(activeConcernText) ||
-      /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome/.test(activeConcernText))
+      /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome|detailed breakdown|patient population details|change practice|specific insights i need|show me the renal subgroup data|that'?s a delay|real-world outcomes/.test(activeConcernText))
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
   }
@@ -993,13 +1255,25 @@ export function maybeApplyHardFamilyAnswerReply({
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
 
   if (/clinical_value|clinical_evaluation/.test(stageText)) {
+    if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(activeConcernText)) {
+      return buildDeterministicEvidenceFitReply({ scenario, turns });
+    }
+    if (/what'?s the plan to get renal-specific subgroup data|what'?s the plan to get that renal-specific data|what'?s the plan to get renal subgroup data|what'?s the plan to get that renal subgroup data|what'?s the timeline for getting that renal-specific data|what'?s the timeline for renal-specific subgroup data|what'?s the timeline for that renal subgroup analysis/.test(activeConcernText)) {
+      return "The concrete plan is a dedicated renal subgroup analysis or follow-up cohort with stratified efficacy, renal-safety, and dose-adjusted outcome endpoints in the moderate renal-impairment patients driving your decision. I do not have a committed readout date I can defend today, so until that analysis is actually available I would not ask you to change treatment for that subgroup.";
+    }
+    if (/that subgroup analysis is still not scheduled|still no subgroup analysis scheduled|still no renal subgroup analysis scheduled|subgroup analysis is not scheduled|not scheduled, is it|still no subgroup analysis/.test(activeConcernText)) {
+      return "You're right that without that subgroup analysis formally scheduled, there is still no new evidence path you can use to justify changing treatment for the moderate renal-impairment subgroup. So the decision stays unchanged until that renal-specific analysis is actually underway and results are available.";
+    }
     if (/what specific subgroup does this data apply to|what subgroup does this data actually apply to/.test(activeConcernText)) {
       return "The subgroup that matters is the harder-to-treat patient who is still not controlled on the standard path and whose renal burden or comorbidity load makes you question whether the usual evidence still applies cleanly.";
     }
     if (/how this applies to my patients with renal issues|how does your data account for renal impairment|how does your data account for renal function/.test(activeConcernText)) {
       return "It does not apply cleanly enough yet, because the study still leaves unanswered how much benefit remains once you adjust dosing for the renal-impaired patients you actually treat.";
     }
-    if (/real-world renal data|what real-world renal data do you have|what renal data do you have for patients like mine|renal data do you have that's relevant to my patients|what subgroup data do you have|subgroup data for patients with moderate renal impairment|subgroup analysis for moderate renal impairment|moderate renal impairment subgroup analysis|that subgroup analysis is crucial|what'?s the plan for getting that renal subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that subgroup analysis|what'?s the plan to get that subgroup analysis to me|what'?s the plan to get that subgroup analysis done within the next quarter|what'?s the timeline for that renal subgroup analysis|what'?s the timeline for that subgroup analysis|what'?s the earliest i can expect that subgroup analysis|when can i anticipate seeing the detailed breakdown|when can i expect subgroup results|when can i expect those subgroup results|i need that subgroup analysis to make a decision|peer-reviewed journal|peer reviewed journal|actual numbers for my patient population|numbers for my patient population|what numbers do you have for my patient population|what'?s the exact threshold that changes treatment|what'?s the exact egfr threshold for that subgroup|renal threshold that changes treatment|what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|at what specific point does the data suggest i should switch/.test(activeConcernText)) {
+    if (/what'?s the actual efficacy after dose adjustment for moderate renal impairment|what'?s the actual renal efficacy after dose adjustment|actual efficacy after dose adjustment|what'?s the actual renal safety after dose adjustment|actual renal safety after dose adjustment|what'?s the real-world renal safety data after dose adjustment|real-world renal safety data after dose adjustment|what'?s the actual benefit after dose adjustment for my moderate renal impairment patients|actual benefit after dose adjustment/.test(activeConcernText)) {
+      return buildDeterministicEvidenceFitReply({ scenario, turns });
+    }
+    if (/real-world renal data|what real-world renal data do you have|what renal data do you have for patients like mine|renal data do you have that's relevant to my patients|what subgroup data do you have|subgroup data for patients with moderate renal impairment|subgroup analysis for moderate renal impairment|moderate renal impairment subgroup analysis|that subgroup analysis is crucial|what'?s the plan for getting that renal subgroup analysis|what'?s the plan to get that renal subgroup analysis|what'?s the plan for getting that subgroup analysis|what'?s the plan to get that subgroup analysis|what'?s the plan to get that subgroup analysis to me|what'?s the plan to get that subgroup analysis done within the next quarter|what'?s the plan to get renal-specific data|what is the plan to get renal-specific data|plan to get renal-specific data|what'?s the plan to get renal data|what is the plan to get renal data|plan to get renal data|what'?s the plan for getting that renal data|what is the plan for getting that renal data|what'?s the plan for getting renal data now|what is the plan for getting renal data now|what'?s the plan for getting that renal data now|what is the plan for getting that renal data now|what'?s the plan to get that data now|what is the plan to get that data now|what'?s the plan to get that subgroup readout|what is the plan to get that subgroup readout|plan to get that subgroup readout|what'?s the timeline for that renal subgroup analysis|what'?s the timeline for that subgroup analysis|what'?s the earliest i can expect that subgroup analysis|when can i anticipate seeing the detailed breakdown|when can i expect subgroup results|when can i expect those subgroup results|i need that subgroup analysis to make a decision|peer-reviewed journal|peer reviewed journal|actual numbers for my patient population|numbers for my patient population|what numbers do you have for my patient population|what'?s the exact threshold that changes treatment|what'?s the exact egfr threshold for that subgroup|renal threshold that changes treatment|what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|at what specific point does the data suggest i should switch|that doesn'?t help my patients with moderate renal impairment|still doesn'?t address my renal patients|what specific data on renal safety.*give you confidence|specific data on renal safety.*give you confidence/.test(activeConcernText)) {
       return buildDeterministicEvidenceFitReply({ scenario, turns });
     }
     if (/what'?s the actual dose adjustment for a patient with moderate renal impairment|what'?s the exact dose for moderate renal impairment|how does dosing adjust for renal impairment/.test(activeConcernText)) {
@@ -1014,7 +1288,7 @@ export function maybeApplyHardFamilyAnswerReply({
     if (/what specific comorbidities did this study account for|what comorbidities did this study account for, exactly|how the patient population in this study reflects the complexity i see in my own practice|reflects the complexity i see in my own practice/.test(activeConcernText)) {
       return "That is still the weakness in the evidence: it does not cleanly represent the higher-complexity patients with layered renal burden and comorbidities who drive your real treatment decisions, so the study population still feels cleaner than the patients you actually manage.";
     }
-    if (/what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|what'?s the renal threshold that changes treatment|gfr below 30|exact gfr threshold/.test(activeConcernText)) {
+    if (/what'?s the exact renal threshold where i need to switch treatments|what'?s the specific renal threshold that changes my treatment choice|what'?s the renal threshold that changes treatment|gfr below 30|exact gfr threshold|minimum egfr where you still see a benefit|lowest egfr where you(?:'ve)? (?:actually )?seen preserved efficacy|lowest egfr where efficacy is still preserved|at what threshold of renal function do the benefits.*diminish|at what point does the renal impairment become a limiting factor|what'?s the renal dose adjustment threshold|renal safety threshold for dose adjustment in my patients|renal safety threshold after dose adjustment|specific renal safety threshold for dose adjustment|renal safety threshold, exactly|exact threshold for dose adjustment in renal impairment|exact renal dose adjustment threshold|what'?s the exact threshold\??|what is the exact threshold\??/.test(activeConcernText)) {
       return "There is not a validated renal threshold in this dataset that tells you exactly when to switch. That is the gap: the study does not give a clean GFR cutoff where you can say the evidence still supports treatment in the higher-risk renal patient.";
     }
     if (

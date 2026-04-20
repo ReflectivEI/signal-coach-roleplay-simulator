@@ -1,15 +1,59 @@
 import { ALL_SCENARIOS } from "../src/lib/scenarioCatalog.js";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
 import { initializeConversation } from "../src/lib/conversationInit";
 import { generateHcpResponse } from "../src/lib/hcpResponseGenerator";
 import { computeVolatilityEvents } from "../src/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
-import { generateSessionReview } from "../src/lib/sessionReview";
+import { buildDeterministicSessionReview, generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { invokeWorkerText } from "../src/services/workerClient.js";
 import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "../src/lib/qaRepProxy.js";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
+const QA_REVIEW_TIMEOUT_MS = 20000;
+const QA_HCP_TOKEN_CAP = 260;
+const QA_CACHE_PATH = path.resolve(".qa-matrix-cache.json");
+const QA_FINGERPRINT_FILES = [
+  "src/lib/qaRepProxy.js",
+  "src/lib/hcpResponseGenerator.ts",
+  "src/lib/hcpResponseSurface.ts",
+  "src/lib/hcpDialogueDirectives.ts",
+  "src/lib/sessionReview.ts",
+  "scripts/qa-matrix.ts",
+];
+
+async function computeQaFingerprint() {
+  const hash = crypto.createHash("sha256");
+  for (const relPath of QA_FINGERPRINT_FILES) {
+    try {
+      const content = await fs.readFile(path.resolve(relPath), "utf8");
+      hash.update(relPath);
+      hash.update("\n");
+      hash.update(content);
+      hash.update("\n");
+    } catch {
+      hash.update(`${relPath}:missing\n`);
+    }
+  }
+  return hash.digest("hex");
+}
+
+async function readQaCache() {
+  try {
+    const raw = await fs.readFile(QA_CACHE_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+async function writeQaCache(cache) {
+  await fs.writeFile(QA_CACHE_PATH, JSON.stringify(cache, null, 2));
+}
 
 async function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = QA_STEP_TIMEOUT_MS): Promise<T> {
   let timeoutId;
@@ -168,9 +212,15 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
       const rateLimitMatch = message.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+      const cooldownMatch = message.match(/"retryAfterSeconds":\s*(\d+)/i);
+      const coolingDown = /cooling down after rate limit/i.test(message);
       if (attempt < maxRetries - 1) {
         const delay = rateLimitMatch
           ? Math.ceil(Number(rateLimitMatch[1]) * 1000) + 1500
+          : cooldownMatch
+            ? Math.ceil(Number(cooldownMatch[1]) * 1000) + 1500
+            : coolingDown
+              ? 25000
           : Math.pow(2, attempt) * 1000;
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
@@ -191,15 +241,18 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
   let currentVolatilityProfile = "stable";
 
   for (let i = 0; i < maxTurns; i++) {
+    console.log(`[${scenario.title}] Turn ${i + 1}/${maxTurns} — generating rep`);
     const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
     const repTextRaw = await retry(() => withTimeout(invokeWorkerText({
       prompt: repPrompt,
       max_tokens: 180,
       temperature: 0.1,
+      timeout_ms: 15000,
     }), `${scenario.title} rep turn ${i + 1}`));
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
     let repText = repDraft;
     if (personaKey === "strong_rep") {
+      const beforeFamilyRewrite = repText;
       repText = maybeApplyHardFamilyAnswerReply({
         scenario,
         turns,
@@ -210,34 +263,37 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
         turns,
         draft: repText,
       });
-      repText = await retry(() => withTimeout(maybeReviseStrongRepReply({
-        scenario,
-        turns,
-        currentBehaviorState,
-        currentJourneyState,
-        draft: repText,
-      }), `${scenario.title} rep revision ${i + 1}`));
-      repText = await retry(() => withTimeout(maybeConcreteifyStrongRepReply({
-        scenario,
-        turns,
-        currentBehaviorState,
-        currentJourneyState,
-        draft: repText,
-      }), `${scenario.title} rep concrete revision ${i + 1}`));
-      repText = await retry(() => withTimeout(maybeDeRepeatStrongRepReply({
-        scenario,
-        turns,
-        currentBehaviorState,
-        currentJourneyState,
-        draft: repText,
-      }), `${scenario.title} rep dedupe revision ${i + 1}`));
-      repText = await retry(() => withTimeout(maybeTightenSpokenRepReply({
-        scenario,
-        turns,
-        currentBehaviorState,
-        currentJourneyState,
-        draft: repText,
-      }), `${scenario.title} rep spoken-tightening ${i + 1}`));
+      const usedDeterministicFamilyReply = repText !== beforeFamilyRewrite;
+      if (!usedDeterministicFamilyReply) {
+        repText = await retry(() => withTimeout(maybeReviseStrongRepReply({
+          scenario,
+          turns,
+          currentBehaviorState,
+          currentJourneyState,
+          draft: repText,
+        }), `${scenario.title} rep revision ${i + 1}`, 20000));
+        repText = await retry(() => withTimeout(maybeConcreteifyStrongRepReply({
+          scenario,
+          turns,
+          currentBehaviorState,
+          currentJourneyState,
+          draft: repText,
+        }), `${scenario.title} rep concrete revision ${i + 1}`, 20000));
+        repText = await retry(() => withTimeout(maybeDeRepeatStrongRepReply({
+          scenario,
+          turns,
+          currentBehaviorState,
+          currentJourneyState,
+          draft: repText,
+        }), `${scenario.title} rep dedupe revision ${i + 1}`, 20000));
+        repText = await retry(() => withTimeout(maybeTightenSpokenRepReply({
+          scenario,
+          turns,
+          currentBehaviorState,
+          currentJourneyState,
+          draft: repText,
+        }), `${scenario.title} rep spoken-tightening ${i + 1}`, 20000));
+      }
       repText = maybeApplyHardFamilyAnswerReply({
         scenario,
         turns,
@@ -269,6 +325,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       cues: turn.cues || [],
     }));
 
+    console.log(`[${scenario.title}] Turn ${i + 1}/${maxTurns} — generating HCP`);
     const response = await retry(() => withTimeout(generateHcpResponse(
       scenario,
       conversationHistory,
@@ -279,6 +336,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       allSignals,
       i,
       currentVolatilityProfile as any,
+      QA_HCP_TOKEN_CAP,
     ), `${scenario.title} hcp turn ${i + 1}`));
 
     if (response.coachingNudge) {
@@ -321,21 +379,27 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
   const effective = Object.entries(capabilityLevels).filter(([, level]) => level === "effective").map(([id]) => id.replace(/_/g, " "));
 
   let review;
-  try {
-    review = await retry(() => withTimeout(
-      generateSessionReview(scenario, turns, allSignals, stateHistory, volatilityEvents),
-      `${scenario.title} session review`,
-      90000,
-    ));
-  } catch (error) {
+  if (process.env.QA_LLM_REVIEW === "1") {
+    try {
+      console.log(`[${scenario.title}] Generating session review`);
+      review = await retry(() => withTimeout(
+        generateSessionReview(scenario, turns, allSignals, stateHistory, volatilityEvents),
+        `${scenario.title} session review`,
+        QA_REVIEW_TIMEOUT_MS,
+      ));
+    } catch (error) {
+      review = {
+        ...buildDeterministicSessionReview(capabilityLevels, volatilityEvents),
+        qaFallback: true,
+        qaFallbackReason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  } else {
+    console.log(`[${scenario.title}] Generating deterministic session review`);
     review = {
-      capabilityInsights,
-      briefRationale: missed.length > 0
-        ? `Deterministic QA fallback: missed capability signals detected in ${missed.join(", ")}. Effective signals observed in ${effective.join(", ") || "none"}.`
-        : `Deterministic QA fallback: no missed capabilities detected. Effective signals observed in ${effective.join(", ") || "none"}.`,
-      volatilityEvents,
-      qaFallback: true,
-      qaFallbackReason: error instanceof Error ? error.message : String(error),
+      ...buildDeterministicSessionReview(capabilityLevels, volatilityEvents),
+      qaFallback: false,
+      qaFallbackReason: "",
     };
   }
 
@@ -358,6 +422,8 @@ async function main() {
   const personaKey = parsePersonaKey(process.argv[2]);
   const maxTurns = Number(process.argv[3] || 4);
   const results = [];
+  const fingerprint = await computeQaFingerprint();
+  const cache = await readQaCache();
 
   if (scenarios.length === 0) {
     console.error(`No scenarios matched filter: "${process.argv.slice(4).join(" ")}"`);
@@ -367,9 +433,23 @@ async function main() {
   console.log(`Running QA matrix for ${scenarios.length} scenario(s) as ${personaKey} with ${maxTurns} rep turn(s) each...`);
 
   for (const scenario of scenarios) {
+    const cacheKey = `${fingerprint}::${personaKey}::${maxTurns}::${scenario.id || scenario.title}`;
+    const cachedResult = cache[cacheKey];
+    if (cachedResult) {
+      console.log(`Running scenario: ${scenario.title}`);
+      console.log(`CACHE HIT :: ${scenario.title}`);
+      results.push(cachedResult);
+      const failed = Object.entries(cachedResult.assertions).filter(([key, value]) => key.endsWith("Pass") && !value);
+      const summary = failed.length ? `FAIL ${failed.map(([key]) => key).join(", ")}` : "PASS";
+      console.log(`${summary} :: ${scenario.title}`);
+      continue;
+    }
+
     console.log(`Running scenario: ${scenario.title}`);
     const result = await runSession(scenario, personaKey, maxTurns);
     results.push(result);
+    cache[cacheKey] = result;
+    await writeQaCache(cache);
     const failed = Object.entries(result.assertions).filter(([key, value]) => key.endsWith("Pass") && !value);
     const summary = failed.length ? `FAIL ${failed.map(([key]) => key).join(", ")}` : "PASS";
     console.log(`${summary} :: ${scenario.title}`);

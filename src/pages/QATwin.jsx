@@ -4,7 +4,7 @@ import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "@/lib/capabilityEvaluation";
 import { initializeConversation } from "@/lib/conversationInit";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
-import { generateSessionReview } from "@/lib/sessionReview";
+import { buildDeterministicSessionReview, generateSessionReview } from "@/lib/sessionReview";
 import { ArrowLeft, Play, Square, Zap, CheckCircle2, AlertCircle, Download } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -107,6 +107,8 @@ Return ONLY the rep's reply as plain text.`,
 };
 
 const QA_STEP_TIMEOUT_MS = 45000;
+const QA_REVIEW_TIMEOUT_MS = 20000;
+const QA_HCP_TOKEN_CAP = 260;
 
 async function withTimeout(promise, label, timeoutMs = QA_STEP_TIMEOUT_MS) {
   let timeoutId;
@@ -202,7 +204,17 @@ async function retryWithBackoff(fn, maxRetries = 3) {
     } catch (error) {
       lastError = error;
       if (attempt < maxRetries - 1) {
-        const delay = Math.pow(2, attempt) * 1000;
+        const message = error instanceof Error ? error.message : String(error);
+        const rateLimitMatch = message.match(/try again in\s+(\d+(?:\.\d+)?)s/i);
+        const cooldownMatch = message.match(/"retryAfterSeconds":\s*(\d+)/i);
+        const coolingDown = /cooling down after rate limit/i.test(message);
+        const delay = rateLimitMatch
+          ? Math.ceil(Number(rateLimitMatch[1]) * 1000) + 1500
+          : cooldownMatch
+            ? Math.ceil(Number(cooldownMatch[1]) * 1000) + 1500
+            : coolingDown
+              ? 25000
+              : Math.pow(2, attempt) * 1000;
         await new Promise((r) => setTimeout(r, delay));
       }
     }
@@ -238,13 +250,14 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       onProgress(`Turn ${i + 1}/${maxTurns} — generating rep message…`);
       const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
       const repTextRaw = await retryWithBackoff(() => withTimeout(
-        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.1 }),
+        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.1, timeout_ms: 15000 }),
         `${scenario.title} rep turn ${i + 1}`,
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
       let repText = repDraft;
       if (personaKey === "strong_rep") {
+        const beforeFamilyRewrite = repText;
         repText = maybeApplyHardFamilyAnswerReply({
           scenario,
           turns,
@@ -255,46 +268,53 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
           turns,
           draft: repText,
         });
-        repText = await retryWithBackoff(() => withTimeout(
-          maybeReviseStrongRepReply({
-            scenario,
-            turns,
-            currentBehaviorState,
-            currentJourneyState,
-            draft: repText,
-          }),
-          `${scenario.title} rep revision ${i + 1}`,
-        ));
-        repText = await retryWithBackoff(() => withTimeout(
-          maybeConcreteifyStrongRepReply({
-            scenario,
-            turns,
-            currentBehaviorState,
-            currentJourneyState,
-            draft: repText,
-          }),
-          `${scenario.title} rep concrete revision ${i + 1}`,
-        ));
-        repText = await retryWithBackoff(() => withTimeout(
-          maybeDeRepeatStrongRepReply({
-            scenario,
-            turns,
-            currentBehaviorState,
-            currentJourneyState,
-            draft: repText,
-          }),
-          `${scenario.title} rep dedupe revision ${i + 1}`,
-        ));
-        repText = await retryWithBackoff(() => withTimeout(
-          maybeTightenSpokenRepReply({
-            scenario,
-            turns,
-            currentBehaviorState,
-            currentJourneyState,
-            draft: repText,
-          }),
-          `${scenario.title} rep spoken-tightening ${i + 1}`,
-        ));
+        const usedDeterministicFamilyReply = repText !== beforeFamilyRewrite;
+        if (!usedDeterministicFamilyReply) {
+          repText = await retryWithBackoff(() => withTimeout(
+            maybeReviseStrongRepReply({
+              scenario,
+              turns,
+              currentBehaviorState,
+              currentJourneyState,
+              draft: repText,
+            }),
+            `${scenario.title} rep revision ${i + 1}`,
+            20000,
+          ));
+          repText = await retryWithBackoff(() => withTimeout(
+            maybeConcreteifyStrongRepReply({
+              scenario,
+              turns,
+              currentBehaviorState,
+              currentJourneyState,
+              draft: repText,
+            }),
+            `${scenario.title} rep concrete revision ${i + 1}`,
+            20000,
+          ));
+          repText = await retryWithBackoff(() => withTimeout(
+            maybeDeRepeatStrongRepReply({
+              scenario,
+              turns,
+              currentBehaviorState,
+              currentJourneyState,
+              draft: repText,
+            }),
+            `${scenario.title} rep dedupe revision ${i + 1}`,
+            20000,
+          ));
+          repText = await retryWithBackoff(() => withTimeout(
+            maybeTightenSpokenRepReply({
+              scenario,
+              turns,
+              currentBehaviorState,
+              currentJourneyState,
+              draft: repText,
+            }),
+            `${scenario.title} rep spoken-tightening ${i + 1}`,
+            20000,
+          ));
+        }
         repText = maybeApplyHardFamilyAnswerReply({
           scenario,
           turns,
@@ -336,6 +356,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
         allSignals,
         i,
         currentVolatilityProfile,
+        QA_HCP_TOKEN_CAP,
       ), `${scenario.title} hcp turn ${i + 1}`));
 
       const hcpTurnObj = {
@@ -383,24 +404,27 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   const effective = Object.entries(capabilityLevels).filter(([, v]) => v === "effective").map(([k]) => k.replace(/_/g, " "));
 
   let review;
-  try {
-    onProgress("Generating full end-of-session review…");
-    review = await retryWithBackoff(() => withTimeout(
-      generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents),
-      `${scenario.title} session review`,
-      90000,
-    ));
-  } catch (error) {
-    const briefRationale = missed.length > 0
-      ? `Deterministic QA fallback: ${missed.length} capability gap(s) detected — ${missed.join(", ")}. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "No effective signals detected."} Volatility events: ${volEvents.length}.`
-      : `Deterministic QA fallback: No missed capabilities detected. ${effective.length > 0 ? `Effective signals: ${effective.join(", ")}.` : "All capabilities at developing level."} Volatility events: ${volEvents.length}.`;
-
+  if (import.meta.env.VITE_QA_LLM_REVIEW === "1") {
+    try {
+      onProgress("Generating full end-of-session review…");
+      review = await retryWithBackoff(() => withTimeout(
+        generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents),
+        `${scenario.title} session review`,
+        QA_REVIEW_TIMEOUT_MS,
+      ));
+    } catch (error) {
+      review = {
+        ...buildDeterministicSessionReview(capabilityLevels, volEvents),
+        qaFallback: true,
+        qaFallbackReason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  } else {
+    onProgress("Generating deterministic end-of-session review…");
     review = {
-      capabilityInsights,
-      briefRationale,
-      volatilityEvents: volEvents,
-      qaFallback: true,
-      qaFallbackReason: error instanceof Error ? error.message : String(error),
+      ...buildDeterministicSessionReview(capabilityLevels, volEvents),
+      qaFallback: false,
+      qaFallbackReason: "",
     };
   }
 

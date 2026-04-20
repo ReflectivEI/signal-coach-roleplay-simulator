@@ -165,6 +165,95 @@ function normalizeSessionReviewShape(
   };
 }
 
+export function buildDeterministicSessionReview(
+  deterministicAssessment: Record<string, string>,
+  volatilityEvents: VolatilityEvent[] = []
+): SessionReview {
+  const normalizedInsights = normalizeCapabilityInsights([], deterministicAssessment);
+  const missed = normalizedInsights.filter((item) => item.observationLevel === "missed").map((item) => item.capabilityName);
+  const developing = normalizedInsights.filter((item) => item.observationLevel === "developing").map((item) => item.capabilityName);
+  const effective = normalizedInsights.filter((item) => item.observationLevel === "effective").map((item) => item.capabilityName);
+
+  const briefRationale = missed.length > 0
+    ? `Deterministic QA review: missed capability signals detected in ${missed.join(", ")}. ${effective.length > 0 ? `Effective signals observed in ${effective.join(", ")}.` : "No capabilities reached the effective band in this run."}`
+    : `Deterministic QA review: no missed capability signals detected. ${effective.length > 0 ? `Effective signals observed in ${effective.join(", ")}.` : "Capabilities remained in the developing band."}`;
+
+  const didWell = effective.length > 0
+    ? `The strongest observable capabilities in this run were ${effective.join(", ")}.`
+    : "No capability reached the effective band in this run.";
+
+  const biggestGap = missed.length > 0
+    ? `The largest observable gaps were in ${missed.join(", ")}.`
+    : developing.length > 0
+      ? `The remaining work is concentrated in ${developing.join(", ")}.`
+      : "No major observable gap was detected in this run.";
+
+  const nextAdjustment = missed.length > 0
+    ? `Tighten the next pass around ${missed[0]} before widening validation again.`
+    : developing.length > 0
+      ? `Move the strongest developing capability, ${developing[0]}, into the effective band on the next pass.`
+      : "Hold the current behavior pattern and widen validation coverage.";
+
+  return {
+    briefRationale,
+    didWell,
+    biggestGap,
+    nextAdjustment,
+    capabilityInsights: normalizedInsights,
+    volatilityEvents,
+    signalResponseAlignment: [briefRationale],
+    overallSummary: [briefRationale],
+    strengthsProse: effective.length > 0 ? [didWell] : [],
+    developProse: developing.length > 0 ? [`Capabilities still developing: ${developing.join(", ")}.`] : [],
+    actionPlanProse: [nextAdjustment],
+    strengths: normalizeGuidanceItems(
+      normalizedInsights.filter((item) => item.observationLevel === "effective").map((item) => ({
+        capabilityId: item.capabilityId,
+        title: item.capabilityName,
+        guidance: `Repeat the observable behavior pattern that lifted ${item.capabilityName} into the effective band.`,
+        relatedTurnIds: [],
+        exampleRewrite: "",
+      })),
+      normalizedInsights,
+      "effective",
+    ),
+    improvementAreas: normalizeGuidanceItems(
+      normalizedInsights.filter((item) => item.observationLevel === "developing").map((item) => ({
+        capabilityId: item.capabilityId,
+        title: item.capabilityName,
+        guidance: `Tighten the response pattern in ${item.capabilityName} so it becomes more specific and more adaptive to the HCP's exact concern.`,
+        relatedTurnIds: [],
+        exampleRewrite: "",
+      })),
+      normalizedInsights,
+      "developing",
+    ),
+    missedOpportunities: normalizeGuidanceItems(
+      normalizedInsights.filter((item) => item.observationLevel === "missed").map((item) => ({
+        capabilityId: item.capabilityId,
+        title: item.capabilityName,
+        guidance: `Address ${item.capabilityName} directly in the next iteration instead of broadening the exchange.`,
+        relatedTurnIds: [],
+        exampleRewrite: "",
+      })),
+      normalizedInsights,
+      "missed",
+    ),
+    suggestedReframes: normalizeGuidanceItems(
+      normalizedInsights.filter((item) => item.observationLevel !== "effective").map((item) => ({
+        capabilityId: item.capabilityId,
+        title: item.capabilityName,
+        guidance: `Respond to the exact HCP concern first, then add only one narrower next-step or clarifier for ${item.capabilityName}.`,
+        relatedTurnIds: [],
+        exampleRewrite: "",
+      })),
+      normalizedInsights,
+      "developing",
+    ),
+    overallGuidance: [DEFAULT_OVERALL_GUIDANCE],
+  };
+}
+
 export async function generateSessionReview(
   scenario: any,
   transcript: ConversationTurn[],
@@ -480,9 +569,9 @@ Return ONLY valid JSON with this exact structure:
 
   const result = await invokeWorkerJson({
     prompt,
-    max_tokens: 2600,
+    max_tokens: 1600,
     temperature: 0.2,
-    timeout_ms: 90000,
+    timeout_ms: 45000,
     response_json_schema: {
       type: "object",
       properties: {
