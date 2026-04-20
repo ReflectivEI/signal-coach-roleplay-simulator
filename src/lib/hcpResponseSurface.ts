@@ -256,6 +256,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `If this does not add another staff step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
       output = `If you can make the next step concrete enough to actually do, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "adoption_caution") {
+      output = `If this feels safe enough not to be first, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else {
       output = `If you can keep this practical, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }
@@ -270,6 +272,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `If this stays workable for staff, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
       output = `If this gets concrete enough to act on, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "adoption_caution") {
+      output = `If this feels safe enough to trial without being first, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }
   }
 
@@ -280,6 +284,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `${output.replace(/[.?!]+$/, "")} What first step would actually make this workable?`;
     } else if (turn.concernFamily === "hesitation") {
       output = `${output.replace(/[.?!]+$/, "")} What one next step would make this real enough to actually do?`;
+    } else if (turn.concernFamily === "adoption_caution") {
+      output = `${output.replace(/[.?!]+$/, "")} What one low-risk step would make this feel safe enough to try?`;
     } else {
       output = `${output.replace(/[.?!]+$/, "")} What next step would make this real?`;
     }

@@ -584,6 +584,7 @@ function inferConcernTags(text: string): string[] {
   if (/guideline/.test(normalized)) tags.push("guideline");
   if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
   if (/patient population|typical patient|subgroup|patients who|right patient|ideal patient|perfect fit|patient profile|matching chart|flagging the chart|flag the chart|real patient type|patient type|need more data|not convinced|not ready yet|still maybe|still a maybe|hesitation|waiting for the right patient/.test(normalized)) tags.push("patient_fit");
+  if (/not ready to be first|first one|first in my group|what are others doing|others in my area|peer adoption|waiting for others|someone else does first|what are others in my area doing|what are others doing first/.test(normalized)) tags.push("adoption_caution");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
@@ -737,8 +738,26 @@ function isHesitationToCommitmentScenario(scenario: any, latestConcern: string):
   );
 }
 
+function isAdoptionCautionScenario(scenario: any, latestConcern: string): boolean {
+  const title = String(scenario?.title || "").toLowerCase();
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const state = String(scenario?.journeyState || "").toLowerCase();
+  const objective = String(scenario?.objective || "").toLowerCase();
+  const concernText = String(latestConcern || "").toLowerCase();
+
+  return (
+    title === "the reluctant early adopter" ||
+    (stage === "adoption_implementation" &&
+      (state.includes("adoption") || /decision readiness|first one|peer adoption|others in my area/.test(objective)) &&
+      /not ready to be first|first one|what are others doing|others in my area|peer adoption|waiting for others|someone else does first/.test(
+        concernText
+      ))
+  );
+}
+
 function inferObjectionType(latestConcern: string, scenario?: any): BehaviorSignals["objection_type"] {
   if (isHesitationToCommitmentScenario(scenario, latestConcern)) return "none";
+  if (isAdoptionCautionScenario(scenario, latestConcern)) return "none";
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(latestConcern)) return "access";
   if (/workflow|staff|operational|handoff|callback|monitoring|follow-up|form/.test(latestConcern)) return "workflow";
   if (/cost|spend|readmissions|hospitalizations|metrics|value/.test(latestConcern)) return "budget";
@@ -799,6 +818,7 @@ function normalizeBehaviorSignals(
   const forceWeakAlignment = !premiseCorrected && (genericPitch || talkedPastConcern);
   const forceRepDominant = genericPitch;
   const forceHesitationFamily = isHesitationToCommitmentScenario(scenario, latestConcern);
+  const forceAdoptionCautionFamily = isAdoptionCautionScenario(scenario, latestConcern);
 
   return {
     question_type: forceRepDominant
@@ -813,7 +833,7 @@ function normalizeBehaviorSignals(
       : rawSignals?.response_alignment === "strong"
         ? "strong"
         : inferredAlignment,
-    objection_type: forceHesitationFamily
+    objection_type: (forceHesitationFamily || forceAdoptionCautionFamily)
       ? "none"
       : rawSignals?.objection_type && rawSignals.objection_type !== "none"
       ? rawSignals.objection_type

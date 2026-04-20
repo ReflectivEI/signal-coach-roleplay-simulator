@@ -10,7 +10,7 @@ import { deriveConcernFamily } from "./hcpTurnDirectives";
 import { deriveFamilyTemperamentControls } from "./hcpFamilyProfiles";
 
 export interface HcpRuntimeProfile {
-  concernFamily: "evidence" | "workflow" | "access" | "hesitation" | "screening" | "time" | "general";
+  concernFamily: "evidence" | "workflow" | "access" | "hesitation" | "adoption_caution" | "screening" | "time" | "general";
   familyKey: string;
   warmth: "guarded" | "professional" | "measured" | "open";
   directness: "high" | "medium" | "low";
@@ -56,6 +56,7 @@ export function deriveHcpRuntimeProfile({
   let directness: HcpRuntimeProfile["directness"] = highPressure ? "high" : "medium";
   if (persona.includes("skeptical") || concernFamily === "evidence" || concernFamily === "access") directness = "high";
   if (concernFamily === "hesitation" && !highPressure) directness = "medium";
+  if (concernFamily === "adoption_caution" && !highPressure) directness = "medium";
   if (warmth === "open" && !highPressure) directness = "medium";
   if (familyControls.directnessBias > 0 && directness === "medium") directness = "high";
   else if (familyControls.directnessBias < 0 && directness === "high") directness = "medium";
@@ -95,6 +96,8 @@ export function deriveHcpRuntimeProfile({
           ? "Hold on the access barrier and the specific step that slows care down."
           : concernFamily === "hesitation"
             ? "Hold on the specific condition that would make one next step feel safe and concrete."
+          : concernFamily === "adoption_caution"
+            ? "Hold on first-mover risk, peer precedent, and what low-risk step would make action feel safe."
           : concernFamily === "screening"
             ? "Hold on the patient-selection boundary and what rule would actually be usable."
             : "Keep the current concern narrow and concrete.",

@@ -6,6 +6,7 @@ export type SharedConcernFamily =
   | "workflow"
   | "access"
   | "hesitation"
+  | "adoption_caution"
   | "screening"
   | "time"
   | "general";
@@ -88,6 +89,10 @@ export function deriveConcernFamily(scenario: any = {}): SharedConcernFamily {
     journeyStage === "commitment_close" &&
     /\b(right patient|ideal patient|perfect fit|not ready|still maybe|passive agreement|specific next step|time-bound|easy to say yes|trial patients?)\b/.test(text)
   ) return "hesitation";
+  if (
+    journeyStage === "adoption_implementation" &&
+    /\b(not ready to be first|first one|what are others doing|others in my area|peer adoption|what are others in my area doing|waiting for others|someone else does first|group to change protocols)\b/.test(text)
+  ) return "adoption_caution";
   if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
   if (/\b(workflow|staff|handoff|process|clinic|operational|implementation|callback)\b/.test(text)) return "workflow";
   if (/\b(screen|screening|candidate|eligibility|identify|selection|criteria)\b/.test(text)) return "screening";
@@ -169,6 +174,9 @@ function inferResponseShape({
 }): ResponseShape {
   if (escalationStage === "disengaging") return closeMode ? "conditional_close" : "compressed_probe";
   if (escalationStage === "high_pressure") return objectionMode ? "pushback" : "compressed_probe";
+  if ((closeMode || phase === "implementation_commitment") && concernFamily === "adoption_caution") {
+    return escalationStage === "firm" ? "constraint_probe" : "partial_agreement";
+  }
   if (closeMode && concernFamily === "hesitation") return escalationStage === "firm" ? "constraint_probe" : "partial_agreement";
   if (closeMode) return escalationStage === "firm" ? "constraint_probe" : "partial_agreement";
   if (objectionMode) return escalationStage === "firm" ? "pushback" : "constraint_probe";
@@ -245,6 +253,9 @@ function buildDirectiveLines({
   if (concernFamily === "hesitation") {
     lines.push("- Treat this as hesitation-to-commitment, not a hard objection. Keep the HCP focused on what concrete condition would make one next step feel safe.");
   }
+  if (concernFamily === "adoption_caution") {
+    lines.push("- Treat this as adoption caution, not a hard objection. Keep the HCP focused on first-mover risk, peer normalization, and what low-risk step would feel safe.");
+  }
 
   if (domain === "oncology" && concernFamily === "evidence") {
     lines.push("- In oncology evidence mode, sound threshold-aware and exacting about subgroup fit or decision relevance.");
@@ -261,8 +272,8 @@ function buildDirectiveLines({
   if (domain === "dermatology" && concernFamily === "workflow") {
     lines.push("- In dermatology workflow mode, stay grounded in monitoring burden, staff ownership, and what a smaller practice can realistically absorb.");
   }
-  if (domain === "nephrology" && concernFamily === "general") {
-    lines.push("- In nephrology adoption mode, sound cautious about who goes first and what threshold would justify changing course.");
+  if (domain === "nephrology" && (concernFamily === "general" || concernFamily === "adoption_caution")) {
+    lines.push("- In nephrology adoption mode, stay focused on first-mover risk, peer precedent, and what would make one low-risk trial feel safe.");
   }
   if (domain === "neurology" && concernFamily === "evidence") {
     lines.push("- In neurology safety/evidence mode, stay exacting about unresolved risk signals and what would need verification before moving on.");

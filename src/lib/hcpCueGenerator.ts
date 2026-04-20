@@ -569,6 +569,7 @@ function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
     interactionPressure: inputs.interactionPressures || [],
     keyChallenges: inputs.scenario?.keyChallenges || [],
   }) as ConcernFamily;
+  if ((scenarioConcern as unknown as string) === "adoption_caution") return "general";
   if (scenarioConcern && scenarioConcern !== "general") return scenarioConcern;
 
   const reply = normalizeText(inputs.hcpReply).toLowerCase();

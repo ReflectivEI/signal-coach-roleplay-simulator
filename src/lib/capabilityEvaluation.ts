@@ -36,6 +36,25 @@ function isHesitationToCommitmentScenario(context: EvaluationContext = {}): bool
   );
 }
 
+function isAdoptionCautionScenario(context: EvaluationContext = {}): boolean {
+  const scenario = context.scenario || {};
+  const focusCapabilities = context.focusCapabilities || [];
+  const title = String(scenario?.title || "").toLowerCase();
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const state = String(scenario?.journeyState || "").toLowerCase();
+  const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
+  const objective = String(scenario?.objective || "").toLowerCase();
+
+  return (
+    title === "the reluctant early adopter" ||
+    (stage === "adoption_implementation" &&
+      (focusCapabilities.includes("commitment_gaining") || state.includes("adoption")) &&
+      /first one|others in my area|peer adoption|decision readiness|not ready to be first/.test(
+        `${objective} ${scenario?.description || ""} ${pressures}`
+      ))
+  );
+}
+
 function hasHardObjectionSignals(signals: BehaviorSignals[]): boolean {
   return signals.some((signal) =>
     signal.objection_type === "clinical" ||
@@ -298,6 +317,23 @@ export function runCapabilityEvaluationEngine(
       result.commitment_gaining === "effective";
 
     if (strongClosePattern && !hasHardObjectionSignals(signals)) {
+      result.objection_navigation = "effective";
+      if (result.adaptability !== "missed") {
+        result.adaptability = "effective";
+      }
+    } else if (!hasHardObjectionSignals(signals) && result.objection_navigation === "missed") {
+      result.objection_navigation = "developing";
+    }
+  }
+
+  if (isAdoptionCautionScenario(context)) {
+    const strongAdoptionPattern =
+      result.question_quality === "effective" &&
+      result.listening_responsiveness === "effective" &&
+      result.making_it_matter === "effective" &&
+      (result.commitment_gaining === "effective" || result.commitment_gaining === "developing");
+
+    if (strongAdoptionPattern && !hasHardObjectionSignals(signals)) {
       result.objection_navigation = "effective";
       if (result.adaptability !== "missed") {
         result.adaptability = "effective";
