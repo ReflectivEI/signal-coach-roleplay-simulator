@@ -46,6 +46,19 @@ function normalizeForMatch(text = "") {
     .toLowerCase();
 }
 
+export function normalizeDialoguePunctuation(text = "") {
+  return String(text || "")
+    .replace(/\b(Then the standard has to stay concrete|Then the answer has to stay operational|Then the practical value has to be operational, not promotional|The direct answer is that|The useful answer is|The practical test is|The unresolved issue is|The unresolved piece is|Right now the unresolved number is|The one change that should matter in the room|That is the gap)\s*:\s*/g, "$1. ")
+    .replace(/\b(it only helps if|the concrete change would have to be)\s*:\s*/g, "$1 ")
+    .replace(/\s+:\s+/g, ". ")
+    .replace(/\.\s+\./g, ".")
+    .replace(/\s+([.?!,])/g, "$1")
+    .replace(/([.?!])([A-Za-z])/g, "$1 $2")
+    .replace(/([.?!]\s+)([a-z])/g, (_, boundary, letter) => `${boundary}${letter.toUpperCase()}`)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function extractIssueLabel(text = "") {
   const normalized = String(text).toLowerCase();
   if (/renal impairment|renal function|\brenal\b|kidney/.test(normalized)) return "renal impairment";

@@ -129,6 +129,10 @@ function applyGlobalSpokenRewrites(text = ""): string {
   });
 
   output = output
+    .replace(/\b(Then the real question is|The real question is|The practical test is|The useful answer is|The direct answer is|The one thing is|The one change is|That is the gap)\s*:\s*/g, "$1. ")
+    .replace(/\s+:\s+/g, ". ");
+
+  output = output
     .replace(/\bKeep it brief\b/gi, "Give me the short version")
     .replace(/\bKeep this brief\b/gi, "Give me the short version")
     .replace(/\bKeep it tight\b/gi, "Give me the short version");
@@ -266,7 +270,7 @@ function buildCostValueSpecificLine({
     turn.escalationStage === "high_pressure"
   ) {
     return deterministicPick([
-      "If you can't walk me through total cost per patient, then I still don't have enough information to evaluate its value.",
+      "If you can't give me a clear total cost per patient, then I still don't have enough information to evaluate its value.",
       "I don't need another efficacy point. I need the total cost picture, including any testing or monitoring this adds.",
       "If the cost side is unclear, then I still don't have enough information to evaluate its value.",
     ], seed);
@@ -310,7 +314,7 @@ function applyCostValueSpokenTightening(
 
   return deterministicPick([
     "What am I supposed to do with the added testing and follow-up costs in that number?",
-    "Then walk me through the full spend, including the added testing and monitoring.",
+    "Then give me the full spend, including the added testing and monitoring.",
     "What does the all-in cost look like once you add the extra testing and follow-up?",
     "If I'm counting the monitoring and added workups too, what does that cost per patient actually become?",
   ], seed);

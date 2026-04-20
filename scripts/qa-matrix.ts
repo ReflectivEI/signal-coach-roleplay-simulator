@@ -9,7 +9,7 @@ import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { buildDeterministicSessionReview, generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "../src/lib/qaRepProxy.js";
+import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply, normalizeDialoguePunctuation } from "../src/lib/qaRepProxy.js";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -309,6 +309,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
         turns,
         draft: repText,
       });
+      repText = normalizeDialoguePunctuation(repText);
     }
 
     const repTurnObj = {

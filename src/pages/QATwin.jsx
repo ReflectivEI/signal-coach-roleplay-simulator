@@ -10,7 +10,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply } from "@/lib/qaRepProxy";
+import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply, normalizeDialoguePunctuation } from "@/lib/qaRepProxy";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -325,6 +325,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
           turns,
           draft: repText,
         });
+        repText = normalizeDialoguePunctuation(repText);
       }
 
       const repTurnObj = {
