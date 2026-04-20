@@ -1,5 +1,6 @@
 import { HcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { HcpTurnDirectiveSet } from "./hcpTurnDirectives";
+import { buildRealismSpecNotes, getRealismExampleBank } from "./hcpRealismMemory";
 
 function normalizeText(value = ""): string {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -480,6 +481,17 @@ export function buildRealismBackbonePrompt({
     "- In discovery, ask practical patient-criteria questions instead of drifting into broad product talk.",
     "- In adoption caution, focus on first-mover risk, peer precedent, and low-risk next steps.",
   ];
+  const realismSpecNotes = buildRealismSpecNotes({
+    scenario,
+    turn,
+    profile,
+    hcpTurnCount,
+  });
+  const realismExamples = getRealismExampleBank({
+    scenario,
+    turn,
+    profile,
+  });
 
   if (turn.concernFamily === "workflow" || turn.concernFamily === "access") {
     lines.push("- Do not use abstract burden phrasing alone; name the concrete step, owner, or delay.");
@@ -516,6 +528,16 @@ export function buildRealismBackbonePrompt({
 
   if (profile.directness === "high") {
     lines.push("- This HCP should sound direct, compressed, and task-focused, not conversationally generous.");
+  }
+
+  if (realismSpecNotes.length) {
+    lines.push("APPROVED REALISM SPECS:");
+    realismSpecNotes.forEach((note) => lines.push(`- ${note}`));
+  }
+
+  if (realismExamples.length) {
+    lines.push("APPROVED SPOKEN CADENCE EXAMPLES (style reference only — do not copy verbatim unless naturally appropriate):");
+    realismExamples.forEach((example) => lines.push(`- "${example}"`));
   }
 
   return lines.join("\n");
