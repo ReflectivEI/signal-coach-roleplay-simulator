@@ -393,7 +393,11 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
     scenario.startingBehaviorState,
   );
   const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
-  const capabilityLevels = runCapabilityEvaluationEngine(allSignals, scenario.suggestedFocusCapabilities || []);
+  const capabilityLevels = runCapabilityEvaluationEngine(
+    allSignals,
+    scenario.suggestedFocusCapabilities || [],
+    scenario,
+  );
   const capabilityInsights = Object.entries(capabilityLevels).map(([id, level]) => ({
     capabilityId: id,
     capabilityName: id.replace(/_/g, " "),

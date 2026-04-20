@@ -5,6 +5,7 @@ export type SharedConcernFamily =
   | "evidence"
   | "workflow"
   | "access"
+  | "hesitation"
   | "screening"
   | "time"
   | "general";
@@ -83,6 +84,10 @@ export function deriveConcernFamily(scenario: any = {}): SharedConcernFamily {
     return "general";
   }
 
+  if (
+    journeyStage === "commitment_close" &&
+    /\b(right patient|ideal patient|perfect fit|not ready|still maybe|passive agreement|specific next step|time-bound|easy to say yes|trial patients?)\b/.test(text)
+  ) return "hesitation";
   if (/\b(access|coverage|copay|prior auth|formulary|payer|benefits)\b/.test(text)) return "access";
   if (/\b(workflow|staff|handoff|process|clinic|operational|implementation|callback)\b/.test(text)) return "workflow";
   if (/\b(screen|screening|candidate|eligibility|identify|selection|criteria)\b/.test(text)) return "screening";
@@ -164,6 +169,7 @@ function inferResponseShape({
 }): ResponseShape {
   if (escalationStage === "disengaging") return closeMode ? "conditional_close" : "compressed_probe";
   if (escalationStage === "high_pressure") return objectionMode ? "pushback" : "compressed_probe";
+  if (closeMode && concernFamily === "hesitation") return escalationStage === "firm" ? "constraint_probe" : "partial_agreement";
   if (closeMode) return escalationStage === "firm" ? "constraint_probe" : "partial_agreement";
   if (objectionMode) return escalationStage === "firm" ? "pushback" : "constraint_probe";
   if (turnCount <= 1) return "brief_invitation";
@@ -236,6 +242,10 @@ function buildDirectiveLines({
     lines.push("- Allow conditional openness, but keep one unresolved condition active and make the openness sound earned, not generous.");
   }
 
+  if (concernFamily === "hesitation") {
+    lines.push("- Treat this as hesitation-to-commitment, not a hard objection. Keep the HCP focused on what concrete condition would make one next step feel safe.");
+  }
+
   if (domain === "oncology" && concernFamily === "evidence") {
     lines.push("- In oncology evidence mode, sound threshold-aware and exacting about subgroup fit or decision relevance.");
   }
@@ -263,6 +273,9 @@ function buildDirectiveLines({
   if (domain === "endocrinology" && concernFamily === "screening") {
     lines.push("- In endocrinology discovery mode, stay practical about which patients actually stay on therapy and where current thinking breaks down.");
   }
+  if (domain === "general" && concernFamily === "hesitation") {
+    lines.push("- In hesitation mode, stay anchored to passive agreement, what has delayed action so far, and the smallest next owned move.");
+  }
 
   return lines;
 }
@@ -289,7 +302,7 @@ export function deriveHcpTurnDirectives({
   const closeMode = phase === "close" || phase === "implementation_commitment";
 
   const recentSignals = recentWindow(allPriorSignals, 4);
-  const assessment = runCapabilityEvaluationEngine(recentSignals);
+  const assessment = runCapabilityEvaluationEngine(recentSignals, scenario?.suggestedFocusCapabilities || [], scenario);
   const repeatedMisses = [
     assessment.listening_responsiveness === "missed" &&
     countConsecutiveMisses(allPriorSignals, (signal) =>

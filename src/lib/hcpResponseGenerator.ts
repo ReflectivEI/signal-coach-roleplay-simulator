@@ -583,7 +583,7 @@ function inferConcernTags(text: string): string[] {
   const tags: string[] = [];
   if (/guideline/.test(normalized)) tags.push("guideline");
   if (/renal impairment|renal function|kidney disease/.test(normalized)) tags.push("renal");
-  if (/patient population|typical patient|subgroup|patients who|right patient|ideal patient|perfect fit|patient profile|matching chart|flagging the chart|flag the chart|real patient type|patient type/.test(normalized)) tags.push("patient_fit");
+  if (/patient population|typical patient|subgroup|patients who|right patient|ideal patient|perfect fit|patient profile|matching chart|flagging the chart|flag the chart|real patient type|patient type|need more data|not convinced|not ready yet|still maybe|still a maybe|hesitation|waiting for the right patient/.test(normalized)) tags.push("patient_fit");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
@@ -686,7 +686,7 @@ function ignoredDirectConcern(repMessage: string, latestConcern: string): boolea
   const directOperationalAsk =
     /what'?s the one thing|what specifically|what changes|what gets added|what staff|prior auth|workflow|extra step|bottom line/.test(concernText);
   const directClinicalAsk =
-    /renal|guideline|patient population|subgroup|right patient|ideal patient|perfect fit|patient profile|patient type|what outcomes|cost|readmissions|justify the cost/.test(concernText);
+    /renal|guideline|patient population|subgroup|right patient|ideal patient|perfect fit|patient profile|patient type|need more data|not convinced|not ready yet|still maybe|still a maybe|hesitation|what outcomes|cost|readmissions|justify the cost/.test(concernText);
 
   if ((directOperationalAsk || directClinicalAsk) && sharedTags.length === 0) {
     return true;
@@ -718,11 +718,31 @@ function inferListeningPattern(repMessage: string, latestConcern: string): Behav
   return "missed";
 }
 
-function inferObjectionType(latestConcern: string): BehaviorSignals["objection_type"] {
+function isHesitationToCommitmentScenario(scenario: any, latestConcern: string): boolean {
+  const title = String(scenario?.title || "").toLowerCase();
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const state = String(scenario?.journeyState || "").toLowerCase();
+  const objective = String(scenario?.objective || "").toLowerCase();
+  const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
+  const concernText = String(latestConcern || "").toLowerCase();
+
+  return (
+    title === "the perpetual maybe" ||
+    (stage === "commitment_close" &&
+      (state.includes("commitment") || /specific next step|passive agreement|right patient/.test(objective)) &&
+      (/right patient|ideal patient|perfect fit|patient profile|need more data|not convinced|not ready yet|still maybe|hesitation|waiting for the right patient/.test(
+        concernText
+      ) ||
+        /curious_uncertain/.test(pressures)))
+  );
+}
+
+function inferObjectionType(latestConcern: string, scenario?: any): BehaviorSignals["objection_type"] {
+  if (isHesitationToCommitmentScenario(scenario, latestConcern)) return "none";
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(latestConcern)) return "access";
   if (/workflow|staff|operational|handoff|callback|monitoring|follow-up|form/.test(latestConcern)) return "workflow";
   if (/cost|spend|readmissions|hospitalizations|metrics|value/.test(latestConcern)) return "budget";
-  if (/guideline|renal|patient population|subgroup|right patient|ideal patient|perfect fit|patient profile|patient type|study|data/.test(latestConcern)) return "clinical";
+  if (/guideline|renal|patient population|subgroup|study|data|evidence|trial|readout/.test(latestConcern)) return "clinical";
   return "none";
 }
 
@@ -771,13 +791,14 @@ function normalizeBehaviorSignals(
   const inferredQuestionType = detectQuestionType(repMessage);
   const inferredAlignment = inferResponseAlignment(repMessage, latestConcern);
   const inferredListening = inferListeningPattern(repMessage, latestConcern);
-  const inferredObjectionType = inferObjectionType(latestConcern);
+  const inferredObjectionType = inferObjectionType(latestConcern, scenario);
   const inferredEngagement = inferEngagementLevel(hcpReply);
   const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
   const genericPitch = isGenericProductPitch(repMessage);
   const talkedPastConcern = ignoredDirectConcern(repMessage, latestConcern);
   const forceWeakAlignment = !premiseCorrected && (genericPitch || talkedPastConcern);
   const forceRepDominant = genericPitch;
+  const forceHesitationFamily = isHesitationToCommitmentScenario(scenario, latestConcern);
 
   return {
     question_type: forceRepDominant
@@ -792,7 +813,9 @@ function normalizeBehaviorSignals(
       : rawSignals?.response_alignment === "strong"
         ? "strong"
         : inferredAlignment,
-    objection_type: rawSignals?.objection_type && rawSignals.objection_type !== "none"
+    objection_type: forceHesitationFamily
+      ? "none"
+      : rawSignals?.objection_type && rawSignals.objection_type !== "none"
       ? rawSignals.objection_type
       : inferredObjectionType,
     engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"

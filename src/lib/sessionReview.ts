@@ -292,7 +292,11 @@ export async function generateSessionReview(
   const signalsSummary = allSignals.map((s, i) => `Rep Turn ${i + 1}: ${JSON.stringify(s)}`).join("\n");
 
   // Deterministic pre-evaluation — LLM MUST NOT contradict these
-  const deterministicAssessment = runCapabilityEvaluationEngine(allSignals, scenario.suggestedFocusCapabilities);
+  const deterministicAssessment = runCapabilityEvaluationEngine(
+    allSignals,
+    scenario.suggestedFocusCapabilities,
+    scenario,
+  );
   const assessmentSummary = Object.entries(deterministicAssessment)
     .map(([id, level]) => `${id}: ${level}`)
     .join("\n");

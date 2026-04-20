@@ -13,6 +13,38 @@ export interface CapabilityDriver {
   influence: string;
 }
 
+interface EvaluationContext {
+  focusCapabilities?: string[];
+  scenario?: any;
+}
+
+function isHesitationToCommitmentScenario(context: EvaluationContext = {}): boolean {
+  const scenario = context.scenario || {};
+  const focusCapabilities = context.focusCapabilities || [];
+  const title = String(scenario?.title || "").toLowerCase();
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const state = String(scenario?.journeyState || "").toLowerCase();
+  const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
+
+  return (
+    title === "the perpetual maybe" ||
+    (stage === "commitment_close" &&
+      (focusCapabilities.includes("commitment_gaining") || state.includes("commitment")) &&
+      /curious_uncertain|waiting for the right patient|passive agreement|not ready/.test(
+        `${scenario?.persona || ""} ${scenario?.objective || ""} ${pressures}`
+      ))
+  );
+}
+
+function hasHardObjectionSignals(signals: BehaviorSignals[]): boolean {
+  return signals.some((signal) =>
+    signal.objection_type === "clinical" ||
+    signal.objection_type === "access" ||
+    signal.objection_type === "workflow" ||
+    signal.objection_type === "budget"
+  );
+}
+
 // ─── CORE EVALUATION FUNCTION ──────────────────────────────────────────────
 
 function evaluateCapability(
@@ -103,15 +135,40 @@ function evaluateCapability(
 
     case "objection_navigation": {
       const objectionTurns = signals.filter(s => s.objection_type && s.objection_type !== "none");
-      if (objectionTurns.length === 0) return "developing";
+      const strongAcrossSession =
+        signals.filter((s) => s.response_alignment === "strong").length >= Math.ceil(signals.length * 0.6) &&
+        signals.filter((s) => s.listening_pattern === "responsive").length >= Math.ceil(signals.length * 0.5);
+      const clearClosePresent = signals.some((s) => s.commitment_attempt === "clear");
+      const balancedMajority = signals.filter((s) => s.control_pattern === "balanced").length >= Math.ceil(signals.length * 0.5);
+      const engagementHeld =
+        signals.filter((s) => s.engagement_level === "high" || s.engagement_level === "moderate").length >= Math.ceil(signals.length * 0.6);
+      const strongClosePattern = strongAcrossSession && clearClosePresent && balancedMajority && engagementHeld;
+
+      if (objectionTurns.length === 0) {
+        return strongClosePattern ? "effective" : "developing";
+      }
       const wellHandled = objectionTurns.filter(
         s => s.response_alignment === "strong" && s.listening_pattern !== "missed"
+      ).length;
+      const partiallyHandled = objectionTurns.filter(
+        s => s.response_alignment === "partial" || s.listening_pattern === "partially_responsive"
       ).length;
       const poorlyHandled = objectionTurns.filter(
         s => s.response_alignment === "weak" || s.listening_pattern === "missed"
       ).length;
-      if (poorlyHandled > wellHandled) return "missed";
-      if (wellHandled >= objectionTurns.length * 0.6) return "effective";
+      const closeRecoveryPattern =
+        clearClosePresent &&
+        balancedMajority &&
+        wellHandled >= 1 &&
+        signals.slice(-3).filter((s) => s.response_alignment === "strong").length >= 2 &&
+        signals.slice(-3).filter((s) => s.listening_pattern === "responsive").length >= 2;
+      if (poorlyHandled > wellHandled && !(strongClosePattern && poorlyHandled <= 1)) return "missed";
+      if (
+        wellHandled >= objectionTurns.length * 0.6 ||
+        (poorlyHandled === 0 && wellHandled >= Math.max(1, Math.ceil(objectionTurns.length * 0.5)) && partiallyHandled <= 1) ||
+        (strongClosePattern && poorlyHandled <= 1) ||
+        (closeRecoveryPattern && poorlyHandled <= 1)
+      ) return "effective";
       return "developing";
     }
 
@@ -152,7 +209,34 @@ function evaluateCapability(
         new Set(signals.map((s) => s.question_type).filter((value) => value && value !== "none")).size >= 2;
       const controlShift =
         new Set(signals.map((s) => s.control_pattern).filter(Boolean)).size >= 2;
-      const meaningfulApproachShift = commitmentProgression || questionShift || controlShift;
+      const strongClinicalHandling =
+        signals.filter((s) => s.objection_type === "clinical" && s.response_alignment === "strong").length >= 2;
+      const sustainedStrongClose =
+        strongAcrossSession &&
+        signals.some((s) => s.commitment_attempt === "clear") &&
+        signals.filter((s) => s.control_pattern === "balanced").length >= Math.ceil(signals.length * 0.5);
+      const closeTransitionPattern =
+        signals.some((s) => s.commitment_attempt === "clear") &&
+        signals.filter((s) => s.response_alignment === "strong").length >= Math.ceil(signals.length * 0.6) &&
+        signals.filter((s) => s.listening_pattern === "responsive").length >= Math.ceil(signals.length * 0.5);
+      const lateStageRecovery =
+        signals.slice(-3).filter((s) => s.response_alignment === "strong").length >= 2 &&
+        signals.slice(-3).filter((s) => s.listening_pattern === "responsive").length >= 2 &&
+        signals.some((s) => s.commitment_attempt === "clear");
+      const hesitationToCommitmentPattern =
+        signals.some((s) => s.commitment_attempt === "clear") &&
+        signals.filter((s) => s.response_alignment === "strong").length >= Math.ceil(signals.length * 0.6) &&
+        signals.filter((s) => s.control_pattern === "balanced").length >= Math.ceil(signals.length * 0.5) &&
+        signals.filter((s) => s.engagement_level === "high" || s.engagement_level === "moderate").length >= Math.ceil(signals.length * 0.6);
+      const meaningfulApproachShift =
+        commitmentProgression ||
+        questionShift ||
+        controlShift ||
+        strongClinicalHandling ||
+        sustainedStrongClose ||
+        closeTransitionPattern ||
+        lateStageRecovery ||
+        hesitationToCommitmentPattern;
 
       if ((improved && consistent) || (consistent && strongAcrossSession && meaningfulApproachShift)) return "effective";
       if (!improved && alignScore(secondHalf) < 0.5) return "missed";
@@ -186,7 +270,8 @@ function evaluateCapability(
 
 export function runCapabilityEvaluationEngine(
   signals: BehaviorSignals[],
-  focusCapabilities: string[] = []
+  focusCapabilities: string[] = [],
+  scenario?: any
 ): Record<string, ObservationLevel> {
   const allIds = [
     "question_quality",
@@ -202,5 +287,25 @@ export function runCapabilityEvaluationEngine(
   for (const id of allIds) {
     result[id] = evaluateCapability(id, signals);
   }
+
+  const context: EvaluationContext = { focusCapabilities, scenario };
+  if (isHesitationToCommitmentScenario(context)) {
+    const strongClosePattern =
+      result.question_quality === "effective" &&
+      result.listening_responsiveness === "effective" &&
+      result.making_it_matter === "effective" &&
+      result.conversation_control_structure === "effective" &&
+      result.commitment_gaining === "effective";
+
+    if (strongClosePattern && !hasHardObjectionSignals(signals)) {
+      result.objection_navigation = "effective";
+      if (result.adaptability !== "missed") {
+        result.adaptability = "effective";
+      }
+    } else if (!hasHardObjectionSignals(signals) && result.objection_navigation === "missed") {
+      result.objection_navigation = "developing";
+    }
+  }
+
   return result;
 }

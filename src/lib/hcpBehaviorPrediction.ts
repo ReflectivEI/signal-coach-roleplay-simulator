@@ -14,8 +14,8 @@ export function predictHcpBehavior(
   latestSignals: BehaviorSignals[],
   scenario: any
 ): BehaviorPrediction {
-  const assessment = runCapabilityEvaluationEngine(latestSignals);
-  const allTimeAssessment = runCapabilityEvaluationEngine(signals);
+  const assessment = runCapabilityEvaluationEngine(latestSignals, [], scenario);
+  const allTimeAssessment = runCapabilityEvaluationEngine(signals, [], scenario);
 
   const missedRunCounts: Record<string, number> = {};
   for (const id of SIGNAL_INTELLIGENCE_CAPABILITIES.map(c => c.id)) {

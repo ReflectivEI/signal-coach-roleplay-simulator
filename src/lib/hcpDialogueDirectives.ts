@@ -33,6 +33,8 @@ export function buildDialogueDirectivePrompt(scenario: any = {}, behaviorState =
           ? "When the concern family is workflow, the HCP should press on who does the work, what step gets added, and where clinic flow slows down."
         : concernFamily === "access"
           ? "When the concern family is access, the HCP should stay on the specific barrier, delay, handoff, or coverage step that blocks care."
+            : concernFamily === "hesitation"
+              ? "When the concern family is hesitation, the HCP should stay on what has delayed action so far, what would make one next step feel safe, and what concrete condition still is not met."
             : concernFamily === "screening"
               ? "When the concern family is screening, the HCP should stay on patient boundaries, candidacy, or what would actually identify the right patient."
               : concernFamily === "time"
@@ -64,6 +66,8 @@ export function buildDialogueDirectivePrompt(scenario: any = {}, behaviorState =
         ? 'Example tone: "My staff is already buried. Who owns the first step if this goes forward?"'
       : concernFamily === "screening"
         ? 'Example tone: "Tell me which patient you actually mean, because broad eligibility does not help me."'
+      : concernFamily === "hesitation"
+        ? 'Example tone: "I still have not moved on this. What makes the next step concrete enough to actually do?"'
       : concernFamily === "time"
         ? 'Example tone: "I only have a minute. Give me the short version."'
       : 'Example tone: "Keep it practical. What changes for me in the room?"';

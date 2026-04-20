@@ -254,6 +254,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `If this does not add another staff step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "hesitation") {
+      output = `If you can make the next step concrete enough to actually do, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else {
       output = `If you can keep this practical, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }
@@ -266,6 +268,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `If this stays workable for staff, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+    } else if (turn.concernFamily === "hesitation") {
+      output = `If this gets concrete enough to act on, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }
   }
 
@@ -274,6 +278,8 @@ function applyLateStageNarrowing(text: string, turn: HcpTurnDirectiveSet): strin
       output = `${output.replace(/[.?!]+$/, "")} What single data point would change that?`;
     } else if (turn.concernFamily === "workflow" || turn.concernFamily === "access") {
       output = `${output.replace(/[.?!]+$/, "")} What first step would actually make this workable?`;
+    } else if (turn.concernFamily === "hesitation") {
+      output = `${output.replace(/[.?!]+$/, "")} What one next step would make this real enough to actually do?`;
     } else {
       output = `${output.replace(/[.?!]+$/, "")} What next step would make this real?`;
     }
