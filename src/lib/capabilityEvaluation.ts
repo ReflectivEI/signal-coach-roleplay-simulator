@@ -142,7 +142,19 @@ function evaluateCapability(
         arr.reduce((sum, s) => sum + (s.engagement_level === "high" ? 2 : s.engagement_level === "moderate" ? 1 : 0), 0) / (arr.length || 1);
       const improved = alignScore(secondHalf) > alignScore(firstHalf) || engageScore(secondHalf) > engageScore(firstHalf);
       const consistent = alignScore(secondHalf) >= 1.2 && engageScore(secondHalf) >= 1.0;
-      if (improved && consistent) return "effective";
+      const strongAcrossSession =
+        alignScore(signals) >= 1.3 &&
+        engageScore(signals) >= 1.0;
+      const clearCommitLate = secondHalf.some((s) => s.commitment_attempt === "clear");
+      const clearCommitEarly = firstHalf.some((s) => s.commitment_attempt === "clear");
+      const commitmentProgression = clearCommitLate && !clearCommitEarly;
+      const questionShift =
+        new Set(signals.map((s) => s.question_type).filter((value) => value && value !== "none")).size >= 2;
+      const controlShift =
+        new Set(signals.map((s) => s.control_pattern).filter(Boolean)).size >= 2;
+      const meaningfulApproachShift = commitmentProgression || questionShift || controlShift;
+
+      if ((improved && consistent) || (consistent && strongAcrossSession && meaningfulApproachShift)) return "effective";
       if (!improved && alignScore(secondHalf) < 0.5) return "missed";
       return "developing";
     }
