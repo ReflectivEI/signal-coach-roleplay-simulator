@@ -462,11 +462,109 @@ function AssertionRow({ assertion }) {
   );
 }
 
+function RunTranscript({ turns, buttonLabel = "See Transcript for This Run" }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!Array.isArray(turns) || turns.length === 0) return null;
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-surface/40">
+      <button
+        onClick={() => setExpanded((current) => !current)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface/60 transition-colors rounded-xl"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(174 55% 62%)" }}>
+            QA Run Transcript
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Review the exact exchange used to generate assertions, capability results, and the end-session rationale.
+          </p>
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/40 px-3 py-1.5 text-xs font-medium text-foreground">
+          {expanded ? "Hide Transcript for This Run" : buttonLabel}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-border/30"
+          >
+            <div className="px-4 py-4 space-y-3">
+              {turns.map((turn, index) => {
+                const isRep = turn.speaker === "rep";
+                const cueText = Array.isArray(turn.cues)
+                  ? turn.cues
+                    .map((cue) => {
+                      if (!cue) return "";
+                      if (typeof cue === "string") return cue.trim();
+                      return String(cue.description || cue.label || cue.text || "").trim();
+                    })
+                    .filter(Boolean)
+                    .join(" ")
+                  : "";
+
+                return (
+                  <div
+                    key={turn.id || `${turn.speaker}-${index}`}
+                    className={`rounded-xl border px-4 py-3 ${isRep ? "border-primary/25 bg-primary/5" : "border-border/40 bg-background/40"}`}
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${isRep ? "text-primary bg-primary/10" : "text-foreground/80 bg-border/20"}`}>
+                        {isRep ? "Rep" : "HCP"}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">Turn {index + 1}</span>
+                    </div>
+
+                    {cueText && !isRep && (
+                      <div className="mb-2 rounded-lg border border-border/30 bg-surface/50 px-3 py-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
+                          Observed Cue
+                        </p>
+                        <p className="text-xs italic text-foreground/80 leading-relaxed">{cueText}</p>
+                      </div>
+                    )}
+
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{turn.text || "—"}</p>
+
+                    {turn.nudge && (
+                      <div className="mt-2 rounded-lg border border-signal-watch/30 bg-signal-watch/10 px-3 py-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-signal-watch mb-1">
+                          Live Coaching Tip
+                        </p>
+                        <p className="text-xs text-foreground/80 leading-relaxed">{turn.nudge}</p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function MatrixRow({ result, index }) {
   const [expanded, setExpanded] = useState(false);
   const passCount = result.assertions.filter((a) => a.pass).length;
   const totalCount = result.assertions.length;
   const allPass = passCount === totalCount;
+  const capabilityLabelMap = {
+    question_quality: "Question Quality",
+    listening_responsiveness: "Listening & Responsiveness",
+    making_it_matter: "Value Framing",
+    customer_engagement_signals: "Customer Engagement Cues",
+    objection_navigation: "Objection Handling",
+    conversation_control_structure: "Conversation Control & Structure",
+    adaptability: "Adaptability",
+    commitment_gaining: "Commitment Gaining",
+  };
 
   return (
     <div className="border border-border/40 rounded-lg overflow-hidden">
@@ -498,7 +596,7 @@ function MatrixRow({ result, index }) {
                             : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
                       }`}
                     >
-                      {ci.capabilityId.replace(/_/g, " ")}: {ci.observationLevel}
+                      {(ci.capabilityName || capabilityLabelMap[ci.capabilityId] || ci.capabilityId.replace(/_/g, " "))}: {ci.observationLevel}
                     </span>
                   ))}
                 </div>
@@ -507,6 +605,7 @@ function MatrixRow({ result, index }) {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "hsl(174 55% 62%)" }}>Brief Rationale</p>
                 <p className="text-xs text-foreground/70 leading-relaxed">{result.review?.briefRationale || "—"}</p>
               </div>
+              <RunTranscript turns={result.turns} />
             </div>
           </motion.div>
         )}
@@ -523,14 +622,14 @@ function CapabilityHeatmap({ results }) {
   ];
 
   const capLabels = {
-    question_quality: "Q. Quality",
-    listening_responsiveness: "Listening",
+    question_quality: "Question Quality",
+    listening_responsiveness: "Listening & Responsiveness",
     making_it_matter: "Value Framing",
-    customer_engagement_signals: "Engagement Cues",
+    customer_engagement_signals: "Customer Engagement Cues",
     objection_navigation: "Objection Handling",
-    conversation_control_structure: "Control & Structure",
+    conversation_control_structure: "Conversation Control & Structure",
     adaptability: "Adaptability",
-    commitment_gaining: "Commitment",
+    commitment_gaining: "Commitment Gaining",
   };
 
   const levelColor = {
@@ -547,7 +646,7 @@ function CapabilityHeatmap({ results }) {
           <tr>
             <th className="text-left text-muted-foreground font-medium pb-2 pr-3 min-w-[120px]">Scenario</th>
             {capIds.map((id) => (
-              <th key={id} className="text-center text-muted-foreground font-medium pb-2 px-1 min-w-[80px]">{capLabels[id]}</th>
+              <th key={id} className="text-center text-muted-foreground font-medium pb-2 px-1 min-w-[120px]">{capLabels[id]}</th>
             ))}
           </tr>
         </thead>
@@ -581,6 +680,16 @@ function CapabilityHeatmap({ results }) {
 
 export default function QATwin() {
   const navigate = useNavigate();
+  const capabilityLabelMap = {
+    question_quality: "Question Quality",
+    listening_responsiveness: "Listening & Responsiveness",
+    making_it_matter: "Value Framing",
+    customer_engagement_signals: "Customer Engagement Cues",
+    objection_navigation: "Objection Handling",
+    conversation_control_structure: "Conversation Control & Structure",
+    adaptability: "Adaptability",
+    commitment_gaining: "Commitment Gaining",
+  };
   const [scenarios, setScenarios] = useState([]);
   const [scenariosLoaded, setScenariosLoaded] = useState(false);
   const [mode, setMode] = useState("single");
@@ -829,7 +938,7 @@ export default function QATwin() {
                           : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
                     }`}
                   >
-                    {q.capabilityId.replace(/_/g, " ")}: {q.observationLevel}
+                    {(q.capabilityName || capabilityLabelMap[q.capabilityId] || q.capabilityId.replace(/_/g, " "))}: {q.observationLevel}
                   </span>
                 ))}
               </div>
@@ -839,6 +948,8 @@ export default function QATwin() {
               <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "hsl(174 55% 62%)" }}>Brief Rationale</p>
               <p className="text-xs text-foreground/80 leading-relaxed">{singleResult.review?.briefRationale || "—"}</p>
             </div>
+
+            <RunTranscript turns={singleResult.turns} />
           </motion.div>
         )}
 
