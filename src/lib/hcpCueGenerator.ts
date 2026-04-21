@@ -470,22 +470,70 @@ const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Parti
   },
 };
 
-const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string> = {
-  receptive_attentive: "The HCP is leaving space for the conversation to move forward, so the next turn should stay specific and relevant.",
-  neutral_attentive: "The HCP is still evaluating the exchange, so the next turn needs to earn more of their attention.",
-  focused_narrowing: "The HCP is narrowing the exchange around one issue, so the next response should answer that issue directly.",
-  time_constrained: "Time is visibly limiting the exchange, so the next move has to stay tight and immediately useful.",
-  hard_escalation: "Patience is tightening, so another detour will harden the conversation further.",
-  terminal_exit: "The interaction is closing, so only a concise, relevant final move has any room left.",
+const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string[]> = {
+  receptive_attentive: [
+    "The HCP is still with you, so the next turn should stay concrete and relevant.",
+    "The HCP is open enough to keep listening, so the next turn needs to stay specific.",
+    "The HCP is giving the conversation a little room, so the next turn should make good use of it.",
+  ],
+  neutral_attentive: [
+    "The HCP is still sizing this up, so the next turn has to earn more of their attention.",
+    "The HCP is listening, but the next turn still needs to prove its relevance.",
+    "The HCP has not closed down the exchange, but the next turn needs to land cleanly.",
+  ],
+  focused_narrowing: [
+    "The HCP is narrowing in on one issue, so the next response should answer that directly.",
+    "The HCP is pressing on one point, so the next turn should stay on that point.",
+    "The HCP is tightening the conversation around one issue, so the next response should stay there.",
+  ],
+  time_constrained: [
+    "Time is visibly short, so the next move has to be brief and useful.",
+    "There is not much room left here, so the next turn should get to the point quickly.",
+    "Time is tight, so the next move needs to be concise and immediately relevant.",
+  ],
+  hard_escalation: [
+    "Patience is tightening, so another detour will make this harder to recover.",
+    "The HCP is losing patience, so the next turn has to answer the point directly.",
+    "The exchange is hardening, so the next move cannot afford another sidestep.",
+  ],
+  terminal_exit: [
+    "The interaction is close to ending, so only a concise and relevant final move still fits.",
+    "The exchange is closing down, so the next move has to be brief and immediately useful.",
+    "There is very little room left here, so the final move needs to be concise and relevant.",
+  ],
 };
 
-const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string> = {
-  evidence: "They are holding on the proof point, not general framing.",
-  workflow: "They are watching for what this changes in clinic flow, not a broad concept.",
-  access: "They are locked on the access step that actually slows care down.",
-  screening: "They are holding on the patient-selection boundary, not a generic statement.",
-  time: "They are signaling limited availability, so the next move needs real economy.",
-  general: "They are signaling the conversation has to earn its relevance quickly.",
+const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string[]> = {
+  evidence: [
+    "They still need proof that applies to the patients they actually treat.",
+    "They are holding on whether the evidence really fits their patients.",
+    "They still need evidence that feels relevant in practice, not just strong on paper.",
+  ],
+  workflow: [
+    "They are watching for what this actually changes in the clinic workflow.",
+    "They still need to hear what changes for staff in the real workflow.",
+    "They are focused on whether this creates work or removes it for the team.",
+  ],
+  access: [
+    "They are focused on the access step that actually slows care down.",
+    "They still need to know what changes in the approval and access process.",
+    "They are holding on the access barrier that keeps care from moving forward.",
+  ],
+  screening: [
+    "They are focused on which patients truly fit, not a broad patient label.",
+    "They still need a clearer patient-selection answer.",
+    "They are holding on where the real patient boundary sits.",
+  ],
+  time: [
+    "They are signaling limited time, so the next move needs real economy.",
+    "They do not have much time here, so the next turn needs to stay lean.",
+    "They are working inside a short time window, so the next move needs to stay tight.",
+  ],
+  general: [
+    "They still need a clearer reason to stay in the conversation.",
+    "They are signaling that the conversation still has to prove its relevance.",
+    "They still need to hear why this matters in a practical way.",
+  ],
 };
 
 function deriveAnchorAwareConcernDescription({
@@ -516,7 +564,15 @@ function deriveAnchorAwareConcernDescription({
     return "They are still deciding whether the evidence really applies to the patients they actually treat.";
   }
 
-  return CONCERN_DESCRIPTION_BANK[concernFamily];
+  return pick(
+    CONCERN_DESCRIPTION_BANK[concernFamily],
+    normalizeText(
+      scenario?.title,
+      scenario?.journeyStage,
+      scenario?.objective,
+      concernFamily
+    )
+  );
 }
 
 function normalizeText(...values: unknown[]): string {
@@ -847,7 +903,16 @@ export function buildCueDescription(
         ? cueLabelConcern
         : derivedConcernFamily;
 
-  return `${BEHAVIOR_DESCRIPTION_BANK[derivedCategory]} ${deriveAnchorAwareConcernDescription({
+  return `${pick(
+    BEHAVIOR_DESCRIPTION_BANK[derivedCategory],
+    normalizeText(
+      scenario?.title,
+      scenario?.journeyStage,
+      derivedCategory,
+      finalConcernFamily,
+      cueLabel
+    )
+  )} ${deriveAnchorAwareConcernDescription({
     scenario,
     concernFamily: finalConcernFamily,
   })}`.trim();

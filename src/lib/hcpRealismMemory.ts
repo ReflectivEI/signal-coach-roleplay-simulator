@@ -61,7 +61,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
   {
     family: "evidence",
     phase: "clinical_value",
-    example: "The efficacy data is fine. For the patients who would actually use this, does the outcome justify what we'd spend? How do you see it?",
+    example: "The efficacy data is fine. For the patients who would actually use this, does the outcome justify what we'd spend? How do you justify the cost?",
   },
   {
     family: "evidence",
@@ -213,6 +213,7 @@ export function buildRealismSpecNotes({
   if (firstTurn) {
     notes.push("On the first HCP turn, preserve the meeting reason, constraint, and concrete ask in spoken form.");
     notes.push("A good first-turn line should sound like a clinician deciding whether this conversation is worth the next minute.");
+    notes.push("Do not end a question with a vague closer if the actual ask is still unclear. The HCP's ask has to be understandable on its own.");
   }
 
   if (profile.directness === "high") {
@@ -234,6 +235,7 @@ export function buildRealismSpecNotes({
 
   if (turn.concernFamily === "evidence") {
     notes.push("Evidence-focused HCPs should sound threshold-aware and specific about why the proof does or does not fit their patients.");
+    notes.push("If the HCP is asking a follow-up, make the decision question explicit instead of relying on a vague closer.");
   }
   if (turn.concernFamily === "screening") {
     notes.push("Discovery lines should sound like the HCP is clarifying patient boundaries, not asking generic product questions.");

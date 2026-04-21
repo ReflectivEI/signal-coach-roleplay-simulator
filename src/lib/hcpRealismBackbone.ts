@@ -15,6 +15,85 @@ function normalizeOpeningSceneLine(openingScene = ""): string {
     .replace(/\s+\?/g, "?");
 }
 
+function deterministicPick<T>(items: T[], seed = ""): T {
+  if (!items.length) throw new Error("deterministicPick requires at least one item");
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return items[(hash >>> 0) % items.length];
+}
+
+function buildExplicitFollowUpForAnchor(anchorType: OpeningAnchorType, concernFamily = "general"): string {
+  const family = String(concernFamily || "").toLowerCase();
+
+  if (anchorType === "cost_value") {
+    return deterministicPick([
+      "How do you justify the cost?",
+      "Why is the outcome worth the total cost?",
+      "What makes the cost worth it in practice?",
+    ], `${anchorType}|${family}`);
+  }
+
+  if (anchorType === "workflow" || family === "workflow") {
+    return deterministicPick([
+      "What actually changes for staff?",
+      "What changes in the real workflow?",
+      "What would be different for the team day to day?",
+    ], `${anchorType}|${family}`);
+  }
+
+  if (anchorType === "prior_auth" || anchorType === "formulary" || family === "access") {
+    return deterministicPick([
+      "What actually changes in the access step?",
+      "What changes in the approval process?",
+      "What would make that easier to get through?",
+    ], `${anchorType}|${family}`);
+  }
+
+  if (anchorType === "screening" || family === "screening") {
+    return deterministicPick([
+      "Which patients are you actually talking about?",
+      "Which patients really fit?",
+      "What patient are you picturing when you say that?",
+    ], `${anchorType}|${family}`);
+  }
+
+  if (anchorType === "guideline" || anchorType === "safety_flag" || anchorType === "competitive_loyalty" || family === "evidence") {
+    return deterministicPick([
+      "What makes that relevant in practice?",
+      "What makes that apply to your patients?",
+      "What would make that matter in a real decision?",
+    ], `${anchorType}|${family}`);
+  }
+
+  if (family === "time") {
+    return deterministicPick([
+      "What's the short version that matters here?",
+      "What's the one point that matters right now?",
+      "What's the practical point in one sentence?",
+    ], `${anchorType}|${family}`);
+  }
+
+  return deterministicPick([
+    "Why does that matter in practice?",
+    "What does that actually change?",
+    "What should that mean for me in the room?",
+  ], `${anchorType}|${family}`);
+}
+
+function replaceVagueFollowUpClosers(text = "", anchorType: OpeningAnchorType, concernFamily = "general"): string {
+  const explicit = buildExplicitFollowUpForAnchor(anchorType, concernFamily);
+  return normalizeText(text)
+    .replace(/\bWalk me through that\b[.?!]*/gi, explicit)
+    .replace(/\bWalk me through\b[.?!]*/gi, explicit)
+    .replace(/\bHow are you thinking about that\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you think about that\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you see it\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you see that\b[.?!]*/gi, explicit);
+}
+
 function applyGlobalOpeningSpeechCadence(
   text: string,
   turn: HcpTurnDirectiveSet,
@@ -30,11 +109,9 @@ function applyGlobalOpeningSpeechCadence(
       .replace(/\bWhat are others in my area doing\b/i, "What are others around here doing")
       .replace(/\bI just haven't had one come through that fits perfectly yet\b/i, "I just haven't had the right patient come through yet")
       .replace(/\bMy question is always the same\.\s+For the\b/i, "For the")
-      .replace(/\bI keep coming back to the same question\.\s+For the\b/i, "For the")
-      .replace(/\bWalk me through that\b/i, "How do you see it")
-      .replace(/\bWalk me through\.\b/i, "How do you see it?")
-      .replace(/\bHow are you thinking about that\b/i, "How do you see it")
-      .replace(/\bHow do you think about that\b/i, "How do you see it");
+      .replace(/\bI keep coming back to the same question\.\s+For the\b/i, "For the");
+
+  output = replaceVagueFollowUpClosers(output, anchorType, turn.concernFamily);
 
   if (turn.concernFamily === "time" && profile.directness === "high") {
     output = output
@@ -207,16 +284,6 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
       }
       return null;
   }
-}
-
-function deterministicPick<T>(items: T[], seed = ""): T {
-  if (!items.length) throw new Error("deterministicPick requires at least one item");
-  let hash = 2166136261;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index);
-    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
-  }
-  return items[(hash >>> 0) % items.length];
 }
 
 export function buildGlobalFirstTurnCue({
@@ -607,6 +674,8 @@ export function enforceSourceBackedRealismSurface({
   ) {
     output = `${output.replace(/[.?!]+$/, "")}. Give me the short version.`;
   }
+
+  output = replaceVagueFollowUpClosers(output, anchorType, turn.concernFamily);
 
   return output;
 }

@@ -65,6 +65,8 @@ export function normalizeDialoguePunctuation(text = "") {
     .replace(/\bThe unresolved issue is\b/g, "What is unresolved is")
     .replace(/\bThe unresolved piece is still\b/g, "What is still unresolved is")
     .replace(/\bThe unresolved piece is\b/g, "What is unresolved is")
+    .replace(/\bWhat is still unresolved is\b/g, "I still don't have")
+    .replace(/\bWhat is unresolved is\b/g, "I still don't have")
     .replace(/\bRight now the unresolved number is\b/g, "What is still missing is")
     .replace(/\bThe one change that should matter in the room is\b/g, "What should change in the room is")
     .replace(/\bThen the standard has to stay concrete\b/g, "It has to stay concrete")
@@ -83,6 +85,8 @@ export function normalizeDialoguePunctuation(text = "") {
     .replace(/\bThen the concrete standard is\b/g, "The concrete standard is")
     .replace(/\bThen the practical change has to happen\b/g, "The practical change has to happen")
     .replace(/\bThe real question is\b/g, "I still need to understand")
+    .replace(/\bIf the real blocker is\b/g, "If that's really the sticking point,")
+    .replace(/\bIf the blocker is\b/g, "If that's the sticking point,")
     .replace(/\bThe one thing to know is whether\b/g, "What I need to know is whether")
     .replace(/\bThe one thing I need to know is whether\b/g, "What I need to know is whether")
     .replace(/\bThe one thing that usually slows care is\b/g, "What usually slows care is")
@@ -103,8 +107,10 @@ export function normalizeDialoguePunctuation(text = "") {
     .replace(/\bIf ([^.!?]{10,160}?), it still\b/g, "If $1, it still")
     .replace(/\bIf ([^.!?]{10,160}?), this still\b/g, "If $1, this still")
     .replace(/\s+:\s+/g, ". ")
-    .replace(/\bHow are you thinking about that\?/g, "How do you see it?")
-    .replace(/\bHow do you think about that\?/g, "How do you see it?")
+    .replace(/\bHow are you thinking about that\?/g, "Why does that matter in practice?")
+    .replace(/\bHow do you think about that\?/g, "Why does that matter in practice?")
+    .replace(/\bHow do you see it\?/g, "Why does that matter in practice?")
+    .replace(/\bHow do you see that\?/g, "Why does that matter in practice?")
     .replace(/\bMake it quick\b/g, "Keep it short")
     .replace(/\.\s+\./g, ".")
     .replace(/\s+([.?!,])/g, "$1")
@@ -406,9 +412,9 @@ function buildCostValueFollowThroughReply({ scenario, turns, activeConcernText =
 
   if (/average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring/.test(normalized)) {
     if (/incremental spend per patient|added monitoring cost per patient|pin down cleanly|break out cleanly/.test(lastRepText)) {
-      return "What is still missing is the added monitoring cost per patient. I don't have that exact figure broken out cleanly yet, so the next useful move is bringing back that cost breakout instead of stretching the answer.";
+      return "I still don't have the added monitoring cost per patient broken out cleanly enough. The next useful move is coming back with that exact number instead of stretching the answer.";
     }
-    return "If the real blocker is the added monitoring cost itself, that's the number I still need to pin down cleanly. Until I can show that added cost per patient without hiding behind a broad range, I still haven't answered the cost question well enough.";
+    return "If the sticking point is the added monitoring cost itself, that's the number I still need to pin down. Until I can give you that cost per patient without hiding behind a broad range, I still haven't answered the cost question well enough.";
   }
 
   if (/what am i supposed to do with|what do i do with|how am i supposed to use that/.test(normalized)) {
@@ -421,20 +427,20 @@ function buildCostValueFollowThroughReply({ scenario, turns, activeConcernText =
 
   if (/incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|follow up costs|testing and monitoring/.test(normalized)) {
     if (/incremental spend per patient|added monitoring cost per patient|break out cleanly/.test(lastRepText)) {
-      return "What is still unresolved is the added testing and monitoring cost per patient. I don't have that exact incremental number broken out cleanly yet, so the next useful step is bringing back that cost breakout rather than broadening the value story.";
+      return "I still don't have the added testing and monitoring cost per patient broken out cleanly enough. The next useful step is coming back with that cost breakout instead of broadening the value story.";
     }
     return repTurns >= 4
-      ? "If the blocker is the added testing and monitoring cost, that's the number I still need to break out cleanly. Until I can show that incremental spend per patient, I still haven't answered the value question."
-      : "If the real blocker is the added testing and monitoring cost, I need to separate that incremental spend from the base drug cost. Until I can show that cleanly, I still haven't answered the value question.";
+      ? "If the sticking point is the added testing and monitoring cost, that's the number I still need to break out clearly. Until I can show that incremental spend per patient, I still haven't answered the value question."
+      : "If the sticking point is the added testing and monitoring cost, I need to separate that incremental spend from the base drug cost. Until I can show that clearly, I still haven't answered the value question.";
   }
 
   if (/exact cost|total cost per patient|overall cost of treatment per patient|cost per patient/.test(normalized)) {
     if (/full per-patient cost cleanly|gap i still need to close|haven't answered the value question/.test(lastRepText)) {
-      return "What is still unresolved is the exact per-patient cost. I don't have that number broken out cleanly enough yet, so the next useful step is coming back with the full cost picture instead of pretending the value case is settled.";
+      return "I still don't have the exact per-patient cost broken out cleanly enough. The next useful step is coming back with the full cost picture instead of pretending the value case is settled.";
     }
     return repTurns >= 4
       ? "If you need the exact number, that's the gap I still need to close. Until I can show the full per-patient cost cleanly, I shouldn't pretend the value case is complete."
-      : "If the blocker is the exact number, I need to break out the drug cost from the added testing and monitoring cost. Until I can show that cleanly, I still haven't answered the value question.";
+      : "If the sticking point is the exact number, I need to break out the drug cost from the added testing and monitoring cost. Until I can show that clearly, I still haven't answered the value question.";
   }
 
   if (/formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(normalized)) {

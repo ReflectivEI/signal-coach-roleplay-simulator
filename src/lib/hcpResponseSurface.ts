@@ -150,6 +150,8 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\bThe direct answer is that\b/gi, "")
     .replace(/\bThe direct answer is\b/gi, "")
     .replace(/\bThe real question is\b/gi, "I still need to understand")
+    .replace(/\bIf the real blocker is\b/gi, "If that's really the sticking point,")
+    .replace(/\bIf the blocker is\b/gi, "If that's the sticking point,")
     .replace(/\bThe one thing to know is whether\b/gi, "What I need to know is whether")
     .replace(/\bThe one thing that usually slows care is\b/gi, "What usually slows care is")
     .replace(/\bThe one step that should save time is\b/gi, "The step that should save time is")
@@ -166,8 +168,6 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\bKeep this brief\b/gi, "Give me the short version")
     .replace(/\bKeep it tight\b/gi, "Give me the short version")
     .replace(/\bMake it quick\b/gi, "Keep it short")
-    .replace(/\bHow are you thinking about that\?/gi, "How do you see it?")
-    .replace(/\bHow do you think about that\?/gi, "How do you see it?")
     .replace(/\bover the access\b/gi, "through that access step")
     .replace(/\bnot just the product\s+(What single data point would change that\?)/gi, "not just the product. $1");
 
@@ -267,6 +267,34 @@ function applyDomainCadence(text: string, domain: string, concernFamily: string)
   }
 
   return normalizeText(output);
+}
+
+function buildExplicitFollowUpForConcern(concernFamily = "general"): string {
+  switch (String(concernFamily || "").toLowerCase()) {
+    case "evidence":
+      return "What makes that apply to the patients you actually treat?";
+    case "workflow":
+      return "What actually changes for staff?";
+    case "access":
+      return "What actually changes in the access step?";
+    case "screening":
+      return "Which patients are you actually talking about?";
+    case "time":
+      return "What's the short version that matters here?";
+    default:
+      return "Why does that matter in practice?";
+  }
+}
+
+function replaceVagueFollowUpClosers(text: string, concernFamily: string): string {
+  const explicit = buildExplicitFollowUpForConcern(concernFamily);
+  return normalizeText(text)
+    .replace(/\bHow are you thinking about that\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you think about that\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you see it\b[.?!]*/gi, explicit)
+    .replace(/\bHow do you see that\b[.?!]*/gi, explicit)
+    .replace(/\bWalk me through that\b[.?!]*/gi, explicit)
+    .replace(/\bWalk me through\b[.?!]*/gi, explicit);
 }
 
 function deterministicPick<T>(items: T[], seed = ""): T {
@@ -592,6 +620,7 @@ export function applyHcpResponseSurface({
   });
 
   output = applyGlobalSpokenRewrites(output);
+  output = replaceVagueFollowUpClosers(output, turn.concernFamily);
   output = applyAnchorSpecificProgression(output, turn, scenario, hcpTurnCount);
   output = applyCostValueSpokenTightening(output, turn, scenario, hcpTurnCount);
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
