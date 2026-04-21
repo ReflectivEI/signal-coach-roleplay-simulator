@@ -5,6 +5,7 @@ import { runCapabilityEvaluationEngine } from "@/lib/capabilityEvaluation";
 import { initializeConversation } from "@/lib/conversationInit";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { buildDeterministicSessionReview, generateSessionReview } from "@/lib/sessionReview";
+import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { ArrowLeft, Play, Square, Zap, CheckCircle2, AlertCircle, Download } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -240,6 +241,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   let turns = [];
   let allSignals = [];
   let repTurnIds = [];
+  let predictionTrace = [];
   let currentBehaviorState = convInit.initialBehaviorState;
   let currentJourneyState = scenario.journeyState;
   /** @type {"stable" | "slightly_disrupted" | "disrupted"} */
@@ -379,6 +381,16 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       currentBehaviorState = response.nextBehaviorState;
       currentJourneyState = response.nextJourneyState;
       if (response.volatilityState) currentVolatilityProfile = response.volatilityState.profile;
+
+      const predictionSnapshot = response.prediction || predictHcpBehavior(allSignals, allSignals, scenario);
+      predictionTrace = [
+        ...predictionTrace,
+        {
+          turn: i + 1,
+          repTurnId: repTurnObj.id,
+          prediction: predictionSnapshot,
+        },
+      ];
     } catch (error) {
       onProgress(`Turn ${i + 1}/${maxTurns} — FAILED after retries: ${error.message}`);
       break;
@@ -434,7 +446,8 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   }
 
   const assertions = runAssertions(scenario, turns, allSignals, review);
-  return { scenario, turns, allSignals, review, assertions, sessionId: session.id };
+  const finalPrediction = predictionTrace[predictionTrace.length - 1]?.prediction || predictHcpBehavior(allSignals, allSignals, scenario);
+  return { scenario, turns, allSignals, review, assertions, sessionId: session.id, predictionTrace, finalPrediction };
 }
 
 function StatusPill({ status }) {
@@ -550,6 +563,104 @@ function RunTranscript({ turns, buttonLabel = "See Transcript for This Run" }) {
   );
 }
 
+function PredictiveTracePanel({ predictionTrace, finalPrediction }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if ((!Array.isArray(predictionTrace) || predictionTrace.length === 0) && !finalPrediction) return null;
+
+  return (
+    <div className="rounded-xl border border-border/40 bg-surface/40">
+      <button
+        onClick={() => setExpanded((current) => !current)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface/60 transition-colors rounded-xl"
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(174 55% 62%)" }}>
+            Predictive Trace
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            QA-only view of the predicted HCP trajectory used to shape behavior across the run.
+          </p>
+        </div>
+        <span className="shrink-0 inline-flex items-center gap-2 rounded-full border border-border/50 bg-background/40 px-3 py-1.5 text-xs font-medium text-foreground">
+          {expanded ? "Hide Predictive Trace" : "See Predictive Trace for This Run"}
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-border/30"
+          >
+            <div className="px-4 py-4 space-y-3">
+              {finalPrediction && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-primary mb-2">
+                    Final Predicted State
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-foreground/85">
+                    <div><span className="text-muted-foreground">State:</span> {finalPrediction.predictedBehaviorState}</div>
+                    <div><span className="text-muted-foreground">Openness:</span> {finalPrediction.openness} ({finalPrediction.opennessScore}/10)</div>
+                    <div><span className="text-muted-foreground">Trajectory:</span> {finalPrediction.trajectory}</div>
+                    <div><span className="text-muted-foreground">Risk:</span> {finalPrediction.riskLevel}</div>
+                    <div><span className="text-muted-foreground">Concern family:</span> {String(finalPrediction.concernFamily || "general").replace(/_/g, " ")}</div>
+                    <div><span className="text-muted-foreground">Domain:</span> {finalPrediction.scenarioDomain || "general"}</div>
+                  </div>
+                  {finalPrediction.nextLikelyBehavior && (
+                    <p className="mt-3 text-xs text-foreground/85 leading-relaxed">{finalPrediction.nextLikelyBehavior}</p>
+                  )}
+                </div>
+              )}
+
+              {(predictionTrace || []).map((entry, index) => (
+                <div key={`${entry.turn}-${index}`} className="rounded-xl border border-border/35 bg-background/40 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      After Rep Turn {entry.turn}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground capitalize">
+                      {entry.prediction.predictedBehaviorState} / {entry.prediction.riskLevel} risk
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-foreground/80">
+                    <div><span className="text-muted-foreground">Trajectory:</span> {entry.prediction.trajectory}</div>
+                    <div><span className="text-muted-foreground">Concern family:</span> {String(entry.prediction.concernFamily || "general").replace(/_/g, " ")}</div>
+                  </div>
+                  {entry.prediction.predictedDrivers?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Predicted Drivers</p>
+                      <div className="space-y-1">
+                        {entry.prediction.predictedDrivers.map((driver, driverIndex) => (
+                          <p key={driverIndex} className="text-xs text-foreground/80 leading-relaxed">{driver}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {entry.prediction.predictedObjections?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Predicted Objection Themes</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {entry.prediction.predictedObjections.map((objection, objectionIndex) => (
+                          <span key={objectionIndex} className="text-[11px] px-2 py-0.5 rounded-md border border-border/40 bg-surface/40 text-foreground/80">
+                            {objection}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function MatrixRow({ result, index }) {
   const [expanded, setExpanded] = useState(false);
   const passCount = result.assertions.filter((a) => a.pass).length;
@@ -605,6 +716,7 @@ function MatrixRow({ result, index }) {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "hsl(174 55% 62%)" }}>Brief Rationale</p>
                 <p className="text-xs text-foreground/70 leading-relaxed">{result.review?.briefRationale || "—"}</p>
               </div>
+              <PredictiveTracePanel predictionTrace={result.predictionTrace} finalPrediction={result.finalPrediction} />
               <RunTranscript turns={result.turns} />
             </div>
           </motion.div>
@@ -755,6 +867,13 @@ export default function QATwin() {
       lines.push("Capabilities:");
       (r.review?.capabilityInsights || []).forEach((ci) => lines.push(`  ${ci.capabilityId}: ${ci.observationLevel}`));
       lines.push(`Brief Rationale: ${r.review?.briefRationale || "—"}`);
+      if (r.finalPrediction) {
+        lines.push(`Predicted State: ${r.finalPrediction.predictedBehaviorState}`);
+        lines.push(`Predicted Risk: ${r.finalPrediction.riskLevel}`);
+        lines.push(`Predicted Trajectory: ${r.finalPrediction.trajectory}`);
+        lines.push(`Concern Family: ${r.finalPrediction.concernFamily}`);
+        (r.finalPrediction.predictedDrivers || []).forEach((driver) => lines.push(`  Driver: ${driver}`));
+      }
       lines.push("");
     }
     const blob = new Blob([lines.join("\n")], { type: "text/plain" });
@@ -949,6 +1068,7 @@ export default function QATwin() {
               <p className="text-xs text-foreground/80 leading-relaxed">{singleResult.review?.briefRationale || "—"}</p>
             </div>
 
+            <PredictiveTracePanel predictionTrace={singleResult.predictionTrace} finalPrediction={singleResult.finalPrediction} />
             <RunTranscript turns={singleResult.turns} />
           </motion.div>
         )}

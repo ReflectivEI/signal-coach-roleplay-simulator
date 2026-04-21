@@ -12,7 +12,8 @@ import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
 import { ArrowLeft, Square, Lightbulb, LightbulbOff, ChevronDown, Target } from "lucide-react";
 import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PERSONA_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
-import { computeHcpState, computeHcpStateHistory } from "@/lib/hcpStateEngine";
+import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
+import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
 import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
@@ -136,6 +137,12 @@ export default function Simulator() {
           hcpCue: activeCues?.[0]?.label || "",
           hcpBehavior: session?.currentBehaviorState,
           journeyState: session?.currentJourneyState,
+          prediction: hcpPrediction ? {
+            predictedBehaviorState: hcpPrediction.predictedBehaviorState,
+            concernFamily: hcpPrediction.concernFamily,
+            riskLevel: hcpPrediction.riskLevel,
+            nextLikelyBehavior: hcpPrediction.nextLikelyBehavior,
+          } : null,
           scenario,
         });
         setRealtimeFeedback({
@@ -198,12 +205,7 @@ export default function Simulator() {
         setCurrentVolatilityProfile(response.volatilityState.profile);
       }
 
-      const prediction = computeHcpState(
-        updatedSignals,
-        scenario.persona,
-        scenario.interactionPressure || [],
-        scenario.startingBehaviorState,
-      );
+      const prediction = response.prediction || predictHcpBehavior(updatedSignals, updatedSignals, scenario);
       setHcpPrediction(prediction);
       if (coachingEnabled && response.coachingNudge) {
         setLastNudge(response.coachingNudge);

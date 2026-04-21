@@ -70,14 +70,34 @@ export interface SimulatorResponse {
   behaviorSignals: BehaviorSignals;
   coachingNudge: CoachingNudge | null;
   volatilityState: VolatilityState;
+  prediction?: BehaviorPrediction;
 }
 
 export interface BehaviorPrediction {
+  openness: "closed" | "neutral" | "open";
+  opennessScore: number;
+  trajectory: "improving" | "stalled" | "declining";
+  riskLevel: "low" | "moderate" | "high";
+  nextLikelyBehavior: string;
   predictedBehaviorState: string;
   predictedResistanceLevel: "low" | "moderate" | "high";
   predictedDrivers: string[];
   predictedObjections: string[];
   predictedEngagementPattern: string;
+  concernFamily: string;
+  scenarioDomain: string;
+  scenarioFamily: string;
+  contextProfile: {
+    practiceSetting: string;
+    patientMixReality: string;
+    accessFrictionType: string;
+    staffingReality: string;
+    workflowBottleneck: string;
+    adoptionStyle: string;
+    evidenceSensitivity: string;
+  };
+  assessmentSnapshot: Record<string, ObservationLevel>;
+  missedRunCounts: Record<string, number>;
   capabilityDrivers: CapabilityDriver[];
 }
 

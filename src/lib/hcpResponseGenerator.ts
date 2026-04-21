@@ -948,8 +948,22 @@ CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradic
 Predicted HCP State: ${prediction.predictedBehaviorState}
 Predicted Resistance: ${prediction.predictedResistanceLevel}
 Predicted Engagement Pattern: ${prediction.predictedEngagementPattern}
+Predicted Openness: ${prediction.openness} (${prediction.opennessScore}/10)
+Predicted Trajectory: ${prediction.trajectory}
+Predicted Risk: ${prediction.riskLevel}
+Concern Family: ${prediction.concernFamily}
+Scenario Domain: ${prediction.scenarioDomain}
+Scenario Family: ${prediction.scenarioFamily}
 ${prediction.predictedDrivers.length ? `Predicted Drivers:\n${prediction.predictedDrivers.map(d => `  - ${d}`).join("\n")}` : ""}
 ${prediction.predictedObjections.length ? `Predicted Objection Themes:\n${prediction.predictedObjections.map(o => `  - ${o}`).join("\n")}` : ""}
+Scenario Reality Profile:
+  - Practice setting: ${prediction.contextProfile.practiceSetting}
+  - Patient mix reality: ${prediction.contextProfile.patientMixReality}
+  - Access friction: ${prediction.contextProfile.accessFrictionType}
+  - Staffing reality: ${prediction.contextProfile.staffingReality}
+  - Workflow bottleneck: ${prediction.contextProfile.workflowBottleneck}
+  - Adoption style: ${prediction.contextProfile.adoptionStyle}
+  - Evidence sensitivity: ${prediction.contextProfile.evidenceSensitivity}
 `;
 
   const runtimeProfileBlock = `
@@ -1272,6 +1286,7 @@ Return ONLY valid JSON:
       hcpReply,
     ),
     coachingNudge: result.coachingNudge || null,
-    volatilityState: volatility
+    volatilityState: volatility,
+    prediction,
   };
 }

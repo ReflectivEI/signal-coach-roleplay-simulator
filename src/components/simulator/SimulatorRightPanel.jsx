@@ -146,6 +146,9 @@ export default function SimulatorRightPanel({
 
       {hcpPrediction && (
         <LightSection icon={AlertTriangle} title="Predictive Layer">
+          <Row label="Predicted State">
+            <Pill>{hcpPrediction.predictedBehaviorState}</Pill>
+          </Row>
           <Row label="Openness">
             <Pill>{opennessPill[hcpPrediction.openness] || hcpPrediction.openness}</Pill>
           </Row>
@@ -183,6 +186,20 @@ export default function SimulatorRightPanel({
               <p className="text-xs leading-relaxed" style={{ color: "rgba(236,245,245,0.90)" }}>
                 {hcpPrediction.nextLikelyBehavior}
               </p>
+            </div>
+          )}
+          {hcpPrediction.concernFamily && (
+            <div className="grid grid-cols-1 gap-2 pt-1">
+              <Row label="Concern Family">
+                <span className="text-xs font-medium capitalize" style={{ color: "rgba(244,249,249,0.96)" }}>
+                  {String(hcpPrediction.concernFamily).replace(/_/g, " ")}
+                </span>
+              </Row>
+              <Row label="Scenario Domain">
+                <span className="text-xs font-medium capitalize" style={{ color: "rgba(244,249,249,0.96)" }}>
+                  {String(hcpPrediction.scenarioDomain || "general")}
+                </span>
+              </Row>
             </div>
           )}
         </LightSection>

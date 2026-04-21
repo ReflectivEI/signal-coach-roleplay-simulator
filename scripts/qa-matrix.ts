@@ -8,8 +8,10 @@ import { computeVolatilityEvents } from "../src/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { buildDeterministicSessionReview, generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
+import { predictHcpBehavior } from "../src/lib/hcpBehaviorPrediction";
 import { invokeWorkerText } from "../src/services/workerClient.js";
 import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply, normalizeDialoguePunctuation } from "../src/lib/qaRepProxy.js";
+import { getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -240,6 +242,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
 
   let turns: any[] = [];
   let allSignals: any[] = [];
+  const predictionTrace: any[] = [];
   const repTurnIds: string[] = [];
   let currentBehaviorState = convInit.initialBehaviorState;
   let currentJourneyState = scenario.journeyState;
@@ -366,6 +369,11 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     if (response.volatilityState) {
       currentVolatilityProfile = response.volatilityState.profile;
     }
+    predictionTrace.push({
+      turn: i + 1,
+      repTurnId: repTurnObj.id,
+      prediction: response.prediction || predictHcpBehavior(allSignals, allSignals, scenario),
+    });
   }
 
   const stateHistory = computeHcpStateHistory(
@@ -414,6 +422,8 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     personaKey,
     turns,
     allSignals,
+    predictionTrace,
+    finalPrediction: predictionTrace[predictionTrace.length - 1]?.prediction || predictHcpBehavior(allSignals, allSignals, scenario),
     capabilityLevels,
     review,
     assertions: summarizeAssertions(scenario, turns, allSignals, review),
@@ -422,8 +432,30 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
 
 async function main() {
   const scenarioFilter = process.argv.slice(4).join(" ").trim().toLowerCase();
+  const familyAliasMap: Record<string, string[]> = {
+    "cost/value": ["evidence"],
+    cost: ["evidence"],
+    value: ["evidence"],
+    "access/workflow": ["access", "workflow"],
+    access: ["access"],
+    workflow: ["workflow"],
+    "skeptical evidence-fit": ["evidence"],
+    skeptical: ["evidence"],
+    "time-pressured gatekeeping": ["time"],
+    time: ["time"],
+    gatekeeping: ["time"],
+    "patient-selection ambiguity": ["screening"],
+    screening: ["screening"],
+  };
+  const requestedFamilies = familyAliasMap[scenarioFilter] || [];
   const scenarios = scenarioFilter
-    ? ALL_SCENARIOS.filter((scenario) => scenario.title.toLowerCase().includes(scenarioFilter))
+    ? ALL_SCENARIOS.filter((scenario) => {
+        const concernFamily = getScenarioConcernFamily(scenario) || "";
+        return scenario.title.toLowerCase().includes(scenarioFilter) ||
+          scenario.journeyStage.toLowerCase().includes(scenarioFilter) ||
+          concernFamily.includes(scenarioFilter) ||
+          requestedFamilies.includes(concernFamily);
+      })
     : ALL_SCENARIOS;
   const personaKey = parsePersonaKey(process.argv[2]);
   const maxTurns = Number(process.argv[3] || 4);
@@ -469,8 +501,10 @@ async function main() {
     results: results.map((result) => ({
       title: result.scenario.title,
       journeyStage: result.scenario.journeyStage,
+      concernFamily: getScenarioConcernFamily(result.scenario) || "general",
       assertions: result.assertions,
       capabilityLevels: result.capabilityLevels,
+      finalPrediction: result.finalPrediction,
       briefRationale: result.review?.briefRationale || "",
       qaFallback: Boolean(result.review?.qaFallback),
       qaFallbackReason: result.review?.qaFallbackReason || "",
@@ -483,6 +517,17 @@ async function main() {
             cue: turn.cues?.[0]?.label || "",
             cueDescription: turn.cues?.[0]?.description || "",
             nudge: turn.nudge?.guidance || "",
+          }))
+        : undefined,
+      predictionTrace: results.length === 1
+        ? result.predictionTrace?.map((entry) => ({
+            turn: entry.turn,
+            predictedBehaviorState: entry.prediction?.predictedBehaviorState || "",
+            riskLevel: entry.prediction?.riskLevel || "",
+            trajectory: entry.prediction?.trajectory || "",
+            concernFamily: entry.prediction?.concernFamily || "",
+            predictedDrivers: entry.prediction?.predictedDrivers || [],
+            predictedObjections: entry.prediction?.predictedObjections || [],
           }))
         : undefined,
     })),
