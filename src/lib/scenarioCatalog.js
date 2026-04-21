@@ -147,7 +147,7 @@ export const ALL_SCENARIOS = [
     stakeholder: "Internal Medicine / Hospital Medicine Physician",
     objective: "Shift from clinical value to economic and patient-outcome value framing.",
     context: "Internal Medicine / Hospital Medicine Physician — Large health system with formulary cost pressures, sits on a P&T advisory group.",
-    openingScene: "The efficacy data is fine. My question is always the same: for the patients who would actually use this, does the outcome justify what we'd spend? How are you thinking about that?",
+    openingScene: "The efficacy data is fine. For the patients who would actually use this, does the outcome justify what we'd spend? How do you see it?",
     visualScene: generateOpeningScene({ title: "The Cost-Effectiveness Filter", journeyStage: "clinical_value", startingBehaviorState: "neutral", decisionOrientation: "evidence_driven", interactionPressure: ["operationally_constrained", "access_barrier"] }),
     journeyStage: "clinical_value", journeyState: "clinical_evaluation",
     hcpRoleType: "influencer", decisionOrientation: "evidence_driven",

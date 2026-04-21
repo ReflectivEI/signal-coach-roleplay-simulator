@@ -29,8 +29,12 @@ function applyGlobalOpeningSpeechCadence(
       .replace(/\bI don't know what I can do about that, is there even a process\b/i, "I don't know what I can actually do about that. Is there even a process")
       .replace(/\bWhat are others in my area doing\b/i, "What are others around here doing")
       .replace(/\bI just haven't had one come through that fits perfectly yet\b/i, "I just haven't had the right patient come through yet")
-      .replace(/\bWalk me through that\b/i, "How are you thinking about that")
-      .replace(/\bWalk me through\.\b/i, "How are you thinking about that?");
+      .replace(/\bMy question is always the same\.\s+For the\b/i, "For the")
+      .replace(/\bI keep coming back to the same question\.\s+For the\b/i, "For the")
+      .replace(/\bWalk me through that\b/i, "How do you see it")
+      .replace(/\bWalk me through\.\b/i, "How do you see it?")
+      .replace(/\bHow are you thinking about that\b/i, "How do you see it")
+      .replace(/\bHow do you think about that\b/i, "How do you see it");
 
   if (turn.concernFamily === "time" && profile.directness === "high") {
     output = output

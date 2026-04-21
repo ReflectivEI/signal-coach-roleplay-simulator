@@ -61,13 +61,13 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
   {
     family: "evidence",
     phase: "clinical_value",
-    example: "The efficacy data is fine. My question is always the same: for the patients who would actually use this, does the outcome justify what we'd spend? How are you thinking about that?",
+    example: "The efficacy data is fine. For the patients who would actually use this, does the outcome justify what we'd spend? How do you see it?",
   },
   {
     family: "evidence",
     phase: "clinical_value",
     directness: "high",
-    example: "If you can't give me a clear total cost per patient, then I still don't have enough information to evaluate its value.",
+    example: "If you can't give me a clear total cost per patient, I still don't have enough information to evaluate its value.",
   },
   {
     family: "evidence",
@@ -80,7 +80,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     family: "evidence",
     phase: "clinical_value",
     directness: "high",
-    example: "If the cost side is unclear, then I still don't have enough information to evaluate its value.",
+    example: "If the cost side is unclear, I still don't have enough information to evaluate its value.",
   },
   {
     family: "access",

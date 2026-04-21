@@ -129,13 +129,36 @@ function applyGlobalSpokenRewrites(text = ""): string {
   });
 
   output = output
+    .replace(/\bMy question is always the same\.\s+For the\b/gi, "For the")
+    .replace(/\bI keep coming back to the same question\.\s+For the\b/gi, "For the")
+    .replace(/\bI still need to understand\s+for the patients who would actually use this,\s*/gi, "For the patients who would actually use this, ")
+    .replace(/\bMy question is always the same\b/gi, "I still need to understand")
+    .replace(/\bI keep coming back to the same question\b/gi, "I still need to understand")
+    .replace(/\bI still need to understand:\s*/gi, "I still need to understand ")
+    .replace(/\bThe practical test is whether\b/gi, "I need to see whether")
+    .replace(/\bThe useful answer is whether\b/gi, "I need to know whether")
+    .replace(/\bThe useful answer is the\b/gi, "The")
+    .replace(/\bThe useful answer is an\b/gi, "An")
+    .replace(/\bThe useful answer is\b/gi, "What matters is")
+    .replace(/\bThe direct answer is that\b/gi, "")
+    .replace(/\bThe direct answer is\b/gi, "")
+    .replace(/\bThe real question is\b/gi, "I still need to understand")
+    .replace(/\bThe one thing to know is whether\b/gi, "What I need to know is whether")
+    .replace(/\bThe one thing that usually slows care is\b/gi, "What usually slows care is")
+    .replace(/\bThe one step that should save time is\b/gi, "The step that should save time is")
+    .replace(/\bI need to see whether:\s*/gi, "I need to see whether ")
+    .replace(/\bI need to know whether:\s*/gi, "I need to know whether ")
     .replace(/\b(Then the real question is|The real question is|The practical test is|The useful answer is|The direct answer is|The one thing is|The one change is|That is the gap)\s*:\s*/g, "$1. ")
+    .replace(/,\s*then\s+/gi, ", ")
     .replace(/\s+:\s+/g, ". ");
 
   output = output
     .replace(/\bKeep it brief\b/gi, "Give me the short version")
     .replace(/\bKeep this brief\b/gi, "Give me the short version")
-    .replace(/\bKeep it tight\b/gi, "Give me the short version");
+    .replace(/\bKeep it tight\b/gi, "Give me the short version")
+    .replace(/\bMake it quick\b/gi, "Keep it short")
+    .replace(/\bHow are you thinking about that\?/gi, "How do you see it?")
+    .replace(/\bHow do you think about that\?/gi, "How do you see it?");
 
   output = output.replace(
     /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should|Keep|Stay|Show|Tell|Give)\b/g,
@@ -258,8 +281,8 @@ function buildCostValueSpecificLine({
 
   if (turn.escalationStage === "disengaging" || turn.responseShape === "conditional_close") {
     return deterministicPick([
-      "If the cost side is still unclear, then I still don't have enough information to evaluate its value.",
-      "If you can't make the total-cost picture clear, then I still don't have enough to judge whether it's worth it.",
+      "If the cost side is still unclear, I still don't have enough information to evaluate its value.",
+      "If you can't make the total-cost picture clear, I still don't have enough to judge whether it's worth it.",
       "At this point, if the spend still isn't clear, I still don't have enough information to make a value call.",
     ], seed);
   }
@@ -270,9 +293,9 @@ function buildCostValueSpecificLine({
     turn.escalationStage === "high_pressure"
   ) {
     return deterministicPick([
-      "If you can't give me a clear total cost per patient, then I still don't have enough information to evaluate its value.",
+      "If you can't give me a clear total cost per patient, I still don't have enough information to evaluate its value.",
       "I don't need another efficacy point. I need the total cost picture, including any testing or monitoring this adds.",
-      "If the cost side is unclear, then I still don't have enough information to evaluate its value.",
+      "If the cost side is unclear, I still don't have enough information to evaluate its value.",
     ], seed);
   }
 
@@ -306,9 +329,9 @@ function applyCostValueSpokenTightening(
 
   if (turn.escalationStage === "disengaging" || turn.responseShape === "conditional_close") {
     return deterministicPick([
-      "If the all-in cost still isn't clear, then I still don't have enough information to decide if it's worth it.",
-      "If you still can't break out the full spend, then I still can't make a real value judgment on it.",
-      "If the total-cost picture is still fuzzy, then I still don't have enough to evaluate it properly.",
+      "If the all-in cost still isn't clear, I still don't have enough information to decide if it's worth it.",
+      "If you still can't break out the full spend, I still can't make a real value judgment on it.",
+      "If the total-cost picture is still fuzzy, I still don't have enough to evaluate it properly.",
     ], seed);
   }
 
