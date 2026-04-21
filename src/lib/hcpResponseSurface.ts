@@ -63,6 +63,9 @@ function repairQuestionPunctuation(text = ""): string {
     if (/^(what|how|why|who|when|where|can|would|should|do|does|did|is|are|am|will|could)\b/i.test(cleaned) && /\.$/.test(cleaned)) {
       return cleaned.replace(/\.$/, "?");
     }
+    if (/,\s*(what|how|why|who|when|where|can|would|should|do|does|did|is|are|am|will|could)\b/i.test(cleaned) && /\.$/.test(cleaned)) {
+      return cleaned.replace(/\.$/, "?");
+    }
     return cleaned;
   }).join(" ");
 }
@@ -97,6 +100,10 @@ function enforceSentenceBoundaries(text = ""): string {
   );
   output = output.replace(
     /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
+    "$1. $2"
+  );
+  output = output.replace(
+    /([a-z0-9])\s+(What single data point would change that\?|What first step would actually make this workable\?|What one next step would make this real enough to actually do\?|What one low-risk step would make this feel safe enough to try\?|What next step would make this real\?)/g,
     "$1. $2"
   );
 
@@ -146,6 +153,8 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\bThe one thing to know is whether\b/gi, "What I need to know is whether")
     .replace(/\bThe one thing that usually slows care is\b/gi, "What usually slows care is")
     .replace(/\bThe one step that should save time is\b/gi, "The step that should save time is")
+    .replace(/\bcan you make this quick\b/gi, "keep it short")
+    .replace(/\bmake this quick\b/gi, "keep it short")
     .replace(/\bI need to see whether:\s*/gi, "I need to see whether ")
     .replace(/\bI need to know whether:\s*/gi, "I need to know whether ")
     .replace(/\b(Then the real question is|The real question is|The practical test is|The useful answer is|The direct answer is|The one thing is|The one change is|That is the gap)\s*:\s*/g, "$1. ")
@@ -158,7 +167,9 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\bKeep it tight\b/gi, "Give me the short version")
     .replace(/\bMake it quick\b/gi, "Keep it short")
     .replace(/\bHow are you thinking about that\?/gi, "How do you see it?")
-    .replace(/\bHow do you think about that\?/gi, "How do you see it?");
+    .replace(/\bHow do you think about that\?/gi, "How do you see it?")
+    .replace(/\bover the access\b/gi, "through that access step")
+    .replace(/\bnot just the product\s+(What single data point would change that\?)/gi, "not just the product. $1");
 
   output = output.replace(
     /([a-z0-9])\s+(What|How|Why|Who|When|Where|If|Can|Would|Should|Keep|Stay|Show|Tell|Give)\b/g,
