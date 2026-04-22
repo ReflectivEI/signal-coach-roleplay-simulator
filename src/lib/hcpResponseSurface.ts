@@ -46,7 +46,8 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|they|them|we|i)\.$/i, ".")
     .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.")
     .replace(/\s+\b(what [^.?!]*?)\s+\bfor\./i, " $1?")
-    .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?");
+    .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?")
+    .replace(/\bkeep it to\.$/i, "keep it to one point.");
 
   output = output.replace(/\.\./g, ".");
   return normalizeText(output);
@@ -68,6 +69,101 @@ function repairQuestionPunctuation(text = ""): string {
     }
     return cleaned;
   }).join(" ");
+}
+
+function repairCommaSplices(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/(\bqueue to get through),\s+(what's|what is)\b/gi, "$1. $2")
+    .replace(/(\bpaperwork to get through),\s+(what's|what is)\b/gi, "$1. $2")
+    .replace(/(\bstaff already buried),\s+(what's|what is)\b/gi, "$1. $2")
+    .replace(/(\bI've got [^,.?!]+),\s+(what's|what is|tell me|show me|give me)\b/gi, "$1. $2");
+
+  return normalizeText(output);
+}
+
+function inferMissingObject(text = ""): string {
+  const value = normalizeText(text).toLowerCase();
+  if (/prior auth queue|approval queue/.test(value)) return "it";
+  if (/prior auth/.test(value)) return "that";
+  if (/queue/.test(value)) return "it";
+  if (/workflow|staff step|handoff|monitoring/.test(value)) return "that";
+  if (/cost|spend|testing|monitoring/.test(value)) return "that";
+  return "that";
+}
+
+function repairIncompleteOperationalAsks(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  const object = inferMissingObject(output);
+
+  output = output
+    .replace(/\b(help me reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(help reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what's the one thing you can do to help me reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what is the one thing you can do to help me reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what's the one thing you can do to help reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what is the one thing you can do to help reduce)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what's the one thing you can do to change)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what is the one thing you can do to change)\?$/i, `$1 ${object}?`)
+    .replace(/\b(what specific action can you take to address)\.$/i, `$1 ${object}?`)
+    .replace(/\b(what specific step can you take to address)\.$/i, `$1 ${object}?`)
+    .replace(/\b(what can you do to address)\.$/i, `$1 ${object}?`);
+
+  output = output
+    .replace(/\bhelp me reduce that\?$/i, "help me reduce that burden on my staff?")
+    .replace(/\bhelp me reduce it\?$/i, /prior auth queue|approval queue/i.test(output) ? "help me reduce it?" : "help me reduce that?")
+    .replace(/\bwhat's the one thing you can do to help me reduce that\?$/i, "What's the one thing you can do to help reduce that?")
+    .replace(/\bwhat is the one thing you can do to help me reduce that\?$/i, "What is the one thing you can do to help reduce that?");
+
+  if (/prior auth queue/i.test(output)) {
+    output = output
+      .replace(/\bwhat's the one thing you can do to help reduce it\?$/i, "What's the one thing you can do to help reduce it?")
+      .replace(/\bwhat's the one thing you can do to help reduce that\?$/i, "What's the one thing you can do to help reduce that queue?")
+      .replace(/\bwhat is the one thing you can do to help reduce that\?$/i, "What is the one thing you can do to help reduce that queue?");
+  }
+
+  return normalizeText(output);
+}
+
+function dedupeLateStageQuestions(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(
+      /\b(What's the first step to get past prior auth\?)\s+(What first step would actually make this workable\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What specific patient subgroup would I use this for to justify a formulary change\?)\s+(What next step would make this real\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What one proof point would actually change the decision\?)\s+(What one data point would actually change treatment choice\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What one data point would actually change treatment choice\?)\s+(What evidence would actually move this from discussion to decision\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What's the smallest change I can make to test this without fully changing our protocol\?)\s+(What one low-risk step would make this feel safe enough to try\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What's the smallest step I can take to test this without changing our entire workflow\?)\s+(What one low-risk step would make this feel safe enough to try\?)/i,
+      "$1"
+    )
+    .replace(
+      /\b(What one next step would make this real enough to actually do\?)\s+(What next step would make this real\?)/i,
+      "$1"
+    );
+
+  return normalizeText(output);
 }
 
 function hasNaturalTimePressureDirective(text = ""): boolean {
@@ -103,8 +199,16 @@ function enforceSentenceBoundaries(text = ""): string {
     "$1. $2"
   );
   output = output.replace(
+    /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
+    "$1. $2"
+  );
+  output = output.replace(
     /([a-z0-9])\s+(What single data point would change that\?|What first step would actually make this workable\?|What one next step would make this real enough to actually do\?|What one low-risk step would make this feel safe enough to try\?|What next step would make this real\?)/g,
     "$1. $2"
+  );
+  output = output.replace(
+    /,\s+so\s+(what's|what is|how|why|who|when|where|can|would|should)\b/gi,
+    ". $1"
   );
 
   return normalizeText(output);
@@ -748,9 +852,15 @@ export function applyHcpResponseSurface({
 
   return ensureTerminalPunctuation(
     repairQuestionPunctuation(
-      repairDanglingTail(
-        enforceSentenceCase(
-          enforceSentenceBoundaries(output)
+      repairIncompleteOperationalAsks(
+        repairDanglingTail(
+          enforceSentenceCase(
+            dedupeLateStageQuestions(
+              repairCommaSplices(
+                enforceSentenceBoundaries(output)
+              )
+            )
+          )
         )
       )
     )

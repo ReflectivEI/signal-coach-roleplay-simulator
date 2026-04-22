@@ -28,7 +28,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     phase: "initial_access",
     directness: "high",
     pressure: "operationally_constrained",
-    example: "Okay, I've got a few minutes. My office manager said you've been trying to get in. I'll be honest, I'm not usually a fan of these visits, so let's keep this useful.",
+    example: "Okay, I've got a few minutes. My office manager said you've been trying to get in. Keep it useful and get to the point.",
   },
   {
     family: "screening",
@@ -86,7 +86,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     family: "access",
     phase: "objection_resolution",
     directness: "high",
-    example: "Before you say anything, if there's a prior auth requirement, this conversation is over. We don't have the bandwidth.",
+    example: "If this still needs prior auth, tell me what actually changes for my staff. We do not have spare bandwidth.",
   },
   {
     family: "evidence",
@@ -107,7 +107,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
   {
     family: "workflow",
     phase: "implementation_commitment",
-    example: "Clinically, I'm on board. But we'd still need someone to manage the monitoring. I don't have the staff support a bigger practice would have.",
+    example: "Clinically, I can see it. But someone still has to own the monitoring, and I do not have extra staff sitting around.",
   },
   {
     family: "evidence",
@@ -117,7 +117,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
   {
     family: "access",
     phase: "access_resolution",
-    example: "I'd like to use this, but our formulary team flagged it as non-preferred. I don't know what I can actually do about that. Is there even a process?",
+    example: "I'd like to use this, but our formulary team flagged it as non-preferred. What can I actually do from my side to move it?",
   },
   {
     family: "hesitation",
@@ -215,6 +215,9 @@ export function buildRealismSpecNotes({
     notes.push("A good first-turn line should sound like a clinician deciding whether this conversation is worth the next minute.");
     notes.push("Do not end a question with a vague closer if the actual ask is still unclear. The HCP's ask has to be understandable on its own.");
   }
+
+  notes.push("Every HCP question must stand alone semantically. Do not ask to reduce, change, fix, improve, or help with something unless the object is explicitly named.");
+  notes.push("Avoid comma splices in spoken dialogue. If two independent thoughts are present, split them into separate sentences.");
 
   if (profile.directness === "high") {
     notes.push("When directness is high, prefer clipped sentences over balanced, polished explanations.");

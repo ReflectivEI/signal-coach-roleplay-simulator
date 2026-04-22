@@ -543,24 +543,40 @@ function deriveAnchorAwareConcernDescription({
   scenario?: HcpCueInputs["scenario"];
   concernFamily: ConcernFamily;
 }): string {
+  const scenarioText = normalizeText(
+    scenario?.title,
+    scenario?.journeyStage,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.openingScene,
+    scenario?.visualScene,
+    Array.isArray(scenario?.keyChallenges) ? scenario?.keyChallenges.join(" ") : ""
+  );
   const anchor = detectOpeningAnchorType(
-    normalizeText(
-      scenario?.title,
-      scenario?.objective,
-      scenario?.description,
-      scenario?.openingScene,
-      scenario?.visualScene,
-      Array.isArray(scenario?.keyChallenges) ? scenario?.keyChallenges.join(" ") : ""
-    )
+    scenarioText
   );
 
-  if (anchor === "cost_value") {
+  if (
+    concernFamily === "general" &&
+    String(scenario?.journeyStage || "").toLowerCase() === "commitment_close" &&
+    /\bright patient\b|\bfit(s|ting)? perfectly\b|\bpatient\b.*\bfit\b/i.test(scenarioText)
+  ) {
+    return "They are still trying to pin down which patient would make this feel real enough to act on.";
+  }
+  if (
+    concernFamily === "general" &&
+    /\bsafe enough\b|\blow-risk\b|\bfirst mover\b|\bfirst use\b|\bfirst\b/i.test(scenarioText)
+  ) {
+    return "They are still deciding what low-risk first step would feel safe enough to try.";
+  }
+
+  if (anchor === "cost_value" && concernFamily === "evidence") {
     return "They still need a clear understanding of the total cost before they can judge whether it is worth it.";
   }
-  if (anchor === "workflow") {
+  if (anchor === "workflow" && concernFamily === "workflow") {
     return "They are trying to understand exactly what changes for staff in the real workflow.";
   }
-  if (anchor === "guideline" || anchor === "safety_flag") {
+  if ((anchor === "guideline" || anchor === "safety_flag") && concernFamily === "evidence") {
     return "They are still deciding whether the evidence really applies to the patients they actually treat.";
   }
 
@@ -885,6 +901,18 @@ export function buildCueDescription(
   concernFamily?: ConcernFamily,
   scenario?: HcpCueInputs["scenario"]
 ): string {
+  const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
+  const scenarioText = normalizeText(
+    scenario?.title,
+    scenario?.journeyStage,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.openingScene,
+    scenario?.visualScene,
+    Array.isArray(scenario?.keyChallenges) ? scenario?.keyChallenges.join(" ") : ""
+  );
+  const preserveGeneralConcern =
+    derivedScenarioNeedsGeneralConcern(scenarioText, journeyStage);
   const derivedCategory = category || deriveCueCategory({
     hcpReply: cueLabel,
     behaviorState,
@@ -899,6 +927,8 @@ export function buildCueDescription(
   const finalConcernFamily =
     derivedConcernFamily === "evidence" && cueLabelConcern && cueLabelConcern !== "evidence"
       ? cueLabelConcern
+      : preserveGeneralConcern && derivedConcernFamily === "general"
+        ? derivedConcernFamily
       : cueLabelConcern && derivedConcernFamily === "general"
         ? cueLabelConcern
         : derivedConcernFamily;
@@ -916,6 +946,11 @@ export function buildCueDescription(
     scenario,
     concernFamily: finalConcernFamily,
   })}`.trim();
+}
+
+function derivedScenarioNeedsGeneralConcern(scenarioText = "", journeyStage = ""): boolean {
+  if (journeyStage === "commitment_close") return true;
+  return /\bright patient\b|\bfit(s|ting)? perfectly\b|\bfirst one\b|\bnot ready to be the first\b|\blow-risk\b|\bsafe enough\b|\bfirst move\b/i.test(scenarioText);
 }
 
 export function resolveObservedCue(
