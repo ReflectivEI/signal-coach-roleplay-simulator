@@ -402,6 +402,78 @@ function buildWorkflowConditionalLine({
   ], seed);
 }
 
+function buildEvidenceConditionalLine({
+  turn,
+  scenario,
+  original,
+  hcpTurnCount,
+}: {
+  turn: HcpTurnDirectiveSet;
+  scenario: any;
+  original: string;
+  hcpTurnCount: number;
+}): string {
+  const seed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.responseShape}|${turn.escalationStage}|${hcpTurnCount}|${original}`;
+
+  if (turn.phase === "objection_resolution") {
+    return deterministicPick([
+      "If you can show me the exact evidence that answers that concern, I can stay with it.",
+      "If you can keep this to the proof point that actually answers the concern, I can stay with it.",
+      "If there is evidence that directly answers that risk, keep it to that.",
+    ], seed);
+  }
+
+  if (turn.phase === "implementation_commitment") {
+    return deterministicPick([
+      "If you can show me the one proof point that would justify trying this again, I can stay with it.",
+      "If there is one data point that would make this usable again, keep it to that.",
+      "If the evidence is strong enough to reopen this in practice, keep it to the one point that proves it.",
+    ], seed);
+  }
+
+  return deterministicPick([
+    "If you can show me the one proof point that would actually change the decision, I can stay with this.",
+    "If there is one data point that would really change treatment choice, keep it to that.",
+    "If you can make the evidence specific enough to change a real decision, I can stay with it.",
+  ], seed);
+}
+
+function buildEvidenceCloseQuestion({
+  turn,
+  scenario,
+  original,
+  hcpTurnCount,
+}: {
+  turn: HcpTurnDirectiveSet;
+  scenario: any;
+  original: string;
+  hcpTurnCount: number;
+}): string {
+  const seed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.responseShape}|${turn.escalationStage}|question|${hcpTurnCount}|${original}`;
+
+  if (turn.phase === "objection_resolution") {
+    return deterministicPick([
+      "What evidence would actually answer that concern?",
+      "What proof point would actually settle that?",
+      "What data would actually close that gap for you?",
+    ], seed);
+  }
+
+  if (turn.phase === "implementation_commitment") {
+    return deterministicPick([
+      "What proof point would make this usable again?",
+      "What data would make you comfortable trying this again?",
+      "What evidence would reopen this in practice?",
+    ], seed);
+  }
+
+  return deterministicPick([
+    "What one proof point would actually change the decision?",
+    "What one data point would actually change treatment choice?",
+    "What evidence would actually move this from discussion to decision?",
+  ], seed);
+}
+
 function applyAnchorSpecificProgression(
   text: string,
   turn: HcpTurnDirectiveSet,
@@ -498,6 +570,7 @@ function applyShapeCompression(
 function applyLateStageNarrowing(
   text: string,
   turn: HcpTurnDirectiveSet,
+  scenario: any,
   hcpTurnCount = 0,
 ): string {
   let output = text;
@@ -505,7 +578,12 @@ function applyLateStageNarrowing(
 
   if (turn.closeMode && turn.responseShape === "partial_agreement" && !/\bif you can|if that can|if this can|i could look at|i can look at|i’d look at|i'd look at|i'm open to\b/i.test(output)) {
     if (turn.concernFamily === "evidence") {
-      output = `If you can show me what changes practice, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = `${buildEvidenceConditionalLine({
+        turn,
+        scenario,
+        original: output,
+        hcpTurnCount,
+      })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
       output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
@@ -526,7 +604,12 @@ function applyLateStageNarrowing(
 
   if (turn.closeMode && turn.escalationStage !== "disengaging" && !/\bif\b.*\bcan\b|\bif\b.*\bshow\b|\bif\b.*\bkeep\b|\bif\b.*\bworkable\b/i.test(output)) {
     if (turn.concernFamily === "evidence") {
-      output = `If you can make the proof point concrete, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = `${buildEvidenceConditionalLine({
+        turn,
+        scenario,
+        original: output,
+        hcpTurnCount,
+      })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
       output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
@@ -545,7 +628,12 @@ function applyLateStageNarrowing(
 
   if (turn.closeMode && !/next step|one step|one patient|one case|one action|open to|would you be open/i.test(output)) {
     if (turn.concernFamily === "evidence") {
-      output = `${output.replace(/[.?!]+$/, "")} What single data point would change that?`;
+      output = `${output.replace(/[.?!]+$/, "")} ${buildEvidenceCloseQuestion({
+        turn,
+        scenario,
+        original: output,
+        hcpTurnCount,
+      })}`;
     } else if (turn.concernFamily === "workflow" || turn.concernFamily === "access") {
       output = `${output.replace(/[.?!]+$/, "")} What first step would actually make this workable?`;
     } else if (turn.concernFamily === "hesitation") {
@@ -624,7 +712,7 @@ export function applyHcpResponseSurface({
   output = applyAnchorSpecificProgression(output, turn, scenario, hcpTurnCount);
   output = applyCostValueSpokenTightening(output, turn, scenario, hcpTurnCount);
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
-  output = applyLateStageNarrowing(output, turn, hcpTurnCount);
+  output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
   output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
 

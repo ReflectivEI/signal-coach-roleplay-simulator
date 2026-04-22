@@ -193,6 +193,10 @@ function reconcilePredictedBehaviorState({
     return concernFamily === "time" ? "frustration" : "resistance";
   }
 
+  if (hcpState.openness === "closed" && hcpState.riskLevel === "high" && highPressureFamily) {
+    return concernFamily === "time" ? "frustration" : "resistance";
+  }
+
   if (hcpState.riskLevel === "high" && hcpState.trajectory === "declining") {
     return highPressureFamily ? "resistance" : "frustration";
   }
@@ -207,6 +211,10 @@ function reconcilePredictedBehaviorState({
 
   if (predictedBehaviorState === "curiosity" && hcpState.openness === "closed") {
     return highPressureFamily ? "frustration" : "neutral";
+  }
+
+  if (predictedBehaviorState === "openness" && hcpState.openness === "closed") {
+    return highPressureFamily ? (concernFamily === "time" ? "frustration" : "resistance") : "neutral";
   }
 
   return predictedBehaviorState;
