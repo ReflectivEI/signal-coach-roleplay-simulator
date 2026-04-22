@@ -168,6 +168,50 @@ function buildNextLikelyBehavior(
   return hcpState.nextLikelyBehavior;
 }
 
+function reconcilePredictedBehaviorState({
+  predictedBehaviorState,
+  predictedResistanceLevel,
+  concernFamily,
+  hcpState,
+  scenario,
+}: {
+  predictedBehaviorState: string;
+  predictedResistanceLevel: "low" | "moderate" | "high";
+  concernFamily: string;
+  hcpState: ReturnType<typeof computeHcpState>;
+  scenario: any;
+}): string {
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+  const highPressureFamily =
+    concernFamily === "evidence" ||
+    concernFamily === "time" ||
+    pressures.includes("time_constrained") ||
+    pressures.includes("skeptical_resistant") ||
+    pressures.includes("safety_concern");
+
+  if (hcpState.openness === "closed" && predictedResistanceLevel === "high") {
+    return concernFamily === "time" ? "frustration" : "resistance";
+  }
+
+  if (hcpState.riskLevel === "high" && hcpState.trajectory === "declining") {
+    return highPressureFamily ? "resistance" : "frustration";
+  }
+
+  if (predictedBehaviorState === "openness" && hcpState.openness === "neutral" && hcpState.riskLevel !== "low") {
+    return "neutral";
+  }
+
+  if (predictedBehaviorState === "openness" && highPressureFamily && predictedResistanceLevel !== "low") {
+    return concernFamily === "time" ? "frustration" : "neutral";
+  }
+
+  if (predictedBehaviorState === "curiosity" && hcpState.openness === "closed") {
+    return highPressureFamily ? "frustration" : "neutral";
+  }
+
+  return predictedBehaviorState;
+}
+
 export function predictHcpBehavior(
   signals: BehaviorSignals[],
   latestSignals: BehaviorSignals[],
@@ -350,7 +394,14 @@ export function predictHcpBehavior(
   const scenarioFamily = deriveFamilyTemperamentControls(scenario).familyKey;
   const contextProfile = deriveScenarioPredictiveContext(scenario, concernFamily, scenarioDomain);
   const riskLevel = maxRiskLevel(hcpState.riskLevel, predictedResistanceLevel);
-  const nextLikelyBehavior = buildNextLikelyBehavior(predictedBehaviorState, concernFamily, hcpState, scenario);
+  const reconciledBehaviorState = reconcilePredictedBehaviorState({
+    predictedBehaviorState,
+    predictedResistanceLevel,
+    concernFamily,
+    hcpState,
+    scenario,
+  });
+  const nextLikelyBehavior = buildNextLikelyBehavior(reconciledBehaviorState, concernFamily, hcpState, scenario);
 
   return {
     openness: hcpState.openness,
@@ -358,7 +409,7 @@ export function predictHcpBehavior(
     trajectory: hcpState.trajectory,
     riskLevel,
     nextLikelyBehavior,
-    predictedBehaviorState,
+    predictedBehaviorState: reconciledBehaviorState,
     predictedResistanceLevel,
     predictedDrivers: dedupeStrings(predictedDrivers),
     predictedObjections: dedupeStrings(predictedObjections),

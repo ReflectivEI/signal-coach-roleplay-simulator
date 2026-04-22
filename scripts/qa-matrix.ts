@@ -25,6 +25,7 @@ const QA_FINGERPRINT_FILES = [
   "src/lib/hcpResponseSurface.ts",
   "src/lib/hcpRealismBackbone.ts",
   "src/lib/hcpRealismMemory.ts",
+  "src/lib/hcpBehaviorPrediction.ts",
   "src/lib/hcpDialogueDirectives.ts",
   "src/lib/hcpTurnDirectives.ts",
   "src/lib/scenarioFamilyRegistry.ts",
