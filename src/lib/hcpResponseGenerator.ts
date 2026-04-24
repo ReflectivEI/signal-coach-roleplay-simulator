@@ -23,6 +23,7 @@ import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntime
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
+import { validateHcpHumanRealism } from "./hcpRealismLanguagePack.js";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
@@ -521,6 +522,246 @@ function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): str
   return String(scenario?.openingScene || "").toLowerCase();
 }
 
+function hasTranscriptSupportForPriorReference(transcript: ConversationTurn[] = []): boolean {
+  const repLines = (Array.isArray(transcript) ? transcript : [])
+    .filter((turn) => turn?.speaker === "rep" && turn?.text)
+    .map((turn) => String(turn.text).toLowerCase());
+
+  if (!repLines.length) return false;
+
+  return repLines.some((line) =>
+    /\befficacy\b|\bstudy\b|\bdata\b|\btrial\b|\boutcome\b|\bguideline\b|\bshared last week\b|\bmentioned earlier\b/.test(line)
+  );
+}
+
+function enforceTranscriptContinuity({
+  hcpReply,
+  transcript,
+  hcpTurnCount,
+  scenario,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  hcpTurnCount: number;
+  scenario: any;
+}): string {
+  const line = String(hcpReply || "").trim();
+  if (!line) return line;
+
+  const referencesPriorRepClaim =
+    /\byou(?:'ve| have)? already\b/i.test(line) ||
+    /\byou mentioned\b/i.test(line) ||
+    /\bas you explained\b/i.test(line) ||
+    /\blike you told me\b/i.test(line) ||
+    /\byou already gave(?: me)?\b/i.test(line);
+
+  if (!referencesPriorRepClaim) return line;
+
+  if (hcpTurnCount > 0 && hasTranscriptSupportForPriorReference(transcript)) {
+    return line;
+  }
+
+  const pressure = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+  if (pressure.includes("time_constrained")) {
+    return "I've only got a minute, so what are you looking to discuss?";
+  }
+
+  return "What specifically are you looking to go over today?";
+}
+
+function extractRepIntent(repMessage: string) {
+  const text = String(repMessage || "").trim();
+  const normalized = text.toLowerCase();
+
+  let topic = "";
+  if (/prior auth|prior authorization|paperwork|approval|coverage/.test(normalized)) topic = "prior auth burden";
+  else if (/formulary|non-preferred|committee|payer|access/.test(normalized)) topic = "formulary access";
+  else if (/workflow|staff|handoff|callback|process|operational/.test(normalized)) topic = "workflow burden";
+  else if (/renal|kidney|subgroup|guideline|trial|study|data|evidence/.test(normalized)) topic = "clinical evidence";
+  else if (/patient|therapy|treatment|outcome/.test(normalized)) topic = "patient fit";
+
+  let intentType: "introduction" | "follow_up" | "discovery_question" | "solution_pitch" | "clarification" = "introduction";
+  if (/follow(?:ing)? up|we spoke|we talked|you mentioned|as we discussed|last week|earlier|ongoing/i.test(text)) {
+    intentType = "follow_up";
+  } else if (/\?$/.test(text) || /^(what|how|where|which|who|can|could|would)\b/i.test(normalized)) {
+    intentType = "discovery_question";
+  } else if (/clarify|to be clear|just to confirm/i.test(normalized)) {
+    intentType = "clarification";
+  } else if (/help reduce|help with|impact we're seeing|this can|this could|would cut down|would reduce|benefit/i.test(normalized)) {
+    intentType = "solution_pitch";
+  }
+
+  const hasPriorContextSignal = /follow(?:ing)? up|we spoke|we talked|you mentioned|as we discussed|last week|earlier|ongoing/i.test(text);
+
+  return {
+    topic,
+    intentType,
+    hasPriorContextSignal,
+  };
+}
+
+function hcpTopicPattern(topic = ""): RegExp | null {
+  switch (topic) {
+    case "prior auth burden":
+      return /prior auth|paperwork|approval|coverage|staff/i;
+    case "formulary access":
+      return /formulary|non-preferred|access|committee|payer/i;
+    case "workflow burden":
+      return /workflow|staff|handoff|callback|process|operational/i;
+    case "clinical evidence":
+      return /renal|subgroup|guideline|study|trial|data|evidence/i;
+    case "patient fit":
+      return /patient|therapy|treatment|outcome/i;
+    default:
+      return null;
+  }
+}
+
+function topicAlignmentLine(
+  topic = "",
+  behaviorState = "",
+  journeyStage = "",
+  hcpTurnCount = 0,
+): string {
+  const earlyTurn = hcpTurnCount <= 1;
+  const lowerBehavior = String(behaviorState || "").toLowerCase();
+  const lowerJourney = String(journeyStage || "").toLowerCase();
+
+  const variants: Record<string, string[]> = {
+    "prior auth burden": earlyTurn
+      ? [
+          "Yes, prior auth has definitely been a challenge.",
+          "Yes, that's been an ongoing issue for us.",
+          "Yes, we've been dealing with that quite a bit.",
+        ]
+      : [
+          "On prior auth specifically, that's still been a challenge for us.",
+          "On the prior auth side, that's still been an issue for the team.",
+          "That prior auth piece is still a real problem for us.",
+        ],
+    "formulary access": earlyTurn
+      ? [
+          "Yes, formulary access has definitely been an issue for us.",
+          "Yes, that's been an ongoing access problem on our side.",
+          "Yes, we've been running into that quite a bit.",
+        ]
+      : [
+          "On formulary access, that's still been a sticking point for us.",
+          "On the access side, that's still been difficult for us.",
+          "That formulary piece is still a real barrier for us.",
+        ],
+    "workflow burden": earlyTurn
+      ? [
+          "Yes, workflow has definitely been a pressure point for us.",
+          "Yes, that's been an ongoing issue for the office.",
+          "Yes, we've been dealing with that quite a bit operationally.",
+        ]
+      : [
+          "On the workflow side, that's still been a strain for the team.",
+          "Workflow-wise, that's still been a pressure point for us.",
+          "That operational piece is still difficult for the office.",
+        ],
+    "clinical evidence": earlyTurn
+      ? [
+          "Yes, that's definitely been part of the discussion for us.",
+          "Yes, that evidence question has been coming up for us.",
+          "Yes, that's been an ongoing question on our end.",
+        ]
+      : [
+          "On the evidence side, that's still one of the main questions for us.",
+          "That evidence piece is still very much part of the discussion for us.",
+          "That's still one of the key evidence questions for us.",
+        ],
+    "patient fit": earlyTurn
+      ? [
+          "Yes, figuring out the right patient has definitely been part of the challenge.",
+          "Yes, that's been one of the ongoing questions for us.",
+          "Yes, we've been working through that quite a bit.",
+        ]
+      : [
+          "On patient fit, that's still one of the harder parts for us.",
+          "That patient-selection piece is still a challenge for us.",
+          "We're still working through what the right patient looks like there.",
+        ],
+    default: earlyTurn
+      ? [
+          "Yes, that's been an ongoing issue for us.",
+          "Yes, we've been dealing with that quite a bit.",
+          "Yes, that's definitely been coming up for us.",
+        ]
+      : [
+          "That's still been one of the issues for us.",
+          "That's still part of the challenge on our side.",
+          "That's still one of the sticking points for us.",
+        ],
+  };
+
+  const pool = variants[topic] || variants.default;
+  const seed = `${topic}|${lowerBehavior}|${lowerJourney}|${hcpTurnCount}`;
+  const offset =
+    (lowerBehavior.includes("closed") || lowerBehavior.includes("resist")) ? 1 :
+    (lowerJourney.includes("access") || lowerJourney.includes("adoption")) ? 2 :
+    0;
+  const score = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return pool[(score + offset) % pool.length];
+}
+
+function enforceRepAlignment(
+  hcpText: string,
+  repIntent: { topic: string; intentType: string; hasPriorContextSignal: boolean },
+  {
+    behaviorState = "",
+    journeyStage = "",
+    hcpTurnCount = 0,
+  }: {
+    behaviorState?: string;
+    journeyStage?: string;
+    hcpTurnCount?: number;
+  } = {},
+) {
+  let line = String(hcpText || "").trim();
+  if (!line) return line;
+
+  const topicPattern = hcpTopicPattern(repIntent.topic);
+  const alreadyAligned = Boolean(topicPattern && topicPattern.test(line));
+  const hasProxyFirstTimeFraming =
+    /\bmy ma said\b/i.test(line) ||
+    /\bsomeone told me\b/i.test(line) ||
+    /\byou(?:'ve| have) been trying to reach me\b/i.test(line) ||
+    /\byou(?:'ve| have) been trying to get in\b/i.test(line) ||
+    /\bmy office manager said\b/i.test(line);
+  const hasInitialAccessReset =
+    /\bwhat'?s this about\b/i.test(line) ||
+    /\bwhy are you here\b/i.test(line) ||
+    /\bwhat do you want me to know\b/i.test(line);
+
+  if (alreadyAligned && !hasProxyFirstTimeFraming) {
+    return line;
+  }
+
+  if (repIntent.hasPriorContextSignal) {
+    if (hasProxyFirstTimeFraming) {
+      line = topicAlignmentLine(repIntent.topic, behaviorState, journeyStage, hcpTurnCount);
+    }
+
+    if (hasInitialAccessReset && hcpTurnCount <= 1) {
+      line = topicAlignmentLine(repIntent.topic, behaviorState, journeyStage, hcpTurnCount);
+    }
+  }
+
+  const shouldInjectAlignment =
+    Boolean(repIntent.topic) &&
+    Boolean(topicPattern) &&
+    !topicPattern.test(line) &&
+    (repIntent.hasPriorContextSignal || hcpTurnCount === 0);
+
+  if (shouldInjectAlignment && hcpTurnCount <= 1) {
+    line = topicAlignmentLine(repIntent.topic, behaviorState, journeyStage, hcpTurnCount);
+  }
+
+  return line;
+}
+
 function getLastHcpReplyText(transcript: ConversationTurn[]): string {
   for (let i = transcript.length - 1; i >= 0; i -= 1) {
     if (transcript[i]?.speaker === "hcp" && transcript[i]?.text) {
@@ -749,7 +990,7 @@ function isHesitationToCommitmentScenario(scenario: any, latestConcern: string):
   if (scenarioMatchesConcernFamily(scenario, "hesitation")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const state = String(scenario?.journeyState || "").toLowerCase();
+  const state = String(scenario?.journeyStage || "").toLowerCase();
   const objective = String(scenario?.objective || "").toLowerCase();
   const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
   const concernText = String(latestConcern || "").toLowerCase();
@@ -769,7 +1010,7 @@ function isAdoptionCautionScenario(scenario: any, latestConcern: string): boolea
   if (scenarioMatchesConcernFamily(scenario, "adoption_caution")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const state = String(scenario?.journeyState || "").toLowerCase();
+  const state = String(scenario?.journeyStage || "").toLowerCase();
   const objective = String(scenario?.objective || "").toLowerCase();
   const concernText = String(latestConcern || "").toLowerCase();
 
@@ -810,7 +1051,7 @@ function inferCommitmentAttempt(
   const lateEnoughForAsk =
     repTurns >= 2 ||
     ["commitment_close", "access_formulary", "adoption_implementation"].includes(String(scenario?.journeyStage || "")) ||
-    String(scenario?.journeyState || "").includes("commitment");
+    String(scenario?.journeyStage || "").includes("commitment");
 
   if (/\bcan we\b|\bwould you be open to\b|\bnext step\b|\bset up\b|\bfollow-up\b|\breview together\b|\bbring this to\b|\bpilot\b|\btry this with\b|\bidentify a patient\b|\bflagging that chart\b|\bbring to the next formulary discussion\b|\bconcrete step you could take\b|\bwhat one thing could you take back\b|\bmake a strong case\b/.test(text)) {
     return "clear";
@@ -999,7 +1240,9 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
 ${summarizeConcernContinuity(transcript, scenario)}
 `;
 
-  const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
+  const prompt = `You are generating spoken dialogue for the HCP in a Signal Intelligence Coaching Simulator.
+Act as the HCP only. Do not sound like a coach, evaluator, or summarizer.
+Return a JSON object.
 
 SCENARIO: ${scenario.title}
 Stakeholder: ${scenario.stakeholder}
@@ -1082,6 +1325,10 @@ INSTRUCTIONS:
 24. Across 5-8 exchanges, preserve continuity of the HCP's agenda; the wording may change, but the unresolved blocker should remain recognizable until it is actually addressed
 25. If the HCP has repeated the same concern family recently, sharpen or narrow that same concern instead of inventing a new one
 26. If the HCP questioned why the rep is there and the rep directly corrected that premise (for example: requested follow-up, requested study, agreed conversation), you MUST absorb that correction on the next turn and move to a narrower practical or decision-relevant condition. Do NOT keep asking why the rep is there after the premise has been directly answered.
+27. Every HCP question must stand alone semantically. Never ask to reduce, change, fix, improve, justify, or help with something unless the object is explicit.
+28. Do not end an HCP line on an incomplete ask such as "reduce?", "change?", "help with?", or any question missing what is actually being asked about.
+29. Avoid comma splices in HCP dialogue. If there are two complete thoughts, split them into separate sentences.
+30. In operational or access questions, explicitly name the object of the ask such as the queue, the prior auth step, the approval path, the callback burden, the monitoring step, or the staff task.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -1201,6 +1448,17 @@ Return ONLY valid JSON:
       transcript,
     });
   }
+  hcpReply = enforceTranscriptContinuity({
+    hcpReply,
+    transcript,
+    hcpTurnCount,
+    scenario,
+  });
+  hcpReply = enforceRepAlignment(hcpReply, extractRepIntent(repMessage), {
+    behaviorState: result.nextBehaviorState || currentBehaviorState,
+    journeyStage: result.nextJourneyState || currentJourneyState,
+    hcpTurnCount,
+  });
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
@@ -1208,6 +1466,20 @@ Return ONLY valid JSON:
     profile: runtimeProfile,
     hcpTurnCount,
   });
+  hcpReply = enforceTranscriptContinuity({
+    hcpReply,
+    transcript,
+    hcpTurnCount,
+    scenario,
+  });
+  hcpReply = validateHcpHumanRealism(hcpReply, {
+    scenario,
+    repMessage,
+    interactionPressures: scenario.interactionPressure || [],
+    behaviorState: result.nextBehaviorState || currentBehaviorState,
+    turnCount: hcpTurnCount,
+    hasPriorContextSignal: extractRepIntent(repMessage).hasPriorContextSignal,
+  }).text;
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
     transcript,
@@ -1228,6 +1500,20 @@ Return ONLY valid JSON:
         profile: runtimeProfile,
         hcpTurnCount,
       });
+      hcpReply = enforceTranscriptContinuity({
+        hcpReply,
+        transcript,
+        hcpTurnCount,
+        scenario,
+      });
+      hcpReply = validateHcpHumanRealism(hcpReply, {
+        scenario,
+        repMessage,
+        interactionPressures: scenario.interactionPressure || [],
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        turnCount: hcpTurnCount,
+        hasPriorContextSignal: extractRepIntent(repMessage).hasPriorContextSignal,
+      }).text;
     } catch {
       continuityAdjusted = true;
       hcpReply = applyHcpResponseSurface({
@@ -1241,6 +1527,20 @@ Return ONLY valid JSON:
         profile: runtimeProfile,
         hcpTurnCount,
       });
+      hcpReply = enforceTranscriptContinuity({
+        hcpReply,
+        transcript,
+        hcpTurnCount,
+        scenario,
+      });
+      hcpReply = validateHcpHumanRealism(hcpReply, {
+        scenario,
+        repMessage,
+        interactionPressures: scenario.interactionPressure || [],
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        turnCount: hcpTurnCount,
+        hasPriorContextSignal: extractRepIntent(repMessage).hasPriorContextSignal,
+      }).text;
     }
   }
 

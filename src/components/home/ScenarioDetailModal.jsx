@@ -22,7 +22,7 @@ function FieldLabel({ children }) {
 
 // ── Variable pill with tooltip ───────────────────────────────────────────
 const TOOLTIP_DESCRIPTIONS = {
-  "Discovery": "Early-stage conversation where rep learns about HCP's patient population and clinical priorities.",
+  "Early Discovery": "Early-stage conversation where rep learns about HCP's patient population and clinical priorities.",
   "Open": "HCP is receptive and engaged; showing genuine interest in the conversation.",
   "Treating Clinician": "Physician directly responsible for patient care and clinical decisions.",
   "Patient-Centric": "HCP prioritizes patient outcomes and benefits as the primary decision driver."
@@ -32,7 +32,7 @@ function VarPill({ children }) {
   const DESCRIPTIONS = {
     // Journey Stages (display labels)
     "Initial Access": "Getting into the conversation and establishing enough credibility to earn a real dialogue.",
-    "Discovery": "Early-stage conversation where the rep learns about the HCP's patient population, clinical priorities, and current workflows.",
+    "Early Discovery": "Early-stage conversation where the rep learns about the HCP's patient population, clinical priorities, and current workflows.",
     "Clinical Value": "HCP evaluates whether the product delivers clinical value for their patient population.",
     "Objection Handling": "Responding to HCP resistance, concerns, or barriers to progression.",
     "Adoption & Implementation": "HCP commits to using the product and implements it into their practice.",
@@ -40,7 +40,7 @@ function VarPill({ children }) {
     "Commitment & Close": "Securing a clear, owned commitment from the HCP to move forward.",
     // Journey Stages (raw enum values fallback)
     "initial_access": "Getting into the conversation and establishing enough credibility to earn a real dialogue.",
-    "discovery": "Early-stage conversation where the rep learns about the HCP's patient population, clinical priorities, and current workflows.",
+    "early_discovery": "Early-stage conversation where the rep learns about the HCP's patient population, clinical priorities, and current workflows.",
     "clinical_value": "HCP evaluates whether the product delivers clinical value for their patient population.",
     "objection_handling": "Responding to HCP resistance, concerns, or barriers to progression.",
     "adoption_implementation": "HCP commits to using the product and implements it into their practice.",
@@ -174,7 +174,7 @@ function AiCoachSection({ scenario }) {
       if (cancelled) return;
       setHcpState({
         currentBehaviorState: convInit.initialBehaviorState,
-        currentJourneyState: scenario.journeyState,
+        currentJourneyState: scenario.journeyStage,
         currentVolatilityProfile: convInit.initialVolatilityProfile,
         allSignals: [],
       });
@@ -208,7 +208,7 @@ function AiCoachSection({ scenario }) {
         scenario,
         transcript,
         hcpState?.currentBehaviorState || scenario.startingBehaviorState || "neutral",
-        hcpState?.currentJourneyState || scenario.journeyState,
+        hcpState?.currentJourneyState ?? null,
         false,
         trimmed,
         hcpState?.allSignals || [],

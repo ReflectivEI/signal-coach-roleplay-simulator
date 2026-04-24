@@ -46,7 +46,7 @@ const SLOT1_ACTION_BANK: Record<string, string[]> = {
     "leans against the counter, scrolling through the day's schedule on the EMR",
     "is at their desk, pen in hand, working through a stack of patient intake forms",
   ],
-  discovery: [
+  early_discovery: [
     "is reviewing a patient chart, pausing over a handwritten note as you enter",
     "sits at their desk with several patient intake summaries spread out in front of them",
     "is at their workstation, cross-referencing open chart tabs with handwritten notes",

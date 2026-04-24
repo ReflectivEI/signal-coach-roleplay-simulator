@@ -32,7 +32,7 @@ Validated by script:
 Current built-in family counts in code:
 
 - `initial_access`: 3
-- `discovery`: 3
+- `early_discovery`: 3
 - `clinical_value`: 3
 - `objection_handling`: 3
 - `adoption_implementation`: 3
@@ -109,7 +109,7 @@ Files:
 
 ### What is still weak
 
-1. Strong-rep conversations in high-pressure scenarios still over-index on discovery instead of conversion.
+1. Strong-rep conversations in high-pressure scenarios still over-index on early_discovery behavior instead of conversion.
    - Example: `The Gatekeeper Filter`
    - The HCP is time-constrained and wants relevance fast.
    - The strong-rep proxy still asks long exploratory questions rather than tightening the exchange.

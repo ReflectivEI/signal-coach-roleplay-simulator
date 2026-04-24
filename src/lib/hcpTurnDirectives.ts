@@ -119,7 +119,7 @@ function countConsecutiveMisses(signals: BehaviorSignals[], selector: (signal: B
 }
 
 function derivePhase(scenario: any = {}, currentJourneyState = ""): string {
-  const state = String(currentJourneyState || scenario?.journeyState || "").toLowerCase();
+  const state = String(currentJourneyState || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
 
   if (state.includes("objection") || stage === "objection_handling") return "objection_resolution";
@@ -127,7 +127,7 @@ function derivePhase(scenario: any = {}, currentJourneyState = ""): string {
   if (state.includes("access") || stage === "access_formulary") return "access_resolution";
   if (state.includes("adoption") || stage === "adoption_implementation") return "implementation_commitment";
   if (state.includes("commitment") || stage === "commitment_close") return "close";
-  if (state.includes("early") || stage === "initial_access" || stage === "discovery") return "clarify";
+  if (state.includes("early") || stage === "initial_access" || stage === "early_discovery") return "clarify";
   return "clarify";
 }
 
@@ -286,7 +286,7 @@ function buildDirectiveLines({
     lines.push("- In hematology post-adoption mode, stay focused on the difficult first case, what happened, and why confidence has narrowed.");
   }
   if (domain === "endocrinology" && concernFamily === "screening") {
-    lines.push("- In endocrinology discovery mode, stay practical about which patients actually stay on therapy and where current thinking breaks down.");
+    lines.push("- In endocrinology early_discovery mode, stay practical about which patients actually stay on therapy and where current thinking breaks down.");
   }
   if (domain === "general" && concernFamily === "hesitation") {
     lines.push("- In hesitation mode, stay anchored to passive agreement, what has delayed action so far, and the smallest next owned move.");

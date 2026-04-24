@@ -30,10 +30,10 @@ export default function Home() {
   const filtered = applyScenarioFilters(scenarios, filters);
 
   // Group scenarios by journey stage for display
-  const STAGE_ORDER = ["initial_access", "discovery", "clinical_value", "objection_handling", "adoption_implementation", "access_formulary", "commitment_close"];
+  const STAGE_ORDER = ["initial_access", "early_discovery", "clinical_value", "objection_handling", "adoption_implementation", "access_formulary", "commitment_close"];
   const STAGE_LABELS = {
     initial_access: "Initial Access",
-    discovery: "Discovery",
+    early_discovery: "Early Discovery",
     clinical_value: "Clinical Value",
     objection_handling: "Objection Handling",
     adoption_implementation: "Adoption & Implementation",

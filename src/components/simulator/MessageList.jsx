@@ -68,7 +68,7 @@ function MessageBubble({ turn }) {
   );
 }
 
-export default function MessageList({ turns, isLoading, realtimeFeedback }) {
+export default function MessageList({ turns, isLoading }) {
   const bottomRef = useRef(null);
 
   useEffect(() => {

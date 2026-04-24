@@ -68,6 +68,32 @@ function buildActionItemParagraph(insight) {
   return `${insight.nextTimeAction}${rewrite}`;
 }
 
+function quoteTurnText(text) {
+  const value = String(text || "").trim();
+  return value ? `"${value}"` : "";
+}
+
+function buildTranscriptIndex(transcript = []) {
+  return (Array.isArray(transcript) ? transcript : []).reduce((acc, turn, index) => {
+    const turnId = String(turn?.id || "").trim();
+    const text = String(turn?.text || "").trim();
+    if (!turnId || !text) return acc;
+    acc[turnId] = {
+      turnNumber: Number(turn?.turnNumber || index + 1),
+      speaker: String(turn?.speaker || "").toUpperCase(),
+      text,
+    };
+    return acc;
+  }, {});
+}
+
+function buildReadableEvidenceList(insight, transcriptIndex) {
+  return (Array.isArray(insight?.relatedTurnIds) ? insight.relatedTurnIds : [])
+    .map((turnId) => transcriptIndex?.[turnId])
+    .filter(Boolean)
+    .map((entry) => `Turn ${entry.turnNumber} -- ${entry.speaker}: ${quoteTurnText(entry.text)}`);
+}
+
 function NotObservedMarker() {
   return (
     <p
@@ -174,11 +200,12 @@ function DeepDiveBlock({ number, title, children }) {
 
 // ─── Capability row ───────────────────────────────────────────────────────────
 
-function CapabilityRow({ cap, insight }) {
+function CapabilityRow({ cap, insight, transcriptIndex }) {
   const [open, setOpen] = useState(false);
   const colors = CAP_COLORS[cap.id] || { text: "text-primary", bg: "bg-primary/10", border: "border-primary/20" };
   const sublabel = CAP_SUBLABELS[cap.id];
   const score = LEVEL_TO_SCORE[insight?.observationLevel] || 0;
+  const readableEvidence = buildReadableEvidenceList(insight, transcriptIndex);
   const hasStructuredContent = Boolean(
     insight?.whatHappened ||
     insight?.transcriptEvidence ||
@@ -276,11 +303,18 @@ function CapabilityRow({ cap, insight }) {
 
               {!hasStructuredContent && <NotObservedMarker />}
 
-              {insight.relatedTurnIds?.length > 0 && (
+              {readableEvidence.length > 0 && (
                 <div className="pt-2 border-t border-border/30">
-                  <p className="text-xs text-muted-foreground/60 font-mono">
-                    Transcript anchors: {insight.relatedTurnIds.join(", ")}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
+                    Transcript Evidence
                   </p>
+                  <div className="mt-2 space-y-1.5">
+                    {readableEvidence.map((entry) => (
+                      <p key={entry} className="text-xs text-muted-foreground/80 leading-relaxed">
+                        {entry}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -310,6 +344,7 @@ function CapabilityRow({ cap, insight }) {
  *   review: any;
  *   scenario: any;
  *   sessionTurnCount: number;
+ *   transcript?: any[];
  *   onClose: () => void;
  *   onExport: () => void;
  *   onNewSession: () => void;
@@ -320,6 +355,7 @@ export default function SessionSummaryModal({
   review,
   scenario,
   sessionTurnCount,
+  transcript = [],
   onClose,
   onExport,
   onNewSession,
@@ -359,6 +395,7 @@ export default function SessionSummaryModal({
   }
 
   const briefRationale = review.briefRationale || review.overallSummary?.[0] || "";
+  const transcriptIndex = buildTranscriptIndex(transcript);
   const insights = SIGNAL_INTELLIGENCE_CAPABILITIES
     .map((cap) => insightByCapability[cap.id])
     .filter(Boolean);
@@ -574,6 +611,7 @@ export default function SessionSummaryModal({
                     key={cap.id}
                     cap={cap}
                     insight={insightByCapability[cap.id]}
+                    transcriptIndex={transcriptIndex}
                   />
                 ))}
               </div>

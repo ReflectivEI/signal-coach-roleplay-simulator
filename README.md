@@ -1,6 +1,9 @@
-# Signal Coach Core
+# Signal Coach Roleplay Simulator
 
 Standalone Role Play Simulator built as an independent frontend plus dedicated backend worker.
+
+GitHub repo:
+`ReflectivEI/signal-coach-roleplay-simulator`
 
 Production worker target:
 `https://reflectivai-rps-api.tonyabdelmalak.workers.dev`
@@ -13,11 +16,10 @@ Production worker target:
 npm install
 ```
 
-2. Create worker secrets and local frontend config:
+2. Create worker secrets:
 
 ```bash
 cp .dev.vars.example .dev.vars
-printf "VITE_ROLEPLAY_WORKER_URL=http://127.0.0.1:8787\n" > .env.local
 ```
 
 3. Run the dedicated Cloudflare Worker:
@@ -26,11 +28,17 @@ printf "VITE_ROLEPLAY_WORKER_URL=http://127.0.0.1:8787\n" > .env.local
 npm run worker:dev
 ```
 
+Local worker target:
+`http://127.0.0.1:8787`
+
 4. In a second terminal, run the frontend:
 
 ```bash
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
+
+Local frontend target:
+`http://127.0.0.1:5173`
 
 5. Build for production:
 
@@ -44,7 +52,7 @@ npm run build
 - Custom scenarios are persisted through the worker and cached locally as a fallback.
 - Completed simulator sessions are persisted through the worker.
 - HCP generation, coaching support, and structured review generation run through the worker.
-- The worker lives in `worker/src/index.js` and exposes `/health`, `/api/llm/invoke`, `/api/scenarios`, and `/api/roleplay/sessions`.
+- The worker lives in `worker/src/index.js` and exposes `/health`, `/api/llm/invoke`, `/api/scenarios`, `/api/roleplay/sessions`, `/api/roleplay/start`, and `/api/roleplay/respond`.
 
 ## Important
 

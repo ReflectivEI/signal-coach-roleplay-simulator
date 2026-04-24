@@ -26,7 +26,6 @@ for (const scenario of ALL_SCENARIOS) {
   familySummary[scenario.journeyStage] = (familySummary[scenario.journeyStage] || 0) + 1;
 
   if (!allowedJourneyStages.has(scenario.journeyStage)) issues.push({ title: scenario.title, field: "journeyStage", value: String(scenario.journeyStage) });
-  if (!allowedJourneyStates.has(scenario.journeyState)) issues.push({ title: scenario.title, field: "journeyState", value: String(scenario.journeyState) });
   if (!allowedHcpRoleTypes.has(scenario.hcpRoleType)) issues.push({ title: scenario.title, field: "hcpRoleType", value: String(scenario.hcpRoleType) });
   if (!allowedDecisionOrientations.has(scenario.decisionOrientation)) issues.push({ title: scenario.title, field: "decisionOrientation", value: String(scenario.decisionOrientation) });
   if (!allowedPersonas.has(scenario.persona)) issues.push({ title: scenario.title, field: "persona", value: String(scenario.persona) });

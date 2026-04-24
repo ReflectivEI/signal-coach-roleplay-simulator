@@ -42,7 +42,7 @@ const INFLUENCE_DRIVERS = [
 const JOURNEY_STAGES = [
   { value: "all", label: "All Journey Stages" },
   { value: "initial_access", label: "Initial Access" },
-  { value: "discovery", label: "Discovery" },
+  { value: "early_discovery", label: "Early Discovery" },
   { value: "clinical_value", label: "Clinical Value" },
   { value: "objection_handling", label: "Objection Handling" },
   { value: "adoption_implementation", label: "Adoption & Implementation" },

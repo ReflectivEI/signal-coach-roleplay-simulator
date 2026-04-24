@@ -380,8 +380,8 @@ export function predictHcpBehavior(
     predictedResistanceLevel = "moderate";
   }
 
-  const journeyState = scenario.journeyState || "";
-  if (journeyState === "objection_phase" && assessment["objection_navigation"] !== "effective" && predictedBehaviorState === "openness") {
+  const journeyState = scenario.journeyStage || "";
+  if (journeyState === "objection_handling" && assessment["objection_navigation"] !== "effective" && predictedBehaviorState === "openness") {
     predictedBehaviorState = "curiosity";
   }
 

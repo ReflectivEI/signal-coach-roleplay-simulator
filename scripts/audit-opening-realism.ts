@@ -32,7 +32,7 @@ for (const scenario of ALL_SCENARIOS) {
     scenario,
     allPriorSignals: [],
     currentBehaviorState: scenario.startingBehaviorState,
-    currentJourneyState: scenario.journeyState,
+    currentJourneyState: scenario.journeyStage,
     predictionState: scenario.startingBehaviorState,
     turnCount: 0,
   });

@@ -1,5 +1,5 @@
 {
-  "name": "signal-coach-core",
+  "name": "signal-coach-roleplay-simulator",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,6 +12,8 @@
     "audit:openers": "npx vite-node scripts/audit-opening-realism.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
     "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
+    "verify:identity": "npx vite-node scripts/verify-rps-identity.ts",
+    "verify:predeploy": "npx vite-node scripts/predeploy-verify.ts",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
     "worker:deploy": "wrangler deploy --config wrangler.toml",

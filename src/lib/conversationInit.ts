@@ -2,27 +2,26 @@
  * Conversation Initialization Engine
  * ====================================
  * Extracted from simulatorEngine.ts to keep file size manageable.
- * Establishes rep-first simulator setup and initial guidance.
+ * Establishes rep vs hcp initiated startup plus backend opener state.
  */
 
 import type { VolatilityProfile } from "./simulatorEngine";
+import { requestHcpOpening } from "@/services/workerClient";
 
-export type ConversationStartType = "rep_initiated";
+export type ConversationStartType = "rep_initiated" | "hcp_initiated";
 
 export interface ConversationInit {
   startType: ConversationStartType;
-  hcpOpeningText: null;
+  hcpOpeningText: string | null;
   initialBehaviorState: string;
   initialVolatilityProfile: VolatilityProfile;
   inputPlaceholder: string;
   openingGuidance: string[];       // non-scripted suggestions shown to rep
 }
 
-export async function initializeConversation(scenario: any): Promise<ConversationInit> {
-  // Rep ALWAYS opens the conversation
-  const startType: ConversationStartType = "rep_initiated";
-
-  // Determine initial behavior state from scenario
+export async function initializeConversation(scenario: any, sessionId?: string): Promise<ConversationInit> {
+  const startType: ConversationStartType =
+    scenario?.conversationStartType === "hcp_initiated" ? "hcp_initiated" : "rep_initiated";
   const initialBehaviorState = scenario.startingBehaviorState || "neutral";
 
   // Persona-specific input guidance (non-scripted — gives rep cognitive scaffolding)
@@ -55,12 +54,36 @@ export async function initializeConversation(scenario: any): Promise<Conversatio
     "Avoid leading with product claims"
   ];
 
+  let hcpOpeningText: string | null = null;
+
+  if (sessionId) {
+    try {
+      const realism = await requestHcpOpening({
+        sessionId,
+        scenarioId: scenario?.id || "",
+        title: scenario?.title || "",
+        stakeholder: scenario?.stakeholder || "",
+        objective: scenario?.objective || "",
+        persona: scenario?.persona || null,
+        journeyStage: scenario?.journeyStage || null,
+        interactionPressure: Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [],
+        startingBehaviorState: scenario?.startingBehaviorState || initialBehaviorState,
+      });
+      hcpOpeningText = realism.rewrittenLine || null;
+    } catch {
+      hcpOpeningText = null;
+    }
+  }
+
   return {
     startType,
-    hcpOpeningText: null,
+    hcpOpeningText,
     initialBehaviorState,
     initialVolatilityProfile: "stable",
-    inputPlaceholder: "Open the conversation. Read the scene and cues carefully.",
+    inputPlaceholder:
+      startType === "hcp_initiated"
+        ? "Respond to the HCP. Read the scene and cues carefully."
+        : "Open the conversation. Read the scene and cues carefully.",
     openingGuidance: guidance
   };
 }

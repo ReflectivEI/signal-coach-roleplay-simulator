@@ -19,8 +19,8 @@ const FAMILY_PRESETS: Record<string, HcpFamilyTemperamentControls> = {
       "Do not let early access scenarios sound too relaxed or generous too quickly.",
     ],
   },
-  discovery: {
-    familyKey: "discovery",
+  early_discovery: {
+    familyKey: "early_discovery",
     warmthBias: 0,
     directnessBias: 0,
     brevityBias: 0,
@@ -118,9 +118,9 @@ function clampBias(value: number): -1 | 0 | 1 {
 }
 
 export function deriveFamilyTemperamentControls(scenario: any = {}): HcpFamilyTemperamentControls {
-  const family = String(scenario?.journeyStage || "discovery").toLowerCase();
+  const family = String(scenario?.journeyStage || "early_discovery").toLowerCase();
   const persona = String(scenario?.persona || "").toLowerCase();
-  const familyPreset = FAMILY_PRESETS[family] || FAMILY_PRESETS.discovery;
+  const familyPreset = FAMILY_PRESETS[family] || FAMILY_PRESETS.early_discovery;
   const personaOverride = PERSONA_OVERRIDES[persona] || {};
 
   return {

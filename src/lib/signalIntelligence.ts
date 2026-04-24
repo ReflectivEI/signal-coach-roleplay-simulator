@@ -198,11 +198,13 @@ export const getCapability = (id: SignalIntelligenceCapabilityId): SignalIntelli
 };
 
 export const JOURNEY_STATE_LABELS: Record<string, string> = {
+  initial_access: "Initial Access",
   early_discovery: "Early Discovery",
-  clinical_evaluation: "Clinical Evaluation",
-  objection_phase: "Objection Phase",
+  clinical_value: "Clinical Value",
+  objection_handling: "Objection Handling",
   access_formulary: "Access & Formulary",
-  adoption_commitment: "Adoption & Commitment"
+  adoption_implementation: "Adoption & Implementation",
+  commitment_close: "Commitment & Close",
 };
 
 export const BEHAVIOR_STATE_LABELS: Record<string, string> = {
@@ -252,7 +254,7 @@ export const DECISION_ORIENTATION_LABELS: Record<string, string> = {
 
 export const JOURNEY_STAGE_LABELS: Record<string, string> = {
   initial_access: "Initial Access",
-  discovery: "Discovery",
+  early_discovery: "Early Discovery",
   clinical_value: "Clinical Value",
   objection_handling: "Objection Handling",
   adoption_implementation: "Adoption & Implementation",

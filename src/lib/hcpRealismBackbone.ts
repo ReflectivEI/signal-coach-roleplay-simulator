@@ -343,13 +343,13 @@ export function buildGlobalFirstTurnCue({
     }
   }
 
-  if (journeyStage === "discovery" || concernFamily === "screening") {
+  if (journeyStage === "early_discovery" || concernFamily === "screening") {
     if (anchorType === "priority_mismatch") {
       return deterministicPick([
         "The HCP keeps the chart open, expression tightening around the patients who fall off therapy.",
         "The HCP leaves the notes open and looks back like the real issue is what happens when patients do not stay on treatment.",
         "The HCP keeps the case notes in view, attention fixed on the patients who do not make it through therapy.",
-      ], `${title}|discovery|priority_mismatch`);
+      ], `${title}|early_discovery|priority_mismatch`);
     }
 
     if (anchorType === "status_quo") {
@@ -357,14 +357,14 @@ export function buildGlobalFirstTurnCue({
         "The HCP looks back with the posture of someone who does not feel a compelling need to change course.",
         "The HCP keeps the chart open and looks back like the current approach is still working well enough.",
         "The HCP stays measured, current routine clearly still the baseline they trust.",
-      ], `${title}|discovery|status_quo`);
+      ], `${title}|early_discovery|status_quo`);
     }
 
     return deterministicPick([
       "The HCP keeps the chart open and leans slightly toward the patient list.",
       "The HCP leaves the case notes open, attention settling around which patients really fit.",
       "The HCP keeps the patient list in view and looks back as if the selection boundary matters most.",
-    ], `${title}|discovery|screening`);
+    ], `${title}|early_discovery|screening`);
   }
 
   if (journeyStage === "clinical_value" || concernFamily === "evidence") {
@@ -551,7 +551,7 @@ export function buildRealismBackbonePrompt({
     "- Use plain, spoken clinician language rather than polished explanatory language.",
     "- Keep workflow and access language concrete: staff, forms, callbacks, approval steps, handoffs, scheduling, delays, who owns the next step.",
     "- Under time pressure, ask for one specific point and compress the room for the rep.",
-    "- In discovery, ask practical patient-criteria questions instead of drifting into broad product talk.",
+    "- In early_discovery, ask practical patient-criteria questions instead of drifting into broad product talk.",
     "- In adoption caution, focus on first-mover risk, peer precedent, and low-risk next steps.",
   ];
   const realismSpecNotes = buildRealismSpecNotes({

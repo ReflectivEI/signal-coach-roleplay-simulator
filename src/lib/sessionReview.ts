@@ -358,7 +358,7 @@ Objective: ${scenario.objective}
 Core Tension: ${scenario.coreTension || "not specified"}
 Persona: ${scenario.persona}
 Journey Stage: ${scenario.journeyStage}
-Journey State: ${scenario.journeyState}
+Journey State: ${scenario.journeyStage}
 Starting Behavior: ${scenario.startingBehaviorState}
 Pressures: ${(scenario.interactionPressure || []).join(", ") || "none"}
 Key Challenges: ${(scenario.keyChallenges || []).join(", ")}
@@ -539,7 +539,7 @@ Known chains — if active in this session, BOTH capabilities must reference the
 
 ── STAGE-AWARE NARRATIVE GUARDRAILS ──
 - In initial_access or early_discovery scenarios, do NOT frame commitment_gaining as a major success unless the HCP explicitly owned a next step.
-- In discovery scenarios without a true objection signal, do NOT describe objection_navigation as the dominant failure.
+- In early_discovery scenarios without a true objection signal, do NOT describe objection_navigation as the dominant failure.
 - Prioritize primary capabilities in the scenario capability profile when writing briefRationale, didWell, biggestGap, and nextAdjustment.
 
 ── TRACEABILITY ──

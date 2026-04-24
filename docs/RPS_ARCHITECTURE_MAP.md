@@ -363,7 +363,7 @@ this is where to refine the pools and normalization rules.
 The standalone simulator currently groups built-in scenarios into:
 
 1. `initial_access`
-2. `discovery`
+2. `early_discovery`
 3. `clinical_value`
 4. `objection_handling`
 5. `adoption_implementation`
@@ -373,7 +373,7 @@ The standalone simulator currently groups built-in scenarios into:
 Current count by family:
 
 - initial_access: 3
-- discovery: 3
+- early_discovery: 3
 - clinical_value: 3
 - objection_handling: 3
 - adoption_implementation: 3
@@ -418,4 +418,3 @@ The standalone architecture is still weaker in:
    - brevity
    - patience threshold
 6. Expand `access_formulary` coverage to match the other scenario families.
-

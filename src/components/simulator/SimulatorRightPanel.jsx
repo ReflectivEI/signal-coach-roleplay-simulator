@@ -67,17 +67,12 @@ export default function SimulatorRightPanel({
   lastSignals = {},
   focusCapabilities = [],
   lastNudge = null,
-  realtimeFeedback = null,
   scenario = null,
   conversationInit = null,
   hasRepSpoken = false,
 }) {
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
-  const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
-    title: "Live coaching",
-    capabilityName: "Live coaching",
-    guidance: realtimeFeedback.guidance,
-  } : null);
+  const liveCoaching = lastNudge;
   const sceneDescription = scenario?.visualScene || scenario?.description || "";
   const openingGuidance = !hasRepSpoken ? (conversationInit?.openingGuidance || []) : [];
 
@@ -120,11 +115,6 @@ export default function SimulatorRightPanel({
         <LightSection
           icon={Zap}
           title="Live Coaching"
-          headerRight={realtimeFeedback?.timestamp ? (
-            <span className="text-[11px] font-medium whitespace-nowrap" style={{ color: "rgba(255, 235, 169, 0.78)" }}>
-              {new Date(realtimeFeedback.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          ) : null}
         >
           <div
             className="p-3 rounded-xl"

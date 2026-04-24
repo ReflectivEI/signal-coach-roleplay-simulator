@@ -15,16 +15,16 @@ import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PERSONA_LABELS, PRESSURE_L
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
-import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
+import { createWorkerSession, getWorkerRuntimeDescriptor } from "@/services/workerClient";
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 import { toast } from "@/components/ui/use-toast";
 
-function createLocalSession(scData, convInit) {
+function createLocalSession(scData, convInit, sessionId) {
   return {
-    id: crypto.randomUUID(),
+    id: sessionId,
     scenarioId: scData.id,
     scenarioTitle: scData.title,
-    currentJourneyState: scData.journeyState,
+    currentJourneyState: scData.journeyStage,
     currentBehaviorState: convInit.initialBehaviorState,
     turnCount: 0,
     coachingNudgesEnabled: true,
@@ -39,6 +39,8 @@ export default function Simulator() {
 
   const [scenario, setScenario] = useState(null);
   const [session, setSession] = useState(null);
+  const [currentBehaviorState, setCurrentBehaviorState] = useState("neutral");
+  const [currentJourneyState, setCurrentJourneyState] = useState("early_discovery");
   const [turns, setTurns] = useState([]);
   const [activeCues, setActiveCues] = useState([]);
   const [lastSignals, setLastSignals] = useState({});
@@ -57,9 +59,9 @@ export default function Simulator() {
   const [repTurnIds, setRepTurnIds] = useState([]);
   const [conversationInit, setConversationInit] = useState(null);
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
-  const [realtimeFeedback, setRealtimeFeedback] = useState(null);
   const [reviewStage, setReviewStage] = useState("");
   const [lastRuntimeError, setLastRuntimeError] = useState("");
+  const runtimeDescriptor = getWorkerRuntimeDescriptor();
 
   useEffect(() => {
     if (scenarioId) void initSession();
@@ -90,13 +92,29 @@ export default function Simulator() {
     }
     setScenario(scData);
 
-    const convInit = await initializeConversation(scData);
+    const sessionId = crypto.randomUUID();
+    const startType = scData?.conversationStartType === "hcp_initiated" ? "hcp_initiated" : "rep_initiated";
+    const convInit = await initializeConversation(scData, startType === "hcp_initiated" ? sessionId : undefined);
     setConversationInit(convInit);
+    setCurrentBehaviorState(convInit.initialBehaviorState);
+    setCurrentJourneyState(scData.journeyStage);
 
-    const newSession = createLocalSession(scData, convInit);
+    const newSession = createLocalSession(scData, convInit, sessionId);
     setSession(newSession);
 
-    setTurns([]);
+    const isHcpInitiated = convInit.startType === "hcp_initiated";
+    const initialTurns = isHcpInitiated && convInit.hcpOpeningText
+      ? [{
+          id: crypto.randomUUID(),
+          speaker: "hcp",
+          text: convInit.hcpOpeningText,
+          timestamp: new Date().toISOString(),
+          cues: [],
+          nudge: null,
+        }]
+      : [];
+
+    setTurns(initialTurns);
     setHasRepSpoken(false);
 
     const initCues = [];
@@ -107,6 +125,14 @@ export default function Simulator() {
       scenario: scData,
     });
     initCues.push({ id: "cue_init_1", ...openingCue });
+    if (isHcpInitiated && convInit.hcpOpeningText) {
+      initCues.push({
+        id: "cue_opening_line",
+        label: "HCP opening line",
+        description: convInit.hcpOpeningText,
+        source: "conversation_shift",
+      });
+    }
     setActiveCues(initCues);
     setIsInitializing(false);
   };
@@ -128,33 +154,6 @@ export default function Simulator() {
     };
     setTurns((prev) => [...prev, repTurnObj]);
 
-    if (coachingEnabled) {
-      try {
-        const lastHcpTurn = [...turns].reverse().find((turn) => turn.speaker === "hcp");
-        const guidance = await generateRealtimeFeedback({
-          repResponse: repText,
-          hcpLastReply: lastHcpTurn?.text || "",
-          hcpCue: activeCues?.[0]?.label || "",
-          hcpBehavior: session?.currentBehaviorState,
-          journeyState: session?.currentJourneyState,
-          prediction: hcpPrediction ? {
-            predictedBehaviorState: hcpPrediction.predictedBehaviorState,
-            concernFamily: hcpPrediction.concernFamily,
-            riskLevel: hcpPrediction.riskLevel,
-            nextLikelyBehavior: hcpPrediction.nextLikelyBehavior,
-          } : null,
-          scenario,
-        });
-        setRealtimeFeedback({
-          repTurnId: repTurnObj.id,
-          guidance,
-          timestamp: new Date(),
-        });
-      } catch (err) {
-        console.log("Feedback generation skipped:", err.message);
-      }
-    }
-
     const conversationHistory = [...turns, repTurnObj].map((t) => ({
       id: t.id,
       speaker: t.speaker,
@@ -167,8 +166,8 @@ export default function Simulator() {
       const response = await generateHcpResponse(
         scenario,
         conversationHistory,
-        session.currentBehaviorState,
-        session.currentJourneyState,
+        currentBehaviorState,
+        currentJourneyState,
         coachingEnabled,
         repText,
         allSignals,
@@ -217,6 +216,8 @@ export default function Simulator() {
         currentBehaviorState: response.nextBehaviorState,
         turnCount: session.turnCount + 2,
       };
+      setCurrentBehaviorState(response.nextBehaviorState || currentBehaviorState);
+      setCurrentJourneyState(response.nextJourneyState || currentJourneyState);
       setSession(updatedSession);
     } catch (error) {
       const message = error instanceof Error ? error.message : "HCP response failed.";
@@ -229,7 +230,7 @@ export default function Simulator() {
     } finally {
       setIsLoading(false);
     }
-  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile]);
+  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile, currentBehaviorState, currentJourneyState, activeCues, hcpPrediction]);
 
   const handleEndSession = async () => {
     if (!session || isReviewing) return;
@@ -321,7 +322,16 @@ export default function Simulator() {
     );
   }
 
-  const currentPressures = scenario?.interactionPressure || [];
+  const scenarioJourneyState = scenario?.journeyStage ?? null;
+  const currentJourneyStateValue = session?.currentJourneyState ?? null;
+  const configuredPressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+  const activePressures = Array.isArray(session?.activePressures) ? session.activePressures : [];
+  const showCurrentJourneyState =
+    Boolean(currentJourneyStateValue) &&
+    currentJourneyStateValue !== scenarioJourneyState;
+  const showActivePressures =
+    activePressures.length > 0 &&
+    JSON.stringify(activePressures) !== JSON.stringify(configuredPressures);
 
   return (
     <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
@@ -349,54 +359,94 @@ export default function Simulator() {
               <div className="flex items-center gap-1.5 mt-1">
                 <Target className="w-3 h-3 shrink-0" style={{ color: "rgba(220, 236, 236, 0.72)" }} />
                 <span className="text-xs truncate" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{PERSONA_LABELS[scenario?.persona] || scenario?.persona}</span>
-                <span className="text-xs" style={{ color: "rgba(255,255,255,0.24)" }}>·</span>
-                <span className="text-xs" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{JOURNEY_STATE_LABELS[session?.currentJourneyState]}</span>
               </div>
             </div>
 
-            <div className="hidden xl:flex items-center gap-3 ml-6 pl-6 min-w-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.16)" }}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
-                HCP State
-              </span>
+            <div className="hidden xl:flex items-center gap-5 ml-6 pl-6 min-w-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.16)" }}>
               <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Journey
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {JOURNEY_STATE_LABELS[session?.currentJourneyState] || session?.currentJourneyState}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Behavior
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {BEHAVIOR_STATE_LABELS[session?.currentBehaviorState] || session?.currentBehaviorState}
-                  </span>
-                </div>
-                {currentPressures.length > 0 && (
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Scenario
+                </span>
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                      Pressures
+                      Journey (Scenario)
                     </span>
-                    <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
-                      {currentPressures.map((pressure) => (
-                        <span
-                          key={pressure}
-                          className="px-2 py-1 text-[11px] font-medium rounded-md border whitespace-nowrap"
-                          style={{
-                            background: "rgba(37, 124, 123, 0.12)",
-                            borderColor: "rgba(37, 124, 123, 0.24)",
-                            color: "rgba(244,249,249,0.96)",
-                          }}
-                        >
-                          {PRESSURE_LABELS[pressure] || pressure}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
+                      {JOURNEY_STATE_LABELS[scenarioJourneyState] || scenarioJourneyState}
+                    </span>
                   </div>
-                )}
+                  {configuredPressures.length > 0 && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
+                        Pressures (Configured)
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
+                        {configuredPressures.map((pressure) => (
+                          <span
+                            key={pressure}
+                            className="px-2 py-1 text-[11px] font-medium rounded-md border whitespace-nowrap"
+                            style={{
+                              background: "rgba(255,255,255,0.08)",
+                              borderColor: "rgba(125, 173, 190, 0.24)",
+                              color: "rgba(228, 239, 239, 0.92)",
+                            }}
+                          >
+                            {PRESSURE_LABELS[pressure] || pressure}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="w-px h-10 shrink-0" style={{ background: "rgba(255,255,255,0.16)" }} />
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Live State
+                </span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
+                      Behavior (Current)
+                    </span>
+                    <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
+                      {BEHAVIOR_STATE_LABELS[currentBehaviorState] || currentBehaviorState}
+                    </span>
+                  </div>
+                  {showCurrentJourneyState && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
+                        Journey (Current)
+                      </span>
+                      <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
+                        {JOURNEY_STATE_LABELS[currentJourneyStateValue] || currentJourneyStateValue}
+                      </span>
+                    </div>
+                  )}
+                  {showActivePressures && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
+                        Pressures (Active)
+                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
+                        {activePressures.map((pressure) => (
+                          <span
+                            key={`active-${pressure}`}
+                            className="px-2 py-1 text-[11px] font-medium rounded-md border whitespace-nowrap"
+                            style={{
+                              background: "rgba(38, 88, 153, 0.12)",
+                              borderColor: "rgba(97, 138, 193, 0.24)",
+                              color: "rgba(244,249,249,0.96)",
+                            }}
+                          >
+                            {PRESSURE_LABELS[pressure] || pressure}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -447,6 +497,31 @@ export default function Simulator() {
             boxShadow: "0 18px 40px rgba(14, 24, 43, 0.06)",
           }}
         >
+          {import.meta.env.DEV && (
+            <div
+              className="mx-6 mt-4 rounded-2xl border px-4 py-3"
+              style={{
+                background: "linear-gradient(180deg, rgba(241,248,249,0.95) 0%, rgba(236,244,246,0.94) 100%)",
+                borderColor: "rgba(121, 153, 171, 0.36)",
+              }}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "hsl(200 20% 34%)" }}>
+                  Runtime Path
+                </span>
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "rgba(27, 117, 111, 0.12)", color: "hsl(178 51% 28%)" }}>
+                  {runtimeDescriptor.frontendMode}
+                </span>
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "rgba(38, 88, 153, 0.10)", color: "hsl(215 53% 31%)" }}>
+                  {runtimeDescriptor.inferenceMode}
+                </span>
+              </div>
+              <div className="mt-2 space-y-1.5 text-[12px]" style={{ color: "hsl(202 18% 35%)" }}>
+                <p><span className="font-semibold">HCP generation:</span> {runtimeDescriptor.hcpGenerationPath}</p>
+                <p className="break-all"><span className="font-semibold">Worker URL:</span> {runtimeDescriptor.workerBaseUrl || "browser proxy / local worker"}</p>
+              </div>
+            </div>
+          )}
           {lastRuntimeError ? (
             <div
               className="mx-6 mt-4 rounded-2xl border px-4 py-3 text-sm"
@@ -459,7 +534,7 @@ export default function Simulator() {
               {lastRuntimeError}
             </div>
           ) : null}
-          <MessageList turns={turns} isLoading={isLoading} realtimeFeedback={realtimeFeedback} />
+          <MessageList turns={turns} isLoading={isLoading} />
 
           <MessageInput
             onSend={handleRepMessage}
@@ -482,10 +557,10 @@ export default function Simulator() {
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
-              realtimeFeedback={realtimeFeedback}
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              currentBehaviorState={currentBehaviorState}
             />
           </div>
         </div>
@@ -509,10 +584,10 @@ export default function Simulator() {
               lastSignals={lastSignals}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
-              realtimeFeedback={realtimeFeedback}
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              currentBehaviorState={currentBehaviorState}
             />
           </motion.div>
         )}
@@ -537,6 +612,7 @@ export default function Simulator() {
           review={review}
           scenario={scenario}
           sessionTurnCount={turns.filter((t) => t.speaker === "rep").length}
+          transcript={turns}
           onClose={() => setShowSummary(false)}
           onExport={handleExport}
           onNewSession={() => navigate("/")}

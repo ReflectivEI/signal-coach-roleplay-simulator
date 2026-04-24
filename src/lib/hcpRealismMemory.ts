@@ -1,5 +1,6 @@
 import type { HcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import type { HcpTurnDirectiveSet } from "./hcpTurnDirectives";
+import { buildHcpRealismNotes, pickHcpRealismExamples } from "./hcpRealismLanguagePack.js";
 
 type RealismExample = {
   family: string;
@@ -15,7 +16,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     phase: "initial_access",
     directness: "high",
     pressure: "time_constrained",
-    example: "Look, I've got four minutes before my next patient. My MA said you had something about prior auth reduction, that's why I said yes.",
+    example: "My MA said this was about prior auth reduction. I've only got a couple minutes, so tell me what you can actually do to make that easier on my staff.",
   },
   {
     family: "general",
@@ -28,7 +29,21 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     phase: "initial_access",
     directness: "high",
     pressure: "operationally_constrained",
-    example: "Okay, I've got a few minutes. My office manager said you've been trying to get in. I'll be honest, I'm not usually a fan of these visits, so let's keep this useful.",
+    example: "Okay, I've got a few minutes. My office manager said you've been trying to get in. Keep it useful and get to the point.",
+  },
+  {
+    family: "general",
+    phase: "initial_access",
+    directness: "high",
+    pressure: "operationally_constrained",
+    example: "My office manager said you've been trying to get in. I've got a few minutes, so tell me why I should make time for this.",
+  },
+  {
+    family: "time",
+    phase: "initial_access",
+    directness: "high",
+    pressure: "time_constrained",
+    example: "I've only got a minute, so give me the short version of why this matters right now.",
   },
   {
     family: "screening",
@@ -45,6 +60,12 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     family: "general",
     phase: "discovery",
     example: "Honestly, my patients are doing pretty well. I haven't had much reason to change anything. What would make you think I need something different?",
+  },
+  {
+    family: "general",
+    phase: "discovery",
+    directness: "high",
+    example: "My patients are doing pretty well as things are. If you think I need to change something, tell me what gap you're seeing that I'm not.",
   },
   {
     family: "evidence",
@@ -83,10 +104,16 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     example: "If the cost side is unclear, I still don't have enough information to evaluate its value.",
   },
   {
+    family: "evidence",
+    phase: "clinical_value",
+    directness: "high",
+    example: "The efficacy isn't really my question. I need to know whether the outcome justifies the cost for the patients who'd actually use it.",
+  },
+  {
     family: "access",
     phase: "objection_resolution",
     directness: "high",
-    example: "Before you say anything, if there's a prior auth requirement, this conversation is over. We don't have the bandwidth.",
+    example: "If this still needs prior auth, tell me what actually changes for my staff. We do not have spare bandwidth.",
   },
   {
     family: "evidence",
@@ -100,14 +127,34 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     example: "I've been using that option for three years. My patients do well on it. Unless you can show me something that matters to them specifically, I'm not interested in switching.",
   },
   {
+    family: "evidence",
+    phase: "objection_resolution",
+    directness: "high",
+    pressure: "skeptical_resistant",
+    example: "My patients do well on what I'm already using. If this is supposed to change that, tell me what actually matters for them.",
+  },
+  {
     family: "adoption_caution",
     phase: "implementation_commitment",
     example: "I think the data is compelling. I'm just not ready to be the first one in my group to change protocols. What are others around here doing?",
   },
   {
+    family: "adoption_caution",
+    phase: "implementation_commitment",
+    directness: "high",
+    example: "The data isn't my problem. I need to know what others around here are actually doing before I go first.",
+  },
+  {
     family: "workflow",
     phase: "implementation_commitment",
-    example: "Clinically, I'm on board. But we'd still need someone to manage the monitoring. I don't have the staff support a bigger practice would have.",
+    example: "Clinically, I can see it. But someone still has to own the monitoring, and I do not have extra staff sitting around.",
+  },
+  {
+    family: "workflow",
+    phase: "implementation_commitment",
+    directness: "high",
+    pressure: "operationally_constrained",
+    example: "Clinically, I can see it. The problem is who actually owns the extra monitoring step in a practice like mine.",
   },
   {
     family: "evidence",
@@ -117,7 +164,14 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
   {
     family: "access",
     phase: "access_resolution",
-    example: "I'd like to use this, but our formulary team flagged it as non-preferred. I don't know what I can actually do about that. Is there even a process?",
+    example: "I'd like to use this, but our formulary team flagged it as non-preferred. What can I actually do from my side to move it?",
+  },
+  {
+    family: "access",
+    phase: "access_resolution",
+    directness: "high",
+    pressure: "access_barrier",
+    example: "I'd like to use it, but formulary is still the issue. Tell me what the actual process is here.",
   },
   {
     family: "hesitation",
@@ -125,14 +179,33 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     example: "I've been meaning to try it. I just haven't had the right patient come through yet.",
   },
   {
+    family: "hesitation",
+    phase: "close",
+    directness: "high",
+    example: "I still need to know what the right patient actually looks like before this turns into a real next step.",
+  },
+  {
     family: "access",
     phase: "close",
     example: "I'm supportive, you know that. But this is ultimately a formulary decision. I'll bring it up at the next P&T meeting. That's probably six weeks out.",
   },
   {
+    family: "access",
+    phase: "close",
+    directness: "high",
+    pressure: "access_barrier",
+    example: "I'm supportive, but this still goes through P&T. If you want this to move, tell me what I can actually do before that meeting.",
+  },
+  {
     family: "evidence",
     phase: "close",
     example: "Actually, Dr. Chen wanted to sit in on this one. We've been going back and forth on whether to add this to our toolkit. Maybe you can help us sort it out.",
+  },
+  {
+    family: "evidence",
+    phase: "close",
+    directness: "high",
+    example: "Dr. Chen and I are not aligned on this yet. If you're going to help, help us get specific about where the disagreement actually is.",
   },
 ];
 
@@ -155,6 +228,16 @@ export function getRealismExampleBank({
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
 }): string[] {
+  const sharedExamples = pickHcpRealismExamples({
+    scenario,
+    journeyStage: scenario?.journeyStage || turn.phase,
+    interactionPressures: scenario?.interactionPressure || [],
+    behaviorState: profile?.warmth || profile?.brevity || "",
+    scenarioTopic: turn?.concernFamily || profile?.concernFamily || "",
+    repIntentType: turn?.responseMode || "",
+    hcpTurnCount: 0,
+  });
+
   const title = String(scenario?.title || "scenario");
   const phase = String(turn.phase || "");
   const family = String(turn.concernFamily || profile.concernFamily || "general");
@@ -188,11 +271,26 @@ export function getRealismExampleBank({
         ? familyMatches
         : fallbackMatches;
 
-  const first = deterministicPick(primaryPool, `${title}|${family}|${phase}|primary`);
-  const secondPool = primaryPool.filter((entry) => entry !== first);
-  const second = deterministicPick(secondPool, `${title}|${family}|${phase}|secondary`);
+  const dedupedExamples: string[] = [];
+  const pools = [
+    { key: "primary", items: primaryPool },
+    { key: "phase", items: phaseMatches },
+    { key: "family", items: familyMatches },
+    { key: "fallback", items: fallbackMatches },
+  ];
 
-  return [first?.example, second?.example].filter(Boolean) as string[];
+  pools.forEach(({ key, items }) => {
+    if (!items.length) return;
+    const picked = deterministicPick(items, `${title}|${family}|${phase}|${key}`);
+    const example = picked?.example;
+    if (example && !dedupedExamples.includes(example)) {
+      dedupedExamples.push(example);
+    }
+  });
+
+  return [...sharedExamples, ...dedupedExamples]
+    .filter((example, index, array) => example && array.indexOf(example) === index)
+    .slice(0, 8);
 }
 
 export function buildRealismSpecNotes({
@@ -206,7 +304,15 @@ export function buildRealismSpecNotes({
   profile: HcpRuntimeProfile;
   hcpTurnCount: number;
 }): string[] {
-  const notes: string[] = [];
+  const notes: string[] = [
+    ...buildHcpRealismNotes({
+      journeyStage: scenario?.journeyStage || turn?.phase,
+      interactionPressures: scenario?.interactionPressure || [],
+      scenarioTopic: turn?.concernFamily || profile?.concernFamily || "",
+      repIntentType: turn?.responseMode || "",
+      hcpTurnCount,
+    }),
+  ];
   const firstTurn = hcpTurnCount === 0;
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
 
@@ -215,6 +321,9 @@ export function buildRealismSpecNotes({
     notes.push("A good first-turn line should sound like a clinician deciding whether this conversation is worth the next minute.");
     notes.push("Do not end a question with a vague closer if the actual ask is still unclear. The HCP's ask has to be understandable on its own.");
   }
+
+  notes.push("Every HCP question must stand alone semantically. Do not ask to reduce, change, fix, improve, or help with something unless the object is explicitly named.");
+  notes.push("Avoid comma splices in spoken dialogue. If two independent thoughts are present, split them into separate sentences.");
 
   if (profile.directness === "high") {
     notes.push("When directness is high, prefer clipped sentences over balanced, polished explanations.");

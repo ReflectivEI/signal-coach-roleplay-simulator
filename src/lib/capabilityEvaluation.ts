@@ -22,14 +22,14 @@ interface EvaluationContext {
 function isEarlyDiscoveryScenario(context: EvaluationContext = {}): boolean {
   const scenario = context.scenario || {};
   const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const state = String(scenario?.journeyState || "").toLowerCase();
-  return stage === "initial_access" || stage === "discovery" || state === "early_discovery";
+  const state = String(scenario?.journeyStage || "").toLowerCase();
+  return stage === "initial_access" || stage === "early_discovery" || state === "early_discovery";
 }
 
 function isScreeningScenario(context: EvaluationContext = {}): boolean {
   const scenario = context.scenario || {};
   if (scenarioMatchesConcernFamily(scenario, "screening")) return true;
-  return String(scenario?.journeyStage || "").toLowerCase() === "discovery";
+  return String(scenario?.journeyStage || "").toLowerCase() === "early_discovery";
 }
 
 function isHesitationToCommitmentScenario(context: EvaluationContext = {}): boolean {
@@ -38,7 +38,7 @@ function isHesitationToCommitmentScenario(context: EvaluationContext = {}): bool
   if (scenarioMatchesConcernFamily(scenario, "hesitation")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const state = String(scenario?.journeyState || "").toLowerCase();
+  const state = String(scenario?.journeyStage || "").toLowerCase();
   const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
 
   return (
@@ -57,7 +57,7 @@ function isAdoptionCautionScenario(context: EvaluationContext = {}): boolean {
   if (scenarioMatchesConcernFamily(scenario, "adoption_caution")) return true;
   const title = String(scenario?.title || "").toLowerCase();
   const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const state = String(scenario?.journeyState || "").toLowerCase();
+  const state = String(scenario?.journeyStage || "").toLowerCase();
   const pressures = String((scenario?.interactionPressure || []).join(" ")).toLowerCase();
   const objective = String(scenario?.objective || "").toLowerCase();
 

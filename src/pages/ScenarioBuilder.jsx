@@ -9,23 +9,13 @@ import { invokeWorkerJson } from "@/services/workerClient";
 
 const journeyStages = [
   { value: "initial_access", label: "Initial Access" },
-  { value: "discovery", label: "Discovery" },
+  { value: "early_discovery", label: "Early Discovery" },
   { value: "clinical_value", label: "Clinical Value" },
   { value: "objection_handling", label: "Objection Handling" },
   { value: "access_formulary", label: "Access & Formulary" },
   { value: "adoption_implementation", label: "Adoption & Implementation" },
   { value: "commitment_close", label: "Commitment & Close" },
 ];
-
-const journeyStateForStage = {
-  initial_access: "early_discovery",
-  discovery: "early_discovery",
-  clinical_value: "clinical_evaluation",
-  objection_handling: "objection_phase",
-  access_formulary: "access_formulary",
-  adoption_implementation: "adoption_commitment",
-  commitment_close: "adoption_commitment",
-};
 
 const hcpRoleTypes = [
   { value: "treating_clinician", label: "Treating Clinician" },
@@ -197,7 +187,7 @@ SCHEMA RULES:
 - visualScene: 2 sentences max. Observable rep-facing opening scene.
 - keyChallenges: Exactly 3.
 - suggestedFocusCapabilities: Pick 2-3 from this exact list: ${capabilityIds}
-- journeyStage: one of: initial_access, discovery, clinical_value, objection_handling, access_formulary, adoption_implementation, commitment_close
+- journeyStage: one of: initial_access, early_discovery, clinical_value, objection_handling, access_formulary, adoption_implementation, commitment_close
 - hcpRoleType: one of: treating_clinician, influencer, thought_leader
 - decisionOrientation: one of: patient_centric, evidence_driven, risk_averse, guideline_anchored
 - startingBehaviorState: one of: closed, neutral, open, curiosity, resistance, frustration, time_pressure
@@ -259,7 +249,7 @@ Return ONLY valid JSON:
         openingScene: result.openingScene || f.openingScene,
         visualScene: result.visualScene || f.visualScene,
         journeyStage: result.journeyStage || f.journeyStage,
-        journeyState: journeyStateForStage[result.journeyStage] || f.journeyState,
+        journeyState: result.journeyStage || f.journeyState,
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
         decisionOrientation: result.decisionOrientation || f.decisionOrientation,
         startingBehaviorState: result.startingBehaviorState || f.startingBehaviorState,
@@ -278,7 +268,7 @@ Return ONLY valid JSON:
 
     await createCustomScenario({
       ...form,
-      journeyState: journeyStateForStage[form.journeyStage] || "early_discovery",
+      journeyState: form.journeyStage || "early_discovery",
       keyChallenges: form.keyChallenges.split("\n").filter(Boolean),
       interactionPressure: form.interactionPressure,
       isBuiltIn: false,
