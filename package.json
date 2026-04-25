@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:host": "vite --host 0.0.0.0 --port 5173",
+    "tunnel": "cloudflared tunnel --url http://localhost:5173",
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
@@ -14,6 +16,7 @@
     "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
+    "dev:worker": "wrangler dev --config wrangler.toml --port 8787",
     "worker:deploy": "wrangler deploy --config wrangler.toml",
     "frontend:deploy": "wrangler pages deploy dist --project-name signal-coach-roleplay-simulator --config wrangler.pages.toml",
     "deploy:full": "npm run build && npm run worker:deploy && npm run frontend:deploy"

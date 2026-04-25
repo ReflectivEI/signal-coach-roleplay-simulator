@@ -1,3 +1,5 @@
+import { HCP_REALISM_LANGUAGE_PACK, pickHcpRealismExamples, validateHcpHumanRealism } from "../../src/lib/hcpRealismLanguagePack.js";
+
 const allowedMethods = "GET,POST,PUT,DELETE,OPTIONS";
 const allowedHeaders = "Content-Type,Authorization";
 const memoryState = {
@@ -43,32 +45,14 @@ function createId(prefix, label = "") {
   return `${prefix}-${slugify(label) || Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const allowedJourneyStages = new Set([
+const allowedJourneyValues = new Set([
   "initial_access",
-  "discovery",
+  "early_discovery",
   "clinical_value",
   "objection_handling",
   "access_formulary",
   "adoption_implementation",
   "commitment_close",
-]);
-
-const journeyStateForStage = {
-  initial_access: "early_discovery",
-  discovery: "early_discovery",
-  clinical_value: "clinical_evaluation",
-  objection_handling: "objection_phase",
-  access_formulary: "access_formulary",
-  adoption_implementation: "adoption_commitment",
-  commitment_close: "adoption_commitment",
-};
-
-const allowedJourneyStates = new Set([
-  "early_discovery",
-  "clinical_evaluation",
-  "objection_phase",
-  "access_formulary",
-  "adoption_commitment",
 ]);
 
 const allowedHcpRoleTypes = new Set([
@@ -166,14 +150,9 @@ function uniqueStrings(values) {
 }
 
 function normalizeScenarioPayload(body = {}, existingScenario = null) {
-  const journeyStage = allowedJourneyStages.has(body.journeyStage)
+  const journeyStage = allowedJourneyValues.has(body.journeyStage)
     ? body.journeyStage
-    : existingScenario?.journeyStage || "discovery";
-
-  const journeyStateCandidate = safeString(body.journeyState) || journeyStateForStage[journeyStage];
-  const journeyState = allowedJourneyStates.has(journeyStateCandidate)
-    ? journeyStateCandidate
-    : journeyStateForStage[journeyStage];
+    : existingScenario?.journeyStage || "initial_access";
 
   const hcpRoleType = allowedHcpRoleTypes.has(body.hcpRoleType)
     ? body.hcpRoleType
@@ -207,7 +186,6 @@ function normalizeScenarioPayload(body = {}, existingScenario = null) {
     openingScene: safeString(body.openingScene, existingScenario?.openingScene || ""),
     visualScene: safeString(body.visualScene, existingScenario?.visualScene || ""),
     journeyStage,
-    journeyState,
     hcpRoleType,
     decisionOrientation,
     persona,
@@ -268,10 +246,13 @@ function normalizeSessionPayload(body = {}, existingSession = null) {
     .slice(-MAX_SIGNAL_ITEMS)
     .map((signal) => normalizeSignalItem(asObject(signal)));
 
-  const journeyStateCandidate = safeString(body?.currentJourneyState || body?.journeyState || existingSession?.currentJourneyState);
-  const currentJourneyState = allowedJourneyStates.has(journeyStateCandidate)
+  const journeyStateCandidate = safeString(
+    body?.currentJourneyState,
+    safeString(existingSession?.currentJourneyState),
+  );
+  const currentJourneyState = allowedJourneyValues.has(journeyStateCandidate)
     ? journeyStateCandidate
-    : existingSession?.currentJourneyState || "early_discovery";
+    : safeString(existingSession?.currentJourneyState);
 
   const behaviorStateCandidate = safeString(body?.currentBehaviorState || body?.behaviorState || existingSession?.currentBehaviorState);
   const currentBehaviorState = allowedBehaviorStates.has(behaviorStateCandidate)
@@ -552,6 +533,757 @@ function buildMockResponse({ response_json_schema }) {
   };
 }
 
+async function invokeWorkerModel(env, {
+  prompt,
+  max_tokens = 220,
+  temperature = 0.2,
+  roleplay = true,
+  provider: requestedProvider,
+  model: requestedModel,
+}) {
+  const providerKeys = getLlmProvider(env, requestedProvider);
+  if (!providerKeys.provider) {
+    return "I need something more specific before I can react to that.";
+  }
+
+  const provider = providerKeys.provider;
+  const model = modelForProvider(provider, requestedModel);
+  const llmUrl = llmUrlForProvider(provider);
+  const apiKey = apiKeyForProvider(provider, providerKeys);
+  const groqKeys = getGroqCandidateKeys(providerKeys);
+  const messages = buildMessages({ prompt, roleplay, response_json_schema: null });
+  const payload = { model, messages, temperature, max_tokens };
+  const controller = new AbortController();
+  const timeoutMs = Math.max(5000, Number(env?.LLM_TIMEOUT_MS || 25000));
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    let data;
+    if (provider === "groq" && groqKeys.length > 1) {
+      const failoverResult = await invokeGroqWithFailover({
+        llmUrl,
+        payload,
+        groqKeys,
+        controller,
+      });
+      if (failoverResult?.data) {
+        data = failoverResult.data;
+      } else {
+        return "I need something more specific before I can react to that.";
+      }
+    } else {
+      const response = await fetch(llmUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        return "I need something more specific before I can react to that.";
+      }
+      data = await response.json();
+    }
+
+    return safeString(data?.choices?.[0]?.message?.content, "I need something more specific before I can react to that.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function inferHcpCueFromReply(hcpReply = "", behaviorState = "") {
+  const line = safeString(hcpReply).toLowerCase();
+  if (/\bminute\b|\bbetween patients\b|\bkeep it brief\b|\bkeep it short\b|\bnext patient\b/.test(line)) return "time pressured";
+  if (/\bstaff\b|\boffice\b|\bworkflow\b|\bprocess\b|\bstep\b/.test(line)) return "workflow concern";
+  if (/\bprior auth\b|\bapproved\b|\bcoverage\b|\baccess\b|\bstuck\b/.test(line)) return "access friction";
+  if (/\bdata\b|\bstudy\b|\bevidence\b|\bguideline\b|\bsafety\b/.test(line)) return "clinical skepticism";
+  if (/\bnot yet\b|\bnot interested\b|\bi'm not there\b/.test(line) || behaviorState === "closed") return "closed";
+  return behaviorState || "neutral";
+}
+
+function getNextBehaviorState({
+  currentBehaviorState,
+  turnCount,
+  scenarioId,
+}) {
+  const fallback = safeString(currentBehaviorState, "neutral");
+  const t = Number(turnCount || 0);
+
+  if (scenarioId === "builtin-the-warm-intro-that-turns-cold") {
+    if (t <= 0) return "neutral";
+    if (t <= 2) return "slightly_impatient";
+    if (t <= 4) return "guarded";
+    return "skeptical";
+  }
+
+  return fallback || "neutral";
+}
+
+function deriveNextJourneyState(currentJourneyState = "", scenarioContext = {}) {
+  return allowedJourneyValues.has(currentJourneyState) ? currentJourneyState : "";
+}
+
+function inferTopicFromText(text = "") {
+  const normalized = safeString(text).toLowerCase();
+  if (!normalized) return "";
+  if (/prior auth|prior authorization|approval|paperwork|callback/.test(normalized)) return "prior_auth";
+  if (/formulary|non-preferred|committee|payer/.test(normalized)) return "formulary_issue";
+  if (/access|coverage|approved/.test(normalized)) return "access_issue";
+  if (/workflow|staff|handoff|process|operational/.test(normalized)) return "workflow_burden";
+  if (/safety|risk|hepatic|adverse|side effect/.test(normalized)) return "safety_question";
+  if (/study|trial|data|evidence|guideline/.test(normalized)) return "study_follow_up";
+  if (/patient|fit|subgroup|renal/.test(normalized)) return "patient_fit";
+  return "";
+}
+
+function inferScenarioKeyTopic(scenarioContext = {}) {
+  return (
+    inferTopicFromText(safeString(scenarioContext?.objective)) ||
+    inferTopicFromText(safeString(scenarioContext?.description)) ||
+    inferTopicFromText(safeString(scenarioContext?.openingScene)) ||
+    inferTopicFromText(uniqueStrings(scenarioContext?.interactionPressure).join(" ")) ||
+    ""
+  );
+}
+
+function topicLabel(topic = "") {
+  switch (topic) {
+    case "prior_auth":
+      return "prior auth";
+    case "formulary_issue":
+      return "formulary access";
+    case "access_issue":
+      return "access";
+    case "workflow_burden":
+      return "workflow";
+    case "safety_question":
+      return "safety";
+    case "study_follow_up":
+      return "that study";
+    case "patient_fit":
+      return "patient fit";
+    default:
+      return "that";
+  }
+}
+
+function topicPattern(topic = "") {
+  switch (topic) {
+    case "prior_auth":
+      return /\bprior auth(?:orization)?\b|\bapproval\b|\bpaperwork\b|\bcallback\b/i;
+    case "formulary_issue":
+      return /\bformulary\b|\bnon-preferred\b|\bcommittee\b|\bpayer\b/i;
+    case "access_issue":
+      return /\baccess\b|\bcoverage\b|\bapproved\b/i;
+    case "workflow_burden":
+      return /\bworkflow\b|\bstaff\b|\bhandoff\b|\bprocess\b|\boperational\b/i;
+    case "safety_question":
+      return /\bsafety\b|\brisk\b|\badverse\b|\bside effect\b|\bhepatic\b/i;
+    case "study_follow_up":
+      return /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b|\bguideline\b/i;
+    case "patient_fit":
+      return /\bpatient\b|\bfit\b|\bsubgroup\b|\brenal\b/i;
+    default:
+      return null;
+  }
+}
+
+function extractRepOpeningContext(repMessage = "", scenarioContext = {}) {
+  const text = safeString(repMessage);
+  const explicitTopic = inferTopicFromText(text);
+  const scenarioTopic = inferScenarioKeyTopic(scenarioContext);
+  const hasPriorContextSignal = /\bfollow(?:ing)? up\b|\bwe spoke\b|\bwe talked\b|\byou mentioned\b|\bas we discussed\b|\blast week\b|\bearlier\b|\bongoing\b/i.test(text);
+
+  let intentType = "introducing";
+  if (hasPriorContextSignal) intentType = "following_up";
+  else if (/\bclarify|to be clear|just to confirm\b/i.test(text)) intentType = "clarifying";
+  else if (/\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(text)) intentType = "bringing_study";
+  else if (/\bburden\b|\bchallenge\b|\bissue\b|\bstuck\b/i.test(text)) intentType = "asking_about_burden";
+
+  return {
+    explicitTopic,
+    scenarioTopic,
+    hasPriorContextSignal,
+    intentType,
+    repIncludesScenarioTopic: Boolean(explicitTopic && scenarioTopic && explicitTopic === scenarioTopic),
+  };
+}
+
+function splitFirstSentence(text = "") {
+  const value = safeString(text);
+  if (!value) return { firstSentence: "", remainder: "" };
+  const match = value.match(/^(.+?[.!?])(\s+.*)?$/);
+  if (!match) return { firstSentence: value, remainder: "" };
+  return {
+    firstSentence: safeString(match[1]),
+    remainder: safeString(match[2]),
+  };
+}
+
+function buildFirstTurnAcknowledgment({ repContext = {}, scenarioContext = {}, conversationState = {} }) {
+  const topic = repContext.explicitTopic || repContext.scenarioTopic || "general";
+  const label = topicLabel(topic);
+  const pressures = uniqueStrings(scenarioContext?.interactionPressure).map((value) => value.toLowerCase());
+  const behavior = safeString(
+    scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState,
+    "neutral",
+  ).toLowerCase();
+  const operationallyConstrained = pressures.includes("operationally_constrained");
+  const timeConstrained = pressures.includes("time_constrained");
+  const skeptical = pressures.includes("skeptical_resistant") || /guarded|skeptical|closed/.test(behavior);
+
+  if (repContext.repIncludesScenarioTopic || repContext.explicitTopic) {
+    if (topic === "prior_auth") {
+      if (operationallyConstrained || timeConstrained) return "Yes, prior auth has been one of the bigger workflow headaches for the office lately.";
+      return "Yes, prior auth has definitely been an issue on our side.";
+    }
+    if (topic === "formulary_issue" || topic === "access_issue") {
+      return skeptical
+        ? `Yes, ${label} is still where we keep getting stuck.`
+        : `Yes, ${label} is still one of the main sticking points for us.`;
+    }
+    if (topic === "study_follow_up") {
+      return repContext.hasPriorContextSignal
+        ? "Yes, I'm glad you followed up on that study, because I haven't had time to go back through it."
+        : "Yes, that study has still been on my mind.";
+    }
+    if (topic === "workflow_burden") {
+      return "Yes, workflow has been one of the bigger pressure points for the office.";
+    }
+    if (topic === "safety_question") {
+      return "Yes, safety is one of the first things I need to get clear on.";
+    }
+    if (topic === "patient_fit") {
+      return "Yes, figuring out the right patient is still one of the harder parts here.";
+    }
+    return "Yes, that's still one of the issues on our side.";
+  }
+
+  if (topic === "prior_auth") return "If this is about prior auth, that's been one of the bigger workflow headaches for my staff lately.";
+  if (topic === "formulary_issue" || topic === "access_issue") return `If this is about ${label}, that's where we've been getting stuck.`;
+  if (topic === "study_follow_up") return "If this is about that study, I haven't had time to dig back into it.";
+  if (topic === "workflow_burden") return "If this is about workflow, that's been a real pressure point for the office.";
+  if (topic === "safety_question") return "If this is about safety, that's the part I need to get clear on first.";
+  if (topic === "patient_fit") return "If this is about patient fit, that's still one of the harder parts to sort out.";
+  return "If this is about the main issue here, that's still been a real sticking point for us.";
+}
+
+function firstSentenceNeedsAlignment(firstSentence = "", repContext = {}, turnCount = 0) {
+  if (turnCount > 0) return false;
+
+  const sentence = safeString(firstSentence);
+  const topic = repContext.explicitTopic || repContext.scenarioTopic;
+  const pattern = topicPattern(topic);
+  const acknowledgesTopic = Boolean(pattern && pattern.test(sentence));
+  const hasProxyReset =
+    /\bmy ma said\b|\bmy office manager said\b|\bsomeone told me\b|\byou(?:'ve| have) been trying to reach me\b|\byou(?:'ve| have) been trying to get in\b/i.test(sentence);
+  const hasGenericReset =
+    /\bwhat'?s this about\b|\bwhy are you here\b|\bwhat do you need from me\b/i.test(sentence);
+
+  if (repContext.hasPriorContextSignal && hasProxyReset) return true;
+  if (repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
+  if (!repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
+  if (repContext.repIncludesScenarioTopic && hasGenericReset) return true;
+  return false;
+}
+
+function enforceFirstTurnRepAcknowledgment(hcpReply = "", repMessage = "", scenarioContext = {}, conversationState = {}) {
+  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
+  if (turnCount > 0) return safeString(hcpReply);
+
+  const repContext = extractRepOpeningContext(repMessage, scenarioContext);
+  const { firstSentence, remainder } = splitFirstSentence(hcpReply);
+  if (!firstSentenceNeedsAlignment(firstSentence, repContext, turnCount)) {
+    return safeString(hcpReply);
+  }
+
+  const rewrittenFirstSentence = buildFirstTurnAcknowledgment({
+    repContext,
+    scenarioContext,
+    conversationState,
+  });
+  const normalizedRemainder = safeString(remainder).replace(/^\s+/, "").replace(/^(and|but)\s+/i, "");
+  return normalizedRemainder ? `${rewrittenFirstSentence} ${normalizedRemainder}`.trim() : rewrittenFirstSentence;
+}
+
+function selectRoleplayRealismReferences({
+  scenarioContext = {},
+  journeyStage = "initial_access",
+  interactionPressures = [],
+  behaviorState = "",
+  scenarioTopic = "",
+  repIntentType = "",
+  turnCount = 0,
+  repMessage = "",
+}) {
+  const stageExamples = Array.isArray(HCP_REALISM_LANGUAGE_PACK?.journeyStage?.[journeyStage])
+    ? HCP_REALISM_LANGUAGE_PACK.journeyStage[journeyStage]
+    : [];
+  const pressureExamples = uniqueStrings(interactionPressures)
+    .flatMap((pressure) => Array.isArray(HCP_REALISM_LANGUAGE_PACK?.interactionPressure?.[pressure])
+      ? HCP_REALISM_LANGUAGE_PACK.interactionPressure[pressure]
+      : []);
+  const selectedJourneyExamples = stageExamples.slice(0, 3);
+  const selectedPressureExamples = pressureExamples.slice(0, 4);
+  const calibratedExamples = pickHcpRealismExamples({
+    scenario: scenarioContext,
+    journeyStage,
+    interactionPressures,
+    behaviorState,
+    scenarioTopic,
+    repIntentType,
+    hcpTurnCount: turnCount,
+    repMessage,
+  });
+
+  return [
+    ...selectedJourneyExamples,
+    ...selectedPressureExamples,
+    ...calibratedExamples,
+  ].filter((example, index, array) => example && array.indexOf(example) === index).slice(0, 10);
+}
+
+function buildRoleplayStartPrompt({ scenarioContext = {}, conversationState = {} }) {
+  const title = safeString(scenarioContext?.title, "Roleplay Scenario");
+  const stakeholder = safeString(scenarioContext?.stakeholder, "HCP");
+  const persona = safeString(scenarioContext?.persona, "time_constrained_community_doctor");
+  const journeyStage = safeString(scenarioContext?.journeyStage, "initial_access");
+  const interactionPressure = uniqueStrings(scenarioContext?.interactionPressure).join(", ") || "none";
+  const startingBehaviorState = safeString(scenarioContext?.startingBehaviorState, "closed");
+  const realismExamples = selectRoleplayRealismReferences({
+    scenario: scenarioContext,
+    journeyStage,
+    interactionPressures: scenarioContext?.interactionPressure || [],
+    behaviorState: startingBehaviorState,
+    scenarioTopic: inferScenarioKeyTopic(scenarioContext),
+    turnCount: Number(conversationState?.turnCount || 0),
+  });
+  const realismReferenceBlock = realismExamples.length
+    ? `\nJourney-stage and pressure realism references (style only -- do not copy unless it naturally fits the live exchange):\n${realismExamples.map((example) => `- "${example}"`).join("\n")}\n`
+    : "";
+
+  return `You are generating the first spoken line from a healthcare professional in a pharma role-play simulator.
+Act as a realistic HCP in the room, not a coach, narrator, or feedback writer.
+
+Return ONE realistic HCP opening line only.
+
+Rules:
+- sound like a real clinician speaking out loud
+- stay concise
+- no markdown
+- no stage directions
+- no labels
+- no more than 2 sentences
+- keep natural spoken cadence
+- if the persona is time constrained, sound busy but professional
+- if operationally constrained, mention office/staff/process friction when relevant
+- do not sound like a chatbot or training script
+${realismReferenceBlock}
+
+Scenario title: ${title}
+Stakeholder: ${stakeholder}
+Persona: ${persona}
+Journey stage: ${journeyStage}
+Interaction pressures: ${interactionPressure}
+Starting behavior state: ${startingBehaviorState}
+Current journey state: ${safeString(conversationState?.currentJourneyState)}
+
+Generate the HCP opening line now.`;
+}
+
+function buildRoleplayRespondPrompt({ repMessage = "", scenarioContext = {}, conversationState = {} }) {
+  const title = safeString(scenarioContext?.title, "Roleplay Scenario");
+  const stakeholder = safeString(scenarioContext?.stakeholder, "HCP");
+  const objective = safeString(scenarioContext?.objective);
+  const persona = safeString(scenarioContext?.persona, "time_constrained_community_doctor");
+  const journeyStage = safeString(scenarioContext?.journeyStage, "initial_access");
+  const interactionPressure = uniqueStrings(scenarioContext?.interactionPressure).join(", ") || "none";
+  const currentBehaviorState = safeString(scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState, "neutral");
+  const currentJourneyState = safeString(conversationState?.currentJourneyState);
+  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
+  const signals = Array.isArray(conversationState?.signals) ? conversationState.signals.slice(-4) : [];
+  const scenarioId = safeString(conversationState?.scenarioId || scenarioContext?.scenarioId, "");
+  const repContext = extractRepOpeningContext(repMessage, scenarioContext);
+  const realismExamples = selectRoleplayRealismReferences({
+    scenario: scenarioContext,
+    journeyStage,
+    interactionPressures: scenarioContext?.interactionPressure || [],
+    behaviorState: currentBehaviorState,
+    scenarioTopic: repContext.explicitTopic || repContext.scenarioTopic,
+    repIntentType: repContext.intentType,
+    turnCount,
+    repMessage,
+  });
+  const realismReferenceBlock = realismExamples.length
+    ? `
+Journey-stage and pressure realism references (style only -- do not copy verbatim unless they naturally fit the live exchange):
+${realismExamples.map((example) => `- "${example}"`).join("\n")}
+`
+    : "";
+  const firstTurnTopicRule = turnCount <= 0
+    ? `
+First HCP response contract:
+- your first sentence MUST react to what the rep actually said
+- if the rep did NOT explicitly mention the key topic, name the key topic in the first sentence
+- if the rep DID mention the key topic, acknowledge that same topic naturally in the first sentence
+- do NOT reset into generic first-access dialogue if the rep already gave context
+- do NOT use proxy framing like "My MA said..." or "You've been trying to get in" when the rep already established context
+- keep the acknowledgment human, brief, and pressure-aware
+
+Rep opening context:
+- explicit topic: ${repContext.explicitTopic || "none"}
+- scenario key topic: ${repContext.scenarioTopic || "none"}
+- prior context implied: ${repContext.hasPriorContextSignal ? "yes" : "no"}
+- rep intent: ${repContext.intentType}
+`
+    : "";
+  const warmIntroToneBlock = scenarioId === "builtin-the-warm-intro-that-turns-cold"
+    ? `
+Warm Intro Turns Cold tone calibration:
+- Turn 1: busy but still professional and polite
+- Turn 2: less warm and more selective, but not rude
+- Turn 3: guarded and questioning relevance
+- Turn 4+: skeptical and resistant, but still clinician-professional
+- Do not snap, bark, or sound theatrically hostile early
+- Avoid lines like "Look, I've got patients waiting" or "Just say it"
+`
+    : "";
+
+  return `You are playing the HCP in a pharma role-play simulator.
+
+Your task:
+- reply as the HCP to the rep's most recent line
+- keep it realistic, spoken, and specific
+- return ONE HCP reply only
+- act as the HCP, not a coach, evaluator, or assistant
+
+Rules:
+- no markdown
+- no labels
+- no stage directions
+- no more than 2 sentences
+- do not sound polished or generic
+- if time constrained, sound busy or selective
+- if operationally constrained, talk about staff, office, workflow, process, or what step changes
+- if access constrained, mention approval, coverage, prior auth, delays, or what gets stuck
+- preserve skepticism when appropriate
+- do not invent clinical claims
+- keep emotional temperature realistic: busy, cooling, guarded, skeptical
+- sound professionally constrained, not socially rude
+${realismReferenceBlock}
+
+Scenario: ${title}
+Stakeholder: ${stakeholder}
+Objective: ${objective}
+Persona: ${persona}
+Journey stage: ${journeyStage}
+Current journey state: ${currentJourneyState}
+Current behavior state: ${currentBehaviorState}
+Interaction pressures: ${interactionPressure}
+Turn count: ${turnCount}
+Recent signals: ${signals.length ? JSON.stringify(signals) : "none"}
+${firstTurnTopicRule}
+${warmIntroToneBlock}
+
+Rep said:
+"${repMessage}"
+
+Return the HCP reply now.`;
+}
+
+function buildRoleplayMetadata({ hcpReply, scenarioContext, conversationState }) {
+  const currentBehaviorState = safeString(
+    scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState,
+    "neutral",
+  );
+  const scenarioId = safeString(
+    conversationState?.scenarioId || scenarioContext?.scenarioId,
+    "",
+  );
+  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
+
+  const nextBehaviorState = getNextBehaviorState({
+    currentBehaviorState,
+    turnCount,
+    scenarioId,
+  });
+  const nextJourneyState = deriveNextJourneyState(
+    safeString(conversationState?.currentJourneyState),
+    scenarioContext,
+  );
+  const hcpCue = inferHcpCueFromReply(hcpReply, nextBehaviorState);
+
+  return {
+    hcpCue,
+    nextBehaviorState,
+    nextJourneyState,
+    realism: {
+      rewrittenLine: hcpReply,
+    },
+  };
+}
+
+function normalizeRoleplayEntryTone(hcpReply = "", scenarioContext = {}, conversationState = {}) {
+  const text = safeString(hcpReply);
+  if (!text) return text;
+
+  const journeyStage = safeString(scenarioContext?.journeyStage);
+  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
+  const pressures = uniqueStrings(scenarioContext?.interactionPressure).join(" ").toLowerCase();
+
+  if (journeyStage !== "initial_access" || turnCount > 1) {
+    return text;
+  }
+
+  let normalized = text
+    .replace(/^look,\s*/i, "")
+    .replace(/\bcan you make it quick\b/i, "can you give me the short version")
+    .replace(/\bmake it quick\b/i, "keep it brief");
+
+  if (/slammed today|waiting room full of patients/i.test(normalized)) {
+    normalized = "I've got a couple minutes before my next patient, so what's this about?";
+  }
+
+  if (
+    /time_constrained/.test(pressures) &&
+    /operationally_constrained/.test(pressures) &&
+    /what's this about\??$/i.test(normalized)
+  ) {
+    normalized = "I've got a couple minutes before my next patient, so what's this about? We're short staffed today, so I need the short version.";
+  }
+
+  return safeString(normalized);
+}
+
+function splitRoleplaySentences(text = "") {
+  return safeString(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function deterministicRoleplayPick(options = [], seed = "") {
+  if (!Array.isArray(options) || !options.length) return "";
+  const score = Array.from(String(seed || "")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return options[score % options.length];
+}
+
+export function addHcpMicroAcknowledgment(text = "", context = {}) {
+  const base = safeString(text);
+  if (!base) return base;
+  if (/^(okay|alright|i hear you|got it|fair|sure|that's fine|look|honestly)[—-]/i.test(base)) {
+    return base;
+  }
+  if (/^(i have|i've got|we've got|i'm|we're|this is|that's|it is|it’s)/i.test(base)) {
+    return base;
+  }
+  if (/^(scene|system|feedback|coaching)\s*:/i.test(base)) {
+    return base;
+  }
+  if (!/^(what|how|why|where|which|so what|tell me|walk me through)\b/i.test(base)) {
+    return base;
+  }
+
+  const {
+    journeyStage = "",
+    activePressures = [],
+    behaviorState = "",
+    transcript = [],
+    repMessage = "",
+  } = context;
+
+  const pressures = uniqueStrings(activePressures).map((value) => value.toLowerCase());
+  const seed = `${journeyStage}|${behaviorState}|${pressures.join("|")}|${transcript.length}|${repMessage}|${base}`;
+
+  let bridgePool = ["Okay"];
+  if (pressures.includes("time_constrained")) {
+    bridgePool = ["Okay", "Alright", "Got it"];
+  } else if (pressures.includes("skeptical_resistant")) {
+    bridgePool = ["I hear you", "Fair", "That's fine"];
+  } else if (pressures.includes("operationally_constrained")) {
+    bridgePool = ["Okay", "Got it", "I hear you"];
+  } else if (pressures.includes("access_barrier") || journeyStage === "access_formulary") {
+    bridgePool = ["Fair", "Okay", "I hear you"];
+  } else if (pressures.includes("curious_uncertain")) {
+    bridgePool = ["Okay", "Sure", "Alright"];
+  }
+
+  const bridge = deterministicRoleplayPick(bridgePool, seed) || "Okay";
+  return `${bridge}—${base.charAt(0).toLowerCase()}${base.slice(1)}`;
+}
+
+function varyHcpSentenceStructure(text = "", context = {}) {
+  const base = safeString(text);
+  if (!base) return base;
+
+  const {
+    journeyStage = "",
+    interactionPressures = [],
+    transcript = [],
+    turnCount = 0,
+  } = context;
+
+  const pressures = uniqueStrings(interactionPressures).map((value) => value.toLowerCase());
+  const seed = `${journeyStage}|${pressures.join("|")}|${turnCount}|${transcript.length}|${base}`;
+  const skeptical = pressures.includes("skeptical_resistant");
+  const timeConstrained = pressures.includes("time_constrained");
+  let sentences = splitRoleplaySentences(base);
+
+  if (!sentences.length) return base;
+
+  let first = sentences[0]
+    .replace(/^What specifically\b/i, deterministicRoleplayPick([
+      "So what actually",
+      "Walk me through what",
+      "Okay... what actually",
+    ], `${seed}|specific`))
+    .replace(/^What exactly\b/i, deterministicRoleplayPick([
+      "So what exactly",
+      "Okay... what exactly",
+      "Walk me through what exactly",
+    ], `${seed}|exactly`))
+    .replace(/^What changes\b/i, deterministicRoleplayPick([
+      "So what actually changes",
+      "Walk me through what's different",
+      "Okay... so what changes",
+    ], `${seed}|changes`));
+
+  if (skeptical && !/\bnot convinced yet\b|\bthat's usually not where it breaks\b/i.test(first)) {
+    first = deterministicRoleplayPick([
+      `${first} I'm not convinced yet.`,
+      `${first} That's usually not where it breaks for us.`,
+    ], `${seed}|skeptical`);
+    sentences = splitRoleplaySentences(first).concat(sentences.slice(1));
+  } else {
+    sentences[0] = first;
+  }
+
+  if (timeConstrained) {
+    return safeString(sentences[0]);
+  }
+
+  return safeString(sentences.join(" "));
+}
+
+async function handleRoleplayStart(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const scenarioContext = asObject(body?.scenarioContext);
+  const conversationState = asObject(body?.conversationState);
+  const sessionId = safeString(body?.sessionId, createId("roleplay-session", scenarioContext?.title || "session"));
+
+  const rawHcpReply = await invokeWorkerModel(env, {
+    prompt: buildRoleplayStartPrompt({ scenarioContext, conversationState }),
+    max_tokens: 180,
+    temperature: 0.2,
+    roleplay: true,
+    provider: "groq",
+  });
+  const hcpReply = validateHcpHumanRealism(
+    normalizeRoleplayEntryTone(rawHcpReply, scenarioContext, conversationState),
+    {
+      scenario: scenarioContext,
+      repMessage: "",
+      interactionPressures: scenarioContext?.interactionPressure || [],
+      behaviorState: scenarioContext?.startingBehaviorState || conversationState?.currentBehaviorState || "closed",
+      turnCount: Number(conversationState?.turnCount || 0),
+      hasPriorContextSignal: false,
+    },
+  ).text;
+  let variedReply = validateHcpHumanRealism(
+    addHcpMicroAcknowledgment(varyHcpSentenceStructure(hcpReply, {
+      journeyStage: scenarioContext?.journeyStage,
+      interactionPressures: scenarioContext?.interactionPressure || [],
+      transcript: [],
+      turnCount: Number(conversationState?.turnCount || 0),
+    }), {
+      journeyStage: scenarioContext?.journeyStage,
+      activePressures: scenarioContext?.interactionPressure || [],
+      behaviorState: scenarioContext?.startingBehaviorState || conversationState?.currentBehaviorState || "closed",
+      transcript: [],
+      repMessage: "",
+    }),
+    {
+      scenario: scenarioContext,
+      repMessage: "",
+      interactionPressures: scenarioContext?.interactionPressure || [],
+      behaviorState: scenarioContext?.startingBehaviorState || conversationState?.currentBehaviorState || "closed",
+      turnCount: Number(conversationState?.turnCount || 0),
+      hasPriorContextSignal: false,
+    },
+  ).text;
+  const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
+
+  return json({
+    sessionId,
+    hcpReply: variedReply,
+    metadata,
+  }, {}, request);
+}
+
+async function handleRoleplayRespond(request, env) {
+  const body = await request.json().catch(() => ({}));
+  const scenarioContext = asObject(body?.scenarioContext);
+  const conversationState = asObject(body?.conversationState);
+  const repMessage = asLimitedText(body?.repMessage, 2000);
+  const sessionId = safeString(body?.sessionId, createId("roleplay-session", scenarioContext?.title || "session"));
+
+  if (!repMessage) {
+    return json({ error: "repMessage is required" }, { status: 400 }, request);
+  }
+
+  const rawHcpReply = await invokeWorkerModel(env, {
+    prompt: buildRoleplayRespondPrompt({ repMessage, scenarioContext, conversationState }),
+    max_tokens: 220,
+    temperature: 0.2,
+    roleplay: true,
+    provider: "groq",
+  });
+  const hcpReply = normalizeRoleplayEntryTone(
+    enforceFirstTurnRepAcknowledgment(rawHcpReply, repMessage, scenarioContext, conversationState),
+    scenarioContext,
+    conversationState,
+  );
+  const validatedReply = validateHcpHumanRealism(hcpReply, {
+    scenario: scenarioContext,
+    repMessage,
+    interactionPressures: scenarioContext?.interactionPressure || [],
+    behaviorState: scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState || "neutral",
+    turnCount: Number(conversationState?.turnCount || 0),
+    hasPriorContextSignal: extractRepOpeningContext(repMessage, scenarioContext).hasPriorContextSignal,
+  }).text;
+  let variedReply = validateHcpHumanRealism(
+    addHcpMicroAcknowledgment(varyHcpSentenceStructure(validatedReply, {
+      journeyStage: scenarioContext?.journeyStage,
+      interactionPressures: scenarioContext?.interactionPressure || [],
+      transcript: conversationState?.transcript || [],
+      turnCount: Number(conversationState?.turnCount || 0),
+    }), {
+      journeyStage: scenarioContext?.journeyStage,
+      activePressures: scenarioContext?.interactionPressure || [],
+      behaviorState: scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState || "neutral",
+      transcript: conversationState?.transcript || [],
+      repMessage,
+    }),
+    {
+      scenario: scenarioContext,
+      repMessage,
+      interactionPressures: scenarioContext?.interactionPressure || [],
+      behaviorState: scenarioContext?.currentBehaviorState || conversationState?.currentBehaviorState || "neutral",
+      turnCount: Number(conversationState?.turnCount || 0),
+      hasPriorContextSignal: extractRepOpeningContext(repMessage, scenarioContext).hasPriorContextSignal,
+    },
+  ).text;
+  const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
+
+  return json({
+    sessionId,
+    hcpReply: variedReply,
+    metadata,
+  }, {}, request);
+}
+
 async function handleLlmInvoke(request, env) {
   const body = await request.json().catch(() => ({}));
   const {
@@ -809,34 +1541,60 @@ function handleHealth(env, request) {
     keyPools: {
       groq: groqApiKeys?.length || 0,
     },
-    endpoints: ["/health", "/api/llm/invoke", "/api/scenarios", "/api/roleplay/sessions"],
+    endpoints: ["/health", "/api/llm/invoke", "/api/scenarios", "/api/roleplay/sessions", "/api/roleplay/start", "/api/roleplay/respond"],
   }, {}, request);
 }
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") {
-      return preflight(request);
+      if (request.method === "OPTIONS") {
+        return preflight(request);
+      }
+
+      if (url.pathname === "/health" && request.method === "GET") {
+        return handleHealth(env, request);
+      }
+
+      if (url.pathname === "/api/llm/invoke" && request.method === "POST") {
+        return handleLlmInvoke(request, env);
+      }
+
+      if (url.pathname === "/api/scenarios") {
+        return handleScenarios(request, env);
+      }
+
+      if (url.pathname === "/api/roleplay/sessions") {
+        return handleSessions(request, env);
+      }
+
+      if (url.pathname === "/api/roleplay/start" && request.method === "POST") {
+        try {
+          return await handleRoleplayStart(request, env);
+        } catch (error) {
+          return json({ error: "fallback", details: String(error?.message || error || "unknown") }, { status: 200 }, request);
+        }
+      }
+
+      if (url.pathname === "/api/roleplay/respond" && request.method === "POST") {
+        try {
+          return await handleRoleplayRespond(request, env);
+        } catch (error) {
+          return json({ error: "fallback", details: String(error?.message || error || "unknown") }, { status: 200 }, request);
+        }
+      }
+
+      return json({ error: "Not found" }, { status: 404 }, request);
+    } catch (error) {
+      return withCors(
+        new Response(JSON.stringify({ error: "fallback", details: String(error?.message || error || "unknown") }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+        request,
+      );
     }
-
-    if (url.pathname === "/health" && request.method === "GET") {
-      return handleHealth(env, request);
-    }
-
-    if (url.pathname === "/api/llm/invoke" && request.method === "POST") {
-      return handleLlmInvoke(request, env);
-    }
-
-    if (url.pathname === "/api/scenarios") {
-      return handleScenarios(request, env);
-    }
-
-    if (url.pathname === "/api/roleplay/sessions") {
-      return handleSessions(request, env);
-    }
-
-    return json({ error: "Not found" }, { status: 404 }, request);
   },
 };

@@ -11,7 +11,8 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply, normalizeDialoguePunctuation } from "@/lib/qaRepProxy";
+import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
+import { buildMatrixAuditSummary, buildTranscriptAudit } from "@/lib/qaTwinAudit";
 
 const QA_PERSONAS = {
   strong_rep: {
@@ -61,7 +62,7 @@ Generate the rep's next response (1-2 sentences) that:
 - In a time-pressured exchange, it is better to give one crisp answer with no question than a thoughtful question that delays the answer
 - If the HCP repeats the same concern twice, stop widening the conversation and address the concern head-on
 - Do not ask another broad question when the HCP is clearly asking for the bottom line
-- In commitment-close or adoption-commitment scenarios, stop reopening discovery after the core blocker is clear
+- In commitment-close or adoption-implementation scenarios, stop reopening early_discovery after the core blocker is clear
 - Once the HCP has repeated a vague blocker like "right patient", "not yet", or "I need to see more", pivot toward a proportionate next-step ask
 - In close-stage scenarios, prefer a smallest-next-step question such as whether the HCP would be open to defining one patient type, reviewing one case, or taking one concrete action they can own
 
@@ -231,7 +232,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
     id: crypto.randomUUID(),
     scenarioId: scenario.id,
     scenarioTitle: `${scenario.title} [QA]`,
-    currentJourneyState: scenario.journeyState,
+    currentJourneyState: scenario.journeyStage,
     currentBehaviorState: convInit.initialBehaviorState,
     turnCount: 0,
     coachingNudgesEnabled: true,
@@ -243,97 +244,36 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   let repTurnIds = [];
   let predictionTrace = [];
   let currentBehaviorState = convInit.initialBehaviorState;
-  let currentJourneyState = scenario.journeyState;
+  let currentJourneyState = scenario.journeyStage;
   /** @type {"stable" | "slightly_disrupted" | "disrupted"} */
   let currentVolatilityProfile = "stable";
 
   for (let i = 0; i < maxTurns; i++) {
     try {
       onProgress(`Turn ${i + 1}/${maxTurns} — generating rep message…`);
-      const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
+      const lastHcpMessage = [...turns].reverse().find((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")?.text || "";
+      const lastHcpQuestionType = detectHcpQuestionType(lastHcpMessage);
+      const repPrompt = `${persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState)}${buildRepAnswerFirstPromptConstraint(lastHcpMessage)}`;
       const repTextRaw = await retryWithBackoff(() => withTimeout(
         invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.1, timeout_ms: 15000 }),
         `${scenario.title} rep turn ${i + 1}`,
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-      let repText = repDraft;
-      if (personaKey === "strong_rep") {
-        const beforeFamilyRewrite = repText;
-        repText = maybeApplyHardFamilyAnswerReply({
+      let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft });
+      if (lastHcpQuestionType === "solution_seeking") {
+        repReply = enforceRepAnswerFirstContract({
           scenario,
           turns,
-          draft: repText,
+          draft: repReply,
         });
-        repText = maybeEnforceFamilyAnswerReply({
-          scenario,
-          turns,
-          draft: repText,
-        });
-        const usedDeterministicFamilyReply = repText !== beforeFamilyRewrite;
-        if (!usedDeterministicFamilyReply) {
-          repText = await retryWithBackoff(() => withTimeout(
-            maybeReviseStrongRepReply({
-              scenario,
-              turns,
-              currentBehaviorState,
-              currentJourneyState,
-              draft: repText,
-            }),
-            `${scenario.title} rep revision ${i + 1}`,
-            20000,
-          ));
-          repText = await retryWithBackoff(() => withTimeout(
-            maybeConcreteifyStrongRepReply({
-              scenario,
-              turns,
-              currentBehaviorState,
-              currentJourneyState,
-              draft: repText,
-            }),
-            `${scenario.title} rep concrete revision ${i + 1}`,
-            20000,
-          ));
-          repText = await retryWithBackoff(() => withTimeout(
-            maybeDeRepeatStrongRepReply({
-              scenario,
-              turns,
-              currentBehaviorState,
-              currentJourneyState,
-              draft: repText,
-            }),
-            `${scenario.title} rep dedupe revision ${i + 1}`,
-            20000,
-          ));
-          repText = await retryWithBackoff(() => withTimeout(
-            maybeTightenSpokenRepReply({
-              scenario,
-              turns,
-              currentBehaviorState,
-              currentJourneyState,
-              draft: repText,
-            }),
-            `${scenario.title} rep spoken-tightening ${i + 1}`,
-            20000,
-          ));
-        }
-        repText = maybeApplyHardFamilyAnswerReply({
-          scenario,
-          turns,
-          draft: repText,
-        });
-        repText = maybeEnforceFamilyAnswerReply({
-          scenario,
-          turns,
-          draft: repText,
-        });
-        repText = normalizeDialoguePunctuation(repText);
       }
 
       const repTurnObj = {
         id: crypto.randomUUID(),
         speaker: "rep",
-        text: repText,
+        text: repReply.text || "",
+        concept: repReply.concept || null,
         timestamp: new Date().toISOString(),
         cues: [],
         nudge: null,
@@ -355,7 +295,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
         currentBehaviorState,
         currentJourneyState,
         true,
-        repText,
+        repReply.text || "",
         allSignals,
         i,
         currentVolatilityProfile,
@@ -447,7 +387,8 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
 
   const assertions = runAssertions(scenario, turns, allSignals, review);
   const finalPrediction = predictionTrace[predictionTrace.length - 1]?.prediction || predictHcpBehavior(allSignals, allSignals, scenario);
-  return { scenario, turns, allSignals, review, assertions, sessionId: session.id, predictionTrace, finalPrediction };
+  const qaAudit = buildTranscriptAudit({ scenario, turns, personaKey });
+  return { scenario, turns, allSignals, review, assertions, sessionId: session.id, predictionTrace, finalPrediction, personaKey, qaAudit };
 }
 
 function StatusPill({ status }) {
@@ -475,8 +416,17 @@ function AssertionRow({ assertion }) {
   );
 }
 
-function RunTranscript({ turns, buttonLabel = "See Transcript for This Run" }) {
+function FailureChip({ type }) {
+  return (
+    <span className="text-[11px] px-2 py-0.5 rounded-full border border-destructive/35 bg-destructive/10 text-destructive">
+      {String(type || "").replace(/_/g, " ")}
+    </span>
+  );
+}
+
+function RunTranscript({ qaAudit, buttonLabel = "See Transcript for This Run" }) {
   const [expanded, setExpanded] = useState(false);
+  const turns = qaAudit?.transcript || [];
 
   if (!Array.isArray(turns) || turns.length === 0) return null;
 
@@ -510,46 +460,51 @@ function RunTranscript({ turns, buttonLabel = "See Transcript for This Run" }) {
             <div className="px-4 py-4 space-y-3">
               {turns.map((turn, index) => {
                 const isRep = turn.speaker === "rep";
-                const cueText = Array.isArray(turn.cues)
-                  ? turn.cues
-                    .map((cue) => {
-                      if (!cue) return "";
-                      if (typeof cue === "string") return cue.trim();
-                      return String(cue.description || cue.label || cue.text || "").trim();
-                    })
-                    .filter(Boolean)
-                    .join(" ")
-                  : "";
 
                 return (
                   <div
-                    key={turn.id || `${turn.speaker}-${index}`}
+                    key={`${turn.speaker}-${index}`}
                     className={`rounded-xl border px-4 py-3 ${isRep ? "border-primary/25 bg-primary/5" : "border-border/40 bg-background/40"}`}
                   >
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${isRep ? "text-primary bg-primary/10" : "text-foreground/80 bg-border/20"}`}>
                         {isRep ? "Rep" : "HCP"}
                       </span>
-                      <span className="text-[11px] text-muted-foreground">Turn {index + 1}</span>
+                      <span className="text-[11px] text-muted-foreground">Turn {turn.turnNumber || index + 1}</span>
                     </div>
 
-                    {cueText && !isRep && (
-                      <div className="mb-2 rounded-lg border border-border/30 bg-surface/50 px-3 py-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">
-                          Observed Cue
-                        </p>
-                        <p className="text-xs italic text-foreground/80 leading-relaxed">{cueText}</p>
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{turn.rawMessage || "—"}</p>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-[11px] text-foreground/75">
+                      <div><span className="text-muted-foreground">Intent:</span> {String(turn.detectedIntent || "none").replace(/_/g, " ")}</div>
+                      <div><span className="text-muted-foreground">Tone:</span> {String(turn.detectedTone || "neutral").replace(/_/g, " ")}</div>
+                      <div><span className="text-muted-foreground">Journey:</span> {String(turn.detectedJourneyStage || "none").replace(/_/g, " ")}</div>
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <span className="text-muted-foreground">Pressures:</span> {(turn.detectedPressures || []).length ? turn.detectedPressures.map((item) => item.replace(/_/g, " ")).join(", ") : "none"}
+                      </div>
+                    </div>
+
+                    {turn.continuityNotes?.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-border/30 bg-surface/50 px-3 py-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Continuity Notes</p>
+                        {turn.continuityNotes.map((note, noteIndex) => (
+                          <p key={noteIndex} className="text-xs text-foreground/80 leading-relaxed">{note}</p>
+                        ))}
                       </div>
                     )}
 
-                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{turn.text || "—"}</p>
+                    {turn.realismNotes?.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-border/30 bg-surface/50 px-3 py-2">
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-1">Realism Notes</p>
+                        {turn.realismNotes.map((note, noteIndex) => (
+                          <p key={noteIndex} className="text-xs text-foreground/80 leading-relaxed">{note}</p>
+                        ))}
+                      </div>
+                    )}
 
-                    {turn.nudge && (
-                      <div className="mt-2 rounded-lg border border-signal-watch/30 bg-signal-watch/10 px-3 py-2">
-                        <p className="text-[11px] font-medium uppercase tracking-wider text-signal-watch mb-1">
-                          Live Coaching Tip
-                        </p>
-                        <p className="text-xs text-foreground/80 leading-relaxed">{turn.nudge}</p>
+                    {turn.failures?.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {turn.failures.map((type) => <FailureChip key={type} type={type} />)}
                       </div>
                     )}
                   </div>
@@ -682,8 +637,12 @@ function MatrixRow({ result, index }) {
       <button onClick={() => setExpanded(!expanded)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface/60 transition-colors">
         <span className="text-xs text-muted-foreground w-5 shrink-0">{index + 1}</span>
         <span className="flex-1 text-sm font-medium text-foreground truncate">{result.scenario.title}</span>
+        <span className="text-xs text-muted-foreground shrink-0">{QA_PERSONAS[result.personaKey]?.label || result.personaKey}</span>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${allPass ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10" : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"}`}>
           {passCount}/{totalCount} passed
+        </span>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${(result.qaAudit?.verdict || "FAIL") === "PASS" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10" : "text-destructive border-destructive/40 bg-destructive/10"}`}>
+          QA {result.qaAudit?.verdict || "FAIL"}
         </span>
         <span className="text-muted-foreground/60 text-xs ml-1">{expanded ? "▲" : "▼"}</span>
       </button>
@@ -716,8 +675,19 @@ function MatrixRow({ result, index }) {
                 <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "hsl(174 55% 62%)" }}>Brief Rationale</p>
                 <p className="text-xs text-foreground/70 leading-relaxed">{result.review?.briefRationale || "—"}</p>
               </div>
+              <div className="mt-3 rounded-xl border border-border/35 bg-background/40 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "hsl(174 55% 62%)" }}>QA Safeguard Verdict</p>
+                <p className="text-xs text-foreground/80 leading-relaxed">{result.qaAudit?.realismSummary}</p>
+                <p className="text-xs text-foreground/80 leading-relaxed mt-1">{result.qaAudit?.continuitySummary}</p>
+                <p className="text-xs text-foreground/80 leading-relaxed mt-1">{result.qaAudit?.stateAlignmentSummary}</p>
+                {result.qaAudit?.topCorrections?.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {result.qaAudit.topCorrections.map((item) => <FailureChip key={item} type={item.replace(/\s+/g, "_")} />)}
+                  </div>
+                )}
+              </div>
               <PredictiveTracePanel predictionTrace={result.predictionTrace} finalPrediction={result.finalPrediction} />
-              <RunTranscript turns={result.turns} />
+              <RunTranscript qaAudit={result.qaAudit} />
             </div>
           </motion.div>
         )}
@@ -813,6 +783,7 @@ export default function QATwin() {
   const [singleResult, setSingleResult] = useState(null);
   const [matrixResults, setMatrixResults] = useState([]);
   const [matrixProgress, setMatrixProgress] = useState({ current: 0, total: 0 });
+  const matrixAudit = buildMatrixAuditSummary(matrixResults);
 
   const abortRef = useRef(false);
 
@@ -840,15 +811,16 @@ export default function QATwin() {
     abortRef.current = false;
     setStatus("running");
     setMatrixResults([]);
-    const toRun = scenarios.slice(0, scenarios.length);
+    const personasToRun = Object.keys(QA_PERSONAS);
+    const toRun = scenarios.flatMap((scenario) => personasToRun.map((persona) => ({ scenario, persona })));
     setMatrixProgress({ current: 0, total: toRun.length });
 
     for (let i = 0; i < toRun.length; i++) {
       if (abortRef.current) break;
-      const sc = toRun[i];
+      const { scenario: sc, persona } = toRun[i];
       setMatrixProgress({ current: i + 1, total: toRun.length });
-      setProgress(`Running scenario ${i + 1}/${toRun.length}: "${sc.title}"…`);
-      const result = await runQASession(sc, personaKey, maxTurns, (msg) => setProgress(`[${i + 1}/${toRun.length}] ${msg}`));
+      setProgress(`Running ${QA_PERSONAS[persona].label} on ${i + 1}/${toRun.length}: "${sc.title}"…`);
+      const result = await runQASession(sc, persona, maxTurns, (msg) => setProgress(`[${i + 1}/${toRun.length}] ${msg}`));
       setMatrixResults((prev) => [...prev, result]);
     }
 
@@ -859,14 +831,27 @@ export default function QATwin() {
   const stopRun = () => { abortRef.current = true; setStatus("idle"); setProgress(""); };
 
   const exportResults = (results) => {
-    const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Persona: ${personaKey}`, `Turns per scenario: ${maxTurns}`, ""];
+    const exportAudit = buildMatrixAuditSummary(results);
+    const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Turns per scenario: ${maxTurns}`, "", "Aggregate Failure Counts:"];
+    Object.entries(exportAudit.failureCounts).forEach(([type, count]) => lines.push(`  ${type}: ${count}`));
+    lines.push("", "Per Persona:");
+    Object.entries(exportAudit.perPersona).forEach(([key, value]) => lines.push(`  ${key}: ${value.pass} pass / ${value.fail} fail`));
+    lines.push("");
     for (const r of results) {
-      lines.push(`=== ${r.scenario.title} ===`);
+      lines.push(`=== ${r.scenario.title} [${r.personaKey}] ===`);
+      lines.push(`QA Verdict: ${r.qaAudit?.verdict || "FAIL"}`);
       lines.push(`Assertions: ${r.assertions.filter((a) => a.pass).length}/${r.assertions.length} passed`);
       r.assertions.forEach((a) => lines.push(`  [${a.pass ? "PASS" : "FAIL"}] ${a.label}: ${a.detail}`));
       lines.push("Capabilities:");
       (r.review?.capabilityInsights || []).forEach((ci) => lines.push(`  ${ci.capabilityId}: ${ci.observationLevel}`));
       lines.push(`Brief Rationale: ${r.review?.briefRationale || "—"}`);
+      lines.push(`Realism Summary: ${r.qaAudit?.realismSummary || "—"}`);
+      lines.push(`Continuity Summary: ${r.qaAudit?.continuitySummary || "—"}`);
+      lines.push(`State Alignment Summary: ${r.qaAudit?.stateAlignmentSummary || "—"}`);
+      (r.qaAudit?.failures || []).forEach((failure) => {
+        lines.push(`  [${failure.type}] Turn ${failure.turnNumber}: ${failure.evidence}`);
+        if (failure.note) lines.push(`    Note: ${failure.note}`);
+      });
       if (r.finalPrediction) {
         lines.push(`Predicted State: ${r.finalPrediction.predictedBehaviorState}`);
         lines.push(`Predicted Risk: ${r.finalPrediction.riskLevel}`);
@@ -967,7 +952,7 @@ export default function QATwin() {
             <div>
               <label className="text-xs text-muted-foreground uppercase tracking-wider font-medium block mb-1.5">Turns per scenario</label>
               <div className="flex gap-1.5">
-                {[2, 4, 6, 8].map((count) => (
+                {[2, 4, 6, 8, 10].map((count) => (
                   <button
                     key={count}
                     onClick={() => setMaxTurns(count)}
@@ -1039,6 +1024,37 @@ export default function QATwin() {
             </div>
 
             <div className="rounded-xl border border-border/40 bg-surface/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "hsl(174 55% 62%)" }}>QA Safeguard Verdict</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${(singleResult.qaAudit?.verdict || "FAIL") === "PASS" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10" : "text-destructive border-destructive/40 bg-destructive/10"}`}>
+                  {singleResult.qaAudit?.verdict || "FAIL"}
+                </span>
+              </div>
+              <p className="text-xs text-foreground/80 leading-relaxed">{singleResult.qaAudit?.realismSummary}</p>
+              <p className="text-xs text-foreground/80 leading-relaxed mt-1">{singleResult.qaAudit?.continuitySummary}</p>
+              <p className="text-xs text-foreground/80 leading-relaxed mt-1">{singleResult.qaAudit?.stateAlignmentSummary}</p>
+              {singleResult.qaAudit?.topCorrections?.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "hsl(174 55% 62%)" }}>Top 3 Corrections Needed</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {singleResult.qaAudit.topCorrections.map((item) => <FailureChip key={item} type={item.replace(/\s+/g, "_")} />)}
+                  </div>
+                </div>
+              )}
+              {(singleResult.qaAudit?.failures || []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {(singleResult.qaAudit.failures || []).slice(0, 8).map((failure, idx) => (
+                    <div key={`${failure.type}-${idx}`} className="rounded-lg border border-border/30 bg-background/40 px-3 py-2">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{failure.type.replace(/_/g, " ")} · Turn {failure.turnNumber}</p>
+                      <p className="text-xs text-foreground/80 mt-1">{failure.evidence}</p>
+                      {failure.note && <p className="text-xs text-muted-foreground mt-1">{failure.note}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border/40 bg-surface/40 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "hsl(174 55% 62%)" }}>
                 Assertions — {singleResult.assertions.filter((q) => q.pass).length}/{singleResult.assertions.length} passed
               </p>
@@ -1069,7 +1085,7 @@ export default function QATwin() {
             </div>
 
             <PredictiveTracePanel predictionTrace={singleResult.predictionTrace} finalPrediction={singleResult.finalPrediction} />
-            <RunTranscript turns={singleResult.turns} />
+            <RunTranscript qaAudit={singleResult.qaAudit} />
           </motion.div>
         )}
 
@@ -1077,11 +1093,56 @@ export default function QATwin() {
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4" style={{ color: "hsl(174 55% 62%)" }} />
-              <span className="font-semibold text-foreground text-sm">Matrix Results — {matrixResults.length} scenarios completed</span>
+              <span className="font-semibold text-foreground text-sm">Matrix Results — {matrixResults.length} scenario/persona runs completed</span>
               <span className="text-xs text-muted-foreground ml-auto">
                 {matrixResults.reduce((sum, result) => sum + result.assertions.filter((item) => item.pass).length, 0)} /
                 {matrixResults.reduce((sum, result) => sum + result.assertions.length, 0)} assertions passed
               </span>
+            </div>
+
+            <div className="rounded-xl border border-border/40 bg-surface/40 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "hsl(174 55% 62%)" }}>Global QA Safeguard Summary</p>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">Per Persona PASS / FAIL</p>
+                  <div className="space-y-2">
+                    {Object.entries(matrixAudit.perPersona).map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between rounded-lg border border-border/30 bg-background/40 px-3 py-2">
+                        <span className="text-xs text-foreground/85">{QA_PERSONAS[key]?.label || key}</span>
+                        <span className="text-xs text-muted-foreground">{value.pass} pass / {value.fail} fail</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">Failure Taxonomy</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(matrixAudit.failureCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                      <span key={type} className="text-[11px] px-2 py-0.5 rounded-full border border-border/40 bg-background/40 text-foreground/80">
+                        {type.replace(/_/g, " ")}: {count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">Top Recurring Realism Failures</p>
+                  <div className="space-y-2">
+                    {matrixAudit.topRecurringRealismFailures.map(([type, count]) => (
+                      <div key={type} className="text-xs text-foreground/80">{type.replace(/_/g, " ")} — {count}</div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">Top Recurring Continuity Failures</p>
+                  <div className="space-y-2">
+                    {matrixAudit.topRecurringContinuityFailures.map(([type, count]) => (
+                      <div key={type} className="text-xs text-foreground/80">{type.replace(/_/g, " ")} — {count}</div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="rounded-xl border border-border/40 bg-surface/40 p-4">

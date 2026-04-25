@@ -10,7 +10,7 @@ import { buildDeterministicSessionReview, generateSessionReview } from "../src/l
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { predictHcpBehavior } from "../src/lib/hcpBehaviorPrediction";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { maybeApplyHardFamilyAnswerReply, maybeConcreteifyStrongRepReply, maybeDeRepeatStrongRepReply, maybeEnforceFamilyAnswerReply, maybeReviseStrongRepReply, maybeTightenSpokenRepReply, normalizeDialoguePunctuation } from "../src/lib/qaRepProxy.js";
+import { buildDeterministicQaRepReply, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
 import { getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
@@ -237,6 +237,61 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   throw lastError;
 }
 
+function buildSafeRepFallback({
+  scenario,
+  turns,
+  isQAMode = true,
+}: {
+  scenario: any;
+  turns: any[];
+  isQAMode?: boolean;
+}) {
+  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "" });
+  const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+  if (isQAMode) {
+    console.log("REP_FALLBACK_USED", finalRepReply.concept || repProxyOutput.concept || "unknown");
+  }
+  return finalRepReply;
+}
+
+async function generateQaRepReply({
+  scenario,
+  turns,
+  currentBehaviorState,
+  currentJourneyState,
+  persona,
+  turnIndex,
+  isQAMode = true,
+}: {
+  scenario: any;
+  turns: any[];
+  currentBehaviorState: string;
+  currentJourneyState: string;
+  persona: {
+    buildPrompt: (scenario: any, turns: any[], currentBehaviorState: string, currentJourneyState: string) => string;
+  };
+  turnIndex: number;
+  isQAMode?: boolean;
+}) {
+  const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
+
+  try {
+    const repTextRaw = await withTimeout(invokeWorkerText({
+      prompt: repPrompt,
+      max_tokens: 180,
+      temperature: 0.1,
+      timeout_ms: 7000,
+      retry_count: 0,
+    }), `${scenario.title} rep turn ${turnIndex + 1}`);
+
+    const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
+    const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: repDraft });
+    return enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+  } catch {
+    return buildSafeRepFallback({ scenario, turns, isQAMode });
+  }
+}
+
 async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: number) {
   const persona = QA_PERSONAS[personaKey];
   const convInit = await initializeConversation(scenario);
@@ -251,75 +306,21 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
 
   for (let i = 0; i < maxTurns; i++) {
     console.log(`[${scenario.title}] Turn ${i + 1}/${maxTurns} — generating rep`);
-    const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
-    const repTextRaw = await retry(() => withTimeout(invokeWorkerText({
-      prompt: repPrompt,
-      max_tokens: 180,
-      temperature: 0.1,
-      timeout_ms: 15000,
-    }), `${scenario.title} rep turn ${i + 1}`));
-    const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    let repText = repDraft;
-    if (personaKey === "strong_rep") {
-      const beforeFamilyRewrite = repText;
-      repText = maybeApplyHardFamilyAnswerReply({
-        scenario,
-        turns,
-        draft: repText,
-      });
-      repText = maybeEnforceFamilyAnswerReply({
-        scenario,
-        turns,
-        draft: repText,
-      });
-      const usedDeterministicFamilyReply = repText !== beforeFamilyRewrite;
-      if (!usedDeterministicFamilyReply) {
-        repText = await retry(() => withTimeout(maybeReviseStrongRepReply({
-          scenario,
-          turns,
-          currentBehaviorState,
-          currentJourneyState,
-          draft: repText,
-        }), `${scenario.title} rep revision ${i + 1}`, 20000));
-        repText = await retry(() => withTimeout(maybeConcreteifyStrongRepReply({
-          scenario,
-          turns,
-          currentBehaviorState,
-          currentJourneyState,
-          draft: repText,
-        }), `${scenario.title} rep concrete revision ${i + 1}`, 20000));
-        repText = await retry(() => withTimeout(maybeDeRepeatStrongRepReply({
-          scenario,
-          turns,
-          currentBehaviorState,
-          currentJourneyState,
-          draft: repText,
-        }), `${scenario.title} rep dedupe revision ${i + 1}`, 20000));
-        repText = await retry(() => withTimeout(maybeTightenSpokenRepReply({
-          scenario,
-          turns,
-          currentBehaviorState,
-          currentJourneyState,
-          draft: repText,
-        }), `${scenario.title} rep spoken-tightening ${i + 1}`, 20000));
-      }
-      repText = maybeApplyHardFamilyAnswerReply({
-        scenario,
-        turns,
-        draft: repText,
-      });
-      repText = maybeEnforceFamilyAnswerReply({
-        scenario,
-        turns,
-        draft: repText,
-      });
-      repText = normalizeDialoguePunctuation(repText);
-    }
+    const finalRepReply = await generateQaRepReply({
+      scenario,
+      turns,
+      currentBehaviorState,
+      currentJourneyState,
+      persona,
+      turnIndex: i,
+      isQAMode: true,
+    });
 
     const repTurnObj = {
       id: crypto.randomUUID(),
       speaker: "rep",
-      text: repText,
+      text: finalRepReply.text || "",
+      concept: finalRepReply.concept || null,
       timestamp: new Date().toISOString(),
       cues: [],
       nudge: null,
@@ -342,7 +343,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       currentBehaviorState,
       currentJourneyState,
       true,
-      repText,
+      finalRepReply.text || "",
       allSignals,
       i,
       currentVolatilityProfile as any,
@@ -515,6 +516,7 @@ async function main() {
         ? result.turns.map((turn) => ({
             speaker: turn.speaker,
             text: turn.text,
+            concept: turn.concept || null,
             cue: turn.cues?.[0]?.label || "",
             cueDescription: turn.cues?.[0]?.description || "",
             nudge: turn.nudge?.guidance || "",

@@ -1,3 +1,10 @@
+// ⚠️ LOCKED BASELINE — CONVERSATIONAL REALISM ANCHOR
+// Restored from commit 3b5aafa
+// Requirements:
+// 1) First-turn must acknowledge REP opener
+// 2) Preserve conversational bridges (Okay—, I hear you—, etc.)
+// 3) DO NOT allow domain/decision layers to override first sentence
+// Any changes must pass manual first-turn test before commit
 /**
  * HCP Response Generator
  * =====================

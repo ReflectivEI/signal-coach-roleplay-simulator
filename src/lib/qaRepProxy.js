@@ -1,4 +1,5 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
+import { humanizeRepResponse } from "./repHumanizer.js";
 
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|specific data|evidence|moderate renal impairment|renal impairment|renal dosing|egfr|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population|what exactly|exact guideline language|one proof point|one key point|what specifically changes|what caused|what step gets added|biomarker|threshold|analysis|comorbidit|total cost per patient|cost per patient|what's included|what is included|what does that include|break down/i;
 const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what'?s the one thing you need to know|one thing you need to know|what's the relevance|what is the relevance|relevant to my practice|relevant to my clinic|what makes this relevant|what sets your product apart|what's the one thing that could slow care|one thing that could slow care|what specific barrier|what barrier are you looking for|what makes you think|what specific access step|what specific change/i;
@@ -34,6 +35,38 @@ function getLastRepText(turns = []) {
     }
   }
   return "";
+}
+
+export function detectHcpQuestionType(lastHcpMessage = "") {
+  const text = normalizeForMatch(lastHcpMessage);
+  if (!text || !text.includes("?")) return "none";
+
+  if (
+    /what would|what specifically|what'?s the one thing|how would|what can you do|give me|what does your product|what changes|what gets added|what step|what would actually|what does that actually|what does this actually|what is the actual process|what's the actual process/.test(text)
+  ) {
+    return "solution_seeking";
+  }
+
+  if (
+    /what do you mean|when you say|can you clarify|clarify|what are you referring to|which one do you mean/.test(text)
+  ) {
+    return "clarification";
+  }
+
+  if (
+    /which patients|what kind of patient|what are you seeing|how do you decide|where do you draw the line|tell me more about/.test(text)
+  ) {
+    return "discovery";
+  }
+
+  return "none";
+}
+
+export function buildRepAnswerFirstPromptConstraint(lastHcpMessage = "") {
+  const questionType = detectHcpQuestionType(lastHcpMessage);
+  if (questionType !== "solution_seeking") return "";
+
+  return `\nADDITIONAL REP CONTRACT:\nYou MUST directly answer the HCP's question with a concrete, specific response before asking anything else. Do NOT ask another discovery question.`;
 }
 
 function normalizeForMatch(text = "") {
@@ -120,6 +153,797 @@ export function normalizeDialoguePunctuation(text = "") {
     .trim();
 }
 
+function classifyQaTopic(lastHcpMessage = "") {
+  const text = normalizeForMatch(lastHcpMessage);
+  if (/formulary|non-preferred|preferred|committee|review/.test(text)) return "formulary";
+  if (/renal|subgroup|evidence|guideline|efficacy|safety|outcome|patient population/.test(text)) return "clinical";
+  if (/prior auth|prior authorization|workflow|staff|callback|handoff|rework|step|process|office/.test(text)) return "workflow";
+  return "general";
+}
+
+function prefix(text = "") {
+  return normalizeForMatch(text).slice(0, 24);
+}
+
+function getRepCoverage(turns = []) {
+  const repTexts = turns
+    .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+    .map((turn) => normalizeForMatch(turn.text));
+
+  const joined = repTexts.join(" ");
+
+  return {
+    answeredDirectly: /what changes is|the practical change is|the practical answer is|the direct change is|it removes|it cuts down|it keeps|it gives|it means/.test(joined),
+    gaveWorkflowExample: /in practice|for example|for instance|the ma is|the case does not bounce|the front end gets|the request goes forward/.test(joined),
+    explainedStaffImpact: /for your staff|for the office|cuts rework|fewer callbacks|duplicate handoffs|less back-and-forth|loose ends/.test(joined),
+    providedImplementationDetail: /operationally|the real shift is|the change is|one complete intake|one complete review packet|one complete submission|handoff at the front end/.test(joined),
+  };
+}
+
+function classifyQaAsk(lastHcpMessage = "") {
+  const text = normalizeForMatch(lastHcpMessage);
+
+  if (/what specifically gets removed|what gets removed|what task gets dropped|what drops off/.test(text)) {
+    return "removed_work";
+  }
+  if (/what step falls|what step lands|what step goes to|what'?s the next step for my staff|what is the next step for my staff|after prior auth is done|after the prior auth is complete/.test(text)) {
+    return "post_auth_step";
+  }
+  if (/what specifically changes for my staff|what changes for my staff|what changes for the staff|what changes for the office/.test(text)) {
+    return "staff_change";
+  }
+  if (/what specifically reduces callbacks|reduce callbacks|what reduces callbacks/.test(text)) {
+    return "callbacks";
+  }
+
+  return "general";
+}
+
+function classifySpecificAsk(hcpTurn = "") {
+  const text = normalizeForMatch(hcpTurn);
+
+  if (/what specifically gets removed|what gets removed|what task gets dropped|what drops off/.test(text)) {
+    return "removed_work";
+  }
+  if (/what changes for my staff|what changes for the staff|what changes for the office|how will this impact.*staff|what specifically changes for my staff/.test(text)) {
+    return "staff_change";
+  }
+  if (/after prior auth|what happens next|what's the next step|what is the next step|what do i do differently after|what step falls|what step lands/.test(text)) {
+    return "next_step";
+  }
+  if (/where is the delay|what is the delay|what is the bottleneck|where is the bottleneck|where does it break|what part breaks down/.test(text)) {
+    return "bottleneck";
+  }
+  if (/how does this work|how would this work|how do i do that|what do i do differently|how would my team do that|how is this implemented|implementation/.test(text)) {
+    return "implementation";
+  }
+  if (/what reduces callbacks|reduce callbacks|missing info|missing information|calling the patient back/.test(text)) {
+    return "removed_work";
+  }
+
+  return "general_staff_burden";
+}
+
+function responseModeForAsk(askType = "") {
+  switch (askType) {
+    case "removed_work":
+      return "removal_explanation";
+    case "staff_change":
+      return "behavior_change";
+    case "next_step":
+      return "workflow_progression";
+    case "bottleneck":
+      return "root_cause";
+    case "implementation":
+      return "how_it_works";
+    default:
+      return "behavior_change";
+  }
+}
+
+function resolveOperationalAsk(hcpTurn = "") {
+  const text = normalizeForMatch(hcpTurn);
+
+  if (/missing info|missing information|missing prior auth information|missing fields|missing details|calling the patient back/.test(text)) {
+    return "missing_info_callback";
+  }
+  if (/resubmission|sending the same authorization back|sending the same prior auth back|second time|same request again|same authorization again/.test(text)) {
+    return "resubmission_loop";
+  }
+  if (/duplicate handoff|handoff|bouncing the case back and forth|bounce the case|back and forth/.test(text)) {
+    return "duplicate_handoff";
+  }
+  if (/status check|checking back|check back|calling to check|manual status/.test(text)) {
+    return "manual_status_check";
+  }
+  if (/paperwork|documentation|missing fields|complete before it goes out|front end|submission/.test(text)) {
+    return "paperwork_completion";
+  }
+  if (/after prior auth|after the prior auth is complete|next step|what happens next|move directly|scheduling|treatment prep/.test(text)) {
+    return "post_auth_next_step";
+  }
+
+  return "general_staff_burden";
+}
+
+function getOperationalBucketPatterns(bucket = "") {
+  switch (bucket) {
+    case "missing_info_callback":
+      return [
+        /calling patients? back|calling the patient back|missing prior auth information|missing information/,
+        /not calling patients? back|not calling the patient back|callback no longer happens/,
+        /move it forward in one pass|reopening the case later|one pass/,
+      ];
+    case "resubmission_loop":
+      return [
+        /resubmission cycle|sending the same authorization back a second time|same prior auth back/,
+        /not sending the same authorization back a second time|resubmission work drops off/,
+        /stays in motion without dropping back into rework|does not drop back into rework/,
+      ];
+    case "duplicate_handoff":
+      return [
+        /handoff between the office and the payer|single cleaner handoff|bouncing the case back and forth/,
+        /not bouncing the case back and forth|not fixing missing pieces in another handoff/,
+        /moves through a single cleaner handoff|one cleaner handoff instead/,
+      ];
+    case "manual_status_check":
+      return [
+        /manual status check|calling or checking back on the same authorization repeatedly/,
+        /not spending time calling or checking back repeatedly/,
+        /act on a clearer next step right away|clearer next step right away/,
+      ];
+    case "paperwork_completion":
+      return [
+        /paperwork step changes at the front end|documentation is complete before it goes out|chasing missing fields/,
+        /not chasing missing fields after submission/,
+        /documentation is complete before it goes out|goes out complete at the front end/,
+      ];
+    case "post_auth_next_step":
+      return [
+        /after prior auth|move directly to the next office step|scheduling or treatment prep/,
+        /not circling back to fix the same request again/,
+        /move the patient to scheduling or treatment prep|move directly to the next office step/,
+      ];
+    default:
+      return [
+        /reopening and correcting the same authorization request|same authorization request/,
+        /repeat work drops off|less time reopening/,
+        /move the case forward with fewer manual touchpoints|fewer manual touchpoints/,
+      ];
+  }
+}
+
+function getOperationalTemplate(bucket = "", level = 0) {
+  const templates = {
+    missing_info_callback: [
+      "The specific change is that the request is completed before it is submitted, so your MA is not calling the patient back for missing prior auth information. Instead of reopening the case later, the office can move it forward in one pass.",
+      "What stops happening is the callback for missing prior auth information, because the request is complete before it goes out. Instead of patching the case after the visit, the office can keep it moving in one pass.",
+      "What happens instead is that the office submits a complete request up front, so your MA is not calling the patient back later for missing information. The case can move forward without reopening it.",
+    ],
+    resubmission_loop: [
+      "The step that changes is the resubmission cycle. Your staff is not sending the same authorization back a second time because the first request goes in complete. Instead, the case stays in motion without dropping back into rework.",
+      "What stops happening is the second submission on the same authorization, because the first request goes out complete. Instead of sending it back through the queue again, the office keeps the case moving.",
+      "What happens instead is one complete authorization submission the first time, so your staff is not resending the same case later. The case stays in motion instead of dropping back into rework.",
+    ],
+    duplicate_handoff: [
+      "What changes is the handoff between the office and the payer. Your team is not bouncing the case back and forth to fix missing pieces. Instead, the case moves through a single cleaner handoff.",
+      "What stops happening is the back-and-forth handoff to fix missing pieces. Instead of sending the case across twice, the office moves it through one cleaner handoff.",
+      "What happens instead is one cleaner handoff with the needed information already in place, so your team is not bouncing the case back and forth later.",
+    ],
+    manual_status_check: [
+      "The task that drops off is the manual status check. Your staff is not spending time calling or checking back on the same authorization repeatedly. Instead, they can act on a clearer next step right away.",
+      "What stops happening is the repeated call or status check on the same authorization. Instead of checking back on the same case again, the office can move on a clearer next step.",
+      "What happens instead is that staff gets to the next action without repeated status checks, so they are not calling back on the same authorization over and over.",
+    ],
+    paperwork_completion: [
+      "The paperwork step changes at the front end. Your team is not chasing missing fields after submission. Instead, the documentation is complete before it goes out.",
+      "What stops happening is the follow-up to fill missing paperwork fields after submission. Instead of patching the documentation later, the office sends it out complete.",
+      "What happens instead is complete documentation before submission, so your team is not chasing missing fields after the case has already gone out.",
+    ],
+    post_auth_next_step: [
+      "What changes after prior auth is that the case can move directly to the next office step instead of stalling in follow-up work. Your staff is not circling back to fix the same request again. Instead, they can move the patient to scheduling or treatment prep.",
+      "What stops happening after prior auth is the follow-up work on the same request. Instead of circling back to repair it, the office can move the patient to the next step right away.",
+      "What happens instead is that the patient moves from prior auth to scheduling or treatment prep without another repair step, so staff is not reopening the same request again.",
+    ],
+    general_staff_burden: [
+      "The concrete change for your staff is that they spend less time reopening and correcting the same authorization request. The repeat work drops off, and the office can move the case forward with fewer manual touchpoints.",
+      "What stops happening is the repeated correction of the same authorization request. Instead of reopening the case again, the office can move it forward with fewer manual touchpoints.",
+      "What happens instead is that the case moves forward with fewer manual touchpoints, so your staff is not reopening and correcting the same authorization request again.",
+    ],
+  };
+
+  const options = templates[bucket] || templates.general_staff_burden;
+  return options[Math.min(level, options.length - 1)];
+}
+
+function operationalPartsForBucket(bucket = "") {
+  switch (bucket) {
+    case "missing_info_callback":
+      return {
+        step: "the request is completed before it is submitted",
+        stop: "your MA is not calling the patient back for missing prior auth information",
+        instead: "the office can move it forward in one pass",
+      };
+    case "resubmission_loop":
+      return {
+        step: "the first authorization request goes out complete",
+        stop: "your staff is not sending the same authorization back a second time",
+        instead: "the case stays in motion without dropping back into rework",
+      };
+    case "duplicate_handoff":
+      return {
+        step: "the handoff between the office and the payer is cleaned up at the front end",
+        stop: "your team is not bouncing the case back and forth to fix missing pieces",
+        instead: "the case moves through one cleaner handoff",
+      };
+    case "manual_status_check":
+      return {
+        step: "the office has a clearer handoff on the authorization status",
+        stop: "your staff is not spending time calling or checking back on the same authorization repeatedly",
+        instead: "they can act on a clearer next step right away",
+      };
+    case "paperwork_completion":
+      return {
+        step: "the paperwork is completed at the front end before submission",
+        stop: "your team is not chasing missing fields after the case has already gone out",
+        instead: "the documentation is complete before it leaves the office",
+      };
+    case "post_auth_next_step":
+      return {
+        step: "the case moves from prior auth into the next office step without another repair cycle",
+        stop: "your staff is not circling back to fix the same request again",
+        instead: "they can move the patient to scheduling or treatment prep",
+      };
+    default:
+      return {
+        step: "the authorization moves forward through one cleaner workflow step",
+        stop: "your staff is not reopening and correcting the same authorization request again",
+        instead: "the office can move the case forward with fewer manual touchpoints",
+      };
+  }
+}
+
+const CONCEPT_LAYERS = [
+  "core_change",
+  "operational_detail",
+  "example",
+  "staff_impact",
+  "next_step",
+];
+
+const REP_CONCEPT_LAYERS = [
+  "core_change",
+  "example",
+  "staff_impact",
+  "operational_detail",
+  "next_step",
+];
+
+const REP_CONCEPT_SEQUENCE = [
+  "core_change",
+  "example",
+  "staff_impact",
+  "operational_detail",
+  "next_step",
+];
+
+function detectConceptLayer(text = "") {
+  const t = normalizeForMatch(text);
+
+  if (/(after that|next|then it moves|from there)/.test(t)) {
+    return "next_step";
+  }
+
+  if (/(for example|in practice|like when)/.test(t)) {
+    return "example";
+  }
+
+  if (/(your staff|they spend|they don't have to|they doesnt have to|your ma|ma spends|staff spends)/.test(t)) {
+    return "staff_impact";
+  }
+
+  if (/(ma|staff|workflow|step|process|office|handoff|payer|authorization)/.test(t)) {
+    return "operational_detail";
+  }
+
+  if (/(no more|removes|reduces|cuts out|less|fewer|stops|drops off)/.test(t)) {
+    return "core_change";
+  }
+
+  return "core_change";
+}
+
+function detectRepConcept(text = "") {
+  const t = normalizeForMatch(text);
+
+  if (t.includes("for example") || t.includes("in practice")) return "example";
+  if (t.includes("staff") || t.includes("ma")) return "staff_impact";
+  if (t.includes("after") || t.includes("next")) return "next_step";
+  if (t.includes("step") || t.includes("process")) return "operational_detail";
+
+  return "core_change";
+}
+
+function getNormalizedTurnSpeaker(turn = {}) {
+  return String(turn?.speaker || turn?.role || turn?.author || "").toLowerCase();
+}
+
+function getNormalizedTurnText(turn = {}) {
+  return String(turn?.text || turn?.message || turn?.content || turn?.rawMessage || "");
+}
+
+function getUsedConceptLayers(turns = []) {
+  const used = new Set();
+
+  turns.forEach((turn) => {
+    const speaker = getNormalizedTurnSpeaker(turn);
+    const text = getNormalizedTurnText(turn);
+    const isRep =
+      speaker === "rep" ||
+      speaker === "user" ||
+      speaker.includes("rep");
+
+    if (isRep && text.trim()) {
+      used.add(detectConceptLayer(text));
+    }
+  });
+
+  return used;
+}
+
+function getUsedRepConcepts(turns = []) {
+  return turns
+    .map((turn) => {
+      const speaker = String(turn?.speaker || turn?.role || turn?.author || "").toLowerCase();
+
+      if (!speaker.includes("rep")) return null;
+      return turn?.concept || null;
+    })
+    .filter(Boolean);
+}
+
+function getNextLayer(usedLayers) {
+  for (const layer of CONCEPT_LAYERS) {
+    if (!usedLayers.has(layer)) {
+      return layer;
+    }
+  }
+  return "next_step";
+}
+
+function getNextConcept(used = []) {
+  const orderedUsed = (used || []).filter(Boolean);
+
+  let next = "next_step";
+  for (let i = 0; i < REP_CONCEPT_SEQUENCE.length; i += 1) {
+    if (!orderedUsed.includes(REP_CONCEPT_SEQUENCE[i])) {
+      next = REP_CONCEPT_SEQUENCE[i];
+      break;
+    }
+  }
+
+  const last = orderedUsed[orderedUsed.length - 1];
+  if (last === next) {
+    next = "next_step";
+  }
+
+  const counts = orderedUsed.reduce((acc, concept) => {
+    acc[concept] = (acc[concept] || 0) + 1;
+    return acc;
+  }, {});
+
+  if ((counts.operational_detail || 0) >= 1 && next === "operational_detail") {
+    next = "next_step";
+  }
+
+  if (orderedUsed.includes("next_step")) {
+    next = "next_step";
+  }
+
+  return next;
+}
+
+function asRepReplyPayload(reply = "", concept = null, context = {}) {
+  const rawText = typeof reply === "string" ? reply : String(reply?.text || "");
+  return {
+    text: finalizeRepReply(rawText, context),
+    concept,
+  };
+}
+
+function renderConcept(type = "core_change", context = {}) {
+  const bucket = context?.bucket || "general_staff_burden";
+
+  switch (type) {
+    case "example":
+      if (bucket === "post_auth_next_step") {
+        return "In practice, instead of stalling after prior auth, the case moves to the next office step right away.";
+      }
+      return "In practice, instead of calling the patient back, the request goes in complete the first time.";
+    case "staff_impact":
+      if (bucket === "manual_status_check") {
+        return "The main thing is your staff is not chasing the same authorization status again and again.";
+      }
+      return "The main thing is your staff isn't reopening and fixing the same authorization twice.";
+    case "operational_detail":
+      if (bucket === "paperwork_completion") {
+        return "The step that changes is the submission itself - the paperwork goes out complete instead of getting kicked back.";
+      }
+      return "The step that changes is the initial submission - it goes in complete instead of getting kicked back.";
+    case "next_step":
+      if (bucket === "post_auth_next_step") {
+        return "After that, the case moves straight into the next office step instead of looping back.";
+      }
+      return "After that, the case moves straight into scheduling instead of looping back.";
+    default:
+      if (bucket === "missing_info_callback") {
+        return "The main difference is the request goes in complete, so the callback loop drops off.";
+      }
+      return "The main difference is the request goes in complete the first time.";
+  }
+}
+
+function generateIsolatedLayerResponse(layer, { bucket = "general_staff_burden", context = {} } = {}) {
+  const { step, stop, instead } = operationalPartsForBucket(bucket);
+  const askType = context?.askType || "";
+
+  switch (layer) {
+    case "core_change":
+      if (bucket === "resubmission_loop") return "It cuts out the resubmission loop.";
+      if (bucket === "missing_info_callback") return "It cuts out the missing-info callback.";
+      if (bucket === "duplicate_handoff") return "It cuts out the extra handoff.";
+      if (bucket === "manual_status_check") return "It cuts out the repeat status-check work.";
+      if (bucket === "paperwork_completion") return "It cuts out the paperwork cleanup after submission.";
+      if (bucket === "post_auth_next_step") return "It cuts out the repair step after prior auth.";
+      if (askType === "staff_change") return "It cuts out the repeat rework.";
+      return "It cuts out the resubmission loop.";
+
+    case "operational_detail":
+      if (bucket === "missing_info_callback") return "Your MA is not calling the patient back for missing prior auth information.";
+      if (bucket === "resubmission_loop") return "Your staff is not sending the same authorization back a second time.";
+      if (bucket === "duplicate_handoff") return "Your team is not bouncing the case back and forth to fix missing pieces.";
+      if (bucket === "manual_status_check") return "Your staff is not calling or checking back on the same authorization again.";
+      if (bucket === "paperwork_completion") return "Your team is not chasing missing fields after the case goes out.";
+      if (bucket === "post_auth_next_step") return "Your staff is not circling back to fix the same request again.";
+      return "Your MA is not reopening and fixing the same authorization.";
+
+    case "example":
+      if (bucket === "missing_info_callback") return "For example, instead of calling the patient back, the request goes in complete the first time.";
+      if (bucket === "resubmission_loop") return "For example, instead of sending the same prior auth back again, the first request goes out complete.";
+      if (bucket === "duplicate_handoff") return "For example, instead of bouncing the case back to fix missing pieces, it moves through one cleaner handoff.";
+      if (bucket === "manual_status_check") return "For example, instead of checking back on the same authorization, the office gets to the next action right away.";
+      if (bucket === "paperwork_completion") return "For example, instead of fixing missing fields later, the documentation is complete before submission.";
+      if (bucket === "post_auth_next_step") return "For example, instead of circling back after prior auth, the case moves into the next office step.";
+      return "For example, instead of calling the patient back, the request goes in complete the first time.";
+
+    case "staff_impact":
+      if (bucket === "missing_info_callback") return "So your staff spends less time chasing missing information after the visit.";
+      if (bucket === "resubmission_loop") return "So your staff spends less time resubmitting the same case.";
+      if (bucket === "duplicate_handoff") return "So your staff spends less time fixing the same case across extra handoffs.";
+      if (bucket === "manual_status_check") return "So your staff spends less time checking on the same authorization over and over.";
+      if (bucket === "paperwork_completion") return "So your staff spends less time fixing paperwork after it has already gone out.";
+      if (bucket === "post_auth_next_step") return "So your staff spends less time circling back on work that should already be done.";
+      return "So your staff spends less time chasing missing info and resubmitting cases.";
+
+    case "next_step":
+      if (bucket === "missing_info_callback") return "After that, the case can move forward in one pass.";
+      if (bucket === "resubmission_loop") return "After that, the case keeps moving instead of dropping back into rework.";
+      if (bucket === "duplicate_handoff") return "After that, the case moves through one cleaner handoff.";
+      if (bucket === "manual_status_check") return "After that, the office can act on the next step right away.";
+      if (bucket === "paperwork_completion") return "After that, the documentation can move out without another cleanup step.";
+      if (bucket === "post_auth_next_step") return "After that, the case can move straight into scheduling instead of rework.";
+      return "After that, the case can move straight into scheduling instead of rework.";
+
+    default:
+      return `It cuts out the repeat rework because ${step}. ${stop.charAt(0).toUpperCase()}${stop.slice(1)}. ${instead.charAt(0).toUpperCase()}${instead.slice(1)}.`;
+  }
+}
+
+function containsMultipleConcepts(text = "") {
+  const matches = [
+    /no more|cuts out|reduces|less|fewer/,
+    /workflow|staff|process|step/,
+    /for example|in practice/,
+    /your staff|they spend/,
+    /after that|next|then/,
+  ].filter((pattern) => pattern.test(String(text || "").toLowerCase()));
+
+  return matches.length > 1;
+}
+
+function responseLayerOrderForAsk(askType = "") {
+  switch (askType) {
+    case "removed_work":
+      return ["core_change", "operational_detail", "example", "staff_impact", "next_step"];
+    case "staff_change":
+      return ["operational_detail", "staff_impact", "example", "next_step", "core_change"];
+    case "next_step":
+      return ["next_step", "operational_detail", "example", "staff_impact", "core_change"];
+    case "bottleneck":
+      return ["operational_detail", "core_change", "example", "staff_impact", "next_step"];
+    case "implementation":
+      return ["operational_detail", "example", "staff_impact", "next_step", "core_change"];
+    default:
+      return ["core_change", "operational_detail", "example", "staff_impact", "next_step"];
+  }
+}
+
+function isSameConcept(previousRep = "", currentRep = "") {
+  const stripFrame = (text) => normalizeForMatch(text)
+    .replace(/^(the step that changes is|where this actually breaks down is|the specific change is|what stops happening is|the part that drops off is|what your staff is actually doing differently is this|the difference for your staff is this|after that first change|from there|what happens next is|the way it works is that|this works by)\b/i, "")
+    .replace(/\b(instead|that means|so)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const a = stripFrame(previousRep);
+  const b = stripFrame(currentRep);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+function selectOperationalLayer({ turns = [], askType = "", responseMode = "" }) {
+  const usedLayers = getUsedConceptLayers(turns);
+  const order = responseLayerOrderForAsk(askType);
+  const preferredLayer =
+    responseMode === "removal_explanation" ? "core_change" :
+    responseMode === "behavior_change" ? "operational_detail" :
+    responseMode === "workflow_progression" ? "next_step" :
+    responseMode === "root_cause" ? "operational_detail" :
+    responseMode === "how_it_works" ? "example" :
+    order[0];
+  const candidateOrder = [preferredLayer, ...order.filter((layer) => layer !== preferredLayer)];
+
+  for (const layer of candidateOrder) {
+    if (!usedLayers.has(layer)) {
+      return layer;
+    }
+  }
+
+  return getNextLayer(usedLayers);
+}
+
+function renderOperationalLayer(bucket = "", layer = "") {
+  const { step, stop, instead } = operationalPartsForBucket(bucket);
+  switch (layer) {
+    case "core_change":
+      return `It cuts out the repeat rework because ${step}. ${stop.charAt(0).toUpperCase()}${stop.slice(1)}.`;
+    case "operational_detail":
+      return `Your staff is not getting pulled back into the same step because ${step}. ${stop.charAt(0).toUpperCase()}${stop.slice(1)}.`;
+    case "example":
+      return `For example, ${step}, so ${stop}. ${instead.charAt(0).toUpperCase()}${instead.slice(1)}.`;
+    case "staff_impact":
+      return `So your staff feels the difference here: ${stop}. ${instead.charAt(0).toUpperCase()}${instead.slice(1)}.`;
+    case "next_step":
+      return `After that, ${instead}. ${stop.charAt(0).toUpperCase()}${stop.slice(1)}.`;
+    default:
+      return `It cuts out the repeat rework because ${step}. ${stop.charAt(0).toUpperCase()}${stop.slice(1)}.`;
+  }
+}
+
+function forceNextConceptLayer(usedLayers, askType = "", bucket = "general_staff_burden") {
+  const orderedLayers = responseLayerOrderForAsk(askType);
+  const next = orderedLayers.find((layer) => !usedLayers.has(layer)) || getNextLayer(usedLayers);
+  return renderOperationalLayer(bucket, next);
+}
+
+function enforceUniqueOperationalAnswer({ turns = [], bucket = "", askType = "", candidate = "" }) {
+  const usedLayers = getUsedConceptLayers(turns);
+  const currentLayer = detectConceptLayer(candidate);
+
+  if (!usedLayers.has(currentLayer) && !containsMultipleConcepts(candidate)) {
+    return candidate;
+  }
+
+  const nextLayer = getNextLayer(usedLayers);
+  return generateIsolatedLayerResponse(nextLayer, { bucket, context: { askType } });
+}
+
+function getOperationalResolutionLevel(turns = [], bucket = "") {
+  const patterns = getOperationalBucketPatterns(bucket);
+  const repTexts = turns
+    .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+    .map((turn) => normalizeForMatch(turn.text));
+
+  let level = 0;
+  for (const text of repTexts) {
+    if (patterns[0]?.test(text)) level = Math.max(level, 1);
+    if (patterns[1]?.test(text)) level = Math.max(level, 2);
+    if (patterns[2]?.test(text)) level = Math.max(level, 3);
+  }
+  return level;
+}
+
+function nextOperationalResolution(turns = [], bucket = "") {
+  const level = getOperationalResolutionLevel(turns, bucket);
+  return getOperationalTemplate(bucket, level);
+}
+
+function chooseProgressionMode({ lastHcpMessage = "", turns = [] }) {
+  const questionType = detectHcpQuestionType(lastHcpMessage);
+  const coverage = getRepCoverage(turns);
+
+  if (questionType === "solution_seeking") {
+    return "answer";
+  }
+
+  if (!coverage.answeredDirectly) {
+    return "answer";
+  }
+
+  if (!coverage.gaveWorkflowExample) return "example";
+  if (!coverage.explainedStaffImpact) return "staff";
+  if (!coverage.providedImplementationDetail) return "implementation";
+  return "next_step";
+}
+
+function pickProgressionLine(mode, topic, previousRepText = "", lastHcpMessage = "", turns = []) {
+  const previousPrefix = prefix(previousRepText);
+  const askType = classifySpecificAsk(lastHcpMessage);
+  const responseMode = responseModeForAsk(askType);
+  const operationalBucket = resolveOperationalAsk(lastHcpMessage);
+  const lines = {
+    workflow: {
+      answer: [
+        "What changes is that the request goes in complete the first time, so your staff is not chasing missing details or reopening the case later.",
+        "The practical change is one complete prior auth submission up front, so staff is not doing callbacks, resubmissions, or duplicate handoffs later.",
+      ],
+      example: [
+        "In practice, that means the MA is not calling the patient back for missing information and the case does not bounce between the office and the payer.",
+        "In practice, the front end gets the case out cleanly, so staff is not reopening it after the visit to patch missing pieces.",
+      ],
+      staff: [
+        "For your staff, that cuts rework and keeps the case from bouncing through callbacks and duplicate handoffs.",
+        "For the office, that means less back-and-forth, fewer callbacks, and fewer loose ends after the visit.",
+      ],
+      implementation: [
+        "Operationally, the real shift is one complete intake and prior-auth step instead of patching the case after the visit.",
+        "Operationally, it changes the handoff at the front end so the case is ready before staff has to chase it later.",
+      ],
+      next_step: [
+        "The next practical step is checking which fields are usually missing now, so you can see whether one complete submission would actually remove that rework.",
+        "The next practical step is pressure-testing the point where your staff usually reopens the case, so you can see whether a complete submission would actually take that step out.",
+      ],
+    },
+    formulary: {
+      answer: [
+        "What changes is having one committee-ready summary instead of restarting the access discussion from scratch each time.",
+        "The practical change is a review-ready formulary summary, so the request is not reopening as a series of one-off follow-ups.",
+      ],
+      example: [
+        "In practice, that gives the team a specific patient group, outcome, and reason to revisit the restriction.",
+        "In practice, it means the request goes forward with one clear rationale instead of a loose collection of follow-up questions.",
+      ],
+      staff: [
+        "For your staff, that means fewer back-and-forth requests and a clearer process for what actually has to go to review.",
+        "For the office, that reduces the extra steps that happen when the request comes back without the right review package.",
+      ],
+      implementation: [
+        "Operationally, the change is packaging the request for review once instead of sending partial information and reopening it later.",
+        "Operationally, it means one complete review packet instead of a stop-start process that keeps coming back to the office.",
+      ],
+      next_step: [
+        "The next practical step is confirming what the committee needs in that summary so the request moves through one review path.",
+        "The next practical step is narrowing the exact review requirement that keeps this from moving now, so the package is complete the first time.",
+      ],
+    },
+    clinical: {
+      answer: [
+        "What changes is whether the data answers the exact evidence gap you're raising, not whether the product sounds broadly positive.",
+        "The practical change is narrowing the discussion to the exact evidence question driving your decision, not to a general efficacy claim.",
+      ],
+      example: [
+        "In practice, that means staying on the subgroup, renal issue, or outcome that is actually driving your decision.",
+        "In practice, it means keeping the discussion tied to the patient group you would really change treatment for.",
+      ],
+      staff: [
+        "For your team, that keeps the conversation tied to a real treatment decision instead of a broad value statement.",
+        "For the practice, that keeps the review focused on the one evidence gap that would actually change care.",
+      ],
+      implementation: [
+        "Operationally, the shift is narrowing the review to the exact evidence point you would need before changing course.",
+        "Operationally, it means defining the one evidence question that still has to be answered before this moves.",
+      ],
+      next_step: [
+        "The next practical step is agreeing on the one evidence question that still has to be answered before this moves.",
+        "The next practical step is pressure-testing the exact subgroup or outcome you still need to see before this becomes actionable.",
+      ],
+    },
+    general: {
+      answer: [
+        "What changes is the specific part of the process that's creating extra work right now, not a broad value story.",
+        "The practical change is addressing the exact bottleneck on the table instead of widening the discussion.",
+      ],
+      example: [
+        "In practice, that means staying on the step that's slowing care rather than opening a broader discussion.",
+        "In practice, it means focusing on the part of the workflow or decision that is actually blocking progress.",
+      ],
+      staff: [
+        "For your team, that keeps the conversation tied to what is actually creating burden day to day.",
+        "For the office, that keeps this anchored to the practical issue instead of a general pitch.",
+      ],
+      implementation: [
+        "Operationally, the shift is defining the exact step that has to change before this is worth carrying forward.",
+        "Operationally, it means making one concrete change instead of talking around the issue.",
+      ],
+      next_step: [
+        "The next practical step is narrowing the exact point where this is getting stuck so you can see whether the change is real.",
+        "The next practical step is pressure-testing the one step that still needs to change before this becomes useful.",
+      ],
+    },
+  };
+
+  if (topic === "workflow" && mode === "answer") {
+    const mappedBucket =
+      askType === "removed_work" ? "resubmission_loop" :
+      askType === "next_step" ? "post_auth_next_step" :
+      askType === "staff_change" ? "general_staff_burden" :
+      askType === "implementation" ? "paperwork_completion" :
+      askType === "bottleneck" ? "duplicate_handoff" :
+      operationalBucket;
+    const usedLayers = getUsedConceptLayers(turns);
+    const nextLayer = getNextLayer(usedLayers);
+    let candidateResponse = generateIsolatedLayerResponse(nextLayer, {
+      bucket: mappedBucket,
+      context: { askType, responseMode, lastHcpMessage },
+    });
+
+    if (containsMultipleConcepts(candidateResponse)) {
+      candidateResponse = generateIsolatedLayerResponse(nextLayer, {
+        bucket: mappedBucket,
+        context: { askType, responseMode, lastHcpMessage },
+      });
+    }
+
+    if (prefix(candidateResponse) === previousPrefix) {
+      candidateResponse = generateIsolatedLayerResponse(getNextLayer(new Set([...usedLayers, nextLayer])), {
+        bucket: mappedBucket,
+        context: { askType, responseMode, lastHcpMessage },
+      });
+    }
+
+    return candidateResponse;
+  }
+
+  const options = lines[topic]?.[mode] || lines.general[mode];
+  if (prefix(options[0]) === previousPrefix && options[1]) {
+    return options[1];
+  }
+  return options[0];
+}
+
+export function buildDeterministicQaRepReply({ turns = [], draft = "" }) {
+  const lastHcpMessage = getLastHcpText(turns);
+
+  if (!lastHcpMessage) {
+    return asRepReplyPayload(
+      "I want to keep this focused on the part of the workflow that is creating extra work for the office right now.",
+      "core_change",
+      { hcpTurn: lastHcpMessage, transcript: turns },
+    );
+  }
+
+  const topic = classifyQaTopic(lastHcpMessage);
+  const mode = chooseProgressionMode({ lastHcpMessage, turns });
+  const bucket = resolveOperationalAsk(lastHcpMessage);
+  const previousRepText = getLastRepText(turns);
+  const candidate = pickProgressionLine(mode, topic, previousRepText, lastHcpMessage, turns);
+  const usedConcepts = getUsedRepConcepts(turns);
+  const nextConcept = getNextConcept(usedConcepts);
+  const forced = renderConcept(nextConcept, {
+    bucket,
+    topic,
+    mode,
+    hcpTurn: lastHcpMessage,
+    candidate,
+  });
+
+  return asRepReplyPayload(
+    forced,
+    nextConcept,
+    { hcpTurn: lastHcpMessage, transcript: turns },
+  );
+}
+
 function extractIssueLabel(text = "") {
   const normalized = String(text).toLowerCase();
   if (/renal impairment|renal function|\brenal\b|kidney/.test(normalized)) return "renal impairment";
@@ -201,6 +1025,108 @@ function deriveInitialAccessOperationalChange(scenario = {}, activeConcernText =
   return "one cleaner operational step so the case does not bounce back through the office twice";
 }
 
+function hasConcreteSolutionSeekingAnswer(text = "") {
+  const value = normalizeForMatch(text);
+  if (!value) return false;
+
+  const hasDomainAnchor = /staff|workflow|process|patients?|access|prior auth|prior authorization|\bpa\b|formulary|committee|callback|handoff|steps?|office|approval|payer|paperwork|documentation|authorization|form|ma\b|medical assistant/.test(value);
+  const hasSubstance = /reduces?|remove|shorter|cleaner|fewer|less|no more|not have to|doesn't have to|goes through|move forward|submit|complete|fix|send|avoid|stop|right first time|resubmit|kicked back|missing info|missing information|reopen|reopening|denied|chart notes|step therapy/.test(value);
+
+  return hasDomainAnchor && hasSubstance;
+}
+
+function hasSemanticDomainSignal(text = "") {
+  return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
+}
+
+function hasSemanticChangeSignal(text = "") {
+  return /fix|complete|submit|send|reduce|remove|avoid|stop|less|fewer|no more|not have to|doesn't have to|goes through|move forward|cleaner|right first time|cuts out|drops off|isn't reopening|not doing|doesn't bounce back|isn't fixing/.test(normalizeForMatch(text));
+}
+
+function hasSemanticSpecificitySignal(text = "") {
+  return /resubmission|missing info|missing information|callback|kicked back|kicked-back|denied|reopened|payer|documentation|icd|step therapy|chart notes|form|front desk|ma\b|medical assistant|office staff|approval|clean first time|authorization|same authorization|same pa|same prior auth|bounced back|send it again|fix and send it again/.test(normalizeForMatch(text));
+}
+
+function hasOperationalAnchor(text = "") {
+  return /resubmit|resubmission|missing info|missing information|fix|fixing|correcting|reopen|reopening|send again|second time|same pa|same prior auth|same authorization|kicked back|kicked-back|denied|payer bounce|bounce it back|bounced back|form complete|form completion|form is complete|documentation gap|ma chasing|calling back|callback|callbacks|back and forth/.test(normalizeForMatch(text));
+}
+
+function hasShortDirectOperationalResolution(text = "") {
+  const value = normalizeForMatch(text);
+  return (
+    /\bno resubmissions\b/.test(value) ||
+    /\bma\b.*\b(no|not|doesn't)\b.*\b(chase|calling|call|missing info|missing information)\b/.test(value) ||
+    /\bstaff\b.*\b(no|not|doesn't)\b.*\b(do|doing|fix|send|same pa|same prior auth|same authorization|twice)\b/.test(value) ||
+    /\bless\b.*\b(callback|callbacks|fixing|same authorization|resubmit|resubmission)\b/.test(value) ||
+    /\bfewer\b.*\b(kicked back requests?|callbacks?|resubmissions?)\b/.test(value) ||
+    /\bgoes through\b.*\bclean\b.*\bfirst time\b/.test(value) ||
+    /\bclean\b.*\bfirst time\b/.test(value) ||
+    /\bdoesn't have to\b.*\bfix\b.*\bsend it again\b/.test(value) ||
+    /\bnot reopening\b.*\bsame case\b/.test(value) ||
+    /\breduces?\b.*\b(callback|callbacks|resubmit|resubmission loop)\b/.test(value)
+  );
+}
+
+function isBroadVagueNonAnswer(text = "") {
+  const value = normalizeForMatch(text);
+  return (
+    /\bit reduces burden\b/.test(value) ||
+    /\bit helps your office\b/.test(value) ||
+    /\bit makes the process better\b/.test(value) ||
+    /\bwe support your staff\b/.test(value) ||
+    /\bit improves workflow\b/.test(value) ||
+    /\bit makes things easier\b/.test(value) ||
+    /\bit helps reduce burden\b/.test(value) ||
+    /\bit improves efficiency\b/.test(value) ||
+    /\bit helps your staff\b/.test(value)
+  );
+}
+
+export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
+  const questionType = detectHcpQuestionType(hcpTurn);
+  if (questionType !== "solution_seeking") return true;
+
+  const response = normalizeForMatch(repResponse);
+  const hcpText = normalizeForMatch(hcpTurn);
+
+  if (!response) {
+    return false;
+  }
+
+  if (/^(what|how|why|where|when|who|can|could|would|should|is|are|do|does|did)\b/.test(response) || /\?$/.test(response)) {
+    return false;
+  }
+
+  if (isBroadVagueNonAnswer(response)) {
+    return false;
+  }
+
+  const operationalAsk =
+    /prior auth|prior authorization|\bpa\b|workflow|staff|ma\b|paperwork|documentation|payer|authorization|callback|resubmit|form|approval|office/.test(hcpText);
+  const requiresOperationalAnchor =
+    /what changes|what specifically|what'?s different|what is different|what actually changes/.test(hcpText);
+
+  if (operationalAsk) {
+    const hasDomain = hasSemanticDomainSignal(response);
+    const hasChange = hasSemanticChangeSignal(response);
+    const hasSpecificity = hasSemanticSpecificitySignal(response);
+    const hasAnchor = hasOperationalAnchor(response);
+    if (requiresOperationalAnchor && !hasAnchor) {
+      return false;
+    }
+    if ((hasDomain && hasChange && hasSpecificity) || hasShortDirectOperationalResolution(response)) {
+      return true;
+    }
+    return false;
+  }
+
+  return hasConcreteSolutionSeekingAnswer(response);
+}
+
+function fullyAnswersQuestion(hcpTurn = "", repResponse = "") {
+  return semanticallyAnswersHcpAsk(hcpTurn, repResponse);
+}
+
 function deriveGuidelineDirectAnswer(activeConcernText = "") {
   const text = String(activeConcernText || "").toLowerCase();
   if (/exact guideline language|guideline update|guideline recommendation/.test(text)) {
@@ -219,6 +1145,77 @@ function deriveGuidelineDirectAnswer(activeConcernText = "") {
     return "The value story is still too broad unless it changes a real patient or utilization decision for you";
   }
   return "The evidence is still not specific enough to clear the decision bar you use in practice";
+}
+
+function buildSolutionSeekingFallback({ scenario, turns }) {
+  const lastHcpMessage = getLastHcpText(turns);
+  const response = normalizeForMatch(lastHcpMessage);
+
+  if (/prior auth|prior authorization|\bpa\b|workflow|staff|ma\b|paperwork|documentation|authorization|callback|resubmit|approval|office/.test(response)) {
+    const askType = classifySpecificAsk(lastHcpMessage);
+    const bucket =
+      askType === "removed_work" ? "resubmission_loop" :
+      askType === "next_step" ? "post_auth_next_step" :
+      askType === "staff_change" ? "general_staff_burden" :
+      askType === "implementation" ? "paperwork_completion" :
+      askType === "bottleneck" ? "duplicate_handoff" :
+      resolveOperationalAsk(lastHcpMessage);
+    const usedLayers = getUsedConceptLayers(turns);
+    const nextLayer = getNextLayer(usedLayers);
+    return generateIsolatedLayerResponse(nextLayer, {
+      bucket,
+      context: { askType, lastHcpMessage },
+    });
+  }
+
+  return "It cuts out the resubmission loop.";
+}
+
+function finalizeRepReply(text = "", context = {}) {
+  return normalizeDialoguePunctuation(humanizeRepResponse(text, context));
+}
+
+export function enforceRepAnswerFirstContract({
+  scenario,
+  turns,
+  draft,
+}) {
+  const lastHcpMessage = getLastHcpText(turns);
+  const questionType = detectHcpQuestionType(lastHcpMessage);
+  const draftPayload = typeof draft === "object" && draft !== null
+    ? draft
+    : { text: String(draft || "").trim(), concept: null };
+
+  if (questionType !== "solution_seeking") {
+    return asRepReplyPayload(draftPayload.text, draftPayload.concept, {
+      hcpTurn: lastHcpMessage,
+      transcript: turns,
+    });
+  }
+
+  const normalizedDraft = String(draftPayload.text || "").trim();
+  if (!normalizedDraft) {
+    return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
+      hcpTurn: lastHcpMessage,
+      transcript: turns,
+    });
+  }
+
+  const draftIsQuestion =
+    /\?$/.test(normalizedDraft) ||
+    /^(what|how|why|where|when|who|can|could|would|should|is|are|do|does|did)\b/i.test(normalizedDraft);
+
+  if (!draftIsQuestion && fullyAnswersQuestion(lastHcpMessage, normalizedDraft)) {
+    return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
+      hcpTurn: lastHcpMessage,
+      transcript: turns,
+    });
+  }
+
+  return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
+    hcpTurn: lastHcpMessage,
+    transcript: turns,
+  });
 }
 
 function deriveImplementationConcreteAnswer(activeConcernText = "", scenario = {}) {
@@ -375,8 +1372,8 @@ function isCostValueThreadActive(turns = [], scenario = {}) {
 }
 
 function shouldHoldCostValueLane({ scenario, turns, activeConcernText = "", lastRepText = "", draft = "" }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
-  if (!/clinical_value|clinical_evaluation/.test(stageText)) {
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
+  if (!/clinical_value|clinical_value/.test(stageText)) {
     return false;
   }
 
@@ -505,7 +1502,7 @@ function buildOperationalFollowThroughReply({ activeConcernText = "", turns }) {
 function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBehaviorState, currentJourneyState, draft }) {
   const activeConcernText = getActiveConcernText(turns, scenario);
   const familyText = `${scenario?.journeyStage || ""} ${currentBehaviorState || ""} ${currentJourneyState || ""} ${(scenario?.interactionPressure || []).join(" ")}`;
-  const isClinicalSkepticism = /clinical_value|skeptical|clinical_evaluation/i.test(familyText);
+  const isClinicalSkepticism = /clinical_value|skeptical|clinical_value/i.test(familyText);
   const repeatedConcern = hasRepeatedObjection(turns);
   const directDemand = DIRECT_ANSWER_TRIGGER.test(activeConcernText);
   const firstRepTurn = turns.filter((turn) => turn?.speaker === "rep").length === 0;
@@ -524,8 +1521,8 @@ function shouldUseDeterministicEvidenceFitRewrite({ scenario, turns, currentBeha
 }
 
 function shouldUseDeterministicCommitmentRewrite({ scenario, turns, draft }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
-  const isCommitmentStage = /commitment_close|adoption_commitment|access_formulary/.test(stageText);
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
+  const isCommitmentStage = /commitment_close|adoption_implementation|access_formulary/.test(stageText);
   if (!isCommitmentStage) {
     return false;
   }
@@ -579,7 +1576,7 @@ function shouldUseDeterministicFamilyAnswerRewrite({ scenario, turns, draft }) {
     return (WORKFLOW_DEMAND_PATTERN.test(activeConcernText) || repeatedConcern) && (draftTooLoose || WORKFLOW_REDISCOVERY_PATTERN.test(draftText));
   }
 
-  if (stage === "discovery") {
+  if (stage === "early_discovery") {
     return (DISCOVERY_DIRECT_ASK_PATTERN.test(activeConcernText) || repeatedConcern) && (draftTooLoose || /\?$/.test(draftText));
   }
 
@@ -698,7 +1695,7 @@ function buildDeterministicFamilyAnswerReply({ scenario, turns }) {
     return "The main question is whether this is workable in practice, not whether the idea makes sense. The only thing worth testing is whether it reduces the staff burden instead of widening it.";
   }
 
-  if (stage === "discovery") {
+  if (stage === "early_discovery") {
     if (/what specific clinical profile would make me change course|what specific clinical profile makes you think i'?d change course|what clinical profile would make me switch, not just any patient|what clinical profile would make me switch|clinical profile makes you think i'd change course/.test(activeConcernText)) {
       return "The clinical profile would have to be the patient who is still not controlled well enough on the current treatment and whose disease burden or treatment response is poor enough that staying on the same path no longer makes clinical sense.";
     }
@@ -1419,6 +2416,18 @@ function hasRepeatedObjection(turns = []) {
   return sharedSignals.some((signal) => last.includes(signal) && prev.includes(signal));
 }
 
+function avoidRepeatedDeterministicReply(candidate, draft, turns = []) {
+  const normalizedCandidate = normalizeForMatch(candidate);
+  if (!normalizedCandidate) return String(draft || "").trim();
+
+  const recentRepTurns = turns
+    .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+    .slice(-2);
+
+  const repeated = recentRepTurns.some((turn) => normalizeForMatch(turn.text) === normalizedCandidate);
+  return repeated ? String(draft || "").trim() : String(candidate || "").trim();
+}
+
 function needsAnswerFirstRevision({ scenario, turns, currentBehaviorState, currentJourneyState, draft }) {
   const activeConcernText = getActiveConcernText(turns, scenario);
   if (!activeConcernText) {
@@ -1440,7 +2449,7 @@ export async function maybeReviseStrongRepReply({
   currentJourneyState,
   draft,
 }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
   const repeatedConcern = hasRepeatedObjection(turns);
   const lastRepText = getLastRepText(turns);
@@ -1456,17 +2465,17 @@ export async function maybeReviseStrongRepReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome|detailed breakdown|patient population details|change practice|specific insights i need|show me the renal subgroup data|that'?s a delay|real-world outcomes/.test(activeConcernText)
   ) {
-    return buildDeterministicEvidenceFitReply({ scenario, turns });
+    return avoidRepeatedDeterministicReply(buildDeterministicEvidenceFitReply({ scenario, turns }), draft, turns);
   }
 
   if (
-    /commitment_close|adoption_commitment/.test(stageText) &&
+    /commitment_close|adoption_implementation/.test(stageText) &&
     (CLOSE_PROOF_POINT_PATTERN.test(activeConcernText) || repeatedConcern)
   ) {
-    return buildDeterministicCommitmentReply({ scenario, turns });
+    return avoidRepeatedDeterministicReply(buildDeterministicCommitmentReply({ scenario, turns }), draft, turns);
   }
 
   if (shouldUseDeterministicFamilyAnswerRewrite({
@@ -1474,7 +2483,7 @@ export async function maybeReviseStrongRepReply({
     turns,
     draft,
   })) {
-    return buildDeterministicFamilyAnswerReply({ scenario, turns });
+    return avoidRepeatedDeterministicReply(buildDeterministicFamilyAnswerReply({ scenario, turns }), draft, turns);
   }
 
   if (shouldUseDeterministicCommitmentRewrite({
@@ -1482,7 +2491,7 @@ export async function maybeReviseStrongRepReply({
     turns,
     draft,
   })) {
-    return buildDeterministicCommitmentReply({ scenario, turns });
+    return avoidRepeatedDeterministicReply(buildDeterministicCommitmentReply({ scenario, turns }), draft, turns);
   }
 
   if (shouldUseDeterministicEvidenceFitRewrite({
@@ -1492,7 +2501,7 @@ export async function maybeReviseStrongRepReply({
     currentJourneyState,
     draft,
   })) {
-    return buildDeterministicEvidenceFitReply({ scenario, turns });
+    return avoidRepeatedDeterministicReply(buildDeterministicEvidenceFitReply({ scenario, turns }), draft, turns);
   }
 
   if (!needsAnswerFirstRevision({
@@ -1548,7 +2557,7 @@ export function maybeEnforceFamilyAnswerReply({
   turns,
   draft,
 }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
   const lastRepText = getLastRepText(turns);
 
@@ -1563,7 +2572,7 @@ export function maybeEnforceFamilyAnswerReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /\bcost|spend|value|monitoring|testing|diagnostic|expense|budget\b/.test(activeConcernText) &&
     hasCostValueGapAdmission(lastRepText)
   ) {
@@ -1571,7 +2580,7 @@ export function maybeEnforceFamilyAnswerReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit|what am i supposed to do with|what do i do with|how am i supposed to use that|incremental cost|added cost per patient|extra testing|extra monitoring|follow-up costs|testing and monitoring|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring|don't need another efficacy point|do not need another efficacy point|not another efficacy point/.test(activeConcernText) &&
     hasConcreteCostValueAnswer(lastRepText)
   ) {
@@ -1579,7 +2588,7 @@ export function maybeEnforceFamilyAnswerReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /average added monitoring cost|added cost for monitoring|monitoring cost per patient|average monitoring cost|specific added cost per patient.*monitoring|exact added cost per patient.*monitoring|specific added cost.*monitoring|exact added cost.*monitoring/.test(activeConcernText) &&
     (hasMonitoringCostRange(lastRepText) || hasCostValueGapAdmission(lastRepText) || hasConcreteCostValueAnswer(lastRepText))
   ) {
@@ -1587,7 +2596,7 @@ export function maybeEnforceFamilyAnswerReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|exact total cost|comprehensive cost breakdown|overall expense per patient/.test(activeConcernText) &&
     hasCostValueGapAdmission(lastRepText)
   ) {
@@ -1610,32 +2619,32 @@ export function maybeEnforceFamilyAnswerReply({
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
   }
 
   if (
-    /commitment_close|adoption_commitment/.test(stageText) &&
+    /commitment_close|adoption_implementation/.test(stageText) &&
     /if you can make the proof point concrete|make the proof point concrete|concrete proof point for my patients|concrete proof point for my high-risk patients|what'?s the subgroup analysis showing for my high-risk patients|what'?s the actual reduction i'?d see in my patients|what'?s the actual reduction i'?d see in my high-risk patients|actual reduction for my high-risk patients|still waiting for concrete proof points|still waiting for that concrete proof point|most vulnerable patients|hospitalization rates|tangible impact/.test(activeConcernText)
   ) {
     return buildDeterministicCommitmentReply({ scenario, turns });
   }
 
-  if (/commitment_close|adoption_commitment/.test(stageText) && CLOSE_PROOF_POINT_PATTERN.test(activeConcernText)) {
+  if (/commitment_close|adoption_implementation/.test(stageText) && CLOSE_PROOF_POINT_PATTERN.test(activeConcernText)) {
     return buildDeterministicCommitmentReply({ scenario, turns });
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /what'?s the plan to get that dedicated renal subgroup analysis|what'?s the plan to actually get that subgroup analysis done|what'?s the specific plan to get that subgroup analysis done for my patients with moderate renal impairment|when do i get that renal subgroup analysis to make a decision|when do i get that subgroup analysis to make a decision|what'?s the timeline for that dedicated analysis|what'?s the earliest i can expect to see that renal subgroup analysis|still waiting for meaningful subgroup analysis|still waiting to see some meaningful subgroup analysis|that doesn'?t help my patients with moderate renal impairment|still doesn'?t address my renal patients/.test(activeConcernText)
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     (DIRECT_ANSWER_TRIGGER.test(activeConcernText) ||
       /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup|numbers for my patient population|real-world renal data|moderate renal impairment|threshold|closest renal-specific data|closest renal-specific outcome|detailed breakdown|patient population details|change practice|specific insights i need|show me the renal subgroup data|that'?s a delay|real-world outcomes/.test(activeConcernText))
   ) {
@@ -1658,7 +2667,7 @@ export function maybeApplyHardFamilyAnswerReply({
   turns,
   draft,
 }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
   const lastRepText = getLastRepText(turns);
   const isPerpetualMaybe =
@@ -1669,7 +2678,7 @@ export function maybeApplyHardFamilyAnswerReply({
 
   if (
     isPerpetualMaybe &&
-    /commitment_close|adoption_commitment/.test(stageText) &&
+    /commitment_close|adoption_implementation/.test(stageText) &&
     (
       /right patient|ideal patient|perfect fit|haven't had one|meaning to try it|not the right fit|still not convinced|need more data|what would change that|what would actually alter treatment approach|what would alter our current approach|proof point|concrete outcome|single data point|patient outcome|what changes practice|one key metric|piece of evidence|one number|specific, compelling metric|what single metric changes treatment choice/.test(
         activeConcernText,
@@ -1690,7 +2699,7 @@ export function maybeApplyHardFamilyAnswerReply({
     return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
   }
 
-  if (/clinical_value|clinical_evaluation/.test(stageText)) {
+  if (/clinical_value|clinical_value/.test(stageText)) {
     if (
       /\bcost|spend|value|monitoring|testing|diagnostic|expense|budget\b/.test(activeConcernText) &&
       hasCostValueGapAdmission(lastRepText)
@@ -1773,7 +2782,7 @@ export function maybeApplyHardFamilyAnswerReply({
     return buildDeterministicFamilyAnswerReply({ scenario, turns });
   }
 
-  if (/commitment_close|adoption_commitment/.test(stageText)) {
+  if (/commitment_close|adoption_implementation/.test(stageText)) {
     if (/what'?s the exact reduction threshold|what reduction would change treatment choice|what'?s the smallest reduction that would make a difference|what'?s the threshold for that reduction to change treatment choice/.test(activeConcernText)) {
       return "A practice-changing threshold would usually need to look like roughly a 15% to 20% relative reduction in hospitalizations or readmissions in the subgroup you would actually treat, not just a directional benefit that never changes the decision.";
     }
@@ -1857,18 +2866,18 @@ export async function maybeDeRepeatStrongRepReply({
   currentJourneyState,
   draft,
 }) {
-  const stageText = `${scenario?.journeyStage || ""} ${scenario?.journeyState || ""}`.toLowerCase();
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
   const activeConcernText = normalizeForMatch(getActiveConcernText(turns, scenario));
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     /renal|kidney|egfr|gfr|dose adjustment|dose reduction|subgroup data|real-world renal data|numbers for my patient population|threshold|closest renal-specific data|closest renal-specific outcome/.test(activeConcernText)
   ) {
     return buildDeterministicEvidenceFitReply({ scenario, turns });
   }
 
   if (
-    /clinical_value|clinical_evaluation/.test(stageText) &&
+    /clinical_value|clinical_value/.test(stageText) &&
     shouldHoldCostValueLane({
       scenario,
       turns,
@@ -1881,7 +2890,7 @@ export async function maybeDeRepeatStrongRepReply({
   }
 
   if (
-    /commitment_close|adoption_commitment/.test(stageText) &&
+    /commitment_close|adoption_implementation/.test(stageText) &&
     (CLOSE_PROOF_POINT_PATTERN.test(activeConcernText) || /one number|single data point|specific, compelling metric|what one piece|still too soft|not concrete enough/.test(activeConcernText))
   ) {
     return buildDeterministicCommitmentReply({ scenario, turns });
@@ -1890,6 +2899,17 @@ export async function maybeDeRepeatStrongRepReply({
   const lastRepText = getLastRepText(turns);
   if (!lastRepText || lastRepText !== String(draft || "").trim()) {
     return draft;
+  }
+
+  if (/initial_access/.test(stageText)) {
+    const initialAccessBarrier = deriveInitialAccessBarrier(scenario, activeConcernText);
+    const initialAccessChange = deriveInitialAccessOperationalChange(scenario, activeConcernText);
+
+    if (/short version|few minutes|what'?s this about|approval path|prior auth|workflow|staff|step/i.test(activeConcernText)) {
+      return `The short version is whether this leads to ${initialAccessChange}. If it does not change ${initialAccessBarrier}, it is not helping your team.`;
+    }
+
+    return `What matters is whether this changes ${initialAccessBarrier} in a way your staff would actually feel. If it does not, we should stop there.`;
   }
 
   const originalConcernText = getActiveConcernText(turns, scenario);
