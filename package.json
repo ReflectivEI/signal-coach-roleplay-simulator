@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:clean": "pkill -f wrangler || true && pkill -f vite || true",
     "dev:host": "vite --host 0.0.0.0 --port 5173",
     "tunnel": "cloudflared tunnel --url http://localhost:5173",
     "build": "vite build",

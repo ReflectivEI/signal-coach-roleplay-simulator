@@ -1,5 +1,15 @@
 import { HCP_REALISM_LANGUAGE_PACK, pickHcpRealismExamples, validateHcpHumanRealism } from "../../src/lib/hcpRealismLanguagePack.js";
 
+const workerImportHealth = {
+  hcpRealismLanguagePack: Boolean(HCP_REALISM_LANGUAGE_PACK),
+  pickHcpRealismExamples: typeof pickHcpRealismExamples === "function",
+  validateHcpHumanRealism: typeof validateHcpHumanRealism === "function",
+};
+
+if (Object.values(workerImportHealth).some((value) => !value)) {
+  console.error("WORKER IMPORT FAILURE", workerImportHealth);
+}
+
 const allowedMethods = "GET,POST,PUT,DELETE,OPTIONS";
 const allowedHeaders = "Content-Type,Authorization";
 const memoryState = {
