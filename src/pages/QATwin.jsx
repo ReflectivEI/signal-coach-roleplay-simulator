@@ -14,6 +14,14 @@ import { listAllScenarios } from "@/lib/scenarioStorage";
 import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
 import { buildMatrixAuditSummary, buildTranscriptAudit } from "@/lib/qaTwinAudit";
 
+function createSafeId() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const QA_PERSONAS = {
   strong_rep: {
     label: "Strong Rep",
@@ -229,7 +237,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   const convInit = await initializeConversation(scenario);
 
   const session = {
-    id: crypto.randomUUID(),
+    id: createSafeId(),
     scenarioId: scenario.id,
     scenarioTitle: `${scenario.title} [QA]`,
     currentJourneyState: scenario.journeyStage,
@@ -270,7 +278,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       }
 
       const repTurnObj = {
-        id: crypto.randomUUID(),
+        id: createSafeId(),
         speaker: "rep",
         text: repReply.text || "",
         concept: repReply.concept || null,
@@ -303,7 +311,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       ), `${scenario.title} hcp turn ${i + 1}`));
 
       const hcpTurnObj = {
-        id: crypto.randomUUID(),
+        id: createSafeId(),
         speaker: "hcp",
         text: response.hcpReply,
         timestamp: new Date().toISOString(),

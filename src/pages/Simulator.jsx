@@ -19,9 +19,17 @@ import { generateRealtimeFeedback, createWorkerSession } from "@/services/worker
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 import { toast } from "@/components/ui/use-toast";
 
+function createSafeId() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && typeof cryptoApi.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+  return `id-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function createLocalSession(scData, convInit) {
   return {
-    id: crypto.randomUUID(),
+    id: createSafeId(),
     scenarioId: scData.id,
     scenarioTitle: scData.title,
     currentJourneyState: scData.journeyState,
@@ -119,7 +127,7 @@ export default function Simulator() {
     setHasRepSpoken(true);
 
     const repTurnObj = {
-      id: crypto.randomUUID(),
+      id: createSafeId(),
       speaker: "rep",
       text: repText,
       timestamp: new Date().toISOString(),
@@ -183,7 +191,7 @@ export default function Simulator() {
           updated[repIdx] = { ...updated[repIdx], nudge: response.coachingNudge };
         }
         return [...updated, {
-          id: crypto.randomUUID(),
+          id: createSafeId(),
           speaker: "hcp",
           text: response.hcpReply,
           timestamp: new Date().toISOString(),

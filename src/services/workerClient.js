@@ -120,6 +120,52 @@ async function parseWorkerResponse(response) {
   return response.json();
 }
 
+export async function generateRealtimeFeedback(payload) {
+  const prompt = [
+    `You are a sales coaching expert analyzing a pharmaceutical rep's response during a role-play simulation.`,
+    ``,
+    `CONTEXT:`,
+    `- Rep's response: "${payload.repResponse}"`,
+    `- HCP's last reply: "${payload.hcpLastReply || "Unknown"}"`,
+    `- Active HCP cue: ${payload.hcpCue || "None provided"}`,
+    `- HCP current behavior: ${payload.hcpBehavior}`,
+    `- Journey stage: ${payload.journeyState}`,
+    `- Scenario: ${payload.scenario?.title || "Unknown"}`,
+    `- Predicted HCP state: ${payload.prediction?.predictedBehaviorState || "Unknown"}`,
+    `- Concern family: ${payload.prediction?.concernFamily || "Unknown"}`,
+    `- Predicted risk: ${payload.prediction?.riskLevel || "Unknown"}`,
+    `- Predicted next move: ${payload.prediction?.nextLikelyBehavior || "Unknown"}`,
+    ``,
+    `SCORING / COACHING BOUNDARY:`,
+    `- Evaluate rep behavior only.`,
+    `- Use the HCP cue, behavior, and dialogue only as context for what the rep should do next.`,
+    `- Do not infer psychology or score the HCP.`,
+    ``,
+    `SIGNAL INTELLIGENCE CAPABILITIES to evaluate against:`,
+    `1. Question Quality — timely, relevant questions that move the conversation forward.`,
+    `2. Listening & Responsiveness — accurate understanding of HCP input and a response that clearly reflects it.`,
+    `3. Customer Engagement Cues — noticing changes in participation and conversational momentum.`,
+    `4. Value Framing — connecting the point to the HCP's specific priorities and why it matters.`,
+    `5. Objection Handling — engaging resistance constructively without defensiveness.`,
+    `6. Conversation Control & Structure — guiding the exchange with clear direction and purpose.`,
+    `7. Adaptability — adjusting approach based on what is happening in the interaction.`,
+    `8. Commitment Gaining — creating a clear next action the HCP can own.`,
+    ``,
+    `Provide ONE specific, actionable coaching tip that would improve this response.`,
+    `Hard rules:`,
+    `- under 22 words total`,
+    `- one sentence only`,
+    `- specific to what the rep just said`,
+    `- specific to the HCP's current state`,
+    `- no generic praise`,
+    `- no summary`,
+    `- no filler words like "consider" or "try to"`,
+    `Format: "[what to do next], because [specific HCP signal or risk]."`,
+  ].join("\n");
+
+  return invokeWorkerText({ prompt, max_tokens: 60, temperature: 0.1 });
+}
+
 /**
  * @param {string} url
  * @param {WorkerRequestJsonOptions} [options]
