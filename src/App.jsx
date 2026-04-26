@@ -10,6 +10,7 @@ import Capabilities from './pages/Capabilities';
 import QATwin from './pages/QATwin';
 import AdminDashboard from './pages/AdminDashboard';
 import ScenarioLibrary from './pages/ScenarioLibrary';
+import PredictiveBuilder from './pages/PredictiveBuilder';
 
 const AppRoutes = () => {
   return (
@@ -21,6 +22,7 @@ const AppRoutes = () => {
       <Route path="/qa" element={<QATwin />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/library" element={<ScenarioLibrary />} />
+      <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

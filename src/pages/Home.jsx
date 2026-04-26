@@ -86,6 +86,12 @@ export default function Home() {
               <Plus className="w-3.5 h-3.5" />
               Build Scenario
             </Link>
+            <Link to="/predictive-builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
+              <Brain className="w-3.5 h-3.5" />
+              Predictive Builder
+            </Link>
             <Link to="/capabilities" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
               onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
               onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
