@@ -174,7 +174,7 @@ function buildSafeRepFallback({
   turns: any[];
   isQAMode?: boolean;
 }) {
-  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "" });
+  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "", scenario });
   const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
   if (isQAMode) {
     console.log("REP_FALLBACK_USED", finalRepReply.concept || repProxyOutput.concept || "unknown");
@@ -218,7 +218,7 @@ async function generateQaRepReply({
     );
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft });
+    let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
 
     if (lastHcpQuestionType === "solution_seeking") {
       repReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repReply });

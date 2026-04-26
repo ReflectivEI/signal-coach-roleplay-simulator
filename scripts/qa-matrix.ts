@@ -246,7 +246,7 @@ function buildSafeRepFallback({
   turns: any[];
   isQAMode?: boolean;
 }) {
-  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "" });
+  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "", scenario });
   const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
   if (isQAMode) {
     console.log("REP_FALLBACK_USED", finalRepReply.concept || repProxyOutput.concept || "unknown");
@@ -285,7 +285,7 @@ async function generateQaRepReply({
     }), `${scenario.title} rep turn ${turnIndex + 1}`);
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: repDraft });
+    const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
     return enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
   } catch {
     return buildSafeRepFallback({ scenario, turns, isQAMode });

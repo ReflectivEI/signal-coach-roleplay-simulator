@@ -37,6 +37,135 @@ function getLastRepText(turns = []) {
   return "";
 }
 
+function inferConcernFamilyFromScenario(scenario = {}) {
+  const title = normalizeForMatch(scenario?.title || "");
+  const stage = normalizeForMatch(scenario?.journeyStage || "");
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value) => normalizeForMatch(value))
+    : [];
+
+  if (pressures.includes("time_constrained") || title.includes("gatekeeper") || title.includes("no-show")) return "time";
+  if (pressures.includes("access_barrier") || title.includes("prior auth") || title.includes("formulary") || title.includes("handoff")) return "access";
+  if (title.includes("workflow") || pressures.includes("operationally_constrained")) return "workflow";
+  if (title.includes("undefined patient") || title.includes("assumed priority") || stage === "discovery") return "screening";
+  if (stage === "clinical_value" || title.includes("guideline") || title.includes("data that doesn't land") || title.includes("cost-effectiveness") || title.includes("split decision")) return "evidence";
+  if (stage === "adoption_implementation" || title.includes("early adopter")) return "adoption_caution";
+  if (stage === "commitment_close" || title.includes("perpetual maybe")) return "hesitation";
+  return "general";
+}
+
+function buildScenarioAwareOpeningLine(scenario = {}) {
+  const family = inferConcernFamilyFromScenario(scenario);
+  const openingScene = String(scenario?.openingScene || "").trim();
+
+  if (family === "evidence") {
+    return "To keep this useful, I should address the exact evidence-fit concern in your opening context before broadening anything else.";
+  }
+
+  if (family === "time") {
+    return "I will keep this short and practical: the point is reducing the step that creates avoidable rework for your team.";
+  }
+
+  if (family === "access") {
+    return "The focus is one concrete access step that can change review flow without adding new office burden.";
+  }
+
+  if (family === "workflow") {
+    return "The focus is one workflow change that removes repeat staff work rather than adding another handoff.";
+  }
+
+  if (family === "screening") {
+    return "The focus is defining the specific patient profile where this is actually relevant in your practice.";
+  }
+
+  if (family === "adoption_caution") {
+    return "The focus is a low-risk first-use path that fits how decisions are made in your setting.";
+  }
+
+  if (family === "hesitation") {
+    return "The focus is the smallest concrete next step you could own if the core concern is addressed.";
+  }
+
+  return openingScene
+    ? `Based on the opening context, the focus is ${openingScene.toLowerCase().replace(/\.$/, "")}.`
+    : "I want to keep this focused on the one practical issue that needs to be resolved in your setting.";
+}
+
+function buildConcernAwareFallbackResponse(scenario = {}, lastHcpMessage = "") {
+  const family = inferConcernFamilyFromScenario(scenario);
+  const issue = extractIssueLabel(lastHcpMessage);
+
+  if (family === "evidence") {
+    return `You are right to press on ${issue}; if that fit is unresolved, we should treat the decision as open rather than assume broad applicability.`;
+  }
+
+  if (family === "time") {
+    return "The short version is one practical change that reduces repeat office work before the case bounces back through your team.";
+  }
+
+  if (family === "access") {
+    return "The concrete change is an access step that keeps the request moving without creating extra staff handoffs.";
+  }
+
+  if (family === "workflow") {
+    return "The practical shift is removing one repeat workflow task so staff can move the case forward in one pass.";
+  }
+
+  if (family === "screening") {
+    return "The key is defining one patient profile that actually matches what you see in practice, not a broad theoretical fit.";
+  }
+
+  if (family === "adoption_caution") {
+    return "A realistic next move is one low-risk first-use case rather than broad rollout language.";
+  }
+
+  if (family === "hesitation") {
+    return "The practical next step is one specific commitment tied to the blocker already on the table.";
+  }
+
+  return "The practical answer should stay on the specific issue you just raised, not broaden into a generic pitch.";
+}
+
+function draftAppearsContextAware({ draft = "", scenario = {}, lastHcpMessage = "", previousRepText = "" }) {
+  const normalized = normalizeForMatch(draft);
+  if (!normalized) return false;
+  if (prefix(normalized) === prefix(previousRepText)) return false;
+  if (ABSTRACT_QA_LANGUAGE_PATTERN.test(normalized) || OVER_EXPLANATORY_PATTERN.test(normalized)) return false;
+  if (isBroadVagueNonAnswer(normalized)) return false;
+
+  const questionType = detectHcpQuestionType(lastHcpMessage);
+  if (questionType === "solution_seeking") {
+    return fullyAnswersQuestion(lastHcpMessage, normalized);
+  }
+
+  const family = inferConcernFamilyFromScenario(scenario);
+  const hcpIssue = normalizeForMatch(lastHcpMessage);
+  const issueAnchors = [
+    /renal|subgroup|excluded|guideline|evidence|trial|fit|comorbid/,
+    /prior auth|authorization|formulary|coverage|payer|committee|review/,
+    /workflow|staff|handoff|callback|rework|step|operational/,
+    /short version|few minutes|busy|next patient|time|quick/,
+  ];
+
+  const hasIssueCarry = hcpIssue
+    ? issueAnchors.some((pattern) => pattern.test(hcpIssue) && pattern.test(normalized))
+    : false;
+
+  const familyAnchors = {
+    evidence: /evidence|trial|fit|renal|subgroup|patient population|guideline|decision bar/,
+    time: /short|quick|time|practical|concise|next patient|brief/,
+    access: /access|coverage|formulary|authorization|review|approval|payer/,
+    workflow: /workflow|staff|handoff|callback|rework|office|step/,
+    screening: /patient profile|right patient|candidate|selection|fit/,
+    adoption_caution: /first-use|low-risk|pilot|start small|implementation/,
+    hesitation: /next step|commitment|specific action|owner/,
+    general: /practical|specific|issue|context/,
+  };
+
+  const hasFamilyAnchor = familyAnchors[family]?.test(normalized);
+  return Boolean(hasIssueCarry || hasFamilyAnchor);
+}
+
 export function detectHcpQuestionType(lastHcpMessage = "") {
   const text = normalizeForMatch(lastHcpMessage);
   if (!text || !text.includes("?")) return "none";
@@ -911,13 +1040,32 @@ function pickProgressionLine(mode, topic, previousRepText = "", lastHcpMessage =
   return options[0];
 }
 
-export function buildDeterministicQaRepReply({ turns = [], draft = "" }) {
+export function buildDeterministicQaRepReply({ turns = [], draft = "", scenario = {} }) {
   const lastHcpMessage = getLastHcpText(turns);
+  const previousRepText = getLastRepText(turns);
+
+  const draftText = String(draft || "").trim();
+  if (draftText && draftAppearsContextAware({ draft: draftText, scenario, lastHcpMessage, previousRepText })) {
+    return asRepReplyPayload(
+      draftText,
+      null,
+      { hcpTurn: lastHcpMessage, transcript: turns },
+    );
+  }
 
   if (!lastHcpMessage) {
     return asRepReplyPayload(
-      "I want to keep this focused on the part of the workflow that is creating extra work for the office right now.",
+      buildScenarioAwareOpeningLine(scenario),
       "core_change",
+      { hcpTurn: lastHcpMessage, transcript: turns },
+    );
+  }
+
+  const concernAwareFallback = buildConcernAwareFallbackResponse(scenario, lastHcpMessage);
+  if (concernAwareFallback && prefix(concernAwareFallback) !== prefix(previousRepText)) {
+    return asRepReplyPayload(
+      concernAwareFallback,
+      "direct_answer",
       { hcpTurn: lastHcpMessage, transcript: turns },
     );
   }
@@ -925,7 +1073,6 @@ export function buildDeterministicQaRepReply({ turns = [], draft = "" }) {
   const topic = classifyQaTopic(lastHcpMessage);
   const mode = chooseProgressionMode({ lastHcpMessage, turns });
   const bucket = resolveOperationalAsk(lastHcpMessage);
-  const previousRepText = getLastRepText(turns);
   const candidate = pickProgressionLine(mode, topic, previousRepText, lastHcpMessage, turns);
   const usedConcepts = getUsedRepConcepts(turns);
   const nextConcept = getNextConcept(usedConcepts);

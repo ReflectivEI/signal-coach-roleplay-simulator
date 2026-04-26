@@ -774,7 +774,7 @@ function applyContinuityPressure(
 
   if (turn.escalationStage === "high_pressure" || turn.escalationStage === "disengaging") {
     output = output
-      .replace(/\bLet me step back\b/gi, "No, stay with it")
+      .replace(/\bLet me step back\b/gi, "Let's stay on the point")
       .replace(/\bBefore we get ahead of ourselves\b/gi, "Before we go further")
       .replace(/\bI'm trying to understand\b/gi, "I'm looking at")
       .replace(/\bI'm still trying to understand\b/gi, "I'm still looking at");
@@ -783,6 +783,59 @@ function applyContinuityPressure(
   if (profile.directness === "high" && turn.concernFamily === "time") {
     output = output
       .replace(/\bWhat would you want me to focus on\b/gi, "What do you want me to focus on");
+  }
+
+  return normalizeText(output);
+}
+
+function applyProfessionalBoundaryBalance(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  profile: HcpRuntimeProfile,
+  scenario: any,
+  hcpTurnCount = 0,
+): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  // Keep pressure professional: remove abrupt phrasing that reads as hostile.
+  output = output
+    .replace(/\bNo, stay with it\b/gi, "Let's stay on the point")
+    .replace(/\bNo\. Stay with it\b/gi, "Let's stay on the point")
+    .replace(/\bI don't have time for this\b/gi, "I don't have time for a long loop here")
+    .replace(/\bThis is a waste of time\b/gi, "This isn't useful if it stays this broad")
+    .replace(/\bYou're not listening\b/gi, "We're not aligned on the concern yet");
+
+  // Avoid over-accommodating language in guarded/high-pressure states.
+  if (
+    profile.warmth === "guarded" ||
+    profile.patienceThreshold === "low" ||
+    turn.escalationStage === "high_pressure" ||
+    turn.escalationStage === "disengaging"
+  ) {
+    output = output
+      .replace(/\bI can stay with this if it stays concrete\b/gi, "Keep this concrete or we should pause here")
+      .replace(/\bI can stay with it\b/gi, "Keep it concrete")
+      .replace(/\bI can keep looking at it\b/gi, "Keep it decision-relevant")
+      .replace(/\bI can look at it\b/gi, "Make it practical")
+      .replace(/\bI can hear one more practical point\b/gi, "Give me one practical point");
+  }
+
+  // Deterministic polite wrap-up when repeated misses + low patience indicate low value.
+  const sustainedMisses = Array.isArray(turn.repeatedMisses) && turn.repeatedMisses.length >= 2;
+  const shouldWrap =
+    hcpTurnCount >= 2 &&
+    sustainedMisses &&
+    (turn.escalationStage === "disengaging" || profile.patienceThreshold === "low");
+
+  if (shouldWrap && !/pause here|circle back|send me the one point|come back better prepared|send me one concrete point/i.test(output)) {
+    const wrapSeed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${hcpTurnCount}`;
+    const wrapLine = deterministicPick([
+      "Let's pause here. If you can send one concrete point that addresses this blocker, we can revisit.",
+      "I need to get back to patients. Send one decision-relevant point on this exact concern and we'll circle back.",
+      "Let's stop here for now. If you come back with one concrete answer to this blocker, we can continue.",
+    ], wrapSeed);
+    output = trimToSentences(`${output.replace(/[.?!]+$/, "")}. ${wrapLine}`, 2);
   }
 
   return normalizeText(output);
@@ -818,6 +871,7 @@ export function applyHcpResponseSurface({
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
+  output = applyProfessionalBoundaryBalance(output, turn, profile, scenario, hcpTurnCount);
   output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
 
   if (

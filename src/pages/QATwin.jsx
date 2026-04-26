@@ -268,7 +268,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-      let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft });
+      let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
       if (lastHcpQuestionType === "solution_seeking") {
         repReply = enforceRepAnswerFirstContract({
           scenario,
