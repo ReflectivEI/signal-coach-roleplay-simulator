@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-const DISEASE_STATES = [
+export const DISEASE_STATES = [
   { value: "all", label: "All Disease States" },
   { value: "pulmonology", label: "Pulmonology" },
   { value: "cardiology", label: "Cardiology" },
@@ -16,7 +16,7 @@ const DISEASE_STATES = [
   { value: "primary_care", label: "Primary Care" },
 ];
 
-const SPECIALTIES = [
+export const SPECIALTIES = [
   { value: "all", label: "All Specialties" },
   { value: "specialist", label: "Specialist" },
   { value: "primary_care", label: "Primary Care" },
@@ -24,14 +24,14 @@ const SPECIALTIES = [
   { value: "academic", label: "Academic / KOL" },
 ];
 
-const HCP_TYPES = [
+export const HCP_TYPES = [
   { value: "all", label: "All HCP Types" },
   { value: "treating_clinician", label: "Treating Clinician" },
   { value: "influencer", label: "Influencer" },
   { value: "thought_leader", label: "Thought Leader" },
 ];
 
-const INFLUENCE_DRIVERS = [
+export const INFLUENCE_DRIVERS = [
   { value: "all", label: "All Influence Drivers" },
   { value: "patient_centric", label: "Patient-Centric" },
   { value: "evidence_driven", label: "Evidence-Driven" },
@@ -39,7 +39,7 @@ const INFLUENCE_DRIVERS = [
   { value: "guideline_anchored", label: "Guideline-Anchored" },
 ];
 
-const JOURNEY_STAGES = [
+export const JOURNEY_STAGES = [
   { value: "all", label: "All Journey Stages" },
   { value: "initial_access", label: "Initial Access" },
   { value: "discovery", label: "Discovery" },
@@ -50,7 +50,7 @@ const JOURNEY_STAGES = [
   { value: "commitment_close", label: "Commitment & Close" },
 ];
 
-const INTERACTION_PRESSURES = [
+export const INTERACTION_PRESSURES = [
   { value: "all", label: "All Interaction Pressures" },
   { value: "time_constrained", label: "Time Constrained" },
   { value: "operationally_constrained", label: "Operationally Constrained" },
