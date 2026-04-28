@@ -1241,14 +1241,61 @@ function normalizeRoleplayEntryTone(hcpReply = "", scenarioContext = {}, convers
   const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
   const pressures = uniqueStrings(scenarioContext?.interactionPressure).join(" ").toLowerCase();
 
-  if (journeyStage !== "initial_access" || turnCount > 1) {
-    return text;
-  }
-
   let normalized = text
+    .replace(
+      /^you'?re following up on (?:that|the) study[^,]*,\s*i remember you dropping it off,?\s*(.*)$/i,
+      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
+    )
+    .replace(
+      /^you'?re following up on (?:that|the) study you dropped off last week,?\s*(.*)$/i,
+      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
+    )
+    .replace(
+      /^you'?re following up on (?:that|the) study you dropped off,?\s*(.*)$/i,
+      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
+    )
+    .replace(
+      /^you'?re following up on (?:that|the) study,?\s*(.*)$/i,
+      (_, rest) => `I remember that study.${rest ? ` ${safeString(rest)}` : ""}`,
+    )
     .replace(/^look,\s*/i, "")
     .replace(/\bcan you make it quick\b/i, "can you give me the short version")
     .replace(/\bmake it quick\b/i, "keep it brief");
+
+  normalized = normalized
+    .replace(
+      /^(I remember[^.?!]{0,140}),\s*(I(?:'ve| have) got[^,]{3,120}),\s*(what'?s|why|how|where|when|who|can we)\b/i,
+      "$1. $2, so $3",
+    )
+    .replace(
+      /^(I(?:'ve| have) got[^.?!]{0,120}),\s*(what'?s|why|how|where|when|who|can we)\b/i,
+      "$1, so $2",
+    )
+    .replace(/that'?s usually not where it breaks for us\.\s*But to be honest,\s*/gi, "that's usually not where we get stuck, and ")
+    .replace(/\.\s*But to be honest,\s*/g, ". To be honest, ")
+    .replace(/\byet,\s*what specifically\b/gi, "yet. What specifically")
+    .replace(/\.\s*but\b/gi, ". But")
+    .replace(/\.\s*and\b/gi, ". And");
+
+  if (turnCount <= 0 && /^I remember that study\.?$/i.test(safeString(normalized))) {
+    if (/time_constrained|operationally_constrained/.test(pressures)) {
+      normalized = "I remember that study. I've only got a minute, so what's the key point that would help my staff or patients today?";
+    } else {
+      normalized = "I remember that study. What's the key takeaway you want me to apply for patients?";
+    }
+  }
+
+  if (turnCount <= 0 && /^I remember the study you dropped off\.?$/i.test(safeString(normalized))) {
+    if (/time_constrained|operationally_constrained/.test(pressures)) {
+      normalized = "I remember the study you dropped off. I've only got a minute, so what's the key point that would help my staff or patients today?";
+    } else {
+      normalized = "I remember the study you dropped off. What's the key takeaway you want me to apply for patients?";
+    }
+  }
+
+  if (journeyStage !== "initial_access" || turnCount > 1) {
+    return safeString(normalized);
+  }
 
   if (/slammed today|waiting room full of patients/i.test(normalized)) {
     normalized = "I've got a couple minutes before my next patient, so what's this about?";
@@ -1276,6 +1323,29 @@ function deterministicRoleplayPick(options = [], seed = "") {
   if (!Array.isArray(options) || !options.length) return "";
   const score = Array.from(String(seed || "")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return options[score % options.length];
+}
+
+function enforceNonTrivialFirstTurnReply(text = "", scenarioContext = {}, conversationState = {}, repMessage = "") {
+  let line = safeString(text)
+    .replace(/that's usually not where it breaks for us/gi, "that's usually not where we get stuck")
+    .replace(/\.\s*But to be honest,\s*/g, ". To be honest, ")
+    .replace(/^I remember that study\.\s*you left with me last week,?\s*/i, "I remember the study you left with me last week. ")
+    .replace(/^I remember that study\.\s*You left here last week,\s*/i, "I remember the study you left last week. ")
+    .replace(/([.?!]\s+)([a-z])/g, (_, punct, char) => `${punct}${char.toUpperCase()}`);
+  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
+  if (!line || turnCount > 0) return line;
+
+  const pressures = uniqueStrings(scenarioContext?.interactionPressure).join(" ").toLowerCase();
+  const highPressure = /time_constrained|operationally_constrained/.test(pressures);
+
+  if (/^I remember that study\.?$/i.test(line) || /^I remember the study you dropped off\.?$/i.test(line)) {
+    if (highPressure) {
+      return "I remember the study you dropped off. I've only got a minute, so what's the key point that would help my staff or patients today?";
+    }
+    return "I remember the study you dropped off. What's the key takeaway you want me to apply for patients?";
+  }
+
+  return line;
 }
 
 export function addHcpMicroAcknowledgment(text = "", context = {}) {
@@ -1421,6 +1491,7 @@ async function handleRoleplayStart(request, env) {
       hasPriorContextSignal: false,
     },
   ).text;
+  variedReply = enforceNonTrivialFirstTurnReply(variedReply, scenarioContext, conversationState, "");
   const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
 
   return json({
@@ -1483,6 +1554,7 @@ async function handleRoleplayRespond(request, env) {
       hasPriorContextSignal: extractRepOpeningContext(repMessage, scenarioContext).hasPriorContextSignal,
     },
   ).text;
+  variedReply = enforceNonTrivialFirstTurnReply(variedReply, scenarioContext, conversationState, repMessage);
   const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
 
   return json({

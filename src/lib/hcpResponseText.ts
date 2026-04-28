@@ -23,14 +23,57 @@ function forceTerminalPunctuation(text: string): string {
 
 function normalizeClinicianVoice(text: string): string {
     return String(text || "")
+        .replace(
+            /^you'?re following up on (?:that|the) study[^,]*,\s*i remember you dropping it off,?\s*(.*)$/i,
+            (_, rest) => `I remember the study you dropped off.${rest ? ` ${String(rest).trim()}` : ""}`,
+        )
+        .replace(
+            /^you'?re following up on (?:that|the) study you dropped off last week,?\s*(.*)$/i,
+            (_, rest) => `I remember the study you dropped off.${rest ? ` ${String(rest).trim()}` : ""}`,
+        )
+        .replace(
+            /^you'?re following up on (?:that|the) study you dropped off,?\s*(.*)$/i,
+            (_, rest) => `I remember the study you dropped off.${rest ? ` ${String(rest).trim()}` : ""}`,
+        )
+        .replace(
+            /^you'?re following up on (?:that|the) study,?\s*(.*)$/i,
+            (_, rest) => `I remember that study.${rest ? ` ${String(rest).trim()}` : ""}`,
+        )
         .replace(/^So\s+I want to make sure\s+(?:we're|we are)\s+/i, "For these patients, I'm focused on ")
         .replace(/^I want to make sure\s+(?:we're|we are)\s+/i, "For these patients, I'm focused on ")
         .replace(/^So\s+I need to make sure\s+/i, "I need to know ")
+        .replace(/\bthe one point that changes what happens in my clinic\b/gi, "one practical takeaway I can apply for staff or patients")
+        .replace(/\bthe one thing that changes what happens in my clinic\b/gi, "one practical takeaway I can apply in patient or access decisions")
+        .replace(/\bchanges what happens in my clinic\b/gi, "changes how I manage patients in practice")
+        .replace(/\bchanges what happens in clinic\b/gi, "changes how I manage patients in practice")
+        .replace(/\bgive me one point that would change\b/gi, "tell me what would be different")
+        .replace(/\bgive me one practical point that would change\b/gi, "tell me what would be different")
+        .replace(/\bgive me one concrete point that actually changes my decision\b/gi, "give me one concrete takeaway I can use in a treatment decision")
+        .replace(/\bthe one point that changes\b/gi, "what would be different")
+        .replace(/that'?s usually not where it breaks for us\.\s*But to be honest,\s*/gi, "that's usually not where we get stuck, and ")
+        .replace(/\.\s*But to be honest,\s*/g, ". To be honest, ")
+        .replace(/\byet,\s*what specifically\b/gi, "yet. What specifically")
+        .replace(/\.\s*but\b/gi, ". But")
+        .replace(/\.\s*and\b/gi, ". And")
         .replace(/\bconsidering comorbidities like\b/gi, "especially with comorbidities such as")
         .replace(/\bsolid data\b/gi, "clear data")
         .replace(/\byour approach works in patients with complex conditions like\b/gi, "this works in patients with complex conditions such as")
         .replace(/\s+/g, " ")
         .trim();
+}
+
+function repairConstraintStackedRunOn(line: string): string {
+    let text = String(line || "").trim();
+    if (!text) return text;
+
+    // "I remember the study..., I've got a few minutes..., what's ..."
+    // -> "I remember the study... I've got a few minutes..., so what's ..."
+    text = text.replace(
+        /^(I remember[^.?!]{0,140}),\s*(I(?:'ve| have) got[^,]{3,120}),\s*(what'?s|why|how|where|when|who|can we)\b/i,
+        "$1. $2, so $3",
+    );
+
+    return text;
 }
 
 function splitLongRunOn(line: string): string {
@@ -100,7 +143,8 @@ export function normalizeHcpSpokenText(rawText: unknown, maxSentences = 3): stri
     if (!cleaned) return "";
 
     const voiceNormalized = normalizeClinicianVoice(cleaned);
-    const runOnSafe = splitLongRunOn(voiceNormalized);
+    const structureRepaired = repairConstraintStackedRunOn(voiceNormalized);
+    const runOnSafe = splitLongRunOn(structureRepaired);
     const connectorSafe = addCausalConnectorForConstraintPivot(runOnSafe);
     const sentenceList = splitSentences(connectorSafe).slice(0, maxSentences);
     const normalized = sentenceList

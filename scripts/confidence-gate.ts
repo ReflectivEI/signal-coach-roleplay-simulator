@@ -124,6 +124,7 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
     /^i've got\b/i,
     /^look[,.]?\s/i,
     /^tell me\b/i,
+    /\bso tell me\b/i,
     /^give me\b/i,
     /^walk me through\b/i,
   ];

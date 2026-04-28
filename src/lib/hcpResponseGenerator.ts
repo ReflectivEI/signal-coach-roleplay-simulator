@@ -528,10 +528,10 @@ function ensureFirstTurnRepTopicAcknowledgment({
     pressures.includes("operationally_constrained");
 
   if (highPressure) {
-    return "I remember the study you dropped off. I've only got a minute, so give me the one point that changes what happens in my clinic.";
+    return "I remember the study you dropped off. I've only got a minute, so tell me what would be different for my staff or patients if this actually helps.";
   }
 
-  return "I remember the study you dropped off. Give me one concrete point from it that would actually change my decision.";
+  return "I remember the study you dropped off. Give me one concrete takeaway from it that I can apply to a real patient decision.";
 }
 
 function needsHumanPhraseSafetyRewrite({
@@ -574,15 +574,15 @@ function buildHumanPhraseSafetyFallback({
   const highPressure = pressures.includes("time_constrained") || pressures.includes("operationally_constrained");
 
   if (hcpTurnCount === 0 && mentionsStudy && highPressure) {
-    return "I remember the study you left. I've only got a minute, so tell me the one change that would actually reduce prior auth callbacks for my staff.";
+    return "I remember the study you left. I've only got a minute, so tell me what would be different for my staff in prior auth if this works.";
   }
   if (hcpTurnCount === 0 && mentionsStudy) {
-    return "I remember the study you left. Give me one practical point from it that would change how I decide.";
+    return "I remember the study you left. Give me one practical takeaway from it that I can use in a patient decision.";
   }
   if (highPressure) {
-    return "I've only got a minute. Give me one practical point that changes what happens in clinic.";
+    return "I've only got a minute. Tell me what would be different in access workflow for my staff and patients today.";
   }
-  return "Give me one practical point that would change my decision in clinic.";
+  return "Give me one practical takeaway I can apply in access decisions for patients.";
 }
 
 function buildDeterministicFirstTurnFallback({
@@ -602,9 +602,9 @@ function buildDeterministicFirstTurnFallback({
     ["closed", "resistance", "time_pressure"].includes(predictedBehaviorState);
 
   if (highPressure) {
-    return `I can give you a minute. If this is about ${topic}, tell me the one thing that changes what happens in my clinic.`;
+    return `I can give you a minute. If this is about ${topic}, tell me what would be different for one patient or one staff step this week.`;
   }
-  return `Okay, I'm listening. If this is about ${topic}, give me one concrete point that actually changes my decision.`;
+  return `Okay, I'm listening. If this is about ${topic}, give me one concrete takeaway I can use in a treatment decision.`;
 }
 
 async function rewriteFirstTurnAwayFromOpeningEcho({
