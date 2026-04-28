@@ -58,11 +58,11 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             : "0 2px 6px rgba(0,0,0,0.04)",
           transform: hovered ? "translateY(-4px) scale(1.01)" : "translateY(0)",
           transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease",
-          padding: "1rem 1rem 0.95rem",
+          padding: "0.9rem 1rem 0.85rem",
           display: "flex",
           flexDirection: "column",
-          gap: "0.62rem",
-          minHeight: "118px",
+          gap: "0.5rem",
+          minHeight: "94px",
           justifyContent: "space-between",
           position: "relative",
         }}
@@ -78,15 +78,6 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 mt-0.5 ${difficulty.cls}`}>
             {difficulty.label}
           </span>
-        </div>
-
-        <div className="space-y-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(176 45% 36%)" }}>
-            Predictive brief included
-          </p>
-          <p className="text-xs leading-relaxed" style={{ color: "hsl(215 18% 38%)" }}>
-            Review the HCP brief, then launch the roleplay. Advanced builder is optional.
-          </p>
         </div>
 
         {/* Actions */}

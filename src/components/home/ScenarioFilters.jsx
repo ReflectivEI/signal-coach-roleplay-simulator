@@ -144,13 +144,21 @@ export default function ScenarioFilters({ filters, onChange }) {
 
 export function applyScenarioFilters(scenarios, filters) {
   return scenarios.filter(s => {
-    if (filters.hcpType !== "all" && s.hcpRoleType !== filters.hcpType) return false;
-    if (filters.influenceDriver !== "all" && s.decisionOrientation !== filters.influenceDriver) return false;
-    if (filters.journeyStage !== "all" && s.journeyStage !== filters.journeyStage) return false;
+    const mappedHcpType = s.gridMapping?.hcpType || s.hcpRoleType;
+    const mappedInfluenceDriver = s.gridMapping?.influenceDriver || s.decisionOrientation;
+    const mappedJourneyStage = s.gridMapping?.journeyStage || s.journeyStage;
+
+    if (filters.hcpType !== "all" && mappedHcpType !== filters.hcpType) return false;
+    if (filters.influenceDriver !== "all" && mappedInfluenceDriver !== filters.influenceDriver) return false;
+    if (filters.journeyStage !== "all" && mappedJourneyStage !== filters.journeyStage) return false;
     if (filters.interactionPressure !== "all") {
       if (!s.interactionPressure?.includes(filters.interactionPressure)) return false;
     }
     if (filters.diseaseState !== "all") {
+      const mappedDiseaseState = s.gridMapping?.diseaseState || s.predictiveSeed?.diseaseState;
+      if (mappedDiseaseState) {
+        if (mappedDiseaseState !== filters.diseaseState) return false;
+      } else {
       const haystack = `${s.stakeholder} ${s.context} ${s.title}`.toLowerCase();
       const termMap = {
         pulmonology: ["pulmonol", "pulmonary", "lung", "respiratory"],
@@ -167,15 +175,21 @@ export function applyScenarioFilters(scenarios, filters) {
       };
       const terms = termMap[filters.diseaseState] || [];
       if (!terms.some(t => haystack.includes(t))) return false;
+      }
     }
     if (filters.specialty !== "all") {
-      const haystack = `${s.stakeholder} ${s.context}`.toLowerCase();
-      if (filters.specialty === "academic" && !haystack.includes("academic") && !haystack.includes("kol") && !haystack.includes("committee")) return false;
-      if (filters.specialty === "hospital_medicine" && !haystack.includes("hospital")) return false;
-      if (filters.specialty === "primary_care" && !haystack.includes("primary care") && !haystack.includes("internal medicine") && !haystack.includes("hospitalist")) return false;
-      if (filters.specialty === "specialist") {
-        const nonSpec = ["primary care", "hospitalist", "internal medicine"];
-        if (nonSpec.some(t => haystack.includes(t))) return false;
+      const mappedSpecialty = s.gridMapping?.specialty;
+      if (mappedSpecialty) {
+        if (mappedSpecialty !== filters.specialty) return false;
+      } else {
+        const haystack = `${s.stakeholder} ${s.context}`.toLowerCase();
+        if (filters.specialty === "academic" && !haystack.includes("academic") && !haystack.includes("kol") && !haystack.includes("committee")) return false;
+        if (filters.specialty === "hospital_medicine" && !haystack.includes("hospital")) return false;
+        if (filters.specialty === "primary_care" && !haystack.includes("primary care") && !haystack.includes("internal medicine") && !haystack.includes("hospitalist")) return false;
+        if (filters.specialty === "specialist") {
+          const nonSpec = ["primary care", "hospitalist", "internal medicine"];
+          if (nonSpec.some(t => haystack.includes(t))) return false;
+        }
       }
     }
     return true;

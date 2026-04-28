@@ -356,3 +356,37 @@ export const ALL_SCENARIOS = [
     isBuiltIn: true
   }
 ];
+
+const GRID_FILTER_MAP_BY_TITLE = {
+  "The Gatekeeper Filter": { diseaseState: "primary_care", specialty: "primary_care", interactionPressure: "time_constrained" },
+  "The Warm Intro That Turns Cold": { diseaseState: "cardiology", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+  "The No-Show Follow-Up": { diseaseState: "primary_care", specialty: "specialist", interactionPressure: "time_constrained" },
+  "The Undefined Patient Profile": { diseaseState: "primary_care", specialty: "hospital_medicine", interactionPressure: "curious_uncertain" },
+  "The Assumed Priority": { diseaseState: "endocrinology", specialty: "academic", interactionPressure: "skeptical_resistant" },
+  "The Protocol Lock": { diseaseState: "pulmonology", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+  "The Data That Doesn't Land": { diseaseState: "pulmonology", specialty: "academic", interactionPressure: "skeptical_resistant" },
+  "The Guideline Anchor": { diseaseState: "cardiology", specialty: "primary_care", interactionPressure: "skeptical_resistant" },
+  "The Cost-Effectiveness Filter": { diseaseState: "primary_care", specialty: "hospital_medicine", interactionPressure: "operationally_constrained" },
+  "The Prior Auth Reflex": { diseaseState: "rheumatology", specialty: "specialist", interactionPressure: "access_barrier" },
+  "The Unexpected Safety Flag": { diseaseState: "neurology", specialty: "academic", interactionPressure: "safety_concern" },
+  "The Competitive Defender": { diseaseState: "oncology", specialty: "specialist", interactionPressure: "competitive_bias" },
+  "The Reluctant Early Adopter": { diseaseState: "nephrology", specialty: "academic", interactionPressure: "curious_uncertain" },
+  "The Workflow Bottleneck": { diseaseState: "dermatology", specialty: "specialist", interactionPressure: "operationally_constrained" },
+  "The Reversal After First Patient": { diseaseState: "hematology", specialty: "academic", interactionPressure: "safety_concern" },
+  "The Formulary Firewall": { diseaseState: "primary_care", specialty: "academic", interactionPressure: "access_barrier" },
+  "The Perpetual Maybe": { diseaseState: "gastroenterology", specialty: "specialist", interactionPressure: "curious_uncertain" },
+  "The Handoff Risk": { diseaseState: "primary_care", specialty: "academic", interactionPressure: "access_barrier" },
+  "The Split Decision": { diseaseState: "primary_care", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+};
+
+for (const scenario of ALL_SCENARIOS) {
+  const mapped = GRID_FILTER_MAP_BY_TITLE[scenario.title] || {};
+  scenario.gridMapping = {
+    diseaseState: mapped.diseaseState || scenario.predictiveSeed?.diseaseState || "",
+    specialty: mapped.specialty || "",
+    hcpType: scenario.hcpRoleType || "",
+    influenceDriver: scenario.decisionOrientation || "",
+    journeyStage: scenario.journeyStage || "",
+    interactionPressure: mapped.interactionPressure || scenario.interactionPressure?.[0] || "",
+  };
+}

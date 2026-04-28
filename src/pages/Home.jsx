@@ -183,7 +183,7 @@ export default function Home() {
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
           <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>
-            Filter the grid, open any scenario brief, then start the roleplay. Predictive Builder remains available as an optional deep-dive workspace.
+            Use Preview Brief on any card to review context, then start the roleplay. Predictive Builder remains available as an optional deep-dive workspace.
           </p>
         </div>
 

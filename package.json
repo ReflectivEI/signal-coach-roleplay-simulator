@@ -14,6 +14,7 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "audit:openers": "npx vite-node scripts/audit-opening-realism.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
+    "audit:architecture": "npx vite-node scripts/audit-architecture-alignment.ts",
     "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
     "confidence:gate": "npx vite-node scripts/confidence-gate.ts",
     "predeploy": "npm run predeploy-verify",
