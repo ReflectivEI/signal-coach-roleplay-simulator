@@ -10,6 +10,9 @@ const workerPaths = [
   "/api/roleplay/sessions",
   "/api/roleplay/start",
   "/api/roleplay/respond",
+  "/api/evidence/sources",
+  "/api/evidence/records",
+  "/api/evidence/ingest",
 ];
 
 const localWorkerUrl = "http://127.0.0.1:8787";

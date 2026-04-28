@@ -62,6 +62,27 @@ export interface VolatilityEvent {
   hcpReactionType: string;
 }
 
+export interface PredictiveTurnDebug {
+  contextApplied: boolean;
+  source: "ai" | "deterministic" | "unknown";
+  specialistTitle: string;
+  seed: {
+    diseaseState: string;
+    hcpType: string;
+    journeyStage: string;
+    interactionPressure: string;
+    influenceDriver: string;
+    behaviorArchetype: string;
+  } | null;
+  surfacedSignals: string[];
+  anchorHeadlines: {
+    mindset?: string;
+    objections?: string;
+    responseStyle?: string;
+    repApproach?: string;
+  };
+}
+
 export interface SimulatorResponse {
   hcpReply: string;
   nextBehaviorState: string;
@@ -71,6 +92,7 @@ export interface SimulatorResponse {
   coachingNudge: CoachingNudge | null;
   volatilityState: VolatilityState;
   prediction?: BehaviorPrediction;
+  predictiveDebug?: PredictiveTurnDebug | null;
 }
 
 export interface BehaviorPrediction {
@@ -106,6 +128,7 @@ export interface ConversationTurn {
   speaker: "rep" | "hcp";
   text: string;
   timestamp: string;
+  predictiveDebug?: PredictiveTurnDebug | null;
 }
 
 export interface SessionReview {
@@ -194,11 +217,11 @@ export function computeVolatility(
   let primaryTriggerSignal: string | null = null;
 
   // HIGH-PRESSURE SCENARIOS: Lower volatility threshold (1 missed = trigger)
-  const isHighPressure = (pressures.includes("time_constrained") || 
-                          pressures.includes("skeptical_resistant") ||
-                          pressures.includes("safety_concern") ||
-                          scenario.startingBehaviorState === "closed" ||
-                          (pressures.length >= 2));
+  const isHighPressure = (pressures.includes("time_constrained") ||
+    pressures.includes("skeptical_resistant") ||
+    pressures.includes("safety_concern") ||
+    scenario.startingBehaviorState === "closed" ||
+    (pressures.length >= 2));
 
   if (allSignals.length > 0) {
     const recentWindow = allSignals.slice(-3);
@@ -346,10 +369,10 @@ export function computeVolatilityEvents(
     if (state.profile !== previousProfile || state.curveballActive) {
       const hcpReactionType =
         state.recoveryActive ? "recovery_de_escalation" :
-        state.curveballActive ? (state.curveballType || "curveball") :
-        state.profile === "disrupted" ? "resistance_escalation" :
-        state.profile === "slightly_disrupted" ? "disengagement" :
-        "stabilization";
+          state.curveballActive ? (state.curveballType || "curveball") :
+            state.profile === "disrupted" ? "resistance_escalation" :
+              state.profile === "slightly_disrupted" ? "disengagement" :
+                "stabilization";
 
       events.push({
         turnId: repTurnIds[i] || `turn_${i + 1}`,

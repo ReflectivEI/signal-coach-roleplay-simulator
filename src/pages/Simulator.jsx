@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
@@ -17,6 +17,8 @@ import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
 import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
+import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
+import { buildPredictivePromptContext, buildPredictiveRuntimeLens } from "@/lib/predictiveRuntimeService";
 import { toast } from "@/components/ui/use-toast";
 
 function createSafeId() {
@@ -61,13 +63,21 @@ export default function Simulator() {
   const [allSignals, setAllSignals] = useState([]);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
-  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */ ("stable"));
+  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
   const [repTurnIds, setRepTurnIds] = useState([]);
   const [conversationInit, setConversationInit] = useState(null);
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
   const [realtimeFeedback, setRealtimeFeedback] = useState(null);
   const [reviewStage, setReviewStage] = useState("");
   const [lastRuntimeError, setLastRuntimeError] = useState("");
+  const [predictiveLens, setPredictiveLens] = useState({ isLoading: false, data: null });
+  const predictiveLensRef = useRef({ isLoading: false, data: null });
+  const predictiveLensReadyPromiseRef = useRef(Promise.resolve(null));
+
+  const setPredictiveLensState = useCallback((nextLens) => {
+    predictiveLensRef.current = nextLens;
+    setPredictiveLens(nextLens);
+  }, []);
 
   useEffect(() => {
     if (scenarioId) void initSession();
@@ -96,12 +106,33 @@ export default function Simulator() {
         }),
       };
     }
-    setScenario(scData);
+    const resolvedSeed = buildPredictiveSeedFromScenario(scData);
+    const scenarioWithSeed = {
+      ...scData,
+      predictiveSeed: {
+        ...resolvedSeed,
+        ...(scData.predictiveSeed || {}),
+      },
+    };
+    setScenario(scenarioWithSeed);
+    setPredictiveLensState({ isLoading: true, data: null });
 
-    const convInit = await initializeConversation(scData);
+    const runtimeLensPromise = buildPredictiveRuntimeLens({
+      selection: scenarioWithSeed.predictiveSeed,
+      scenarioTitle: scenarioWithSeed.title,
+    });
+    predictiveLensReadyPromiseRef.current = runtimeLensPromise;
+
+    void runtimeLensPromise.then((runtimeData) => {
+      setPredictiveLensState({ isLoading: false, data: runtimeData });
+    }).catch(() => {
+      setPredictiveLensState({ isLoading: false, data: null });
+    });
+
+    const convInit = await initializeConversation(scenarioWithSeed);
     setConversationInit(convInit);
 
-    const newSession = createLocalSession(scData, convInit);
+    const newSession = createLocalSession(scenarioWithSeed, convInit);
     setSession(newSession);
 
     setTurns([]);
@@ -109,10 +140,10 @@ export default function Simulator() {
 
     const initCues = [];
     const openingCue = resolveObservedCue("", {
-      hcpReply: scData.openingScene || scData.visualScene || scData.description || "",
-      behaviorState: scData.startingBehaviorState || "neutral",
-      interactionPressures: scData.interactionPressure || [],
-      scenario: scData,
+      hcpReply: scenarioWithSeed.openingScene || scenarioWithSeed.visualScene || scenarioWithSeed.description || "",
+      behaviorState: scenarioWithSeed.startingBehaviorState || "neutral",
+      interactionPressures: scenarioWithSeed.interactionPressure || [],
+      scenario: scenarioWithSeed,
     });
     initCues.push({ id: "cue_init_1", ...openingCue });
     setActiveCues(initCues);
@@ -124,6 +155,16 @@ export default function Simulator() {
     setIsLoading(true);
     setLastNudge(null);
     setLastRuntimeError("");
+
+    const isFirstRepTurn = !hasRepSpoken;
+    if (isFirstRepTurn && predictiveLensRef.current.isLoading) {
+      // Fast readiness gate: wait briefly for first-turn lens hydration, then continue.
+      await Promise.race([
+        predictiveLensReadyPromiseRef.current,
+        new Promise((resolve) => setTimeout(resolve, 900)),
+      ]).catch(() => null);
+    }
+
     setHasRepSpoken(true);
 
     const repTurnObj = {
@@ -182,6 +223,8 @@ export default function Simulator() {
         allSignals,
         session.turnCount,
         currentVolatilityProfile,
+        undefined,
+        buildPredictivePromptContext(predictiveLensRef.current.data),
       );
 
       setTurns((prev) => {
@@ -197,6 +240,7 @@ export default function Simulator() {
           timestamp: new Date().toISOString(),
           cues: response.activeCues || [],
           nudge: null,
+          predictiveDebug: response.predictiveDebug || null,
         }];
       });
 
@@ -237,7 +281,7 @@ export default function Simulator() {
     } finally {
       setIsLoading(false);
     }
-  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile]);
+  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile, hasRepSpoken]);
 
   const handleEndSession = async () => {
     if (!session || isReviewing) return;
@@ -266,6 +310,15 @@ export default function Simulator() {
       transcript: turns,
       review: reviewData,
       signals: allSignals,
+      predictiveLens: predictiveLens?.data ? {
+        selection: predictiveLens.data.selection,
+        synthesisSource: predictiveLens.data.synthesisSource,
+        synthesisError: predictiveLens.data.synthesisError,
+        specialistTitle: predictiveLens.data.specialistTitle,
+        sections: predictiveLens.data.lens?.sections || null,
+        hcpPerspective: predictiveLens.data.lens?.hcpPerspective || null,
+        repPreparation: predictiveLens.data.lens?.repPreparation || null,
+      } : null,
     };
     await createWorkerSession(completedSession).catch(() => null);
     setSession((current) => current ? ({
@@ -494,6 +547,7 @@ export default function Simulator() {
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              predictiveLens={predictiveLens}
             />
           </div>
         </div>
@@ -521,6 +575,7 @@ export default function Simulator() {
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              predictiveLens={predictiveLens}
             />
           </motion.div>
         )}

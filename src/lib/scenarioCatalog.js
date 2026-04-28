@@ -15,6 +15,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "treating_clinician", decisionOrientation: "patient_centric",
     persona: "time_constrained_community_doctor", startingBehaviorState: "closed",
     interactionPressure: ["time_constrained", "operationally_constrained"],
+    predictiveSeed: {
+      diseaseState: "primary_care",
+      hcpType: "treating_clinician",
+      journeyStage: "initial_access",
+      interactionPressure: "time_constrained",
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
     keyChallenges: ["No trust established yet", "Time pressure used as a shield", "Rep must earn the conversation before delivering any content"],
     suggestedFocusCapabilities: ["question_quality", "customer_engagement_signals", "adaptability"],
     isBuiltIn: true
@@ -119,6 +127,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "thought_leader", decisionOrientation: "evidence_driven",
     persona: "skeptical_specialist", startingBehaviorState: "neutral",
     interactionPressure: ["skeptical_resistant"],
+    predictiveSeed: {
+      diseaseState: "pulmonology",
+      hcpType: "thought_leader",
+      journeyStage: "clinical_value",
+      interactionPressure: "skeptical_resistant",
+      influenceDriver: "evidence_driven",
+      behaviorArchetype: "skeptical_specialist",
+    },
     keyChallenges: ["Rep cannot win a clinical debate with a KOL", "Exploring the concern is more credible than defending the data", "Making it matter requires connecting to what the HCP does trust"],
     suggestedFocusCapabilities: ["objection_navigation", "listening_responsiveness", "making_it_matter"],
     isBuiltIn: true
@@ -136,6 +152,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "treating_clinician", decisionOrientation: "guideline_anchored",
     persona: "skeptical_specialist", startingBehaviorState: "closed",
     interactionPressure: ["skeptical_resistant", "competitive_bias"],
+    predictiveSeed: {
+      diseaseState: "cardiology",
+      hcpType: "treating_clinician",
+      journeyStage: "clinical_value",
+      interactionPressure: "skeptical_resistant",
+      influenceDriver: "guideline_anchored",
+      behaviorArchetype: "skeptical_specialist",
+    },
     keyChallenges: ["Rep cannot argue against guidelines", "Value must be connected to the HCP's own clinical experience", "Discovery about real patient gaps is the only productive path"],
     suggestedFocusCapabilities: ["question_quality", "making_it_matter", "adaptability"],
     isBuiltIn: true

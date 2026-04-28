@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, Sparkles, Loader2, Check, Wand2 } from "lucide-react";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { createCustomScenario } from "@/lib/scenarioStorage";
 import { invokeWorkerJson } from "@/services/workerClient";
+import { PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
 
 const journeyStages = [
   { value: "initial_access", label: "Initial Access" },
@@ -59,6 +60,48 @@ const pressures = [
   { value: "safety_concern", label: "Safety Concern" },
   { value: "access_barrier", label: "Access Barrier" },
 ];
+
+const predictiveSeedFields = [
+  "diseaseState",
+  "hcpType",
+  "journeyStage",
+  "interactionPressure",
+  "influenceDriver",
+  "behaviorArchetype",
+];
+
+function validatePredictiveSeed(seed = {}) {
+  const normalized = Object.fromEntries(
+    predictiveSeedFields.map((field) => [field, String(seed?.[field] || "").trim()]),
+  );
+
+  const filledCount = Object.values(normalized).filter(Boolean).length;
+  if (filledCount === 0) {
+    return { ok: true, normalized: null, message: "" };
+  }
+
+  if (filledCount !== predictiveSeedFields.length) {
+    return {
+      ok: false,
+      normalized: null,
+      message: "If using Predictive HCP Seed, all 6 fields are required.",
+    };
+  }
+
+  for (const field of predictiveSeedFields) {
+    const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
+    const allowed = new Set(options.map((item) => item.value));
+    if (!allowed.has(normalized[field])) {
+      return {
+        ok: false,
+        normalized: null,
+        message: `Predictive seed field \"${field}\" has an invalid value.`,
+      };
+    }
+  }
+
+  return { ok: true, normalized, message: "" };
+}
 
 /**
  * @param {{ label: string; hint?: string; children: any }} props
@@ -119,16 +162,16 @@ function MultiToggle({ options, selected, onChange }) {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all"
           style={selected.includes(o.value)
             ? {
-                background: "linear-gradient(135deg, rgba(26, 67, 114, 0.12), rgba(28, 128, 118, 0.14))",
-                borderColor: "rgba(37, 124, 123, 0.44)",
-                color: "hsl(176 54% 31%)",
-                boxShadow: "0 6px 16px rgba(20, 72, 89, 0.08)",
-              }
+              background: "linear-gradient(135deg, rgba(26, 67, 114, 0.12), rgba(28, 128, 118, 0.14))",
+              borderColor: "rgba(37, 124, 123, 0.44)",
+              color: "hsl(176 54% 31%)",
+              boxShadow: "0 6px 16px rgba(20, 72, 89, 0.08)",
+            }
             : {
-                background: "rgba(255,255,255,0.88)",
-                borderColor: "rgba(92, 135, 165, 0.34)",
-                color: "hsl(215 16% 44%)",
-              }}
+              background: "rgba(255,255,255,0.88)",
+              borderColor: "rgba(92, 135, 165, 0.34)",
+              color: "hsl(215 16% 44%)",
+            }}
         >
           {selected.includes(o.value) && <Check className="w-3 h-3" />}
           {o.label}
@@ -158,10 +201,19 @@ export default function ScenarioBuilder() {
     interactionPressure: [],
     keyChallenges: "",
     suggestedFocusCapabilities: [],
+    predictiveSeed: {
+      diseaseState: "",
+      hcpType: "",
+      journeyStage: "",
+      interactionPressure: "",
+      influenceDriver: "",
+      behaviorArchetype: "",
+    },
   });
   const [saving, setSaving] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const set = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
 
@@ -171,6 +223,12 @@ export default function ScenarioBuilder() {
 
     try {
       const capabilityIds = SIGNAL_INTELLIGENCE_CAPABILITIES.map((c) => c.id).join(", ");
+      const predictiveOptions = Object.fromEntries(
+        predictiveSeedFields.map((field) => [
+          field,
+          (PREDICTIVE_SELECTOR_OPTIONS[field] || []).map((item) => item.value).join(", "),
+        ]),
+      );
 
       const prompt = `You are building a canonical Signal Intelligence Coaching Simulator scenario for pharma rep training.
 
@@ -202,6 +260,13 @@ SCHEMA RULES:
 - decisionOrientation: one of: patient_centric, evidence_driven, risk_averse, guideline_anchored
 - startingBehaviorState: one of: closed, neutral, open, curiosity, resistance, frustration, time_pressure
 - interactionPressure: array, each value from: time_constrained, skeptical_resistant, curious_uncertain, operationally_constrained, competitive_bias, safety_concern, access_barrier
+- predictiveSeed: optional object with ALL 6 fields if present. Allowed values:
+  - diseaseState: ${predictiveOptions.diseaseState}
+  - hcpType: ${predictiveOptions.hcpType}
+  - journeyStage: ${predictiveOptions.journeyStage}
+  - interactionPressure: ${predictiveOptions.interactionPressure}
+  - influenceDriver: ${predictiveOptions.influenceDriver}
+  - behaviorArchetype: ${predictiveOptions.behaviorArchetype}
 
 Return ONLY valid JSON:
 {
@@ -219,7 +284,15 @@ Return ONLY valid JSON:
   "startingBehaviorState": "string",
   "interactionPressure": ["string"],
   "keyChallenges": ["string", "string", "string"],
-  "suggestedFocusCapabilities": ["string", "string"]
+  "suggestedFocusCapabilities": ["string", "string"],
+  "predictiveSeed": {
+    "diseaseState": "string",
+    "hcpType": "string",
+    "journeyStage": "string",
+    "interactionPressure": "string",
+    "influenceDriver": "string",
+    "behaviorArchetype": "string"
+  }
 }`;
 
       const result = await invokeWorkerJson({
@@ -244,9 +317,12 @@ Return ONLY valid JSON:
             interactionPressure: { type: "array", items: { type: "string" } },
             keyChallenges: { type: "array", items: { type: "string" } },
             suggestedFocusCapabilities: { type: "array", items: { type: "string" } },
+            predictiveSeed: { type: "object" },
           },
         },
       });
+
+      const seedValidation = validatePredictiveSeed(result.predictiveSeed || {});
 
       setForm((f) => ({
         ...f,
@@ -266,6 +342,9 @@ Return ONLY valid JSON:
         interactionPressure: result.interactionPressure?.length ? result.interactionPressure : f.interactionPressure,
         keyChallenges: (result.keyChallenges || []).join("\n") || f.keyChallenges,
         suggestedFocusCapabilities: result.suggestedFocusCapabilities?.length ? result.suggestedFocusCapabilities : f.suggestedFocusCapabilities,
+        predictiveSeed: seedValidation.ok && seedValidation.normalized
+          ? seedValidation.normalized
+          : f.predictiveSeed,
       }));
     } finally {
       setAiGenerating(false);
@@ -274,10 +353,18 @@ Return ONLY valid JSON:
 
   const handleSave = async () => {
     if (!form.title || !form.openingScene || !form.journeyStage || !form.startingBehaviorState) return;
+    const seedValidation = validatePredictiveSeed(form.predictiveSeed);
+    if (!seedValidation.ok) {
+      setSaveError(seedValidation.message);
+      return;
+    }
+
+    setSaveError("");
     setSaving(true);
 
     await createCustomScenario({
       ...form,
+      predictiveSeed: seedValidation.normalized,
       journeyState: journeyStateForStage[form.journeyStage] || "early_discovery",
       keyChallenges: form.keyChallenges.split("\n").filter(Boolean),
       interactionPressure: form.interactionPressure,
@@ -326,146 +413,204 @@ Return ONLY valid JSON:
 
           <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6 items-start">
             <div className="space-y-6">
-          <div
-            className="rounded-[24px] p-6 space-y-5"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
-              border: "1.5px solid rgba(92, 135, 165, 0.36)",
-              boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
-            }}
-          >
-            <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-              <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Scenario Details</h3>
-            </div>
-            <Field label="Title *">
-              <Input value={form.title} onChange={set("title")} placeholder="e.g. The prior auth reflex in a rushed oncology clinic" />
-            </Field>
-            <Field label="Core Tension" hint="What is the fundamental conversational challenge this scenario represents?">
-              <Input value={form.coreTension} onChange={set("coreTension")} placeholder="e.g. HCP raises access concerns before clinical value is established" multiline />
-            </Field>
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Stakeholder">
-                <Input value={form.stakeholder} onChange={set("stakeholder")} placeholder="e.g. Cardiologist" />
-              </Field>
-              <Field label="Context">
-                <Input value={form.context} onChange={set("context")} placeholder="e.g. Busy outpatient clinic" />
-              </Field>
-            </div>
-            <Field label="Objective" hint="What should the rep practice in this scenario?">
-              <Input value={form.objective} onChange={set("objective")} placeholder="e.g. Navigate the access objection without abandoning the clinical conversation" multiline />
-            </Field>
-          </div>
-
-          <div
-            className="rounded-[24px] p-5"
-            style={{
-              background: "linear-gradient(135deg, hsl(223 39% 18%) 0%, hsl(214 43% 24%) 48%, hsl(184 42% 24%) 100%)",
-              border: "1.5px solid rgba(97, 182, 181, 0.30)",
-              boxShadow: "0 18px 34px rgba(14, 24, 43, 0.12)",
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(101, 217, 200, 0.12)", border: "1px solid rgba(101, 217, 200, 0.24)" }}>
-                <Wand2 className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
+              <div
+                className="rounded-[24px] p-6 space-y-5"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+                  border: "1.5px solid rgba(92, 135, 165, 0.36)",
+                  boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
+                }}
+              >
+                <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                  <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Scenario Details</h3>
+                </div>
+                <Field label="Title *">
+                  <Input value={form.title} onChange={set("title")} placeholder="e.g. The prior auth reflex in a rushed oncology clinic" />
+                </Field>
+                <Field label="Core Tension" hint="What is the fundamental conversational challenge this scenario represents?">
+                  <Input value={form.coreTension} onChange={set("coreTension")} placeholder="e.g. HCP raises access concerns before clinical value is established" multiline />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Stakeholder">
+                    <Input value={form.stakeholder} onChange={set("stakeholder")} placeholder="e.g. Cardiologist" />
+                  </Field>
+                  <Field label="Context">
+                    <Input value={form.context} onChange={set("context")} placeholder="e.g. Busy outpatient clinic" />
+                  </Field>
+                </div>
+                <Field label="Objective" hint="What should the rep practice in this scenario?">
+                  <Input value={form.objective} onChange={set("objective")} placeholder="e.g. Navigate the access objection without abandoning the clinical conversation" multiline />
+                </Field>
               </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white mb-0.5">Format into canonical structure</p>
-                <p className="text-xs mb-3 leading-relaxed" style={{ color: "rgba(231, 245, 243, 0.82)" }}>
-                  Fill in any fields you have and the worker will format the complete scenario into the same structure as the built-in scenarios.
-                </p>
-                <button
-                  onClick={generateWithAI}
-                  disabled={aiGenerating || (!form.title && !form.coreTension && !form.stakeholder)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(135deg, hsl(163 53% 42%), hsl(174 58% 34%))", color: "white" }}
-                >
-                  {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                  {aiGenerating ? "Formatting scenario..." : "Generate full scenario"}
-                </button>
-              </div>
-            </div>
-          </div>
 
-          <div
-            className="rounded-[24px] p-6 space-y-5"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
-              border: "1.5px solid rgba(92, 135, 165, 0.36)",
-              boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
-            }}
-          >
-            <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-              <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Opening Scene *</h3>
-            </div>
-            <Field label="" hint="The first thing the HCP says. Sets the opening tone and challenge.">
-              <Input value={form.openingScene} onChange={set("openingScene")} placeholder={`e.g. "I only have a minute. What extra steps does this actually create for my staff?"`} multiline />
-            </Field>
-            <Field label="Visual Scene">
-              <Input value={form.visualScene} onChange={set("visualScene")} placeholder="Rep-facing observational scene" multiline />
-            </Field>
-            <Field label="Description">
-              <Input value={form.description} onChange={set("description")} placeholder="Brief summary of this scenario's challenge and context" multiline />
-            </Field>
-          </div>
+              <div
+                className="rounded-[24px] p-5"
+                style={{
+                  background: "linear-gradient(135deg, hsl(223 39% 18%) 0%, hsl(214 43% 24%) 48%, hsl(184 42% 24%) 100%)",
+                  border: "1.5px solid rgba(97, 182, 181, 0.30)",
+                  boxShadow: "0 18px 34px rgba(14, 24, 43, 0.12)",
+                }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(101, 217, 200, 0.12)", border: "1px solid rgba(101, 217, 200, 0.24)" }}>
+                    <Wand2 className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white mb-0.5">Format into canonical structure</p>
+                    <p className="text-xs mb-3 leading-relaxed" style={{ color: "rgba(231, 245, 243, 0.82)" }}>
+                      Fill in any fields you have and the worker will format the complete scenario into the same structure as the built-in scenarios.
+                    </p>
+                    <button
+                      onClick={generateWithAI}
+                      disabled={aiGenerating || (!form.title && !form.coreTension && !form.stakeholder)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ background: "linear-gradient(135deg, hsl(163 53% 42%), hsl(174 58% 34%))", color: "white" }}
+                    >
+                      {aiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {aiGenerating ? "Formatting scenario..." : "Generate full scenario"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="rounded-[24px] p-6 space-y-5"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+                  border: "1.5px solid rgba(92, 135, 165, 0.36)",
+                  boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
+                }}
+              >
+                <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                  <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Opening Scene *</h3>
+                </div>
+                <Field label="" hint="The first thing the HCP says. Sets the opening tone and challenge.">
+                  <Input value={form.openingScene} onChange={set("openingScene")} placeholder={`e.g. "I only have a minute. What extra steps does this actually create for my staff?"`} multiline />
+                </Field>
+                <Field label="Visual Scene">
+                  <Input value={form.visualScene} onChange={set("visualScene")} placeholder="Rep-facing observational scene" multiline />
+                </Field>
+                <Field label="Description">
+                  <Input value={form.description} onChange={set("description")} placeholder="Brief summary of this scenario's challenge and context" multiline />
+                </Field>
+              </div>
             </div>
 
             <div className="space-y-6">
-          <div
-            className="rounded-[24px] p-6 space-y-5"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
-              border: "1.5px solid rgba(92, 135, 165, 0.36)",
-              boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
-            }}
-          >
-            <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-              <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Realism Variables</h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Journey Stage *">
-                <Select value={form.journeyStage} onChange={set("journeyStage")} options={journeyStages} />
-              </Field>
-              <Field label="Starting Behavior State *">
-                <Select value={form.startingBehaviorState} onChange={set("startingBehaviorState")} options={behaviorStates} />
-              </Field>
-              <Field label="HCP Role Type">
-                <Select value={form.hcpRoleType} onChange={set("hcpRoleType")} options={hcpRoleTypes} />
-              </Field>
-              <Field label="Decision Orientation">
-                <Select value={form.decisionOrientation} onChange={set("decisionOrientation")} options={decisionOrientations} />
-              </Field>
-            </div>
-            <Field label="Interaction Pressures">
-              <MultiToggle options={pressures} selected={form.interactionPressure} onChange={set("interactionPressure")} />
-            </Field>
-          </div>
+              <div
+                className="rounded-[24px] p-6 space-y-5"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+                  border: "1.5px solid rgba(92, 135, 165, 0.36)",
+                  boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
+                }}
+              >
+                <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                  <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Realism Variables</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Field label="Journey Stage *">
+                    <Select value={form.journeyStage} onChange={set("journeyStage")} options={journeyStages} />
+                  </Field>
+                  <Field label="Starting Behavior State *">
+                    <Select value={form.startingBehaviorState} onChange={set("startingBehaviorState")} options={behaviorStates} />
+                  </Field>
+                  <Field label="HCP Role Type">
+                    <Select value={form.hcpRoleType} onChange={set("hcpRoleType")} options={hcpRoleTypes} />
+                  </Field>
+                  <Field label="Decision Orientation">
+                    <Select value={form.decisionOrientation} onChange={set("decisionOrientation")} options={decisionOrientations} />
+                  </Field>
+                </div>
+                <Field label="Interaction Pressures">
+                  <MultiToggle options={pressures} selected={form.interactionPressure} onChange={set("interactionPressure")} />
+                </Field>
 
-          <div
-            className="rounded-[24px] p-6 space-y-5"
-            style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
-              border: "1.5px solid rgba(92, 135, 165, 0.36)",
-              boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
-            }}
-          >
-            <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-              <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Signal Intelligence Focus</h3>
-            </div>
-            <Field label="Suggested Focus Capabilities" hint="Which capabilities should the rep pay attention to in this scenario?">
-              <MultiToggle
-                options={SIGNAL_INTELLIGENCE_CAPABILITIES.map((c) => ({ value: c.id, label: c.label }))}
-                selected={form.suggestedFocusCapabilities}
-                onChange={set("suggestedFocusCapabilities")}
-              />
-            </Field>
-            <Field label="Key Challenges" hint="One per line">
-              <Input value={form.keyChallenges} onChange={set("keyChallenges")} placeholder={`e.g. Skepticism about prior auth burden\nResistance to switching therapy`} multiline />
-            </Field>
-          </div>
+                <div className="pt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                  <h4 className="text-sm font-semibold mb-3" style={{ color: "hsl(174 55% 34%)" }}>
+                    Predictive HCP Seed (Optional)
+                  </h4>
+                  <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
+                    If provided, all 6 fields are required. This powers auto-derived runtime predictive context in the simulator.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Field label="Disease State">
+                      <Select
+                        value={form.predictiveSeed.diseaseState}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, diseaseState: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.diseaseState}
+                      />
+                    </Field>
+                    <Field label="HCP Type">
+                      <Select
+                        value={form.predictiveSeed.hcpType}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, hcpType: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.hcpType}
+                      />
+                    </Field>
+                    <Field label="Journey Stage">
+                      <Select
+                        value={form.predictiveSeed.journeyStage}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, journeyStage: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.journeyStage}
+                      />
+                    </Field>
+                    <Field label="Interaction Pressure">
+                      <Select
+                        value={form.predictiveSeed.interactionPressure}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, interactionPressure: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.interactionPressure}
+                      />
+                    </Field>
+                    <Field label="Influence Driver">
+                      <Select
+                        value={form.predictiveSeed.influenceDriver}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, influenceDriver: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.influenceDriver}
+                      />
+                    </Field>
+                    <Field label="Behavior Archetype">
+                      <Select
+                        value={form.predictiveSeed.behaviorArchetype}
+                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, behaviorArchetype: value } }))}
+                        options={PREDICTIVE_SELECTOR_OPTIONS.behaviorArchetype}
+                      />
+                    </Field>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="rounded-[24px] p-6 space-y-5"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+                  border: "1.5px solid rgba(92, 135, 165, 0.36)",
+                  boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
+                }}
+              >
+                <div className="pb-3 border-b" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                  <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Signal Intelligence Focus</h3>
+                </div>
+                <Field label="Suggested Focus Capabilities" hint="Which capabilities should the rep pay attention to in this scenario?">
+                  <MultiToggle
+                    options={SIGNAL_INTELLIGENCE_CAPABILITIES.map((c) => ({ value: c.id, label: c.label }))}
+                    selected={form.suggestedFocusCapabilities}
+                    onChange={set("suggestedFocusCapabilities")}
+                  />
+                </Field>
+                <Field label="Key Challenges" hint="One per line">
+                  <Input value={form.keyChallenges} onChange={set("keyChallenges")} placeholder={`e.g. Skepticism about prior auth burden\nResistance to switching therapy`} multiline />
+                </Field>
+              </div>
             </div>
           </div>
 
           <div className="flex items-center justify-end gap-3 pb-8">
+            {saveError ? (
+              <p className="text-xs mr-auto" style={{ color: "hsl(0 62% 34%)" }}>
+                {saveError}
+              </p>
+            ) : null}
             <Link to="/" className="text-sm transition-colors" style={{ color: "hsl(215 16% 44%)" }}>Cancel</Link>
             <button
               onClick={handleSave}

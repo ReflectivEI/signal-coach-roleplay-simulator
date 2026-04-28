@@ -1,9 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { X, MapPin, Send, Loader2, Brain, Zap, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { initializeConversation } from "@/lib/conversationInit";
+import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
+import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import {
   SIGNAL_INTELLIGENCE_CAPABILITIES,
   JOURNEY_STAGE_LABELS,
@@ -109,7 +112,7 @@ function CapPill({ children }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <motion.div 
+        <motion.div
           className="flex items-center gap-2 group"
           whileHover={{ x: 4 }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
@@ -152,6 +155,11 @@ function OpeningSceneBlock({ scenario }) {
       <p className="text-sm text-slate-700 leading-relaxed italic">{sceneText}</p>
     </div>
   );
+}
+
+function getPredictiveLabel(field, value) {
+  const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
+  return options.find((option) => option.value === value)?.label || value;
 }
 
 // ── AI Coach ──────────────────────────────────────────────────────────────────
@@ -257,11 +265,10 @@ function AiCoachSection({ scenario }) {
         ) : (
           messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[88%] text-xs leading-relaxed px-3 py-2 rounded-lg ${
-                m.role === "user"
+              <div className={`max-w-[88%] text-xs leading-relaxed px-3 py-2 rounded-lg ${m.role === "user"
                   ? "bg-primary/15 border border-primary/20 text-foreground"
                   : "bg-surface border border-border/60 text-foreground/85"
-              }`}>
+                }`}>
                 {m.text}
               </div>
             </div>
@@ -307,6 +314,7 @@ function AiCoachSection({ scenario }) {
 
 // ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function ScenarioDetailModal({ scenario, difficulty: _difficulty, onClose, onStart }) {
+  const navigate = useNavigate();
   // Wrap content in TooltipProvider for tooltips to work
   const WrappedContent = ({ children }) => {
     return <TooltipProvider>{children}</TooltipProvider>;
@@ -317,10 +325,10 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
     const state = scenario.startingBehaviorState || "";
     const pressures = scenario.interactionPressure || [];
     let score = 0;
-    if (["objection_handling","commitment_close","access_formulary"].includes(stage)) score += 2;
-    else if (["adoption_implementation","clinical_value"].includes(stage)) score += 1;
-    if (["closed","resistance","frustration"].includes(state)) score += 2;
-    if (pressures.some(p => ["skeptical_resistant","safety_concern","competitive_bias"].includes(p))) score += 1;
+    if (["objection_handling", "commitment_close", "access_formulary"].includes(stage)) score += 2;
+    else if (["adoption_implementation", "clinical_value"].includes(stage)) score += 1;
+    if (["closed", "resistance", "frustration"].includes(state)) score += 2;
+    if (pressures.some(p => ["skeptical_resistant", "safety_concern", "competitive_bias"].includes(p))) score += 1;
     if (pressures.length >= 2) score += 1;
     if (score >= 4) return { label: "Advanced", color: "text-red-600 border-red-200 bg-red-50" };
     if (score >= 2) return { label: "Intermediate", color: "text-amber-600 border-amber-200 bg-amber-50" };
@@ -330,6 +338,23 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
   const focusCaps = scenario.suggestedFocusCapabilities || [];
   const pressures = (scenario.interactionPressure || []).slice(0, 3);
   const challenges = (scenario.keyChallenges || []).slice(0, 3);
+  const predictiveSeed = useMemo(() => buildPredictiveSeedFromScenario(scenario), [scenario]);
+  const predictiveProfile = useMemo(() => buildPredictiveProfile(predictiveSeed), [predictiveSeed]);
+  const predictiveHighlights = [
+    { label: "Mindset", value: predictiveProfile?.sections?.mindset?.headline },
+    { label: "Likely objection", value: predictiveProfile?.sections?.objections?.headline },
+    { label: "Response style", value: predictiveProfile?.sections?.responseStyle?.headline },
+    { label: "Best rep approach", value: predictiveProfile?.sections?.repApproach?.headline },
+  ].filter((item) => item.value);
+
+  const openAdvancedBuilder = () => {
+    const params = new URLSearchParams();
+    Object.entries(predictiveSeed).forEach(([key, value]) => {
+      if (value) params.set(key, String(value));
+    });
+    const suffix = params.toString();
+    navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
+  };
 
   // Strip "Role — " prefix from context
   const contextDetail = (() => {
@@ -355,202 +380,284 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
             boxShadow: "0 30px 80px rgba(15, 23, 42, 0.22)",
           }}
         >
-        {/* Drag pill on mobile */}
-        <div className="sm:hidden flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-border/60 rounded-full" />
-        </div>
-
-        {/* Sticky Header */}
-        <div
-          className="sticky top-0 z-10 px-6 py-5 flex items-start justify-between gap-3"
-          style={{
-            background: "linear-gradient(135deg, hsl(223 47% 18%) 0%, hsl(214 53% 24%) 55%, hsl(176 59% 30%) 100%)",
-            borderBottom: "1px solid rgba(95, 220, 197, 0.16)",
-          }}
-        >
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="font-semibold text-white text-lg leading-snug">{scenario.title}</h2>
-              <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border shrink-0 ${difficulty.color}`}>
-                {difficulty.label}
-              </span>
-            </div>
-          </div>
-          <button onClick={onClose} className="text-slate-300 hover:text-white transition-colors shrink-0 mt-0.5">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div
-          className="px-6 py-6 space-y-6"
-          style={{ background: "linear-gradient(180deg, #f9fbfc 0%, #f1f7f7 100%)" }}
-        >
-
-          {/* HCP Profile + Objective banners */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(180deg, hsl(223 44% 18%) 0%, hsl(219 39% 15%) 100%)",
-                border: "1px solid rgba(100, 223, 201, 0.16)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>HCP Profile</p>
-              <p className="text-sm text-white font-semibold leading-snug mb-1.5">{scenario.stakeholder}</p>
-              {contextDetail && (
-                <p className="text-xs text-white leading-relaxed">{contextDetail}</p>
-              )}
-            </div>
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 48% 23%) 100%)",
-                border: "1px solid rgba(100, 223, 201, 0.16)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>Objective</p>
-              <p className="text-xs text-white leading-relaxed">{scenario.objective}</p>
-            </div>
+          {/* Drag pill on mobile */}
+          <div className="sm:hidden flex justify-center pt-3 pb-1">
+            <div className="w-10 h-1 bg-border/60 rounded-full" />
           </div>
 
-          {/* Opening Scene — always visible */}
-          <OpeningSceneBlock scenario={scenario} />
-
-          {/* Tactical Focus + Key Challenges */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(180deg, hsl(223 35% 17%) 0%, hsl(221 33% 15%) 100%)",
-                border: "1px solid rgba(39, 63, 103, 0.35)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Tactical Focus</p>
-              <p className="text-sm text-white leading-relaxed">{scenario.description}</p>
+          {/* Sticky Header */}
+          <div
+            className="sticky top-0 z-10 px-6 py-5 flex items-start justify-between gap-3"
+            style={{
+              background: "linear-gradient(135deg, hsl(223 47% 18%) 0%, hsl(214 53% 24%) 55%, hsl(176 59% 30%) 100%)",
+              borderBottom: "1px solid rgba(95, 220, 197, 0.16)",
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h2 className="font-semibold text-white text-lg leading-snug">{scenario.title}</h2>
+                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border shrink-0 ${difficulty.color}`}>
+                  {difficulty.label}
+                </span>
+              </div>
             </div>
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(135deg, hsl(223 35% 17%) 0%, hsl(176 40% 23%) 100%)",
-                border: "1px solid rgba(58, 123, 121, 0.30)",
-              }}
-            >
-              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Key Challenges</p>
-              <ul className="space-y-2">
-                {challenges.map((c, i) => (
-                  <li key={i} className="text-sm text-white flex items-start gap-2.5 leading-relaxed">
-                    <span
-                      className="shrink-0"
-                      style={{ width: 5, height: 5, borderRadius: "50%", background: "hsl(162 60% 55%)", marginTop: 8 }}
-                    />
-                    <span>{c}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <button onClick={onClose} className="text-slate-300 hover:text-white transition-colors shrink-0 mt-0.5">
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Scenario Variables + Signal Intelligence */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            className="px-6 py-6 space-y-6"
+            style={{ background: "linear-gradient(180deg, #f9fbfc 0%, #f1f7f7 100%)" }}
+          >
 
-            {/* Scenario Variables */}
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
-                border: "1.5px solid rgba(134, 209, 194, 0.70)",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Brain className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
-                  Scenario Variables
-                </p>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Journey Stage</p>
-                  <VarPill>{JOURNEY_STAGE_LABELS[scenario.journeyStage] || scenario.journeyStage}</VarPill>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Behavior State</p>
-                  <VarPill>{BEHAVIOR_STATE_SIMPLE_LABELS[scenario.startingBehaviorState] || scenario.startingBehaviorState}</VarPill>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>HCP Role</p>
-                  <VarPill>{HCP_ROLE_LABELS[scenario.hcpRoleType] || scenario.hcpRoleType}</VarPill>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Decision Orientation</p>
-                  <VarPill>{DECISION_ORIENTATION_LABELS[scenario.decisionOrientation] || scenario.decisionOrientation}</VarPill>
-                </div>
-              </div>
-            </div>
-
-            {/* Signal Intelligence Focus */}
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
-                border: "1.5px solid rgba(134, 209, 194, 0.70)",
-              }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <Zap className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
-                <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
-                  Signal Intelligence Focus
-                </p>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Focus Capabilities</p>
-                  <p className="text-xs text-slate-700 mb-2.5 leading-relaxed italic">
-                    Capabilities most relevant to this scenario
-                  </p>
-                  <div className="space-y-2">
-                    {SIGNAL_INTELLIGENCE_CAPABILITIES
-                      .filter(cap => focusCaps.includes(cap.id))
-                      .map(cap => (
-                        <CapPill key={cap.id}>{cap.metric}</CapPill>
-                      ))
-                    }
-                  </div>
-                </div>
-                {pressures.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Interaction Pressure</p>
-                    <div className="space-y-2">
-                      {pressures.map(p => (
-                        <CapPill key={p}>{PRESSURE_LABELS[p] || p}</CapPill>
-                      ))}
-                    </div>
-                  </div>
+            {/* HCP Profile + Objective banners */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(180deg, hsl(223 44% 18%) 0%, hsl(219 39% 15%) 100%)",
+                  border: "1px solid rgba(100, 223, 201, 0.16)",
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>HCP Profile</p>
+                <p className="text-sm text-white font-semibold leading-snug mb-1.5">{scenario.stakeholder}</p>
+                {contextDetail && (
+                  <p className="text-xs text-white leading-relaxed">{contextDetail}</p>
                 )}
               </div>
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 48% 23%) 100%)",
+                  border: "1px solid rgba(100, 223, 201, 0.16)",
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>Objective</p>
+                <p className="text-xs text-white leading-relaxed">{scenario.objective}</p>
+              </div>
+            </div>
+
+            {/* Opening Scene — always visible */}
+            <OpeningSceneBlock scenario={scenario} />
+
+            <div
+              className="rounded-2xl p-4"
+              style={{
+                background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 42% 24%) 100%)",
+                border: "1px solid rgba(100, 223, 201, 0.18)",
+              }}
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-2xl">
+                  <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>
+                    Predictive HCP Brief
+                  </p>
+                  <p className="text-sm text-white leading-relaxed">
+                    Review this brief before roleplay. The advanced Predictive Builder is optional and only needed when you want a deeper synthesis workspace.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openAdvancedBuilder}
+                  className="shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors"
+                  style={{
+                    color: "hsl(176 45% 14%)",
+                    background: "rgba(233, 248, 245, 0.96)",
+                    border: "1px solid rgba(169, 235, 220, 0.82)",
+                  }}
+                >
+                  Open Advanced Builder
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4 mt-4">
+                <div className="rounded-2xl p-4" style={{ background: "rgba(8, 23, 41, 0.22)", border: "1px solid rgba(169, 235, 220, 0.12)" }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(174 62% 82%)" }}>
+                    Scenario-derived lens
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(predictiveSeed).map(([field, value]) => (
+                      <span
+                        key={field}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-medium"
+                        style={{
+                          color: "rgba(245, 251, 250, 0.96)",
+                          background: "rgba(255,255,255,0.08)",
+                          border: "1px solid rgba(169, 235, 220, 0.16)",
+                        }}
+                      >
+                        {getPredictiveLabel(field, value)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl p-4" style={{ background: "rgba(8, 23, 41, 0.22)", border: "1px solid rgba(169, 235, 220, 0.12)" }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(174 62% 82%)" }}>
+                    Roleplay calibration
+                  </p>
+                  <div className="space-y-2.5">
+                    {predictiveHighlights.map((item) => (
+                      <div key={item.label}>
+                        <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "rgba(206, 239, 235, 0.72)" }}>
+                          {item.label}
+                        </p>
+                        <p className="text-sm text-white leading-relaxed">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tactical Focus + Key Challenges */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(180deg, hsl(223 35% 17%) 0%, hsl(221 33% 15%) 100%)",
+                  border: "1px solid rgba(39, 63, 103, 0.35)",
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Tactical Focus</p>
+                <p className="text-sm text-white leading-relaxed">{scenario.description}</p>
+              </div>
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(135deg, hsl(223 35% 17%) 0%, hsl(176 40% 23%) 100%)",
+                  border: "1px solid rgba(58, 123, 121, 0.30)",
+                }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Key Challenges</p>
+                <ul className="space-y-2">
+                  {challenges.map((c, i) => (
+                    <li key={i} className="text-sm text-white flex items-start gap-2.5 leading-relaxed">
+                      <span
+                        className="shrink-0"
+                        style={{ width: 5, height: 5, borderRadius: "50%", background: "hsl(162 60% 55%)", marginTop: 8 }}
+                      />
+                      <span>{c}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Scenario Variables + Signal Intelligence */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+              {/* Scenario Variables */}
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
+                  border: "1.5px solid rgba(134, 209, 194, 0.70)",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Brain className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
+                    Scenario Variables
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Journey Stage</p>
+                    <VarPill>{JOURNEY_STAGE_LABELS[scenario.journeyStage] || scenario.journeyStage}</VarPill>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Behavior State</p>
+                    <VarPill>{BEHAVIOR_STATE_SIMPLE_LABELS[scenario.startingBehaviorState] || scenario.startingBehaviorState}</VarPill>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>HCP Role</p>
+                    <VarPill>{HCP_ROLE_LABELS[scenario.hcpRoleType] || scenario.hcpRoleType}</VarPill>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Decision Orientation</p>
+                    <VarPill>{DECISION_ORIENTATION_LABELS[scenario.decisionOrientation] || scenario.decisionOrientation}</VarPill>
+                  </div>
+                </div>
+              </div>
+
+              {/* Signal Intelligence Focus */}
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
+                  border: "1.5px solid rgba(134, 209, 194, 0.70)",
+                }}
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Zap className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
+                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
+                    Signal Intelligence Focus
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Focus Capabilities</p>
+                    <p className="text-xs text-slate-700 mb-2.5 leading-relaxed italic">
+                      Capabilities most relevant to this scenario
+                    </p>
+                    <div className="space-y-2">
+                      {SIGNAL_INTELLIGENCE_CAPABILITIES
+                        .filter(cap => focusCaps.includes(cap.id))
+                        .map(cap => (
+                          <CapPill key={cap.id}>{cap.metric}</CapPill>
+                        ))
+                      }
+                    </div>
+                  </div>
+                  {pressures.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Interaction Pressure</p>
+                      <div className="space-y-2">
+                        {pressures.map(p => (
+                          <CapPill key={p}>{PRESSURE_LABELS[p] || p}</CapPill>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* AI Coach */}
+            <AiCoachSection scenario={scenario} />
+
+            {/* Footer actions */}
+            <div className="flex items-center gap-3 pt-1 pb-2">
+              <button onClick={onClose}
+                className="py-2 px-5 rounded-lg border border-slate-200 text-slate-500 text-sm hover:border-slate-300 hover:text-slate-700 transition-colors">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={openAdvancedBuilder}
+                className="py-2 px-5 rounded-lg border text-sm font-semibold transition-colors"
+                style={{
+                  borderColor: "rgba(34, 123, 118, 0.24)",
+                  color: "hsl(176 42% 28%)",
+                  background: "rgba(227, 247, 243, 0.92)",
+                }}
+              >
+                Advanced Builder
+              </button>
+              <button onClick={onStart}
+                className="py-2 px-6 rounded-lg text-sm font-semibold text-white transition-colors"
+                style={{ background: "hsl(174 40% 14%)" }}
+                onMouseEnter={e => { e.currentTarget.style.background = "hsl(174 40% 20%)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "hsl(174 40% 14%)"; }}
+              >
+                Start Roleplay →
+              </button>
             </div>
           </div>
-
-          {/* AI Coach */}
-          <AiCoachSection scenario={scenario} />
-
-          {/* Footer actions */}
-          <div className="flex items-center gap-3 pt-1 pb-2">
-            <button onClick={onClose}
-              className="py-2 px-5 rounded-lg border border-slate-200 text-slate-500 text-sm hover:border-slate-300 hover:text-slate-700 transition-colors">
-              Close
-            </button>
-            <button onClick={onStart}
-              className="py-2 px-6 rounded-lg text-sm font-semibold text-white transition-colors"
-              style={{ background: "hsl(174 40% 14%)" }}
-              onMouseEnter={e => { e.currentTarget.style.background = "hsl(174 40% 20%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "hsl(174 40% 14%)"; }}
-            >
-              Start Scenario →
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
     </TooltipProvider>
   );
 }

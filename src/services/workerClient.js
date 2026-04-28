@@ -33,6 +33,9 @@ const workerScenariosPath = "/api/scenarios";
 const workerSessionsPath = "/api/roleplay/sessions";
 const roleplayStartPath = "/api/roleplay/start";
 const roleplayRespondPath = "/api/roleplay/respond";
+const evidenceSourcesPath = "/api/evidence/sources";
+const evidenceRecordsPath = "/api/evidence/records";
+const evidenceIngestPath = "/api/evidence/ingest";
 
 const useBrowserProxyPaths = isViteDevRuntime && isBrowserRuntime;
 
@@ -42,6 +45,9 @@ const workerScenariosUrl = useBrowserProxyPaths ? workerScenariosPath : `${WORKE
 const workerSessionsUrl = useBrowserProxyPaths ? workerSessionsPath : `${WORKER_URL}${workerSessionsPath}`;
 const roleplayStartUrl = useBrowserProxyPaths ? roleplayStartPath : `${WORKER_URL}${roleplayStartPath}`;
 const roleplayRespondUrl = useBrowserProxyPaths ? roleplayRespondPath : `${WORKER_URL}${roleplayRespondPath}`;
+const evidenceSourcesUrl = useBrowserProxyPaths ? evidenceSourcesPath : `${WORKER_URL}${evidenceSourcesPath}`;
+const evidenceRecordsUrl = useBrowserProxyPaths ? evidenceRecordsPath : `${WORKER_URL}${evidenceRecordsPath}`;
+const evidenceIngestUrl = useBrowserProxyPaths ? evidenceIngestPath : `${WORKER_URL}${evidenceIngestPath}`;
 const DEFAULT_WORKER_TIMEOUT_MS = 35000;
 const HEALTH_TIMEOUT_MS = 8000;
 const TRANSIENT_RETRY_DELAYS_MS = [400, 1200];
@@ -61,6 +67,9 @@ export function getWorkerRuntimeDescriptor() {
     workerSessionsUrl,
     roleplayStartUrl,
     roleplayRespondUrl,
+    evidenceSourcesUrl,
+    evidenceRecordsUrl,
+    evidenceIngestUrl,
     useBrowserProxyPaths,
     inferenceMode,
     hcpGenerationPath: "local directives/prompt + local worker inference + local cleanup",
@@ -85,6 +94,70 @@ function isTransientWorkerError(error) {
     code === "ECONNRESET" ||
     code === "ETIMEDOUT"
   );
+}
+
+function stripJsonCodeFence(text = "") {
+  const line = String(text || "").trim();
+  const match = line.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1].trim() : line;
+}
+
+function extractFirstBalancedJson(text = "") {
+  const input = String(text || "");
+  const starts = ["{", "["].map((char) => input.indexOf(char)).filter((idx) => idx >= 0);
+  if (!starts.length) return null;
+
+  const start = Math.min(...starts);
+  const open = input[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < input.length; i += 1) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === open) depth += 1;
+    if (ch === close) depth -= 1;
+
+    if (depth === 0) {
+      return input.slice(start, i + 1).trim();
+    }
+  }
+
+  return null;
+}
+
+function parseStructuredPayload(payload) {
+  const line = stripJsonCodeFence(String(payload || ""));
+
+  try {
+    return JSON.parse(line);
+  } catch {
+    const extracted = extractFirstBalancedJson(line);
+    if (extracted) {
+      return JSON.parse(extracted);
+    }
+
+    const preview = line.slice(0, 120).replace(/\s+/g, " ");
+    console.warn("[workerClient] Structured payload parse failed", { preview });
+    throw new Error("Worker returned non-JSON structured payload");
+  }
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TIMEOUT_MS, label = "Worker request", maxRetries = TRANSIENT_RETRY_DELAYS_MS.length) {
@@ -217,7 +290,7 @@ export async function invokeWorkerJson({ prompt, response_json_schema, max_token
   }
 
   if (typeof payload === "string") {
-    return JSON.parse(payload);
+    return parseStructuredPayload(payload);
   }
 
   throw new Error("Worker returned no structured response");
@@ -340,4 +413,31 @@ export async function updateWorkerSession(id, patch) {
 
 export async function deleteWorkerSession(id) {
   await requestWorkerJson(workerSessionsUrl, { method: "DELETE", body: { id } });
+}
+
+export async function listEvidenceSources() {
+  const data = await requestWorkerJson(evidenceSourcesUrl);
+  return Array.isArray(data?.sources) ? data.sources : [];
+}
+
+export async function listEvidenceRecords(filters = {}) {
+  const params = new URLSearchParams();
+  if (filters.domain) params.set("domain", filters.domain);
+  if (filters.diseaseState) params.set("diseaseState", filters.diseaseState);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const url = params.toString() ? `${evidenceRecordsUrl}?${params.toString()}` : evidenceRecordsUrl;
+  const data = await requestWorkerJson(url);
+  return Array.isArray(data?.records) ? data.records : [];
+}
+
+export async function ingestEvidenceRecords(payload = {}) {
+  const data = await requestWorkerJson(evidenceIngestUrl, {
+    method: "POST",
+    body: payload,
+  });
+  return {
+    ingestedCount: Number(data?.ingestedCount || 0),
+    records: Array.isArray(data?.records) ? data.records : [],
+    rejected: Array.isArray(data?.rejected) ? data.rejected : [],
+  };
 }

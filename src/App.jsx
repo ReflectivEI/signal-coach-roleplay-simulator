@@ -11,6 +11,7 @@ import QATwin from './pages/QATwin';
 import AdminDashboard from './pages/AdminDashboard';
 import ScenarioLibrary from './pages/ScenarioLibrary';
 import PredictiveBuilder from './pages/PredictiveBuilder';
+import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
 
 const AppRoutes = () => {
   return (
@@ -23,6 +24,7 @@ const AppRoutes = () => {
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/library" element={<ScenarioLibrary />} />
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
+      <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

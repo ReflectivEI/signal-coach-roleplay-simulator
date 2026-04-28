@@ -80,6 +80,15 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
           </span>
         </div>
 
+        <div className="space-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(176 45% 36%)" }}>
+            Predictive brief included
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "hsl(215 18% 38%)" }}>
+            Review the HCP brief, then launch the roleplay. Advanced builder is optional.
+          </p>
+        </div>
+
         {/* Actions */}
         <div className="flex items-center justify-between gap-2 mt-auto">
           <button
@@ -91,7 +100,7 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
               background: hovered ? "rgba(170, 231, 223, 0.32)" : "rgba(255,255,255,0.42)",
             }}
           >
-            Expand for Details
+            Preview Brief
           </button>
           <button
             onClick={() => navigate(`/simulator?scenarioId=${scenario.id}`)}

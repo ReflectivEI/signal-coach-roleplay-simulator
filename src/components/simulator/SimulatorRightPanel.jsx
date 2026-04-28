@@ -1,4 +1,6 @@
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
@@ -71,7 +73,10 @@ export default function SimulatorRightPanel({
   scenario = null,
   conversationInit = null,
   hasRepSpoken = false,
+  predictiveLens = null,
 }) {
+  const navigate = useNavigate();
+  const [showPredictiveLens, setShowPredictiveLens] = useState(false);
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
   const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
     title: "Live coaching",
@@ -81,8 +86,89 @@ export default function SimulatorRightPanel({
   const sceneDescription = scenario?.visualScene || scenario?.description || "";
   const openingGuidance = !hasRepSpoken ? (conversationInit?.openingGuidance || []) : [];
 
+  const openPredictiveBuilder = () => {
+    const selection = predictiveLens?.data?.selection;
+    if (!selection) {
+      navigate("/predictive-builder");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    Object.entries(selection).forEach(([key, value]) => {
+      if (value) params.set(key, String(value));
+    });
+    const suffix = params.toString();
+    navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
+  };
+
   return (
     <div className="space-y-4">
+      {(predictiveLens?.isLoading || predictiveLens?.data) && (
+        <DarkSection
+          icon={BrainCircuit}
+          title="Predictive HCP Lens"
+          headerRight={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold"
+              style={{ color: "hsl(174 60% 68%)" }}
+              onClick={() => setShowPredictiveLens((prev) => !prev)}
+            >
+              {showPredictiveLens ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {showPredictiveLens ? "Hide" : "View"}
+            </button>
+          }
+        >
+          {predictiveLens?.isLoading && (
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
+              Building predictive lens from scenario metadata...
+            </p>
+          )}
+
+          {predictiveLens?.data && (
+            <>
+              <Row label="Source">
+                <Pill>{predictiveLens.data.synthesisSource === "ai" ? "AI-synthesized" : "Deterministic"}</Pill>
+              </Row>
+              <Row label="Specialist">
+                <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
+                  {predictiveLens.data.specialistTitle}
+                </span>
+              </Row>
+              {predictiveLens.data.synthesisError ? (
+                <p className="text-xs" style={{ color: "rgba(255, 220, 173, 0.92)" }}>
+                  {predictiveLens.data.synthesisError}
+                </p>
+              ) : null}
+
+              {showPredictiveLens && (
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={openPredictiveBuilder}
+                    className="text-[11px] font-semibold underline"
+                    style={{ color: "hsl(174 60% 68%)" }}
+                  >
+                    Open in Predictive Builder
+                  </button>
+                  <div className="grid grid-cols-1 gap-2">
+                    <p className="text-[11px] uppercase tracking-wider" style={{ color: "rgba(220,236,236,0.72)" }}>
+                      Runtime headlines
+                    </p>
+                    <div className="space-y-1.5 text-xs" style={{ color: "rgba(244,249,249,0.94)" }}>
+                      <p>Mindset: {predictiveLens.data.lens?.sections?.mindset?.headline || "n/a"}</p>
+                      <p>Objections: {predictiveLens.data.lens?.sections?.objections?.headline || "n/a"}</p>
+                      <p>Response style: {predictiveLens.data.lens?.sections?.responseStyle?.headline || "n/a"}</p>
+                      <p>Rep approach: {predictiveLens.data.lens?.sections?.repApproach?.headline || "n/a"}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </DarkSection>
+      )}
+
       {scenario && sceneDescription && (
         <DarkSection icon={MapPin} title="Scene">
           <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>

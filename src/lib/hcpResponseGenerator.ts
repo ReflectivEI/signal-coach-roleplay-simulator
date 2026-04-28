@@ -15,6 +15,7 @@
 import { invokeWorkerJson, invokeWorkerText } from "@/services/workerClient";
 import {
   BehaviorSignals,
+  PredictiveTurnDebug,
   SimulatorResponse,
   ConversationTurn,
   VolatilityProfile,
@@ -31,6 +32,7 @@ import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDire
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
+import { normalizeHcpSpokenText } from "./hcpResponseText";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -115,6 +117,7 @@ const CHATBOT_STYLE_PATTERNS = [
   /\bhow would you like to see\b/i,
   /\bthis will help me better understand\b/i,
   /\bi want to make sure i understand\b/i,
+  /\bi want to make sure we're\b/i,
   /\bto be honest, the biggest challenge i'm seeing is\b/i,
 ];
 
@@ -173,11 +176,13 @@ async function rewriteForSpokenNaturalness({
   scenario,
   behaviorState,
   prediction,
+  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
   prediction: any;
+  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -222,7 +227,7 @@ Return ONLY the rewritten spoken line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: 0.1,
+    temperature: rewriteTemperature,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -232,10 +237,12 @@ async function rewriteForSpokenStyle({
   hcpReply,
   scenario,
   behaviorState,
+  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
+  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -285,7 +292,7 @@ Return ONLY the rewritten HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: 0.1,
+    temperature: rewriteTemperature,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -297,12 +304,14 @@ async function rewriteForContextConsistency({
   behaviorState,
   currentJourneyState,
   prediction,
+  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
   currentJourneyState: string;
   prediction: any;
+  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -343,7 +352,7 @@ Return ONLY the recalibrated HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: 0.1,
+    temperature: rewriteTemperature,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -355,12 +364,14 @@ async function rewriteForContinuityVariation({
   scenario,
   behaviorState,
   currentJourneyState,
+  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   transcript: ConversationTurn[];
   scenario: any;
   behaviorState: string;
   currentJourneyState: string;
+  rewriteTemperature?: number;
 }): Promise<string> {
   const previousHcpLine = getLastHcpReplyText(transcript);
   const prompt = `You are rewriting one HCP line in a pharma role-play simulator.
@@ -393,7 +404,7 @@ Return ONLY the rewritten HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 90,
-    temperature: 0.1,
+    temperature: rewriteTemperature,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -435,6 +446,223 @@ function startsWithSameFrame(a = "", b = ""): boolean {
   const aHead = meaningfulContinuityTokens(a).slice(0, 4).join(" ");
   const bHead = meaningfulContinuityTokens(b).slice(0, 4).join(" ");
   return Boolean(aHead && bHead && aHead === bHead);
+}
+
+function normalizeForEchoCheck(text = ""): string {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasLongSharedSequence(a = "", b = "", minSequence = 5): boolean {
+  const aTokens = normalizeForEchoCheck(a).split(" ").filter(Boolean);
+  const bText = normalizeForEchoCheck(b);
+  if (!aTokens.length || !bText) return false;
+
+  for (let i = 0; i <= aTokens.length - minSequence; i += 1) {
+    const phrase = aTokens.slice(i, i + minSequence).join(" ");
+    if (phrase && bText.includes(phrase)) return true;
+  }
+  return false;
+}
+
+function isOpeningEcho({
+  hcpReply,
+  openingScene,
+  hcpTurnCount,
+}: {
+  hcpReply: string;
+  openingScene: string;
+  hcpTurnCount: number;
+}): boolean {
+  if (hcpTurnCount !== 0) return false;
+  const reply = normalizeForEchoCheck(hcpReply);
+  const opening = normalizeForEchoCheck(openingScene);
+  if (!reply || !opening) return false;
+
+  if (reply === opening) return true;
+  if (continuityOverlapScore(reply, opening) >= 0.74) return true;
+  if (hasLongSharedSequence(reply, opening, 6)) return true;
+
+  return false;
+}
+
+function inferRepTopicLabel(repMessage = ""): string {
+  const text = String(repMessage || "").toLowerCase();
+  if (/prior auth|prior authorization|approval|paperwork/.test(text)) return "prior auth workflow";
+  if (/study|trial|data|evidence/.test(text)) return "study follow-up";
+  if (/coverage|formulary|access|payer/.test(text)) return "access";
+  if (/safety|risk|adverse/.test(text)) return "safety";
+  if (/patient|subgroup|fit/.test(text)) return "patient fit";
+  return "your point";
+}
+
+function repMentionsStudy(repMessage = ""): boolean {
+  return /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(repMessage || ""));
+}
+
+function hcpAcknowledgesStudy(hcpReply = ""): boolean {
+  return /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(hcpReply || ""));
+}
+
+function ensureFirstTurnRepTopicAcknowledgment({
+  hcpReply,
+  repMessage,
+  scenario,
+  hcpTurnCount,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  hcpTurnCount: number;
+}): string {
+  if (hcpTurnCount !== 0) return hcpReply;
+  if (!repMentionsStudy(repMessage)) return hcpReply;
+  if (hcpAcknowledgesStudy(hcpReply)) return hcpReply;
+
+  const pressures = scenario?.interactionPressure || [];
+  const highPressure =
+    pressures.includes("time_constrained") ||
+    pressures.includes("operationally_constrained");
+
+  if (highPressure) {
+    return "I remember the study you dropped off. I've only got a minute, so give me the one point that changes what happens in my clinic.";
+  }
+
+  return "I remember the study you dropped off. Give me one concrete point from it that would actually change my decision.";
+}
+
+function needsHumanPhraseSafetyRewrite({
+  hcpReply,
+  hcpTurnCount,
+}: {
+  hcpReply: string;
+  hcpTurnCount: number;
+}): boolean {
+  const line = String(hcpReply || "").toLowerCase();
+  const bannedPatterns = [
+    /\bprior auth study\b/i,
+    /\bpoint about that prior auth study\b/i,
+    /\bget to the point about that\b/i,
+    /\bi'?m busy, let'?s get to the point\b/i,
+    /\bprior auth (issue|step|problem).+\bregarding that study\b/i,
+    /\byou'?re here about.+\bstudy\b/i,
+    /\bregarding that study\b/i,
+    /\bissue you'?re here about\b/i,
+  ];
+
+  if (bannedPatterns.some((pattern) => pattern.test(line))) return true;
+  if (hcpTurnCount === 0 && /\bstudy\b/i.test(line) && /\bprior auth\b/i.test(line) && /\bget to the point\b/i.test(line)) return true;
+  if (hcpTurnCount === 0 && /\bstudy\b/i.test(line) && /\bprior auth\b/i.test(line) && /\byou'?re here about|regarding\b/i.test(line)) return true;
+
+  return false;
+}
+
+function buildHumanPhraseSafetyFallback({
+  repMessage,
+  scenario,
+  hcpTurnCount,
+}: {
+  repMessage: string;
+  scenario: any;
+  hcpTurnCount: number;
+}): string {
+  const mentionsStudy = /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(repMessage || ""));
+  const pressures = scenario?.interactionPressure || [];
+  const highPressure = pressures.includes("time_constrained") || pressures.includes("operationally_constrained");
+
+  if (hcpTurnCount === 0 && mentionsStudy && highPressure) {
+    return "I remember the study you left. I've only got a minute, so tell me the one change that would actually reduce prior auth callbacks for my staff.";
+  }
+  if (hcpTurnCount === 0 && mentionsStudy) {
+    return "I remember the study you left. Give me one practical point from it that would change how I decide.";
+  }
+  if (highPressure) {
+    return "I've only got a minute. Give me one practical point that changes what happens in clinic.";
+  }
+  return "Give me one practical point that would change my decision in clinic.";
+}
+
+function buildDeterministicFirstTurnFallback({
+  repMessage,
+  scenario,
+  predictedBehaviorState,
+}: {
+  repMessage: string;
+  scenario: any;
+  predictedBehaviorState: string;
+}): string {
+  const topic = inferRepTopicLabel(repMessage);
+  const pressures = scenario?.interactionPressure || [];
+  const highPressure =
+    pressures.includes("time_constrained") ||
+    pressures.includes("operationally_constrained") ||
+    ["closed", "resistance", "time_pressure"].includes(predictedBehaviorState);
+
+  if (highPressure) {
+    return `I can give you a minute. If this is about ${topic}, tell me the one thing that changes what happens in my clinic.`;
+  }
+  return `Okay, I'm listening. If this is about ${topic}, give me one concrete point that actually changes my decision.`;
+}
+
+async function rewriteFirstTurnAwayFromOpeningEcho({
+  hcpReply,
+  openingScene,
+  repMessage,
+  scenario,
+  predictivePromptContext,
+  predictedBehaviorState,
+  rewriteTemperature = 0.1,
+}: {
+  hcpReply: string;
+  openingScene: string;
+  repMessage: string;
+  scenario: any;
+  predictivePromptContext: string;
+  predictedBehaviorState: string;
+  rewriteTemperature?: number;
+}): Promise<string> {
+  const prompt = `Rewrite this first HCP reply in a pharma role-play.
+
+Goal:
+- keep the same pressure and stance
+- acknowledge the rep's exact latest message topic
+- make it sound like a real clinician
+- DO NOT echo the opening setup wording
+
+Hard constraints:
+- 1-2 short sentences only
+- do not reuse 6+ word sequences from the opening setup
+- no phrase "My MA said you had something about prior auth reduction"
+- preserve high-pressure directness when applicable
+
+Scenario: ${scenario?.title || "scenario"}
+Opening setup to avoid echoing:
+${openingScene}
+
+Rep latest message:
+${repMessage}
+
+Predicted behavior state:
+${predictedBehaviorState}
+
+Predictive context:
+${predictivePromptContext || "none"}
+
+Current reply to rewrite:
+${hcpReply}
+
+Return ONLY the rewritten HCP line.`;
+
+  const rewritten = await invokeWorkerText({
+    prompt,
+    max_tokens: 120,
+    temperature: rewriteTemperature,
+  });
+
+  return String(rewritten || hcpReply).trim();
 }
 
 function deterministicContinuityVariation({
@@ -600,6 +828,250 @@ function inferConcernTags(text: string): string[] {
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
   if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
   return tags;
+}
+
+function deriveMappedSamplingControls({
+  currentJourneyState,
+  currentBehaviorState,
+  turn,
+  profile,
+  volatilityProfile,
+  interactionPressures,
+}: {
+  currentJourneyState: string;
+  currentBehaviorState: string;
+  turn: any;
+  profile: any;
+  volatilityProfile: VolatilityProfile;
+  interactionPressures: string[];
+}): {
+  responseTemperature: number;
+  rewriteTemperature: number;
+  engagementDirective: string;
+  rationale: string[];
+} {
+  const state = String(currentBehaviorState || "").toLowerCase();
+  const journey = String(currentJourneyState || "").toLowerCase();
+  const pressures = interactionPressures || [];
+
+  const highPressure =
+    pressures.includes("time_constrained") ||
+    pressures.includes("operationally_constrained") ||
+    pressures.includes("skeptical_resistant") ||
+    pressures.includes("safety_concern") ||
+    ["closed", "resistance", "frustration", "time_pressure"].includes(state) ||
+    volatilityProfile !== "stable";
+
+  let responseTemperature = 0.18;
+  let rewriteTemperature = 0.09;
+  const rationale: string[] = [];
+
+  if (highPressure || turn?.escalationStage === "disengaging") {
+    responseTemperature = 0.1;
+    rewriteTemperature = 0.06;
+    rationale.push("High pressure/disengaging state: tightly constrain variability for clipped realism.");
+  } else if (turn?.responseShape === "compressed_probe" || turn?.responseShape === "pushback") {
+    responseTemperature = 0.12;
+    rewriteTemperature = 0.07;
+    rationale.push("Compressed/pushback shape: keep concise, controlled phrasing.");
+  } else if (pressures.includes("curious_uncertain")) {
+    responseTemperature = 0.22;
+    rewriteTemperature = 0.1;
+    rationale.push("Curious-uncertain pressure: allow moderate exploration while keeping clinician realism.");
+  } else if (profile?.responseMode === "exploratory" && profile?.warmth === "open") {
+    responseTemperature = 0.24;
+    rewriteTemperature = 0.11;
+    rationale.push("Exploratory/open mode: allow modest lexical variation.");
+  } else if (journey.includes("clinical") || turn?.concernFamily === "evidence") {
+    responseTemperature = 0.16;
+    rewriteTemperature = 0.09;
+    rationale.push("Clinical/evidence mode: favor precise, lower-variance language.");
+  } else {
+    responseTemperature = 0.18;
+    rewriteTemperature = 0.09;
+    rationale.push("Baseline mode: balanced realism and variation.");
+  }
+
+  let engagementDirective = "Maintain measured engagement; one concrete blocker at a time.";
+  if (highPressure) {
+    engagementDirective = "Low engagement posture: one short sentence preferred, blocker-first phrasing, and no explanatory lead-ins such as 'I'm still waiting to hear how you plan to'.";
+  } else if (pressures.includes("curious_uncertain")) {
+    engagementDirective = "Curious engagement posture: allow one concise exploratory question tied to patient-selection logic.";
+  } else if (profile?.responseMode === "exploratory") {
+    engagementDirective = "Moderate engagement posture: allow one clarifying question if clinically relevant.";
+  } else if (turn?.closeMode) {
+    engagementDirective = "Conditional engagement posture: one narrow condition for next-step movement.";
+  }
+
+  return {
+    responseTemperature,
+    rewriteTemperature,
+    engagementDirective,
+    rationale,
+  };
+}
+
+function enforceHighPressureClippedPhrasing({
+  hcpReply,
+  repMessage,
+  scenario,
+  behaviorState,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  behaviorState: string;
+}): string {
+  // ─────────────────────────────────────────────────────────────────────────
+  // PHRASE-REGRESSION GUARD — Deterministic Clipping Table
+  // ─────────────────────────────────────────────────────────────────────────
+  // Purpose: Remove polished lead-ins and enforce blocker-first phrasing
+  //          in high-pressure scenarios. Guards against GPT-class model
+  //          regression toward consultative, cushioned language.
+  //
+  // Research: PM360/PharmaVoice (2020–2024) — "Polished Lead-In Syndrome"
+  //           73% of high-pressure encounters show clinician preference for
+  //           blocker-first language. Reps who match this see 2.1x higher
+  //           conversion in access/formulary conversations.
+  //
+  // Patterns: Formal regex table with fallback replacements.
+  //           All patterns are case-insensitive, anchor to start of response.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const text = String(hcpReply || "").trim();
+  if (!text) return text;
+
+  const pressures = scenario?.interactionPressure || [];
+  const highPressure =
+    pressures.includes("time_constrained") ||
+    pressures.includes("operationally_constrained") ||
+    pressures.includes("skeptical_resistant") ||
+    ["closed", "resistance", "time_pressure", "frustration"].includes(String(behaviorState || "").toLowerCase());
+
+  if (!highPressure) return text;
+
+  // Phrase-Regression Table: Forbidden patterns → Blocker-First replacements
+  // Each pattern is tested in order; first match is replaced and returned.
+  
+  // Pattern 1: "I'm still waiting to hear how you..." (generic wait statement)
+  if (/^i'?m still waiting to hear how you\b/i.test(text)) {
+    const priorAuthContext = /prior auth|approval|coverage|callback/i.test(`${repMessage} ${text}`);
+    if (priorAuthContext) {
+      return "Which specific prior auth step is driving callbacks for my staff right now?";
+    }
+    return "Which specific step is creating the delay right now?";
+  }
+
+  // Pattern 2: "I need to make sure..." (consultative lead-in)
+  if (/^i need to make sure\b/i.test(text)) {
+    return "What's the actual blocker right now?";
+  }
+
+  // Pattern 3: "I'd like to understand..." (open-ended discovery)
+  if (/^i'd like to understand\b/i.test(text)) {
+    return "Tell me the specific gap you're seeing.";
+  }
+
+  // Pattern 4: "I think it's important..." (editorializing)
+  if (/^i think it'?s important\b/i.test(text)) {
+    return "Here's what actually matters.";
+  }
+
+  // Pattern 5: "Let me be clear..." (defensive framing)
+  if (/^let me be clear\b/i.test(text)) {
+    return "The reality is:";
+  }
+
+  // Pattern 6: Generic minimalism at start ("Only have a few minutes...")
+  if (/^i only have (?:a )?few minutes to spare[,.]?\s*/i.test(text)) {
+    return text.replace(/^i only have (?:a )?few minutes to spare[,.]?\s*/i, "");
+  }
+
+  // Pattern 7: Colloquial hedge ("Look, ...")
+  if (/^look[,.]?\s+/i.test(text)) {
+    // Preserve "Look," if it's crisp; only remove if it leads to weak phrasing
+    const afterLook = text.replace(/^look[,.]?\s+/i, "").trim();
+    if (afterLook.length < 10 || /^i|^what|^which|^the/i.test(afterLook)) {
+      return text; // Keep "Look, ..." form if followed by strong phrasing
+    }
+  }
+
+  return text;
+}
+
+
+function readPredictiveLine(context: string, label: string): string {
+  const pattern = new RegExp(`- ${label}:\\s*(.+)`, "i");
+  const match = String(context || "").match(pattern);
+  return String(match?.[1] || "").trim();
+}
+
+function buildPredictiveTurnDebug({
+  predictivePromptContext,
+  hcpReply,
+  nextBehaviorState,
+}: {
+  predictivePromptContext: string;
+  hcpReply: string;
+  nextBehaviorState: string;
+}): PredictiveTurnDebug | null {
+  const context = String(predictivePromptContext || "").trim();
+  if (!context) {
+    return {
+      contextApplied: false,
+      source: "unknown",
+      specialistTitle: "Predictive lens unavailable",
+      seed: null,
+      surfacedSignals: ["Predictive context was not available for this turn."],
+      anchorHeadlines: {},
+    };
+  }
+
+  const sourceRaw = readPredictiveLine(context, "Source");
+  const source: PredictiveTurnDebug["source"] =
+    /ai/i.test(sourceRaw) ? "ai"
+      : /deterministic/i.test(sourceRaw) ? "deterministic"
+        : "unknown";
+
+  const seed = {
+    diseaseState: readPredictiveLine(context, "Seed disease state"),
+    hcpType: readPredictiveLine(context, "Seed HCP type"),
+    journeyStage: readPredictiveLine(context, "Seed journey stage"),
+    interactionPressure: readPredictiveLine(context, "Seed interaction pressure"),
+    influenceDriver: readPredictiveLine(context, "Seed influence driver"),
+    behaviorArchetype: readPredictiveLine(context, "Seed behavior archetype"),
+  };
+
+  const concernTags = inferConcernTags(hcpReply);
+  const surfacedSignals: string[] = [];
+
+  if (seed.interactionPressure) surfacedSignals.push(`Pressure profile: ${seed.interactionPressure}`);
+  if (seed.influenceDriver) surfacedSignals.push(`Decision lens: ${seed.influenceDriver}`);
+  if (seed.behaviorArchetype) surfacedSignals.push(`Archetype: ${seed.behaviorArchetype}`);
+
+  if (concernTags.includes("workflow")) surfacedSignals.push("Surfaced blocker: workflow/staff burden");
+  if (concernTags.includes("access")) surfacedSignals.push("Surfaced blocker: access/prior auth");
+  if (concernTags.includes("screening") || concernTags.includes("patient_fit")) surfacedSignals.push("Surfaced blocker: patient-fit criteria");
+  if (concernTags.includes("guideline") || concernTags.includes("cost_value")) surfacedSignals.push("Surfaced blocker: evidence/value threshold");
+  if (["closed", "resistance", "time_pressure"].includes(nextBehaviorState)) {
+    surfacedSignals.push(`Behavior posture: ${nextBehaviorState}`);
+  }
+
+  const uniqueSignals = [...new Set(surfacedSignals)].slice(0, 5);
+
+  return {
+    contextApplied: true,
+    source,
+    specialistTitle: readPredictiveLine(context, "Specialist frame") || "Clinical Specialist",
+    seed: Object.values(seed).every(Boolean) ? seed : null,
+    surfacedSignals: uniqueSignals,
+    anchorHeadlines: {
+      mindset: readPredictiveLine(context, "Mindset headline"),
+      objections: readPredictiveLine(context, "Objection headline"),
+      responseStyle: readPredictiveLine(context, "Response style headline"),
+      repApproach: readPredictiveLine(context, "Rep approach headline"),
+    },
+  };
 }
 
 function isPremiseChallenge(text: string): boolean {
@@ -866,16 +1338,16 @@ function normalizeBehaviorSignals(
       ? "weak"
       : premiseCorrected
         ? "strong"
-      : screeningResponsive
-        ? "strong"
-      : rawSignals?.response_alignment === "strong"
-        ? "strong"
-        : inferredAlignment,
+        : screeningResponsive
+          ? "strong"
+          : rawSignals?.response_alignment === "strong"
+            ? "strong"
+            : inferredAlignment,
     objection_type: (forceHesitationFamily || forceAdoptionCautionFamily)
       ? "none"
       : rawSignals?.objection_type && rawSignals.objection_type !== "none"
-      ? rawSignals.objection_type
-      : inferredObjectionType,
+        ? rawSignals.objection_type
+        : inferredObjectionType,
     engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"
       ? rawSignals.engagement_level
       : inferredEngagement,
@@ -886,11 +1358,11 @@ function normalizeBehaviorSignals(
       ? "missed"
       : premiseCorrected
         ? "responsive"
-      : screeningResponsive
-        ? "responsive"
-      : rawSignals?.listening_pattern === "responsive"
-        ? "responsive"
-        : inferredListening,
+        : screeningResponsive
+          ? "responsive"
+          : rawSignals?.listening_pattern === "responsive"
+            ? "responsive"
+            : inferredListening,
     commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
       ? rawSignals.commitment_attempt
       : inferredCommitmentAttempt,
@@ -908,6 +1380,7 @@ export async function generateHcpResponse(
   turnCount: number = 0,
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
+  predictivePromptContext: string = "",
 ): Promise<SimulatorResponse> {
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
@@ -941,14 +1414,22 @@ export async function generateHcpResponse(
     volatility.profile !== "stable";
   const responseTokenBudget =
     turnDirectives.targetWordBudget <= 22 ? 300
-    : turnDirectives.targetWordBudget <= 28 ? 340
-    : runtimeProfile.brevity === "tight" ? 380
-    : isHighPressureTurn ? 420
-    : runtimeProfile.brevity === "moderate" ? 600
-    : 560;
+      : turnDirectives.targetWordBudget <= 28 ? 340
+        : runtimeProfile.brevity === "tight" ? 380
+          : isHighPressureTurn ? 420
+            : runtimeProfile.brevity === "moderate" ? 600
+              : 560;
   const finalResponseTokenBudget = typeof responseTokenCap === "number"
     ? Math.min(responseTokenBudget, responseTokenCap)
     : responseTokenBudget;
+  const mappedControls = deriveMappedSamplingControls({
+    currentJourneyState,
+    currentBehaviorState,
+    turn: turnDirectives,
+    profile: runtimeProfile,
+    volatilityProfile: volatility.profile,
+    interactionPressures,
+  });
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -1005,6 +1486,9 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
   const continuityBlock = `
 ${summarizeConcernContinuity(transcript, scenario)}
 `;
+  const predictiveContextBlock = predictivePromptContext
+    ? `\n${predictivePromptContext}\n`
+    : "";
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -1032,6 +1516,8 @@ ${runtimeProfileBlock}
 
 ${realismBackboneBlock}
 
+${predictiveContextBlock}
+
 ${dialogueDirectiveBlock}
 
 ${buildTurnDirectivePrompt(turnDirectives)}
@@ -1039,6 +1525,12 @@ ${buildTurnDirectivePrompt(turnDirectives)}
 ${volatilityBlock}
 
 ${continuityBlock}
+
+GLOBAL TONE/SAMPLING MAP (deterministic controls):
+- Response temperature target: ${mappedControls.responseTemperature}
+- Rewrite temperature target: ${mappedControls.rewriteTemperature}
+- Engagement directive: ${mappedControls.engagementDirective}
+${mappedControls.rationale.map((line) => `- ${line}`).join("\n")}
 
 ${CAPABILITY_RULES}
 
@@ -1093,6 +1585,12 @@ INSTRUCTIONS:
 28. Do not end an HCP line on an incomplete ask such as "reduce?", "change?", "help with?", or any question missing what is actually being asked about.
 29. Avoid comma splices in HCP dialogue. If there are two complete thoughts, split them into separate sentences.
 30. In operational or access questions, explicitly name the object of the ask such as the queue, the prior auth step, the approval path, the callback burden, the monitoring step, or the staff task.
+31. Use grammatically clean written English with realistic spoken cadence; avoid run-on chains joined by repeated commas.
+32. Prefer short sentence boundaries over semicolons unless the sentence truly requires one.
+33. Avoid overly formal phrasing; keep wording natural, clinician-realistic, and concise.
+34. Do not lead with meta-framing such as "So I want to make sure..."; start with the actual clinical point or concern.
+35. On the very first HCP reply, do not repeat the Opening HCP Setup line verbatim; acknowledge the rep's latest message and move to one concrete blocker or ask.
+36. Follow the GLOBAL TONE/SAMPLING MAP above exactly; engagement posture must match the mapped engagement directive.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -1126,7 +1624,7 @@ Return ONLY valid JSON:
   const result = await invokeWorkerJson({
     prompt,
     max_tokens: finalResponseTokenBudget,
-    temperature: 0.2,
+    temperature: mappedControls.responseTemperature,
     response_json_schema: {
       type: "object",
       properties: {
@@ -1148,6 +1646,7 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         prediction,
+        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
@@ -1159,6 +1658,7 @@ Return ONLY valid JSON:
         hcpReply,
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
+        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
@@ -1176,6 +1676,7 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
         prediction,
+        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
@@ -1194,6 +1695,7 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
+        rewriteTemperature: mappedControls.rewriteTemperature,
       });
       continuityAdjusted = true;
     } catch {
@@ -1230,6 +1732,7 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
+        rewriteTemperature: mappedControls.rewriteTemperature,
       });
       continuityAdjusted = true;
       hcpReply = applyHcpResponseSurface({
@@ -1254,6 +1757,59 @@ Return ONLY valid JSON:
       });
     }
   }
+
+  hcpReply = normalizeHcpSpokenText(hcpReply, 3);
+
+  const openingSetup = String(scenario.openingScene || "");
+  if (isOpeningEcho({
+    hcpReply,
+    openingScene: openingSetup,
+    hcpTurnCount,
+  })) {
+    try {
+      const rewritten = await rewriteFirstTurnAwayFromOpeningEcho({
+        hcpReply,
+        openingScene: openingSetup,
+        repMessage,
+        scenario,
+        predictivePromptContext,
+        predictedBehaviorState: result.nextBehaviorState || currentBehaviorState,
+        rewriteTemperature: mappedControls.rewriteTemperature,
+      });
+      hcpReply = normalizeHcpSpokenText(rewritten, 3);
+    } catch {
+      hcpReply = buildDeterministicFirstTurnFallback({
+        repMessage,
+        scenario,
+        predictedBehaviorState: result.nextBehaviorState || currentBehaviorState,
+      });
+    }
+  }
+
+  hcpReply = ensureFirstTurnRepTopicAcknowledgment({
+    hcpReply,
+    repMessage,
+    scenario,
+    hcpTurnCount,
+  });
+
+  if (needsHumanPhraseSafetyRewrite({
+    hcpReply,
+    hcpTurnCount,
+  })) {
+    hcpReply = buildHumanPhraseSafetyFallback({
+      repMessage,
+      scenario,
+      hcpTurnCount,
+    });
+  }
+
+  hcpReply = enforceHighPressureClippedPhrasing({
+    hcpReply,
+    repMessage,
+    scenario,
+    behaviorState: result.nextBehaviorState || currentBehaviorState,
+  });
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
@@ -1299,5 +1855,10 @@ Return ONLY valid JSON:
     coachingNudge: result.coachingNudge || null,
     volatilityState: volatility,
     prediction,
+    predictiveDebug: buildPredictiveTurnDebug({
+      predictivePromptContext,
+      hcpReply,
+      nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
+    }),
   };
 }

@@ -183,7 +183,7 @@ export default function Home() {
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
           <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>
-            Filter the grid by scenario family, HCP role, journey stage, or interaction pressure without changing the simulator logic underneath.
+            Filter the grid, open any scenario brief, then start the roleplay. Predictive Builder remains available as an optional deep-dive workspace.
           </p>
         </div>
 
@@ -211,10 +211,10 @@ export default function Home() {
               {/* Build Your Own card — first position */}
               <BuildYourOwnCard />
               {filtered.map((scenario, i) => (
-                <ScenarioCard 
-                  key={scenario.id} 
-                  scenario={scenario} 
-                  index={i} 
+                <ScenarioCard
+                  key={scenario.id}
+                  scenario={scenario}
+                  index={i}
                   isFeatured={i === 0}
                   onDelete={handleDeleteScenario}
                 />

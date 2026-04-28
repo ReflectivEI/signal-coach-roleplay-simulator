@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
@@ -27,10 +27,70 @@ function HcpCueStrip({ cue }) {
   );
 }
 
+function PredictiveDebugChip({ debugInfo }) {
+  const [open, setOpen] = useState(false);
+  if (!debugInfo) return null;
+
+  const applied = Boolean(debugInfo.contextApplied);
+  const sourceLabel = debugInfo.source === "ai" ? "AI" : debugInfo.source === "deterministic" ? "Deterministic" : "Unknown";
+  const surfacedSignals = Array.isArray(debugInfo.surfacedSignals) ? debugInfo.surfacedSignals : [];
+
+  return (
+    <div className="max-w-fit rounded-xl border px-3 py-2" style={{
+      background: applied ? "rgba(225, 245, 240, 0.84)" : "rgba(238, 241, 246, 0.92)",
+      borderColor: applied ? "rgba(70, 153, 138, 0.42)" : "rgba(132, 149, 173, 0.42)",
+    }}>
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)" }}>
+          {applied ? "Predictive Applied" : "Predictive Pending"}
+        </span>
+        <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{
+          color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)",
+          borderColor: applied ? "rgba(70, 153, 138, 0.42)" : "rgba(132, 149, 173, 0.42)",
+          background: "rgba(255,255,255,0.62)",
+        }}>
+          {sourceLabel}
+        </span>
+        <button
+          type="button"
+          className="text-[10px] underline"
+          style={{ color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)" }}
+          onClick={() => setOpen((current) => !current)}
+        >
+          {open ? "Hide" : "View"}
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-2.5 space-y-2">
+          {surfacedSignals.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {surfacedSignals.map((signal) => (
+                <span key={signal} className="text-[10px] px-2 py-0.5 rounded-md" style={{
+                  color: applied ? "hsl(171 48% 28%)" : "hsl(220 20% 36%)",
+                  background: "rgba(255,255,255,0.72)",
+                  border: applied ? "1px solid rgba(70, 153, 138, 0.34)" : "1px solid rgba(132, 149, 173, 0.34)",
+                }}>
+                  {signal}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px]" style={{ color: "hsl(171 35% 34%)" }}>
+              Predictive context was injected, but this turn did not expose a distinct surfaced blocker tag.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({ turn }) {
   const isRep = turn.speaker === "rep";
   const isHcp = turn.speaker === "hcp";
   const cue = turn.cues?.[0] || null;
+  const predictiveDebug = turn.predictiveDebug || null;
 
   return (
     <div>
@@ -54,6 +114,7 @@ function MessageBubble({ turn }) {
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
           {isHcp && cue && <HcpCueStrip cue={cue} />}
+          {isHcp && predictiveDebug && <PredictiveDebugChip debugInfo={predictiveDebug} />}
           <div className="px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit" style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
             color: isRep ? "white" : "hsl(222 30% 28%)",
