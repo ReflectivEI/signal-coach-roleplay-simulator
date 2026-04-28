@@ -1,4 +1,5 @@
 # Signal Coach Role Play Simulator
+
 ## Comprehensive Architecture and Mapping Manual
 
 ## 1. Purpose and Scope
@@ -32,31 +33,33 @@ Primary implementation anchors:
 - `src/lib/predictiveBuilderModel.js`
 - `src/pages/ScenarioBuilder.jsx`
 
-
 ## 2. High-Level System Architecture
 
 The platform is composed of four functional planes:
 
 1. Scenario Authoring and Storage Plane
+
 - Built-in scenarios are defined in `src/lib/scenarioCatalog.js`.
 - Custom scenarios are created in `src/pages/ScenarioBuilder.jsx` and persisted through `src/lib/scenarioStorage.js` (worker-first, local fallback).
 
-2. Scenario Discovery and Selection Plane
+1. Scenario Discovery and Selection Plane
+
 - Scenario grid page in `src/pages/Home.jsx`.
 - Six dropdown filters in `src/components/home/ScenarioFilters.jsx`.
 - Scenario cards in `src/components/home/ScenarioCard.jsx`.
 - Preview Brief modal in `src/components/home/ScenarioDetailModal.jsx`.
 
-3. Runtime Simulation and Realism Plane
+1. Runtime Simulation and Realism Plane
+
 - Session orchestration in `src/pages/Simulator.jsx`.
 - HCP response generation and realism controls in `src/lib/hcpResponseGenerator.ts` and related realism modules.
 - Volatility and interaction-state logic in `src/lib/simulatorEngine.ts`.
 
-4. Evaluation and Feedback Plane
+1. Evaluation and Feedback Plane
+
 - Deterministic capability signal evaluation in `src/lib/capabilityEvaluation.ts`.
 - Structured review generation in `src/lib/sessionReview.ts`.
 - Five-section feedback rendering in `src/components/simulator/SessionSummaryModal.jsx`.
-
 
 ## 3. Scenario Card and Grid Architecture
 
@@ -90,7 +93,6 @@ Card height and spacing were tightened to improve visual consistency in mixed-ti
 - Preserved stable title and action zones
 
 Implemented in `src/components/home/ScenarioCard.jsx`.
-
 
 ## 4. Six-Dimension Scenario Mapping Model
 
@@ -136,7 +138,6 @@ The six dropdowns are intentional and still valid because they provide:
 - Fast segmentation of training cases by clinical and behavioral attributes
 - Consistent bridge to Predictive Builder dimensions
 
-
 ## 5. Where Preview Brief Content Comes From
 
 Preview Brief content is derived directly from scenario objects loaded via `scenarioStorage`:
@@ -156,7 +157,6 @@ The modal in `src/components/home/ScenarioDetailModal.jsx` reads scenario fields
 
 No separate shadow brief store is required for standard scenario brief display.
 
-
 ## 6. How Structure and Mapping Were Designed
 
 The architecture intentionally separates:
@@ -173,7 +173,6 @@ Design intent:
 
 This separation allows UI or indexing changes without changing scoring definitions.
 
-
 ## 7. Runtime Flow: From Scenario Launch to Session End
 
 When a user starts a scenario:
@@ -185,7 +184,6 @@ When a user starts a scenario:
 5. Behavior signals are extracted each rep turn.
 6. Volatility profile and prediction are updated.
 7. On `End & Get Feedback`, review generation runs and summary modal opens.
-
 
 ## 8. Evaluation and Feedback Architecture
 
@@ -238,7 +236,6 @@ Defined in `SessionSummaryModal.jsx` as `LEVEL_TO_SCORE`.
 
 This score is presentation-level and does not replace capability evidence.
 
-
 ## 9. How AI Extracts Behaviors Turn by Turn
 
 Turn-by-turn extraction follows this sequence:
@@ -251,7 +248,6 @@ Turn-by-turn extraction follows this sequence:
 6. End-session review consumes transcript + signal history + state trajectory
 
 Result: behavior extraction is not a post-hoc single-pass summary; it is accumulated stateful inference across the exchange.
-
 
 ## 10. Predictive HCP Builder: Purpose and Workflow
 
@@ -301,7 +297,6 @@ In short: cards are case-driven; builder is profile-driven.
 
 It returns structured sections used by the UI card.
 
-
 ## 11. Build Your Own Scenario and AI Mapping
 
 ### 11.1 Build Your Own Card
@@ -341,7 +336,6 @@ At session init, `Simulator.jsx` resolves a seed (`buildPredictiveSeedFromScenar
 
 This informs HCP generation context and keeps custom scenarios aligned with the same predictive architecture.
 
-
 ## 12. Deterministic Layer vs Realism Layer
 
 ### 12.1 Deterministic Layer Responsibilities
@@ -367,7 +361,6 @@ The split prevents realism polish from mutating scoring truth.
 
 This is directly aligned with SOT constraints in `docs/CURRENT_CANONICAL_SOT_STANDALONE.md`.
 
-
 ## 13. References and Source-of-Truth Alignment
 
 Primary SOT references:
@@ -382,7 +375,6 @@ Key alignment rules enforced by code and audits:
 - Canonical capability model retained
 - Five-section feedback format present
 - Built-in scenarios mapped deterministically to six grid dimensions
-
 
 ## 14. Audit and Verification Artifacts
 
@@ -420,7 +412,6 @@ Command:
 
 Validates core realism/consistency gates for runtime response behavior.
 
-
 ## 15. Practical Usage Guidance
 
 ### 15.1 Scenario Grid Usage
@@ -443,7 +434,6 @@ Validates core realism/consistency gates for runtime response behavior.
 2. Fill realism variables and key challenges.
 3. Provide full predictive seed for strongest mapping alignment.
 4. Save and run through standard simulator pipeline.
-
 
 ## 16. Current State Summary
 

@@ -273,6 +273,38 @@ export async function invokeWorkerText({ prompt, max_tokens = 900, temperature =
 }
 
 /**
+ * Invoke worker and return RAW string payload (no parsing).
+ * Used by invokeWorkerJsonWithRetry to apply custom extraction logic.
+ * @param {WorkerJsonRequest} [options]
+ * @returns {Promise<string>} Raw response payload as string
+ */
+export async function invokeWorkerJsonRawPayload({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model, timeout_ms, retry_count } = {}) {
+  const response = await fetchWithTimeout(workerInvokeUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, response_json_schema, max_tokens, temperature, roleplay, provider, model }),
+  }, timeout_ms || DEFAULT_WORKER_TIMEOUT_MS, "Worker JSON invoke", typeof retry_count === "number" ? retry_count : TRANSIENT_RETRY_DELAYS_MS.length);
+
+  const data = await parseWorkerResponse(response);
+  const payload = data?.response;
+
+  if (!payload) {
+    throw new Error("Worker returned no response payload");
+  }
+
+  // Return as string (may have formatting issues, which retry handler will fix)
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  if (typeof payload === "object") {
+    return JSON.stringify(payload);
+  }
+
+  return String(payload || "");
+}
+
+/**
  * @param {WorkerJsonRequest} [options]
  */
 export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model, timeout_ms, retry_count } = {}) {

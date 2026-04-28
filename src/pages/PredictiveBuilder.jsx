@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, BrainCircuit, ChevronDown, ChevronUp, FlaskConical, Loader2, MessageSquareText, Stethoscope } from "lucide-react";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
-import { checkWorkerHealth, invokeWorkerJson, invokeWorkerText, listEvidenceRecords } from "@/services/workerClient";
+import { checkWorkerHealth, invokeWorkerText, invokeWorkerJsonRawPayload, listEvidenceRecords } from "@/services/workerClient";
+import { invokeWorkerJsonWithRetry } from "@/services/workerJsonRetryHandler";
+import { getWorkerHealthReport, shouldAttemptWorkerSynthesis } from "@/services/workerOfflineSafeguard";
 import { getProfileMemory, recordProfileInteraction } from "@/lib/predictiveMemoryStore";
 import {
   buildSelectorLabels,
@@ -11,7 +13,15 @@ import {
   buildSynthesisUserPrompt,
   resolveSpecialistPersona,
 } from "@/lib/specialistSynthesisPrompts";
+import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 import { normalizeHcpSpokenText } from "@/lib/hcpResponseText";
+
+const DEV_DEBUG_SYNTHESIS = import.meta?.env?.DEV && localStorage?.getItem("DEBUG_SYNTHESIS") === "true";
+
+function debugLog(label, data) {
+  if (!DEV_DEBUG_SYNTHESIS) return;
+  console.log(`[PredictiveBuilder] ${label}`, data);
+}
 
 const INITIAL_SELECTION = {
   diseaseState: "",
@@ -160,16 +170,21 @@ export default function PredictiveBuilder() {
       setSynthesisSource("");
 
       try {
-        // Step 1: Check worker availability
-        const health = await checkWorkerHealth();
+        // Step 1: Pre-flight health check using safeguard
+        const healthReport = await getWorkerHealthReport();
         if (ticket.cancelled) return;
-        setWorkerStatus(health);
+        setWorkerStatus(healthReport.status);
 
-        if (health === "offline") {
+        if (!shouldAttemptWorkerSynthesis(healthReport.status)) {
           setSynthesisSource("static");
-          setSynthesisError("Worker offline — showing deterministic profile. Start `npm run worker:dev` for AI synthesis.");
+          setSynthesisError(
+            `⚠️ ${healthReport.message} Start \`npm run worker:dev\` to enable AI synthesis.`
+          );
+          debugLog("runSynthesis", `Worker unavailable: ${healthReport.message}`);
           return;
         }
+
+        debugLog("runSynthesis", `Worker status: ${healthReport.status}`);
 
         // Step 2: Fetch evidence records for this disease state
         let records = [];
@@ -192,12 +207,21 @@ export default function PredictiveBuilder() {
 
         const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
-        // Step 4: Invoke worker for structured synthesis
-        const synthesized = await invokeWorkerJson({
-          prompt: fullPrompt,
-          max_tokens: 3200,
+        // Step 4: Invoke worker for structured synthesis with aggressive retry and recovery
+        const synthesized = await invokeWorkerJsonWithRetry({
+          invokerFn: async (temp) =>
+            invokeWorkerJsonRawPayload({
+              prompt: fullPrompt,
+              response_json_schema: PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA,
+              max_tokens: 3200,
+              temperature: temp,
+              roleplay: false,
+            }),
+          maxRetries: 5,
           temperature: 0.18,
-          roleplay: false,
+          onRetry: (retryInfo) => {
+            debugLog("Synthesis retry", retryInfo);
+          },
         });
         if (ticket.cancelled) return;
 
@@ -206,15 +230,29 @@ export default function PredictiveBuilder() {
           setSynthesisSource("ai");
         } else {
           setSynthesisSource("static");
-          setSynthesisError("AI synthesis returned unexpected shape — showing deterministic profile.");
+          setSynthesisError(
+            "AI synthesis returned unexpected structure despite recovery attempts — this indicates a service-level issue, not a formatting mismatch."
+          );
         }
       } catch (err) {
         if (ticket.cancelled) return;
         setSynthesisSource("static");
-        if (String(err?.message || "").includes("non-JSON structured payload")) {
-          setSynthesisError("AI synthesis formatting mismatch — showing deterministic profile. Retry once; if it repeats, the worker prompt formatting needs adjustment.");
+
+        // Categorize the error type
+        const isRetryExhausted = err?.code === "WORKER_JSON_RETRY_EXHAUSTED";
+        const isNetworkError = err?.name === "AbortError" || String(err?.message || "").includes("timed out");
+        const isServiceError = isNetworkError || (err?.code === "ECONNREFUSED");
+
+        if (isRetryExhausted && !isServiceError) {
+          // All extraction+parse retries failed: this is a persistent formatting issue
+          setSynthesisError(
+            "⚠️ PERSISTENT JSON FORMATTING ISSUE: Worker is returning non-recoverable output format. This requires worker/model configuration adjustment."
+          );
+        } else if (isServiceError) {
+          // Actual service failure (network, worker down, etc.)
+          setSynthesisError("Worker service unavailable — showing deterministic profile. Retry when service recovers.");
         } else {
-          setSynthesisError("AI synthesis unavailable right now — showing deterministic profile.");
+          setSynthesisError(`AI synthesis failed: ${String(err?.message || "").slice(0, 80)}…`);
         }
       } finally {
         if (!ticket.cancelled) {

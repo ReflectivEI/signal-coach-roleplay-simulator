@@ -1,0 +1,296 @@
+{
+  "summary": [
+    {
+      "scenarioId": "builtin-the-gatekeeper-filter",
+      "scenarioTitle": "The Gatekeeper Filter",
+      "exchangesRequested": 12,
+      "exchangesCompleted": 12,
+      "errors": [],
+      "firstHcp": "You're asking about prior auth, specifically the step that's generating the most callbacks, and honestly, it's usually the initial submission that gets stuck, my staff spends a lot of time on the phone clarifying or resubmitting.",
+      "lastHcp": "Look, if it stays unchanged for 30 days, the risk is that these patients are going to end up in the ER or with a specialist, and that's just not how I want to manage care, but I've got to prioritize the patients I've got waiting right now.",
+      "audit": {
+        "commaSpliceLikely": 0,
+        "polishedLeadIn": 0,
+        "empty": 0
+      }
+    },
+    {
+      "scenarioId": "builtin-the-undefined-patient-profile",
+      "scenarioTitle": "The Undefined Patient Profile",
+      "exchangesRequested": 12,
+      "exchangesCompleted": 12,
+      "errors": [],
+      "firstHcp": "Yes, figuring out the right patient is still one of the harder parts here. Can you help me understand how your product or approach might fit into that process and address some of those uncertainties?",
+      "lastHcp": "To be honest, I'm not even sure what a successful first trial would look like in our setting, we'd need to see some real-world data on how this integrates with our existing workflows and patient populations. Can you walk me through how other hospitals have handled implementation and what kind of support systems were put in place?",
+      "audit": {
+        "commaSpliceLikely": 0,
+        "polishedLeadIn": 0,
+        "empty": 0
+      }
+    }
+  ],
+  "transcripts": [
+    {
+      "scenarioId": "builtin-the-gatekeeper-filter",
+      "scenarioTitle": "The Gatekeeper Filter",
+      "exchangesRequested": 12,
+      "exchangesCompleted": 12,
+      "firstHcp": "You're asking about prior auth, specifically the step that's generating the most callbacks, and honestly, it's usually the initial submission that gets stuck, my staff spends a lot of time on the phone clarifying or resubmitting.",
+      "lastHcp": "Look, if it stays unchanged for 30 days, the risk is that these patients are going to end up in the ER or with a specialist, and that's just not how I want to manage care, but I've got to prioritize the patients I've got waiting right now.",
+      "transcript": [
+        {
+          "speaker": "rep",
+          "text": "Quick one before your next patient: what is the single prior auth step creating the most callbacks?",
+          "turnNumber": 1
+        },
+        {
+          "speaker": "hcp",
+          "text": "You're asking about prior auth, specifically the step that's generating the most callbacks, and honestly, it's usually the initial submission that gets stuck, my staff spends a lot of time on the phone clarifying or resubmitting.",
+          "turnNumber": 2
+        },
+        {
+          "speaker": "rep",
+          "text": "If we solve only one bottleneck this month, which step would you want fixed first?",
+          "turnNumber": 3
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, if I had to pick one thing that's been a constant headache for my staff and me, it's the prior authorization process for medications, that's where we waste the most time and it delays patient care, so if you can help with that, I'm listening.",
+          "turnNumber": 4
+        },
+        {
+          "speaker": "rep",
+          "text": "What has to be true operationally for this to be worth another minute of your time?",
+          "turnNumber": 5
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, if you can show me how this is going to streamline my prior auth process or reduce the administrative burden on my staff, then I'm willing to listen for another minute, but it's got to be something that's going to make a real difference in my workflow.",
+          "turnNumber": 6
+        },
+        {
+          "speaker": "rep",
+          "text": "Which staff handoff breaks down most often in your current process?",
+          "turnNumber": 7
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, it's usually the transition from our office to the specialist, we've had issues with prior auth and getting the right paperwork to the right person, it's a manual process that gets bogged down.",
+          "turnNumber": 8
+        },
+        {
+          "speaker": "rep",
+          "text": "If I keep this to one change, what outcome should your team feel first?",
+          "turnNumber": 9
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, if you're going to make a pitch, make it quick, I've got patients waiting and my staff is already overwhelmed with prior auths, so if this is about streamlining that process, then you've got my attention.",
+          "turnNumber": 10
+        },
+        {
+          "speaker": "rep",
+          "text": "What do you need from me to make this practical, not theoretical, for your workflow?",
+          "turnNumber": 11
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, I've got a few minutes before my next patient, so make it quick, what's the one thing you can tell me that's going to make a difference in how I prescribe this, something that's going to get past our prior auth issues.",
+          "turnNumber": 12
+        },
+        {
+          "speaker": "rep",
+          "text": "Where does this fail today: forms, payer criteria, or patient follow-through?",
+          "turnNumber": 13
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, it's all of the above, but if I had to pick one, it's the payer criteria, that's where we get stuck the most, my staff spends way too much time on prior auths and denials, it's a huge operational headache for us.",
+          "turnNumber": 14
+        },
+        {
+          "speaker": "rep",
+          "text": "What is the most realistic first pilot patient in your clinic context?",
+          "turnNumber": 15
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, I've got about two minutes before my next patient, and to be honest, I'm not sure I'm ready to think about a pilot patient without knowing more about how this would work in our specific context, can you tell me what kind of support or resources would be available to help us implement this.",
+          "turnNumber": 16
+        },
+        {
+          "speaker": "rep",
+          "text": "If we skip anything nonessential, what still must be addressed now?",
+          "turnNumber": 17
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, if this is about a new medication or treatment, I need to know it's going to be covered by our patients' insurance, because prior auth has been a huge headache for my staff and we can't afford to get stuck on that.",
+          "turnNumber": 18
+        },
+        {
+          "speaker": "rep",
+          "text": "What would make you say this conversation was actually useful today?",
+          "turnNumber": 19
+        },
+        {
+          "speaker": "hcp",
+          "text": "Honestly, if you can give me something that helps me streamline the prior authorization process for my patients, that would be useful, but I've only got a minute or so before my next patient, so make it quick.",
+          "turnNumber": 20
+        },
+        {
+          "speaker": "rep",
+          "text": "What should I not waste your time with in the next step?",
+          "turnNumber": 21
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, I've got a packed schedule today, just give me the one thing that's actually going to make a difference for my patients, something that's going to streamline the process or improve outcomes, that's all I've got time for.",
+          "turnNumber": 22
+        },
+        {
+          "speaker": "rep",
+          "text": "One final check: what is the risk if this stays unchanged for 30 days?",
+          "turnNumber": 23
+        },
+        {
+          "speaker": "hcp",
+          "text": "Look, if it stays unchanged for 30 days, the risk is that these patients are going to end up in the ER or with a specialist, and that's just not how I want to manage care, but I've got to prioritize the patients I've got waiting right now.",
+          "turnNumber": 24
+        }
+      ],
+      "errors": []
+    },
+    {
+      "scenarioId": "builtin-the-undefined-patient-profile",
+      "scenarioTitle": "The Undefined Patient Profile",
+      "exchangesRequested": 12,
+      "exchangesCompleted": 12,
+      "firstHcp": "Yes, figuring out the right patient is still one of the harder parts here. Can you help me understand how your product or approach might fit into that process and address some of those uncertainties?",
+      "lastHcp": "To be honest, I'm not even sure what a successful first trial would look like in our setting, we'd need to see some real-world data on how this integrates with our existing workflows and patient populations. Can you walk me through how other hospitals have handled implementation and what kind of support systems were put in place?",
+      "transcript": [
+        {
+          "speaker": "rep",
+          "text": "When you think about undefined patient profiles, where do you feel most uncertainty today?",
+          "turnNumber": 1
+        },
+        {
+          "speaker": "hcp",
+          "text": "Yes, figuring out the right patient is still one of the harder parts here. Can you help me understand how your product or approach might fit into that process and address some of those uncertainties?",
+          "turnNumber": 2
+        },
+        {
+          "speaker": "rep",
+          "text": "What patient characteristics are you currently using, even informally, to decide fit?",
+          "turnNumber": 3
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, I'm still figuring that out, we don't really have a set profile in place, but I've been thinking about patients with multiple comorbidities and those who have had a hard time managing their condition with current treatments.",
+          "turnNumber": 4
+        },
+        {
+          "speaker": "rep",
+          "text": "Which subgroup do you suspect might benefit most, but you have not validated yet?",
+          "turnNumber": 5
+        },
+        {
+          "speaker": "hcp",
+          "text": "I've been wondering about patients with multiple comorbidities, but I haven't had a chance to really dig into the data and see if our current approach is truly optimal for them. Can you tell me if there's any research or evidence that suggests a particular subgroup like that might benefit from a different approach?",
+          "turnNumber": 6
+        },
+        {
+          "speaker": "rep",
+          "text": "What evidence threshold would make you confident enough to test this in practice?",
+          "turnNumber": 7
+        },
+        {
+          "speaker": "hcp",
+          "text": "I'd want to see some real-world data, not just trials, to understand how this plays out in a population similar to mine, and I'm thinking specifically about patients with multiple comorbidities, which is a big part of my hospitalist practice. Can you show me any subgroup analyses or post-hoc studies that might give me a better sense of that?",
+          "turnNumber": 8
+        },
+        {
+          "speaker": "rep",
+          "text": "Where does your current approach feel strongest, and where does it feel least predictable?",
+          "turnNumber": 9
+        },
+        {
+          "speaker": "hcp",
+          "text": "Honestly, I feel like we're strongest when we've got a clear diagnosis and can just follow established protocols, but it's the patients who don't fit neatly into one category that really throw us for a loop - I'm not sure we're doing the best we can for them, and that's what keeps me up at night.",
+          "turnNumber": 10
+        },
+        {
+          "speaker": "rep",
+          "text": "If you had to start with one patient archetype, who would that be and why?",
+          "turnNumber": 11
+        },
+        {
+          "speaker": "hcp",
+          "text": "I think I'd start with the patient who's been on multiple medications for a while, maybe someone with a complex medical history, because that's where I see the most challenges in terms of managing side effects and interactions. Can you help me understand how your product would fit into that kind of scenario?",
+          "turnNumber": 12
+        },
+        {
+          "speaker": "rep",
+          "text": "What concern would stop you from trying this with that first subgroup?",
+          "turnNumber": 13
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, it's not just one concern, but I think what would really stop me is if I couldn't get a clear sense of which patients would truly benefit from this, I need to understand the specific characteristics or markers that would make this a good fit for them.",
+          "turnNumber": 14
+        },
+        {
+          "speaker": "rep",
+          "text": "How would you define success for the first 2 to 3 patients you try?",
+          "turnNumber": 15
+        },
+        {
+          "speaker": "hcp",
+          "text": "For those initial patients, I'd want to see a noticeable reduction in their symptom severity, and ideally, a decrease in the number of hospitalizations or emergency department visits.",
+          "turnNumber": 16
+        },
+        {
+          "speaker": "rep",
+          "text": "What implementation friction do you anticipate from staff or follow-up burden?",
+          "turnNumber": 17
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, I'm a bit concerned about the nursing staff's workload, we're already short-staffed on the floor and any additional tasks or follow-up would need to be carefully considered to ensure it doesn't overwhelm them.",
+          "turnNumber": 18
+        },
+        {
+          "speaker": "rep",
+          "text": "What data point would change your confidence the fastest?",
+          "turnNumber": 19
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, I'm not sure I've got a clear picture of what I'm looking for yet, but if I had to choose, it would be something that shows a clear reduction in hospital readmissions for patients on this treatment, that's the metric that would really grab my attention.",
+          "turnNumber": 20
+        },
+        {
+          "speaker": "rep",
+          "text": "What would you want clarified before committing to a broader use case?",
+          "turnNumber": 21
+        },
+        {
+          "speaker": "hcp",
+          "text": "I'd want to know more about how this would integrate with our existing protocols and workflows, and what kind of support or resources would be available to help us implement it effectively. Can you walk me through what a typical rollout would look like in a hospital setting like ours?",
+          "turnNumber": 22
+        },
+        {
+          "speaker": "rep",
+          "text": "If the first trial goes well, what would your next expansion step look like?",
+          "turnNumber": 23
+        },
+        {
+          "speaker": "hcp",
+          "text": "To be honest, I'm not even sure what a successful first trial would look like in our setting, we'd need to see some real-world data on how this integrates with our existing workflows and patient populations. Can you walk me through how other hospitals have handled implementation and what kind of support systems were put in place?",
+          "turnNumber": 24
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

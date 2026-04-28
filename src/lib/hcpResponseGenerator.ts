@@ -952,7 +952,7 @@ function enforceHighPressureClippedPhrasing({
 
   // Phrase-Regression Table: Forbidden patterns → Blocker-First replacements
   // Each pattern is tested in order; first match is replaced and returned.
-  
+
   // Pattern 1: "I'm still waiting to hear how you..." (generic wait statement)
   if (/^i'?m still waiting to hear how you\b/i.test(text)) {
     const priorAuthContext = /prior auth|approval|coverage|callback/i.test(`${repMessage} ${text}`);
@@ -1591,6 +1591,7 @@ INSTRUCTIONS:
 34. Do not lead with meta-framing such as "So I want to make sure..."; start with the actual clinical point or concern.
 35. On the very first HCP reply, do not repeat the Opening HCP Setup line verbatim; acknowledge the rep's latest message and move to one concrete blocker or ask.
 36. Follow the GLOBAL TONE/SAMPLING MAP above exactly; engagement posture must match the mapped engagement directive.
+37. Do not repeat the same urgency directive across consecutive HCP turns (for example repeating "get to the point" or "short version"). Keep pressure real, but vary wording naturally.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -1714,12 +1715,18 @@ Return ONLY valid JSON:
       transcript,
     });
   }
+  const recentHcpReplies = transcript
+    .filter((turn: any) => turn?.speaker === "hcp" && turn?.text)
+    .map((turn: any) => String(turn.text))
+    .slice(-4);
+
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
     turn: turnDirectives,
     profile: runtimeProfile,
     hcpTurnCount,
+    recentHcpReplies,
   });
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
@@ -1741,6 +1748,7 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
+        recentHcpReplies,
       });
     } catch {
       continuityAdjusted = true;
@@ -1754,6 +1762,7 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
+        recentHcpReplies,
       });
     }
   }

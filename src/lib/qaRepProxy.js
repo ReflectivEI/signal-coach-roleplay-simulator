@@ -686,11 +686,11 @@ function selectOperationalLayer({ turns = [], askType = "", responseMode = "" })
   const order = responseLayerOrderForAsk(askType);
   const preferredLayer =
     responseMode === "removal_explanation" ? "core_change" :
-    responseMode === "behavior_change" ? "operational_detail" :
-    responseMode === "workflow_progression" ? "next_step" :
-    responseMode === "root_cause" ? "operational_detail" :
-    responseMode === "how_it_works" ? "example" :
-    order[0];
+      responseMode === "behavior_change" ? "operational_detail" :
+        responseMode === "workflow_progression" ? "next_step" :
+          responseMode === "root_cause" ? "operational_detail" :
+            responseMode === "how_it_works" ? "example" :
+              order[0];
   const candidateOrder = [preferredLayer, ...order.filter((layer) => layer !== preferredLayer)];
 
   for (const layer of candidateOrder) {
@@ -875,11 +875,11 @@ function pickProgressionLine(mode, topic, previousRepText = "", lastHcpMessage =
   if (topic === "workflow" && mode === "answer") {
     const mappedBucket =
       askType === "removed_work" ? "resubmission_loop" :
-      askType === "next_step" ? "post_auth_next_step" :
-      askType === "staff_change" ? "general_staff_burden" :
-      askType === "implementation" ? "paperwork_completion" :
-      askType === "bottleneck" ? "duplicate_handoff" :
-      operationalBucket;
+        askType === "next_step" ? "post_auth_next_step" :
+          askType === "staff_change" ? "general_staff_burden" :
+            askType === "implementation" ? "paperwork_completion" :
+              askType === "bottleneck" ? "duplicate_handoff" :
+                operationalBucket;
     const usedLayers = getUsedConceptLayers(turns);
     const nextLayer = getNextLayer(usedLayers);
     let candidateResponse = generateIsolatedLayerResponse(nextLayer, {
@@ -1155,11 +1155,11 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
     const askType = classifySpecificAsk(lastHcpMessage);
     const bucket =
       askType === "removed_work" ? "resubmission_loop" :
-      askType === "next_step" ? "post_auth_next_step" :
-      askType === "staff_change" ? "general_staff_burden" :
-      askType === "implementation" ? "paperwork_completion" :
-      askType === "bottleneck" ? "duplicate_handoff" :
-      resolveOperationalAsk(lastHcpMessage);
+        askType === "next_step" ? "post_auth_next_step" :
+          askType === "staff_change" ? "general_staff_burden" :
+            askType === "implementation" ? "paperwork_completion" :
+              askType === "bottleneck" ? "duplicate_handoff" :
+                resolveOperationalAsk(lastHcpMessage);
     const usedLayers = getUsedConceptLayers(turns);
     const nextLayer = getNextLayer(usedLayers);
     return generateIsolatedLayerResponse(nextLayer, {
@@ -1171,8 +1171,94 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
   return "It cuts out the resubmission loop.";
 }
 
+function getRecentRepReplies(context = {}, window = 4) {
+  const transcript = Array.isArray(context?.transcript) ? context.transcript : [];
+  const repTexts = transcript
+    .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+    .map((turn) => turn.text.trim())
+    .filter(Boolean);
+
+  if (!repTexts.length) return [];
+  return repTexts.slice(-Math.max(1, window));
+}
+
+function stableIndex(key = "", size = 1) {
+  const span = Math.max(1, size);
+  const score = String(key || "")
+    .split("")
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  return score % span;
+}
+
+function pickVariant(variants = [], fallback = "", key = "") {
+  if (!Array.isArray(variants) || !variants.length) return fallback;
+  return variants[stableIndex(key, variants.length)] || variants[0] || fallback;
+}
+
+function buildOperationalLoopAlternatives(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+
+  if (/callback|call back/.test(ask)) {
+    return [
+      "The first submission includes the required details, so your staff is not fielding follow-up callback requests.",
+      "The change is one complete authorization pass, which removes the callback cleanup step for your MA.",
+      "Operationally, your team sends one complete prior auth packet and can move to the next patient task.",
+      "The practical difference is fewer callback touchpoints because the initial request is complete.",
+    ];
+  }
+
+  if (/prior auth|prior authorization|pa\b/.test(ask)) {
+    return [
+      "The first prior auth submission is complete, so your staff does not have to run a second correction pass.",
+      "The operational change is one clean prior auth packet instead of a follow-up fix step.",
+      "Your team handles prior auth in one pass and can move directly to the next office action.",
+      "The practical shift is fewer prior auth touchpoints because the required fields are complete upfront.",
+    ];
+  }
+
+  return [
+    "The first submission is complete, so staff can move to the next action without a cleanup step.",
+    "The operational change is one complete pass rather than a second correction step.",
+    "Your team can move forward on the next office task once the first request goes in complete.",
+    "The practical difference is fewer rework touchpoints for staff after submission.",
+  ];
+}
+
+function rotateRepeatedRepLine(text = "", context = {}) {
+  const candidate = String(text || "").trim();
+  if (!candidate) return candidate;
+
+  const normalizedCandidate = normalizeForMatch(candidate);
+  const baseKey = `${prefix(context?.hcpTurn || "")}:${normalizedCandidate}`;
+
+  if (/moves straight into scheduling instead of (looping back|rework)/.test(normalizedCandidate)) {
+    return pickVariant(buildOperationalLoopAlternatives(context), candidate, `${baseKey}:schedule-loop`);
+  }
+
+  if (/cuts out the resubmission loop/.test(normalizedCandidate)) {
+    return pickVariant(buildOperationalLoopAlternatives(context), candidate, `${baseKey}:resubmission-loop`);
+  }
+
+  const recent = getRecentRepReplies(context, 4);
+  const repeatedCount = recent.reduce(
+    (count, line) => (normalizeForMatch(line) === normalizedCandidate ? count + 1 : count),
+    0,
+  );
+  if (repeatedCount === 0) return candidate;
+
+  const key = `${prefix(context?.hcpTurn || "")}:${repeatedCount}:${normalizedCandidate}`;
+
+  if (/^after that,/.test(normalizedCandidate)) {
+    return candidate.replace(/^After that,/i, repeatedCount % 2 === 0 ? "Then," : "From there,");
+  }
+
+  return candidate;
+}
+
 function finalizeRepReply(text = "", context = {}) {
-  return normalizeDialoguePunctuation(humanizeRepResponse(text, context));
+  const humanized = humanizeRepResponse(text, context);
+  const deduped = rotateRepeatedRepLine(humanized, context);
+  return normalizeDialoguePunctuation(deduped);
 }
 
 export function enforceRepAnswerFirstContract({
@@ -2247,8 +2333,8 @@ function buildDeterministicCommitmentReply({ scenario, turns }) {
     if (repTurns >= 3) {
       return "The proof point has to tighten to one metric: a subgroup analysis in the patients still landing in the hospital on the current path, showing roughly a 15% to 20% relative reduction in hospitalizations or readmissions. Anything softer than that is unlikely to change treatment choice.";
     }
-      return "The concrete proof point would have to be one subgroup analysis in the patients still landing in the hospital on the current path, showing a hospitalization or readmission reduction strong enough to change treatment choice for that subgroup.";
-    }
+    return "The concrete proof point would have to be one subgroup analysis in the patients still landing in the hospital on the current path, showing a hospitalization or readmission reduction strong enough to change treatment choice for that subgroup.";
+  }
 
   if (/actual reduction.*high-risk patients|tangible benefit for my most vulnerable patients|most vulnerable patients|high-risk patients|smallest subgroup where this makes a difference|smallest subgroup/.test(activeConcernText)) {
     if (repTurns >= 5) {

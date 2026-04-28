@@ -5,7 +5,10 @@ import {
     buildSynthesisUserPrompt,
     resolveSpecialistPersona,
 } from "@/lib/specialistSynthesisPrompts";
-import { checkWorkerHealth, invokeWorkerJson, listEvidenceRecords } from "@/services/workerClient";
+import { checkWorkerHealth, invokeWorkerJson, invokeWorkerJsonRawPayload, listEvidenceRecords } from "@/services/workerClient";
+import { invokeWorkerJsonWithRetry } from "@/services/workerJsonRetryHandler";
+import { getWorkerHealthReport, shouldAttemptWorkerSynthesis } from "@/services/workerOfflineSafeguard";
+import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 
 function getOptionLabel(field, value) {
     const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
@@ -77,9 +80,10 @@ export async function buildPredictiveRuntimeLens(options = {}) {
     let lens = staticLensFromProfile(staticProfile);
 
     try {
-        const health = await checkWorkerHealth();
-        if (health === "offline") {
-            synthesisError = "Predictive AI synthesis unavailable. Using deterministic lens.";
+        // Pre-flight health check using safeguard
+        const healthReport = await getWorkerHealthReport();
+        if (!shouldAttemptWorkerSynthesis(healthReport.status)) {
+            synthesisError = `Worker unavailable (${healthReport.status}) — using deterministic lens.`;
             return {
                 selection,
                 selectorLabels,
@@ -100,21 +104,36 @@ export async function buildPredictiveRuntimeLens(options = {}) {
         const systemPrompt = buildSpecialistSystemPrompt(selection);
         const userPrompt = buildSynthesisUserPrompt(selection, evidenceRecords, staticProfile, selectorLabels);
 
-        const synthesized = await invokeWorkerJson({
-            prompt: `${systemPrompt}\n\n${userPrompt}\n\nRuntime scenario: ${scenarioTitle}`,
-            max_tokens: 2800,
+        const runtimePrompt = `${systemPrompt}\n\n${userPrompt}\n\nRuntime scenario: ${scenarioTitle}`;
+
+        const synthesized = await invokeWorkerJsonWithRetry({
+            invokerFn: async (temp) =>
+                invokeWorkerJsonRawPayload({
+                    prompt: runtimePrompt,
+                    response_json_schema: PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA,
+                    max_tokens: 2800,
+                    temperature: temp,
+                    roleplay: false,
+                }),
+            maxRetries: 5,
             temperature: 0.18,
-            roleplay: false,
         });
 
         if (synthesized?.sections) {
             lens = synthesized;
             synthesisSource = "ai";
         } else {
-            synthesisError = "Predictive synthesis shape mismatch. Using deterministic lens.";
+            synthesisError = "Runtime synthesis returned unexpected structure — service-level issue detected.";
         }
-    } catch {
-        synthesisError = "Predictive synthesis failed. Using deterministic lens.";
+    } catch (err) {
+        const isRetryExhausted = err?.code === "WORKER_JSON_RETRY_EXHAUSTED";
+        if (isRetryExhausted) {
+            synthesisError = "Runtime synthesis persistent formatting issue — worker output format needs adjustment.";
+        } else if (String(err?.message || "").includes("timed out") || err?.name === "AbortError") {
+            synthesisError = "Runtime synthesis service timeout — worker unavailable.";
+        } else {
+            synthesisError = "Runtime synthesis failed — using deterministic lens.";
+        }
     }
 
     return {

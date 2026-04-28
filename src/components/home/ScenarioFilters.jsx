@@ -122,11 +122,11 @@ export default function ScenarioFilters({ filters, onChange }) {
   return (
     <div className="mb-5">
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <FilterDropdown options={DISEASE_STATES}        value={filters.diseaseState}        onChange={set("diseaseState")} />
-        <FilterDropdown options={SPECIALTIES}           value={filters.specialty}           onChange={set("specialty")} />
-        <FilterDropdown options={HCP_TYPES}             value={filters.hcpType}             onChange={set("hcpType")} />
-        <FilterDropdown options={INFLUENCE_DRIVERS}     value={filters.influenceDriver}     onChange={set("influenceDriver")} />
-        <FilterDropdown options={JOURNEY_STAGES}        value={filters.journeyStage}        onChange={set("journeyStage")} />
+        <FilterDropdown options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
+        <FilterDropdown options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
+        <FilterDropdown options={HCP_TYPES} value={filters.hcpType} onChange={set("hcpType")} />
+        <FilterDropdown options={INFLUENCE_DRIVERS} value={filters.influenceDriver} onChange={set("influenceDriver")} />
+        <FilterDropdown options={JOURNEY_STAGES} value={filters.journeyStage} onChange={set("journeyStage")} />
         <FilterDropdown options={INTERACTION_PRESSURES} value={filters.interactionPressure} onChange={set("interactionPressure")} />
       </div>
       {activeCount > 0 && (
@@ -159,22 +159,22 @@ export function applyScenarioFilters(scenarios, filters) {
       if (mappedDiseaseState) {
         if (mappedDiseaseState !== filters.diseaseState) return false;
       } else {
-      const haystack = `${s.stakeholder} ${s.context} ${s.title}`.toLowerCase();
-      const termMap = {
-        pulmonology: ["pulmonol", "pulmonary", "lung", "respiratory"],
-        cardiology: ["cardiol", "cardiac", "heart", "cardiovascular"],
-        rheumatology: ["rheumatol", "arthritis"],
-        neurology: ["neurolog", "brain"],
-        oncology: ["oncolog", "cancer", "tumor"],
-        nephrology: ["nephrolog", "kidney", "renal"],
-        dermatology: ["dermatol", "skin"],
-        hematology: ["hematolog", "blood"],
-        gastroenterology: ["gastro", "gi ", "gastroenterol"],
-        endocrinology: ["endocrin", "diabetes", "thyroid"],
-        primary_care: ["primary care", "internal medicine", "hospitalist", "community"],
-      };
-      const terms = termMap[filters.diseaseState] || [];
-      if (!terms.some(t => haystack.includes(t))) return false;
+        const haystack = `${s.stakeholder} ${s.context} ${s.title}`.toLowerCase();
+        const termMap = {
+          pulmonology: ["pulmonol", "pulmonary", "lung", "respiratory"],
+          cardiology: ["cardiol", "cardiac", "heart", "cardiovascular"],
+          rheumatology: ["rheumatol", "arthritis"],
+          neurology: ["neurolog", "brain"],
+          oncology: ["oncolog", "cancer", "tumor"],
+          nephrology: ["nephrolog", "kidney", "renal"],
+          dermatology: ["dermatol", "skin"],
+          hematology: ["hematolog", "blood"],
+          gastroenterology: ["gastro", "gi ", "gastroenterol"],
+          endocrinology: ["endocrin", "diabetes", "thyroid"],
+          primary_care: ["primary care", "internal medicine", "hospitalist", "community"],
+        };
+        const terms = termMap[filters.diseaseState] || [];
+        if (!terms.some(t => haystack.includes(t))) return false;
       }
     }
     if (filters.specialty !== "all") {

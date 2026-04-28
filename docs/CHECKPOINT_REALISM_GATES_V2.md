@@ -9,7 +9,9 @@
 ## Changes in This Checkpoint
 
 ### 1. ✅ Confidence Gate Script (NEW)
+
 **File:** `scripts/confidence-gate.ts`
+
 - **Purpose:** Codify pass/fail criteria for context-aware realism
 - **Gates:**
   - Gate 1: High-Pressure Clipping (blocker-first validation vs. user's anchor)
@@ -24,7 +26,9 @@
 - **Usage:** `npm run confidence:gate`
 
 ### 2. ✅ Research Documentation (NEW)
+
 **File:** `docs/REALISM_RESEARCH.md`
+
 - **Purpose:** Deep-link all realism criteria to peer-reviewed sources
 - **Content:**
   - Global tone/sampling map → JAMA, NEJM, MSL Society research
@@ -37,7 +41,9 @@
 - **Validation:** All controls are research-grounded and clinically validated
 
 ### 3. ✅ Phrase-Regression Table (ENHANCED)
+
 **File:** `src/lib/hcpResponseGenerator.ts` (enforceHighPressureClippedPhrasing)
+
 - **Improvements:**
   - Formalized regex table with 7 patterns + fallback replacements
   - Comprehensive documentation block explaining PM360 research
@@ -53,6 +59,7 @@
   - Colloquial hedge ("Look,…") conditional preservation
 
 ### 4. ✅ Package.json Updates
+
 - **New npm scripts:**
   - `npm run confidence:gate` — Run confidence gate validator
   - `npm run predeploy` or `npm run predeploy-verify` — Run predeploy checks
@@ -60,13 +67,17 @@
 - **Integration:** Can be called from CI/CD pipelines or local validation before push
 
 ### 5. ✅ Predeploy Integration (READY TO EXTEND)
+
 **File:** `scripts/predeploy-verify.ts` (marked for extension)
+
 - **Next step:** Call `confidence:gate` script at end of predeploy flow
 - **Output:** Add realism confidence block to predeploy report
 - **Exit code:** Fail predeploy if confidence < 96%
 
 ### 6. ✅ QA Matrix Integration (READY TO EXTEND)
+
 **File:** `scripts/qa-matrix.ts` (marked for extension)
+
 - **Next step:** Add metric collection:
   - First-turn "Applied" rate
   - High-pressure clipped-phrasing pass rate
@@ -79,23 +90,28 @@
 ## Validation Status
 
 ### ✅ Code Quality
+
 - **Lint:** All files pass ESLint
 - **Type Safety:** TypeScript checks pass
 - **Diagnostics:** No blocking errors
 
 ### ✅ Behavioral Validation (Live Tests)
+
 **Gatekeeper Filter (High-Pressure):**
+
 - ✅ REP: "hi dr how are you? can we speak about the study i dropped off last week?"
 - ✅ HCP: First turn shows blocker-first, prior-auth-focused, clipped phrasing
 - ✅ PredictiveDebugChip: Shows "Applied" (not "Pending")
 - ✅ Expected: "Which specific prior auth step is driving callbacks for my staff right now?" ← Matches user anchor behavior
 
 **Undefined Patient Profile (Moderate-Pressure):**
+
 - ✅ Exploratory posture maintained (8+ words, allows dialogue)
 - ✅ Not over-compressed
 - ✅ Context-aware response
 
 ### ✅ Architecture Validation
+
 - ✅ Global shared runtime path confirmed (no scenario-specific overrides)
 - ✅ Global sampling map active in all scenarios
 - ✅ Clipping guard applied pre-cue-generation
@@ -151,6 +167,7 @@
 ## Deployment Readiness
 
 **Current State:** ✅ LOCAL-ONLY COMMIT
+
 - All confidence gates implemented
 - Research documentation complete
 - Phrase-regression table formalized
@@ -158,6 +175,7 @@
 - Code quality validated
 
 **Blocking Items for Cloudflare Deploy:**
+
 1. ⚠️ User confirms expanded testing (scenario matrix, phrase regression)
 2. ⚠️ User confirms predeploy gate passes with 96%+ confidence
 3. ⚠️ User confirms anchor opening exchange behaves as expected
@@ -169,6 +187,7 @@
 ## Local Git Status
 
 **Commit Message:**
+
 ```
 checkpoint: global deterministic sampling map + first-turn lens readiness gate + confidence hardening plan
 
@@ -199,9 +218,11 @@ LOCAL ONLY — No Cloudflare deploy until user confirms readiness via expanded t
 ## How to Review This Checkpoint
 
 1. **Run confidence gate:**
+
    ```bash
    npm run confidence:gate
    ```
+
    Verify all 5 gates pass and confidence ≥ 96%
 
 2. **Test anchor scenario:**

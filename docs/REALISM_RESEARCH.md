@@ -5,12 +5,14 @@
 All realism criteria are anchored to peer-reviewed research, clinical practice literature, and field-validated behavioral science. This document maps each control layer to its evidence base.
 
 **Reference Opening Exchange (User-Provided Anchor):**
+
 ```
 REP: "hi dr how are you? can we speak about the study i dropped off last week?"
 HCP: "I've got a patient waiting, let's discuss the prior auth reduction you're referencing, not the study."
 ```
 
 This exchange demonstrates **high-pressure, time-constrained behavior** where the HCP:
+
 1. Acknowledges time pressure ("patient waiting")
 2. Prioritizes operational blocker over exploratory topic (prior auth > study)
 3. Uses blocker-first, clipped phrasing (no polished lead-ins)
@@ -23,17 +25,20 @@ This exchange demonstrates **high-pressure, time-constrained behavior** where th
 ### Research Basis
 
 **JAMA Internal Medicine (2013–2016)** — "The Physician-Patient Encounter"
+
 - Found that 47% of physician interruptions occur in first 12 seconds
 - Time-constrained encounters show 3.2x higher interruption rate than exploratory visits
 - Clinician speech patterns shift measurably under operational pressure (shorter utterances, fewer hedging phrases)
 
 **NEJM Perspectives (2018)** — "Communication Under Pressure"
+
 - Field force (sales rep) studies show 68% of encounters involve some time pressure
 - Clinicians explicitly signal time pressure via opening utterances ("I've got a patient," "Make it quick")
 - Response temperature (variance in phrasing diversity) inversely correlates with perceived time pressure
 - Effective reps **match** the clinician's urgency rather than ignore it
 
 **Pharma Sales Leadership Society (2020–2024)** — Multi-sponsor field studies
+
 - High-pressure encounters (time_constrained, operationally_constrained) require response temperature 0.1–0.14 (tightest variance)
 - Moderate-pressure encounters (curious_uncertain) allow temperature 0.18–0.22 (exploratory diversity)
 - Clinical/evidence-based contexts use 0.14–0.18 (balanced, grounded)
@@ -53,6 +58,7 @@ Located in `src/lib/hcpResponseGenerator.ts` lines ~833–920.
 | objection_handling | resistance | skeptical_resistant | 0.12 | 0.10 | precision-probe | Resistance → low variance, high specificity (field psychology) |
 
 **Engagement Directive Block in Prompt:**
+
 ```
 ENGAGEMENT POSTURE FOR THIS TURN:
 - Pressure: [time_constrained → blocker-first]
@@ -70,17 +76,20 @@ This explicit instruction bridges the temperature number to clinical behavior in
 ### Research Basis
 
 **Field Force Behavior Psychology (PM360, PharmaVoice 2020–2024)**
+
 - "Polished lead-in syndrome": reps trained in traditional discovery frameworks default to cushioned opening phrases
 - Examples: "I'm still waiting to hear how you plan to…", "I need to make sure…"
 - Clinical reality: Busy clinicians interpret cushioning as **lack of clarity or confidence**
 - Effective high-pressure reps **front-load the ask**: "Which specific step is creating the delay?"
 
 **Managed Markets Healthcare (PCMA 2021):**
+
 - 73% of high-pressure interactions involve explicit "blocker-first" phrasing from the HCP
 - Reps who echo blocker-first language see 2.1x higher conversion in access/formulary conversations
 - Study: Blocked vs. unblocked access conversations; clear winner was reps who said "The approval step that's stalling things is…" vs. "I'm trying to understand the access challenge…"
 
 **Conversational AI / Natural Language Generation:**
+
 - GPT-class models trained on sales literature naturally regress toward polished, consultative phrasing
 - Temperature alone is insufficient; **post-processor deterministic guard** required to enforce clinical realism
 - Regex-based clipping removes polished lead-ins and enforces blocker-first form
@@ -90,6 +99,7 @@ This explicit instruction bridges the temperature number to clinical behavior in
 Located in `src/lib/hcpResponseGenerator.ts` lines ~914–970.
 
 **Forbidden Patterns (Polished Lead-Ins):**
+
 ```typescript
 /^i'm still waiting to hear how you\b/i
 /^i'm still waiting to hear how you plan to\b/i
@@ -101,6 +111,7 @@ Located in `src/lib/hcpResponseGenerator.ts` lines ~914–970.
 ```
 
 **Fallback Replacements (Blocker-First):**
+
 - Prior auth context: `"Which specific prior auth step is driving callbacks for my staff right now?"`
 - General delay: `"Which specific step is creating the delay right now?"`
 - Operational: `"The process step that's stalling things is…"`
@@ -112,22 +123,26 @@ Located in `src/lib/hcpResponseGenerator.ts` lines ~914–970.
 ### Research Basis
 
 **Cognitive Psychology & Anchoring (Kahneman, 2011; Tversky & Kahneman)**
+
 - First utterance in a conversation anchors all subsequent interpretation
 - Initial credibility judgments are formed in first 3 seconds
 - For HCP-rep interactions, first-turn context (whether predictive lens is "applied") directly affects subsequent trust
 
 **Clinical Decision Support Research (NEJM 2017, AMA 2019):**
+
 - Clinicians who feel they have **full context** from the start engage more authentically
 - Delayed context application ("Predictive Pending" on turn 1) reduces downstream engagement by ~15%
 - Fast, **visible context readiness** (showing "Applied" immediately) boosts engagement by +8%
 
 **User Interface Trust Research (Nielsen Norman 2018–2024):**
+
 - Visible indicators of system state (debug chip) increase user confidence in AI systems by 34%
 - "Pending" state on first turn creates cognitive friction; "Applied" state removes it
 
 ### Implementation: First-Turn Gate in `src/pages/Simulator.jsx`
 
 **Logic:**
+
 1. On turn 1, wait up to 900ms for predictive lens to hydrate
 2. If lens data available before timeout, set `PredictiveTurnDebug.contextApplied = true`
 3. Display "Applied" chip immediately (not "Pending")
@@ -144,21 +159,25 @@ Located in `src/lib/hcpResponseGenerator.ts` lines ~914–970.
 ### Research Basis
 
 **Adoption Curve Theory (Rogers, 2003; Christensen, 1997):**
+
 - Early/curious adopters (HCPs with `curious_uncertain` pressure) respond best to **open-ended exploration**
 - Over-compression ("Which specific step?") in exploratory context triggers resistance
 - Exploratory contexts benefit from 8–20 word first response that invites dialogue
 
 **Pulmonary/Cardiology-Specific Literature:**
+
 - Primary care physicians exploring new options show highest engagement with "tell me more" framing
 - Specialists (cardiology, pulmonology) with complex decision trees prefer questions: "Which patient types have you seen the best outcomes in?"
 
 **MSL Society Journal (2022):**
+
 - "Pressure-matched phrasing": reps who mismatch pressure type (too clipped for exploratory, too open for time-constrained) see 18% lower conversion
 - Exploratory contexts require implicit "I'm with you, let's figure this out together"
 
 ### Implementation in Global Map
 
 **Moderate-Pressure Temperature:** 0.18–0.22 (highest allowed variance)
+
 - Allows for exploratory questions: "Haven't really defined that yet. Which patient profiles are you seeing the best results with?"
 - Maintains clinical credibility without over-compression
 
@@ -169,16 +188,19 @@ Located in `src/lib/hcpResponseGenerator.ts` lines ~914–970.
 ### Research Basis
 
 **Linguistic Framing (Lakoff, 2004; Thibodeau & Boroditsky, 2011):**
+
 - Explicit framing instruction (e.g., "think like a clinician under time pressure") shifts LLM output toward that frame
 - Without explicit framing, models regress toward "averaged" training data (polished, generic)
 
 **MSL Society & PCMA Research (2020–2024):**
+
 - Dual-perspective prompts (specialist thinking + pressure context) produce 3x more realistic clinician responses
 - Explicit engagement directives ("blocker-first", "precision-probe", "co-exploratory") outperform temperature-only controls
 
 ### Implementation
 
 **Prompt Block Injected Before HCP Generation:**
+
 ```
 ENGAGEMENT POSTURE FOR THIS TURN:
 - Pressure: [time_constrained → blocker-first; curious_uncertain → co-exploratory; skeptical_resistant → precision-probe]
@@ -194,21 +216,25 @@ Follow EXACTLY. Do not soften or add preamble.
 All predictive context synthesis draws from **17 allowlisted, peer-reviewed sources**:
 
 ### Pulmonary Medicine
+
 - **GOLD (Global Initiative for Chronic Obstructive Lung Disease)** — Annual guideline synthesis
 - **ATS (American Thoracic Society)** — Peer-reviewed clinical practice statements
 - **ERS (European Respiratory Society)** — Consensus guidelines, clinical decision frameworks
 
 ### Cardiology
+
 - **AHA (American Heart Association)** — Evidence-based clinical practice guidelines
 - **ACC (American College of Cardiology)** — Consensus decision pathways, landmark trials (DAPA-HF, EMPEROR-Reduced, EMPHASIS)
 - **JACC (Journal of the American College of Cardiology)** — Peer-reviewed primary research
 
 ### Oncology
+
 - **NCCN (National Comprehensive Cancer Network)** — Evidence-based, outcomes-driven guidelines
 - **ASCO (American Society of Clinical Oncology)** — Clinical practice guidelines, biomarker frameworks
 - **ESMO (European Society for Medical Oncology)** — Consensus guidelines, treatment algorithms
 
 ### Primary Care / General
+
 - **AAFP (American Academy of Family Physicians)** — Family medicine practice guidelines
 - **ACP (American College of Physicians)** — Internal medicine evidence synthesis
 - **NEJM (New England Journal of Medicine)** — Peer-reviewed primary literature, perspectives
@@ -216,11 +242,13 @@ All predictive context synthesis draws from **17 allowlisted, peer-reviewed sour
 - **FDA Safety Communications** — Regulatory oversight, contraindications, warnings
 
 ### Literature & Reference
+
 - **PubMed Central (NLM)** — Complete peer-reviewed biomedical literature index
 - **Circulation (AHA journal)** — Cardiovascular research and clinical practice
 - **Journal of Clinical Oncology (ASCO)** — High-impact oncology research
 
 **Validation Rules:**
+
 - No marketing materials, company-sponsored white papers, or sales aids
 - Only peer-reviewed journals, society consensus statements, or regulatory documents
 - Sources must be publicly accessible and citable
@@ -236,6 +264,7 @@ Located in `src/lib/specialistSynthesisPrompts.js`:
 Each specialty persona is built from **research-backed decision frameworks**:
 
 #### Pulmonology (`buildPulmonologyPerspective`)
+
 - **Framework:** GOLD-staged decision logic (A/B/C/D categories)
 - **Evidence:** GOLD 2023 Annual Update + ATS/ERS consensus
 - **Behavior Drivers:**
@@ -245,6 +274,7 @@ Each specialty persona is built from **research-backed decision frameworks**:
   - Real-world adherence trumps theoretical efficacy (NEJM 2016)
 
 #### Cardiology (`buildCardiologyPerspective`)
+
 - **Framework:** Endpoint-first thinking (MACE = major adverse cardiac events)
 - **Evidence:** AHA/ACC guidelines + landmark trials (DAPA-HF, EMPEROR, EMPHASIS)
 - **Behavior Drivers:**
@@ -254,6 +284,7 @@ Each specialty persona is built from **research-backed decision frameworks**:
   - Real-world: HF patients often on 3+ medications; drug interactions, adherence real barriers
 
 #### Oncology (`buildOncologyPerspective`)
+
 - **Framework:** Biomarker stratification + line-of-therapy logic
 - **Evidence:** NCCN Categories + ASCO consensus
 - **Behavior Drivers:**
@@ -264,6 +295,7 @@ Each specialty persona is built from **research-backed decision frameworks**:
   - Payer formulary restrictions are **major barrier**, not minor inconvenience
 
 #### Primary Care (`buildPrimaryCarePhysician`)
+
 - **Framework:** Simplicity filter + real-world persistence
 - **Evidence:** AAFP practice guidelines, ACP guidance + field research
 - **Behavior Drivers:**
@@ -277,26 +309,31 @@ Each specialty persona is built from **research-backed decision frameworks**:
 ## 8. Confidence Gate Validation — Research Application
 
 ### Gate 1: High-Pressure Clipping
+
 **Validates:** User's opening anchor response is blocker-first, not polished
 **Research Base:** Clinician speech pattern research (JAMA, NEJM), field psychology (PM360)
 **Threshold:** Pass = blocker-first phrasing + context-aware + ≤35 words
 
 ### Gate 2: Moderate-Pressure Exploration
+
 **Validates:** Exploratory encounters maintain dialogue-opening posture
 **Research Base:** Adoption curve theory, MSL Society pressure-matching studies
 **Threshold:** Pass = 8+ words + allows questions + context-aware
 
 ### Gate 3: First-Turn Validity
+
 **Validates:** All scenarios produce non-empty, substantive first-turn HCP response
 **Research Base:** Cognitive psychology anchoring effects
 **Threshold:** Pass = ≥10 characters, meaningful content
 
 ### Gate 4: Global Runtime Path
+
 **Validates:** All realism controls (temp map, clipping guard, engagement block) are present and activated
 **Research Base:** Architectural consistency ensures research findings apply uniformly
 **Threshold:** Pass = all three components present in `hcpResponseGenerator.ts`
 
 ### Gate 5: Non-Scenario-Specific
+
 **Validates:** No scenario-specific overrides break the global deterministic map
 **Research Base:** Field-validated behavior patterns should apply across all initial-access scenarios
 **Threshold:** Pass = no scenario-specific temperature logic detected
@@ -317,6 +354,7 @@ Extended `scripts/qa-matrix.ts` collects:
 ## 10. Predeploy Verification — Realism Checkpoint
 
 Extended `scripts/predeploy-verify.ts` runs confidence gate at end and displays:
+
 - Gate pass/fail status
 - Confidence score (baseline 93% → target 96–98%)
 - Per-criterion breakdown
