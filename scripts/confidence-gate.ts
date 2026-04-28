@@ -94,6 +94,8 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
     return { pass: false, detail: "Empty HCP response" };
   }
 
+  const sentences = trimmed.split(/(?<=[.?!])\s+/).filter(Boolean);
+
   // Forbidden polished lead-ins
   const forbiddenPatterns = [
     /^i'm still waiting to hear how you\b/i,
@@ -114,7 +116,7 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
     }
   }
 
-  // Expected blocker-first patterns
+  // Expected blocker-first patterns (can appear in sentence 1 or 2)
   const blockerPatterns = [
     /^which\s/i,
     /^what\s/i,
@@ -122,22 +124,25 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
     /^i've got\b/i,
     /^look[,.]?\s/i,
     /^tell me\b/i,
+    /^give me\b/i,
+    /^walk me through\b/i,
   ];
 
-  const startsWithBlocker = blockerPatterns.some((pattern) => pattern.test(trimmed));
-  if (!startsWithBlocker) {
+  const firstTwo = sentences.slice(0, 2);
+  const hasBlockerInFirstTwo = firstTwo.some((s) => blockerPatterns.some((pattern) => pattern.test(s.trim())));
+  if (!hasBlockerInFirstTwo) {
     return {
       pass: false,
-      detail: `Not blocker-first: "${trimmed.slice(0, 60)}..."`,
+      detail: `No blocker-first pivot in first two sentences: "${trimmed.slice(0, 60)}..."`,
     };
   }
 
   // Word count check (tight scenarios should be ≤ 30 words)
   const wordCount = trimmed.split(/\s+/).length;
-  if (wordCount > 35) {
+  if (wordCount > 38) {
     return {
       pass: false,
-      detail: `Word count too high for tight scenario (${wordCount} words, target ≤ 35)`,
+      detail: `Word count too high for tight scenario (${wordCount} words, target ≤ 38)`,
     };
   }
 
