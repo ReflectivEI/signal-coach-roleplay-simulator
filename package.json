@@ -24,7 +24,7 @@
     "dev:worker": "wrangler dev --config wrangler.toml --port 8787",
     "worker:deploy": "wrangler deploy --config wrangler.toml",
     "frontend:deploy": "wrangler pages deploy dist --project-name signal-coach-roleplay-simulator --config wrangler.pages.toml",
-    "deploy:full": "npm run build && npm run worker:deploy && npm run frontend:deploy"
+    "deploy:full": "node scripts/deploy-guard.js && npm run build && npm run worker:deploy && npm run frontend:deploy"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

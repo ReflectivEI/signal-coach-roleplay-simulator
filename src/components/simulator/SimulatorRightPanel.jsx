@@ -120,9 +120,11 @@ export default function SimulatorRightPanel({
     navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
   };
 
+  const isAdminView = import.meta.env.VITE_ADMIN_LENS === "true";
+
   return (
     <div className="space-y-4">
-      {(predictiveLens?.isLoading || predictiveLens?.data) && (
+      {isAdminView && (predictiveLens?.isLoading || predictiveLens?.data) && (
         <DarkSection
           icon={BrainCircuit}
           title="Predictive HCP Lens"
