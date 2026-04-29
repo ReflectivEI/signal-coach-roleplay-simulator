@@ -1286,17 +1286,21 @@ function inferCommitmentAttempt(
 ): BehaviorSignals["commitment_attempt"] {
   const text = String(repMessage || "").toLowerCase();
   const repTurns = transcript.filter((turn) => turn?.speaker === "rep").length;
-  const lateEnoughForAsk =
-    repTurns >= 2 ||
-    ["commitment_close", "access_formulary", "adoption_implementation"].includes(String(scenario?.journeyStage || "")) ||
-    String(scenario?.journeyState || "").includes("commitment");
-
+  const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
+  const journeyState = String(scenario?.journeyState || "").toLowerCase();
+  
+  // Explicit next-step asks always count (clear commitment)
   if (/\bcan we\b|\bwould you be open to\b|\bnext step\b|\bset up\b|\bfollow-up\b|\breview together\b|\bbring this to\b|\bpilot\b|\btry this with\b|\bidentify a patient\b|\bflagging that chart\b|\bbring to the next formulary discussion\b|\bconcrete step you could take\b|\bwhat one thing could you take back\b|\bmake a strong case\b/.test(text)) {
     return "clear";
   }
 
+  // Exploratory commitment asks: weak if late stage OR early discovery with directional framing
+  const lateEnoughForAsk = repTurns >= 2 || ["commitment_close", "access_formulary", "adoption_implementation"].includes(journeyStage) || journeyState.includes("commitment");
+  const earlyDiscoveryStage = ["initial_access", "discovery"].includes(journeyStage);
+  const hasDirectionalFrame = /\bfirst patient\b|\bwhat would you need\b|\bwhat matters most\b|\bwhere do we start\b|\bwhat's your biggest concern\b/.test(text);
+  
   if (
-    lateEnoughForAsk &&
+    (lateEnoughForAsk || (earlyDiscoveryStage && hasDirectionalFrame)) &&
     /\bwhat would you need to see\b|\bwhich patient type\b|\bwhat outcome carries the most weight\b|\bwhere does .* break down\b|\bwhat specifically would you need to see\b|\bwhat would make this feel usable\b|\bwhat would it take for you to feel confident\b|\bwhat's the next formulary committee meeting\b|\bwhat's the one workflow requirement\b|\bwhat's one concrete step\b|\bwhat's the one data point\b|\bwhat specific info do you need(?: to see)?\b|\bwhat kind of data\b|\bmove the needle with the formulary team\b/.test(text)
   ) {
     return "weak";
