@@ -4,7 +4,9 @@
  * @typedef {Object} WorkerRequestJsonOptions
  * @property {string} [method]
  * @property {unknown} [body]
- */
+const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
+const configuredWorkerUrl = import.meta?.env?.VITE_ROLEPLAY_WORKER_URL?.trim();
+const WORKER_URL = configuredWorkerUrl || DEFAULT_LOCAL_WORKER_URL;
 
 /**
  * @typedef {Object} WorkerTextRequest
@@ -26,7 +28,9 @@
 
 const isBrowserRuntime = typeof window !== "undefined";
 const isViteDevRuntime = Boolean(import.meta?.env?.DEV);
-const WORKER_URL = "http://127.0.0.1:8787";
+const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
+const configuredWorkerUrl = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || "";
+const WORKER_URL = configuredWorkerUrl || DEFAULT_LOCAL_WORKER_URL;
 const workerInvokePath = "/api/llm/invoke";
 const workerHealthPath = "/health";
 const workerScenariosPath = "/api/scenarios";

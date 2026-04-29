@@ -28,6 +28,11 @@ const LEVEL_TO_SCORE = {
   missed: 1,
 };
 
+const REVIEW_TEXT = "hsl(222 44% 17%)";
+const REVIEW_MUTED = "hsl(215 18% 39%)";
+const REVIEW_FAINT = "hsl(215 14% 52%)";
+const REVIEW_PANEL = "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,250,251,0.98) 100%)";
+
 function splitParagraphs(value) {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -153,8 +158,8 @@ function ContextCard({ icon: Icon, title, alwaysExpanded = false, children, tip 
 function OverallBlock({ label, children }) {
   return (
     <div className="space-y-2">
-      <p className="text-sm font-semibold text-foreground">{label}</p>
-      <div className="text-sm text-foreground/80 leading-relaxed space-y-2">{children}</div>
+      <p className="text-sm font-semibold" style={{ color: REVIEW_TEXT }}>{label}</p>
+      <div className="text-sm leading-relaxed space-y-2" style={{ color: REVIEW_MUTED }}>{children}</div>
     </div>
   );
 }
@@ -164,8 +169,8 @@ function OverallBlock({ label, children }) {
 function DeepDiveBlock({ number, title, children }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-        <span className="text-muted-foreground/40 font-mono mr-1">{number})</span>{title}
+      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: REVIEW_MUTED }}>
+        <span className="font-mono mr-1" style={{ color: REVIEW_FAINT }}>{number})</span>{title}
       </p>
       {children}
     </div>
@@ -201,13 +206,13 @@ function CapabilityRow({ cap, insight }) {
           {cap.label}
         </span>
 
-        <span className="text-xs font-medium text-muted-foreground shrink-0">
+        <span className="text-xs font-medium shrink-0" style={{ color: REVIEW_MUTED }}>
           Score {score}/5
         </span>
 
         {/* Sublabel (Signal Awareness only) */}
         {sublabel && !open && (
-          <span className="text-xs text-muted-foreground flex-1">{sublabel}</span>
+          <span className="text-xs flex-1" style={{ color: REVIEW_FAINT }}>{sublabel}</span>
         )}
         {!sublabel && <span className="flex-1" />}
 
@@ -217,8 +222,8 @@ function CapabilityRow({ cap, insight }) {
         </span>
 
         {open
-          ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-1" />
-          : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0 ml-1" />
+          ? <ChevronUp className="w-3.5 h-3.5 shrink-0 ml-1" style={{ color: REVIEW_FAINT }} />
+          : <ChevronDown className="w-3.5 h-3.5 shrink-0 ml-1" style={{ color: REVIEW_FAINT }} />
         }
       </button>
 
@@ -231,14 +236,14 @@ function CapabilityRow({ cap, insight }) {
             transition={{ duration: 0.25 }}
             className="overflow-hidden"
           >
-            <div className="pb-5 px-4 space-y-4 border-t pt-4" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(250,252,253,0.98) 0%, rgba(244,248,250,0.98) 100%)" }}>
+            <div className="pb-5 px-4 space-y-4 border-t pt-4" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
 
               {insight.whatHappened && (
                 <DeepDiveBlock number="1" title="What Happened (Observed Behavior)">
-                  <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-line">{insight.whatHappened}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{insight.whatHappened}</p>
                   {insight.transcriptEvidence && (
                     <div className="mt-2 p-3 rounded-lg bg-surface border-l-2 border-primary/40">
-                      <p className="text-xs text-muted-foreground font-mono leading-relaxed italic">"{insight.transcriptEvidence}"</p>
+                      <p className="text-xs font-mono leading-relaxed italic" style={{ color: REVIEW_MUTED }}>"{insight.transcriptEvidence}"</p>
                     </div>
                   )}
                 </DeepDiveBlock>
@@ -246,23 +251,23 @@ function CapabilityRow({ cap, insight }) {
 
               {insight.whyItMattered && (
                 <DeepDiveBlock number="2" title="Why It Mattered (HCP Reaction)">
-                  <p className="text-sm text-foreground/85 leading-relaxed">{insight.whyItMattered}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{insight.whyItMattered}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.pattern && (
                 <DeepDiveBlock number="3" title="Pattern (If Repeated)">
-                  <p className="text-sm text-foreground/85 leading-relaxed">{insight.pattern}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{insight.pattern}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.whatGoodLooksLike && (
                 <DeepDiveBlock number="4" title="What Good Would Have Looked Like">
-                  <p className="text-sm text-foreground/85 leading-relaxed">{insight.whatGoodLooksLike}</p>
+                  <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{insight.whatGoodLooksLike}</p>
                   {insight.exampleRewrite && (
                     <div className="mt-2 p-3 rounded-lg bg-signal-positive/5 border border-signal-positive/20">
                       <p className="text-xs text-signal-positive font-medium mb-1">Example phrasing:</p>
-                      <p className="text-xs text-foreground/80 italic">"{insight.exampleRewrite}"</p>
+                      <p className="text-xs italic" style={{ color: REVIEW_MUTED }}>"{insight.exampleRewrite}"</p>
                     </div>
                   )}
                 </DeepDiveBlock>
@@ -270,7 +275,7 @@ function CapabilityRow({ cap, insight }) {
 
               {insight.nextTimeAction && (
                 <DeepDiveBlock number="5" title="What to Do Next Time">
-                  <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-line">{insight.nextTimeAction}</p>
+                  <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{insight.nextTimeAction}</p>
                 </DeepDiveBlock>
               )}
 
@@ -278,7 +283,7 @@ function CapabilityRow({ cap, insight }) {
 
               {insight.relatedTurnIds?.length > 0 && (
                 <div className="pt-2 border-t border-border/30">
-                  <p className="text-xs text-muted-foreground/60 font-mono">
+                  <p className="text-xs font-mono" style={{ color: REVIEW_FAINT }}>
                     Transcript anchors: {insight.relatedTurnIds.join(", ")}
                   </p>
                 </div>
@@ -293,7 +298,7 @@ function CapabilityRow({ cap, insight }) {
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            <div className="pb-4 px-4 pt-3 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(250,252,253,0.98) 0%, rgba(244,248,250,0.98) 100%)" }}>
+            <div className="pb-4 px-4 pt-3 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
               <NotObservedMarker />
             </div>
           </motion.div>
@@ -326,6 +331,7 @@ export default function SessionSummaryModal({
   onRegenerate = () => {}
 }) {
   if (!review) return null;
+  const [showOverallAnalysis, setShowOverallAnalysis] = useState(true);
 
   // Build insight lookup, preserving the full forensic capability insight as the source of truth.
   // Legacy guidance objects can fill gaps, but should never overwrite the richer review object.
@@ -552,20 +558,38 @@ export default function SessionSummaryModal({
                     <span className="font-bold text-sm" style={{ color: "hsl(177 49% 36%)" }}>⬥</span>
                     <span className="text-sm font-semibold text-foreground">Overall: {overallScore}/5</span>
                   </div>
-                  <p className="text-xs mt-0.5" style={{ color: "hsl(215 18% 46%)" }}>
+                  <p className="text-xs mt-0.5" style={{ color: REVIEW_MUTED }}>
                     Capability feedback analysis by behavioral metric — click any metric below to analyze.
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-3 py-1 rounded-md border shrink-0 text-slate-600 bg-white/70 border-slate-200">
-                  Analyze
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowOverallAnalysis((current) => !current)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-md border shrink-0"
+                  style={{ color: REVIEW_MUTED, background: "rgba(255,255,255,0.82)", borderColor: "rgba(152, 160, 171, 0.30)" }}
+                >
+                  {showOverallAnalysis ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  {showOverallAnalysis ? "Hide Analysis" : "Analyze"}
+                </button>
               </div>
 
-              <div className="px-5 py-5 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
-                <OverallBlock label="1) Brief Rationale">
-                  <p>{briefRationale || <span className="text-muted-foreground italic">Generating…</span>}</p>
-                </OverallBlock>
-              </div>
+              <AnimatePresence initial={false}>
+                {showOverallAnalysis && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 py-5 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
+                      <OverallBlock label="1) Brief Rationale">
+                        <p style={{ color: REVIEW_TEXT }}>{briefRationale || <span style={{ color: REVIEW_FAINT, fontStyle: "italic" }}>Generating…</span>}</p>
+                      </OverallBlock>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* ── Capability rows — always visible below the overall header ── */}
               <div className="divide-y border-t" style={{ borderColor: "rgba(152, 160, 171, 0.22)" }}>
@@ -579,7 +603,7 @@ export default function SessionSummaryModal({
               </div>
             </div>
 
-            <div className="mt-6 space-y-6 rounded-xl border px-5 py-5" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(246,250,251,0.98) 100%)" }}>
+            <div className="mt-6 space-y-6 rounded-xl border px-5 py-5" style={{ borderColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
               <OverallBlock label="2) Capabilities Done Well">
                 {(didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).length > 0
                   ? (didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).map((p, i) => <p key={i}>{p}</p>)
@@ -605,7 +629,7 @@ export default function SessionSummaryModal({
               </OverallBlock>
 
               {review.overallGuidance?.[0] && (
-                <p className="text-xs leading-relaxed pt-3 border-t" style={{ color: "hsl(215 14% 58%)", borderColor: "rgba(152, 160, 171, 0.18)" }}>
+                <p className="text-xs leading-relaxed pt-3 border-t" style={{ color: REVIEW_FAINT, borderColor: "rgba(152, 160, 171, 0.18)" }}>
                   {review.overallGuidance[0]}
                 </p>
               )}
@@ -624,7 +648,8 @@ export default function SessionSummaryModal({
         >
           <button
             onClick={onExport}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-2 text-sm transition-colors"
+            style={{ color: REVIEW_MUTED }}
           >
             <Download className="w-3.5 h-3.5" />
             Export Feedback PDF

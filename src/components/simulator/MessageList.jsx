@@ -29,7 +29,8 @@ function HcpCueStrip({ cue }) {
 
 function PredictiveDebugChip({ debugInfo }) {
   const [open, setOpen] = useState(false);
-  if (!debugInfo) return null;
+  const isAdminView = import.meta.env.VITE_ADMIN_LENS === "true";
+  if (!isAdminView || !debugInfo) return null;
 
   const applied = Boolean(debugInfo.contextApplied);
   const sourceLabel = debugInfo.source === "ai" ? "AI" : debugInfo.source === "deterministic" ? "Deterministic" : "Unknown";
