@@ -27,6 +27,12 @@ export const scenarioPredictivePresets = {
     influenceDriver: "Practical / Workflow-Oriented",
     behaviorArchetype: "Guarded Gatekeeper",
     coreFriction: "Access + workflow burden",
+    canonical: {
+      journeyStage: "initial_access",
+      interactionPressure: ["time_constrained", "operationally_constrained"],
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
   },
   "The Guideline Anchor": {
     journeyStage: "Clinical Value",
@@ -34,6 +40,12 @@ export const scenarioPredictivePresets = {
     influenceDriver: "Guideline-Anchored",
     behaviorArchetype: "Skeptical Specialist",
     coreFriction: "Guideline lock vs real-world variability",
+    canonical: {
+      journeyStage: "clinical_value",
+      interactionPressure: ["skeptical_resistant", "competitive_bias"],
+      influenceDriver: "guideline_anchored",
+      behaviorArchetype: "skeptical_specialist",
+    },
   },
   "The Workflow Bottleneck": {
     journeyStage: "Adoption & Implementation",
@@ -41,6 +53,12 @@ export const scenarioPredictivePresets = {
     influenceDriver: "Patient-Centric",
     behaviorArchetype: "Guarded Gatekeeper",
     coreFriction: "Workflow capacity vs clinical intent",
+    canonical: {
+      journeyStage: "adoption_implementation",
+      interactionPressure: ["operationally_constrained"],
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
   },
 };
 

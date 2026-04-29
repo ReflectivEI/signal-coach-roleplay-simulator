@@ -10,6 +10,54 @@ import { invokeWorkerJsonWithRetry } from "@/services/workerJsonRetryHandler";
 import { getWorkerHealthReport, shouldAttemptWorkerSynthesis } from "@/services/workerOfflineSafeguard";
 import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 
+const SECTION_ALIASES = {
+    mindset: ["mindset"],
+    objections: ["objections", "likelyObjections"],
+    pressure: ["pressure", "pressureSignals"],
+    redFlags: ["redFlags"],
+    languageWorks: ["languageWorks", "languageThatWorks"],
+    languageResistance: ["languageResistance", "languageThatTriggersResistance"],
+    responseStyle: ["responseStyle", "predictedResponseStyle"],
+    repApproach: ["repApproach", "recommendedRepApproach"],
+};
+
+function normalizeSynthesisSections(synthesized = {}, fallbackSections = {}) {
+    const aiSections = synthesized?.sections || {};
+    const lensFallback = {
+        hcpLens: synthesized?.hcpPerspective?.internalMonologue || "",
+        repLens: synthesized?.repPreparation?.conversationFrame || "",
+    };
+    const repApproachLensFallback = {
+        hcpLens: aiSections?.responseStyle?.hcpLens || lensFallback.hcpLens,
+        repLens: aiSections?.responseStyle?.repLens || lensFallback.repLens,
+    };
+
+    const normalized = {};
+    Object.entries(SECTION_ALIASES).forEach(([canonical, candidates]) => {
+        const aiSection = candidates.map((key) => aiSections?.[key]).find(Boolean);
+        const fallbackSection = fallbackSections?.[canonical];
+
+        if (aiSection) {
+            normalized[canonical] = {
+                ...aiSection,
+                hcpLens: aiSection?.hcpLens || (canonical === "repApproach" ? repApproachLensFallback.hcpLens : lensFallback.hcpLens) || undefined,
+                repLens: aiSection?.repLens || (canonical === "repApproach" ? repApproachLensFallback.repLens : lensFallback.repLens) || undefined,
+            };
+            return;
+        }
+
+        if (fallbackSection) {
+            normalized[canonical] = {
+                ...fallbackSection,
+                hcpLens: fallbackSection?.hcpLens || (canonical === "repApproach" ? repApproachLensFallback.hcpLens : lensFallback.hcpLens) || undefined,
+                repLens: fallbackSection?.repLens || (canonical === "repApproach" ? repApproachLensFallback.repLens : lensFallback.repLens) || undefined,
+            };
+        }
+    });
+
+    return normalized;
+}
+
 function getOptionLabel(field, value) {
     const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
     const match = options.find((option) => option.value === value);
@@ -120,7 +168,10 @@ export async function buildPredictiveRuntimeLens(options = {}) {
         });
 
         if (synthesized?.sections) {
-            lens = synthesized;
+            lens = {
+                ...synthesized,
+                sections: normalizeSynthesisSections(synthesized, staticProfile?.sections || {}),
+            };
             synthesisSource = "ai";
         } else {
             synthesisError = "Runtime synthesis returned unexpected structure — service-level issue detected.";
