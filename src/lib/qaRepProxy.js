@@ -10,6 +10,7 @@ const ACCESS_PROCESS_DEMAND_PATTERN = /formulary|committee|review process|step t
 const WORKFLOW_DEMAND_PATTERN = /workflow|staff|monitoring|follow-up|what happens next|who picks that up|who owns that|extra step|what does that add/i;
 const WORKFLOW_REDISCOVERY_PATTERN = /what's a typical day|how do you currently|where do you think we could make the biggest impact|fit into your existing workflow|what part of the follow-up|what part of the monitoring|what would actually land on your team/i;
 const CLOSE_PROOF_POINT_PATTERN = /proof point|concrete outcome|single data point|patient outcome|concrete|metric|what changes my patient outcome|what changes for my patients|changes practice|specific analysis|what analysis|most vulnerable patients|hospitalization rates|actual reduction|tangible impact/i;
+const EVIDENCE_PROOF_ASK_PATTERN = /proof point|single data point|what data point|one data point|single metric|one metric|one number|specific evidence|what evidence|what analysis|subgroup|change treatment choice|change treatment|real decision|what outcome would|convince me/i;
 const DISCOVERY_DIRECT_ASK_PATTERN = /what patient characteristics|what patient type|which patients|good fit|ideal patient profile|define a good fit|what are you using to define|who are you actually talking about|what kind of patient|relevant to my patients|relevance to my patients|what makes you think your treatment is relevant|non-responders|not responding to current therapy|responding to current therapy|what specifically would change|patients i'm actually struggling with|not just theoretically eligible|patient profile that would make me switch|make me switch|specific patient subgroup|what subgroup|which subgroup|subgroup would actually benefit|specific subgroup|clinical gain|what benefit|what's distinct|what makes it distinct|what specific outcome would change|what outcome would change|change my treatment approach|what makes this patient different|this patient would be any different|change this patient'?s treatment|make me change this patient'?s treatment/i;
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
@@ -1035,6 +1036,11 @@ function hasConcreteSolutionSeekingAnswer(text = "") {
   return hasDomainAnchor && hasSubstance;
 }
 
+function hasEvidenceProofSignal(text = "") {
+  const value = normalizeForMatch(text);
+  return /proof point|data point|single metric|one metric|one number|subgroup|analysis|patient-level|patient level|treatment choice|change treatment|hospitalization|readmission|outcome/i.test(value);
+}
+
 function hasSemanticDomainSignal(text = "") {
   return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
 }
@@ -1088,6 +1094,7 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   const response = normalizeForMatch(repResponse);
   const hcpText = normalizeForMatch(hcpTurn);
+  const evidenceAsk = EVIDENCE_PROOF_ASK_PATTERN.test(hcpText);
 
   if (!response) {
     return false;
@@ -1099,6 +1106,10 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   if (isBroadVagueNonAnswer(response)) {
     return false;
+  }
+
+  if (evidenceAsk) {
+    return hasEvidenceProofSignal(response);
   }
 
   const operationalAsk =
@@ -1150,6 +1161,16 @@ function deriveGuidelineDirectAnswer(activeConcernText = "") {
 function buildSolutionSeekingFallback({ scenario, turns }) {
   const lastHcpMessage = getLastHcpText(turns);
   const response = normalizeForMatch(lastHcpMessage);
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
+
+  if (
+    EVIDENCE_PROOF_ASK_PATTERN.test(response) ||
+    (/commitment_close|adoption_implementation/.test(stageText) && /evidence|subgroup|proof point|data point/.test(response))
+  ) {
+    const activeConcernText = getActiveConcernText(turns, scenario);
+    const proofPointCategory = deriveProofPointCategory({ scenario, activeConcernText, turns });
+    return `${deriveCommitmentDirectAnswer(activeConcernText, proofPointCategory)}. The useful next step is to keep it anchored to ${proofPointCategory}.`;
+  }
 
   if (/prior auth|prior authorization|\bpa\b|workflow|staff|ma\b|paperwork|documentation|authorization|callback|resubmit|approval|office/.test(response)) {
     const askType = classifySpecificAsk(lastHcpMessage);

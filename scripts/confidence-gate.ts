@@ -27,8 +27,8 @@
  * 6. Signal coverage ≥80% of rep turns
  * 
  * EXIT CODES:
- *   0 = All gates pass (98%+ confidence)
- *   1 = Gate violations (confidence < 96%)
+ *   0 = All gates pass
+ *   1 = One or more gate violations
  */
 
 import { promises as fs } from "node:fs";
@@ -38,6 +38,7 @@ import crypto from "node:crypto";
 import { initializeConversation } from "../src/lib/conversationInit";
 import { generateHcpResponse } from "../src/lib/hcpResponseGenerator";
 import { ALL_SCENARIOS } from "../src/lib/scenarioCatalog.js";
+import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
@@ -47,6 +48,7 @@ interface GateCriterion {
     name: string;
     weight: number; // 0.0 to 1.0, sum = 1.0
     pass: boolean;
+    score: number; // 0.0 to 1.0, supports graded scoring
     detail: string;
     delta: number; // confidence contribution
 }
@@ -54,10 +56,20 @@ interface GateCriterion {
 interface ConfidenceGateReport {
     timestamp: string;
     criteria: GateCriterion[];
+    weightedScore: number;
     baselineConfidence: number;
     finalConfidence: number;
     exitCode: number;
     summary: string;
+}
+
+interface CompactConfidenceArtifact {
+    timestamp: string;
+    finalConfidence: number;
+    weightedScore: number;
+    allPassed: boolean;
+    exitCode: number;
+    gateScores: Record<string, { pass: boolean; score: number; weight: number }>;
 }
 
 function normalizeBuiltInScenario(scenario: any, index: number) {
@@ -237,6 +249,42 @@ function validateNonEmptyResponse(text: string): { pass: boolean; detail: string
     return { pass: true, detail: "Response present" };
 }
 
+function clamp01(value: number): number {
+    return Math.max(0, Math.min(1, value));
+}
+
+async function writeConfidenceArtifacts(report: ConfidenceGateReport): Promise<void> {
+    const artifactDir = path.resolve(REPO_ROOT, "artifacts/confidence-gate");
+    await fs.mkdir(artifactDir, { recursive: true });
+
+    const allPassed = report.criteria.every((criterion) => criterion.pass);
+    const gateScores = Object.fromEntries(
+        report.criteria.map((criterion) => [
+            criterion.id,
+            {
+                pass: criterion.pass,
+                score: Number(criterion.score.toFixed(4)),
+                weight: criterion.weight,
+            },
+        ]),
+    );
+
+    const compactArtifact: CompactConfidenceArtifact = {
+        timestamp: report.timestamp,
+        finalConfidence: Number(report.finalConfidence.toFixed(2)),
+        weightedScore: Number(report.weightedScore.toFixed(4)),
+        allPassed,
+        exitCode: report.exitCode,
+        gateScores,
+    };
+
+    const latestPath = path.resolve(artifactDir, "latest.json");
+    const trendPath = path.resolve(artifactDir, "trend.ndjson");
+
+    await fs.writeFile(latestPath, JSON.stringify(compactArtifact), "utf8");
+    await fs.appendFile(trendPath, `${JSON.stringify(compactArtifact)}\n`, "utf8");
+}
+
 async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     const criteria: GateCriterion[] = [];
     const BUILT_IN_SCENARIOS = ALL_SCENARIOS.map(normalizeBuiltInScenario);
@@ -288,8 +336,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
             criteria.push({
                 id: "gate_1_high_pressure_clipping",
                 name: "High-Pressure Clipping (Gatekeeper)",
-                weight: 0.25,
+                weight: 0.2,
                 pass: gate1Pass,
+                score: gate1Pass ? 1 : 0,
                 detail: `${clippingCheck.detail} | ${contextCheck.detail} | First HCP: "${hcpResponse.hcpReply.slice(0, 80)}..."`,
                 delta: gate1Pass ? 0.08 : -0.15,
             });
@@ -297,8 +346,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
             criteria.push({
                 id: "gate_1_high_pressure_clipping",
                 name: "High-Pressure Clipping (Gatekeeper)",
-                weight: 0.25,
+                weight: 0.2,
                 pass: false,
+                score: 0,
                 detail: `Error: ${String(error).slice(0, 100)}`,
                 delta: -0.15,
             });
@@ -347,8 +397,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
             criteria.push({
                 id: "gate_2_moderate_exploratory",
                 name: "Moderate-Pressure Exploration",
-                weight: 0.2,
+                weight: 0.15,
                 pass: gate2Pass,
+                score: gate2Pass ? 1 : 0,
                 detail: `${exploratoryCheck.detail} | ${contextCheck.detail} | First HCP: "${hcpResponse.hcpReply.slice(0, 80)}..."`,
                 delta: gate2Pass ? 0.06 : -0.12,
             });
@@ -356,8 +407,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
             criteria.push({
                 id: "gate_2_moderate_exploratory",
                 name: "Moderate-Pressure Exploration",
-                weight: 0.2,
+                weight: 0.15,
                 pass: false,
+                score: 0,
                 detail: `Error: ${String(error).slice(0, 100)}`,
                 delta: -0.12,
             });
@@ -415,8 +467,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     criteria.push({
         id: "gate_3_first_turn_validity",
         name: "First-Turn Response Validity",
-        weight: 0.15,
+        weight: 0.12,
         pass: gate3Pass,
+        score: gate3Pass ? 1 : 0,
         detail: `${allScenariosFirstTurns.filter((i) => i.pass).length}/${allScenariosFirstTurns.length} scenarios pass (non-empty first-turn)`,
         delta: gate3Pass ? 0.05 : -0.1,
     });
@@ -432,8 +485,9 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     criteria.push({
         id: "gate_4_global_runtime",
         name: "Global Runtime Path (Shared Engine)",
-        weight: 0.2,
+        weight: 0.13,
         pass: gate4Pass,
+        score: gate4Pass ? 1 : 0,
         detail: `GlobalTempMap: ${hasGlobalTempMap} | ClippingGuard: ${hasClippingGuard} | ToneBlock: ${hasGlobalToneBlock}`,
         delta: gate4Pass ? 0.06 : -0.12,
     });
@@ -456,16 +510,133 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     criteria.push({
         id: "gate_5_non_scenario_specific",
         name: "Non-Scenario-Specific (Global Only)",
-        weight: 0.2,
+        weight: 0.12,
         pass: gate5Pass,
+        score: gate5Pass ? 1 : 0,
         detail: gate5Pass ? "No scenario-specific temperature overrides detected" : "Scenario-specific sampling detected",
         delta: gate5Pass ? 0.06 : -0.12,
     });
 
-    // Calculate final confidence
-    const baselineConfidence = 93; // from previous assessment
-    const totalDelta = criteria.reduce((sum, c) => sum + c.delta, 0);
-    const finalConfidence = Math.max(90, Math.min(100, baselineConfidence + (totalDelta * 2))); // Scale delta 2x since all gates pass
+    // GATE 6: Capability evaluation must be scenario-aware (nonBlocking overrides applied)
+    console.log("🔍 Running Gate 6: Capability scenario-awareness...");
+    try {
+        const gatekeeper = BUILT_IN_SCENARIOS.find((s) => s.id === "builtin-the-gatekeeper-filter");
+        if (!gatekeeper) throw new Error("Gatekeeper scenario not found");
+
+        const syntheticSignals: any[] = [
+            {
+                question_type: "closed_ended",
+                response_alignment: "weak",
+                objection_type: "workflow",
+                engagement_level: "low",
+                control_pattern: "rep_dominant",
+                listening_pattern: "missed",
+                commitment_attempt: "none",
+            },
+            {
+                question_type: "closed_ended",
+                response_alignment: "weak",
+                objection_type: "workflow",
+                engagement_level: "low",
+                control_pattern: "rep_dominant",
+                listening_pattern: "missed",
+                commitment_attempt: "none",
+            },
+        ];
+
+        const withoutScenario = runCapabilityEvaluationEngine(syntheticSignals as any, gatekeeper.suggestedFocusCapabilities || []);
+        const withScenario = runCapabilityEvaluationEngine(syntheticSignals as any, gatekeeper.suggestedFocusCapabilities || [], gatekeeper);
+
+        const nonBlockingImproved = ["making_it_matter", "objection_navigation", "commitment_gaining"].filter((capability) => {
+            return withoutScenario[capability] === "missed" && withScenario[capability] !== "missed";
+        });
+
+        const gate6Score = clamp01(nonBlockingImproved.length / 3);
+        const gate6Pass = gate6Score >= (2 / 3);
+
+        criteria.push({
+            id: "gate_6_capability_scenario_awareness",
+            name: "Capability Scenario-Awareness",
+            weight: 0.14,
+            pass: gate6Pass,
+            score: gate6Score,
+            detail: `Nonblocking overrides improved: ${nonBlockingImproved.join(", ") || "none"}`,
+            delta: gate6Pass ? 0.05 : -0.1,
+        });
+    } catch (error) {
+        criteria.push({
+            id: "gate_6_capability_scenario_awareness",
+            name: "Capability Scenario-Awareness",
+            weight: 0.14,
+            pass: false,
+            score: 0,
+            detail: `Error: ${String(error).slice(0, 100)}`,
+            delta: -0.1,
+        });
+    }
+
+    // GATE 7: Early-stage commitment signal detection (directional ask should not be "none")
+    console.log("🔍 Running Gate 7: Early-stage commitment detection...");
+    try {
+        const earlyScenario = BUILT_IN_SCENARIOS.find((s) => String(s.journeyStage || "").toLowerCase() === "initial_access");
+        if (!earlyScenario) throw new Error("Initial-access scenario not found");
+
+        const repMessage = "What would you need to see to try this with a first patient, and what matters most right now?";
+        const conversationHistory = [
+            {
+                id: crypto.randomUUID(),
+                speaker: "rep",
+                text: repMessage,
+                timestamp: new Date().toISOString(),
+                cues: [],
+            },
+        ];
+
+        const response = await withTimeout(
+            generateHcpResponse(
+                earlyScenario,
+                conversationHistory,
+                earlyScenario.startingBehaviorState || "neutral",
+                earlyScenario.journeyStage,
+                true,
+                repMessage,
+                [],
+                0,
+                "stable",
+                260,
+            ),
+            "Early-stage commitment signal detection",
+        );
+
+        const commitmentAttempt = String(response?.behaviorSignals?.commitment_attempt || "none");
+        const gate7Pass = commitmentAttempt === "weak" || commitmentAttempt === "clear";
+        const gate7Score = gate7Pass ? 1 : 0;
+
+        criteria.push({
+            id: "gate_7_early_stage_commitment_signal",
+            name: "Early-Stage Commitment Signal Detection",
+            weight: 0.14,
+            pass: gate7Pass,
+            score: gate7Score,
+            detail: `Detected commitment_attempt=${commitmentAttempt}`,
+            delta: gate7Pass ? 0.05 : -0.1,
+        });
+    } catch (error) {
+        criteria.push({
+            id: "gate_7_early_stage_commitment_signal",
+            name: "Early-Stage Commitment Signal Detection",
+            weight: 0.14,
+            pass: false,
+            score: 0,
+            detail: `Error: ${String(error).slice(0, 100)}`,
+            delta: -0.1,
+        });
+    }
+
+    // Calculate final confidence using weighted realism + capability gate scores
+    const baselineConfidence = 0;
+    const weightedScore = criteria.reduce((sum, c) => sum + (c.weight * c.score), 0);
+    const finalConfidence = Math.max(0, Math.min(100, weightedScore * 100));
 
     const allPassed = criteria.every((c) => c.pass);
     const exitCode = allPassed ? 0 : 1; // Exit 0 if all gates pass, regardless of confidence floor
@@ -474,6 +645,7 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     return {
         timestamp: new Date().toISOString(),
         criteria,
+        weightedScore,
         baselineConfidence,
         finalConfidence,
         exitCode,
@@ -490,6 +662,7 @@ async function main() {
 
     try {
         const report = await runConfidenceGateChecks();
+        await writeConfidenceArtifacts(report);
 
         console.log("\n📊 GATE RESULTS:");
         console.log("─────────────────");
@@ -497,15 +670,18 @@ async function main() {
             const icon = criterion.pass ? "✅" : "❌";
             console.log(`${icon} ${criterion.name} (weight: ${(criterion.weight * 100).toFixed(0)}%)`);
             console.log(`   └─ ${criterion.detail}`);
+            console.log(`   └─ Gate score: ${(criterion.score * 100).toFixed(0)}%`);
             console.log(`   └─ Δ confidence: ${criterion.delta > 0 ? "+" : ""}${(criterion.delta * 100).toFixed(1)}%\n`);
         }
 
         console.log("📈 CONFIDENCE CALCULATION:");
         console.log("─────────────────────────");
         console.log(`Baseline: ${report.baselineConfidence}%`);
+        console.log(`Weighted gate score: ${(report.weightedScore * 100).toFixed(1)}%`);
         const totalDelta = report.criteria.reduce((sum, c) => sum + c.delta, 0);
         console.log(`Total Δ: ${totalDelta > 0 ? "+" : ""}${(totalDelta * 100).toFixed(1)}%`);
         console.log(`Final: ${Math.round(report.finalConfidence)}%`);
+        console.log(`Artifacts: artifacts/confidence-gate/latest.json | artifacts/confidence-gate/trend.ndjson`);
 
         console.log("\n" + report.summary);
         console.log(`\nExit Code: ${report.exitCode}\n`);

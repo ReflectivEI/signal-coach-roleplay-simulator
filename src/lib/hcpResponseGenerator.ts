@@ -1182,16 +1182,33 @@ function inferResponseAlignment(
   repMessage: string,
   latestConcern: string,
   scenario?: any,
+  transcript: ConversationTurn[] = [],
 ): BehaviorSignals["response_alignment"] {
   if (repAddressesPremiseChallenge(repMessage, latestConcern)) {
     return "strong";
   }
+  const repText = String(repMessage || "").toLowerCase();
   const repTags = inferConcernTags(repMessage);
   const concernTags = inferConcernTags(latestConcern);
   const shared = concernTags.filter((tag) => repTags.includes(tag));
   if (shared.length >= 1) {
     return "strong";
   }
+
+  const commitmentCloseEvidence =
+    String(scenario?.journeyStage || "").toLowerCase() === "commitment_close" &&
+    (scenarioMatchesConcernFamily(scenario, "evidence") || concernTags.includes("guideline") || concernTags.includes("patient_fit"));
+  const repeatedEvidenceConcern = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-4)
+    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
+  const evidencePivotAcknowledged =
+    /\bone data point\b|\bthe one data point\b|\bfor this decision\b|\bchange treatment choice\b|\bsubgroup\b|\bexcluded patients?\b|\brenal\b|\breal-?world fit\b/.test(repText);
+
+  if (commitmentCloseEvidence && repeatedEvidenceConcern && evidencePivotAcknowledged) {
+    return "strong";
+  }
+
   if (isScreeningDiscoveryResponse(repMessage, scenario)) {
     const screeningConcern =
       concernTags.includes("screening") ||
@@ -1217,8 +1234,9 @@ function inferListeningPattern(
   repMessage: string,
   latestConcern: string,
   scenario?: any,
+  transcript: ConversationTurn[] = [],
 ): BehaviorSignals["listening_pattern"] {
-  const alignment = inferResponseAlignment(repMessage, latestConcern, scenario);
+  const alignment = inferResponseAlignment(repMessage, latestConcern, scenario, transcript);
   if (alignment === "strong") return "responsive";
   if (alignment === "partial") return "partially_responsive";
   return "missed";
@@ -1282,13 +1300,15 @@ function inferEngagementLevel(hcpReply: string): BehaviorSignals["engagement_lev
 function inferCommitmentAttempt(
   repMessage: string,
   transcript: ConversationTurn[],
-  scenario: any
+  scenario: any,
+  latestConcern: string,
 ): BehaviorSignals["commitment_attempt"] {
   const text = String(repMessage || "").toLowerCase();
   const repTurns = transcript.filter((turn) => turn?.speaker === "rep").length;
   const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
   const journeyState = String(scenario?.journeyState || "").toLowerCase();
-  
+  const concernText = String(latestConcern || "").toLowerCase();
+
   // Explicit next-step asks always count (clear commitment)
   if (/\bcan we\b|\bwould you be open to\b|\bnext step\b|\bset up\b|\bfollow-up\b|\breview together\b|\bbring this to\b|\bpilot\b|\btry this with\b|\bidentify a patient\b|\bflagging that chart\b|\bbring to the next formulary discussion\b|\bconcrete step you could take\b|\bwhat one thing could you take back\b|\bmake a strong case\b/.test(text)) {
     return "clear";
@@ -1298,11 +1318,28 @@ function inferCommitmentAttempt(
   const lateEnoughForAsk = repTurns >= 2 || ["commitment_close", "access_formulary", "adoption_implementation"].includes(journeyStage) || journeyState.includes("commitment");
   const earlyDiscoveryStage = ["initial_access", "discovery"].includes(journeyStage);
   const hasDirectionalFrame = /\bfirst patient\b|\bwhat would you need\b|\bwhat matters most\b|\bwhere do we start\b|\bwhat's your biggest concern\b/.test(text);
-  
+
   if (
     (lateEnoughForAsk || (earlyDiscoveryStage && hasDirectionalFrame)) &&
     /\bwhat would you need to see\b|\bwhich patient type\b|\bwhat outcome carries the most weight\b|\bwhere does .* break down\b|\bwhat specifically would you need to see\b|\bwhat would make this feel usable\b|\bwhat would it take for you to feel confident\b|\bwhat's the next formulary committee meeting\b|\bwhat's the one workflow requirement\b|\bwhat's one concrete step\b|\bwhat's the one data point\b|\bwhat specific info do you need(?: to see)?\b|\bwhat kind of data\b|\bmove the needle with the formulary team\b/.test(text)
   ) {
+    return "weak";
+  }
+
+  const commitmentCloseEvidence =
+    journeyStage === "commitment_close" &&
+    (scenarioMatchesConcernFamily(scenario, "evidence") || /subgroup|trial|evidence|data|renal|real-?world/.test(concernText));
+  const repeatedEvidenceObjection = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-4)
+    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
+  const objectionSofteningCue = /if there is one data point|if you can make the evidence specific|keep it to one point|i can stay with it|i can look at it/.test(concernText);
+  const onePointCommitMove = /\bone data point\b|\bone point\b|\bwould you be open\b|\bif we align on\b|\bnext step\b|\breview one case\b/.test(text);
+
+  if (commitmentCloseEvidence && repTurns >= 5 && repeatedEvidenceObjection && objectionSofteningCue && onePointCommitMove) {
+    return "clear";
+  }
+  if (commitmentCloseEvidence && repTurns >= 4 && repeatedEvidenceObjection && /\bone data point\b|\bfor this decision\b|\bchange treatment choice\b/.test(text)) {
     return "weak";
   }
 
@@ -1319,11 +1356,11 @@ function normalizeBehaviorSignals(
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const premiseCorrected = repAddressesRecentPremiseChallenge(repMessage, transcript);
   const inferredQuestionType = detectQuestionType(repMessage);
-  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario);
-  const inferredListening = inferListeningPattern(repMessage, latestConcern, scenario);
+  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario, transcript);
+  const inferredListening = inferListeningPattern(repMessage, latestConcern, scenario, transcript);
   const inferredObjectionType = inferObjectionType(latestConcern, scenario);
   const inferredEngagement = inferEngagementLevel(hcpReply);
-  const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
+  const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario, latestConcern);
   const genericPitch = isGenericProductPitch(repMessage);
   const talkedPastConcern = ignoredDirectConcern(repMessage, latestConcern);
   const forceWeakAlignment = !premiseCorrected && (genericPitch || talkedPastConcern);
@@ -1331,6 +1368,15 @@ function normalizeBehaviorSignals(
   const forceHesitationFamily = isHesitationToCommitmentScenario(scenario, latestConcern);
   const forceAdoptionCautionFamily = isAdoptionCautionScenario(scenario, latestConcern);
   const screeningResponsive = isScreeningDiscoveryResponse(repMessage, scenario);
+  const commitmentCloseEvidence =
+    String(scenario?.journeyStage || "").toLowerCase() === "commitment_close" &&
+    (scenarioMatchesConcernFamily(scenario, "evidence") || /subgroup|trial|evidence|data|renal|real-?world/.test(String(latestConcern || "")));
+  const repeatedEvidenceObjection = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .slice(-4)
+    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
+  const pivotSignal = /\bone data point\b|\bfor this decision\b|\bchange treatment choice\b|\bif we align on\b|\bnext step\b|\bwould you be open\b/.test(String(repMessage || "").toLowerCase());
+  const forceAdaptivePivot = commitmentCloseEvidence && repeatedEvidenceObjection && pivotSignal;
 
   return {
     question_type: forceRepDominant
@@ -1340,13 +1386,15 @@ function normalizeBehaviorSignals(
         : inferredQuestionType,
     response_alignment: forceWeakAlignment
       ? "weak"
-      : premiseCorrected
+      : forceAdaptivePivot
         ? "strong"
-        : screeningResponsive
+        : premiseCorrected
           ? "strong"
-          : rawSignals?.response_alignment === "strong"
+          : screeningResponsive
             ? "strong"
-            : inferredAlignment,
+            : rawSignals?.response_alignment === "strong"
+              ? "strong"
+              : inferredAlignment,
     objection_type: (forceHesitationFamily || forceAdoptionCautionFamily)
       ? "none"
       : rawSignals?.objection_type && rawSignals.objection_type !== "none"
@@ -1357,19 +1405,25 @@ function normalizeBehaviorSignals(
       : inferredEngagement,
     control_pattern: forceRepDominant
       ? "rep_dominant"
-      : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
+      : forceAdaptivePivot
+        ? "balanced"
+        : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
     listening_pattern: forceWeakAlignment
       ? "missed"
-      : premiseCorrected
+      : forceAdaptivePivot
         ? "responsive"
-        : screeningResponsive
+        : premiseCorrected
           ? "responsive"
-          : rawSignals?.listening_pattern === "responsive"
+          : screeningResponsive
             ? "responsive"
-            : inferredListening,
+            : rawSignals?.listening_pattern === "responsive"
+              ? "responsive"
+              : inferredListening,
     commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
       ? rawSignals.commitment_attempt
-      : inferredCommitmentAttempt,
+      : forceAdaptivePivot && inferredCommitmentAttempt === "none"
+        ? "weak"
+        : inferredCommitmentAttempt,
   };
 }
 

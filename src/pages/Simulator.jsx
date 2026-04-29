@@ -10,8 +10,8 @@ import MessageInput from "@/components/simulator/MessageInput";
 import SimulatorRightPanel from "@/components/simulator/SimulatorRightPanel";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
-import { ArrowLeft, Square, Lightbulb, LightbulbOff, ChevronDown, Target } from "lucide-react";
-import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PERSONA_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
+import { ArrowLeft, Square, ChevronDown } from "lucide-react";
+import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
@@ -55,7 +55,6 @@ export default function Simulator() {
   const [lastNudge, setLastNudge] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [coachingEnabled, setCoachingEnabled] = useState(true);
   const [review, setReview] = useState(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -73,6 +72,7 @@ export default function Simulator() {
   const [predictiveLens, setPredictiveLens] = useState({ isLoading: false, data: null });
   const predictiveLensRef = useRef({ isLoading: false, data: null });
   const predictiveLensReadyPromiseRef = useRef(Promise.resolve(null));
+  const coachingEnabled = true;
 
   const setPredictiveLensState = useCallback((nextLens) => {
     predictiveLensRef.current = nextLens;
@@ -382,7 +382,8 @@ export default function Simulator() {
     );
   }
 
-  const currentPressures = scenario?.interactionPressure || [];
+  const showCurrentJourneyState = session?.currentJourneyState;
+  const showActivePressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
 
   return (
     <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
@@ -393,8 +394,8 @@ export default function Simulator() {
           borderBottom: "1px solid rgba(89, 125, 175, 0.24)",
         }}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="grid grid-cols-[minmax(240px,auto)_1fr_auto] items-center px-5 py-3.5 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => navigate("/")}
               className="transition-colors shrink-0 p-1"
@@ -405,79 +406,57 @@ export default function Simulator() {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="w-px h-5 shrink-0" style={{ background: "rgba(255,255,255,0.18)" }} />
-            <div className="min-w-0">
-              <h1 className="font-semibold text-sm truncate leading-snug" style={{ color: "rgba(255,255,255,0.96)" }}>{scenario?.title}</h1>
-              <div className="flex items-center gap-1.5 mt-1">
-                <Target className="w-3 h-3 shrink-0" style={{ color: "rgba(220, 236, 236, 0.72)" }} />
-                <span className="text-xs truncate" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{PERSONA_LABELS[scenario?.persona] || scenario?.persona}</span>
-                <span className="text-xs" style={{ color: "rgba(255,255,255,0.24)" }}>·</span>
-                <span className="text-xs" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{JOURNEY_STATE_LABELS[session?.currentJourneyState]}</span>
-              </div>
-            </div>
+            <h1 className="font-semibold text-base leading-none truncate max-w-[320px]" style={{ color: "rgba(255,255,255,0.96)" }}>
+              {scenario?.title}
+            </h1>
+          </div>
 
-            <div className="hidden xl:flex items-center gap-3 ml-6 pl-6 min-w-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.16)" }}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
-                HCP State
-              </span>
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Journey
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {JOURNEY_STATE_LABELS[session?.currentJourneyState] || session?.currentJourneyState}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Behavior
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {BEHAVIOR_STATE_LABELS[session?.currentBehaviorState] || session?.currentBehaviorState}
-                  </span>
-                </div>
-                {currentPressures.length > 0 && (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                      Pressures
-                    </span>
-                    <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
-                      {currentPressures.map((pressure) => (
-                        <span
-                          key={pressure}
-                          className="px-2 py-1 text-[11px] font-medium rounded-md border whitespace-nowrap"
-                          style={{
-                            background: "rgba(37, 124, 123, 0.12)",
-                            borderColor: "rgba(37, 124, 123, 0.24)",
-                            color: "rgba(244,249,249,0.96)",
-                          }}
-                        >
-                          {PRESSURE_LABELS[pressure] || pressure}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          <div className="hidden lg:flex items-center gap-3 min-w-0 justify-center">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(255,255,255,0.96)" }}>
+              HCP State
+            </span>
+            <div className="flex items-center gap-3 min-w-0 justify-center">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Journey
+                </span>
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.96)", borderColor: "rgba(37, 124, 123, 0.55)" }}>
+                  {JOURNEY_STATE_LABELS[showCurrentJourneyState] || showCurrentJourneyState}
+                </span>
               </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Behavior
+                </span>
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.96)", borderColor: "rgba(37, 124, 123, 0.55)" }}>
+                  {BEHAVIOR_STATE_LABELS[session?.currentBehaviorState] || session?.currentBehaviorState}
+                </span>
+              </div>
+              {showActivePressures.length > 0 && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                    Pressures
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
+                    {showActivePressures.map((pressure) => (
+                      <span
+                        key={pressure}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          borderColor: "rgba(37, 124, 123, 0.55)",
+                          color: "rgba(255,255,255,0.96)",
+                        }}
+                      >
+                        {PRESSURE_LABELS[pressure] || pressure}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setCoachingEnabled(!coachingEnabled)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-              style={coachingEnabled ? {
-                background: "hsl(174 30% 18%)",
-                border: "1px solid hsl(174 60% 52% / 0.5)",
-                color: "hsl(174 60% 72%)",
-              } : {
-                background: "hsl(222 30% 18%)",
-                border: "1px solid hsl(222 30% 28%)",
-                color: "hsl(215 20% 55%)",
-              }}
-            >
-              {coachingEnabled ? <Lightbulb className="w-3 h-3" /> : <LightbulbOff className="w-3 h-3" />}
-              <span className="hidden sm:inline">Coaching</span>
-            </button>
+          <div className="flex items-center gap-2 shrink-0 justify-end">
             <button
               onClick={handleEndSession}
               disabled={isReviewing || turns.filter((t) => t.speaker === "rep").length === 0}

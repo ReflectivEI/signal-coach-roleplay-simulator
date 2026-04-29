@@ -1,0 +1,560 @@
+[
+  {
+    "timestamp": "2026-04-29T18:50:27.975Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Split Decision",
+    "title": "The Split Decision",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T19:58:19.437Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 1,
+    "scenarioKey": "The Gatekeeper Filter",
+    "title": "The Gatekeeper Filter",
+    "riskLevel": "high",
+    "opennessScore": 2
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Gatekeeper Filter",
+    "title": "The Gatekeeper Filter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Warm Intro That Turns Cold",
+    "title": "The Warm Intro That Turns Cold",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The No-Show Follow-Up",
+    "title": "The No-Show Follow-Up",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Undefined Patient Profile",
+    "title": "The Undefined Patient Profile",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Assumed Priority",
+    "title": "The Assumed Priority",
+    "riskLevel": "high",
+    "opennessScore": 6
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Protocol Lock",
+    "title": "The Protocol Lock",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Data That Doesn't Land",
+    "title": "The Data That Doesn't Land",
+    "riskLevel": "high",
+    "opennessScore": 3
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Guideline Anchor",
+    "title": "The Guideline Anchor",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Cost-Effectiveness Filter",
+    "title": "The Cost-Effectiveness Filter",
+    "riskLevel": "high",
+    "opennessScore": 6
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Prior Auth Reflex",
+    "title": "The Prior Auth Reflex",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Unexpected Safety Flag",
+    "title": "The Unexpected Safety Flag",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Competitive Defender",
+    "title": "The Competitive Defender",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "high",
+    "opennessScore": 8
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Workflow Bottleneck",
+    "title": "The Workflow Bottleneck",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reversal After First Patient",
+    "title": "The Reversal After First Patient",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Formulary Firewall",
+    "title": "The Formulary Firewall",
+    "riskLevel": "low",
+    "opennessScore": 8
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Perpetual Maybe",
+    "title": "The Perpetual Maybe",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Handoff Risk",
+    "title": "The Handoff Risk",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:20:58.273Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Split Decision",
+    "title": "The Split Decision",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:27:42.582Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Gatekeeper Filter",
+    "title": "The Gatekeeper Filter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Warm Intro That Turns Cold",
+    "title": "The Warm Intro That Turns Cold",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The No-Show Follow-Up",
+    "title": "The No-Show Follow-Up",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Undefined Patient Profile",
+    "title": "The Undefined Patient Profile",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Assumed Priority",
+    "title": "The Assumed Priority",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Protocol Lock",
+    "title": "The Protocol Lock",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Data That Doesn't Land",
+    "title": "The Data That Doesn't Land",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Guideline Anchor",
+    "title": "The Guideline Anchor",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Cost-Effectiveness Filter",
+    "title": "The Cost-Effectiveness Filter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Prior Auth Reflex",
+    "title": "The Prior Auth Reflex",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Unexpected Safety Flag",
+    "title": "The Unexpected Safety Flag",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Competitive Defender",
+    "title": "The Competitive Defender",
+    "riskLevel": "high",
+    "opennessScore": 2
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Workflow Bottleneck",
+    "title": "The Workflow Bottleneck",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reversal After First Patient",
+    "title": "The Reversal After First Patient",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Formulary Firewall",
+    "title": "The Formulary Firewall",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Perpetual Maybe",
+    "title": "The Perpetual Maybe",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Handoff Risk",
+    "title": "The Handoff Risk",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:33:03.801Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Split Decision",
+    "title": "The Split Decision",
+    "riskLevel": "high",
+    "opennessScore": 1
+  },
+  {
+    "timestamp": "2026-04-29T20:34:13.875Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:34:57.163Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Gatekeeper Filter",
+    "title": "The Gatekeeper Filter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Warm Intro That Turns Cold",
+    "title": "The Warm Intro That Turns Cold",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The No-Show Follow-Up",
+    "title": "The No-Show Follow-Up",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Undefined Patient Profile",
+    "title": "The Undefined Patient Profile",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Assumed Priority",
+    "title": "The Assumed Priority",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Protocol Lock",
+    "title": "The Protocol Lock",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Data That Doesn't Land",
+    "title": "The Data That Doesn't Land",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Guideline Anchor",
+    "title": "The Guideline Anchor",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Cost-Effectiveness Filter",
+    "title": "The Cost-Effectiveness Filter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Prior Auth Reflex",
+    "title": "The Prior Auth Reflex",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Unexpected Safety Flag",
+    "title": "The Unexpected Safety Flag",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Competitive Defender",
+    "title": "The Competitive Defender",
+    "riskLevel": "high",
+    "opennessScore": 2
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reluctant Early Adopter",
+    "title": "The Reluctant Early Adopter",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Workflow Bottleneck",
+    "title": "The Workflow Bottleneck",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Reversal After First Patient",
+    "title": "The Reversal After First Patient",
+    "riskLevel": "high",
+    "opennessScore": 0
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Formulary Firewall",
+    "title": "The Formulary Firewall",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Perpetual Maybe",
+    "title": "The Perpetual Maybe",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Handoff Risk",
+    "title": "The Handoff Risk",
+    "riskLevel": "low",
+    "opennessScore": 10
+  },
+  {
+    "timestamp": "2026-04-29T20:38:44.809Z",
+    "personaKey": "strong_rep",
+    "maxTurns": 10,
+    "scenarioKey": "The Split Decision",
+    "title": "The Split Decision",
+    "riskLevel": "high",
+    "opennessScore": 1
+  }
+]

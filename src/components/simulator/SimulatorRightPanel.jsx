@@ -64,6 +64,25 @@ const trajectoryConfig = {
   declining: { Icon: TrendingDown, color: "rgba(255,207,214,0.94)", label: "Declining" },
 };
 
+function formatSpecialistTitle(title = "") {
+  const normalized = String(title || "").trim();
+  if (!normalized) return "N/A";
+
+  const compactMap = [
+    { pattern: /Primary Care\s*\/\s*Internal Medicine Specialist/i, replacement: "PCP / INTERNAL MEDICINE" },
+    { pattern: /Primary Care Physician/i, replacement: "PCP" },
+    { pattern: /Internal Medicine Specialist/i, replacement: "INTERNAL MEDICINE" },
+    { pattern: /Specialist$/i, replacement: "" },
+  ];
+
+  let compact = normalized;
+  for (const rule of compactMap) {
+    compact = compact.replace(rule.pattern, rule.replacement).trim();
+  }
+
+  return compact.replace(/\s{2,}/g, " ").trim() || normalized;
+}
+
 export default function SimulatorRightPanel({
   hcpPrediction = null,
   lastSignals = {},
@@ -131,8 +150,8 @@ export default function SimulatorRightPanel({
                 <Pill>{predictiveLens.data.synthesisSource === "ai" ? "AI-synthesized" : "Deterministic"}</Pill>
               </Row>
               <Row label="Specialist">
-                <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
-                  {predictiveLens.data.specialistTitle}
+                <span className="text-[11px] font-semibold uppercase whitespace-nowrap" style={{ color: "rgba(244,249,249,0.96)" }}>
+                  {formatSpecialistTitle(predictiveLens.data.specialistTitle)}
                 </span>
               </Row>
               {predictiveLens.data.synthesisError ? (

@@ -46,7 +46,7 @@ const toastVariants = cva(
 );
 
 /** @type {React.ForwardRefRenderFunction<HTMLDivElement, ToastProps>} */
-const ToastImpl = ({ className, variant, ...props }, ref) => {
+const ToastImpl = ({ className, variant, onOpenChange, ...props }, ref) => {
   return (
     <div
       ref={ref}

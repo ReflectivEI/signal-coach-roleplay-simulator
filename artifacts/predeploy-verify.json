@@ -1,0 +1,192 @@
+{
+  "timestamp": "2026-04-29T20:51:14.123Z",
+  "appBaseUrl": "http://127.0.0.1:5173",
+  "identity": {
+    "pass": true,
+    "failures": [],
+    "wranglerName": "reflectivai-rps-api",
+    "workerHealthService": "reflectivai-rps-api",
+    "details": {
+      "wranglerTomlExists": true,
+      "workerSourceExists": true
+    }
+  },
+  "build": {
+    "pass": true,
+    "stdout": "\n> signal-coach-core@0.0.0 build\n> vite build\n\n",
+    "stderr": ""
+  },
+  "runtime": {
+    "rootStatus": 200,
+    "simulatorStatus": 200,
+    "healthStatus": 200,
+    "healthJson": {
+      "status": "ok",
+      "ready": true,
+      "timestamp": "2026-04-29T20:51:22.981Z",
+      "service": "reflectivai-rps-api",
+      "provider": "groq",
+      "storage": {
+        "provider": "cloudflare_kv"
+      },
+      "providersConfigured": {
+        "openai": false,
+        "groq": true
+      },
+      "keyPools": {
+        "groq": 1
+      },
+      "endpoints": [
+        "/health",
+        "/api/llm/invoke",
+        "/api/scenarios",
+        "/api/roleplay/sessions",
+        "/api/roleplay/start",
+        "/api/roleplay/respond",
+        "/api/evidence/sources",
+        "/api/evidence/records",
+        "/api/evidence/ingest"
+      ]
+    },
+    "healthService": "reflectivai-rps-api",
+    "healthEndpoints": [
+      "/health",
+      "/api/llm/invoke",
+      "/api/scenarios",
+      "/api/roleplay/sessions",
+      "/api/roleplay/start",
+      "/api/roleplay/respond",
+      "/api/evidence/sources",
+      "/api/evidence/records",
+      "/api/evidence/ingest"
+    ],
+    "startStatus": 200,
+    "startBody": {
+      "sessionId": "a56a3ccb-ce49-419c-bba5-a8236ee2e10a",
+      "hcpReply": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here about a new medication, let's get straight to the point.",
+      "metadata": {
+        "hcpCue": "time pressured",
+        "nextBehaviorState": "closed",
+        "nextJourneyState": "initial_access",
+        "realism": {
+          "rewrittenLine": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here about a new medication, let's get straight to the point."
+        }
+      }
+    },
+    "respondStatus": 200,
+    "respondReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?",
+    "respondBody": {
+      "sessionId": "a56a3ccb-ce49-419c-bba5-a8236ee2e10a",
+      "hcpReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?",
+      "metadata": {
+        "hcpCue": "time pressured",
+        "nextBehaviorState": "closed",
+        "nextJourneyState": "initial_access",
+        "realism": {
+          "rewrittenLine": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?"
+        }
+      }
+    },
+    "pass": true
+  },
+  "startup": {
+    "emptyStatePresent": true,
+    "scenarios": [
+      {
+        "scenarioId": "builtin-the-gatekeeper-filter",
+        "startType": "rep_initiated",
+        "hcpOpeningText": null,
+        "placeholder": "Open the conversation. Read the scene and cues carefully.",
+        "pass": true
+      },
+      {
+        "scenarioId": "builtin-the-assumed-priority",
+        "startType": "rep_initiated",
+        "hcpOpeningText": null,
+        "placeholder": "Open the conversation. Read the scene and cues carefully.",
+        "pass": true
+      },
+      {
+        "scenarioId": "builtin-the-competitive-defender",
+        "startType": "rep_initiated",
+        "hcpOpeningText": null,
+        "placeholder": "Open the conversation. Read the scene and cues carefully.",
+        "pass": true
+      },
+      {
+        "scenarioId": "builtin-the-formulary-firewall",
+        "startType": "rep_initiated",
+        "hcpOpeningText": null,
+        "placeholder": "Open the conversation. Read the scene and cues carefully.",
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "realism": {
+    "checks": [
+      {
+        "scenarioId": "builtin-the-gatekeeper-filter",
+        "pass": true,
+        "firstHcpLine": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it related to workflow or something that's been affecting our office lately?",
+        "error": null,
+        "note": "Initial-access opener should be busy but professional, not rude or flattened.",
+        "qaVerdict": "FAIL"
+      },
+      {
+        "scenarioId": "builtin-the-assumed-priority",
+        "pass": true,
+        "firstHcpLine": "If this is about the main issue here, that's still been a real sticking point for us. I'm not convinced yet.",
+        "error": null,
+        "note": "Follow-up framing should not reset to proxy or first-access language.",
+        "qaVerdict": "PASS"
+      },
+      {
+        "scenarioId": "builtin-the-competitive-defender",
+        "pass": true,
+        "firstHcpLine": "You're asking about what matters most to me in terms of patient fit with my current treatment option, and I have to say, it's really about the balance of efficacy and tolerability, we've worked hard to get our patients on a regimen that works for them. I'm not convinced yet. I'm not sure what you're getting at, but I hope you're not going to try to convince me that your product is somehow better, because we're pretty comfortable with what we use now.",
+        "error": null,
+        "note": "Skeptical objections should sound grounded, not templated or theatrically rude.",
+        "qaVerdict": "PASS"
+      },
+      {
+        "scenarioId": "builtin-the-formulary-firewall",
+        "pass": true,
+        "firstHcpLine": "Formulary access is still a challenge for us, and I'm not sure what options we really have since the last P&T committee meeting didn't result in any changes to our hospital's formulary. Can you tell me what specific steps we could take to try to get this moved forward, given the current barriers we're facing?",
+        "error": null,
+        "note": "Access/formulary responses should be complete, process-aware clinician language.",
+        "qaVerdict": "PASS"
+      }
+    ],
+    "pass": true
+  },
+  "stateMapping": {
+    "nonCanonicalJourneyValues": [],
+    "forbiddenHits": {
+      "simulator": [],
+      "workerClient": [],
+      "worker": []
+    },
+    "simulatorPass": true,
+    "workerClientPass": true,
+    "workerPass": true,
+    "scenarioHasJourneyStateDuplication": true,
+    "pass": true
+  },
+  "qa": {
+    "pass": false,
+    "single": null,
+    "matrix": null,
+    "knownBadCase": {
+      "caught": false
+    },
+    "calibrationCases": [],
+    "fatalError": "{\"error\":\"LLM_SERVICE_UNAVAILABLE\",\"details\":\"{\\\"error\\\":{\\\"message\\\":\\\"Rate limit reached for project `project_01k42dy1myf79s1v8vzc9zrfty` on tokens per day (TPD): Limit 7000000, Used 6999181, Requested 4244. Please try again in 42.274285714s. You can change your project's rate limits at https://console.groq.com/settings/project/limits\\\",\\\"type\\\":\\\"tokens\\\",\\\"code\\\":\\\"rate_limit_exceeded\\\"}}\\n\",\"provider\":\"groq\",\"model\":\"llama-3.3-70b-versatile\",\"keyIndex\":0,\"keyPoolSize\":1}"
+  },
+  "finalVerdict": "NOT SAFE TO DEPLOY",
+  "blockingFailures": [
+    "QA Twin safeguard validation failed",
+    "QA validation aborted: {\"error\":\"LLM_SERVICE_UNAVAILABLE\",\"details\":\"{\\\"error\\\":{\\\"message\\\":\\\"Rate limit reached for project `project_01k42dy1myf79s1v8vzc9zrfty` on tokens per day (TPD): Limit 7000000, Used 6999181, Requested 4244. Please try again in 42.274285714s. You can change your project's rate limits at https://console.groq.com/settings/project/limits\\\",\\\"type\\\":\\\"tokens\\\",\\\"code\\\":\\\"rate_limit_exceeded\\\"}}\\n\",\"provider\":\"groq\",\"model\":\"llama-3.3-70b-versatile\",\"keyIndex\":0,\"keyPoolSize\":1}",
+    "QA Twin missed the intentional bad transcript"
+  ]
+}
