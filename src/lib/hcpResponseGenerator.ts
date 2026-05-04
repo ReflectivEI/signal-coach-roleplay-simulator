@@ -1183,6 +1183,9 @@ function getConversationMode(tempProfile: any) {
 }
 
 function buildSessionMemoryPromptBlock(sessionState: any) {
+  const sessionMemory = Array.isArray(sessionState?.sessionMemory)
+    ? sessionState.sessionMemory.slice(-4)
+    : [];
   const history = Array.isArray(sessionState?.interactionHistory)
     ? sessionState.interactionHistory.slice(-3)
     : [];
@@ -1198,11 +1201,14 @@ SESSION MEMORY (persisted runtime state):
 - previous rep interaction: ${String(sessionState?.previousInteraction || "none")}
 - previous concern family: ${sessionState?.previousConcernFamily || "unknown"}
 - escalation level: ${Number(sessionState?.escalationLevel || 0)}
+- last hcp state: ${JSON.stringify(sessionState?.hcpState || {})}
 ${historyLines ? `- recent interaction history:\n${historyLines}` : "- recent interaction history: none"}
+${sessionMemory.length ? `- session memory states:\n${sessionMemory.map((item: any, index: number) => (`  - M${index + 1}: response=\"${String(item?.hcpResponse || "").slice(0, 100)}\" | state=${JSON.stringify(item?.hcpState || {})} | temp=${item?.temperature || "n/a"}`)).join("\n")}` : "- session memory states: none"}
 
 Continuity rules:
 - Continue the unresolved concern family unless the rep directly resolves it.
 - If escalation level is high, tighten resistance posture and increase challenge specificity.
+- Progress concern from skepticism -> proof-seeking -> acceptance-or-resistance based on rep quality and temperature.
 `;
 }
 
@@ -1219,11 +1225,30 @@ function applyEscalationContinuityStyle({
   if (!text) return text;
 
   const escalation = Number(sessionState?.escalationLevel || 0);
-  const priorConcern = String(sessionState?.previousConcernFamily || "").toLowerCase();
+  const lastState = sessionState?.hcpState || {};
+  const priorConcern = String(
+    sessionState?.previousConcernFamily
+      || lastState?.concernFamily
+      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
+      || ""
+  ).toLowerCase();
+  const skepticism = Number(lastState?.skepticism || 5);
+  const resistance = Number(lastState?.resistance || 5);
+  const openness = Number(lastState?.openness || 5);
 
-  if (escalation >= 2 && tempProfile?.band !== "low") {
+  if ((escalation >= 2 || resistance >= 7 || skepticism >= 7) && tempProfile?.band !== "low") {
     if (!/\b(we'?ve tried this|not convinced|still waiting|going in circles)\b/i.test(text)) {
       text = `${text.replace(/[.?!]+$/, "")}. We've gone in circles on this.`;
+    }
+  }
+
+  if ((tempProfile?.band === "low" || openness >= 7) && /\b(we'?ve gone in circles|not convinced)\b/i.test(text)) {
+    text = text.replace(/\bwe'?ve gone in circles on this\.?/gi, "")
+      .replace(/\bi'?m not convinced(?: this changes much)?\.?/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!/\b(i'?m open|open to)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps the right patients.`;
     }
   }
 
@@ -1238,6 +1263,90 @@ function applyEscalationContinuityStyle({
   }
 
   return text.replace(/\s+/g, " ").trim();
+}
+
+function deterministicVariant(seed = "", variants: string[] = []): string {
+  if (!variants.length) return "";
+  let hash = 0;
+  const value = String(seed || "seed");
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return variants[Math.abs(hash) % variants.length];
+}
+
+function concernScopedQuestionVariant({
+  mode,
+  concernFamily,
+  escalationLevel,
+  temperatureBand,
+  historyLength,
+}: {
+  mode: "collaborative" | "guarded" | "resistant";
+  concernFamily?: string;
+  escalationLevel?: number;
+  temperatureBand?: string;
+  historyLength?: number;
+}) {
+  const concern = String(concernFamily || "general").toLowerCase();
+  const escalation = Number(escalationLevel || 0);
+  const seed = `${mode}|${concern}|${escalation}|${temperatureBand || "medium"}|${historyLength || 0}`;
+
+  const byConcern: Record<string, string[]> = {
+    access: [
+      "What changes in the approval path for my staff?",
+      "Which access step is actually easier after this?",
+      "Where does this reduce friction in prior auth?",
+    ],
+    workflow: [
+      "Which step comes off my team's plate?",
+      "What task is my staff doing less of after this?",
+      "Where does this remove rework for the team?",
+    ],
+    patient_fit: [
+      "Which patient profile are you actually targeting first?",
+      "Who specifically is the right first patient?",
+      "What patient type should I test this in first?",
+    ],
+    evidence: [
+      "What proof changes a real treatment decision for me?",
+      "Which data point would actually change practice?",
+      "What evidence should move me from maybe to action?",
+    ],
+  };
+
+  const fallback = [
+    "What changes in practice if this is worth continuing?",
+    "What's concretely different for me after this?",
+    "What practical change should I expect to see?",
+  ];
+
+  const pickedQuestion = deterministicVariant(seed, byConcern[concern] || fallback);
+  const leadByMode = {
+    collaborative: deterministicVariant(`${seed}|lead`, [
+      "That helps.",
+      "Understood.",
+      "Okay, that gives me context.",
+    ]),
+    guarded: deterministicVariant(`${seed}|lead`, [
+      "Fine, keep this practical.",
+      "I hear you, keep this specific.",
+      "Okay, keep this focused.",
+    ]),
+    resistant: deterministicVariant(`${seed}|lead`, escalation >= 3
+      ? [
+        "We've been circling this.",
+        "I'm still not seeing a real shift.",
+        "We've covered this and the blocker is still there.",
+      ]
+      : [
+        "I'm not convinced yet.",
+        "I'm still skeptical.",
+        "This still feels unresolved.",
+      ]),
+  } as const;
+
+  return `${leadByMode[mode]} ${pickedQuestion}`.replace(/\s+/g, " ").trim();
 }
 
 function scenarioRequiresTimePressureLanguage(scenario: any) {
@@ -1285,10 +1394,12 @@ function enforceConversationModeStructure({
   response,
   tempProfile,
   scenario,
+  sessionState,
 }: {
   response: string;
   tempProfile: any;
   scenario?: any;
+  sessionState?: any;
 }) {
   const mode = getConversationMode(tempProfile);
   const firstSentence = String(response || "")
@@ -1296,6 +1407,25 @@ function enforceConversationModeStructure({
     .split(/(?<=[.!?])\s+/)
     .filter(Boolean)[0] || "";
   let text = firstSentence || String(response || "").trim();
+  const concernFamily = String(
+    sessionState?.previousConcernFamily
+      || sessionState?.hcpState?.concernFamily
+      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
+      || ""
+  ).toLowerCase();
+  const escalationLevel = Number(sessionState?.escalationLevel || 0);
+  const historyLength = Array.isArray(sessionState?.sessionMemory)
+    ? sessionState.sessionMemory.length
+    : Array.isArray(sessionState?.interactionHistory)
+      ? sessionState.interactionHistory.length
+      : 0;
+  const modeVariant = concernScopedQuestionVariant({
+    mode,
+    concernFamily,
+    escalationLevel,
+    temperatureBand: tempProfile?.band,
+    historyLength,
+  });
 
   if (!scenarioRequiresTimePressureLanguage(scenario) && (Number(tempProfile?.temperature ?? 5) <= 4 || tempProfile?.band === "low")) {
     text = removeTimePressureLanguage(text);
@@ -1312,9 +1442,9 @@ function enforceConversationModeStructure({
       text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps my patients.`;
     }
     if (!/\?/g.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. How would this help the patients I worry about most?`;
-    } else if (!/\bhow\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. How would this help the patients I worry about most?`;
+      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
+    } else if (!/\b(how|which|what)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
     }
   } else if (mode === "guarded") {
     text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "Keep this brief.");
@@ -1324,11 +1454,11 @@ function enforceConversationModeStructure({
       .replace(/\s+/g, " ")
       .trim();
 
-    if (!/\bI hear that a lot\b/i.test(text)) {
-      text = `I hear that a lot. ${text}`.trim();
+    if (!/\b(keep this|focused|specific|practical|brief)\b/i.test(text)) {
+      text = `${modeVariant} ${text}`.trim();
     }
-    if (!/\b(proof|evidence|data)\b/i.test(text) || !/\?/g.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. What proof should I expect to see in my own patients?`;
+    if (!/\?/g.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
     }
   } else {
     text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "I don't have much time.");
@@ -1341,8 +1471,8 @@ function enforceConversationModeStructure({
       text = `We've tried this before. I'm not convinced yet. ${text}`.trim();
     }
     text = text.replace(/\bHow would this help[^?]*\?/gi, "").trim();
-    if (!/\?/g.test(text) || !/\b(why|what changes|what is different)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. Why is this different in real practice?`;
+    if (!/\?/g.test(text) || !/\b(why|what changes|what is different|which|what)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
     }
     if (scenarioRequiresTimePressureLanguage(scenario) && !/\b(minute|time)\b/i.test(text)) {
       text = `I don't have much time. ${text}`;
@@ -1395,10 +1525,12 @@ function applyTemperatureResponseStyle({
   hcpReply,
   tempProfile,
   scenario,
+  sessionState,
 }: {
   hcpReply: string;
   tempProfile: any;
   scenario?: any;
+  sessionState?: any;
 }) {
   let text = String(hcpReply || "").trim();
   if (!text) return text;
@@ -1406,6 +1538,7 @@ function applyTemperatureResponseStyle({
     response: text,
     tempProfile,
     scenario,
+    sessionState,
   });
   return text;
 }
@@ -1414,10 +1547,12 @@ function enforceTemperatureConsistency({
   response,
   tempProfile,
   scenario,
+  sessionState,
 }: {
   response: string;
   tempProfile: any;
   scenario?: any;
+  sessionState?: any;
 }) {
   let text = String(response || "").trim();
   if (!text) return text;
@@ -1427,8 +1562,71 @@ function enforceTemperatureConsistency({
     response: text,
     tempProfile,
     scenario,
+    sessionState,
   });
   return text.replace(/\s+/g, " ").trim();
+}
+
+function ensureEscalationContinuityNoRepeat({
+  hcpReply,
+  transcript,
+  sessionState,
+  tempProfile,
+  scenario,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  sessionState?: any;
+  tempProfile?: any;
+  scenario?: any;
+}) {
+  const current = String(hcpReply || "").trim();
+  if (!current) return current;
+
+  const recent = transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .map((turn) => String(turn.text || ""))
+    .slice(-2);
+  const last = recent[recent.length - 1] || "";
+  const repeated = needsContinuityVariationRewrite({ hcpReply: current, transcript })
+    || (last && continuityOverlapScore(current, last) >= 0.7);
+
+  if (!repeated) return current;
+
+  const mode = getConversationMode(tempProfile || { band: "medium" });
+  const concernFamily = String(
+    sessionState?.previousConcernFamily
+      || sessionState?.hcpState?.concernFamily
+      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
+      || "general"
+  ).toLowerCase();
+  const escalationLevel = Number(sessionState?.escalationLevel || 0);
+  const historyLength = Array.isArray(sessionState?.sessionMemory) ? sessionState.sessionMemory.length : 0;
+
+  let varied = deterministicContinuityVariation({
+    hcpReply: current,
+    transcript,
+    scenario,
+  });
+
+  const variantQuestion = concernScopedQuestionVariant({
+    mode,
+    concernFamily,
+    escalationLevel,
+    temperatureBand: tempProfile?.band,
+    historyLength,
+  });
+
+  if (!/\?/g.test(varied)) {
+    varied = `${varied.replace(/[.?!]+$/, "")}. ${variantQuestion}`;
+  }
+
+  const stillClose = last && continuityOverlapScore(varied, last) >= 0.7;
+  if (stillClose) {
+    varied = `${variantQuestion} ${varied.replace(/[.?!]+$/, "")}`.replace(/\s+/g, " ").trim();
+  }
+
+  return varied.replace(/\s+/g, " ").trim();
 }
 
 function logTemperatureApplication({
@@ -2353,11 +2551,18 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
-  hcpReply = applyTemperatureResponseStyle({ hcpReply, tempProfile, scenario });
+  hcpReply = applyTemperatureResponseStyle({ hcpReply, tempProfile, scenario, sessionState });
   hcpReply = applyEscalationContinuityStyle({
     hcpReply,
     tempProfile,
     sessionState,
+  });
+  hcpReply = ensureEscalationContinuityNoRepeat({
+    hcpReply,
+    transcript,
+    sessionState,
+    tempProfile,
+    scenario,
   });
   let continuityAdjusted = false;
 
@@ -2507,6 +2712,13 @@ Return ONLY valid JSON:
     tempProfile,
     scenario,
   });
+  hcpReply = ensureEscalationContinuityNoRepeat({
+    hcpReply,
+    transcript,
+    sessionState,
+    tempProfile,
+    scenario,
+  });
 
   const anchored = addPersonaSpecificAnchor({
     draft_hcp_response: hcpReply,
@@ -2514,6 +2726,13 @@ Return ONLY valid JSON:
   });
   hcpReply = anchored.text;
   hcpReply = scrubStaleFallbackPhrases(hcpReply, scenarioRouting);
+  hcpReply = ensureEscalationContinuityNoRepeat({
+    hcpReply,
+    transcript,
+    sessionState,
+    tempProfile,
+    scenario,
+  });
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
@@ -2543,6 +2762,22 @@ Return ONLY valid JSON:
     id: `cue_${Date.now()}`,
     ...cue,
   }] : [];
+
+  const memoryLength = Array.isArray(sessionState?.sessionMemory)
+    ? sessionState.sessionMemory.length
+    : Array.isArray(sessionState?.interactionHistory)
+      ? sessionState.interactionHistory.length
+      : 0;
+  console.log(JSON.stringify({
+    type: "continuity_escalation_generator",
+    sessionMemoryLength: memoryLength,
+    currentTemperature: runtimeTemperature,
+    lastHCPState: sessionState?.hcpState || null,
+    lastResponse: sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.hcpResponse || "",
+    generatedResponse: hcpReply,
+    concernFamily: prediction?.concernFamily || "",
+    escalationLevel: Number(sessionState?.escalationLevel || 0),
+  }));
 
   return {
     hcpReply,

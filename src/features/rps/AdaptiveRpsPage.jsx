@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Mic, MicOff, Sparkles, Save } from "lucide-react";
 import { Link } from "react-router-dom";
 import { generateAdaptiveScenario, evaluateAdaptiveResponse, saveAdaptiveSession } from "./api";
@@ -116,9 +116,14 @@ export default function AdaptiveRpsPage() {
 
     const speech = useSpeechInput();
 
+    useEffect(() => {
+        if (!speech.transcript) return;
+        setRepText(speech.transcript);
+    }, [speech.transcript]);
+
     const repTranscript = useMemo(() => {
-        return (speech.transcript || repText || "").trim();
-    }, [speech.transcript, repText]);
+        return (repText || "").trim();
+    }, [repText]);
 
     const disableGenerate = isGenerateDisabled(form, busy);
     const metricRows = extractEightBehavioralMetricRows(evaluation);
@@ -356,7 +361,7 @@ export default function AdaptiveRpsPage() {
                             value={repText}
                             onChange={(e) => {
                                 setRepText(e.target.value);
-                                speech.setTranscript("");
+                                speech.setTranscript(e.target.value);
                             }}
                             placeholder="Enter REP response text here if you are not using microphone capture."
                             className="si-dark-field mt-3 h-28 w-full rounded-lg p-3 text-sm"

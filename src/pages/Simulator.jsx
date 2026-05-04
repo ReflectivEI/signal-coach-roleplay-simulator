@@ -44,6 +44,18 @@ function createLocalSession(scData, convInit) {
     temperature: Math.max(1, Math.min(10, Math.round(initialTemperature))),
     predictiveProfile: null,
     hcpPersona: null,
+    hcpState: {
+      resistance: 5,
+      skepticism: 5,
+      openness: 5,
+      emotion: "guarded",
+      behaviorState: convInit.initialBehaviorState,
+      concernFamily: "",
+      temperature: Math.max(1, Math.min(10, Math.round(initialTemperature))),
+      temperaturePersonaTraits: temperatureTraits(initialTemperature),
+      updatedAt: new Date().toISOString(),
+    },
+    sessionMemory: [],
     previousInteraction: "",
     interactionHistory: [],
     lastConcernFamily: "",
@@ -74,6 +86,100 @@ function defaultTemperatureFromScenario(scData) {
   if (persona.includes("cost_focused")) return 6;
   if (persona.includes("curious_uncertain")) return 4;
   return 5;
+}
+
+function temperatureTraits(temperature) {
+  const temp = Math.max(1, Math.min(10, Number(temperature) || 5));
+  if (temp <= 4) {
+    return {
+      challengeStyle: "collaborative",
+      patience: 8,
+      directness: 4,
+      interruptionLikelihood: 2,
+    };
+  }
+  if (temp <= 7) {
+    return {
+      challengeStyle: "proof-seeking",
+      patience: 6,
+      directness: 6,
+      interruptionLikelihood: 4,
+    };
+  }
+  return {
+    challengeStyle: "challenging",
+    patience: 3,
+    directness: 8,
+    interruptionLikelihood: 8,
+  };
+}
+
+function deriveHcpStateSnapshot({
+  priorState,
+  behaviorState,
+  prediction,
+  behaviorSignals,
+  temperature,
+}) {
+  const prior = priorState || {
+    resistance: 5,
+    skepticism: 5,
+    openness: 5,
+    emotion: "guarded",
+  };
+
+  const nextBehavior = String(behaviorState || "neutral").toLowerCase();
+  const risk = String(prediction?.riskLevel || "").toLowerCase();
+  const alignment = String(behaviorSignals?.response_alignment || "weak").toLowerCase();
+  const listening = String(behaviorSignals?.listening_pattern || "missed").toLowerCase();
+  const concernFamily = String(prediction?.concernFamily || "").toLowerCase();
+  const traits = temperatureTraits(temperature);
+
+  const ignoredOrDismissed = alignment === "weak" || listening === "missed";
+  const matchedConcern = ["strong", "partial"].includes(alignment);
+
+  const resistanceBump =
+    (ignoredOrDismissed ? 2 : 0) +
+    (["resistance", "closed", "frustration", "time_pressure"].includes(nextBehavior) ? 1 : 0) +
+    (risk === "high" ? 1 : 0) +
+    (traits.challengeStyle === "challenging" ? 1 : 0);
+  const resistanceDrop = matchedConcern ? 1 : 0;
+
+  const skepticismBump =
+    (traits.challengeStyle === "challenging" ? 2 : traits.challengeStyle === "proof-seeking" ? 1 : 0) +
+    (concernFamily === "evidence" || concernFamily === "patient_fit" ? 1 : 0) +
+    (ignoredOrDismissed ? 1 : 0);
+  const skepticismDrop = matchedConcern ? 1 : 0;
+
+  const opennessDrop = ignoredOrDismissed ? 2 : 0;
+  const opennessBump =
+    (matchedConcern ? 1 : 0) +
+    (traits.challengeStyle === "collaborative" ? 2 : 0) +
+    (nextBehavior === "open" ? 1 : 0);
+
+  const resistance = Math.max(1, Math.min(10, Number(prior.resistance || 5) + resistanceBump - resistanceDrop));
+  const skepticism = Math.max(1, Math.min(10, Number(prior.skepticism || 5) + skepticismBump - skepticismDrop));
+  const openness = Math.max(1, Math.min(10, Number(prior.openness || 5) + opennessBump - opennessDrop));
+
+  const emotion = resistance >= 8
+    ? "frustrated"
+    : skepticism >= 7
+      ? "skeptical"
+      : openness >= 7
+        ? "engaged"
+        : "guarded";
+
+  return {
+    resistance,
+    skepticism,
+    openness,
+    emotion,
+    behaviorState: nextBehavior,
+    concernFamily,
+    temperature,
+    temperaturePersonaTraits: traits,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 export default function Simulator() {
@@ -402,6 +508,31 @@ export default function Simulator() {
         currentJourneyState: response.nextJourneyState,
         currentBehaviorState: response.nextBehaviorState,
         turnCount: session.turnCount + 2,
+        hcpState: deriveHcpStateSnapshot({
+          priorState: session?.hcpState,
+          behaviorState: response.nextBehaviorState,
+          prediction: response?.prediction,
+          behaviorSignals: response?.behaviorSignals,
+          temperature,
+        }),
+        sessionMemory: [
+          ...(session?.sessionMemory || []),
+          {
+            hcpResponse: response.hcpReply,
+            hcpState: deriveHcpStateSnapshot({
+              priorState: session?.hcpState,
+              behaviorState: response.nextBehaviorState,
+              prediction: response?.prediction,
+              behaviorSignals: response?.behaviorSignals,
+              temperature,
+            }),
+            temperature,
+            concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+            repMessage: repText,
+            behaviorSignals: response?.behaviorSignals || {},
+            timestamp: new Date().toISOString(),
+          },
+        ].slice(-10),
       };
       setSession(updatedSession);
     } catch (error) {
@@ -409,6 +540,15 @@ export default function Simulator() {
       setLastRuntimeError(message);
       toast({
         title: "HCP response failed",
+            hcpState: deriveHcpStateSnapshot({
+              priorState: session?.hcpState,
+              behaviorState: response.nextBehaviorState,
+              prediction: response?.prediction,
+              behaviorSignals: response?.behaviorSignals,
+              temperature,
+            }),
+            temperature,
+            behaviorSignals: response?.behaviorSignals || {},
         description: message,
         variant: "destructive",
       });
@@ -429,6 +569,15 @@ export default function Simulator() {
       scenario.startingBehaviorState,
     );
     const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
+
+      console.log(JSON.stringify({
+        type: "continuity_escalation_progress",
+        sessionMemoryLength: updatedSession.sessionMemory.length,
+        currentTemperature: temperature,
+        lastHCPState: updatedSession.hcpState,
+        lastResponse: response.hcpReply,
+        escalationLevel: updatedSession.escalationLevel,
+      }));
 
     setReviewStage("Generating coaching feedback (15–30 s)…");
 
