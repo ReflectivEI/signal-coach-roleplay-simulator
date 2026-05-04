@@ -30,6 +30,10 @@ function createSafeId() {
 }
 
 function createLocalSession(scData, convInit) {
+  const initialTemperature = Number(scData?.runtimeTemperature ?? scData?.defaultTemperature);
+  if (!Number.isFinite(initialTemperature)) {
+    throw new Error("Missing temperature");
+  }
   return {
     id: createSafeId(),
     scenarioId: scData.id,
@@ -37,9 +41,39 @@ function createLocalSession(scData, convInit) {
     currentJourneyState: scData.journeyState,
     currentBehaviorState: convInit.initialBehaviorState,
     turnCount: 0,
+    temperature: Math.max(1, Math.min(10, Math.round(initialTemperature))),
+    predictiveProfile: null,
+    hcpPersona: null,
+    previousInteraction: "",
+    interactionHistory: [],
+    lastConcernFamily: "",
+    escalationLevel: 0,
     coachingNudgesEnabled: true,
     isComplete: false,
   };
+}
+
+function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
+  const selection = runtimeLens?.selection;
+  const type = String(selection?.behaviorArchetype || scenario?.persona || "").trim();
+  if (!type) return null;
+  return {
+    type,
+    source: runtimeLens?.synthesisSource || "deterministic",
+    specialistTitle: runtimeLens?.specialistTitle || scenario?.stakeholder || "Clinical Specialist",
+  };
+}
+
+function defaultTemperatureFromScenario(scData) {
+  const explicit = Number(scData?.defaultTemperature || scData?.runtimeTemperature);
+  if (Number.isFinite(explicit) && explicit >= 1 && explicit <= 10) return Math.round(explicit);
+
+  const persona = String(scData?.persona || "").toLowerCase();
+  if (persona.includes("skeptical")) return 7;
+  if (persona.includes("time_constrained")) return 6;
+  if (persona.includes("cost_focused")) return 6;
+  if (persona.includes("curious_uncertain")) return 4;
+  return 5;
 }
 
 export default function Simulator() {
@@ -109,6 +143,7 @@ export default function Simulator() {
     const resolvedSeed = buildPredictiveSeedFromScenario(scData);
     const scenarioWithSeed = {
       ...scData,
+      defaultTemperature: defaultTemperatureFromScenario(scData),
       predictiveSeed: {
         ...resolvedSeed,
         ...(scData.predictiveSeed || {}),
@@ -124,15 +159,31 @@ export default function Simulator() {
     predictiveLensReadyPromiseRef.current = runtimeLensPromise;
 
     void runtimeLensPromise.then((runtimeData) => {
+      const predictiveProfile = buildPredictiveProfileFromRuntime(runtimeData, scenarioWithSeed);
       setPredictiveLensState({ isLoading: false, data: runtimeData });
+      setSession((current) => current ? { ...current, predictiveProfile, hcpPersona: predictiveProfile } : current);
     }).catch(() => {
       setPredictiveLensState({ isLoading: false, data: null });
+      setSession((current) => current ? { ...current, predictiveProfile: null, hcpPersona: null } : current);
     });
 
     const convInit = await initializeConversation(scenarioWithSeed);
     setConversationInit(convInit);
 
-    const newSession = createLocalSession(scenarioWithSeed, convInit);
+    let newSession;
+    try {
+      newSession = createLocalSession(scenarioWithSeed, convInit);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Missing temperature";
+      setLastRuntimeError(message);
+      toast({
+        title: "Simulator initialization failed",
+        description: message,
+        variant: "destructive",
+      });
+      setIsInitializing(false);
+      return;
+    }
     setSession(newSession);
 
     setTurns([]);
@@ -158,12 +209,45 @@ export default function Simulator() {
 
     const isFirstRepTurn = !hasRepSpoken;
     if (isFirstRepTurn && predictiveLensRef.current.isLoading) {
-      // Fast readiness gate: wait briefly for first-turn lens hydration, then continue.
-      await Promise.race([
-        predictiveLensReadyPromiseRef.current,
-        new Promise((resolve) => setTimeout(resolve, 900)),
-      ]).catch(() => null);
+      await predictiveLensReadyPromiseRef.current.catch(() => null);
     }
+
+    const predictiveRuntimeData = predictiveLensRef.current.data;
+    const predictiveProfile = session?.predictiveProfile || buildPredictiveProfileFromRuntime(predictiveRuntimeData, scenario);
+    if (!predictiveProfile) {
+      const message = "Error: HCP context not initialized";
+      setLastRuntimeError(message);
+      toast({
+        title: "HCP context missing",
+        description: message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    const temperature = Number(session?.temperature);
+    if (!Number.isFinite(temperature)) {
+      const message = "Missing temperature";
+      setLastRuntimeError(message);
+      toast({
+        title: "Temperature missing",
+        description: message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("predictive_profile_attached", {
+      hasProfile: !!predictiveProfile,
+      personaType: predictiveProfile?.type,
+    });
+
+    console.log("temperature_applied", {
+      value: temperature,
+      band: temperature <= 3 ? "low" : temperature <= 7 ? "medium" : "high",
+    });
 
     setHasRepSpoken(true);
 
@@ -213,8 +297,18 @@ export default function Simulator() {
     }));
 
     try {
+      const scenarioWithTemperature = {
+        ...scenario,
+        runtimeTemperature: temperature,
+      };
+
+      const predictiveContext = buildPredictivePromptContext(predictiveRuntimeData);
+      if (!predictiveContext.trim()) {
+        throw new Error("Error: HCP context not initialized");
+      }
+
       const response = await generateHcpResponse(
-        scenario,
+        scenarioWithTemperature,
         conversationHistory,
         session.currentBehaviorState,
         session.currentJourneyState,
@@ -224,7 +318,16 @@ export default function Simulator() {
         session.turnCount,
         currentVolatilityProfile,
         undefined,
-        buildPredictivePromptContext(predictiveLensRef.current.data),
+        predictiveProfile,
+        predictiveContext,
+        {
+          hcpPersona: session?.hcpPersona || predictiveProfile,
+          temperature,
+          previousInteraction: repText,
+          interactionHistory: session?.interactionHistory || [],
+          previousConcernFamily: session?.lastConcernFamily || "",
+          escalationLevel: Number(session?.escalationLevel || 0),
+        },
       );
 
       setTurns((prev) => {
@@ -265,6 +368,26 @@ export default function Simulator() {
 
       const updatedSession = {
         ...session,
+        predictiveProfile,
+        hcpPersona: predictiveProfile,
+        previousInteraction: repText,
+        interactionHistory: [
+          ...(session?.interactionHistory || []),
+          {
+            rep: repText,
+            hcp: response.hcpReply,
+            concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+            behaviorState: response.nextBehaviorState,
+          },
+        ].slice(-8),
+        lastConcernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+        escalationLevel: (() => {
+          const prior = Number(session?.escalationLevel || 0);
+          const escalates = ["closed", "resistance", "frustration", "time_pressure"].includes(String(response.nextBehaviorState || "").toLowerCase())
+            || String(response?.prediction?.riskLevel || "").toLowerCase() === "high";
+          if (escalates) return Math.min(3, prior + 1);
+          return Math.max(0, prior - 1);
+        })(),
         currentJourneyState: response.nextJourneyState,
         currentBehaviorState: response.nextBehaviorState,
         turnCount: session.turnCount + 2,
@@ -587,6 +710,14 @@ export default function Simulator() {
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
+              temperature={session?.temperature}
+              onTemperatureChange={(value) => {
+                const numeric = Number(value);
+                if (!Number.isFinite(numeric)) return;
+                const next = Math.max(1, Math.min(10, numeric));
+                setSession((current) => current ? { ...current, temperature: next } : current);
+                console.debug("[Simulator] Temperature updated:", next);
+              }}
             />
           </div>
         </div>
@@ -615,6 +746,14 @@ export default function Simulator() {
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
+              temperature={session?.temperature}
+              onTemperatureChange={(value) => {
+                const numeric = Number(value);
+                if (!Number.isFinite(numeric)) return;
+                const next = Math.max(1, Math.min(10, numeric));
+                setSession((current) => current ? { ...current, temperature: next } : current);
+                console.debug("[Simulator] Temperature updated:", next);
+              }}
             />
           </motion.div>
         )}

@@ -93,6 +93,8 @@ export default function SimulatorRightPanel({
   conversationInit = null,
   hasRepSpoken = false,
   predictiveLens = null,
+  temperature = 5,
+  onTemperatureChange = () => { },
 }) {
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
@@ -190,38 +192,27 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      {scenario && sceneDescription && (
-        <DarkSection icon={MapPin} title="Scene">
-          <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
-            {sceneDescription}
-          </p>
-          {openingGuidance.length > 0 && (
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
-                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
-                  Opening Tips
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {openingGuidance.map((hint, i) => (
-                  <span
-                    key={i}
-                    className="text-[11px] px-2 py-0.5 rounded-md"
-                    style={{
-                      background: "rgba(37,124,123,0.12)",
-                      border: "1px solid rgba(37,124,123,0.24)",
-                      color: "rgba(244,249,249,0.96)",
-                    }}
-                  >
-                    {hint}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </DarkSection>
-      )}
+      <DarkSection icon={Activity} title="Realism Lever">
+        <div className="space-y-2">
+          <Row label="Temperature">
+            <Pill>{Math.max(1, Math.min(10, Number(temperature) || 5))}/10</Pill>
+          </Row>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={Math.max(1, Math.min(10, Number(temperature) || 5))}
+            onChange={(event) => onTemperatureChange(event.target.value)}
+            className="w-full accent-teal-400"
+            aria-label="Realism Lever"
+          />
+          <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
+            <span>1 (Open)</span>
+            <span>5 (Balanced)</span>
+            <span>10 (High Resistance)</span>
+          </div>
+        </div>
+      </DarkSection>
 
       {liveCoaching && (
         <LightSection
@@ -331,6 +322,39 @@ export default function SimulatorRightPanel({
               </Row>
             );
           })}
+        </DarkSection>
+      )}
+
+      {scenario && sceneDescription && (
+        <DarkSection icon={MapPin} title="Scene">
+          <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
+            {sceneDescription}
+          </p>
+          {openingGuidance.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
+                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
+                  Opening Tips
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {openingGuidance.map((hint, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] px-2 py-0.5 rounded-md"
+                    style={{
+                      background: "rgba(37,124,123,0.12)",
+                      border: "1px solid rgba(37,124,123,0.24)",
+                      color: "rgba(244,249,249,0.96)",
+                    }}
+                  >
+                    {hint}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </DarkSection>
       )}
 

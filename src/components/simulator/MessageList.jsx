@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
 
+const SHOW_DEBUG_UI = Boolean(import.meta.env.DEV);
+
 // HCP cues are single-line observable behavioral signals aligned with dialogue
 function HcpCueStrip({ cue }) {
   if (!cue) return null;
@@ -29,11 +31,10 @@ function HcpCueStrip({ cue }) {
 
 function PredictiveDebugChip({ debugInfo }) {
   const [open, setOpen] = useState(false);
-  const isAdminView = import.meta.env.VITE_ADMIN_LENS === "true";
-  if (!isAdminView || !debugInfo) return null;
+  if (!SHOW_DEBUG_UI || !debugInfo) return null;
 
   const applied = Boolean(debugInfo.contextApplied);
-  const sourceLabel = debugInfo.source === "ai" ? "AI" : debugInfo.source === "deterministic" ? "Deterministic" : "Unknown";
+  const sourceLabel = debugInfo.source === "ai" ? "AI" : debugInfo.source === "deterministic" ? "Deterministic" : "";
   const surfacedSignals = Array.isArray(debugInfo.surfacedSignals) ? debugInfo.surfacedSignals : [];
 
   return (
@@ -43,15 +44,17 @@ function PredictiveDebugChip({ debugInfo }) {
     }}>
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)" }}>
-          {applied ? "Predictive Applied" : "Predictive Pending"}
+          {applied ? "Predictive Applied" : "Predictive Debug"}
         </span>
-        <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{
-          color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)",
-          borderColor: applied ? "rgba(70, 153, 138, 0.42)" : "rgba(132, 149, 173, 0.42)",
-          background: "rgba(255,255,255,0.62)",
-        }}>
-          {sourceLabel}
-        </span>
+        {sourceLabel ? (
+          <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{
+            color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)",
+            borderColor: applied ? "rgba(70, 153, 138, 0.42)" : "rgba(132, 149, 173, 0.42)",
+            background: "rgba(255,255,255,0.62)",
+          }}>
+            {sourceLabel}
+          </span>
+        ) : null}
         <button
           type="button"
           className="text-[10px] underline"

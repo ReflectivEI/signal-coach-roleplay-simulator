@@ -1,13 +1,19 @@
 {
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
     "jsx": "react-jsx",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "lib": ["esnext", "dom"],
+    "lib": [
+      "esnext",
+      "dom"
+    ],
     "target": "esnext",
     "checkJs": true,
     "skipLibCheck": true,
@@ -15,7 +21,9 @@
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "src/App.jsx",
@@ -28,5 +36,10 @@
     "src/components/layout/**/*",
     "scripts/**/*"
   ],
-  "exclude": ["node_modules", "dist", "src/vite-plugins", "src/components/ui/**/*"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/vite-plugins",
+    "src/components/ui/**/*"
+  ]
 }

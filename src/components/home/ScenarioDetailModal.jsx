@@ -31,6 +31,47 @@ const TOOLTIP_DESCRIPTIONS = {
   "Patient-Centric": "HCP prioritizes patient outcomes and benefits as the primary decision driver."
 };
 
+function deriveContractTemperature(scenario) {
+  const explicit = Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature);
+  if (Number.isFinite(explicit)) return Math.max(1, Math.min(10, Math.round(explicit)));
+
+  const persona = String(scenario?.persona || "").toLowerCase();
+  if (persona.includes("skeptical")) return 8;
+  if (persona.includes("curious")) return 4;
+  return 6;
+}
+
+function buildPredictiveContract(scenario) {
+  const selection = buildPredictiveSeedFromScenario(scenario || {});
+  const profile = buildPredictiveProfile(selection);
+  const predictiveProfile = {
+    type: String(selection?.behaviorArchetype || scenario?.persona || "").trim(),
+    source: "deterministic",
+    specialistTitle: scenario?.stakeholder || "Clinical Specialist",
+  };
+  const sections = profile?.sections || {};
+  const predictivePromptContext = [
+    "PREDICTIVE HCP LENS (runtime, scenario-derived):",
+    "- Source: deterministic",
+    `- Specialist frame: ${predictiveProfile.specialistTitle}`,
+    `- Seed disease state: ${selection?.diseaseState || ""}`,
+    `- Seed HCP type: ${selection?.hcpType || ""}`,
+    `- Seed journey stage: ${selection?.journeyStage || ""}`,
+    `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
+    `- Seed influence driver: ${selection?.influenceDriver || ""}`,
+    `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
+    `- Mindset headline: ${sections?.mindset?.headline || ""}`,
+    `- Objection headline: ${sections?.objections?.headline || ""}`,
+    `- Response style headline: ${sections?.responseStyle?.headline || ""}`,
+    `- Rep approach headline: ${sections?.repApproach?.headline || ""}`,
+  ].join("\n");
+
+  return {
+    predictiveProfile: predictiveProfile.type ? predictiveProfile : null,
+    predictivePromptContext,
+  };
+}
+
 function VarPill({ children }) {
   const DESCRIPTIONS = {
     // Journey Stages (display labels)
@@ -212,8 +253,19 @@ function AiCoachSection({ scenario }) {
         timestamp: new Date().toISOString(),
       }));
 
+      const { predictiveProfile, predictivePromptContext } = buildPredictiveContract(scenario);
+      if (!predictiveProfile || !predictivePromptContext.trim()) {
+        throw new Error("Error: HCP context not initialized");
+      }
+
+      const contractTemperature = deriveContractTemperature(scenario);
+      const scenarioWithRuntime = {
+        ...scenario,
+        runtimeTemperature: contractTemperature,
+      };
+
       const response = await generateHcpResponse(
-        scenario,
+        scenarioWithRuntime,
         transcript,
         hcpState?.currentBehaviorState || scenario.startingBehaviorState || "neutral",
         hcpState?.currentJourneyState || scenario.journeyState,
@@ -222,6 +274,22 @@ function AiCoachSection({ scenario }) {
         hcpState?.allSignals || [],
         transcript.filter((turn) => turn.speaker === "rep").length,
         hcpState?.currentVolatilityProfile || "stable",
+        undefined,
+        predictiveProfile,
+        predictivePromptContext,
+        {
+          hcpPersona: predictiveProfile,
+          temperature: contractTemperature,
+          previousInteraction: trimmed,
+          previousConcernFamily: "",
+          escalationLevel: 0,
+          interactionHistory: transcript.slice(-6).map((turn) => ({
+            rep: turn?.speaker === "rep" ? turn?.text : "",
+            hcp: turn?.speaker === "hcp" ? turn?.text : "",
+            concernFamily: "",
+            behaviorState: hcpState?.currentBehaviorState || scenario.startingBehaviorState || "neutral",
+          })),
+        },
       );
 
       setHcpMessages(prev => [...prev, { role: "assistant", text: response.hcpReply }]);
@@ -234,7 +302,7 @@ function AiCoachSection({ scenario }) {
     } catch (error) {
       setHcpMessages(prev => [...prev, {
         role: "assistant",
-        text: "I lost the thread there. Ask again in one concise line.",
+        text: error instanceof Error ? error.message : "Error: HCP context not initialized",
       }]);
     } finally {
       setLoading(false);
@@ -266,8 +334,8 @@ function AiCoachSection({ scenario }) {
           messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
               <div className={`max-w-[88%] text-xs leading-relaxed px-3 py-2 rounded-lg ${m.role === "user"
-                  ? "bg-primary/15 border border-primary/20 text-foreground"
-                  : "bg-surface border border-border/60 text-foreground/85"
+                ? "bg-primary/15 border border-primary/20 text-foreground"
+                : "bg-surface border border-border/60 text-foreground/85"
                 }`}>
                 {m.text}
               </div>

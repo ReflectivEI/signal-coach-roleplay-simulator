@@ -720,12 +720,18 @@ export async function enforceHCPResponse({
   hcp_state,
   hcp_brain,
   rep_message,
+  temperature,
+  tempProfile,
+  scenario,
 }: {
   draft_response: string;
   scenario_routing: any;
   hcp_state: string;
   hcp_brain: any;
   rep_message: string;
+  temperature?: number;
+  tempProfile?: any;
+  scenario?: any;
 }): Promise<string> {
   // Step 1: Topic lane enforcement.
   let laneEnforced = enforceScenarioTopicLane({
@@ -821,6 +827,12 @@ export async function enforceHCPResponse({
       action: "regenerated",
     });
   }
+
+  response = enforceTemperatureConsistency({
+    response,
+    tempProfile: tempProfile || getTemperatureBehaviorProfile(Number(temperature) || 5),
+    scenario,
+  });
 
   return response;
 }
@@ -1055,6 +1067,7 @@ function deriveMappedSamplingControls({
   profile,
   volatilityProfile,
   interactionPressures,
+  tempProfile,
 }: {
   currentJourneyState: string;
   currentBehaviorState: string;
@@ -1062,6 +1075,7 @@ function deriveMappedSamplingControls({
   profile: any;
   volatilityProfile: VolatilityProfile;
   interactionPressures: string[];
+  tempProfile?: any;
 }): {
   responseTemperature: number;
   rewriteTemperature: number;
@@ -1110,6 +1124,16 @@ function deriveMappedSamplingControls({
     rationale.push("Baseline mode: balanced realism and variation.");
   }
 
+  if (tempProfile?.band === "high") {
+    responseTemperature = Math.max(0.08, responseTemperature - 0.05);
+    rewriteTemperature = Math.max(0.05, rewriteTemperature - 0.03);
+    rationale.push("High realism lever: increase skepticism, tighten output, and reduce lexical drift.");
+  } else if (tempProfile?.band === "low") {
+    responseTemperature = Math.min(0.28, responseTemperature + 0.04);
+    rewriteTemperature = Math.min(0.14, rewriteTemperature + 0.02);
+    rationale.push("Low realism lever: allow collaborative exploration and slightly fuller phrasing.");
+  }
+
   let engagementDirective = "Maintain measured engagement; one concrete blocker at a time.";
   if (highPressure) {
     engagementDirective = "Low engagement posture: one short sentence preferred, blocker-first phrasing, and no explanatory lead-ins such as 'I'm still waiting to hear how you plan to'.";
@@ -1127,6 +1151,299 @@ function deriveMappedSamplingControls({
     engagementDirective,
     rationale,
   };
+}
+
+function mapTemperatureBand(temp: number) {
+  const normalized = Math.max(1, Math.min(10, Number(temp) || 5));
+  if (normalized <= 3) return "low";
+  if (normalized <= 7) return "medium";
+  return "high";
+}
+
+function getTemperatureBehaviorProfile(temp: number) {
+  const band = mapTemperatureBand(temp);
+
+  return {
+    band,
+    skepticism: band === "low" ? 2 : band === "medium" ? 5 : 9,
+    resistance: band === "low" ? 2 : band === "medium" ? 5 : 9,
+    openness: band === "low" ? 9 : band === "medium" ? 6 : 2,
+    patience: band === "low" ? 9 : band === "medium" ? 6 : 3,
+    interruptionLikelihood: band === "low" ? 1 : band === "medium" ? 4 : 8,
+    responseLength: band === "low" ? "long" : band === "medium" ? "balanced" : "short",
+    tone: band === "low" ? "collaborative" : band === "medium" ? "neutral" : "sharp",
+    questionStyle: band === "low" ? "exploratory" : band === "medium" ? "probing" : "challenging",
+  };
+}
+
+function getConversationMode(tempProfile: any) {
+  if (tempProfile?.band === "low") return "collaborative";
+  if (tempProfile?.band === "medium") return "guarded";
+  return "resistant";
+}
+
+function buildSessionMemoryPromptBlock(sessionState: any) {
+  const history = Array.isArray(sessionState?.interactionHistory)
+    ? sessionState.interactionHistory.slice(-3)
+    : [];
+  const historyLines = history.map((item: any, index: number) => (
+    `- Turn ${index + 1}: REP="${String(item?.rep || "").slice(0, 120)}" | HCP="${String(item?.hcp || "").slice(0, 120)}" | concern=${item?.concernFamily || "unknown"} | behavior=${item?.behaviorState || "unknown"}`
+  )).join("\n");
+
+  return `
+SESSION MEMORY (persisted runtime state):
+- persona archetype: ${sessionState?.hcpPersona?.type || "unknown"}
+- predictive source: ${sessionState?.hcpPersona?.source || "unknown"}
+- current temperature: ${sessionState?.temperature}
+- previous rep interaction: ${String(sessionState?.previousInteraction || "none")}
+- previous concern family: ${sessionState?.previousConcernFamily || "unknown"}
+- escalation level: ${Number(sessionState?.escalationLevel || 0)}
+${historyLines ? `- recent interaction history:\n${historyLines}` : "- recent interaction history: none"}
+
+Continuity rules:
+- Continue the unresolved concern family unless the rep directly resolves it.
+- If escalation level is high, tighten resistance posture and increase challenge specificity.
+`;
+}
+
+function applyEscalationContinuityStyle({
+  hcpReply,
+  tempProfile,
+  sessionState,
+}: {
+  hcpReply: string;
+  tempProfile: any;
+  sessionState?: any;
+}) {
+  let text = String(hcpReply || "").trim();
+  if (!text) return text;
+
+  const escalation = Number(sessionState?.escalationLevel || 0);
+  const priorConcern = String(sessionState?.previousConcernFamily || "").toLowerCase();
+
+  if (escalation >= 2 && tempProfile?.band !== "low") {
+    if (!/\b(we'?ve tried this|not convinced|still waiting|going in circles)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. We've gone in circles on this.`;
+    }
+  }
+
+  if (priorConcern === "patient_fit" && !/\b(patient|subgroup|who specifically)\b/i.test(text)) {
+    text = `${text.replace(/[.?!]+$/, "")}. Which patients are you actually targeting?`;
+  }
+  if (priorConcern === "access" && !/\b(coverage|approval|formulary|access)\b/i.test(text)) {
+    text = `${text.replace(/[.?!]+$/, "")}. What changes in the coverage path?`;
+  }
+  if (priorConcern === "workflow" && !/\b(staff|workflow|step|queue|callback)\b/i.test(text)) {
+    text = `${text.replace(/[.?!]+$/, "")}. Which step changes for my staff?`;
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function scenarioRequiresTimePressureLanguage(scenario: any) {
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+  return pressures.includes("time_constrained");
+}
+
+function removeTimePressureLanguage(text: string) {
+  return String(text || "")
+    .replace(/\b(i have|i've got|i got)\s+(one|two|three|a few|few)\s+minutes?\b[,.!?]?/gi, "")
+    .replace(/\b(i have|i've got|i got)\s+no\s+time\b[,.!?]?/gi, "")
+    .replace(/\b(i'?m|i am)\s+short\s+on\s+time\b[,.!?]?/gi, "")
+    .replace(/\btime\s+is\s+tight\b[,.!?]?/gi, "")
+    .replace(/\bi\s+don'?t\s+have\s+time\b[,.!?]?/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[,.;:\s-]+/, "")
+    .trim();
+}
+
+function enforceBehavioralDivergence(response: string, tempProfile: any) {
+  let text = String(response || "").trim();
+  if (!text) return text;
+
+  if (tempProfile?.band === "low" && /not convinced/i.test(text)) {
+    text = text
+      .replace(/i'?m\s+still\s+not\s+convinced\s+yet\.?/gi, "")
+      .replace(/not\s+convinced\.?/gi, "")
+      .trim();
+    if (!/\bI'?m open\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps my patients.`;
+    }
+  }
+
+  if (tempProfile?.band === "high" && /\bi'?m\s+open\b/i.test(text)) {
+    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
+    if (!/\b(not convinced|we'?ve tried this)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. I'm not convinced this changes much.`;
+    }
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function enforceConversationModeStructure({
+  response,
+  tempProfile,
+  scenario,
+}: {
+  response: string;
+  tempProfile: any;
+  scenario?: any;
+}) {
+  const mode = getConversationMode(tempProfile);
+  const firstSentence = String(response || "")
+    .trim()
+    .split(/(?<=[.!?])\s+/)
+    .filter(Boolean)[0] || "";
+  let text = firstSentence || String(response || "").trim();
+
+  if (!scenarioRequiresTimePressureLanguage(scenario) && (Number(tempProfile?.temperature ?? 5) <= 4 || tempProfile?.band === "low")) {
+    text = removeTimePressureLanguage(text);
+  }
+
+  if (mode === "collaborative") {
+    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "I can give this a minute.");
+    text = text
+      .replace(/\b(i hear that a lot|we'?ve tried this|not convinced|what changes for a real decision)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!/\bI'?m open\b/i.test(text) && !/\bif this helps\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps my patients.`;
+    }
+    if (!/\?/g.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. How would this help the patients I worry about most?`;
+    } else if (!/\bhow\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. How would this help the patients I worry about most?`;
+    }
+  } else if (mode === "guarded") {
+    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "Keep this brief.");
+    text = text
+      .replace(/\bI'?m open\b[^.?!]*[.?!]?/gi, "")
+      .replace(/\bwe'?ve tried this\b[^.?!]*[.?!]?/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!/\bI hear that a lot\b/i.test(text)) {
+      text = `I hear that a lot. ${text}`.trim();
+    }
+    if (!/\b(proof|evidence|data)\b/i.test(text) || !/\?/g.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. What proof should I expect to see in my own patients?`;
+    }
+  } else {
+    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "I don't have much time.");
+    text = text
+      .replace(/\bI'?m open\b[^.?!]*[.?!]?/gi, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!/\b(we'?ve tried this|i'?m not convinced)\b/i.test(text)) {
+      text = `We've tried this before. I'm not convinced yet. ${text}`.trim();
+    }
+    text = text.replace(/\bHow would this help[^?]*\?/gi, "").trim();
+    if (!/\?/g.test(text) || !/\b(why|what changes|what is different)\b/i.test(text)) {
+      text = `${text.replace(/[.?!]+$/, "")}. Why is this different in real practice?`;
+    }
+    if (scenarioRequiresTimePressureLanguage(scenario) && !/\b(minute|time)\b/i.test(text)) {
+      text = `I don't have much time. ${text}`;
+    }
+  }
+
+  text = enforceBehavioralDivergence(text, tempProfile);
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function applyTemperatureStateAdjustments({
+  currentBehaviorState,
+  currentJourneyState,
+  nextBehaviorState,
+  nextJourneyState,
+  tempProfile,
+}: {
+  currentBehaviorState: string;
+  currentJourneyState: string;
+  nextBehaviorState: string;
+  nextJourneyState: string;
+  tempProfile: any;
+}) {
+  let adjustedBehavior = String(nextBehaviorState || currentBehaviorState || "neutral");
+  let adjustedJourney = String(nextJourneyState || currentJourneyState || "initial_access");
+
+  if (tempProfile?.resistance > 7 && adjustedJourney !== currentJourneyState) {
+    adjustedJourney = currentJourneyState;
+  }
+
+  if (tempProfile?.band === "high" && ["open", "engaged", "collaborative"].includes(adjustedBehavior)) {
+    adjustedBehavior = "neutral";
+  }
+
+  if (tempProfile?.band === "low") {
+    if (["closed", "resistance", "frustration", "time_pressure"].includes(adjustedBehavior)) {
+      adjustedBehavior = "open";
+    } else if (adjustedBehavior === "neutral") {
+      adjustedBehavior = "open";
+    }
+  }
+
+  return {
+    nextBehaviorState: adjustedBehavior,
+    nextJourneyState: adjustedJourney,
+  };
+}
+
+function applyTemperatureResponseStyle({
+  hcpReply,
+  tempProfile,
+  scenario,
+}: {
+  hcpReply: string;
+  tempProfile: any;
+  scenario?: any;
+}) {
+  let text = String(hcpReply || "").trim();
+  if (!text) return text;
+  text = enforceConversationModeStructure({
+    response: text,
+    tempProfile,
+    scenario,
+  });
+  return text;
+}
+
+function enforceTemperatureConsistency({
+  response,
+  tempProfile,
+  scenario,
+}: {
+  response: string;
+  tempProfile: any;
+  scenario?: any;
+}) {
+  let text = String(response || "").trim();
+  if (!text) return text;
+
+  text = enforceBehavioralDivergence(text, tempProfile);
+  text = enforceConversationModeStructure({
+    response: text,
+    tempProfile,
+    scenario,
+  });
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function logTemperatureApplication({
+  temperature,
+  tempProfile,
+}: {
+  temperature: number;
+  tempProfile: any;
+}) {
+  console.log(JSON.stringify({
+    type: "temperature_profile_applied",
+    temperature,
+    band: tempProfile?.band || "medium",
+    applied_behavior: tempProfile,
+  }));
 }
 
 function enforceHighPressureClippedPhrasing({
@@ -1235,14 +1552,7 @@ function buildPredictiveTurnDebug({
 }): PredictiveTurnDebug | null {
   const context = String(predictivePromptContext || "").trim();
   if (!context) {
-    return {
-      contextApplied: false,
-      source: "unknown",
-      specialistTitle: "Predictive lens unavailable",
-      seed: null,
-      surfacedSignals: ["Predictive context was not available for this turn."],
-      anchorHeadlines: {},
-    };
+    throw new Error("Missing predictive profile");
   }
 
   const sourceRaw = readPredictiveLine(context, "Source");
@@ -1656,8 +1966,42 @@ export async function generateHcpResponse(
   turnCount: number = 0,
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
+  predictiveProfile?: any,
   predictivePromptContext: string = "",
+  sessionState?: any,
 ): Promise<SimulatorResponse> {
+  if (!scenario) {
+    throw new Error("Missing scenario context");
+  }
+  if (!predictiveProfile) {
+    throw new Error("Missing predictive profile");
+  }
+  const context = String(predictivePromptContext || "").trim();
+  if (!context) {
+    throw new Error("Missing predictive profile");
+  }
+
+  const runtimeTemperatureRaw = Number(scenario?.runtimeTemperature);
+  if (!Number.isFinite(runtimeTemperatureRaw)) {
+    throw new Error("Missing temperature");
+  }
+
+  console.log("predictive_profile_attached", {
+    hasProfile: !!predictiveProfile,
+    personaType: predictiveProfile?.type,
+  });
+
+  console.log("temperature_applied", {
+    value: runtimeTemperatureRaw,
+    band: mapTemperatureBand(runtimeTemperatureRaw),
+  });
+
+  console.log("session_memory_attached", {
+    hasPersona: !!sessionState?.hcpPersona,
+    historyTurns: Array.isArray(sessionState?.interactionHistory) ? sessionState.interactionHistory.length : 0,
+    escalationLevel: Number(sessionState?.escalationLevel || 0),
+  });
+
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
     .join("\n");
@@ -1665,6 +2009,17 @@ export async function generateHcpResponse(
   const focusCaps = (scenario.suggestedFocusCapabilities || []).join(", ");
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
+  const runtimeTemperature = Math.max(1, Math.min(10, runtimeTemperatureRaw));
+  const tempProfile = {
+    ...getTemperatureBehaviorProfile(runtimeTemperature),
+    temperature: runtimeTemperature,
+  };
+  const conversationMode = getConversationMode(tempProfile);
+  logTemperatureApplication({
+    temperature: runtimeTemperature,
+    tempProfile,
+  });
+
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
   const turnDirectives = deriveHcpTurnDirectives({
     scenario,
@@ -1705,6 +2060,7 @@ export async function generateHcpResponse(
     profile: runtimeProfile,
     volatilityProfile: volatility.profile,
     interactionPressures,
+    tempProfile,
   });
 
   const predictionBlock = `
@@ -1762,9 +2118,33 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
   const continuityBlock = `
 ${summarizeConcernContinuity(transcript, scenario)}
 `;
-  const predictiveContextBlock = predictivePromptContext
+  const predictiveContextBlock = context
     ? `\n${predictivePromptContext}\n`
     : "";
+  const sessionMemoryBlock = buildSessionMemoryPromptBlock({
+    hcpPersona: sessionState?.hcpPersona || predictiveProfile,
+    temperature: sessionState?.temperature ?? runtimeTemperature,
+    previousInteraction: sessionState?.previousInteraction || repMessage,
+    previousConcernFamily: sessionState?.previousConcernFamily || prediction?.concernFamily || "",
+    escalationLevel: Number(sessionState?.escalationLevel || 0),
+    interactionHistory: sessionState?.interactionHistory || [],
+  });
+
+  const temperatureBehaviorBlock = `
+HCP conversational mode: ${conversationMode}
+
+Behavior rules:
+- collaborative: open, exploratory, curious
+- guarded: neutral, selective, requires proof
+- resistant: skeptical, challenging, dismissive
+
+Mode constraints:
+- collaborative: must include an openness phrase and an exploratory question; do not challenge aggressively
+- guarded: must include a skeptical phrase and a proof-oriented clarifying question
+- resistant: must include a pushback phrase and a challenge question; do not ask exploratory open-ended questions
+
+Respond STRICTLY according to this mode.
+`;
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -1794,6 +2174,8 @@ ${realismBackboneBlock}
 
 ${predictiveContextBlock}
 
+${sessionMemoryBlock}
+
 ${dialogueDirectiveBlock}
 
 ${buildTurnDirectivePrompt(turnDirectives)}
@@ -1801,6 +2183,8 @@ ${buildTurnDirectivePrompt(turnDirectives)}
 ${volatilityBlock}
 
 ${continuityBlock}
+
+${temperatureBehaviorBlock}
 
 GLOBAL TONE/SAMPLING MAP (deterministic controls):
 - Response temperature target: ${mappedControls.responseTemperature}
@@ -1915,6 +2299,16 @@ Return ONLY valid JSON:
     }
   });
 
+  const adjustedState = applyTemperatureStateAdjustments({
+    currentBehaviorState,
+    currentJourneyState,
+    nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
+    nextJourneyState: result.nextJourneyState || currentJourneyState,
+    tempProfile,
+  });
+  result.nextBehaviorState = adjustedState.nextBehaviorState;
+  result.nextJourneyState = adjustedState.nextJourneyState;
+
   let hcpReply = result.hcpReply || "";
   if (needsNaturalnessRewrite(hcpReply)) {
     try {
@@ -1959,6 +2353,12 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
+  hcpReply = applyTemperatureResponseStyle({ hcpReply, tempProfile, scenario });
+  hcpReply = applyEscalationContinuityStyle({
+    hcpReply,
+    tempProfile,
+    sessionState,
+  });
   let continuityAdjusted = false;
 
   if (needsContinuityVariationRewrite({
@@ -2103,6 +2503,9 @@ Return ONLY valid JSON:
     hcp_state: result.nextBehaviorState || currentBehaviorState,
     hcp_brain: prediction,
     rep_message: repMessage,
+    temperature: runtimeTemperature,
+    tempProfile,
+    scenario,
   });
 
   const anchored = addPersonaSpecificAnchor({

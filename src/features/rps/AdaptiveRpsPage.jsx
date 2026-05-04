@@ -18,6 +18,14 @@ const defaults = {
 };
 
 const SELECT_OPTIONS = {
+    hcp_profile: [
+        ["", "Select HCP profile"],
+        ["community_time_pressed", "Community Clinician (Time-Pressed)"],
+        ["skeptical_specialist", "Skeptical Specialist"],
+        ["access_constrained_decision_maker", "Access-Constrained Decision Maker"],
+        ["guideline_anchored_evaluator", "Guideline-Anchored Evaluator"],
+        ["early_adopter_cautious", "Cautious Early Adopter"],
+    ],
     journey_stage: [
         ["", "Select journey stage"],
         ["initial_access", "Initial Access"],
@@ -64,6 +72,24 @@ const SELECT_OPTIONS = {
         ["evidence_driven", "Evidence-Driven"],
         ["risk_averse", "Risk-Averse"],
         ["guideline_anchored", "Guideline-Anchored"],
+    ],
+    access_barrier_context: [
+        ["", "Select access barrier context"],
+        ["none", "No Immediate Access Barrier"],
+        ["prior_auth_volume", "High Prior Authorization Volume"],
+        ["step_therapy_restriction", "Step-Therapy Restriction"],
+        ["formulary_non_preferred", "Non-Preferred Formulary Status"],
+        ["payer_policy_variability", "Payer Policy Variability"],
+        ["staffing_limited_follow_up", "Limited Staff Follow-Up Capacity"],
+    ],
+    rep_objective: [
+        ["", "Select REP objective"],
+        ["establish_relevance", "Establish Relevance Quickly"],
+        ["uncover_primary_blocker", "Uncover Primary Blocker"],
+        ["validate_patient_fit", "Validate Patient Fit"],
+        ["align_on_evidence", "Align on Evidence Threshold"],
+        ["resolve_access_concern", "Resolve Access Concern"],
+        ["secure_small_next_step", "Secure Small Next Step"],
     ],
 };
 
@@ -303,7 +329,7 @@ export default function AdaptiveRpsPage() {
                     </DashboardCard>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+                <div className="space-y-4">
                     <DashboardCard title="REP Response Capture (Voice + Text)">
                         <div className="flex flex-wrap gap-2">
                             <button
