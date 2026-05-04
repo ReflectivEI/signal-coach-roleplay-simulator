@@ -941,8 +941,8 @@ main().catch(async (error) => {
     finalVerdict: "NOT SAFE TO DEPLOY",
     fatalError: error instanceof Error ? error.message : String(error),
   };
-  await fs.mkdir(ARTIFACT_DIR, { recursive: true }).catch(() => {});
-  await fs.writeFile(ARTIFACT_PATH, JSON.stringify(fallback, null, 2)).catch(() => {});
+  await fs.mkdir(ARTIFACT_DIR, { recursive: true }).catch(() => { });
+  await fs.writeFile(ARTIFACT_PATH, JSON.stringify(fallback, null, 2)).catch(() => { });
   console.error(JSON.stringify(fallback, null, 2));
   process.exitCode = 1;
 });
