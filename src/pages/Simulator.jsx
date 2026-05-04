@@ -120,85 +120,96 @@ export default function Simulator() {
 
   const initSession = async () => {
     setIsInitializing(true);
-    const allScenarios = await listAllScenarios();
-    let scData = await getScenarioById(scenarioId) || allScenarios[0];
-
-    if (!scData) {
-      navigate("/");
-      return;
-    }
-
-    if (!scData.visualScene) {
-      scData = {
-        ...scData,
-        visualScene: generateOpeningScene({
-          title: scData.title,
-          journeyStage: scData.journeyStage || "initial_access",
-          startingBehaviorState: scData.startingBehaviorState || "neutral",
-          decisionOrientation: scData.decisionOrientation,
-          interactionPressure: scData.interactionPressure || [],
-        }),
-      };
-    }
-    const resolvedSeed = buildPredictiveSeedFromScenario(scData);
-    const scenarioWithSeed = {
-      ...scData,
-      defaultTemperature: defaultTemperatureFromScenario(scData),
-      predictiveSeed: {
-        ...resolvedSeed,
-        ...(scData.predictiveSeed || {}),
-      },
-    };
-    setScenario(scenarioWithSeed);
-    setPredictiveLensState({ isLoading: true, data: null });
-
-    const runtimeLensPromise = buildPredictiveRuntimeLens({
-      selection: scenarioWithSeed.predictiveSeed,
-      scenarioTitle: scenarioWithSeed.title,
-    });
-    predictiveLensReadyPromiseRef.current = runtimeLensPromise;
-
-    void runtimeLensPromise.then((runtimeData) => {
-      const predictiveProfile = buildPredictiveProfileFromRuntime(runtimeData, scenarioWithSeed);
-      setPredictiveLensState({ isLoading: false, data: runtimeData });
-      setSession((current) => current ? { ...current, predictiveProfile, hcpPersona: predictiveProfile } : current);
-    }).catch(() => {
-      setPredictiveLensState({ isLoading: false, data: null });
-      setSession((current) => current ? { ...current, predictiveProfile: null, hcpPersona: null } : current);
-    });
-
-    const convInit = await initializeConversation(scenarioWithSeed);
-    setConversationInit(convInit);
-
-    let newSession;
     try {
-      newSession = createLocalSession(scenarioWithSeed, convInit);
+      const allScenarios = await listAllScenarios();
+      let scData = await getScenarioById(scenarioId) || allScenarios[0];
+
+      if (!scData) {
+        navigate("/");
+        return;
+      }
+
+      if (!scData.visualScene) {
+        scData = {
+          ...scData,
+          visualScene: generateOpeningScene({
+            title: scData.title,
+            journeyStage: scData.journeyStage || "initial_access",
+            startingBehaviorState: scData.startingBehaviorState || "neutral",
+            decisionOrientation: scData.decisionOrientation,
+            interactionPressure: scData.interactionPressure || [],
+          }),
+        };
+      }
+      const resolvedSeed = buildPredictiveSeedFromScenario(scData);
+      const scenarioWithSeed = {
+        ...scData,
+        defaultTemperature: defaultTemperatureFromScenario(scData),
+        predictiveSeed: {
+          ...resolvedSeed,
+          ...(scData.predictiveSeed || {}),
+        },
+      };
+      setScenario(scenarioWithSeed);
+      setPredictiveLensState({ isLoading: true, data: null });
+
+      const runtimeLensPromise = buildPredictiveRuntimeLens({
+        selection: scenarioWithSeed.predictiveSeed,
+        scenarioTitle: scenarioWithSeed.title,
+      });
+      predictiveLensReadyPromiseRef.current = runtimeLensPromise;
+
+      void runtimeLensPromise.then((runtimeData) => {
+        const predictiveProfile = buildPredictiveProfileFromRuntime(runtimeData, scenarioWithSeed);
+        setPredictiveLensState({ isLoading: false, data: runtimeData });
+        setSession((current) => current ? { ...current, predictiveProfile, hcpPersona: predictiveProfile } : current);
+      }).catch(() => {
+        setPredictiveLensState({ isLoading: false, data: null });
+        setSession((current) => current ? { ...current, predictiveProfile: null, hcpPersona: null } : current);
+      });
+
+      const convInit = await initializeConversation(scenarioWithSeed);
+      setConversationInit(convInit);
+
+      let newSession;
+      try {
+        newSession = createLocalSession(scenarioWithSeed, convInit);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Missing temperature";
+        setLastRuntimeError(message);
+        toast({
+          title: "Simulator initialization failed",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+      setSession(newSession);
+
+      setTurns([]);
+      setHasRepSpoken(false);
+
+      const initCues = [];
+      const openingCue = resolveObservedCue("", {
+        hcpReply: scenarioWithSeed.openingScene || scenarioWithSeed.visualScene || scenarioWithSeed.description || "",
+        behaviorState: scenarioWithSeed.startingBehaviorState || "neutral",
+        interactionPressures: scenarioWithSeed.interactionPressure || [],
+        scenario: scenarioWithSeed,
+      });
+      initCues.push({ id: "cue_init_1", ...openingCue });
+      setActiveCues(initCues);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Missing temperature";
+      const message = error instanceof Error ? error.message : "Failed to initialize scenario";
       setLastRuntimeError(message);
       toast({
         title: "Simulator initialization failed",
         description: message,
         variant: "destructive",
       });
+      navigate("/");
+    } finally {
       setIsInitializing(false);
-      return;
     }
-    setSession(newSession);
-
-    setTurns([]);
-    setHasRepSpoken(false);
-
-    const initCues = [];
-    const openingCue = resolveObservedCue("", {
-      hcpReply: scenarioWithSeed.openingScene || scenarioWithSeed.visualScene || scenarioWithSeed.description || "",
-      behaviorState: scenarioWithSeed.startingBehaviorState || "neutral",
-      interactionPressures: scenarioWithSeed.interactionPressure || [],
-      scenario: scenarioWithSeed,
-    });
-    initCues.push({ id: "cue_init_1", ...openingCue });
-    setActiveCues(initCues);
-    setIsInitializing(false);
   };
 
   const handleRepMessage = useCallback(async (repText) => {
