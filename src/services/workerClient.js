@@ -26,34 +26,11 @@
 
 const isBrowserRuntime = typeof window !== "undefined";
 const isViteDevRuntime = Boolean(import.meta?.env?.DEV);
-const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
-const STAGING_WORKER_URL = "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev";
-const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
-const configuredWorkerUrl = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || "";
+const BASE_URL = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim();
 
-function isLocalWorkerUrl(url = "") {
-  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(String(url || ""));
+if (!BASE_URL) {
+  throw new Error("Missing required env var VITE_ROLEPLAY_WORKER_URL for runtime worker routing");
 }
-
-function resolveWorkerBaseUrl() {
-  if (isBrowserRuntime) {
-    const { hostname } = window.location;
-    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
-
-    // Guardrail: never route hosted staging/prod pages to a localhost worker.
-    if (configuredWorkerUrl && (!isLocalWorkerUrl(configuredWorkerUrl) || isLocalHost)) {
-      return configuredWorkerUrl;
-    }
-
-    if (isLocalHost) return DEFAULT_LOCAL_WORKER_URL;
-    if (hostname.includes("staging")) return STAGING_WORKER_URL;
-    return PRODUCTION_WORKER_URL;
-  }
-
-  if (configuredWorkerUrl) return configuredWorkerUrl;
-  return DEFAULT_LOCAL_WORKER_URL;
-}
-const WORKER_URL = resolveWorkerBaseUrl();
 const workerInvokePath = "/api/llm/invoke";
 const workerHealthPath = "/health";
 const workerScenariosPath = "/api/scenarios";
@@ -64,31 +41,27 @@ const evidenceSourcesPath = "/api/evidence/sources";
 const evidenceRecordsPath = "/api/evidence/records";
 const evidenceIngestPath = "/api/evidence/ingest";
 
-const useBrowserProxyPaths = isViteDevRuntime && isBrowserRuntime;
-
-const workerInvokeUrl = useBrowserProxyPaths ? workerInvokePath : `${WORKER_URL}${workerInvokePath}`;
-const workerHealthUrl = useBrowserProxyPaths ? workerHealthPath : `${WORKER_URL}${workerHealthPath}`;
-const workerScenariosUrl = useBrowserProxyPaths ? workerScenariosPath : `${WORKER_URL}${workerScenariosPath}`;
-const workerSessionsUrl = useBrowserProxyPaths ? workerSessionsPath : `${WORKER_URL}${workerSessionsPath}`;
-const roleplayStartUrl = useBrowserProxyPaths ? roleplayStartPath : `${WORKER_URL}${roleplayStartPath}`;
-const roleplayRespondUrl = useBrowserProxyPaths ? roleplayRespondPath : `${WORKER_URL}${roleplayRespondPath}`;
-const evidenceSourcesUrl = useBrowserProxyPaths ? evidenceSourcesPath : `${WORKER_URL}${evidenceSourcesPath}`;
-const evidenceRecordsUrl = useBrowserProxyPaths ? evidenceRecordsPath : `${WORKER_URL}${evidenceRecordsPath}`;
-const evidenceIngestUrl = useBrowserProxyPaths ? evidenceIngestPath : `${WORKER_URL}${evidenceIngestPath}`;
+const workerInvokeUrl = `${BASE_URL}${workerInvokePath}`;
+const workerHealthUrl = `${BASE_URL}${workerHealthPath}`;
+const workerScenariosUrl = `${BASE_URL}${workerScenariosPath}`;
+const workerSessionsUrl = `${BASE_URL}${workerSessionsPath}`;
+const roleplayStartUrl = `${BASE_URL}${roleplayStartPath}`;
+const roleplayRespondUrl = `${BASE_URL}${roleplayRespondPath}`;
+const evidenceSourcesUrl = `${BASE_URL}${evidenceSourcesPath}`;
+const evidenceRecordsUrl = `${BASE_URL}${evidenceRecordsPath}`;
+const evidenceIngestUrl = `${BASE_URL}${evidenceIngestPath}`;
 const DEFAULT_WORKER_TIMEOUT_MS = 35000;
 const HEALTH_TIMEOUT_MS = 8000;
 const TRANSIENT_RETRY_DELAYS_MS = [400, 1200];
 
 export function getWorkerRuntimeDescriptor() {
   const frontendMode = isViteDevRuntime ? "local-dev" : "production-build";
-  const inferenceMode = useBrowserProxyPaths
-    ? "browser-proxy -> local worker"
-    : "direct local worker";
+  const inferenceMode = "direct env worker";
 
   return {
     frontendMode,
     isBrowserRuntime,
-    workerBaseUrl: WORKER_URL,
+    workerBaseUrl: BASE_URL,
     workerInvokeUrl,
     workerScenariosUrl,
     workerSessionsUrl,
@@ -97,9 +70,9 @@ export function getWorkerRuntimeDescriptor() {
     evidenceSourcesUrl,
     evidenceRecordsUrl,
     evidenceIngestUrl,
-    useBrowserProxyPaths,
+    useBrowserProxyPaths: false,
     inferenceMode,
-    hcpGenerationPath: "local directives/prompt + local worker inference + local cleanup",
+    hcpGenerationPath: "local directives/prompt + env worker inference + local cleanup",
   };
 }
 

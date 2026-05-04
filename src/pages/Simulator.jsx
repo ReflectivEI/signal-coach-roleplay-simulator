@@ -540,15 +540,15 @@ export default function Simulator() {
       setLastRuntimeError(message);
       toast({
         title: "HCP response failed",
-            hcpState: deriveHcpStateSnapshot({
-              priorState: session?.hcpState,
-              behaviorState: response.nextBehaviorState,
-              prediction: response?.prediction,
-              behaviorSignals: response?.behaviorSignals,
-              temperature,
-            }),
-            temperature,
-            behaviorSignals: response?.behaviorSignals || {},
+        hcpState: deriveHcpStateSnapshot({
+          priorState: session?.hcpState,
+          behaviorState: response.nextBehaviorState,
+          prediction: response?.prediction,
+          behaviorSignals: response?.behaviorSignals,
+          temperature,
+        }),
+        temperature,
+        behaviorSignals: response?.behaviorSignals || {},
         description: message,
         variant: "destructive",
       });
@@ -570,14 +570,14 @@ export default function Simulator() {
     );
     const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
 
-      console.log(JSON.stringify({
-        type: "continuity_escalation_progress",
-        sessionMemoryLength: updatedSession.sessionMemory.length,
-        currentTemperature: temperature,
-        lastHCPState: updatedSession.hcpState,
-        lastResponse: response.hcpReply,
-        escalationLevel: updatedSession.escalationLevel,
-      }));
+    console.log(JSON.stringify({
+      type: "continuity_escalation_progress",
+      sessionMemoryLength: updatedSession.sessionMemory.length,
+      currentTemperature: temperature,
+      lastHCPState: updatedSession.hcpState,
+      lastResponse: response.hcpReply,
+      escalationLevel: updatedSession.escalationLevel,
+    }));
 
     setReviewStage("Generating coaching feedback (15–30 s)…");
 
