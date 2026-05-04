@@ -4,9 +4,7 @@
  * @typedef {Object} WorkerRequestJsonOptions
  * @property {string} [method]
  * @property {unknown} [body]
-const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
-const configuredWorkerUrl = import.meta?.env?.VITE_ROLEPLAY_WORKER_URL?.trim();
-const WORKER_URL = configuredWorkerUrl || DEFAULT_LOCAL_WORKER_URL;
+ */
 
 /**
  * @typedef {Object} WorkerTextRequest
@@ -32,14 +30,27 @@ const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
 const STAGING_WORKER_URL = "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev";
 const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
 const configuredWorkerUrl = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || "";
+
+function isLocalWorkerUrl(url = "") {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(String(url || ""));
+}
+
 function resolveWorkerBaseUrl() {
-  if (configuredWorkerUrl) return configuredWorkerUrl;
   if (isBrowserRuntime) {
     const { hostname } = window.location;
-    if (hostname === "localhost" || hostname === "127.0.0.1") return DEFAULT_LOCAL_WORKER_URL;
+    const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1";
+
+    // Guardrail: never route hosted staging/prod pages to a localhost worker.
+    if (configuredWorkerUrl && (!isLocalWorkerUrl(configuredWorkerUrl) || isLocalHost)) {
+      return configuredWorkerUrl;
+    }
+
+    if (isLocalHost) return DEFAULT_LOCAL_WORKER_URL;
     if (hostname.includes("staging")) return STAGING_WORKER_URL;
     return PRODUCTION_WORKER_URL;
   }
+
+  if (configuredWorkerUrl) return configuredWorkerUrl;
   return DEFAULT_LOCAL_WORKER_URL;
 }
 const WORKER_URL = resolveWorkerBaseUrl();
