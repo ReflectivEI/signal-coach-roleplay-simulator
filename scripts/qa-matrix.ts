@@ -10,7 +10,7 @@ import { buildDeterministicSessionReview, generateSessionReview } from "../src/l
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { predictHcpBehavior } from "../src/lib/hcpBehaviorPrediction";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { buildDeterministicQaRepReply, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
+import { buildDeterministicQaRepReply, buildQaRepTurnTrace, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
 import { getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
 import { buildPredictiveSeedFromScenario } from "../src/lib/predictiveSeedResolver";
 import { buildPredictiveProfile } from "../src/lib/predictiveBuilderModel";
@@ -334,6 +334,13 @@ function buildSafeRepFallback({
   return finalRepReply;
 }
 
+function isMockRepDraft(text: string) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  return /mock ai response - configure openai_api_key or groq_api_key/i.test(value)
+    || /i need something more specific before i can react to that\.?/i.test(value);
+}
+
 async function generateQaRepReply({
   scenario,
   turns,
@@ -388,6 +395,26 @@ async function generateQaRepReply({
     return `${lowRiskStep} Would you be open to setting that one-patient step now so your team can test it without broad workflow disruption?`;
   };
 
+  const finalizeQaRepReply = (
+    finalReply: { text?: string; concept?: string | null },
+    repGenerationSource: string,
+  ) => {
+    const text = enforceCommitmentCloseSafeguard(finalReply.text || "");
+    return {
+      ...finalReply,
+      text,
+      qaTrace: isQAMode
+        ? buildQaRepTurnTrace({
+          scenario,
+          turns,
+          personaKey,
+          repGenerationSource,
+          generatedRepText: text,
+        })
+        : null,
+    };
+  };
+
   const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
 
   try {
@@ -400,22 +427,17 @@ async function generateQaRepReply({
     }), `${scenario.title} rep turn ${turnIndex + 1}`);
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    if (repDraft) {
+    if (repDraft && !isMockRepDraft(repDraft)) {
       const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: { text: repDraft, concept: null }, personaKey, turnIndex });
-      return {
-        ...finalReply,
-        text: enforceCommitmentCloseSafeguard(finalReply.text || ""),
-      };
+      return finalizeQaRepReply(finalReply, "worker");
     }
 
-    const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "" });
+    const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "", personaKey });
     const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey, turnIndex });
-    return {
-      ...finalReply,
-      text: enforceCommitmentCloseSafeguard(finalReply.text || ""),
-    };
+    return finalizeQaRepReply(finalReply, repDraft ? "worker_mock_placeholder" : "worker_empty_fallback");
   } catch {
-    return buildSafeRepFallback({ scenario, turns, personaKey, isQAMode });
+    const fallbackReply = buildSafeRepFallback({ scenario, turns, personaKey, isQAMode });
+    return finalizeQaRepReply(fallbackReply, "worker_error_fallback");
   }
 }
 
@@ -483,6 +505,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       speaker: "rep",
       text: finalRepReply.text || "",
       concept: finalRepReply.concept || null,
+      qaTrace: finalRepReply.qaTrace || null,
       timestamp: new Date().toISOString(),
       cues: [],
       nudge: null,
@@ -819,6 +842,7 @@ async function main() {
           speaker: turn.speaker,
           text: turn.text,
           concept: turn.concept || null,
+          qaTrace: turn.qaTrace || null,
           cue: turn.cues?.[0]?.label || "",
           cueDescription: turn.cues?.[0]?.description || "",
           nudge: turn.nudge?.guidance || "",
