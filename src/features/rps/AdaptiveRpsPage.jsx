@@ -357,6 +357,13 @@ export default function AdaptiveRpsPage() {
                             </button>
                         </div>
 
+                        {speech.isListening && speech.transcript && (
+                            <div className="mt-3 rounded-lg border border-teal-400/50 bg-teal-500/10 p-3">
+                                <p className="text-xs uppercase tracking-wide text-teal-100 mb-2">Live Voice Input</p>
+                                <p className="text-sm text-teal-50 break-words">{speech.transcript}</p>
+                            </div>
+                        )}
+
                         <textarea
                             value={repText}
                             onChange={(e) => {
