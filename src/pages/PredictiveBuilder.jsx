@@ -106,6 +106,29 @@ function normalizeSynthesisSections(synthesized = {}, fallbackSections = {}) {
   return normalized;
 }
 
+/**
+ * When the AI truncates and omits repPreparation, derive it from the already-generated
+ * sections data so the panel always has content to display.
+ */
+function buildRepPreparationFallback(synthesized = {}, normalizedSections = {}) {
+  const prep = synthesized?.repPreparation;
+  // If AI returned a populated repPreparation, use it as-is
+  if (prep && (prep.conversationFrame || prep.preCallIntel?.length > 0 || prep.winCondition)) {
+    return prep;
+  }
+  // Derive from sections — repApproach, languageWorks, languageResistance carry the equivalent data
+  const repApproach = normalizedSections?.repApproach || {};
+  const langWorks = normalizedSections?.languageWorks || {};
+  const langResist = normalizedSections?.languageResistance || {};
+  return {
+    conversationFrame: repApproach.repLens || repApproach.headline || "",
+    preCallIntel: repApproach.keyFactors?.length ? repApproach.keyFactors : (repApproach.repMoves || []),
+    languageDos: langWorks.keyFactors || [],
+    languageDonts: langResist.keyFactors || [],
+    winCondition: repApproach.repMoves?.[0] || repApproach.headline || "",
+  };
+}
+
 function SelectField({ label, value, options, onChange }) {
   return (
     <div className="space-y-1.5">
@@ -261,7 +284,7 @@ export default function PredictiveBuilder() {
             invokeWorkerJsonRawPayload({
               prompt: fullPrompt,
               response_json_schema: PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA,
-              max_tokens: 3200,
+              max_tokens: 4096,
               temperature: temp,
               roleplay: false,
             }),
@@ -278,6 +301,7 @@ export default function PredictiveBuilder() {
           setAiSynthesis({
             ...synthesized,
             sections: normalizedSections,
+            repPreparation: buildRepPreparationFallback(synthesized, normalizedSections),
           });
           setSynthesisSource("ai");
         } else {

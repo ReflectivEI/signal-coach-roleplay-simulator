@@ -1,8 +1,7 @@
 name = "reflectivai-rps-api"
-main = "worker/src/index.js"
+main = "worker/index.ts"
 compatibility_date = "2024-01-01"
 workers_dev = true
-pages_build_output_dir = "dist"
 
 [vars]
 LLM_TIMEOUT_MS = "25000"

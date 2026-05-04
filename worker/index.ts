@@ -1,0 +1,1011 @@
+import legacyWorker from "./src/index.js";
+import { buildScenarioPrompt } from "./prompts/scenario";
+import { buildEvaluationPrompt } from "./prompts/evaluation";
+import {
+    buildScenarioContract,
+    detectCommitment,
+    evaluateRepResponse,
+    mapTemperatureToBehavior,
+} from "./rps/engine.js";
+import {
+    buildHcpBrain,
+    buildHcpBrainCoaching,
+    buildHcpBrainPersonaContext,
+    buildHcpBrainSummary,
+    evaluateRepAgainstBrain,
+} from "./rps/hcpBrain.js";
+import {
+    buildInitialHcpState,
+    computeHcpStateProgression,
+} from "./rps/hcpState.js";
+
+type KvLike = {
+    get: (key: string) => Promise<string | null>;
+    put: (key: string, value: string) => Promise<void>;
+};
+
+type Env = {
+    APP_DATA_KV?: KvLike;
+    GROQ_API_KEY?: string;
+    LLM_TIMEOUT_MS?: string;
+};
+
+const SESSION_KEY = "rps_adaptive_sessions_v1";
+const allowedMethods = "GET,POST,OPTIONS";
+const allowedHeaders = "Content-Type,Authorization";
+const memoryStore: { sessions: unknown[] } = { sessions: [] };
+
+const REQUIRED_SCENARIO_FIELDS = [
+    "scenario_id",
+    "opening_scene",
+    "hcp_statement_or_question",
+    "cue_signal",
+    "cue_signal_layered",
+    "hcp_likely_motivation",
+    "journey_stage_context",
+    "expected_rep_skill_response",
+    "si_capabilities_tested",
+    "behavioral_metrics_observed",
+    "difficulty_level",
+    "scoring_rubric",
+    "temperature_behavior_modifiers",
+    "conversation_memory",
+    "hcp_brain",
+    "hcp_brain_summary",
+    "hcp_state",
+] as const;
+
+const REQUIRED_METRIC_KEYS = [
+    "context_awareness",
+    "cue_recognition",
+    "empathy_acknowledgment",
+    "strategic_questioning",
+    "evidence_framing",
+    "objection_handling",
+    "conversational_control",
+    "tone_pace_confidence",
+] as const;
+
+const REQUIRED_OUTCOME_FIELDS = [
+    "commitment_attempted",
+    "commitment_type",
+    "commitment_strength",
+    "hcp_progression",
+    "conversation_advanced",
+    "outcome_rationale",
+    "expected_outcome_for_temperature",
+    "actual_outcome",
+    "outcome_quality",
+    "gap_between_expected_and_actual",
+    "commitment_attempt_quality",
+    "progression_rationale",
+    "temperature_adjusted_outcome_assessment",
+    "expected_commitment_level_for_temperature",
+    "actual_commitment_level",
+    "outcome_alignment_to_temperature",
+] as const;
+
+function withCors(response: Response, request: Request): Response {
+    const headers = response.headers;
+    const origin = request.headers.get("Origin") || "*";
+    headers.set("Access-Control-Allow-Origin", origin);
+    headers.set("Access-Control-Allow-Methods", allowedMethods);
+    headers.set("Access-Control-Allow-Headers", allowedHeaders);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Cache-Control", "no-cache");
+    return response;
+}
+
+function json(request: Request, payload: unknown, status = 200): Response {
+    return withCors(
+        new Response(JSON.stringify(payload), {
+            status,
+            headers: { "Content-Type": "application/json" },
+        }),
+        request,
+    );
+}
+
+function preflight(request: Request): Response {
+    return withCors(new Response(null, { status: 204 }), request);
+}
+
+function text(value: unknown, fallback = ""): string {
+    const out = String(value ?? "").trim();
+    return out || fallback;
+}
+
+function asObject<T extends Record<string, unknown>>(value: unknown, fallback: T): T {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+        return value as T;
+    }
+    return fallback;
+}
+
+function clampScore(value: unknown, fallback = 5): number {
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) return fallback;
+    return Math.max(1, Math.min(10, Math.round(parsed)));
+}
+
+function safeStructuredLog(route: string, missingFields: string[], normalizationApplied: boolean): void {
+    if (!missingFields.length && !normalizationApplied) return;
+    console.warn(JSON.stringify({
+        route,
+        missing_fields: missingFields,
+        normalization_applied: normalizationApplied,
+        timestamp: new Date().toISOString(),
+    }));
+}
+
+function parseJsonObject(raw: string): unknown {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        const start = raw.indexOf("{");
+        const end = raw.lastIndexOf("}");
+        if (start >= 0 && end > start) {
+            return JSON.parse(raw.slice(start, end + 1));
+        }
+        throw new Error("invalid_json");
+    }
+}
+
+async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<string> {
+    const key = text(env.GROQ_API_KEY);
+    if (!key) return "";
+
+    const timeoutMs = Math.max(8000, Number(env.LLM_TIMEOUT_MS || 25000));
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${key}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                model: "llama-3.1-70b-versatile",
+                temperature: 0.2,
+                max_tokens: maxTokens,
+                messages: [{ role: "user", content: prompt }],
+            }),
+            signal: controller.signal,
+        });
+
+        if (!response.ok) return "";
+
+        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+        return text(data?.choices?.[0]?.message?.content);
+    } catch {
+        return "";
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function sanitizeNoPhi(input: unknown): unknown {
+    if (typeof input === "string") {
+        return input
+            .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+            .replace(/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[redacted-phone]")
+            .replace(/\b\d{1,5}\s+[A-Za-z0-9.\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln)\b/gi, "[redacted-address]");
+    }
+
+    if (Array.isArray(input)) {
+        return input.map(sanitizeNoPhi);
+    }
+
+    if (input && typeof input === "object") {
+        const out: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+            out[key] = sanitizeNoPhi(value);
+        }
+        return out;
+    }
+
+    return input;
+}
+
+function normalizeQuestion(value: unknown): string {
+    return text(value).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isGenericHcpLine(value: unknown): boolean {
+    const line = text(value).toLowerCase();
+    return [
+        "tell me more about your product",
+        "how is this different",
+        "i'm skeptical",
+        "can you provide evidence",
+        "this seems interesting",
+    ].some((phrase) => line.includes(phrase));
+}
+
+function summarizeConversationMemory(memory: Record<string, unknown>): string {
+    const unresolved = Array.isArray(memory.unresolved_cues) ? memory.unresolved_cues.length : 0;
+    const addressed = Array.isArray(memory.addressed_cues) ? memory.addressed_cues.length : 0;
+    const resistanceTrend = text(memory.resistance_trend, "stable");
+    const trustTrend = text(memory.trust_trend, "neutral");
+    const opennessTrend = text(memory.openness_trend, "neutral");
+    const deliveryTrend = text(memory.delivery_trend, "neutral");
+    const perceivedListeningTrend = text(memory.perceived_listening_trend, "neutral");
+    const lastCommitment = text(memory.last_commitment_attempt, "none");
+    return `resistance_trend=${resistanceTrend}; trust_trend=${trustTrend}; openness_trend=${opennessTrend}; delivery_trend=${deliveryTrend}; perceived_listening_trend=${perceivedListeningTrend}; unresolved_cues=${unresolved}; addressed_cues=${addressed}; last_commitment_attempt=${lastCommitment}`;
+}
+
+function summarizeVoiceAdaptation(memory: Record<string, unknown>): string {
+    const last = asObject(memory.last_voice_adaptation as Record<string, unknown>, {} as Record<string, unknown>);
+    if (!Object.keys(last).length) return "none";
+    return [
+        `modifier=${text(last.hcp_reaction_modifier, "hold")}`,
+        `pacing=${text(last.pacing_signal, "unknown")}`,
+        `pause=${text(last.pause_signal, "unknown")}`,
+        `question_delivery=${text(last.question_delivery_signal, "unknown")}`,
+        `resistance_delta=${Number(last.resistance_delta ?? 0)}`,
+        `trust_delta=${Number(last.trust_delta ?? 0)}`,
+    ].join("; ");
+}
+
+function defaultLayeredCue(cueSignal: string, temp: ReturnType<typeof mapTemperatureToBehavior>) {
+    const primary = cueSignal.replace(/_/g, " ") || "Practical decision relevance under constraints";
+    return {
+        primary_cue: primary,
+        secondary_cue: "Workflow/access burden",
+        hidden_resistance: "Prior low-value claim fatigue",
+        openness_level: temp.band === "low" ? "Conditional" : temp.band === "mid" ? "Guarded" : "Minimal",
+        emotional_tone: temp.band === "high" ? "Compressed, skeptical" : temp.band === "mid" ? "Professional but selective" : "Open but practical",
+        likely_reason_for_pushback: "HCP needs practical impact, not broad feature framing.",
+        what_the_rep_must_detect: "The HCP is testing real decision impact under time/workflow constraints.",
+    };
+}
+
+function defaultConversationMemory(base: Record<string, unknown> = {}) {
+    return {
+        prior_rep_moves: Array.isArray(base.prior_rep_moves) ? base.prior_rep_moves : [],
+        prior_hcp_reactions: Array.isArray(base.prior_hcp_reactions) ? base.prior_hcp_reactions : [],
+        unresolved_cues: Array.isArray(base.unresolved_cues) ? base.unresolved_cues : [],
+        addressed_cues: Array.isArray(base.addressed_cues) ? base.addressed_cues : [],
+        delivery_trend: text(base.delivery_trend, "neutral"),
+        perceived_listening_trend: text(base.perceived_listening_trend, "neutral"),
+        resistance_trend: text(base.resistance_trend, "stable"),
+        trust_trend: text(base.trust_trend, "neutral"),
+        openness_trend: text(base.openness_trend, "neutral"),
+        voice_adaptation_history: Array.isArray(base.voice_adaptation_history) ? base.voice_adaptation_history : [],
+        last_voice_adaptation: base.last_voice_adaptation || null,
+        last_commitment_attempt: text(base.last_commitment_attempt, "none"),
+    };
+}
+
+function normalizeMetric(metricValue: unknown, fallbackScore: number, fallbackRationale: string) {
+    const metricObj = asObject(metricValue as Record<string, unknown>, {} as Record<string, unknown>);
+    const score = clampScore(metricObj.score_1_to_10 ?? metricObj.score ?? fallbackScore, fallbackScore);
+    return {
+        score_1_to_10: score,
+        rationale: text(metricObj.rationale, fallbackRationale),
+    };
+}
+
+function normalizeHcpBrainAlignment(value: unknown, fallback: Record<string, unknown> = {}) {
+    const obj = asObject(value as Record<string, unknown>, fallback);
+    return {
+        quality_test_satisfied: Boolean(obj.quality_test_satisfied),
+        credibility_drivers_demonstrated: Array.isArray(obj.credibility_drivers_demonstrated)
+            ? obj.credibility_drivers_demonstrated
+            : [],
+        trust_breakers_triggered: Array.isArray(obj.trust_breakers_triggered)
+            ? obj.trust_breakers_triggered
+            : [],
+        likely_objections_addressed: Boolean(obj.likely_objections_addressed),
+        pressure_signals_detected: Boolean(obj.pressure_signals_detected),
+        recommended_rep_approach_used: Boolean(obj.recommended_rep_approach_used),
+        language_that_worked_used: Boolean(obj.language_that_worked_used),
+        resistance_language_triggered: Boolean(obj.resistance_language_triggered),
+        alignment_rationale: text(obj.alignment_rationale, "Alignment evaluated against Predictive HCP Brain."),
+    };
+}
+
+function normalizeHcpBrainCoaching(value: unknown, fallback: Record<string, unknown> = {}) {
+    const obj = asObject(value as Record<string, unknown>, fallback);
+    return {
+        quality_test_feedback: text(obj.quality_test_feedback, "Quality test not yet evaluated."),
+        credibility_driver_feedback: text(obj.credibility_driver_feedback, "No explicit credibility driver feedback available."),
+        trust_breaker_feedback: text(obj.trust_breaker_feedback, "No explicit trust breaker feedback available."),
+        objection_alignment_feedback: text(obj.objection_alignment_feedback, "No objection alignment feedback available."),
+        recommended_rep_move_feedback: text(obj.recommended_rep_move_feedback, "No recommended move feedback available."),
+        improved_response_grounded_in_hcp_brain: text(
+            obj.improved_response_grounded_in_hcp_brain,
+            "Address the HCP's highest-priority concern first, then ask one precise diagnostic question.",
+        ),
+    };
+}
+
+function isGenericCoachingText(line: string): boolean {
+    const normalized = line.toLowerCase();
+    return [
+        "ask more open-ended questions",
+        "be more empathetic",
+        "provide more evidence",
+        "use better framing",
+        "anchor to the cue",
+    ].some((pattern) => normalized.includes(pattern));
+}
+
+function representativeRepPhrase(transcript: string): string {
+    const sentence = text(transcript)
+        .split(/[.!?]/)
+        .map((part) => part.trim())
+        .find(Boolean);
+    if (!sentence) return "(no representative phrase)";
+    return sentence.length > 130 ? `${sentence.slice(0, 127)}...` : sentence;
+}
+
+function ensureSpecificCoaching(evaluation: Record<string, unknown>, transcript: string, scenarioContext: Record<string, unknown>) {
+    const currentFeedback = Array.isArray(evaluation.coaching_feedback)
+        ? (evaluation.coaching_feedback as unknown[]).map((item) => text(item))
+        : [];
+    const phrase = representativeRepPhrase(transcript);
+    const layered = asObject(scenarioContext.cue_signal_layered as Record<string, unknown>, {} as Record<string, unknown>);
+    const cueHint = text(layered.what_the_rep_must_detect, "The HCP wants practical decision impact under constraints.");
+    const existingIsSpecific = currentFeedback.some((item) => item.includes("When you said") && item.includes("\""));
+    const existingIsGeneric = currentFeedback.length === 0 || currentFeedback.every((item) => isGenericCoachingText(item));
+
+    if (!existingIsSpecific || existingIsGeneric) {
+        evaluation.coaching_feedback = [
+            `When you said \"${phrase}\", the HCP likely heard a broad claim instead of a response to their practical barrier.`,
+            `Behavioral impact: resistance stays elevated because the core cue was not narrowed.`,
+            `Stronger phrasing: \"When you say this may not change what you do Monday morning, is the bigger blocker prior authorization friction, staff burden, or fit uncertainty?\"`,
+        ];
+    }
+
+    evaluation.better_phrasing = text(
+        evaluation.better_phrasing,
+        "When you say this may not change what you do Monday morning, is the bigger blocker prior authorization friction, staff burden, or fit uncertainty?",
+    );
+    evaluation.next_best_question = text(
+        evaluation.next_best_question,
+        "If we focus on one practical barrier first, which step would need to improve for this to be worth discussing further?",
+    );
+    evaluation.what_hcp_likely_heard = text(
+        evaluation.what_hcp_likely_heard,
+        `I heard a broad claim, not yet a practical response to my operating constraint. I need relevance to real workflow decisions. (${cueHint})`,
+    );
+    evaluation.improved_response_example = text(
+        evaluation.improved_response_example,
+        "I hear your workflow concern. Before we go further, is the larger issue prior-auth callbacks, staff time, or uncertainty on patient fit?",
+    );
+
+    const hcpBrain = asObject(scenarioContext.hcp_brain as Record<string, unknown>, {} as Record<string, unknown>);
+    const qualityTest = text(
+        asObject(hcpBrain.clinician_perspective as Record<string, unknown>, {} as Record<string, unknown>).quality_test_question,
+    );
+    if (qualityTest) {
+        const coaching = Array.isArray(evaluation.coaching_feedback)
+            ? (evaluation.coaching_feedback as string[])
+            : [];
+        const alreadyHasQualityTest = coaching.some((line) => line.toLowerCase().includes("quality test"));
+        if (!alreadyHasQualityTest) {
+            coaching.push(`HCP Brain quality test: ${qualityTest}`);
+            evaluation.coaching_feedback = coaching;
+        }
+    }
+
+    const deliveryCoaching = asObject(evaluation.delivery_coaching as Record<string, unknown>, {} as Record<string, unknown>);
+    evaluation.delivery_coaching = {
+        pacing_feedback: text(deliveryCoaching.pacing_feedback, "After acknowledgment, moderate your pace to avoid sounding like a pitch transition."),
+        pause_feedback: text(deliveryCoaching.pause_feedback, "Insert a short pause after acknowledging the concern before asking a diagnostic question."),
+        confidence_feedback: text(deliveryCoaching.confidence_feedback, "Use confident but non-absolute language to reduce perceived pressure."),
+        question_delivery_feedback: text(deliveryCoaching.question_delivery_feedback, "Ask one diagnostic question tied to workflow, access, or fit criteria."),
+        perceived_listening_feedback: text(deliveryCoaching.perceived_listening_feedback, "The HCP should feel you listened before you advanced."),
+        recommended_delivery_adjustment: text(deliveryCoaching.recommended_delivery_adjustment, "Acknowledge, pause, then ask one narrow diagnostic question."),
+        example_rephrasing_with_delivery_note: text(deliveryCoaching.example_rephrasing_with_delivery_note, "Pause after acknowledgment, then ask: \"When this stalls care, is the bigger issue prior auth friction, callback load, or patient-fit uncertainty?\""),
+    };
+
+    const deliveryImpact = asObject(evaluation.delivery_impact_on_hcp as Record<string, unknown>, {} as Record<string, unknown>);
+    evaluation.delivery_impact_on_hcp = {
+        perceived_by_hcp: text(deliveryImpact.perceived_by_hcp, "The HCP likely interpreted delivery as mixed listening signal."),
+        likely_hcp_reaction: text(deliveryImpact.likely_hcp_reaction, "The HCP remains selective and probes for practical relevance."),
+        impact_on_resistance: Number(deliveryImpact.impact_on_resistance ?? 0),
+        impact_on_trust: Number(deliveryImpact.impact_on_trust ?? 0),
+        coaching_implication: text(deliveryImpact.coaching_implication, "Delivery quality likely affected HCP receptivity and should be corrected before advancing claims."),
+    };
+
+    return evaluation;
+}
+
+export function normalizeScenarioResponse(
+    raw: unknown,
+    context: {
+        baseScenario: Record<string, unknown>;
+        temp: ReturnType<typeof mapTemperatureToBehavior>;
+        liveTemperature: number;
+        route: string;
+    },
+) {
+    const parsed = asObject(raw as Record<string, unknown>, {} as Record<string, unknown>);
+    const merged: Record<string, unknown> = {
+        ...context.baseScenario,
+        ...parsed,
+    };
+
+    const cueSignal = text(merged.cue_signal, text(context.baseScenario.cue_signal, "operationally_constrained"));
+    const layeredCue = asObject(merged.cue_signal_layered as Record<string, unknown>, defaultLayeredCue(cueSignal, context.temp));
+    const memory = asObject(merged.conversation_memory as Record<string, unknown>, defaultConversationMemory(asObject(context.baseScenario.conversation_memory as Record<string, unknown>, {} as Record<string, unknown>)));
+
+    merged.scenario_id = text(merged.scenario_id, text(context.baseScenario.scenario_id, `rps-${Date.now()}`));
+    merged.opening_scene = text(merged.opening_scene, text(context.baseScenario.opening_scene, "The HCP is balancing practical constraints and needs relevance quickly."));
+    merged.hcp_statement_or_question = text(merged.hcp_statement_or_question, text(context.baseScenario.hcp_statement_or_question, "What concrete change would matter most in your workflow?"));
+    merged.cue_signal = cueSignal;
+    merged.cue_signal_layered = {
+        ...defaultLayeredCue(cueSignal, context.temp),
+        ...layeredCue,
+    };
+    merged.hcp_likely_motivation = text(merged.hcp_likely_motivation, text(context.baseScenario.hcp_likely_motivation, "Protect patient care quality while minimizing operational burden."));
+    merged.journey_stage_context = text(merged.journey_stage_context, text(context.baseScenario.journey_stage_context, "Early decision stage under practical constraints."));
+    merged.expected_rep_skill_response = text(merged.expected_rep_skill_response, text(context.baseScenario.expected_rep_skill_response, "Acknowledge cue, connect practical relevance, ask one diagnostic next-step question."));
+    merged.si_capabilities_tested = Array.isArray(merged.si_capabilities_tested) ? merged.si_capabilities_tested : (context.baseScenario.si_capabilities_tested || []);
+    merged.behavioral_metrics_observed = Array.isArray(merged.behavioral_metrics_observed) ? merged.behavioral_metrics_observed : (context.baseScenario.behavioral_metrics_observed || []);
+    merged.difficulty_level = text(merged.difficulty_level, context.temp.band);
+    merged.scoring_rubric = Array.isArray(merged.scoring_rubric) ? merged.scoring_rubric : (context.baseScenario.scoring_rubric || []);
+    merged.temperature_behavior_modifiers = {
+        ...context.temp,
+    };
+    merged.initial_temperature = Number(merged.initial_temperature ?? context.liveTemperature);
+    merged.live_temperature = Number(merged.live_temperature ?? context.liveTemperature);
+    merged.temperature_shift_history = Array.isArray(merged.temperature_shift_history)
+        ? merged.temperature_shift_history
+        : [];
+    merged.hcp_brain = asObject(merged.hcp_brain as Record<string, unknown>, asObject(context.baseScenario.hcp_brain as Record<string, unknown>, {} as Record<string, unknown>));
+    merged.hcp_brain_summary = asObject(merged.hcp_brain_summary as Record<string, unknown>, asObject(context.baseScenario.hcp_brain_summary as Record<string, unknown>, {} as Record<string, unknown>));
+    merged.conversation_memory = {
+        ...defaultConversationMemory(memory),
+        ...memory,
+    };
+
+    // Attach initial hcp_state to the scenario so the first evaluate-response call has a baseline
+    if (!merged.hcp_state) {
+        merged.hcp_state = buildInitialHcpState(
+            merged.hcp_brain as Record<string, unknown>,
+            context.liveTemperature,
+        );
+    }
+
+    if (isGenericHcpLine(merged.hcp_statement_or_question)) {
+        merged.hcp_statement_or_question = text(context.baseScenario.hcp_statement_or_question, "What practical barrier would need to change first for this to feel relevant?");
+    }
+
+    const missing = REQUIRED_SCENARIO_FIELDS.filter((field) => merged[field] === undefined || merged[field] === null || merged[field] === "");
+    safeStructuredLog(context.route, [...missing], missing.length > 0);
+
+    return merged;
+}
+
+function normalizeOutcomeAnalysis(
+    rawOutcome: unknown,
+    deterministicOutcome: Record<string, unknown>,
+    transcript: string,
+    liveTemperature: number,
+) {
+    const out = {
+        ...deterministicOutcome,
+        ...asObject(rawOutcome as Record<string, unknown>, {} as Record<string, unknown>),
+    } as Record<string, unknown>;
+
+    const lower = text(transcript).toLowerCase();
+    const hasDiagnosticQuestion = /\b(what|how|which|where|when|is|can|would|could)\b/.test(lower) && lower.includes("?");
+    const hasContext = /\b(prior auth|workflow|access|staff|barrier|patient type|fit)\b/.test(lower);
+    const highTemp = liveTemperature >= 8;
+
+    if (highTemp && !out.commitment_attempted && hasDiagnosticQuestion && hasContext) {
+        out.commitment_attempted = true;
+        out.commitment_type = text(out.commitment_type) === "none" ? "permission_to_continue" : text(out.commitment_type, "permission_to_continue");
+        out.commitment_strength = text(out.commitment_strength) === "none" ? "moderate" : text(out.commitment_strength, "moderate");
+        out.hcp_progression = text(out.hcp_progression, "slightly_advanced");
+        out.conversation_advanced = true;
+        out.outcome_quality = text(out.outcome_quality, "good");
+    }
+
+    if (highTemp && !out.commitment_attempted && ["good", "strong"].includes(text(out.outcome_quality))) {
+        out.commitment_attempted = true;
+        out.commitment_type = text(out.commitment_type) === "none" ? "permission_to_continue" : text(out.commitment_type, "permission_to_continue");
+        out.commitment_strength = text(out.commitment_strength) === "none" ? "weak" : text(out.commitment_strength, "weak");
+        out.conversation_advanced = true;
+    }
+
+    out.commitment_attempted = Boolean(out.commitment_attempted);
+    out.commitment_type = text(out.commitment_type, out.commitment_attempted ? "agreement_to_consider" : "none");
+    out.commitment_strength = text(out.commitment_strength, out.commitment_attempted ? "weak" : "none");
+    out.hcp_progression = text(out.hcp_progression, out.conversation_advanced ? "slightly_advanced" : "unchanged");
+    out.conversation_advanced = Boolean(out.conversation_advanced);
+    out.outcome_rationale = text(out.outcome_rationale, "Outcome determined from cue alignment, questioning quality, and resistance level.");
+    out.expected_outcome_for_temperature = text(out.expected_outcome_for_temperature, highTemp
+        ? "Reduced resistance or permission to continue counts as meaningful progress."
+        : liveTemperature <= 3
+            ? "Expect clearer next-step commitment or specific follow-up movement."
+            : "Expect barrier clarification or fit exploration movement.");
+    out.actual_outcome = text(out.actual_outcome, out.conversation_advanced ? "progressed" : "no_clear_progression");
+    out.outcome_quality = text(out.outcome_quality, out.conversation_advanced ? "good" : "limited");
+    out.gap_between_expected_and_actual = text(out.gap_between_expected_and_actual, out.conversation_advanced ? "moderate" : "high");
+    out.commitment_attempt_quality = text(out.commitment_attempt_quality, out.commitment_attempted ? (text(out.commitment_strength) || "moderate") : "none");
+    out.progression_rationale = text(out.progression_rationale, out.outcome_rationale);
+    out.temperature_adjusted_outcome_assessment = text(out.temperature_adjusted_outcome_assessment, highTemp
+        ? "High-temperature context evaluated with reduced-resistance threshold."
+        : "Outcome evaluated against standard progression expectations for current temperature.");
+    out.expected_commitment_level_for_temperature = text(out.expected_commitment_level_for_temperature, highTemp ? "moderate_or_permission" : liveTemperature <= 3 ? "moderate_to_strong" : "moderate");
+    out.actual_commitment_level = text(out.actual_commitment_level, out.commitment_strength);
+    out.outcome_alignment_to_temperature = text(out.outcome_alignment_to_temperature, out.conversation_advanced ? "aligned" : "underperformed");
+
+    return out;
+}
+
+export function normalizeEvaluationResponse(
+    raw: unknown,
+    context: {
+        deterministic: Record<string, unknown>;
+        transcript: string;
+        scenarioContext: Record<string, unknown>;
+        liveTemperature: number;
+        route: string;
+    },
+) {
+    const parsed = asObject(raw as Record<string, unknown>, {} as Record<string, unknown>);
+    const deterministic = asObject(context.deterministic, {} as Record<string, unknown>);
+    const merged: Record<string, unknown> = {
+        ...deterministic,
+        ...parsed,
+    };
+
+    const deterministicMetrics = asObject(deterministic.metric_scores as Record<string, unknown>, {} as Record<string, unknown>);
+    const rawMetrics = asObject(merged.metric_scores as Record<string, unknown>, {} as Record<string, unknown>);
+    const metrics: Record<string, unknown> = {};
+
+    for (const key of REQUIRED_METRIC_KEYS) {
+        metrics[key] = normalizeMetric(
+            rawMetrics[key],
+            asObject(deterministicMetrics[key] as Record<string, unknown>, {} as Record<string, unknown>).score_1_to_10 as number || 5,
+            text(asObject(deterministicMetrics[key] as Record<string, unknown>, {} as Record<string, unknown>).rationale, "No rationale provided."),
+        );
+    }
+
+    const computedOverall = Math.round(
+        REQUIRED_METRIC_KEYS
+            .map((key) => Number(asObject(metrics[key] as Record<string, unknown>, {} as Record<string, unknown>).score_1_to_10 || 5))
+            .reduce((sum, value) => sum + value, 0) / REQUIRED_METRIC_KEYS.length,
+    );
+
+    let overall = clampScore(merged.overall_score, computedOverall);
+    const transcriptLower = text(context.transcript).toLowerCase();
+    const lacksCueAlignment = !/\b(prior auth|workflow|access|staff|barrier|fit)\b/.test(transcriptLower);
+    const noQuestion = !context.transcript.includes("?");
+    const noAck = !/\b(i hear|i understand|that makes sense|fair point|you'?re right)\b/i.test(context.transcript);
+    const strongDiagnostic = /\b(what|how|which|where|when|is|can|would|could)\b/i.test(context.transcript) && context.transcript.includes("?") && /\b(prior auth|workflow|access|staff|barrier|fit)\b/i.test(context.transcript);
+
+    if ((noQuestion && lacksCueAlignment) || (noAck && lacksCueAlignment)) {
+        overall = Math.min(overall, 5);
+    }
+    if (strongDiagnostic && overall < 7) {
+        overall = 7;
+    }
+
+    const outcome = normalizeOutcomeAnalysis(
+        merged.outcome_analysis,
+        asObject(deterministic.outcome_analysis as Record<string, unknown>, {} as Record<string, unknown>),
+        context.transcript,
+        context.liveTemperature,
+    );
+
+    merged.overall_score = overall;
+    merged.metric_scores = metrics;
+    merged.score_rationale = {
+        ...asObject(deterministic.score_rationale as Record<string, unknown>, {} as Record<string, unknown>),
+        ...asObject(merged.score_rationale as Record<string, unknown>, {} as Record<string, unknown>),
+        runtime_guardrails_applied: {
+            cue_alignment_cap_applied: (noQuestion && lacksCueAlignment) || (noAck && lacksCueAlignment),
+            strong_diagnostic_floor_applied: strongDiagnostic,
+        },
+    };
+    merged.observed_strengths = Array.isArray(merged.observed_strengths) ? merged.observed_strengths : [];
+    merged.missed_cues = Array.isArray(merged.missed_cues) ? merged.missed_cues : [];
+    merged.delivery_issues = Array.isArray(merged.delivery_issues) ? merged.delivery_issues : [];
+    merged.outcome_analysis = outcome;
+    merged.hcp_brain_alignment = normalizeHcpBrainAlignment(
+        merged.hcp_brain_alignment,
+        asObject(deterministic.hcp_brain_alignment as Record<string, unknown>, {} as Record<string, unknown>),
+    );
+    merged.hcp_brain_coaching = normalizeHcpBrainCoaching(
+        merged.hcp_brain_coaching,
+        asObject(deterministic.hcp_brain_coaching as Record<string, unknown>, {} as Record<string, unknown>),
+    );
+
+    // HCP State normalization
+    const rawHcpState = asObject(merged.hcp_state as Record<string, unknown>, {} as Record<string, unknown>);
+    merged.hcp_state = Object.keys(rawHcpState).length > 0 ? rawHcpState : null;
+    const rawHcpStateDelta = asObject(merged.hcp_state_delta as Record<string, unknown>, {} as Record<string, unknown>);
+    merged.hcp_state_delta = Object.keys(rawHcpStateDelta).length > 0 ? rawHcpStateDelta : null;
+    merged.hcp_response_type = text(merged.hcp_response_type as string, "restate_surface_concern");
+    merged.response_type_reason = text(
+        merged.response_type_reason as string,
+        "Response type selected from HCP state, REP quality, temperature, and delivery signals.",
+    );
+    merged.previous_response_types = Array.isArray(merged.previous_response_types)
+        ? merged.previous_response_types
+        : (Array.isArray(rawHcpState.previous_response_types) ? rawHcpState.previous_response_types.slice(-6) : []);
+    merged.response_type_transition_explanation = text(
+        merged.response_type_transition_explanation as string,
+        "Initial response type selection.",
+    );
+    merged.hcp_progression_explanation = text(merged.hcp_progression_explanation as string, "No significant HCP state change this turn.");
+
+    merged.conversation_memory = {
+        ...defaultConversationMemory(asObject(context.scenarioContext.conversation_memory as Record<string, unknown>, {} as Record<string, unknown>)),
+        ...asObject(merged.conversation_memory as Record<string, unknown>, {} as Record<string, unknown>),
+    };
+
+    const adaptation = asObject(merged.voice_behavior_adaptation as Record<string, unknown>, {} as Record<string, unknown>);
+    merged.voice_behavior_adaptation = {
+        pacing_signal: text(adaptation.pacing_signal, "unknown"),
+        pause_signal: text(adaptation.pause_signal, "unknown"),
+        filler_signal: text(adaptation.filler_signal, "unknown"),
+        confidence_signal: text(adaptation.confidence_signal, "unknown"),
+        question_delivery_signal: text(adaptation.question_delivery_signal, "no_question"),
+        perceived_listening_signal: text(adaptation.perceived_listening_signal, "moderate"),
+        delivery_pressure_signal: text(adaptation.delivery_pressure_signal, "neutral"),
+        hcp_reaction_modifier: text(adaptation.hcp_reaction_modifier, "hold"),
+        resistance_delta: Number(adaptation.resistance_delta ?? 0),
+        openness_delta: Number(adaptation.openness_delta ?? 0),
+        trust_delta: Number(adaptation.trust_delta ?? 0),
+        cue_intensity_delta: Number(adaptation.cue_intensity_delta ?? 0),
+        next_turn_guidance: text(adaptation.next_turn_guidance, "Maintain neutral-selective HCP stance with practical relevance checks."),
+    };
+
+    ensureSpecificCoaching(merged, context.transcript, context.scenarioContext);
+
+    if (context.liveTemperature >= 8) {
+        const coaching = Array.isArray(merged.coaching_feedback)
+            ? (merged.coaching_feedback as unknown[]).map((item) => text(item)).filter(Boolean)
+            : [];
+        const mentionsHighTemp = coaching.some((line) => /high realism pressure|high temperature|high-resistance|high resistance/i.test(line));
+        if (!mentionsHighTemp) {
+            coaching.push("High realism pressure guidance: at high resistance, prioritize reduced resistance and permission-to-continue over immediate hard commitment.");
+            merged.coaching_feedback = coaching;
+        }
+    }
+
+    const missing = [
+        ...(merged.overall_score ? [] : ["overall_score"]),
+        ...REQUIRED_METRIC_KEYS.filter((key) => !asObject(merged.metric_scores as Record<string, unknown>, {} as Record<string, unknown>)[key]),
+        ...REQUIRED_OUTCOME_FIELDS.filter((field) => (asObject(merged.outcome_analysis as Record<string, unknown>, {} as Record<string, unknown>)[field] === undefined)),
+    ];
+    safeStructuredLog(context.route, missing.map((item) => String(item)), missing.length > 0);
+
+    return merged;
+}
+
+function pickRegeneratedQuestion(previous: string, baseFallback: string): string {
+    const variants = [
+        "What concrete change would your team need to see before this feels worth trying?",
+        "If we tested this for one week, what outcome would matter most to you?",
+        "What concern should we solve first so this feels practical for your workflow?",
+        "Which barrier would need to move first for you to consider a pilot?",
+        "What would make this feel low-risk enough to discuss with your team?",
+    ];
+
+    const previousNormalized = normalizeQuestion(previous);
+    const next = variants.find((item) => normalizeQuestion(item) !== previousNormalized);
+    return next || baseFallback;
+}
+
+async function readSessions(env: Env): Promise<unknown[]> {
+    if (env.APP_DATA_KV) {
+        const raw = await env.APP_DATA_KV.get(SESSION_KEY);
+        if (!raw) return [];
+        try {
+            const parsed = JSON.parse(raw) as unknown[];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    }
+    return memoryStore.sessions;
+}
+
+async function writeSessions(env: Env, sessions: unknown[]): Promise<void> {
+    if (env.APP_DATA_KV) {
+        await env.APP_DATA_KV.put(SESSION_KEY, JSON.stringify(sessions.slice(0, 300)));
+        return;
+    }
+    memoryStore.sessions = sessions.slice(0, 300);
+}
+
+async function handleGenerateScenario(request: Request, env: Env): Promise<Response> {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const wantsRegenerate = Boolean(body.regenerate_question);
+    const previousQuestion = text(body.previous_hcp_statement_or_question);
+    const baseScenario = buildScenarioContract(body);
+    const liveTemperature = Number(body.live_temperature ?? body.rep_selected_temperature ?? body.hcp_default_temperature ?? 5);
+    const temp = mapTemperatureToBehavior(liveTemperature);
+    const conversationMemory = ((body.conversation_memory || body.scenario_memory || {}) as Record<string, unknown>);
+    const hcpBrain = buildHcpBrain({
+        disease_state: body.disease_state,
+        specialty_hcp_type: body.specialty_hcp_type,
+        hcp_type: body.hcp_type,
+        journey_stage: body.journey_stage,
+        interaction_pressure: body.interaction_pressure,
+        influence_driver: body.influence_driver,
+        behavior_archetype: body.behavior_archetype,
+        initial_temperature: body.initial_temperature ?? liveTemperature,
+        live_temperature: liveTemperature,
+    });
+    const hcpBrainSummary = buildHcpBrainSummary(hcpBrain);
+    const hcpBrainContext = buildHcpBrainPersonaContext(hcpBrain);
+
+    (baseScenario as Record<string, unknown>).hcp_brain = hcpBrain;
+    (baseScenario as Record<string, unknown>).hcp_brain_summary = hcpBrainSummary;
+
+    const prompt = buildScenarioPrompt({
+        hcpProfile: text(body.hcp_profile, "Treating clinician"),
+        journeyStage: text(body.journey_stage, "discovery"),
+        diseaseState: text(body.disease_state, "general"),
+        interactionPressure: text(body.interaction_pressure, "operationally_constrained"),
+        accessBarrierContext: text(body.access_barrier_context, "Access complexity exists."),
+        repObjective: text(body.rep_objective, "Advance a realistic next step."),
+        difficultyLabel: temp.band,
+        behavioralTraits: temp.traits,
+        liveTemperature,
+        conversationMemorySummary: summarizeConversationMemory(conversationMemory),
+        voiceBehaviorAdaptationSummary: summarizeVoiceAdaptation(conversationMemory),
+        hcpBrainContext,
+    });
+
+    const context = { baseScenario: baseScenario as Record<string, unknown>, temp, liveTemperature, route: "/api/rps/generate-scenario" };
+    const aiText = await callGroq(env, prompt, 700);
+    if (!aiText) {
+        const normalized = normalizeScenarioResponse(baseScenario, context);
+        if (wantsRegenerate && previousQuestion) {
+            const generatedQuestion = text(normalized.hcp_statement_or_question, text(baseScenario.hcp_statement_or_question));
+            if (normalizeQuestion(generatedQuestion) === normalizeQuestion(previousQuestion)) {
+                normalized.hcp_statement_or_question = pickRegeneratedQuestion(previousQuestion, generatedQuestion);
+            }
+        }
+        return json(request, normalized);
+    }
+
+    try {
+        const parsed = parseJsonObject(aiText) as Record<string, unknown>;
+        const merged = normalizeScenarioResponse({ ...baseScenario, ...parsed }, context);
+
+        if (wantsRegenerate && previousQuestion) {
+            const generatedQuestion = text(merged.hcp_statement_or_question, baseScenario.hcp_statement_or_question);
+            if (normalizeQuestion(generatedQuestion) === normalizeQuestion(previousQuestion)) {
+                merged.hcp_statement_or_question = pickRegeneratedQuestion(previousQuestion, generatedQuestion);
+            }
+        }
+
+        return json(request, merged);
+    } catch {
+        if (wantsRegenerate && previousQuestion) {
+            return json(request, normalizeScenarioResponse({
+                ...baseScenario,
+                hcp_statement_or_question: pickRegeneratedQuestion(previousQuestion, text(baseScenario.hcp_statement_or_question)),
+            }, context));
+        }
+        return json(request, normalizeScenarioResponse(baseScenario, context));
+    }
+}
+
+async function handleEvaluateResponse(request: Request, env: Env): Promise<Response> {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const transcript = text(body.rep_response_transcript);
+    if (!transcript) {
+        return json(request, { error: "rep_response_transcript is required" }, 400);
+    }
+
+    const scenarioContext = (body.scenario_context || {}) as Record<string, unknown>;
+    const cueSignal = text(scenarioContext.cue_signal, "cue");
+    const repSelectedTemperature = Number(body.live_temperature ?? body.rep_selected_temperature ?? 5);
+    const conversationMemory = (body.conversation_memory || scenarioContext.conversation_memory || {}) as Record<string, unknown>;
+    const selectedDropdowns = asObject(body.selected_dropdowns as Record<string, unknown>, {} as Record<string, unknown>);
+    const hcpBrain = asObject(
+        (body.hcp_brain || scenarioContext.hcp_brain) as Record<string, unknown>,
+        buildHcpBrain({
+            disease_state: selectedDropdowns.disease_state || body.disease_state,
+            specialty_hcp_type: selectedDropdowns.specialty_hcp_type || selectedDropdowns.hcp_type || body.hcp_type,
+            hcp_type: selectedDropdowns.hcp_type || body.hcp_type,
+            journey_stage: selectedDropdowns.journey_stage || body.journey_stage,
+            interaction_pressure: selectedDropdowns.interaction_pressure || body.interaction_pressure,
+            influence_driver: selectedDropdowns.influence_driver || body.influence_driver,
+            behavior_archetype: selectedDropdowns.behavior_archetype || body.behavior_archetype,
+            initial_temperature: body.initial_temperature ?? repSelectedTemperature,
+            live_temperature: repSelectedTemperature,
+        }) as Record<string, unknown>,
+    );
+    const hcpBrainAlignment = evaluateRepAgainstBrain(transcript, hcpBrain);
+    const hcpBrainCoaching = buildHcpBrainCoaching(hcpBrainAlignment, hcpBrain, representativeRepPhrase(transcript));
+    const hcpBrainContext = buildHcpBrainPersonaContext(hcpBrain);
+
+    const deterministic = evaluateRepResponse({
+        repResponseTranscript: transcript,
+        voiceMetadata: body.voice_metadata || {},
+        cueSignal,
+        repSelectedTemperature,
+        scenarioContext,
+        conversationMemory,
+        hcpBrain,
+        previousHcpState: (conversationMemory.hcp_state || scenarioContext.hcp_state) as Record<string, unknown> || null,
+    });
+    const deterministicWithBrain = {
+        ...(deterministic as Record<string, unknown>),
+        hcp_brain_alignment: hcpBrainAlignment,
+        hcp_brain_coaching: hcpBrainCoaching,
+    };
+
+    // Re-run HCP State Progression now that we have the full hcp_brain_alignment attached
+    const fullEvalForState = {
+        overall_score: Number((deterministic as Record<string, unknown>).overall_score || 0),
+        outcome_analysis: (deterministic as Record<string, unknown>).outcome_analysis,
+        hcp_brain_alignment: hcpBrainAlignment,
+    };
+    const voiceAdaptationForState = asObject(
+        (deterministic as Record<string, unknown>).voice_behavior_adaptation as Record<string, unknown>,
+        {} as Record<string, unknown>,
+    );
+    const previousHcpStateForFull = (conversationMemory.hcp_state || scenarioContext.hcp_state) as Record<string, unknown> || null;
+    const fullStateProgression = computeHcpStateProgression({
+        hcpBrain,
+        previousHcpState: previousHcpStateForFull,
+        repResponseTranscript: transcript,
+        evaluation: fullEvalForState,
+        voiceBehaviorAdaptation: voiceAdaptationForState,
+        liveTemperature: repSelectedTemperature,
+        conversationMemory,
+    });
+    (deterministicWithBrain as Record<string, unknown>).hcp_state = fullStateProgression.hcp_state;
+    (deterministicWithBrain as Record<string, unknown>).hcp_state_delta = fullStateProgression.hcp_state_delta;
+    (deterministicWithBrain as Record<string, unknown>).hcp_response_type = fullStateProgression.hcp_response_type;
+    (deterministicWithBrain as Record<string, unknown>).response_type_reason = fullStateProgression.response_type_reason;
+    (deterministicWithBrain as Record<string, unknown>).previous_response_types = fullStateProgression.previous_response_types;
+    (deterministicWithBrain as Record<string, unknown>).response_type_transition_explanation = fullStateProgression.response_type_transition_explanation;
+    (deterministicWithBrain as Record<string, unknown>).hcp_progression_explanation = fullStateProgression.hcp_progression_explanation;
+    (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response = fullStateProgression.simulated_hcp_next_response;
+    // Persist hcp_state and response-type history in conversation_memory
+    (deterministicWithBrain as Record<string, unknown>).conversation_memory = {
+        ...asObject((deterministic as Record<string, unknown>).conversation_memory as Record<string, unknown>, {} as Record<string, unknown>),
+        hcp_state: fullStateProgression.hcp_state,
+        response_type_history: Array.isArray((conversationMemory as Record<string, unknown>)?.response_type_history)
+            ? [
+                ...((conversationMemory as Record<string, unknown>).response_type_history as unknown[]),
+                fullStateProgression.hcp_response_type,
+            ].filter(Boolean).slice(-8)
+            : [fullStateProgression.hcp_response_type],
+    };
+
+    const evalPrompt = buildEvaluationPrompt({
+        scenarioContext: JSON.stringify(scenarioContext),
+        transcript,
+        voiceSummary: JSON.stringify(body.voice_metadata || {}),
+        selectedDropdowns: JSON.stringify(body.selected_dropdowns || {}),
+        repTemperature: repSelectedTemperature,
+        hcpBrainContext,
+    });
+
+    const aiText = await callGroq(env, evalPrompt, 1200);
+    const context = {
+        deterministic: deterministicWithBrain as Record<string, unknown>,
+        transcript,
+        scenarioContext,
+        liveTemperature: repSelectedTemperature,
+        route: "/api/rps/evaluate-response",
+    };
+    if (!aiText) {
+        return json(request, normalizeEvaluationResponse(deterministicWithBrain, context));
+    }
+
+    try {
+        const parsed = parseJsonObject(aiText) as Record<string, unknown>;
+        const merged = normalizeEvaluationResponse({
+            ...deterministicWithBrain,
+            ...parsed,
+            metric_scores: {
+                ...(asObject(deterministicWithBrain.metric_scores as Record<string, unknown>, {} as Record<string, unknown>)),
+                ...((asObject(parsed.metric_scores as Record<string, unknown>, {} as Record<string, unknown>))),
+            },
+            outcome_analysis: {
+                ...(asObject(deterministicWithBrain.outcome_analysis as Record<string, unknown>, {} as Record<string, unknown>)),
+                ...((asObject(parsed.outcome_analysis as Record<string, unknown>, {} as Record<string, unknown>))),
+                ...detectCommitment(transcript),
+            },
+            hcp_brain_alignment: {
+                ...asObject(hcpBrainAlignment as Record<string, unknown>, {} as Record<string, unknown>),
+                ...asObject(parsed.hcp_brain_alignment as Record<string, unknown>, {} as Record<string, unknown>),
+            },
+            hcp_brain_coaching: {
+                ...asObject(hcpBrainCoaching as Record<string, unknown>, {} as Record<string, unknown>),
+                ...asObject(parsed.hcp_brain_coaching as Record<string, unknown>, {} as Record<string, unknown>),
+            },
+        }, context);
+
+        return json(request, merged);
+    } catch {
+        return json(request, normalizeEvaluationResponse(deterministicWithBrain, context));
+    }
+}
+
+async function handleSaveSession(request: Request, env: Env): Promise<Response> {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const clean = sanitizeNoPhi(body) as Record<string, unknown>;
+
+    const sessionId = text(clean.session_id, `adaptive-session-${Date.now()}`);
+    const liveTemperature = Number(clean.live_temperature ?? clean.temperature ?? 5);
+    const initialTemperature = Number(clean.initial_temperature ?? liveTemperature);
+    const record = {
+        id: sessionId,
+        created_at: new Date().toISOString(),
+        dropdown_selections: clean.dropdown_selections || {},
+        temperature: liveTemperature,
+        initial_temperature: initialTemperature,
+        live_temperature: liveTemperature,
+        shift_history: clean.shift_history || [],
+        behavior_modifiers: clean.behavior_modifiers || {},
+        scenario: clean.scenario || {},
+        transcript: clean.transcript || "",
+        voice_metadata: clean.voice_metadata || {},
+        scores: clean.scores || {},
+        score_rationale: clean.score_rationale || {},
+        outcome_analysis: clean.outcome_analysis || {},
+        metric_scores: clean.metric_scores || clean.scores || {},
+        overall_score: clean.overall_score ?? null,
+        temperature_behavior_modifiers: clean.temperature_behavior_modifiers || clean.behavior_modifiers || {},
+        temperature_shift_history: clean.temperature_shift_history || clean.shift_history || [],
+        conversation_memory: clean.conversation_memory || {},
+        hcp_brain_summary: clean.hcp_brain_summary || asObject(clean.scenario as Record<string, unknown>, {} as Record<string, unknown>).hcp_brain_summary || null,
+        hcp_state: clean.hcp_state || null,
+        coaching_feedback: clean.coaching_feedback || [],
+        better_phrasing: clean.better_phrasing || "",
+        next_best_question: clean.next_best_question || "",
+        what_hcp_likely_heard: clean.what_hcp_likely_heard || "",
+        improved_response_example: clean.improved_response_example || "",
+    };
+
+    const previous = await readSessions(env);
+    const next = [record, ...previous].slice(0, 300);
+    await writeSessions(env, next);
+
+    return json(request, { success: true, session_id: sessionId });
+}
+
+function routeAdaptiveRps(pathname: string, request: Request, env: Env): Promise<Response> | null {
+    if (pathname === "/api/rps/generate-scenario" && request.method === "POST") {
+        return handleGenerateScenario(request, env);
+    }
+    if (pathname === "/api/rps/evaluate-response" && request.method === "POST") {
+        return handleEvaluateResponse(request, env);
+    }
+    if (pathname === "/api/rps/save-session" && request.method === "POST") {
+        return handleSaveSession(request, env);
+    }
+    return null;
+}
+
+export default {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+        const url = new URL(request.url);
+
+        if (request.method === "OPTIONS") {
+            return preflight(request);
+        }
+
+        const adaptiveResponse = routeAdaptiveRps(url.pathname, request, env);
+        if (adaptiveResponse) {
+            try {
+                return await adaptiveResponse;
+            } catch (error) {
+                return json(request, { error: "rps_route_failed", details: String(error) }, 500);
+            }
+        }
+
+        const legacyResponse = await legacyWorker.fetch(request, env, ctx);
+        return withCors(legacyResponse, request);
+    },
+};

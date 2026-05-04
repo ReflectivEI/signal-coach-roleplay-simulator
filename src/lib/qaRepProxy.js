@@ -514,19 +514,9 @@ function getNextLayer(usedLayers) {
 
 function getNextConcept(used = []) {
   const orderedUsed = (used || []).filter(Boolean);
+  const last = orderedUsed[orderedUsed.length - 1] || null;
 
-  let next = "next_step";
-  for (let i = 0; i < REP_CONCEPT_SEQUENCE.length; i += 1) {
-    if (!orderedUsed.includes(REP_CONCEPT_SEQUENCE[i])) {
-      next = REP_CONCEPT_SEQUENCE[i];
-      break;
-    }
-  }
-
-  const last = orderedUsed[orderedUsed.length - 1];
-  if (last === next) {
-    next = "next_step";
-  }
+  let next = REP_CONCEPT_SEQUENCE.find((concept) => !orderedUsed.includes(concept)) || "next_step";
 
   const counts = orderedUsed.reduce((acc, concept) => {
     acc[concept] = (acc[concept] || 0) + 1;
@@ -534,11 +524,14 @@ function getNextConcept(used = []) {
   }, {});
 
   if ((counts.operational_detail || 0) >= 1 && next === "operational_detail") {
-    next = "next_step";
+    next = REP_CONCEPT_SEQUENCE.find((concept) => concept !== "operational_detail" && concept !== last) || "next_step";
   }
 
-  if (orderedUsed.includes("next_step")) {
-    next = "next_step";
+  if (next === last) {
+    const rotated = REP_CONCEPT_SEQUENCE.find((concept) => concept !== last && (counts[concept] || 0) <= (counts[last] || 0));
+    if (rotated) {
+      next = rotated;
+    }
   }
 
   return next;

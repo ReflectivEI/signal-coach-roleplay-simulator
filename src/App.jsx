@@ -12,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import ScenarioLibrary from './pages/ScenarioLibrary';
 import PredictiveBuilder from './pages/PredictiveBuilder';
 import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
+import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
 
 const AppRoutes = () => {
   return (
@@ -25,6 +26,7 @@ const AppRoutes = () => {
       <Route path="/library" element={<ScenarioLibrary />} />
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
+      <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

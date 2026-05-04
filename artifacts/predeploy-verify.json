@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-04-29T20:51:14.123Z",
+  "timestamp": "2026-05-03T23:16:49.491Z",
   "appBaseUrl": "http://127.0.0.1:5173",
   "identity": {
     "pass": true,
@@ -23,7 +23,7 @@
     "healthJson": {
       "status": "ok",
       "ready": true,
-      "timestamp": "2026-04-29T20:51:22.981Z",
+      "timestamp": "2026-05-03T23:17:00.168Z",
       "service": "reflectivai-rps-api",
       "provider": "groq",
       "storage": {
@@ -62,28 +62,28 @@
     ],
     "startStatus": 200,
     "startBody": {
-      "sessionId": "a56a3ccb-ce49-419c-bba5-a8236ee2e10a",
-      "hcpReply": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here about a new medication, let's get straight to the point.",
+      "sessionId": "83eef3f8-e851-452a-87e8-5a6d27ab18a3",
+      "hcpReply": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here to discuss a new medication, let's get straight to the point.",
       "metadata": {
         "hcpCue": "time pressured",
         "nextBehaviorState": "closed",
         "nextJourneyState": "initial_access",
         "realism": {
-          "rewrittenLine": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here about a new medication, let's get straight to the point."
+          "rewrittenLine": "I've got about two minutes before my next patient, and to be honest, our prior authorization process has been a nightmare lately, so if you're here to discuss a new medication, let's get straight to the point."
         }
       }
     },
     "respondStatus": 200,
-    "respondReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?",
+    "respondReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something related to workflow or patient management that you'd like to discuss?",
     "respondBody": {
-      "sessionId": "a56a3ccb-ce49-419c-bba5-a8236ee2e10a",
-      "hcpReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?",
+      "sessionId": "83eef3f8-e851-452a-87e8-5a6d27ab18a3",
+      "hcpReply": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something related to workflow or patient management that you'd like to discuss?",
       "metadata": {
         "hcpCue": "time pressured",
         "nextBehaviorState": "closed",
         "nextJourneyState": "initial_access",
         "realism": {
-          "rewrittenLine": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something that can help with our workflow burden in the office?"
+          "rewrittenLine": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it something related to workflow or patient management that you'd like to discuss?"
         }
       }
     },
@@ -128,7 +128,7 @@
       {
         "scenarioId": "builtin-the-gatekeeper-filter",
         "pass": true,
-        "firstHcpLine": "I'm a bit rushed at the moment, but I've got a few minutes before my next patient, what's this about, is it related to workflow or something that's been affecting our office lately?",
+        "firstHcpLine": "I'm a bit rushed between patients, what's this about, is it something that can wait or is it related to a specific issue with one of my patients, like workflow burden we've been dealing with lately.",
         "error": null,
         "note": "Initial-access opener should be busy but professional, not rude or flattened.",
         "qaVerdict": "FAIL"
@@ -136,7 +136,7 @@
       {
         "scenarioId": "builtin-the-assumed-priority",
         "pass": true,
-        "firstHcpLine": "If this is about the main issue here, that's still been a real sticking point for us. I'm not convinced yet.",
+        "firstHcpLine": "If this is about the main issue here, that's still been a real sticking point for us. That's usually not where we get stuck. I've been thinking more about that issue and I'm still not convinced that the solutions we've discussed so far are going to make a significant difference in our practice.",
         "error": null,
         "note": "Follow-up framing should not reset to proxy or first-access language.",
         "qaVerdict": "PASS"
@@ -144,7 +144,7 @@
       {
         "scenarioId": "builtin-the-competitive-defender",
         "pass": true,
-        "firstHcpLine": "You're asking about what matters most to me in terms of patient fit with my current treatment option, and I have to say, it's really about the balance of efficacy and tolerability, we've worked hard to get our patients on a regimen that works for them. I'm not convinced yet. I'm not sure what you're getting at, but I hope you're not going to try to convince me that your product is somehow better, because we're pretty comfortable with what we use now.",
+        "firstHcpLine": "You're asking about what makes our current treatment option work for our patients, and I'll tell you, it's the balance of efficacy and tolerability that we've seen in our patient population. I'm not convinced yet.",
         "error": null,
         "note": "Skeptical objections should sound grounded, not templated or theatrically rude.",
         "qaVerdict": "PASS"
@@ -152,7 +152,7 @@
       {
         "scenarioId": "builtin-the-formulary-firewall",
         "pass": true,
-        "firstHcpLine": "Formulary access is still a challenge for us, and I'm not sure what options we really have since the last P&T committee meeting didn't result in any changes to our hospital's formulary. Can you tell me what specific steps we could take to try to get this moved forward, given the current barriers we're facing?",
+        "firstHcpLine": "Formulary access is still a challenge for us, and I'm not sure what options are actually viable given the current pathway. Can you walk me through what specific steps we'd need to take to get this moved forward, because from what I've seen so far, it's been a pretty tough process to navigate.",
         "error": null,
         "note": "Access/formulary responses should be complete, process-aware clinician language.",
         "qaVerdict": "PASS"
@@ -174,19 +174,1821 @@
     "pass": true
   },
   "qa": {
-    "pass": false,
-    "single": null,
-    "matrix": null,
-    "knownBadCase": {
-      "caught": false
+    "degradedMode": false,
+    "degradedReasons": [],
+    "single": {
+      "scenarioId": "builtin-the-gatekeeper-filter",
+      "personaKey": "strong_rep",
+      "verdict": "FAIL",
+      "failures": [
+        {
+          "turnNumber": 2,
+          "type": "journey_stage_mismatch",
+          "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 2,
+          "type": "interaction_pressure_mismatch",
+          "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 4,
+          "type": "poor_persona_fit",
+          "evidence": "What particular part of the prior authorization process is currently tying up my team with repeat calls?",
+          "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 4,
+          "type": "interaction_pressure_mismatch",
+          "evidence": "What particular part of the prior authorization process is currently tying up my team with repeat calls?",
+          "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 6,
+          "type": "journey_stage_mismatch",
+          "evidence": "What specific prior auth step is causing repeat callbacks? I've only got a minute.",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 6,
+          "type": "workflow_implausible",
+          "evidence": "What specific prior auth step is causing repeat callbacks? I've only got a minute.",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 8,
+          "type": "journey_stage_mismatch",
+          "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Keep it brief and practical.",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 8,
+          "type": "interaction_pressure_mismatch",
+          "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Keep it brief and practical.",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 8,
+          "type": "workflow_implausible",
+          "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Keep it brief and practical.",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 10,
+          "type": "workflow_implausible",
+          "evidence": "What's the one prior auth step that's causing all these callbacks? Give me the short version.",
+          "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 11,
+          "type": "question_obligation_failure",
+          "evidence": "After that, the case can move straight into scheduling instead of rework.",
+          "note": "REP shifted away from the HCP's core ask instead of staying on topic. REP did not provide a direct, concrete answer to the HCP's solution-seeking question.",
+          "confidence": "high"
+        },
+        {
+          "turnNumber": 11,
+          "type": "continuity_break",
+          "evidence": "After that, the case can move straight into scheduling instead of rework.",
+          "note": "REP shifted away from the HCP's core ask instead of staying on topic. REP did not provide a direct, concrete answer to the HCP's solution-seeking question.",
+          "confidence": "high"
+        },
+        {
+          "turnNumber": 12,
+          "type": "poor_persona_fit",
+          "evidence": "What specific part of the prior authorization process is still generating all these phone calls to my office?",
+          "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 12,
+          "type": "interaction_pressure_mismatch",
+          "evidence": "What specific part of the prior authorization process is still generating all these phone calls to my office?",
+          "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        }
+      ],
+      "transcript": [
+        {
+          "turnNumber": 1,
+          "speaker": "rep",
+          "rawMessage": "I want to keep this focused on the part of the workflow that is creating extra work for the office right now.",
+          "detectedIntent": "statement",
+          "detectedTone": "composed",
+          "detectedJourneyStage": "adoption_implementation",
+          "detectedPressures": [
+            "operationally_constrained"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 2,
+          "speaker": "hcp",
+          "rawMessage": "Which specific prior auth step is driving callbacks for my staff right now?",
+          "detectedIntent": "none",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "operationally_constrained",
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "Turn sounds like access_formulary language, but scenario is initial_access.",
+            "Time-constrained scenario lost time-pressure language."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "journey_stage_mismatch",
+            "interaction_pressure_mismatch"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 3,
+          "speaker": "rep",
+          "rawMessage": "In practice, instead of calling the patient back, the request goes in complete the first time.",
+          "detectedIntent": "statement",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "time_constrained",
+            "operationally_constrained"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 4,
+          "speaker": "hcp",
+          "rawMessage": "What particular part of the prior authorization process is currently tying up my team with repeat calls?",
+          "detectedIntent": "none",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "operationally_constrained"
+          ],
+          "continuityNotes": [
+            "Time-constrained scenario lost time-pressure language."
+          ],
+          "realismNotes": [
+            "Line lacks clinician/workflow/context anchors."
+          ],
+          "failures": [
+            "poor_persona_fit",
+            "interaction_pressure_mismatch"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 5,
+          "speaker": "rep",
+          "rawMessage": "The main thing is your staff isn't reopening and fixing the same authorization twice.",
+          "detectedIntent": "statement",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "operationally_constrained"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 6,
+          "speaker": "hcp",
+          "rawMessage": "What specific prior auth step is causing repeat callbacks? I've only got a minute.",
+          "detectedIntent": "none",
+          "detectedTone": "time_pressured",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "time_constrained",
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "Turn sounds like access_formulary language, but scenario is initial_access.",
+            "Operationally constrained HCP did not sound staff/workflow aware."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "journey_stage_mismatch",
+            "workflow_implausible"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 7,
+          "speaker": "rep",
+          "rawMessage": "The step that changes is the initial submission - it goes in complete instead of getting kicked back.",
+          "detectedIntent": "statement",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "time_constrained",
+            "operationally_constrained"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 8,
+          "speaker": "hcp",
+          "rawMessage": "What's the holdup with prior auth, what's triggering all these callbacks? Keep it brief and practical.",
+          "detectedIntent": "none",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "Turn sounds like access_formulary language, but scenario is initial_access.",
+            "Turn pressure signal does not match configured scenario pressure.",
+            "Time-constrained scenario lost time-pressure language.",
+            "Operationally constrained HCP did not sound staff/workflow aware."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "journey_stage_mismatch",
+            "interaction_pressure_mismatch",
+            "workflow_implausible"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 9,
+          "speaker": "rep",
+          "rawMessage": "The practical difference is fewer callback touchpoints because the initial request is complete.",
+          "detectedIntent": "statement",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "operationally_constrained"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 10,
+          "speaker": "hcp",
+          "rawMessage": "What's the one prior auth step that's causing all these callbacks? Give me the short version.",
+          "detectedIntent": "solution_seeking",
+          "detectedTone": "time_pressured",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "time_constrained",
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "Operationally constrained HCP did not sound staff/workflow aware."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "workflow_implausible"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 11,
+          "speaker": "rep",
+          "rawMessage": "After that, the case can move straight into scheduling instead of rework.",
+          "detectedIntent": "statement",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "time_constrained",
+            "operationally_constrained"
+          ],
+          "continuityNotes": [
+            "REP shifted away from the HCP's core ask instead of staying on topic.",
+            "REP did not provide a direct, concrete answer to the HCP's solution-seeking question."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "question_obligation_failure",
+            "continuity_break"
+          ],
+          "personaKey": "strong_rep"
+        },
+        {
+          "turnNumber": 12,
+          "speaker": "hcp",
+          "rawMessage": "What specific part of the prior authorization process is still generating all these phone calls to my office?",
+          "detectedIntent": "none",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "initial_access",
+          "detectedPressures": [
+            "operationally_constrained"
+          ],
+          "continuityNotes": [
+            "Time-constrained scenario lost time-pressure language."
+          ],
+          "realismNotes": [
+            "Line lacks clinician/workflow/context anchors."
+          ],
+          "failures": [
+            "poor_persona_fit",
+            "interaction_pressure_mismatch"
+          ],
+          "personaKey": "strong_rep"
+        }
+      ],
+      "topCorrections": [
+        "interaction pressure mismatch",
+        "journey stage mismatch",
+        "workflow implausible"
+      ]
     },
-    "calibrationCases": [],
-    "fatalError": "{\"error\":\"LLM_SERVICE_UNAVAILABLE\",\"details\":\"{\\\"error\\\":{\\\"message\\\":\\\"Rate limit reached for project `project_01k42dy1myf79s1v8vzc9zrfty` on tokens per day (TPD): Limit 7000000, Used 6999181, Requested 4244. Please try again in 42.274285714s. You can change your project's rate limits at https://console.groq.com/settings/project/limits\\\",\\\"type\\\":\\\"tokens\\\",\\\"code\\\":\\\"rate_limit_exceeded\\\"}}\\n\",\"provider\":\"groq\",\"model\":\"llama-3.3-70b-versatile\",\"keyIndex\":0,\"keyPoolSize\":1}"
+    "matrix": {
+      "expectedRuns": 12,
+      "completedRuns": 12,
+      "results": [
+        {
+          "scenarioId": "builtin-the-gatekeeper-filter",
+          "scenarioTitle": "The Gatekeeper Filter",
+          "personaKey": "strong_rep",
+          "maxTurns": 6,
+          "verdict": "PASS",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "What particular part of the prior authorization process is currently tying up my team with repeated phone calls?",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What particular part of the prior authorization process is currently tying up my team with repeated phone calls?",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "workflow_implausible",
+              "evidence": "What specific prior auth step is causing repeated callbacks? Give me the short version.",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Give me one practical point.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Give me one practical point.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "workflow_implausible",
+              "evidence": "What's the holdup with prior auth, what's triggering all these callbacks? Give me one practical point.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the one prior auth step that's causing callbacks? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What's the one prior auth step that's causing callbacks? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "What's the one prior auth step that's causing callbacks? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the one thing that changes in the prior auth process to reduce callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What's the one thing that changes in the prior auth process to reduce callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-gatekeeper-filter",
+          "scenarioTitle": "The Gatekeeper Filter",
+          "personaKey": "mediocre_rep",
+          "maxTurns": 6,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "What particular part of the prior authorization process is currently tying up my team with repeat calls?",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What particular part of the prior authorization process is currently tying up my team with repeat calls?",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "journey_stage_mismatch",
+              "evidence": "What specific prior auth step is causing repeat callbacks? I've only got a minute.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "workflow_implausible",
+              "evidence": "What specific prior auth step is causing repeat callbacks? I've only got a minute.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the holdup with prior auth, where's the bottleneck? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What's the holdup with prior auth, where's the bottleneck? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "workflow_implausible",
+              "evidence": "What's the holdup with prior auth, where's the bottleneck? Keep it brief and practical.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "What's the one prior auth step that's causing callbacks? Give me the short version.",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 11,
+              "type": "question_obligation_failure",
+              "evidence": "After that, the case can move straight into scheduling instead of rework.",
+              "note": "REP shifted away from the HCP's core ask instead of staying on topic. REP did not provide a direct, concrete answer to the HCP's solution-seeking question.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 11,
+              "type": "continuity_break",
+              "evidence": "After that, the case can move straight into scheduling instead of rework.",
+              "note": "REP shifted away from the HCP's core ask instead of staying on topic. REP did not provide a direct, concrete answer to the HCP's solution-seeking question.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 12,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the one thing that changes in prior auth to stop repeat callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What's the one thing that changes in prior auth to stop repeat callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "workflow_implausible",
+              "evidence": "What's the one thing that changes in prior auth to stop repeat callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-gatekeeper-filter",
+          "scenarioTitle": "The Gatekeeper Filter",
+          "personaKey": "weak_rep",
+          "maxTurns": 6,
+          "verdict": "PASS",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which specific prior auth step is driving callbacks for my staff right now?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which prior auth step is causing callbacks now.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which prior auth step is causing callbacks now.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "workflow_implausible",
+              "evidence": "Which prior auth step is causing callbacks now.",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "What specific part of the prior authorization process is currently bogging down our office with repeat calls? Give me one practical point.",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What specific part of the prior authorization process is currently bogging down our office with repeat calls? Give me one practical point.",
+              "note": "Line lacks clinician/workflow/context anchors. Time-constrained scenario lost time-pressure language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's the holdup with prior auth, can you give me the quick version?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "workflow_implausible",
+              "evidence": "What's the holdup with prior auth, can you give me the quick version?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 9,
+              "type": "question_obligation_failure",
+              "evidence": "The operational change is one clean prior auth packet instead of a follow-up fix step.",
+              "note": "REP did not provide a direct, concrete answer to the HCP's solution-seeking question.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "journey_stage_mismatch",
+              "evidence": "What specific prior auth step is still causing callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "What specific prior auth step is still causing callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "What specific prior auth step is still causing callbacks?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Turn pressure signal does not match configured scenario pressure. Time-constrained scenario lost time-pressure language. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "journey_stage_mismatch",
+              "evidence": "What's still holding up prior auth, give me the quick version?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "workflow_implausible",
+              "evidence": "What's still holding up prior auth, give me the quick version?",
+              "note": "Turn sounds like access_formulary language, but scenario is initial_access. Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-assumed-priority",
+          "scenarioTitle": "The Assumed Priority",
+          "personaKey": "strong_rep",
+          "maxTurns": 8,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still concerned about the logistical hurdles, specifically how your solution addresses the workflow inefficiencies that are currently overwhelming my staff.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "I'm still concerned about the logistical hurdles, specifically how your solution addresses the workflow inefficiencies that are currently overwhelming my staff.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "Which part of my screening process are you saying this affects?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which part of my screening process are you saying this affects?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "Which specific step in my screening process would this actually change?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which specific step in my screening process would this actually change?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "What single change would make this usable now?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which patients would this actually apply to, and how would it change my current screening protocol?",
+              "note": "Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 11,
+              "type": "continuity_break",
+              "evidence": "The operational change is one complete pass rather than a second correction step.",
+              "note": "REP shifted away from the HCP's core ask instead of staying on topic.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "Where is this still not working in practice?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "The first submission is complete, so staff can move to the next action without a cleanup step.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which patients are we talking about, exactly, that would make a difference here?",
+              "note": "Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 16,
+              "type": "poor_persona_fit",
+              "evidence": "Which specific patient subgroup would actually see a difference with this?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 16,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which specific patient subgroup would actually see a difference with this?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-assumed-priority",
+          "scenarioTitle": "The Assumed Priority",
+          "personaKey": "mediocre_rep",
+          "maxTurns": 8,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still concerned about the logistical hurdles, specifically how your solution addresses the workflow inefficiencies that are currently burdening my office.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "I'm still concerned about the logistical hurdles, specifically how your solution addresses the workflow inefficiencies that are currently burdening my office.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "Which part of my screening process are you saying this affects?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which part of my screening process are you saying this affects?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "Which specific step in my screening process would this actually change?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which specific step in my screening process would this actually change?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "What single change would make this usable now?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which patients are you talking about, exactly, that would make a difference with this?",
+              "note": "Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "Where is this still not working in practice?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "The first submission is complete, so staff can move to the next action without a cleanup step.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "Which patients are we talking about, exactly, that this would apply to?",
+              "note": "Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 16,
+              "type": "poor_persona_fit",
+              "evidence": "Which specific patient subgroup would actually see a difference with this?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 16,
+              "type": "journey_stage_mismatch",
+              "evidence": "Which specific patient subgroup would actually see a difference with this?",
+              "note": "Line lacks clinician/workflow/context anchors. Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-assumed-priority",
+          "scenarioTitle": "The Assumed Priority",
+          "personaKey": "weak_rep",
+          "maxTurns": 8,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still concerned about the disruption to our workflow, specifically how your solution addresses the issues we face with patients who can't maintain treatment.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 2,
+              "type": "interaction_pressure_mismatch",
+              "evidence": "I'm still concerned about the disruption to our workflow, specifically how your solution addresses the issues we face with patients who can't maintain treatment.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is early_discovery. Turn pressure signal does not match configured scenario pressure.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "journey_stage_mismatch",
+              "evidence": "What specific subgroup of patients can't maintain treatment and how does your solution address that?",
+              "note": "Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "Tell me the specific gap you're seeing.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "How would you make this practical in the room today?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "The first submission is complete, so staff can move to the next action without a cleanup step.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange. REP shifted away from the HCP's core ask instead of staying on topic.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 13,
+              "type": "continuity_break",
+              "evidence": "The first submission is complete, so staff can move to the next action without a cleanup step.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange. REP shifted away from the HCP's core ask instead of staying on topic.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "journey_stage_mismatch",
+              "evidence": "What specific subgroup of patients can't maintain treatment and how does your solution address that?",
+              "note": "Turn sounds like clinical_value language, but scenario is early_discovery.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-competitive-defender",
+          "scenarioTitle": "The Competitive Defender",
+          "personaKey": "strong_rep",
+          "maxTurns": 10,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still not convinced that changing our current protocol will benefit my patients, so what specifically about workflow are you proposing to improve.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is objection_handling.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this alters my approach to managing patient care, can you connect the dots for me?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't change my treatment approach.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't answer it.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't change my treatment approach.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't answer it.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 16,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't change my treatment approach.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 17,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 18,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't answer it.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 19,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 20,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't change my treatment approach.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-competitive-defender",
+          "scenarioTitle": "The Competitive Defender",
+          "personaKey": "mediocre_rep",
+          "maxTurns": 10,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't tell me how this changes treatment choice in practice.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this would alter my decision-making at the point of care.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't tell me how this changes treatment choice in practice.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this would alter my decision-making at the point of care.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't tell me how this changes treatment choice in practice.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this would alter my decision-making at the point of care.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 16,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't tell me how this changes treatment choice in practice.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 17,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 18,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this would alter my decision-making at the point of care.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 19,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 20,
+              "type": "poor_persona_fit",
+              "evidence": "That still doesn't tell me how this changes treatment choice in practice.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-competitive-defender",
+          "scenarioTitle": "The Competitive Defender",
+          "personaKey": "weak_rep",
+          "maxTurns": 10,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still not convinced that changing our current protocol will benefit my patients, so what specifically about workflow are you proposing to improve.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is objection_handling.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this alters my approach to managing patient care, can you connect the dots for me?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this alters my approach to managing patient care in a meaningful way.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 13,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 14,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this alters my approach to managing patient care in a meaningful way.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 15,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 17,
+              "type": "repetition_or_looping",
+              "evidence": "Your team can move forward on the next office task once the first request goes in complete.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 18,
+              "type": "poor_persona_fit",
+              "evidence": "I'm still not seeing how this alters my approach to managing patient care in a meaningful way.",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 19,
+              "type": "repetition_or_looping",
+              "evidence": "The main difference is the request goes in complete the first time.",
+              "note": "REP repeated a prior discovery path instead of advancing the exchange.",
+              "confidence": "high"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-formulary-firewall",
+          "scenarioTitle": "The Formulary Firewall",
+          "personaKey": "strong_rep",
+          "maxTurns": 6,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still concerned about the formulary status, and your comment about workflow doesn't change that.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is access_formulary.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 5,
+              "type": "continuity_break",
+              "evidence": "The main thing is your staff isn't reopening and fixing the same authorization twice.",
+              "note": "REP shifted away from the HCP's core ask instead of staying on topic.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 6,
+              "type": "poor_persona_fit",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "workflow_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 6,
+              "type": "access_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "What's the exact process to move this from non-preferred to preferred?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "I need a clear understanding of the steps required to get this medication switched from a non-preferred to a preferred status on our formulary.",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "workflow_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "access_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-formulary-firewall",
+          "scenarioTitle": "The Formulary Firewall",
+          "personaKey": "mediocre_rep",
+          "maxTurns": 6,
+          "verdict": "PASS",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "workflow_implausible",
+              "evidence": "I still need to navigate the formulary restrictions, and your solution doesn't change that.",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "workflow_implausible",
+              "evidence": "What's the next step to get this approved by formulary?",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "access_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "workflow_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "access_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            }
+          ]
+        },
+        {
+          "scenarioId": "builtin-the-formulary-firewall",
+          "scenarioTitle": "The Formulary Firewall",
+          "personaKey": "weak_rep",
+          "maxTurns": 6,
+          "verdict": "FAIL",
+          "failures": [
+            {
+              "turnNumber": 2,
+              "type": "journey_stage_mismatch",
+              "evidence": "I'm still dealing with a non-preferred designation here, and streamlining workflow won't change that.",
+              "note": "Turn sounds like adoption_implementation language, but scenario is access_formulary.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 4,
+              "type": "poor_persona_fit",
+              "evidence": "What's the actual process to get this moved from non-preferred to preferred?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 5,
+              "type": "continuity_break",
+              "evidence": "The main thing is your staff isn't reopening and fixing the same authorization twice.",
+              "note": "REP shifted away from the HCP's core ask instead of staying on topic.",
+              "confidence": "high"
+            },
+            {
+              "turnNumber": 6,
+              "type": "workflow_implausible",
+              "evidence": "I need a clear understanding of the steps required to change the formulary status of this medication from non-preferred to preferred.",
+              "note": "Operationally constrained HCP did not sound staff/workflow aware.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 8,
+              "type": "poor_persona_fit",
+              "evidence": "What's the exact process to move this from non-preferred to preferred?",
+              "note": "Line lacks clinician/workflow/context anchors.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "poor_persona_fit",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "workflow_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 10,
+              "type": "access_implausible",
+              "evidence": "Where does the real cost pressure show up in practice?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "poor_persona_fit",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "workflow_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            },
+            {
+              "turnNumber": 12,
+              "type": "access_implausible",
+              "evidence": "How would the all-in spend change once this is live?",
+              "note": "Line lacks clinician/workflow/context anchors. Operationally constrained HCP did not sound staff/workflow aware. Access-barrier scenario did not surface access/formulary language.",
+              "confidence": "medium"
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "failureCounts": {
+          "journey_stage_mismatch": 24,
+          "interaction_pressure_mismatch": 24,
+          "poor_persona_fit": 45,
+          "workflow_implausible": 21,
+          "question_obligation_failure": 2,
+          "continuity_break": 5,
+          "repetition_or_looping": 18,
+          "access_implausible": 6
+        },
+        "perScenario": [
+          {
+            "scenarioId": "builtin-the-gatekeeper-filter",
+            "scenarioTitle": "The Gatekeeper Filter",
+            "personaKey": "strong_rep",
+            "verdict": "PASS",
+            "topFailures": [
+              "interaction_pressure_mismatch",
+              "journey_stage_mismatch",
+              "workflow_implausible"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-gatekeeper-filter",
+            "scenarioTitle": "The Gatekeeper Filter",
+            "personaKey": "mediocre_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "journey_stage_mismatch",
+              "interaction_pressure_mismatch",
+              "workflow_implausible"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-gatekeeper-filter",
+            "scenarioTitle": "The Gatekeeper Filter",
+            "personaKey": "weak_rep",
+            "verdict": "PASS",
+            "topFailures": [
+              "journey_stage_mismatch",
+              "interaction_pressure_mismatch",
+              "workflow_implausible"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-assumed-priority",
+            "scenarioTitle": "The Assumed Priority",
+            "personaKey": "strong_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "interaction_pressure_mismatch",
+              "poor_persona_fit",
+              "journey_stage_mismatch"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-assumed-priority",
+            "scenarioTitle": "The Assumed Priority",
+            "personaKey": "mediocre_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "interaction_pressure_mismatch",
+              "poor_persona_fit",
+              "journey_stage_mismatch"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-assumed-priority",
+            "scenarioTitle": "The Assumed Priority",
+            "personaKey": "weak_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "journey_stage_mismatch",
+              "poor_persona_fit",
+              "repetition_or_looping"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-competitive-defender",
+            "scenarioTitle": "The Competitive Defender",
+            "personaKey": "strong_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "poor_persona_fit",
+              "repetition_or_looping",
+              "journey_stage_mismatch"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-competitive-defender",
+            "scenarioTitle": "The Competitive Defender",
+            "personaKey": "mediocre_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "poor_persona_fit",
+              "repetition_or_looping"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-competitive-defender",
+            "scenarioTitle": "The Competitive Defender",
+            "personaKey": "weak_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "poor_persona_fit",
+              "repetition_or_looping",
+              "journey_stage_mismatch"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-formulary-firewall",
+            "scenarioTitle": "The Formulary Firewall",
+            "personaKey": "strong_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "poor_persona_fit",
+              "workflow_implausible",
+              "access_implausible"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-formulary-firewall",
+            "scenarioTitle": "The Formulary Firewall",
+            "personaKey": "mediocre_rep",
+            "verdict": "PASS",
+            "topFailures": [
+              "workflow_implausible",
+              "poor_persona_fit",
+              "access_implausible"
+            ]
+          },
+          {
+            "scenarioId": "builtin-the-formulary-firewall",
+            "scenarioTitle": "The Formulary Firewall",
+            "personaKey": "weak_rep",
+            "verdict": "FAIL",
+            "topFailures": [
+              "poor_persona_fit",
+              "workflow_implausible",
+              "access_implausible"
+            ]
+          }
+        ],
+        "perPersona": {
+          "strong_rep": {
+            "pass": 1,
+            "fail": 3
+          },
+          "mediocre_rep": {
+            "pass": 1,
+            "fail": 3
+          },
+          "weak_rep": {
+            "pass": 1,
+            "fail": 3
+          }
+        },
+        "topRecurringRealismFailures": [
+          [
+            "poor_persona_fit",
+            45
+          ],
+          [
+            "workflow_implausible",
+            21
+          ],
+          [
+            "access_implausible",
+            6
+          ]
+        ],
+        "topRecurringContinuityFailures": [
+          [
+            "journey_stage_mismatch",
+            24
+          ],
+          [
+            "interaction_pressure_mismatch",
+            24
+          ],
+          [
+            "repetition_or_looping",
+            18
+          ],
+          [
+            "continuity_break",
+            5
+          ],
+          [
+            "question_obligation_failure",
+            2
+          ]
+        ]
+      }
+    },
+    "knownBadCase": {
+      "verdict": "FAIL",
+      "caught": true,
+      "failures": [
+        {
+          "turnNumber": 2,
+          "type": "journey_stage_mismatch",
+          "evidence": "What's the one thing that would make prior auth easier for my staff?",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 2,
+          "type": "interaction_pressure_mismatch",
+          "evidence": "What's the one thing that would make prior auth easier for my staff?",
+          "note": "Turn sounds like access_formulary language, but scenario is initial_access. Time-constrained scenario lost time-pressure language.",
+          "confidence": "medium"
+        },
+        {
+          "turnNumber": 3,
+          "type": "question_obligation_failure",
+          "evidence": "What is the biggest roadblock or challenge right now with prior auth?",
+          "note": "REP repeated a prior discovery path instead of advancing the exchange. REP answered a solution-seeking HCP question with another question. REP looped back to the same discovery path after a solution-seeking HCP question instead of advancing the exchange.",
+          "confidence": "high"
+        },
+        {
+          "turnNumber": 3,
+          "type": "conversation_stagnation",
+          "evidence": "What is the biggest roadblock or challenge right now with prior auth?",
+          "note": "REP repeated a prior discovery path instead of advancing the exchange. REP answered a solution-seeking HCP question with another question. REP looped back to the same discovery path after a solution-seeking HCP question instead of advancing the exchange.",
+          "confidence": "high"
+        },
+        {
+          "turnNumber": 3,
+          "type": "repetition_or_looping",
+          "evidence": "What is the biggest roadblock or challenge right now with prior auth?",
+          "note": "REP repeated a prior discovery path instead of advancing the exchange. REP answered a solution-seeking HCP question with another question. REP looped back to the same discovery path after a solution-seeking HCP question instead of advancing the exchange.",
+          "confidence": "high"
+        }
+      ],
+      "transcript": [
+        {
+          "turnNumber": 1,
+          "speaker": "rep",
+          "rawMessage": "What is the biggest roadblock right now with the prior auth process?",
+          "detectedIntent": "question",
+          "detectedTone": "composed",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "operationally_constrained",
+            "access_barrier"
+          ],
+          "continuityNotes": [],
+          "realismNotes": [],
+          "failures": [],
+          "personaKey": "known_bad_case"
+        },
+        {
+          "turnNumber": 2,
+          "speaker": "hcp",
+          "rawMessage": "What's the one thing that would make prior auth easier for my staff?",
+          "detectedIntent": "solution_seeking",
+          "detectedTone": "neutral",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "operationally_constrained",
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "Turn sounds like access_formulary language, but scenario is initial_access.",
+            "Time-constrained scenario lost time-pressure language."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "journey_stage_mismatch",
+            "interaction_pressure_mismatch"
+          ],
+          "personaKey": "known_bad_case"
+        },
+        {
+          "turnNumber": 3,
+          "speaker": "rep",
+          "rawMessage": "What is the biggest roadblock or challenge right now with prior auth?",
+          "detectedIntent": "question",
+          "detectedTone": "composed",
+          "detectedJourneyStage": "access_formulary",
+          "detectedPressures": [
+            "access_barrier"
+          ],
+          "continuityNotes": [
+            "REP repeated a prior discovery path instead of advancing the exchange.",
+            "REP answered a solution-seeking HCP question with another question.",
+            "REP looped back to the same discovery path after a solution-seeking HCP question instead of advancing the exchange."
+          ],
+          "realismNotes": [],
+          "failures": [
+            "question_obligation_failure",
+            "conversation_stagnation",
+            "repetition_or_looping"
+          ],
+          "personaKey": "known_bad_case"
+        }
+      ]
+    },
+    "calibrationCases": [
+      {
+        "id": "case_1",
+        "label": "solution-seeking HCP question + REP asks another question",
+        "expected": "FAIL",
+        "actual": "FAIL"
+      },
+      {
+        "id": "case_2",
+        "label": "solution-seeking HCP question + REP gives direct concrete answer",
+        "expected": "PASS",
+        "actual": "PASS"
+      },
+      {
+        "id": "case_3",
+        "label": "neutral discovery HCP question + REP asks appropriate discovery question",
+        "expected": "PASS",
+        "actual": "PASS"
+      },
+      {
+        "id": "case_4",
+        "label": "solution-seeking HCP question + REP answers concretely then narrows",
+        "expected": "PASS",
+        "actual": "PASS"
+      },
+      {
+        "id": "case_5",
+        "label": "REP repeats discovery question twice",
+        "expected": "FAIL",
+        "actual": "FAIL"
+      },
+      {
+        "id": "case_6",
+        "label": "conversation advances with a concrete answer",
+        "expected": "PASS",
+        "actual": "PASS"
+      }
+    ],
+    "pass": true
   },
   "finalVerdict": "NOT SAFE TO DEPLOY",
   "blockingFailures": [
-    "QA Twin safeguard validation failed",
-    "QA validation aborted: {\"error\":\"LLM_SERVICE_UNAVAILABLE\",\"details\":\"{\\\"error\\\":{\\\"message\\\":\\\"Rate limit reached for project `project_01k42dy1myf79s1v8vzc9zrfty` on tokens per day (TPD): Limit 7000000, Used 6999181, Requested 4244. Please try again in 42.274285714s. You can change your project's rate limits at https://console.groq.com/settings/project/limits\\\",\\\"type\\\":\\\"tokens\\\",\\\"code\\\":\\\"rate_limit_exceeded\\\"}}\\n\",\"provider\":\"groq\",\"model\":\"llama-3.3-70b-versatile\",\"keyIndex\":0,\"keyPoolSize\":1}",
-    "QA Twin missed the intentional bad transcript"
+    "single QA run has high-confidence failures: question_obligation_failure, continuity_break"
   ]
 }

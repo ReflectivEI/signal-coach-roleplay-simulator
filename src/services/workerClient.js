@@ -29,8 +29,20 @@ const WORKER_URL = configuredWorkerUrl || DEFAULT_LOCAL_WORKER_URL;
 const isBrowserRuntime = typeof window !== "undefined";
 const isViteDevRuntime = Boolean(import.meta?.env?.DEV);
 const DEFAULT_LOCAL_WORKER_URL = "http://127.0.0.1:8787";
+const STAGING_WORKER_URL = "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev";
+const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
 const configuredWorkerUrl = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || "";
-const WORKER_URL = configuredWorkerUrl || DEFAULT_LOCAL_WORKER_URL;
+function resolveWorkerBaseUrl() {
+  if (configuredWorkerUrl) return configuredWorkerUrl;
+  if (isBrowserRuntime) {
+    const { hostname } = window.location;
+    if (hostname === "localhost" || hostname === "127.0.0.1") return DEFAULT_LOCAL_WORKER_URL;
+    if (hostname.includes("staging")) return STAGING_WORKER_URL;
+    return PRODUCTION_WORKER_URL;
+  }
+  return DEFAULT_LOCAL_WORKER_URL;
+}
+const WORKER_URL = resolveWorkerBaseUrl();
 const workerInvokePath = "/api/llm/invoke";
 const workerHealthPath = "/health";
 const workerScenariosPath = "/api/scenarios";
