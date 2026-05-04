@@ -1,4 +1,9 @@
 import { detectHcpQuestionType, semanticallyAnswersHcpAsk } from "./qaRepProxy.js";
+import {
+  buildScenarioRouting,
+  detectTopicLanes,
+  summarizeRoutingAlignment,
+} from "./scenarioRouting";
 
 export const QA_FAILURE_TAXONOMY = [
   "chatbot_phrasing",
@@ -548,6 +553,7 @@ export function detectQuestionObligationFailure({ previousTurn, currentTurn }) {
 export function validateTurnAgainstScenarioState({
   turn,
   scenario,
+  scenarioRouting,
   detectedJourneyStage,
   detectedPressures,
   tone,
@@ -555,13 +561,44 @@ export function validateTurnAgainstScenarioState({
   const failures = [];
   const notes = [];
   if (turn.speaker === "hcp") {
+    const routing = summarizeRoutingAlignment({
+      text: turn?.text || "",
+      scenarioRouting,
+    });
+
+    if (routing.prohibited_topic_detected.length > 0) {
+      failures.push({
+        type: "journey_stage_mismatch",
+        confidence: "high",
+        matched_topic_lane: routing.matched_topic_lane,
+        expected_topic_lanes: routing.expected_topic_lanes,
+        prohibited_topic_detected: routing.prohibited_topic_detected,
+        expected_stage_behavior: routing.expected_stage_behavior,
+        actual_stage_behavior: routing.actual_stage_behavior,
+        recommended_fix: routing.recommended_fix,
+      });
+      notes.push("Detected disallowed topic lane for this scenario stage.");
+    }
+
     const journeyCheck = enforceJourneyStageBehavior({
       turn,
       scenario,
+      scenarioRouting,
+      matchedTopicLanes: routing.matched_topic_lanes,
       detectedJourneyStage,
     });
     if (!journeyCheck.pass) {
-      failures.push({ type: "journey_stage_mismatch", confidence: "medium", evidenceDetails: journeyCheck.evidenceDetails });
+      failures.push({
+        type: "journey_stage_mismatch",
+        confidence: "medium",
+        evidenceDetails: journeyCheck.evidenceDetails,
+        matched_topic_lane: routing.matched_topic_lane,
+        expected_topic_lanes: routing.expected_topic_lanes,
+        prohibited_topic_detected: routing.prohibited_topic_detected,
+        expected_stage_behavior: routing.expected_stage_behavior,
+        actual_stage_behavior: routing.actual_stage_behavior,
+        recommended_fix: routing.recommended_fix,
+      });
       notes.push(journeyCheck.note);
     }
 
@@ -583,9 +620,24 @@ export function validateTurnAgainstScenarioState({
   return { failures, notes };
 }
 
-export function enforceJourneyStageBehavior({ turn, scenario, detectedJourneyStage }) {
+function enforceJourneyStageBehaviorWithRouting({ turn, scenario, scenarioRouting, matchedTopicLanes = [], detectedJourneyStage }) {
   const expectedJourney = normalize(scenario?.journeyStage).toLowerCase();
   const detected = normalize(detectedJourneyStage).toLowerCase();
+  const allowedTopicLanes = scenarioRouting?.allowed_topic_lanes || [];
+  const matchedAllowedLane = matchedTopicLanes.find((lane) => allowedTopicLanes.includes(lane));
+
+  if (matchedAllowedLane) {
+    return {
+      pass: true,
+      note: "",
+      evidenceDetails: {
+        expectedJourney,
+        detectedJourney: detected,
+        matchedAllowedLane,
+      },
+    };
+  }
+
   if (!expectedJourney || !detected) {
     return { pass: true, note: "", evidenceDetails: {} };
   }
@@ -611,6 +663,16 @@ export function enforceJourneyStageBehavior({ turn, scenario, detectedJourneySta
       toleratedAdjacency: false,
     },
   };
+}
+
+export function enforceJourneyStageBehavior({ turn, scenario, scenarioRouting, matchedTopicLanes = [], detectedJourneyStage }) {
+  return enforceJourneyStageBehaviorWithRouting({
+    turn,
+    scenario,
+    scenarioRouting,
+    matchedTopicLanes,
+    detectedJourneyStage,
+  });
 }
 
 export function enforcePressureBehavior({ turn, scenario, detectedPressures = [], tone = "neutral" }) {
@@ -780,6 +842,7 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
   const transcript = [];
   const failureCounts = {};
   const failures = [];
+  const scenarioRouting = buildScenarioRouting(scenario);
 
   turns.forEach((turn, index) => {
     const previousTurn = index > 0 ? turns[index - 1] : null;
@@ -792,6 +855,7 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     const detectedTone = detectEmotionalTemperature(rawMessage, turn.speaker);
     const detectedJourneyStage = detectJourneyStageSignal(rawMessage, scenario);
     const detectedPressures = detectInteractionPressureSignal(rawMessage, scenario);
+    const matchedTopicLanes = detectTopicLanes(rawMessage);
 
     const continuity = detectDialogueContinuityBreak({
       currentTurn: turn,
@@ -803,6 +867,7 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     const stateValidation = validateTurnAgainstScenarioState({
       turn,
       scenario,
+      scenarioRouting,
       detectedJourneyStage,
       detectedPressures,
       tone: detectedTone,
@@ -892,22 +957,32 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       addCounts(failureCounts, type);
       const confidence =
         obligationFailure?.type === type ? obligationFailure.confidence :
-        stagnationFailure?.type === type ? stagnationFailure.confidence :
-        continuity.failures.find((item) => item.type === type)?.confidence ||
-        (type === "chatbot_phrasing" ? chatbot.confidence : "medium");
+          stagnationFailure?.type === type ? stagnationFailure.confidence :
+            continuity.failures.find((item) => item.type === type)?.confidence ||
+            (type === "chatbot_phrasing" ? chatbot.confidence : "medium");
       const severity = classifyFailureSeverity(type, confidence);
       failures.push({
         turnNumber,
         type,
         evidence: buildEvidenceSnippet(rawMessage),
+        failure_type: type,
         evidenceDetails: {
           detectedIntent,
           detectedTone,
           detectedJourneyStage,
           detectedPressures,
+          matchedTopicLanes,
+          expectedTopicLanes: scenarioRouting.allowed_topic_lanes,
+          disallowedTopicLanes: scenarioRouting.disallowed_topic_lanes,
           scenarioJourneyStage: scenario?.journeyStage || null,
           scenarioInteractionPressure: normalizePressureList(scenario),
         },
+        matched_topic_lane: matchedTopicLanes[0] || "general",
+        expected_topic_lanes: scenarioRouting.allowed_topic_lanes,
+        prohibited_topic_detected: matchedTopicLanes.filter((lane) => scenarioRouting.disallowed_topic_lanes.includes(lane)),
+        expected_stage_behavior: scenarioRouting.stage_behavior_rules,
+        actual_stage_behavior: matchedTopicLanes.length ? matchedTopicLanes : ["general"],
+        recommended_fix: "Keep the next turn in an allowed topic lane for the configured stage and pressure.",
         note: [...realismNotes, ...continuityNotes].join(" "),
         confidence,
         severity,

@@ -19,6 +19,7 @@
     "confidence:gate": "npx vite-node scripts/confidence-gate.ts",
     "test:adaptive-temperature": "npx vite-node scripts/adaptive-temperature-tests.ts",
     "test:adaptive-calibration": "npx vite-node scripts/adaptive-realism-calibration-tests.ts",
+    "test:scenario-routing-guardrails": "npx vite-node scripts/scenario-routing-guardrails.ts",
     "test:qa-realism-calibration": "npx vite-node scripts/qa-realism-calibration.ts",
     "test:runtime-alignment": "node scripts/runtime-alignment-check.js",
     "test:hcp-brain-rps": "npx vite-node scripts/test-hcp-brain-rps.ts",

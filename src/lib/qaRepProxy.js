@@ -1,5 +1,10 @@
 import { invokeWorkerText } from "./../services/workerClient.js";
 import { humanizeRepResponse } from "./repHumanizer.js";
+import {
+  buildScenarioRouting,
+  detectTopicLanes,
+  scrubStaleFallbackPhrases,
+} from "./scenarioRouting";
 
 const DIRECT_ANSWER_TRIGGER = /show me data|need data|specific data|evidence|moderate renal impairment|renal impairment|renal dosing|egfr|multiple comorbidit|subgroup|excluded patient|real-world fit|workflow|what changes|what gets added|what staff|what does that add|what's the point|bottom line|operational|guideline|what am i missing|cost savings|justify the cost|readmissions|metrics|prior auth|prior authorization|specific outcomes|what outcomes|own patient population|my own population|what exactly|exact guideline language|one proof point|one key point|what specifically changes|what caused|what step gets added|biomarker|threshold|analysis|comorbidit|total cost per patient|cost per patient|what's included|what is included|what does that include|break down/i;
 const INITIAL_ACCESS_DIRECT_ASK_PATTERN = /what'?s this about|what is this about|why are we talking|why are you here|make this quick|can you make this quick|short version|few minutes|what do you need from me|what'?s the one thing you need to know|one thing you need to know|what's the relevance|what is the relevance|relevant to my practice|relevant to my clinic|what makes this relevant|what sets your product apart|what's the one thing that could slow care|one thing that could slow care|what specific barrier|what barrier are you looking for|what makes you think|what specific access step|what specific change/i;
@@ -539,10 +544,103 @@ function getNextConcept(used = []) {
 
 function asRepReplyPayload(reply = "", concept = null, context = {}) {
   const rawText = typeof reply === "string" ? reply : String(reply?.text || "");
+  const scenarioRouting = context?.scenario ? buildScenarioRouting(context.scenario) : null;
+  const finalized = finalizeRepReply(rawText, context);
+  const aligned = scenarioRouting
+    ? enforceRepScenarioAlignment({
+      rep_script: finalized,
+      scenario_routing: scenarioRouting,
+    })
+    : finalized;
+  const matched = scenarioRouting ? detectTopicLanes(aligned) : [];
+  const prohibited = scenarioRouting
+    ? matched.filter((lane) => (scenarioRouting.disallowed_topic_lanes || []).includes(lane))
+    : [];
+  const repaired = scenarioRouting && prohibited.length
+    ? scrubStaleFallbackPhrases(
+      String(context?.scenario?.journeyStage || "").toLowerCase() === "clinical_value"
+        ? "The practical answer is whether this changes treatment decisions for patients you actually treat."
+        : String(context?.scenario?.journeyStage || "").toLowerCase() === "initial_access"
+          ? "The practical answer is why this matters now and what decision it should clarify in your practice."
+          : String(context?.scenario?.journeyStage || "").toLowerCase() === "access_formulary"
+            ? "The practical answer is the exact access step that needs to change for patients to start care."
+            : "The practical answer is one concrete change tied to this scenario's blocker.",
+      scenarioRouting,
+    )
+    : scrubStaleFallbackPhrases(aligned, scenarioRouting || {});
+
   return {
-    text: finalizeRepReply(rawText, context),
+    text: repaired,
     concept,
   };
+}
+
+function concernFamilyRepAnchor(scenarioRouting = {}) {
+  const family = String(scenarioRouting?.concern_family || "general");
+  switch (family) {
+    case "evidence":
+      return "The practical answer has to stay tied to the evidence gap that would change treatment decisions.";
+    case "access":
+      return "The practical answer has to stay tied to the exact access step that blocks patient start.";
+    case "workflow":
+      return "The practical answer has to stay tied to one concrete implementation step, owner, and what gets removed.";
+    case "safety":
+      return "The practical answer has to stay tied to the safety signal that still blocks confidence.";
+    case "cost":
+      return "The practical answer has to stay tied to one value outcome that changes a real patient decision.";
+    default:
+      return "The practical answer has to stay tied to the current blocker in this scenario.";
+  }
+}
+
+export function enforceRepScenarioAlignment({
+  rep_script = "",
+  scenario_routing = {},
+}) {
+  let response = String(rep_script || "").trim();
+  if (!response) return concernFamilyRepAnchor(scenario_routing);
+
+  const staleWorkflowPatterns = [
+    /fewer rework touchpoints/gi,
+    /first submission (?:is )?complete/gi,
+    /callback cleanup step/gi,
+    /one complete pass/gi,
+  ];
+
+  staleWorkflowPatterns.forEach((pattern) => {
+    response = response.replace(pattern, "a concrete next-step change");
+  });
+
+  const matchedLanes = detectTopicLanes(response);
+  const prohibitedLanes = matchedLanes.filter((lane) =>
+    (scenario_routing?.disallowed_topic_lanes || []).includes(lane)
+  );
+
+  if (prohibitedLanes.length) {
+    response = concernFamilyRepAnchor(scenario_routing);
+  }
+
+  const concernLaneMap = {
+    evidence: ["clinical_value", "evidence_quality"],
+    access: ["access_formulary", "prior_auth"],
+    workflow: ["workflow_implementation"],
+    safety: ["safety_signal", "evidence_quality"],
+    cost: ["cost_value", "clinical_value"],
+    guideline: ["guideline_alignment", "evidence_quality"],
+    adoption_caution: ["peer_adoption", "protocol_change"],
+    patient_fit: ["patient_identification", "clinical_value"],
+  };
+
+  const family = String(scenario_routing?.concern_family || "general");
+  const expectedLanes = concernLaneMap[family] || [];
+  if (expectedLanes.length) {
+    const aligned = detectTopicLanes(response).some((lane) => expectedLanes.includes(lane));
+    if (!aligned) {
+      response = concernFamilyRepAnchor(scenario_routing);
+    }
+  }
+
+  return normalizeDialoguePunctuation(response).trim();
 }
 
 function renderConcept(type = "core_change", context = {}) {
@@ -905,14 +1003,14 @@ function pickProgressionLine(mode, topic, previousRepText = "", lastHcpMessage =
   return options[0];
 }
 
-export function buildDeterministicQaRepReply({ turns = [], draft = "" }) {
+export function buildDeterministicQaRepReply({ scenario = {}, turns = [], draft = "" }) {
   const lastHcpMessage = getLastHcpText(turns);
 
   if (!lastHcpMessage) {
     return asRepReplyPayload(
-      "I want to keep this focused on the part of the workflow that is creating extra work for the office right now.",
+      "I want to keep this focused on the specific blocker that is getting in the way of the next decision.",
       "core_change",
-      { hcpTurn: lastHcpMessage, transcript: turns },
+      { hcpTurn: lastHcpMessage, transcript: turns, scenario },
     );
   }
 
@@ -934,7 +1032,7 @@ export function buildDeterministicQaRepReply({ turns = [], draft = "" }) {
   return asRepReplyPayload(
     forced,
     nextConcept,
-    { hcpTurn: lastHcpMessage, transcript: turns },
+    { hcpTurn: lastHcpMessage, transcript: turns, scenario },
   );
 }
 
@@ -1182,7 +1280,15 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
     });
   }
 
-  return "It cuts out the resubmission loop.";
+  if (/clinical_value|early_discovery|discovery|initial_access/.test(stageText)) {
+    return "The practical answer is whether this changes a real patient decision in your setting.";
+  }
+
+  if (/access_formulary/.test(stageText)) {
+    return "The practical answer is the exact access step that changes for patients to start care.";
+  }
+
+  return "The practical answer is one concrete change tied to your main blocker.";
 }
 
 function getRecentRepReplies(context = {}, window = 4) {
@@ -1214,16 +1320,16 @@ function buildOperationalLoopAlternatives(context = {}) {
 
   if (/callback|call back/.test(ask)) {
     return [
-      "The first submission includes the required details, so your staff is not fielding follow-up callback requests.",
-      "The change is one complete authorization pass, which removes the callback cleanup step for your MA.",
-      "Operationally, your team sends one complete prior auth packet and can move to the next patient task.",
-      "The practical difference is fewer callback touchpoints because the initial request is complete.",
+      "The front-end request includes the needed details, so your staff is not fielding follow-up callback requests.",
+      "The change is one cleaner authorization handoff, which removes repeat callback follow-up for your MA.",
+      "Operationally, your team sends a cleaner prior-auth packet and can move to the next patient task.",
+      "The practical difference is less callback churn because the initial request is more complete.",
     ];
   }
 
   if (/prior auth|prior authorization|pa\b/.test(ask)) {
     return [
-      "The first prior auth submission is complete, so your staff does not have to run a second correction pass.",
+      "The initial prior-auth packet is cleaner, so your staff does not have to run a second correction pass.",
       "The operational change is one clean prior auth packet instead of a follow-up fix step.",
       "Your team handles prior auth in one pass and can move directly to the next office action.",
       "The practical shift is fewer prior auth touchpoints because the required fields are complete upfront.",
@@ -1231,10 +1337,10 @@ function buildOperationalLoopAlternatives(context = {}) {
   }
 
   return [
-    "The first submission is complete, so staff can move to the next action without a cleanup step.",
-    "The operational change is one complete pass rather than a second correction step.",
-    "Your team can move forward on the next office task once the first request goes in complete.",
-    "The practical difference is fewer rework touchpoints for staff after submission.",
+    "The first request is cleaner, so the team can move forward without a repeat correction cycle.",
+    "The operational change is reducing avoidable back-and-forth after submission.",
+    "Your team can move to the next action without repeating the same fix step.",
+    "The practical difference is less repeat work after the initial request.",
   ];
 }
 
@@ -1290,6 +1396,7 @@ export function enforceRepAnswerFirstContract({
     return asRepReplyPayload(draftPayload.text, draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
+      scenario,
     });
   }
 
@@ -1298,6 +1405,7 @@ export function enforceRepAnswerFirstContract({
     return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
+      scenario,
     });
   }
 
@@ -1309,12 +1417,14 @@ export function enforceRepAnswerFirstContract({
     return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
+      scenario,
     });
   }
 
   return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
     hcpTurn: lastHcpMessage,
     transcript: turns,
+    scenario,
   });
 }
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ChevronDown, ChevronUp, RefreshCw, MessageSquare, FileText, Target, AlertTriangle, CheckCircle2, AlertCircle, XCircle, Maximize2, Minimize2 } from "lucide-react";
-import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
+import { SIGNAL_INTELLIGENCE_CAPABILITIES, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 
 const metricColorTokens = {
   success: {
@@ -66,6 +66,9 @@ const REVIEW_TEXT = "hsl(222 44% 17%)";
 const REVIEW_MUTED = "hsl(215 18% 39%)";
 const REVIEW_FAINT = "hsl(215 14% 52%)";
 const REVIEW_PANEL = "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(246,250,251,0.98) 100%)";
+const REVIEW_EVIDENCE_BG = "linear-gradient(180deg, hsl(222 37% 17%) 0%, hsl(222 34% 14%) 100%)";
+const REVIEW_EVIDENCE_BORDER = "rgba(120, 156, 208, 0.42)";
+const REVIEW_EVIDENCE_TEXT = "hsl(210 100% 96%)";
 
 function splitParagraphs(value) {
   if (!value) return [];
@@ -129,6 +132,22 @@ function cleanCoachingCopy(text = "") {
   return tightenSentences(normalized, 22);
 }
 
+function cleanCoachingCopyExpanded(text = "", maxWords = 44) {
+  if (!text) return "";
+
+  const normalized = stripSystemReferences(text)
+    .replace(/\bforensic\b/gi, "detailed")
+    .replace(/\bdiagnostic\b/gi, "focused")
+    .replace(/\bbehavioral signal\b/gi, "moment")
+    .replace(/\bvolatility shift\b/gi, "tone shift")
+    .replace(/\bcausal\b/gi, "clear")
+    .replace(/\bremained\b/gi, "stayed")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return tightenSentences(normalized, maxWords);
+}
+
 function uniqCoachingPoints(items = []) {
   const seen = new Set();
   return items.filter((item) => {
@@ -168,6 +187,32 @@ function buildActionItemParagraph(insight) {
   if (!insight?.nextTimeAction) return "";
   const rewrite = insight.exampleRewrite ? ` Example phrasing: "${cleanCoachingCopy(insight.exampleRewrite)}".` : "";
   return cleanCoachingCopy(`${insight.nextTimeAction}${rewrite}`);
+}
+
+function buildRobustImprovementPoint(insight) {
+  if (!insight) return "";
+
+  const action = cleanCoachingCopyExpanded(insight.nextTimeAction || insight.whatGoodLooksLike || "");
+  const why = cleanCoachingCopyExpanded(insight.whyItMattered || "");
+  const evidence = cleanCoachingCopyExpanded(insight.transcriptEvidence || "", 20);
+  const behavior = cleanCoachingCopyExpanded(insight.whatHappened || "");
+
+  if (!action && !why && !evidence && !behavior) return "";
+
+  const parts = [
+    action,
+    why ? `Why this matters: ${why}` : "",
+    evidence ? `Anchor it to moments like: "${evidence}".` : "",
+    !action && behavior ? `Observed pattern to fix: ${behavior}` : "",
+  ].filter(Boolean);
+
+  return parts.join(" ").trim();
+}
+
+function formatUiPressureLabel(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return PRESSURE_LABELS[raw] || raw.replace(/_/g, " ");
 }
 
 function NotObservedMarker() {
@@ -357,8 +402,10 @@ function CapabilityRow({ cap, insight }) {
                 <DeepDiveBlock number="1" title="What You Did">
                   <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.whatHappened)}</p>
                   {insight.transcriptEvidence && (
-                      <div className="mt-2 p-3 rounded-lg bg-surface border-l-2 border-primary/40">
-                        <p className="text-xs font-mono leading-relaxed italic" style={{ color: REVIEW_MUTED }}>"{cleanCoachingCopy(insight.transcriptEvidence)}"</p>
+                    <div className="mt-2 p-3 rounded-lg border-l-2" style={{ background: REVIEW_EVIDENCE_BG, borderColor: REVIEW_EVIDENCE_BORDER }}>
+                      <p className="text-xs font-mono leading-relaxed italic" style={{ color: REVIEW_EVIDENCE_TEXT }}>
+                        "{cleanCoachingCopy(insight.transcriptEvidence)}"
+                      </p>
                     </div>
                   )}
                 </DeepDiveBlock>
@@ -382,7 +429,7 @@ function CapabilityRow({ cap, insight }) {
                   {insight.exampleRewrite && (
                     <div className="mt-2 p-3 rounded-lg bg-signal-positive/5 border border-signal-positive/20">
                       <p className="text-xs text-signal-positive font-medium mb-1">Example phrasing:</p>
-                        <p className="text-xs italic" style={{ color: REVIEW_MUTED }}>"{cleanCoachingCopy(insight.exampleRewrite)}"</p>
+                      <p className="text-xs italic" style={{ color: REVIEW_MUTED }}>"{cleanCoachingCopy(insight.exampleRewrite)}"</p>
                     </div>
                   )}
                 </DeepDiveBlock>
@@ -504,10 +551,10 @@ export default function SessionSummaryModal({
   const biggestGapFallback = uniqCoachingPoints(legacyWhatWasMissed.map(cleanCoachingCopy));
 
   const actionItemParagraphs = growthInsights
-    .map(buildActionItemParagraph)
+    .map(buildRobustImprovementPoint)
     .filter(Boolean)
-    .slice(0, 1);
-  const actionItemFallback = uniqCoachingPoints(legacyCoaching.map(cleanCoachingCopy));
+    .slice(0, 3);
+  const actionItemFallback = uniqCoachingPoints(legacyCoaching.map((item) => cleanCoachingCopyExpanded(item, 44)));
 
   const outcomeText = [briefRationale, cleanCoachingCopy(splitParagraphs(review.signalResponseAlignment)?.[2] || "")]
     .filter(Boolean)
@@ -515,7 +562,7 @@ export default function SessionSummaryModal({
 
   const strengthsList = uniqCoachingPoints((didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).map(cleanCoachingCopy)).slice(0, 3);
   const limitationsList = uniqCoachingPoints((biggestGapParagraphs.length > 0 ? biggestGapParagraphs : biggestGapFallback).map(cleanCoachingCopy)).slice(0, 3);
-  const improvementText = uniqCoachingPoints((actionItemParagraphs.length > 0 ? actionItemParagraphs : actionItemFallback).map(cleanCoachingCopy)).slice(0, 1);
+  const improvementText = uniqCoachingPoints((actionItemParagraphs.length > 0 ? actionItemParagraphs : actionItemFallback).map((item) => cleanCoachingCopyExpanded(item, 44))).slice(0, 3);
 
   const bestRewrite = insightByCapability["listening_responsiveness"]?.exampleRewrite
     || growthInsights.find((insight) => insight?.exampleRewrite)?.exampleRewrite
@@ -528,7 +575,7 @@ export default function SessionSummaryModal({
     scenario?.persona ? `This HCP was testing whether your response fit a ${scenario.persona.toLowerCase()} decision style.` : "",
     scenario?.coreTension ? `Core tension in this interaction: ${scenario.coreTension}` : "",
     Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length > 0
-      ? `Pressure signals: ${scenario.interactionPressure.join(", ")}`
+      ? `Pressure signals: ${scenario.interactionPressure.map(formatUiPressureLabel).join(", ")}`
       : "",
     Array.isArray(scenario?.keyChallenges) && scenario.keyChallenges.length > 0
       ? `Critical challenge: ${scenario.keyChallenges[0]}`
@@ -694,23 +741,31 @@ export default function SessionSummaryModal({
 
               <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.well.border, background: sectionSurface.well.bg }}>
                 <OverallBlock label="2) What You Did Well">
-                  {strengthsList.length > 0 ? strengthsList.map((item, i) => (
-                    <p key={i} className="flex items-start gap-2">
-                      <span style={{ color: "hsl(169 56% 34%)" }}>•</span>
-                      <span>{item}</span>
-                    </p>
-                  )) : <NotObservedMarker />}
+                  {strengthsList.length > 0
+                    ? (strengthsList.length === 1
+                      ? <p>{strengthsList[0]}</p>
+                      : strengthsList.map((item, i) => (
+                        <p key={i} className="flex items-start gap-2">
+                          <span style={{ color: "hsl(169 56% 34%)" }}>•</span>
+                          <span>{item}</span>
+                        </p>
+                      )))
+                    : <NotObservedMarker />}
                 </OverallBlock>
               </div>
 
               <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.limits.border, background: sectionSurface.limits.bg }}>
                 <OverallBlock label="3) What Limited the Interaction">
-                  {limitationsList.length > 0 ? limitationsList.map((item, i) => (
-                    <p key={i} className="flex items-start gap-2">
-                      <span style={{ color: "hsl(8 56% 44%)" }}>•</span>
-                      <span>{item}</span>
-                    </p>
-                  )) : <NotObservedMarker />}
+                  {limitationsList.length > 0
+                    ? (limitationsList.length === 1
+                      ? <p>{limitationsList[0]}</p>
+                      : limitationsList.map((item, i) => (
+                        <p key={i} className="flex items-start gap-2">
+                          <span style={{ color: "hsl(8 56% 44%)" }}>•</span>
+                          <span>{item}</span>
+                        </p>
+                      )))
+                    : <NotObservedMarker />}
                 </OverallBlock>
               </div>
 
@@ -727,7 +782,16 @@ export default function SessionSummaryModal({
 
               <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.improve.border, background: sectionSurface.improve.bg }}>
                 <OverallBlock label="5) How to Improve">
-                  {improvementText.length > 0 ? improvementText.map((item, i) => <p key={i}>{item}</p>) : <NotObservedMarker />}
+                  {improvementText.length > 0
+                    ? (improvementText.length === 1
+                      ? <p>{improvementText[0]}</p>
+                      : improvementText.map((item, i) => (
+                        <p key={i} className="flex items-start gap-2">
+                          <span style={{ color: "hsl(313 45% 40%)" }}>•</span>
+                          <span>{item}</span>
+                        </p>
+                      )))
+                    : <NotObservedMarker />}
                 </OverallBlock>
               </div>
 
@@ -748,16 +812,24 @@ export default function SessionSummaryModal({
                   className="w-full flex items-center justify-between px-5 py-4 text-left"
                   style={{ background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)" }}
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">7) Skill Breakdown</span>
-                      <span className="text-xs" style={{ color: REVIEW_MUTED }}>Overall {overallScore}/5</span>
-                    </div>
-                    <p className="text-xs mt-0.5" style={{ color: REVIEW_MUTED }}>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p
+                      className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                      style={{ color: "hsl(214 28% 28%)" }}
+                    >
+                      7) Skill Breakdown
+                    </p>
+                    <p className="text-sm font-bold mt-0.5" style={{ color: "hsl(215 34% 22%)" }}>
+                      Overall {overallScore}/5
+                    </p>
+                    <p className="text-xs mt-0.5 font-medium" style={{ color: "hsl(215 16% 40%)" }}>
                       All 8 behavioral metrics with score-led analysis.
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-md border" style={{ color: REVIEW_MUTED, background: "rgba(255,255,255,0.82)", borderColor: "rgba(152, 160, 171, 0.30)" }}>
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md border ml-4"
+                    style={{ color: "hsl(215 24% 30%)", background: "rgba(255,255,255,0.92)", borderColor: "rgba(140, 152, 168, 0.42)" }}
+                  >
                     {showSkillBreakdown ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                     {showSkillBreakdown ? "Collapse" : "Expand"}
                   </span>

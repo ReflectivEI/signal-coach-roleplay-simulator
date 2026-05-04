@@ -27,6 +27,10 @@ type KvLike = {
 type Env = {
     APP_DATA_KV?: KvLike;
     GROQ_API_KEY?: string;
+    GROQ_API_KEY_SB_2?: string;
+    GROQ_API_KEY_SB_3?: string;
+    GROQ_API_KEY_SB_4?: string;
+    GROQ_API_KEY_SB_5?: string;
     LLM_TIMEOUT_MS?: string;
 };
 
@@ -151,39 +155,78 @@ function parseJsonObject(raw: string): unknown {
     }
 }
 
+let groqRoundRobinCursor = 0;
+
+function getGroqKeyPool(env: Env): string[] {
+    return [
+        text(env.GROQ_API_KEY),
+        text(env.GROQ_API_KEY_SB_2),
+        text(env.GROQ_API_KEY_SB_3),
+        text(env.GROQ_API_KEY_SB_4),
+        text(env.GROQ_API_KEY_SB_5),
+    ].filter(Boolean);
+}
+
+function rankGroqKeyPool(pool: string[]): string[] {
+    if (pool.length <= 1) return [...pool];
+    const offset = groqRoundRobinCursor % pool.length;
+    const ranked = [...pool.slice(offset), ...pool.slice(0, offset)];
+    groqRoundRobinCursor = (groqRoundRobinCursor + 1) % pool.length;
+    return ranked;
+}
+
+function isGroqRateLimitResponse(responseText: string): boolean {
+    return /rate limit|rate_limit|rate_limit_exceeded|tokens per minute|tpm|too many requests/i.test(responseText);
+}
+
 async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<string> {
-    const key = text(env.GROQ_API_KEY);
-    if (!key) return "";
+    const keyPool = getGroqKeyPool(env);
+    if (!keyPool.length) return "";
+    const rankedKeys = rankGroqKeyPool(keyPool);
 
     const timeoutMs = Math.max(8000, Number(env.LLM_TIMEOUT_MS || 25000));
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    for (let index = 0; index < rankedKeys.length; index += 1) {
+        const key = rankedKeys[index];
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    try {
-        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${key}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "llama-3.1-70b-versatile",
-                temperature: 0.2,
-                max_tokens: maxTokens,
-                messages: [{ role: "user", content: prompt }],
-            }),
-            signal: controller.signal,
-        });
+        try {
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${key}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    model: "llama-3.1-70b-versatile",
+                    temperature: 0.2,
+                    max_tokens: maxTokens,
+                    messages: [{ role: "user", content: prompt }],
+                }),
+                signal: controller.signal,
+            });
 
-        if (!response.ok) return "";
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => "");
+                const retryable = response.status === 429 || response.status >= 500 || isGroqRateLimitResponse(errorText);
+                if (retryable && index < rankedKeys.length - 1) {
+                    continue;
+                }
+                return "";
+            }
 
-        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-        return text(data?.choices?.[0]?.message?.content);
-    } catch {
-        return "";
-    } finally {
-        clearTimeout(timeout);
+            const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+            return text(data?.choices?.[0]?.message?.content);
+        } catch {
+            if (index >= rankedKeys.length - 1) {
+                return "";
+            }
+        } finally {
+            clearTimeout(timeout);
+        }
     }
+
+    return "";
 }
 
 function sanitizeNoPhi(input: unknown): unknown {

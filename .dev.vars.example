@@ -1,4 +1,8 @@
 # Copy to .dev.vars for local worker development.
-# Add one or both keys below.
+# Add one or both providers below.
 OPENAI_API_KEY=
 GROQ_API_KEY=
+GROQ_API_KEY_SB_2=
+GROQ_API_KEY_SB_3=
+GROQ_API_KEY_SB_4=
+GROQ_API_KEY_SB_5=

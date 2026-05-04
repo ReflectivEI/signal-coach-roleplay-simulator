@@ -92,6 +92,12 @@ export default function Home() {
               <Brain className="w-3.5 h-3.5" />
               Predictive Builder
             </Link>
+            <Link to="/rps-adaptive" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
+              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
+              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
+              <Zap className="w-3.5 h-3.5" />
+              Adaptive RPS
+            </Link>
             <Link to="/capabilities" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
               onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
               onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>

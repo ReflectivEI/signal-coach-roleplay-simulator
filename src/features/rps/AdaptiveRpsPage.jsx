@@ -69,8 +69,8 @@ const SELECT_OPTIONS = {
 
 function DashboardCard({ title, children }) {
     return (
-        <section className="rounded-2xl border border-white/10 bg-slate-900/75 p-4 shadow-lg">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-teal-300">{title}</h3>
+        <section className="si-dark-panel rounded-2xl p-4">
+            <h3 className="si-dark-title mb-3 text-sm font-semibold uppercase tracking-wide">{title}</h3>
             {children}
         </section>
     );
@@ -205,16 +205,16 @@ export default function AdaptiveRpsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,rgba(12,74,110,0.35),transparent_38%),radial-gradient(circle_at_88%_8%,rgba(20,184,166,0.22),transparent_36%),#07111f] px-4 py-6 text-slate-100 md:px-8">
+        <div className="si-dark-shell min-h-screen px-4 py-6 md:px-8">
             <div className="mx-auto max-w-6xl space-y-4">
-                <header className="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-950/90 via-blue-950/85 to-teal-950/85 p-5">
+                <header className="si-dark-panel rounded-2xl bg-gradient-to-r from-slate-950/95 via-blue-950/90 to-teal-950/90 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                            <p className="text-xs uppercase tracking-[0.2em] text-teal-300/85">Adaptive Behavioral Intelligence Engine</p>
+                            <p className="text-xs uppercase tracking-[0.2em] text-teal-200">Adaptive Behavioral Intelligence Engine</p>
                             <h1 className="text-2xl font-semibold">Real-Time HCP Interaction Lab</h1>
-                            <p className="mt-1 text-sm text-slate-300">Evaluates what the REP said, how they said it, and whether the interaction advanced.</p>
+                            <p className="si-dark-label mt-1 text-sm">Evaluates what the REP said, how they said it, and whether the interaction advanced.</p>
                         </div>
-                        <Link to="/" className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-sm text-slate-200 hover:bg-white/10">
+                        <Link to="/" className="inline-flex items-center gap-2 rounded-lg border border-[#4f7e9a] px-3 py-2 text-sm text-slate-100 hover:bg-[#12314d]">
                             <ArrowLeft className="h-4 w-4" />
                             Back to Library
                         </Link>
@@ -225,13 +225,13 @@ export default function AdaptiveRpsPage() {
                     <DashboardCard title="Scenario Controls">
                         <div className="grid gap-3 sm:grid-cols-2">
                             {Object.entries(form).map(([key, value]) => (
-                                <label key={key} className="space-y-1 text-xs uppercase tracking-wide text-slate-300">
+                                <label key={key} className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
                                     {key.replace(/_/g, " ")}
                                     {SELECT_OPTIONS[key] ? (
                                         <select
                                             value={value}
                                             onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                                            className="w-full rounded-lg border border-white/20 bg-slate-950/65 px-3 py-2 text-sm normal-case text-slate-100"
+                                            className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                         >
                                             {SELECT_OPTIONS[key].map(([optionValue, optionLabel]) => (
                                                 <option key={optionValue || "empty"} value={optionValue}>
@@ -243,7 +243,7 @@ export default function AdaptiveRpsPage() {
                                         <input
                                             value={value}
                                             onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                                            className="w-full rounded-lg border border-white/20 bg-slate-950/65 px-3 py-2 text-sm normal-case text-slate-100"
+                                            className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                         />
                                     )}
                                 </label>
@@ -253,7 +253,7 @@ export default function AdaptiveRpsPage() {
                         <div className="mt-4 space-y-2">
                             <div className="flex items-center justify-between text-sm">
                                 <span>REP Realism Lever</span>
-                                <span className="rounded-md bg-white/10 px-2 py-1 font-semibold">{temperature}/10</span>
+                                <span className="rounded-md border border-[#44708c] bg-[#0a223a] px-2 py-1 font-semibold text-[#e8f5ff]">{temperature}/10</span>
                             </div>
                             <input
                                 type="range"
@@ -269,7 +269,7 @@ export default function AdaptiveRpsPage() {
                             type="button"
                             onClick={handleGenerateScenario}
                             disabled={disableGenerate}
-                            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-400 disabled:opacity-60"
+                            className="mt-4 inline-flex items-center gap-2 rounded-lg bg-teal-400 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-teal-300 disabled:opacity-60"
                         >
                             <Sparkles className="h-4 w-4" />
                             Generate HCP Question
@@ -277,23 +277,23 @@ export default function AdaptiveRpsPage() {
                     </DashboardCard>
 
                     <DashboardCard title="HCP Interaction Panel">
-                        <p className="text-xs uppercase tracking-wide text-slate-400">Opening scene</p>
-                        <p className="mt-1 rounded-lg border border-white/10 bg-slate-950/60 p-3 text-sm text-slate-100">
+                        <p className="si-dark-muted text-xs uppercase tracking-wide">Opening scene</p>
+                        <p className="si-dark-field mt-1 rounded-lg p-3 text-sm">
                             {scenario?.opening_scene || "Generate a scenario to begin."}
                         </p>
 
-                        <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">HCP statement or question</p>
-                        <p className="mt-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+                        <p className="si-dark-muted mt-3 text-xs uppercase tracking-wide">HCP statement or question</p>
+                        <p className="mt-1 rounded-lg border border-cyan-300/50 bg-cyan-400/18 p-3 text-sm text-cyan-50">
                             {scenario?.hcp_statement_or_question || "No prompt yet."}
                         </p>
 
-                        <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">REP-only cue / signal</p>
-                        <p className="mt-1 rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-sm text-amber-100">
+                        <p className="si-dark-muted mt-3 text-xs uppercase tracking-wide">REP-only cue / signal</p>
+                        <p className="mt-1 rounded-lg border border-amber-300/50 bg-amber-400/18 p-3 text-sm text-amber-50">
                             {scenario?.cue_signal || "No cue signal yet."}
                         </p>
 
-                        <div className="mt-3 rounded-lg border border-violet-300/30 bg-violet-500/10 p-3 text-sm text-violet-100">
-                            <p className="text-xs uppercase tracking-wide text-violet-200">Powered by Predictive HCP Brain</p>
+                        <div className="mt-3 rounded-lg border border-violet-300/45 bg-violet-500/16 p-3 text-sm text-violet-50">
+                            <p className="text-xs uppercase tracking-wide text-violet-100">Powered by Predictive HCP Brain</p>
                             <p className="mt-1"><span className="font-semibold">Archetype:</span> {scenario?.hcp_brain_summary?.archetype || "Not generated"}</p>
                             <p><span className="font-semibold">Quality Test:</span> {scenario?.hcp_brain_summary?.quality_test_question || "Not generated"}</p>
                             <p><span className="font-semibold">Primary Trust Breaker:</span> {scenario?.hcp_brain_summary?.primary_trust_breaker || "Not generated"}</p>
@@ -310,7 +310,7 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={speech.start}
                                 disabled={!speech.isSupported || busy || speech.isListening}
-                                className="inline-flex items-center gap-2 rounded-lg border border-teal-400/40 bg-teal-500/20 px-3 py-2 text-sm hover:bg-teal-500/30 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-lg border border-teal-300/60 bg-teal-400/24 px-3 py-2 text-sm text-teal-50 hover:bg-teal-400/32 disabled:opacity-50"
                             >
                                 <Mic className="h-4 w-4" />
                                 Start Mic
@@ -319,7 +319,7 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={speech.stop}
                                 disabled={!speech.isSupported || !speech.isListening}
-                                className="inline-flex items-center gap-2 rounded-lg border border-rose-400/40 bg-rose-500/20 px-3 py-2 text-sm hover:bg-rose-500/30 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-lg border border-rose-300/60 bg-rose-400/24 px-3 py-2 text-sm text-rose-50 hover:bg-rose-400/32 disabled:opacity-50"
                             >
                                 <MicOff className="h-4 w-4" />
                                 Stop Mic
@@ -333,11 +333,11 @@ export default function AdaptiveRpsPage() {
                                 speech.setTranscript("");
                             }}
                             placeholder="Enter REP response text here if you are not using microphone capture."
-                            className="mt-3 h-28 w-full rounded-lg border border-white/20 bg-slate-950/70 p-3 text-sm"
+                            className="si-dark-field mt-3 h-28 w-full rounded-lg p-3 text-sm"
                         />
 
-                        <p className="mt-2 text-xs text-slate-300">Live speech transcript: {speech.transcript || "(none)"}</p>
-                        <p className="mt-1 text-xs text-slate-400">Voice metadata: {JSON.stringify(speech.voiceMetadata)}</p>
+                        <p className="si-dark-label mt-2 text-xs">Live speech transcript: {speech.transcript || "(none)"}</p>
+                        <p className="si-dark-muted mt-1 text-xs">Voice metadata: {JSON.stringify(speech.voiceMetadata)}</p>
 
                         <div className="mt-4 flex flex-wrap gap-2">
                             <button
@@ -362,16 +362,16 @@ export default function AdaptiveRpsPage() {
 
                     <DashboardCard title="Evaluation Dashboard">
                         {!evaluation ? (
-                            <p className="text-sm text-slate-300">Run an evaluation to see scoring, cue alignment, delivery analysis, and coaching feedback.</p>
+                            <p className="si-dark-label text-sm">Run an evaluation to see scoring, cue alignment, delivery analysis, and coaching feedback.</p>
                         ) : (
                             <div className="space-y-3 text-sm">
-                                <p className="text-lg font-semibold text-teal-300">Overall Score: {evaluation.overall_score}/10</p>
-                                <div className="rounded-lg border border-white/10 bg-slate-950/60 p-3">
-                                    <p className="mb-2 text-xs uppercase tracking-wide text-slate-400">Behavioral Metric Scores (8)</p>
+                                <p className="text-lg font-semibold text-teal-200">Overall Score: {evaluation.overall_score}/10</p>
+                                <div className="si-dark-field rounded-lg p-3">
+                                    <p className="si-dark-muted mb-2 text-xs uppercase tracking-wide">Behavioral Metric Scores (8)</p>
                                     <div className="space-y-1.5">
                                         {metricRows.map((row) => (
                                             <p key={row.key}>
-                                                <span className="font-semibold text-slate-200">{row.key}:</span> {row.score ?? "N/A"} {row.rationale ? `- ${row.rationale}` : ""}
+                                                <span className="font-semibold text-slate-100">{row.key}:</span> {row.score ?? "N/A"} {row.rationale ? `- ${row.rationale}` : ""}
                                             </p>
                                         ))}
                                     </div>
@@ -380,15 +380,15 @@ export default function AdaptiveRpsPage() {
                                 <p><span className="font-semibold text-slate-200">Strengths:</span> {evaluation.observed_strengths?.join(" | ") || "None"}</p>
                                 <p><span className="font-semibold text-slate-200">Missed Cues:</span> {evaluation.missed_cues?.join(" | ") || "None"}</p>
                                 <p><span className="font-semibold text-slate-200">Delivery Issues:</span> {evaluation.delivery_issues?.join(" | ") || "None"}</p>
-                                <div className="rounded-lg border border-teal-300/25 bg-teal-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-200">Delivery Impact on HCP</p>
+                                <div className="rounded-lg border border-teal-300/40 bg-teal-500/16 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-100">Delivery Impact on HCP</p>
                                     <p><span className="font-semibold text-slate-200">Perceived Listening:</span> {evaluation.voice_behavior_adaptation?.perceived_listening_signal || "unknown"}</p>
                                     <p><span className="font-semibold text-slate-200">Likely HCP Reaction:</span> {evaluation.delivery_impact_on_hcp?.likely_hcp_reaction || evaluation.voice_behavior_adaptation?.hcp_reaction_modifier || "hold"}</p>
                                     <p><span className="font-semibold text-slate-200">Resistance / Trust Impact:</span> {`${evaluation.voice_behavior_adaptation?.resistance_delta ?? 0} / ${evaluation.voice_behavior_adaptation?.trust_delta ?? 0}`}</p>
                                     <p><span className="font-semibold text-slate-200">Delivery Tip:</span> {evaluation.delivery_coaching?.recommended_delivery_adjustment || "Acknowledge, pause, and ask one diagnostic question."}</p>
                                 </div>
-                                <div className="rounded-lg border border-violet-300/25 bg-violet-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-violet-200">HCP Brain Alignment</p>
+                                <div className="rounded-lg border border-violet-300/40 bg-violet-500/16 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-violet-100">HCP Brain Alignment</p>
                                     <p><span className="font-semibold text-slate-200">Quality Test Satisfied:</span> {evaluation.hcp_brain_alignment?.quality_test_satisfied ? "Yes" : "No"}</p>
                                     <p><span className="font-semibold text-slate-200">Credibility Drivers:</span> {(evaluation.hcp_brain_alignment?.credibility_drivers_demonstrated || []).join(" | ") || "None"}</p>
                                     <p><span className="font-semibold text-slate-200">Trust Breakers Triggered:</span> {(evaluation.hcp_brain_alignment?.trust_breakers_triggered || []).join(" | ") || "None"}</p>
@@ -396,8 +396,8 @@ export default function AdaptiveRpsPage() {
                                     <p><span className="font-semibold text-slate-200">Recommended Approach Used:</span> {evaluation.hcp_brain_alignment?.recommended_rep_approach_used ? "Yes" : "No"}</p>
                                     <p><span className="font-semibold text-slate-200">Alignment Rationale:</span> {evaluation.hcp_brain_alignment?.alignment_rationale || "No rationale available."}</p>
                                 </div>
-                                <div className="rounded-lg border border-emerald-300/25 bg-emerald-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-emerald-200">HCP Brain Coaching</p>
+                                <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/16 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-emerald-100">HCP Brain Coaching</p>
                                     <p><span className="font-semibold text-slate-200">Quality Test Feedback:</span> {evaluation.hcp_brain_coaching?.quality_test_feedback || "Not available."}</p>
                                     <p><span className="font-semibold text-slate-200">Credibility Feedback:</span> {evaluation.hcp_brain_coaching?.credibility_driver_feedback || "Not available."}</p>
                                     <p><span className="font-semibold text-slate-200">Trust Breaker Feedback:</span> {evaluation.hcp_brain_coaching?.trust_breaker_feedback || "Not available."}</p>

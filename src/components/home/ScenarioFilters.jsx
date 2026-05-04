@@ -72,19 +72,19 @@ function FilterDropdown({ options, value, onChange }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-2 px-3.5 py-2 rounded-lg border transition-colors"
         style={{
-          borderColor: isActive ? "rgba(146, 236, 217, 0.68)" : "rgba(182, 230, 220, 0.28)",
-          background: isActive ? "rgba(59, 140, 154, 0.34)" : "rgba(34, 68, 108, 0.42)",
-          color: "hsl(190 40% 96%)",
+          borderColor: isActive ? "rgba(145, 232, 213, 0.78)" : "rgba(176, 212, 230, 0.52)",
+          background: isActive ? "rgba(43, 122, 138, 0.48)" : "rgba(18, 53, 94, 0.58)",
+          color: "hsl(193 78% 97%)",
           fontSize: "0.875rem"
         }}
       >
         <span className="truncate font-medium">{selected.label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: "hsl(174 62% 78%)" }} />
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} style={{ color: "hsl(174 80% 85%)" }} />
       </button>
       {open && (
         <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl border shadow-lg overflow-hidden"
           style={{
-            borderColor: "rgba(86, 195, 176, 0.25)",
+            borderColor: "rgba(86, 195, 176, 0.34)",
             background: "linear-gradient(180deg, hsl(222 44% 15%) 0%, hsl(221 41% 13%) 100%)",
             boxShadow: "0 18px 40px rgba(15, 23, 42, 0.28)",
           }}>
@@ -95,15 +95,15 @@ function FilterDropdown({ options, value, onChange }) {
               className="w-full text-left px-3.5 py-2 transition-colors"
               style={{
                 fontSize: "0.875rem",
-                color: opt.value === value ? "hsl(174 75% 78%)" : "hsl(195 28% 86%)",
+                color: opt.value === value ? "hsl(174 84% 84%)" : "hsl(197 40% 92%)",
                 fontWeight: opt.value === value ? 600 : 400,
-                background: opt.value === value ? "rgba(52, 136, 146, 0.28)" : "transparent",
+                background: opt.value === value ? "rgba(52, 136, 146, 0.38)" : "transparent",
               }}
               onMouseEnter={e => {
-                if (opt.value !== value) e.currentTarget.style.background = "rgba(48, 79, 121, 0.34)";
+                if (opt.value !== value) e.currentTarget.style.background = "rgba(48, 79, 121, 0.44)";
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = opt.value === value ? "rgba(52, 136, 146, 0.28)" : "transparent";
+                e.currentTarget.style.background = opt.value === value ? "rgba(52, 136, 146, 0.38)" : "transparent";
               }}
             >
               {opt.label}
@@ -133,7 +133,7 @@ export default function ScenarioFilters({ filters, onChange }) {
         <button
           onClick={() => onChange(DEFAULT_FILTERS)}
           className="mt-3 text-xs transition-colors"
-          style={{ color: "rgba(233, 247, 245, 0.78)" }}
+          style={{ color: "rgba(241, 250, 250, 0.96)" }}
         >
           Clear {activeCount} filter{activeCount > 1 ? "s" : ""}
         </button>

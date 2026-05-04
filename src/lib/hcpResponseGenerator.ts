@@ -31,6 +31,15 @@ import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntime
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
+import {
+  addPersonaSpecificAnchor,
+  buildScenarioRouting,
+  detectTopicLanes,
+  enforceJourneyStageFit,
+  enforcePressureFit,
+  enforceScenarioTopicLane,
+  scrubStaleFallbackPhrases,
+} from "./scenarioRouting";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { normalizeHcpSpokenText } from "./hcpResponseText";
 
@@ -569,20 +578,42 @@ function buildHumanPhraseSafetyFallback({
   scenario: any;
   hcpTurnCount: number;
 }): string {
+  const scenarioRouting = buildScenarioRouting(scenario);
   const mentionsStudy = /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(repMessage || ""));
   const pressures = scenario?.interactionPressure || [];
   const highPressure = pressures.includes("time_constrained") || pressures.includes("operationally_constrained");
 
   if (hcpTurnCount === 0 && mentionsStudy && highPressure) {
-    return "I remember the study you left. I've only got a minute, so tell me what would be different for my staff in prior auth if this works.";
+    const routed = enforceScenarioTopicLane({
+      draft_hcp_response: "I remember the study you left. I've only got a minute, so tell me what would be different if this actually helps in my practice.",
+      scenario_routing: scenarioRouting,
+      rep_message: repMessage,
+      hcp_state: scenario?.startingBehaviorState || "",
+    });
+    return routed.text;
   }
   if (hcpTurnCount === 0 && mentionsStudy) {
-    return "I remember the study you left. Give me one practical takeaway from it that I can use in a patient decision.";
+    return enforceScenarioTopicLane({
+      draft_hcp_response: "I remember the study you left. Give me one practical takeaway from it that I can use in a patient decision.",
+      scenario_routing: scenarioRouting,
+      rep_message: repMessage,
+      hcp_state: scenario?.startingBehaviorState || "",
+    }).text;
   }
   if (highPressure) {
-    return "I've only got a minute. Tell me what would be different in access workflow for my staff and patients today.";
+    return enforceScenarioTopicLane({
+      draft_hcp_response: "I've only got a minute. Tell me what would be different for patients or care decisions today.",
+      scenario_routing: scenarioRouting,
+      rep_message: repMessage,
+      hcp_state: scenario?.startingBehaviorState || "",
+    }).text;
   }
-  return "Give me one practical takeaway I can apply in access decisions for patients.";
+  return enforceScenarioTopicLane({
+    draft_hcp_response: "Give me one practical takeaway I can apply to a real patient decision.",
+    scenario_routing: scenarioRouting,
+    rep_message: repMessage,
+    hcp_state: scenario?.startingBehaviorState || "",
+  }).text;
 }
 
 function buildDeterministicFirstTurnFallback({
@@ -594,6 +625,7 @@ function buildDeterministicFirstTurnFallback({
   scenario: any;
   predictedBehaviorState: string;
 }): string {
+  const scenarioRouting = buildScenarioRouting(scenario);
   const topic = inferRepTopicLabel(repMessage);
   const pressures = scenario?.interactionPressure || [];
   const highPressure =
@@ -602,9 +634,195 @@ function buildDeterministicFirstTurnFallback({
     ["closed", "resistance", "time_pressure"].includes(predictedBehaviorState);
 
   if (highPressure) {
-    return `I can give you a minute. If this is about ${topic}, tell me what would be different for one patient or one staff step this week.`;
+    return enforceScenarioTopicLane({
+      draft_hcp_response: `I can give you a minute. If this is about ${topic}, tell me what would be different for one patient this week.`,
+      scenario_routing: scenarioRouting,
+      rep_message: repMessage,
+      hcp_state: predictedBehaviorState,
+    }).text;
   }
-  return `Okay, I'm listening. If this is about ${topic}, give me one concrete takeaway I can use in a treatment decision.`;
+  return enforceScenarioTopicLane({
+    draft_hcp_response: `Okay, I'm listening. If this is about ${topic}, give me one concrete takeaway I can use in a treatment decision.`,
+    scenario_routing: scenarioRouting,
+    rep_message: repMessage,
+    hcp_state: predictedBehaviorState,
+  }).text;
+}
+
+function logRoutingViolation({
+  violation,
+  detectedTerms = [],
+  allowedLanes = [],
+  journeyStage = "",
+  action = "rewritten",
+}: {
+  violation: string;
+  detectedTerms?: string[];
+  allowedLanes?: string[];
+  journeyStage?: string;
+  action?: "rewritten" | "regenerated" | "none";
+}) {
+  const payload = {
+    type: "routing_violation",
+    violation,
+    detected_terms: detectedTerms,
+    allowed_lanes: allowedLanes,
+    journey_stage: journeyStage,
+    action,
+  };
+  console.log(JSON.stringify(payload));
+}
+
+async function regenerateConstrainedHcpResponse({
+  draft_response,
+  scenario_routing,
+  hcp_state,
+  hcp_brain,
+  rep_message,
+}: {
+  draft_response: string;
+  scenario_routing: any;
+  hcp_state: string;
+  hcp_brain: any;
+  rep_message: string;
+}): Promise<string> {
+  const prompt = `Generate an HCP response that strictly adheres to:
+- journey_stage: ${scenario_routing?.journey_stage || "unknown"}
+- allowed_topic_lanes: ${(scenario_routing?.allowed_topic_lanes || []).join(", ") || "none"}
+- disallowed_topic_lanes: ${(scenario_routing?.disallowed_topic_lanes || []).join(", ") || "none"}
+- interaction_pressure: ${(scenario_routing?.interaction_pressure || []).join(", ") || "none"}
+- persona constraints: behavior_state=${hcp_state || "unknown"}; predicted_state=${hcp_brain?.predictedBehaviorState || "unknown"}; concern_family=${scenario_routing?.concern_family || "general"}
+
+Rep message:
+${rep_message || "none"}
+
+Current draft to repair:
+${draft_response || ""}
+
+Do NOT reference disallowed topics.
+Return only one natural HCP line (1-2 sentences).`;
+
+  try {
+    const regenerated = await invokeWorkerText({
+      prompt,
+      max_tokens: 120,
+      temperature: 0.1,
+    });
+    return String(regenerated || draft_response || "").trim();
+  } catch {
+    return String(draft_response || "").trim();
+  }
+}
+
+export async function enforceHCPResponse({
+  draft_response,
+  scenario_routing,
+  hcp_state,
+  hcp_brain,
+  rep_message,
+}: {
+  draft_response: string;
+  scenario_routing: any;
+  hcp_state: string;
+  hcp_brain: any;
+  rep_message: string;
+}): Promise<string> {
+  // Step 1: Topic lane enforcement.
+  let laneEnforced = enforceScenarioTopicLane({
+    draft_hcp_response: draft_response,
+    scenario_routing,
+    hcp_brain,
+    hcp_state,
+    rep_message,
+  });
+  let response = laneEnforced.text;
+
+  if (laneEnforced.violation_detected) {
+    logRoutingViolation({
+      violation: "disallowed_topic_lane",
+      detectedTerms: laneEnforced.detected_terms || [],
+      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
+      journeyStage: scenario_routing?.journey_stage || "",
+      action: laneEnforced.action || "rewritten",
+    });
+  }
+
+  const laneSummaryAfterRewrite = detectTopicLanes(response).filter((lane) =>
+    (scenario_routing?.disallowed_topic_lanes || []).includes(lane)
+  );
+
+  if (laneSummaryAfterRewrite.length) {
+    response = await regenerateConstrainedHcpResponse({
+      draft_response: response,
+      scenario_routing,
+      hcp_state,
+      hcp_brain,
+      rep_message,
+    });
+    laneEnforced = enforceScenarioTopicLane({
+      draft_hcp_response: response,
+      scenario_routing,
+      hcp_brain,
+      hcp_state,
+      rep_message,
+    });
+    response = laneEnforced.text;
+    logRoutingViolation({
+      violation: "disallowed_topic_lane",
+      detectedTerms: laneSummaryAfterRewrite,
+      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
+      journeyStage: scenario_routing?.journey_stage || "",
+      action: "regenerated",
+    });
+  }
+
+  // Step 2: Journey stage enforcement.
+  const stageEnforced = enforceJourneyStageFit({
+    draft_hcp_response: response,
+    journey_stage: scenario_routing?.journey_stage,
+    scenario_routing,
+    hcp_state,
+  });
+  response = stageEnforced.text;
+
+  // Step 3: Pressure enforcement.
+  const pressureEnforced = enforcePressureFit({
+    draft_hcp_response: response,
+    interaction_pressure: scenario_routing?.interaction_pressure,
+    scenario_routing,
+    hcp_state,
+  });
+  response = pressureEnforced.text;
+
+  const postStageLaneFailures = detectTopicLanes(response).filter((lane) =>
+    (scenario_routing?.disallowed_topic_lanes || []).includes(lane)
+  );
+  if (postStageLaneFailures.length) {
+    const regenerated = await regenerateConstrainedHcpResponse({
+      draft_response: response,
+      scenario_routing,
+      hcp_state,
+      hcp_brain,
+      rep_message,
+    });
+    const finalLaneEnforced = enforceScenarioTopicLane({
+      draft_hcp_response: regenerated,
+      scenario_routing,
+      hcp_brain,
+      hcp_state,
+      rep_message,
+    });
+    response = finalLaneEnforced.text;
+    logRoutingViolation({
+      violation: "failsafe_regeneration",
+      detectedTerms: postStageLaneFailures,
+      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
+      journeyStage: scenario_routing?.journey_stage || "",
+      action: "regenerated",
+    });
+  }
+
+  return response;
 }
 
 async function rewriteFirstTurnAwayFromOpeningEcho({
@@ -1877,6 +2095,22 @@ Return ONLY valid JSON:
     scenario,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
   });
+
+  const scenarioRouting = buildScenarioRouting(scenario);
+  hcpReply = await enforceHCPResponse({
+    draft_response: hcpReply,
+    scenario_routing: scenarioRouting,
+    hcp_state: result.nextBehaviorState || currentBehaviorState,
+    hcp_brain: prediction,
+    rep_message: repMessage,
+  });
+
+  const anchored = addPersonaSpecificAnchor({
+    draft_hcp_response: hcpReply,
+    scenario_routing: scenarioRouting,
+  });
+  hcpReply = anchored.text;
+  hcpReply = scrubStaleFallbackPhrases(hcpReply, scenarioRouting);
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
