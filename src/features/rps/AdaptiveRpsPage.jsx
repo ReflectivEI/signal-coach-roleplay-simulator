@@ -121,6 +121,24 @@ export default function AdaptiveRpsPage() {
         setRepText(speech.transcript);
     }, [speech.transcript]);
 
+    useEffect(() => {
+        const hideLegacyVoiceLines = () => {
+            const textNodes = document.querySelectorAll("p");
+            textNodes.forEach((node) => {
+                const text = (node.textContent || "").trim();
+                if (text.startsWith("Live speech transcript:") || text.startsWith("Voice metadata:")) {
+                    node.style.display = "none";
+                }
+            });
+        };
+
+        hideLegacyVoiceLines();
+        const observer = new MutationObserver(hideLegacyVoiceLines);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+        return () => observer.disconnect();
+    }, []);
+
     const repTranscript = useMemo(() => {
         return (repText || "").trim();
     }, [repText]);
