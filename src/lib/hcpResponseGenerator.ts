@@ -38,7 +38,7 @@ import {
   enforceJourneyStageFit,
   enforcePressureFit,
   enforceScenarioTopicLane,
-  scrubStaleFallbackPhrases,
+  summarizeRoutingAlignment,
 } from "./scenarioRouting";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { normalizeHcpSpokenText } from "./hcpResponseText";
@@ -129,6 +129,63 @@ const CHATBOT_STYLE_PATTERNS = [
   /\bi want to make sure we're\b/i,
   /\bto be honest, the biggest challenge i'm seeing is\b/i,
 ];
+
+const GLOBAL_BANNED_HCP_PHRASES = [
+  "what's concretely different for me after this",
+  "what’s concretely different for me after this",
+  "the practical answer has to stay tied",
+  "what changes in practice if this is worth continuing",
+  "i hear that a lot",
+  "keep this brief",
+  "i'm not convinced yet",
+  "i’m not convinced yet",
+];
+
+function containsGlobalBannedPhrase(text = ""): boolean {
+  const line = String(text || "").toLowerCase();
+  return GLOBAL_BANNED_HCP_PHRASES.some((phrase) => line.includes(phrase));
+}
+
+function referencesRecentBannedPhrase({
+  text,
+  transcript,
+}: {
+  text: string;
+  transcript: ConversationTurn[];
+}): boolean {
+  const current = String(text || "").toLowerCase();
+  const recent = (Array.isArray(transcript) ? transcript : [])
+    .filter((turn) => turn?.speaker === "hcp")
+    .map((turn) => String(turn?.text || "").toLowerCase())
+    .slice(-5);
+
+  return GLOBAL_BANNED_HCP_PHRASES.some((phrase) => {
+    if (!current.includes(phrase)) return false;
+    return recent.some((line) => line.includes(phrase));
+  });
+}
+
+function pickContinuityProgressionAction({
+  sessionState,
+  repMessage,
+}: {
+  sessionState?: any;
+  repMessage?: string;
+}): "restate" | "sharpen" | "deeper_barrier" | "acknowledge_progress" | "move_next_step" | "disengage" {
+  const escalation = Number(sessionState?.escalationLevel || 0);
+  const openness = Number(sessionState?.hcpState?.openness || 5);
+  const skepticism = Number(sessionState?.hcpState?.skepticism || 5);
+  const resistance = Number(sessionState?.hcpState?.resistance || 5);
+  const rep = String(repMessage || "").toLowerCase();
+  const addressed = /\b(specifically|exactly|for this patient|step|path|proof|evidence|subgroup|next step|owner)\b/.test(rep);
+
+  if (escalation >= 4 && resistance >= 8) return "disengage";
+  if (addressed && openness >= 7) return "move_next_step";
+  if (addressed && skepticism <= 5) return "acknowledge_progress";
+  if (escalation >= 3 || skepticism >= 7) return "deeper_barrier";
+  if (escalation >= 2) return "sharpen";
+  return "restate";
+}
 
 function needsNaturalnessRewrite(text: string): boolean {
   const line = String(text || "").trim();
@@ -686,12 +743,19 @@ async function regenerateConstrainedHcpResponse({
   hcp_brain: any;
   rep_message: string;
 }): Promise<string> {
+  const brainProfile = {
+    mindset: hcp_brain?.mindset || hcp_brain?.predictedBehaviorState || "unknown",
+    decisionFilter: hcp_brain?.decisionFilter || hcp_brain?.concernFamily || "unknown",
+    credibilityDrivers: hcp_brain?.credibilityDrivers || hcp_brain?.predictedDrivers || [],
+    trustBreakers: hcp_brain?.trustBreakers || [],
+  };
   const prompt = `Generate an HCP response that strictly adheres to:
 - journey_stage: ${scenario_routing?.journey_stage || "unknown"}
 - allowed_topic_lanes: ${(scenario_routing?.allowed_topic_lanes || []).join(", ") || "none"}
 - disallowed_topic_lanes: ${(scenario_routing?.disallowed_topic_lanes || []).join(", ") || "none"}
 - interaction_pressure: ${(scenario_routing?.interaction_pressure || []).join(", ") || "none"}
 - persona constraints: behavior_state=${hcp_state || "unknown"}; predicted_state=${hcp_brain?.predictedBehaviorState || "unknown"}; concern_family=${scenario_routing?.concern_family || "general"}
+- predictive brain profile: ${JSON.stringify(brainProfile)}
 
 Rep message:
 ${rep_message || "none"}
@@ -699,6 +763,9 @@ ${rep_message || "none"}
 Current draft to repair:
 ${draft_response || ""}
 
+Use the Predictive HCP Brain as the source of truth.
+Do NOT use generic training simulator language.
+Do NOT reuse these phrases: "I hear that a lot", "Keep this brief", "I'm not convinced yet", "What's concretely different for me after this", "What changes in practice if this is worth continuing".
 Do NOT reference disallowed topics.
 Return only one natural HCP line (1-2 sentences).`;
 
@@ -712,6 +779,69 @@ Return only one natural HCP line (1-2 sentences).`;
   } catch {
     return String(draft_response || "").trim();
   }
+}
+
+function validateRoutingOnly({
+  text,
+  scenarioRouting,
+}: {
+  text: string;
+  scenarioRouting: any;
+}) {
+  const summary = summarizeRoutingAlignment({
+    text,
+    scenarioRouting,
+  });
+
+  return {
+    hasLaneViolation: Array.isArray(summary?.prohibited_topic_detected) && summary.prohibited_topic_detected.length > 0,
+    summary,
+  };
+}
+
+function buildBrainGroundedFallbackLine({
+  scenario_routing,
+  hcp_brain,
+  hcp_state,
+}: {
+  scenario_routing: any;
+  hcp_brain: any;
+  hcp_state: string;
+}) {
+  const lane = (scenario_routing?.allowed_topic_lanes || [])[0] || "general";
+  const stage = String(scenario_routing?.journey_stage || "");
+  const state = String(hcp_state || hcp_brain?.predictedBehaviorState || "neutral").toLowerCase();
+  const sharp = /resist|closed|frustrat|time/.test(state);
+
+  const byLane: Record<string, string> = {
+    access_formulary: sharp
+      ? "If access is the blocker, show me the exact step that changes first."
+      : "If access is the blocker, what exact step changes first for this patient?",
+    prior_auth: sharp
+      ? "Name the exact prior-auth step that gets cleaner."
+      : "Which exact prior-auth step gets cleaner for this case?",
+    workflow_implementation: sharp
+      ? "Name the specific workflow step that changes for staff."
+      : "Which specific workflow step changes for staff in this case?",
+    clinical_value: sharp
+      ? "Point to the one clinical signal that changes a real decision."
+      : "What one clinical signal should change a real decision for this patient profile?",
+    guideline_evidence: sharp
+      ? "Give me one guideline-relevant signal for this patient type."
+      : "What one guideline-relevant signal applies to the patients I prioritize?",
+    patient_fit: sharp
+      ? "Tell me exactly which patient type this is for."
+      : "Which exact patient profile is this intended for first?",
+    general: sharp
+      ? "Keep it specific to this case and tell me the practical blocker."
+      : "Keep it specific to this case and tell me the practical blocker first.",
+  };
+
+  const stageTail = stage === "commitment_close"
+    ? " Then name one concrete next step."
+    : "";
+
+  return `${byLane[lane] || byLane.general}${stageTail}`.replace(/\s+/g, " ").trim();
 }
 
 export async function enforceHCPResponse({
@@ -733,31 +863,42 @@ export async function enforceHCPResponse({
   tempProfile?: any;
   scenario?: any;
 }): Promise<string> {
-  // Step 1: Topic lane enforcement.
-  let laneEnforced = enforceScenarioTopicLane({
-    draft_hcp_response: draft_response,
-    scenario_routing,
-    hcp_brain,
-    hcp_state,
-    rep_message,
-  });
-  let response = laneEnforced.text;
+  let response = String(draft_response || "").trim();
 
-  if (laneEnforced.violation_detected) {
+  // Guardrails are validators here; they do not author final dialogue.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const routingValidation = validateRoutingOnly({
+      text: response,
+      scenarioRouting: scenario_routing,
+    });
+    const stageValidation = enforceJourneyStageFit({
+      draft_hcp_response: response,
+      journey_stage: scenario_routing?.journey_stage,
+      scenario_routing,
+      hcp_state,
+    });
+    const pressureValidation = enforcePressureFit({
+      draft_hcp_response: response,
+      interaction_pressure: scenario_routing?.interaction_pressure,
+      scenario_routing,
+      hcp_state,
+    });
+
+    const failed = routingValidation.hasLaneViolation
+      || stageValidation.changed
+      || pressureValidation.changed
+      || containsGlobalBannedPhrase(response);
+
+    if (!failed) break;
+
     logRoutingViolation({
-      violation: "disallowed_topic_lane",
-      detectedTerms: laneEnforced.detected_terms || [],
+      violation: routingValidation.hasLaneViolation ? "disallowed_topic_lane" : "validator_regeneration",
+      detectedTerms: routingValidation.summary?.prohibited_topic_detected || [],
       allowedLanes: scenario_routing?.allowed_topic_lanes || [],
       journeyStage: scenario_routing?.journey_stage || "",
-      action: laneEnforced.action || "rewritten",
+      action: "regenerated",
     });
-  }
 
-  const laneSummaryAfterRewrite = detectTopicLanes(response).filter((lane) =>
-    (scenario_routing?.disallowed_topic_lanes || []).includes(lane)
-  );
-
-  if (laneSummaryAfterRewrite.length) {
     response = await regenerateConstrainedHcpResponse({
       draft_response: response,
       scenario_routing,
@@ -765,66 +906,17 @@ export async function enforceHCPResponse({
       hcp_brain,
       rep_message,
     });
-    laneEnforced = enforceScenarioTopicLane({
-      draft_hcp_response: response,
-      scenario_routing,
-      hcp_brain,
-      hcp_state,
-      rep_message,
-    });
-    response = laneEnforced.text;
-    logRoutingViolation({
-      violation: "disallowed_topic_lane",
-      detectedTerms: laneSummaryAfterRewrite,
-      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
-      journeyStage: scenario_routing?.journey_stage || "",
-      action: "regenerated",
-    });
   }
 
-  // Step 2: Journey stage enforcement.
-  const stageEnforced = enforceJourneyStageFit({
-    draft_hcp_response: response,
-    journey_stage: scenario_routing?.journey_stage,
-    scenario_routing,
-    hcp_state,
+  const finalValidation = validateRoutingOnly({
+    text: response,
+    scenarioRouting: scenario_routing,
   });
-  response = stageEnforced.text;
-
-  // Step 3: Pressure enforcement.
-  const pressureEnforced = enforcePressureFit({
-    draft_hcp_response: response,
-    interaction_pressure: scenario_routing?.interaction_pressure,
-    scenario_routing,
-    hcp_state,
-  });
-  response = pressureEnforced.text;
-
-  const postStageLaneFailures = detectTopicLanes(response).filter((lane) =>
-    (scenario_routing?.disallowed_topic_lanes || []).includes(lane)
-  );
-  if (postStageLaneFailures.length) {
-    const regenerated = await regenerateConstrainedHcpResponse({
-      draft_response: response,
-      scenario_routing,
-      hcp_state,
-      hcp_brain,
-      rep_message,
-    });
-    const finalLaneEnforced = enforceScenarioTopicLane({
-      draft_hcp_response: regenerated,
+  if (finalValidation.hasLaneViolation || containsGlobalBannedPhrase(response)) {
+    response = buildBrainGroundedFallbackLine({
       scenario_routing,
       hcp_brain,
       hcp_state,
-      rep_message,
-    });
-    response = finalLaneEnforced.text;
-    logRoutingViolation({
-      violation: "failsafe_regeneration",
-      detectedTerms: postStageLaneFailures,
-      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
-      journeyStage: scenario_routing?.journey_stage || "",
-      action: "regenerated",
     });
   }
 
@@ -907,49 +999,30 @@ function deterministicContinuityVariation({
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const concernTags = inferConcernTags(`${hcpReply} ${latestConcern}`);
   const text = String(hcpReply || "").trim().replace(/[.?!]+$/, "");
-  const normalizedText = text.toLowerCase();
 
   if (!text) return hcpReply;
-  if (/that still does not change the decision threshold/i.test(text)) {
-    return `${text}.`;
-  }
 
   if (concernTags.includes("workflow")) {
-    if (/prior auth|prior authorization/i.test(text)) {
-      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")} now falls back on staff.`;
-    }
-    if (/staff|team|workflow|handoff|callback/i.test(text)) {
-      return `${text} That's still landing on the team.`;
-    }
-    return `${text} That's still the workflow problem.`;
+    return `${text}. I still need the exact workflow step and owner for this case.`;
   }
 
   if (concernTags.includes("access")) {
-    return `${text} That still leaves the access step unresolved.`;
+    return `${text}. I still need the exact access step that changes first.`;
   }
 
   if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
-    return `${text} That still does not change the decision threshold.`;
+    return `${text}. Tie this to the exact patient profile I should act on.`;
   }
 
   if (concernTags.includes("cost_value")) {
-    return `${text} I still need the part that changes the value equation.`;
+    return `${text}. Show the concrete decision impact, not a broad value claim.`;
   }
 
   if (concernTags.includes("renal")) {
-    if (
-      /renal (?:impairment|function|patients?)/i.test(text) &&
-      /(still does not address|still doesn't address|still does not tell me|still doesn't tell me|does not apply cleanly|doesn't apply cleanly|not enough for my patients)/i.test(text)
-    ) {
-      return "That still doesn't address what this means for the renal patients I manage.";
-    }
-    if (/what (?:that|this) means in the renal patients i manage|renal patients i manage/i.test(normalizedText)) {
-      return `${text}.`;
-    }
-    return `${text} I still do not know what that means in the renal patients I manage.`;
+    return `${text}. Narrow this to what it means for renal patients I actually manage.`;
   }
 
-  return `${text} That still does not answer the blocker I'm holding on.`;
+  return `${text}. Narrow this to the unresolved blocker from the last turn.`;
 }
 
 function needsContinuityVariationRewrite({
@@ -1189,6 +1262,14 @@ function buildSessionMemoryPromptBlock(sessionState: any) {
   const history = Array.isArray(sessionState?.interactionHistory)
     ? sessionState.interactionHistory.slice(-3)
     : [];
+  const previousTurn = history[history.length - 1] || {};
+  const progressionAction = pickContinuityProgressionAction({
+    sessionState,
+    repMessage: previousTurn?.rep || sessionState?.previousInteraction || "",
+  });
+  const priorAskAddressed = /\b(specifically|exactly|proof|evidence|path|step|owner|subgroup|next step)\b/i.test(
+    String(previousTurn?.rep || "")
+  );
   const historyLines = history.map((item: any, index: number) => (
     `- Turn ${index + 1}: REP="${String(item?.rep || "").slice(0, 120)}" | HCP="${String(item?.hcp || "").slice(0, 120)}" | concern=${item?.concernFamily || "unknown"} | behavior=${item?.behaviorState || "unknown"}`
   )).join("\n");
@@ -1202,6 +1283,12 @@ SESSION MEMORY (persisted runtime state):
 - previous concern family: ${sessionState?.previousConcernFamily || "unknown"}
 - escalation level: ${Number(sessionState?.escalationLevel || 0)}
 - last hcp state: ${JSON.stringify(sessionState?.hcpState || {})}
+- previous HCP statement: "${String(previousTurn?.hcp || "none").slice(0, 180)}"
+- previous REP response: "${String(previousTurn?.rep || "none").slice(0, 180)}"
+- unresolved concern: ${sessionState?.previousConcernFamily || sessionState?.hcpState?.concernFamily || "unknown"}
+- last response_type: ${previousTurn?.responseType || "unknown"}
+- did REP address prior ask: ${priorAskAddressed ? "yes" : "no"}
+- progression action for this turn: ${progressionAction}
 ${historyLines ? `- recent interaction history:\n${historyLines}` : "- recent interaction history: none"}
 ${sessionMemory.length ? `- session memory states:\n${sessionMemory.map((item: any, index: number) => (`  - M${index + 1}: response=\"${String(item?.hcpResponse || "").slice(0, 100)}\" | state=${JSON.stringify(item?.hcpState || {})} | temp=${item?.temperature || "n/a"}`)).join("\n")}` : "- session memory states: none"}
 
@@ -1209,6 +1296,7 @@ Continuity rules:
 - Continue the unresolved concern family unless the rep directly resolves it.
 - If escalation level is high, tighten resistance posture and increase challenge specificity.
 - Progress concern from skepticism -> proof-seeking -> acceptance-or-resistance based on rep quality and temperature.
+- Never reuse the same sentence framing across turns; restate in fresh wording.
 `;
 }
 
@@ -1224,45 +1312,17 @@ function applyEscalationContinuityStyle({
   let text = String(hcpReply || "").trim();
   if (!text) return text;
 
-  const escalation = Number(sessionState?.escalationLevel || 0);
-  const lastState = sessionState?.hcpState || {};
-  const priorConcern = String(
-    sessionState?.previousConcernFamily
-      || lastState?.concernFamily
-      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
-      || ""
-  ).toLowerCase();
-  const skepticism = Number(lastState?.skepticism || 5);
-  const resistance = Number(lastState?.resistance || 5);
-  const openness = Number(lastState?.openness || 5);
+  // Validator-only demotion: remove banned canned fragments without authoring replacements.
+  text = text
+    .replace(/\bi hear that a lot\b[,.!?]?/gi, "")
+    .replace(/\bkeep this brief\b[,.!?]?/gi, "")
+    .replace(/\bi'?m not convinced yet\b[,.!?]?/gi, "")
+    .replace(/\bwhat changes in practice if this is worth continuing\??/gi, "")
+    .replace(/\bwhat'?s concretely different for me after this\??/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  if ((escalation >= 2 || resistance >= 7 || skepticism >= 7) && tempProfile?.band !== "low") {
-    if (!/\b(we'?ve tried this|not convinced|still waiting|going in circles)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. We've gone in circles on this.`;
-    }
-  }
-
-  if ((tempProfile?.band === "low" || openness >= 7) && /\b(we'?ve gone in circles|not convinced)\b/i.test(text)) {
-    text = text.replace(/\bwe'?ve gone in circles on this\.?/gi, "")
-      .replace(/\bi'?m not convinced(?: this changes much)?\.?/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!/\b(i'?m open|open to)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps the right patients.`;
-    }
-  }
-
-  if (priorConcern === "patient_fit" && !/\b(patient|subgroup|who specifically)\b/i.test(text)) {
-    text = `${text.replace(/[.?!]+$/, "")}. Which patients are you actually targeting?`;
-  }
-  if (priorConcern === "access" && !/\b(coverage|approval|formulary|access)\b/i.test(text)) {
-    text = `${text.replace(/[.?!]+$/, "")}. What changes in the coverage path?`;
-  }
-  if (priorConcern === "workflow" && !/\b(staff|workflow|step|queue|callback)\b/i.test(text)) {
-    text = `${text.replace(/[.?!]+$/, "")}. Which step changes for my staff?`;
-  }
-
-  return text.replace(/\s+/g, " ").trim();
+  return text;
 }
 
 function deterministicVariant(seed = "", variants: string[] = []): string {
@@ -1316,9 +1376,9 @@ function concernScopedQuestionVariant({
   };
 
   const fallback = [
-    "What changes in practice if this is worth continuing?",
-    "What's concretely different for me after this?",
-    "What practical change should I expect to see?",
+    "Which concrete detail in this case should change my next decision?",
+    "What specific condition would make this relevant for my patients?",
+    "What practical detail is still unresolved for this case?",
   ];
 
   const pickedQuestion = deterministicVariant(seed, byConcern[concern] || fallback);
@@ -1329,7 +1389,7 @@ function concernScopedQuestionVariant({
       "Okay, that gives me context.",
     ]),
     guarded: deterministicVariant(`${seed}|lead`, [
-      "Fine, keep this practical.",
+      "Fine, stay practical.",
       "I hear you, keep this specific.",
       "Okay, keep this focused.",
     ]),
@@ -1340,7 +1400,7 @@ function concernScopedQuestionVariant({
         "We've covered this and the blocker is still there.",
       ]
       : [
-        "I'm not convinced yet.",
+        "I still need a clearer basis.",
         "I'm still skeptical.",
         "This still feels unresolved.",
       ]),
@@ -1370,21 +1430,16 @@ function enforceBehavioralDivergence(response: string, tempProfile: any) {
   let text = String(response || "").trim();
   if (!text) return text;
 
-  if (tempProfile?.band === "low" && /not convinced/i.test(text)) {
+  if (tempProfile?.band === "low" && /\b(not convinced yet|i hear that a lot|keep this brief)\b/i.test(text)) {
     text = text
       .replace(/i'?m\s+still\s+not\s+convinced\s+yet\.?/gi, "")
-      .replace(/not\s+convinced\.?/gi, "")
+      .replace(/i\s+hear\s+that\s+a\s+lot\.?/gi, "")
+      .replace(/keep\s+this\s+brief\.?/gi, "")
       .trim();
-    if (!/\bI'?m open\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps my patients.`;
-    }
   }
 
   if (tempProfile?.band === "high" && /\bi'?m\s+open\b/i.test(text)) {
     text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
-    if (!/\b(not convinced|we'?ve tried this)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. I'm not convinced this changes much.`;
-    }
   }
 
   return text.replace(/\s+/g, " ").trim();
@@ -1402,81 +1457,22 @@ function enforceConversationModeStructure({
   sessionState?: any;
 }) {
   const mode = getConversationMode(tempProfile);
-  const firstSentence = String(response || "")
+  const sentences = String(response || "")
     .trim()
     .split(/(?<=[.!?])\s+/)
-    .filter(Boolean)[0] || "";
-  let text = firstSentence || String(response || "").trim();
-  const concernFamily = String(
-    sessionState?.previousConcernFamily
-      || sessionState?.hcpState?.concernFamily
-      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
-      || ""
-  ).toLowerCase();
-  const escalationLevel = Number(sessionState?.escalationLevel || 0);
-  const historyLength = Array.isArray(sessionState?.sessionMemory)
-    ? sessionState.sessionMemory.length
-    : Array.isArray(sessionState?.interactionHistory)
-      ? sessionState.interactionHistory.length
-      : 0;
-  const modeVariant = concernScopedQuestionVariant({
-    mode,
-    concernFamily,
-    escalationLevel,
-    temperatureBand: tempProfile?.band,
-    historyLength,
-  });
+    .filter(Boolean);
+  let text = sentences.slice(0, 2).join(" ") || String(response || "").trim();
 
   if (!scenarioRequiresTimePressureLanguage(scenario) && (Number(tempProfile?.temperature ?? 5) <= 4 || tempProfile?.band === "low")) {
     text = removeTimePressureLanguage(text);
   }
 
   if (mode === "collaborative") {
-    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "I can give this a minute.");
-    text = text
-      .replace(/\b(i hear that a lot|we'?ve tried this|not convinced|what changes for a real decision)\b/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!/\bI'?m open\b/i.test(text) && !/\bif this helps\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. I'm open if this helps my patients.`;
-    }
-    if (!/\?/g.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
-    } else if (!/\b(how|which|what)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
-    }
+    text = text.replace(/\bi'?m\s+not\s+convinced\s+yet\b[,.!?]?/gi, "").trim();
   } else if (mode === "guarded") {
-    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "Keep this brief.");
-    text = text
-      .replace(/\bI'?m open\b[^.?!]*[.?!]?/gi, "")
-      .replace(/\bwe'?ve tried this\b[^.?!]*[.?!]?/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!/\b(keep this|focused|specific|practical|brief)\b/i.test(text)) {
-      text = `${modeVariant} ${text}`.trim();
-    }
-    if (!/\?/g.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
-    }
+    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
   } else {
-    text = text.replace(/\bI have two minutes\b[,.!?]?/gi, "I don't have much time.");
-    text = text
-      .replace(/\bI'?m open\b[^.?!]*[.?!]?/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!/\b(we'?ve tried this|i'?m not convinced)\b/i.test(text)) {
-      text = `We've tried this before. I'm not convinced yet. ${text}`.trim();
-    }
-    text = text.replace(/\bHow would this help[^?]*\?/gi, "").trim();
-    if (!/\?/g.test(text) || !/\b(why|what changes|what is different|which|what)\b/i.test(text)) {
-      text = `${text.replace(/[.?!]+$/, "")}. ${modeVariant}`;
-    }
-    if (scenarioRequiresTimePressureLanguage(scenario) && !/\b(minute|time)\b/i.test(text)) {
-      text = `I don't have much time. ${text}`;
-    }
+    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
   }
 
   text = enforceBehavioralDivergence(text, tempProfile);
@@ -1534,6 +1530,14 @@ function applyTemperatureResponseStyle({
 }) {
   let text = String(hcpReply || "").trim();
   if (!text) return text;
+
+  // Temperature modulates intensity only; it must not author canned phrases.
+  const wordBudget = tempProfile?.band === "high" ? 22 : tempProfile?.band === "low" ? 40 : 30;
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length > wordBudget) {
+    text = words.slice(0, wordBudget).join(" ").replace(/[,.!?;:]+$/, "").trim();
+  }
+
   text = enforceConversationModeStructure({
     response: text,
     tempProfile,
@@ -1593,40 +1597,9 @@ function ensureEscalationContinuityNoRepeat({
 
   if (!repeated) return current;
 
-  const mode = getConversationMode(tempProfile || { band: "medium" });
-  const concernFamily = String(
-    sessionState?.previousConcernFamily
-      || sessionState?.hcpState?.concernFamily
-      || sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.concernFamily
-      || "general"
-  ).toLowerCase();
-  const escalationLevel = Number(sessionState?.escalationLevel || 0);
-  const historyLength = Array.isArray(sessionState?.sessionMemory) ? sessionState.sessionMemory.length : 0;
-
-  let varied = deterministicContinuityVariation({
-    hcpReply: current,
-    transcript,
-    scenario,
-  });
-
-  const variantQuestion = concernScopedQuestionVariant({
-    mode,
-    concernFamily,
-    escalationLevel,
-    temperatureBand: tempProfile?.band,
-    historyLength,
-  });
-
-  if (!/\?/g.test(varied)) {
-    varied = `${varied.replace(/[.?!]+$/, "")}. ${variantQuestion}`;
-  }
-
-  const stillClose = last && continuityOverlapScore(varied, last) >= 0.7;
-  if (stillClose) {
-    varied = `${variantQuestion} ${varied.replace(/[.?!]+$/, "")}`.replace(/\s+/g, " ").trim();
-  }
-
-  return varied.replace(/\s+/g, " ").trim();
+  // Validator-only demotion: avoid concatenating/templating fallback language here.
+  // Async continuity regeneration happens later in the pipeline.
+  return current;
 }
 
 function logTemperatureApplication({
@@ -2374,6 +2347,13 @@ ${predictiveContextBlock}
 
 ${sessionMemoryBlock}
 
+PREDICTIVE BRAIN AUTHORITY (STRICT):
+- Use the Predictive HCP Brain as the source of truth.
+- Do not use generic training simulator language.
+- Speak as this exact HCP mindset, decision filter, credibility drivers, trust breakers, and current state.
+- Temperature may change intensity only (soft/guarded/sharp), not canned wording.
+- If prior concern is unresolved, progress it with fresh wording (restate, sharpen, reveal deeper barrier, acknowledge progress, move next step, or disengage).
+
 ${dialogueDirectiveBlock}
 
 ${buildTurnDirectivePrompt(turnDirectives)}
@@ -2450,6 +2430,7 @@ INSTRUCTIONS:
 35. On the very first HCP reply, do not repeat the Opening HCP Setup line verbatim; acknowledge the rep's latest message and move to one concrete blocker or ask.
 36. Follow the GLOBAL TONE/SAMPLING MAP above exactly; engagement posture must match the mapped engagement directive.
 37. Do not repeat the same urgency directive across consecutive HCP turns (for example repeating "get to the point" or "short version"). Keep pressure real, but vary wording naturally.
+38. Do not output any of these stock phrases: "I hear that a lot", "Keep this brief", "I'm not convinced yet", "What's concretely different for me after this", "What changes in practice if this is worth continuing".
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -2702,6 +2683,16 @@ Return ONLY valid JSON:
   });
 
   const scenarioRouting = buildScenarioRouting(scenario);
+  if (containsGlobalBannedPhrase(hcpReply) || referencesRecentBannedPhrase({ text: hcpReply, transcript })) {
+    hcpReply = await regenerateConstrainedHcpResponse({
+      draft_response: hcpReply,
+      scenario_routing: scenarioRouting,
+      hcp_state: result.nextBehaviorState || currentBehaviorState,
+      hcp_brain: prediction,
+      rep_message: repMessage,
+    });
+  }
+
   hcpReply = await enforceHCPResponse({
     draft_response: hcpReply,
     scenario_routing: scenarioRouting,
@@ -2725,7 +2716,13 @@ Return ONLY valid JSON:
     scenario_routing: scenarioRouting,
   });
   hcpReply = anchored.text;
-  hcpReply = scrubStaleFallbackPhrases(hcpReply, scenarioRouting);
+  if (containsGlobalBannedPhrase(hcpReply) || referencesRecentBannedPhrase({ text: hcpReply, transcript })) {
+    hcpReply = buildBrainGroundedFallbackLine({
+      scenario_routing: scenarioRouting,
+      hcp_brain: prediction,
+      hcp_state: result.nextBehaviorState || currentBehaviorState,
+    });
+  }
   hcpReply = ensureEscalationContinuityNoRepeat({
     hcpReply,
     transcript,

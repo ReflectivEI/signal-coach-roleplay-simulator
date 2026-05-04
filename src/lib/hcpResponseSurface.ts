@@ -1148,11 +1148,7 @@ export function applyHcpResponseSurface({
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
   output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
-  output = rotateRepeatedDirective(
-    output,
-    recentHcpReplies,
-    `${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${hcpTurnCount}`,
-  );
+  // Validator-demotion: avoid authoring directive templates in the surface layer.
   output = rotateRepeatedQuestionScaffold({
     text: output,
     recentHcpReplies,
@@ -1160,20 +1156,7 @@ export function applyHcpResponseSurface({
     seed: `${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${turn.domain}|${hcpTurnCount}`,
   });
 
-  if (
-    hcpTurnCount > 0 &&
-    scenario?.interactionPressure?.includes("time_constrained") &&
-    !/clock|time|quick|brief|tight|patient|schedule|doorway|room/i.test(output) &&
-    !hasNaturalTimePressureDirective(output) &&
-    turn.escalationStage !== "baseline"
-  ) {
-    output = ensureTerminalPunctuation(output.replace(/[.?!]+$/, ""));
-    output = `${output} ${pickDeterministicTimeTail(
-      `${turn.phase}|${turn.concernFamily}|${turn.domain}|${output}`,
-      recentHcpReplies,
-    )}`;
-    output = trimToSentences(enforceSentenceBoundaries(output), 2);
-  }
+  // Validator-demotion: do not append deterministic time-pressure tails.
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
     output = output

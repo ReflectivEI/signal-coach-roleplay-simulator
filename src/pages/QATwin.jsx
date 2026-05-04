@@ -895,14 +895,70 @@ export default function QATwin() {
 
   const exportResults = (results) => {
     const exportAudit = buildMatrixAuditSummary(results);
+    const classifyAuditStatuses = (qaAudit = {}) => {
+      const failures = Array.isArray(qaAudit?.failures) ? qaAudit.failures : [];
+      const hasType = (types = []) => failures.some((failure) => types.includes(String(failure?.type || "")));
+
+      const repFailureTypes = [
+        "question_obligation_failure",
+        "weak_answer",
+        "conversation_stagnation",
+        "repetition_or_looping",
+      ];
+      const realismFailureTypes = [
+        "chatbot_phrasing",
+        "over_precise",
+        "over_written",
+        "over_explained",
+        "weak_skepticism",
+        "wrong_emotional_temperature",
+        "poor_persona_fit",
+        "poor_specialty_fit",
+        "workflow_implausible",
+        "access_implausible",
+        "clinical_implausible",
+      ];
+      const continuityFailureTypes = [
+        "continuity_break",
+        "repetition_or_looping",
+        "conversation_stagnation",
+      ];
+      const runtimeFailureTypes = [
+        "journey_stage_mismatch",
+        "interaction_pressure_mismatch",
+      ];
+
+      const rep_evaluation_status = hasType(repFailureTypes) ? "FAIL" : "PASS";
+      const hcp_realism_status = hasType(realismFailureTypes) ? "FAIL" : "PASS";
+      const continuity_status = hasType(continuityFailureTypes) ? "FAIL" : "PASS";
+      const system_runtime_status = hasType(runtimeFailureTypes) ? "FAIL" : "PASS";
+      const final_verdict = [rep_evaluation_status, hcp_realism_status, continuity_status, system_runtime_status].every((status) => status === "PASS")
+        ? "PASS"
+        : "FAIL";
+
+      return {
+        rep_evaluation_status,
+        hcp_realism_status,
+        continuity_status,
+        system_runtime_status,
+        final_verdict,
+      };
+    };
+
     const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Turns per scenario: ${maxTurns}`, "", "Aggregate Failure Counts:"];
     Object.entries(exportAudit.failureCounts).forEach(([type, count]) => lines.push(`  ${type}: ${count}`));
     lines.push("", "Per Persona:");
     Object.entries(exportAudit.perPersona).forEach(([key, value]) => lines.push(`  ${key}: ${value.pass} pass / ${value.fail} fail`));
     lines.push("");
     for (const r of results) {
+      const statusBreakdown = classifyAuditStatuses(r.qaAudit || {});
       lines.push(`=== ${r.scenario.title} [${r.personaKey}] ===`);
       lines.push(`QA Verdict: ${r.qaAudit?.verdict || "FAIL"}`);
+      lines.push(`rep_evaluation_status: ${statusBreakdown.rep_evaluation_status}`);
+      lines.push(`hcp_realism_status: ${statusBreakdown.hcp_realism_status}`);
+      lines.push(`continuity_status: ${statusBreakdown.continuity_status}`);
+      lines.push(`system_runtime_status: ${statusBreakdown.system_runtime_status}`);
+      lines.push(`final_verdict: ${statusBreakdown.final_verdict}`);
       lines.push(`Assertions: ${r.assertions.filter((a) => a.pass).length}/${r.assertions.length} passed`);
       r.assertions.forEach((a) => lines.push(`  [${a.pass ? "PASS" : "FAIL"}] ${a.label}: ${a.detail}`));
       lines.push("Capabilities:");
