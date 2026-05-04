@@ -367,9 +367,6 @@ export default function AdaptiveRpsPage() {
                             className="si-dark-field mt-3 h-28 w-full rounded-lg p-3 text-sm"
                         />
 
-                        <p className="si-dark-label mt-2 text-xs">Live speech transcript: {speech.transcript || "(none)"}</p>
-                        <p className="si-dark-muted mt-1 text-xs">Voice metadata: {JSON.stringify(speech.voiceMetadata)}</p>
-
                         <div className="mt-4 flex flex-wrap gap-2">
                             <button
                                 type="button"
