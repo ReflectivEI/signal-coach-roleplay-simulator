@@ -20,6 +20,60 @@ const DISCOVERY_DIRECT_ASK_PATTERN = /what patient characteristics|what patient 
 const BROAD_DISCOVERY_PATTERN = /\?|^can you\b|^could you\b|^would you\b|help me understand|elaborate on|tell me more about|what specific/i;
 const ABSTRACT_QA_LANGUAGE_PATTERN = /critical consideration|significant limitation|primary concern|specific patient population|discussion should focus|treatment landscape|clinical outcomes|align with your concerns|economic concerns|consideration in treatment decisions/i;
 const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track|minimal disruption|incorporated into your existing workflow|in order to|would likely be|that would help/i;
+const DISCOVERY_LOOP_PATTERN = /^(can i ask|tell me more|how are you thinking about|what would you need to see|help me understand|walk me through|can you share|how do you currently|where do you think)/i;
+
+const DIRECT_ASK_TYPES = {
+  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
+  asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
+  asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
+  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis/i,
+  asks_for_guideline_fit: /guideline|pathway|standard of care|protocol|fits in guideline/i,
+  asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
+  asks_for_next_step: /what happens next|next step|who owns|would you be open|what do i do next|what should we do now/i,
+  disengagement_boundary: /stop here|pause here|not discussing this now|leave it there|send (?:the|it) over|no further|not moving this forward/i,
+};
+
+function mapAskToAnswerMode(askType = "") {
+  switch (askType) {
+    case "asks_for_workflow_impact":
+      return "workflow_specific_answer";
+    case "asks_for_access_step":
+      return "access_step_answer";
+    case "asks_for_evidence_relevance":
+      return "evidence_fit_answer";
+    case "asks_for_guideline_fit":
+      return "guideline_fit_answer";
+    case "asks_for_safety_clarity":
+      return "safety_clarity_answer";
+    case "asks_for_next_step":
+      return "next_step_answer";
+    case "disengagement_boundary":
+      return "boundary_acknowledgment";
+    default:
+      return "direct_difference_answer";
+  }
+}
+
+function mapAskToAnchor(askType = "") {
+  switch (askType) {
+    case "asks_for_workflow_impact":
+      return "workflow";
+    case "asks_for_access_step":
+      return "access";
+    case "asks_for_evidence_relevance":
+      return "evidence";
+    case "asks_for_guideline_fit":
+      return "guideline";
+    case "asks_for_safety_clarity":
+      return "safety";
+    case "asks_for_next_step":
+      return "next_step";
+    case "disengagement_boundary":
+      return "boundary";
+    default:
+      return "concrete_difference";
+  }
+}
 
 function getLastHcpText(turns = []) {
   for (let i = turns.length - 1; i >= 0; i -= 1) {
@@ -66,6 +120,113 @@ export function detectHcpQuestionType(lastHcpMessage = "") {
   }
 
   return "none";
+}
+
+export function detectHcpDirectAsk(hcpText = "") {
+  const text = normalizeForMatch(hcpText);
+  if (!text) {
+    return {
+      hasDirectAsk: false,
+      askType: "none",
+      requiredAnswerMode: "none",
+      requiredAnchor: "none",
+    };
+  }
+
+  const hasQuestionSignal = text.includes("?")
+    || /(?:^|[.!?]\s+)(show|tell|name|give|walk me through|explain|be specific)\b/.test(text)
+    || /\b(need to know|need to understand|need the|need a)\b/.test(text);
+  let askType = "none";
+  for (const [type, pattern] of Object.entries(DIRECT_ASK_TYPES)) {
+    if (pattern.test(text)) {
+      askType = type;
+      break;
+    }
+  }
+
+  if (askType === "none" || (!hasQuestionSignal && askType !== "disengagement_boundary")) {
+    return {
+      hasDirectAsk: false,
+      askType: "none",
+      requiredAnswerMode: "none",
+      requiredAnchor: "none",
+    };
+  }
+
+  return {
+    hasDirectAsk: true,
+    askType,
+    requiredAnswerMode: mapAskToAnswerMode(askType),
+    requiredAnchor: mapAskToAnchor(askType),
+  };
+}
+
+export function evaluateRepAnswerToHcpAsk({
+  hcpAsk,
+  repResponse,
+  scenarioRouting,
+  scenarioAnchors = [],
+}) {
+  const ask = typeof hcpAsk === "object" && hcpAsk !== null
+    ? hcpAsk
+    : detectHcpDirectAsk(String(hcpAsk || ""));
+  const hcpText = typeof hcpAsk === "object" && hcpAsk !== null
+    ? String(hcpAsk?.text || "")
+    : String(hcpAsk || "");
+  const response = String(repResponse || "").trim();
+  const normalized = normalizeForMatch(response);
+  const openingSentence = response.match(/^(.+?[.?!])(?:\s|$)/)?.[1]?.trim() || response;
+  const responseStartsWithQuestion = /^(what|how|why|where|when|who|can|could|would|should|is|are|do|does|did)\b/i.test(openingSentence) || /^.+\?$/.test(openingSentence);
+  const loopedBackToDiscovery = DISCOVERY_LOOP_PATTERN.test(openingSentence);
+  const semAnswer = semanticallyAnswersHcpAsk(hcpText, openingSentence || response);
+
+  const concernPatterns = {
+    workflow: /workflow|staff|ma\b|handoff|callback|step|process|team|office/i,
+    access: /access|coverage|prior auth|prior authorization|formulary|approval|payer|committee|pathway/i,
+    evidence: /evidence|data|subgroup|analysis|population|real-?world|outcome/i,
+    guideline: /guideline|pathway|standard of care|protocol/i,
+    safety: /safety|risk|adverse|hepatic|monitoring|tolerability/i,
+    next_step: /next step|would you be open|who owns|move forward|pilot|review one/i,
+    boundary: /understood|we can pause|we can stop|send over|revisit later/i,
+    concrete_difference: /changes|different|instead of|main change|practical change|specific difference/i,
+  };
+  const requiredPattern = concernPatterns[ask.requiredAnchor] || concernPatterns.concrete_difference;
+  const matchedLanes = Array.isArray(scenarioRouting?.allowed_topic_lanes)
+    ? detectTopicLanes(response).filter((lane) => scenarioRouting.allowed_topic_lanes.includes(lane))
+    : [];
+  const anchorMatched = requiredPattern.test(response)
+    || (Array.isArray(scenarioAnchors) && scenarioAnchors.some((anchor) => {
+      const anchorText = normalizeForMatch(anchor);
+      if (!anchorText) return false;
+      return anchorText.split(" ").some((token) => token.length >= 4 && normalized.includes(token));
+    }));
+
+  const stayedOnConcern = anchorMatched || matchedLanes.length > 0;
+  const answeredDirectly = !responseStartsWithQuestion
+    && semAnswer
+    && (stayedOnConcern || hasSemanticSpecificitySignal(openingSentence || response));
+  const includedConcreteSpecificity = hasSemanticSpecificitySignal(response)
+    || hasShortDirectOperationalResolution(response)
+    || /(specifically|exactly|one step|first step|owner|for your staff|for this patient|for guideline placement)/i.test(response);
+  const advancedExchange = /(next step|would you be open|if that is true|then the step is|so we can|to move this forward|decision threshold|what would change your mind)/i.test(response)
+    || (answeredDirectly && includedConcreteSpecificity)
+    || ask.askType === "disengagement_boundary";
+
+  let failureReason = "none";
+  if (loopedBackToDiscovery && !answeredDirectly) failureReason = "looped_back_to_discovery";
+  else if (!answeredDirectly) failureReason = "did_not_answer_directly";
+  else if (!stayedOnConcern) failureReason = "shifted_off_concern";
+  else if (!includedConcreteSpecificity) failureReason = "missing_specificity";
+  else if (!advancedExchange) failureReason = "did_not_advance_exchange";
+
+  return {
+    answeredDirectly,
+    stayedOnConcern,
+    includedConcreteSpecificity,
+    advancedExchange,
+    loopedBackToDiscovery,
+    failureReason,
+  };
 }
 
 export function buildRepAnswerFirstPromptConstraint(lastHcpMessage = "") {
@@ -579,17 +740,17 @@ function concernFamilyRepAnchor(scenarioRouting = {}) {
   const family = String(scenarioRouting?.concern_family || "general");
   switch (family) {
     case "evidence":
-      return "The practical answer has to stay tied to the evidence gap that would change treatment decisions.";
+      return "Keep this on the evidence gap that would actually change treatment decisions.";
     case "access":
-      return "The practical answer has to stay tied to the exact access step that blocks patient start.";
+      return "Keep this on the exact access step that blocks patient start.";
     case "workflow":
-      return "The practical answer has to stay tied to one concrete implementation step, owner, and what gets removed.";
+      return "Keep this on one concrete implementation step, owner, and what gets removed.";
     case "safety":
-      return "The practical answer has to stay tied to the safety signal that still blocks confidence.";
+      return "Keep this on the safety signal that still blocks confidence.";
     case "cost":
-      return "The practical answer has to stay tied to one value outcome that changes a real patient decision.";
+      return "Keep this on one value outcome that changes a real patient decision.";
     default:
-      return "The practical answer has to stay tied to the current blocker in this scenario.";
+      return "Keep this on the current blocker in this scenario.";
   }
 }
 
@@ -1003,12 +1164,27 @@ function pickProgressionLine(mode, topic, previousRepText = "", lastHcpMessage =
   return options[0];
 }
 
-export function buildDeterministicQaRepReply({ scenario = {}, turns = [], draft = "" }) {
+export function buildDeterministicQaRepReply({ scenario = {}, turns = [], draft = "", personaKey = "strong_rep" }) {
   const lastHcpMessage = getLastHcpText(turns);
 
   if (!lastHcpMessage) {
     return asRepReplyPayload(
       "I want to keep this focused on the specific blocker that is getting in the way of the next decision.",
+      "core_change",
+      { hcpTurn: lastHcpMessage, transcript: turns, scenario },
+    );
+  }
+
+  const directAsk = detectHcpDirectAsk(lastHcpMessage);
+  if (directAsk.hasDirectAsk) {
+    const tier = String(personaKey || "strong_rep").toLowerCase();
+    const directReply = tier.includes("weak")
+      ? buildDirectAskWeakAnswer(directAsk)
+      : tier.includes("mediocre") || tier.includes("average")
+        ? buildDirectAskMediocreAnswer({ askType: directAsk.askType, scenario, turns })
+        : buildDirectAskStrongAnswer({ askType: directAsk.askType, scenario, turns });
+    return asRepReplyPayload(
+      directReply,
       "core_change",
       { hcpTurn: lastHcpMessage, transcript: turns, scenario },
     );
@@ -1291,6 +1467,59 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
   return "The practical answer is one concrete change tied to your main blocker.";
 }
 
+function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
+  const lastHcpMessage = getLastHcpText(turns);
+  const activeConcern = getActiveConcernText(turns, scenario);
+
+  switch (askType) {
+    case "asks_for_workflow_impact":
+      return "The main change for your staff is one cleaner submission step, so they stop reopening the same case for callbacks or resubmissions.";
+    case "asks_for_access_step":
+      return "The concrete access step is a complete prior-auth packet up front, so the case clears coverage review without a second repair cycle.";
+    case "asks_for_evidence_relevance":
+      return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
+    case "asks_for_guideline_fit":
+      return "For guideline fit, the answer has to show where this sits in pathway placement versus current standard of care for your actual patient mix.";
+    case "asks_for_safety_clarity":
+      return "For safety clarity, the useful answer is which risk signal would make you pause and how that changes monitoring in the first weeks.";
+    case "asks_for_next_step":
+      return "The next step is defining one low-risk patient profile and one decision threshold before any broader change.";
+    case "disengagement_boundary":
+      return "Understood. We can pause here and only continue if we can stay on your specific blocker.";
+    default:
+      return buildSolutionSeekingFallback({ scenario, turns });
+  }
+}
+
+function buildDirectAskMediocreAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
+  const baseline = buildDirectAskStrongAnswer({ askType, scenario, turns });
+  switch (askType) {
+    case "asks_for_evidence_relevance":
+      return "The evidence may be directionally useful, but it still depends on how your patient mix maps to the subgroup discussion.";
+    case "asks_for_guideline_fit":
+      return "The fit is likely in guideline discussion, though I would still want to map where your pathway threshold sits.";
+    case "asks_for_access_step":
+      return "The process should be cleaner if the access packet is complete, but details can vary by payer.";
+    default:
+      return baseline;
+  }
+}
+
+function buildDirectAskWeakAnswer({ askType = "asks_for_concrete_difference" }) {
+  if (askType === "disengagement_boundary") {
+    return "Can I ask what would need to change before you would continue this discussion?";
+  }
+  return "Can I ask how your team is currently thinking about this right now?";
+}
+
+export function deriveHcpConsequenceLine({ askType = "asks_for_concrete_difference", requiredAnchor = "concrete_difference" } = {}) {
+  const anchorLabel = requiredAnchor === "next_step" ? "the next step" : requiredAnchor.replace(/_/g, " ");
+  if (askType === "disengagement_boundary") {
+    return "You're widening the conversation again instead of respecting the boundary I just set.";
+  }
+  return `You're asking another question, but you still haven't answered the ${anchorLabel} I asked about.`;
+}
+
 function getRecentRepReplies(context = {}, window = 4) {
   const transcript = Array.isArray(context?.transcript) ? context.transcript : [];
   const repTexts = transcript
@@ -1385,14 +1614,19 @@ export function enforceRepAnswerFirstContract({
   scenario,
   turns,
   draft,
+  personaKey = "strong_rep",
+  turnIndex = 0,
 }) {
   const lastHcpMessage = getLastHcpText(turns);
   const questionType = detectHcpQuestionType(lastHcpMessage);
+  const directAsk = detectHcpDirectAsk(lastHcpMessage);
+  const scenarioRouting = buildScenarioRouting(scenario || {});
+  const tier = String(personaKey || "strong_rep").toLowerCase();
   const draftPayload = typeof draft === "object" && draft !== null
     ? draft
     : { text: String(draft || "").trim(), concept: null };
 
-  if (questionType !== "solution_seeking") {
+  if (questionType !== "solution_seeking" && !directAsk.hasDirectAsk) {
     return asRepReplyPayload(draftPayload.text, draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
@@ -1402,7 +1636,14 @@ export function enforceRepAnswerFirstContract({
 
   const normalizedDraft = String(draftPayload.text || "").trim();
   if (!normalizedDraft) {
-    return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
+    const fallback = directAsk.hasDirectAsk
+      ? (tier.includes("weak")
+        ? buildDirectAskWeakAnswer(directAsk)
+        : tier.includes("mediocre") || tier.includes("average")
+          ? buildDirectAskMediocreAnswer({ askType: directAsk.askType, scenario, turns })
+          : buildDirectAskStrongAnswer({ askType: directAsk.askType, scenario, turns }))
+      : buildSolutionSeekingFallback({ scenario, turns });
+    return asRepReplyPayload(fallback, draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
       scenario,
@@ -1414,7 +1655,83 @@ export function enforceRepAnswerFirstContract({
     /^(what|how|why|where|when|who|can|could|would|should|is|are|do|does|did)\b/i.test(normalizedDraft);
 
   if (!draftIsQuestion && fullyAnswersQuestion(lastHcpMessage, normalizedDraft)) {
-    return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
+    if (!directAsk.hasDirectAsk) {
+      return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
+        hcpTurn: lastHcpMessage,
+        transcript: turns,
+        scenario,
+      });
+    }
+
+    const quality = evaluateRepAnswerToHcpAsk({
+      hcpAsk: { ...directAsk, text: lastHcpMessage },
+      repResponse: normalizedDraft,
+      scenarioRouting,
+      scenarioAnchors: scenarioRouting?.allowed_topic_lanes || [],
+    });
+
+    if (tier.includes("weak")) {
+      return asRepReplyPayload(buildDirectAskWeakAnswer(directAsk), draftPayload.concept, {
+        hcpTurn: lastHcpMessage,
+        transcript: turns,
+        scenario,
+      });
+    }
+
+    if ((tier.includes("mediocre") || tier.includes("average")) && quality.answeredDirectly && quality.stayedOnConcern) {
+      return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
+        hcpTurn: lastHcpMessage,
+        transcript: turns,
+        scenario,
+      });
+    }
+
+    if (!tier.includes("mediocre") && !tier.includes("average")) {
+      const strongPass = quality.answeredDirectly
+        && quality.stayedOnConcern
+        && quality.includedConcreteSpecificity
+        && quality.advancedExchange
+        && !quality.loopedBackToDiscovery;
+      if (strongPass) {
+        return asRepReplyPayload(normalizedDraft, draftPayload.concept, {
+          hcpTurn: lastHcpMessage,
+          transcript: turns,
+          scenario,
+        });
+      }
+    }
+
+    const directFallback = tier.includes("mediocre") || tier.includes("average")
+      ? buildDirectAskMediocreAnswer({ askType: directAsk.askType, scenario, turns })
+      : buildDirectAskStrongAnswer({ askType: directAsk.askType, scenario, turns });
+
+    return asRepReplyPayload(directFallback, draftPayload.concept, {
+      hcpTurn: lastHcpMessage,
+      transcript: turns,
+      scenario,
+      turnIndex,
+    });
+  }
+
+  if (directAsk.hasDirectAsk) {
+    const directFallback = tier.includes("weak")
+      ? buildDirectAskWeakAnswer(directAsk)
+      : tier.includes("mediocre") || tier.includes("average")
+        ? buildDirectAskMediocreAnswer({ askType: directAsk.askType, scenario, turns })
+        : buildDirectAskStrongAnswer({ askType: directAsk.askType, scenario, turns });
+    return asRepReplyPayload(directFallback, draftPayload.concept, {
+      hcpTurn: lastHcpMessage,
+      transcript: turns,
+      scenario,
+    });
+  }
+
+  if (
+    !directAsk.hasDirectAsk &&
+    Number(turnIndex || turns.filter((turn) => turn?.speaker === "rep").length) >= 2 &&
+    /^(can i ask|tell me more|how are you thinking about|what would you need to see|help me understand)/i.test(normalizedDraft)
+  ) {
+    return asRepReplyPayload(buildSolutionSeekingFallback({ scenario, turns }), draftPayload.concept, {
       hcpTurn: lastHcpMessage,
       transcript: turns,
       scenario,

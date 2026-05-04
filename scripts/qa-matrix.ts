@@ -3,7 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { initializeConversation } from "../src/lib/conversationInit";
-import { generateHcpResponse } from "../src/lib/hcpResponseGenerator";
+import { generateHcpResponse, HCP_GENERATOR_VERSION } from "../src/lib/hcpResponseGenerator";
 import { computeVolatilityEvents } from "../src/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { buildDeterministicSessionReview, generateSessionReview } from "../src/lib/sessionReview";
@@ -12,6 +12,8 @@ import { predictHcpBehavior } from "../src/lib/hcpBehaviorPrediction";
 import { invokeWorkerText } from "../src/services/workerClient.js";
 import { buildDeterministicQaRepReply, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
 import { getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
+import { buildPredictiveSeedFromScenario } from "../src/lib/predictiveSeedResolver";
+import { buildPredictiveProfile } from "../src/lib/predictiveBuilderModel";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
@@ -19,6 +21,15 @@ const QA_REVIEW_TIMEOUT_MS = 20000;
 const QA_HCP_TOKEN_CAP = 260;
 const QA_CACHE_PATH = path.resolve(".qa-matrix-cache.json");
 const QA_RUN_HISTORY_PATH = path.resolve("artifacts/qa-matrix/run-history.json");
+const QA_RUNTIME_SOURCE_PATH = "src/lib/hcpResponseGenerator.ts";
+const QA_BANNED_PHRASE_PATTERNS = [
+  /\bi hear that a lot\b/i,
+  /\bkeep this brief\b/i,
+  /\bi['’]m not convinced yet\b/i,
+  /\bwhat['’]s concretely different for me after this\b/i,
+  /\bwhat changes in practice if this is worth continuing\b/i,
+  /\bthe practical answer has to stay tied\b/i,
+];
 const QA_FINGERPRINT_FILES = [
   "src/lib/qaRepProxy.js",
   "src/lib/hcpResponseGenerator.ts",
@@ -73,6 +84,39 @@ type QaRunHistoryEntry = {
   riskLevel: string;
   opennessScore: number;
 };
+
+function detectBannedPhrases(text = "") {
+  const value = String(text || "");
+  return QA_BANNED_PHRASE_PATTERNS
+    .filter((pattern) => pattern.test(value))
+    .map((pattern) => pattern.source);
+}
+
+function evaluateRuntimePath(turns: any[]) {
+  const hcpTurns = (Array.isArray(turns) ? turns : []).filter((turn) => turn?.speaker === "hcp");
+  const bannedPhraseFindings = hcpTurns
+    .map((turn, index) => ({
+      turn: index + 1,
+      text: String(turn?.text || ""),
+      matches: detectBannedPhrases(String(turn?.text || "")),
+      runtimeTrace: turn?.runtimeTrace || null,
+    }))
+    .filter((entry) => entry.matches.length > 0);
+
+  const lastRuntimeTrace = [...hcpTurns].reverse().find((turn) => turn?.runtimeTrace)?.runtimeTrace || null;
+  const generatorVersion = String(lastRuntimeTrace?.generator_version || HCP_GENERATOR_VERSION);
+  const systemRuntimeStatus = bannedPhraseFindings.length > 0 ? "FAIL" : "PASS";
+
+  return {
+    system_runtime_status: systemRuntimeStatus,
+    generator_version: generatorVersion,
+    source_path: QA_RUNTIME_SOURCE_PATH,
+    scenario_grounding_applied: Boolean(lastRuntimeTrace?.scenario_grounding_applied),
+    banned_phrase_filter_applied: lastRuntimeTrace?.banned_phrase_filter_applied !== false,
+    scenario_anchors_used: Array.isArray(lastRuntimeTrace?.scenario_anchors_used) ? lastRuntimeTrace.scenario_anchors_used : [],
+    banned_phrase_findings: bannedPhraseFindings,
+  };
+}
 
 async function readQaRunHistory(): Promise<QaRunHistoryEntry[]> {
   try {
@@ -273,14 +317,17 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 function buildSafeRepFallback({
   scenario,
   turns,
+  personaKey,
   isQAMode = true,
 }: {
   scenario: any;
   turns: any[];
+  personaKey?: PersonaKey;
   isQAMode?: boolean;
 }) {
-  const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "" });
-  const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+  const resolvedPersonaKey = isQAMode ? (personaKey || "strong_rep") : personaKey;
+  const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "", personaKey: resolvedPersonaKey });
+  const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey: resolvedPersonaKey, turnIndex: turns.filter((t: any) => t?.speaker === "rep").length });
   if (isQAMode) {
     console.log("REP_FALLBACK_USED", finalRepReply.concept || repProxyOutput.concept || "unknown");
   }
@@ -292,6 +339,7 @@ async function generateQaRepReply({
   turns,
   currentBehaviorState,
   currentJourneyState,
+  personaKey,
   persona,
   turnIndex,
   maxTurns,
@@ -301,6 +349,7 @@ async function generateQaRepReply({
   turns: any[];
   currentBehaviorState: string;
   currentJourneyState: string;
+  personaKey: PersonaKey;
   persona: {
     buildPrompt: (scenario: any, turns: any[], currentBehaviorState: string, currentJourneyState: string) => string;
   };
@@ -352,7 +401,7 @@ async function generateQaRepReply({
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
     if (repDraft) {
-      const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: { text: repDraft, concept: null } });
+      const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: { text: repDraft, concept: null }, personaKey, turnIndex });
       return {
         ...finalReply,
         text: enforceCommitmentCloseSafeguard(finalReply.text || ""),
@@ -360,19 +409,51 @@ async function generateQaRepReply({
     }
 
     const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "" });
-    const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+    const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey, turnIndex });
     return {
       ...finalReply,
       text: enforceCommitmentCloseSafeguard(finalReply.text || ""),
     };
   } catch {
-    return buildSafeRepFallback({ scenario, turns, isQAMode });
+    return buildSafeRepFallback({ scenario, turns, personaKey, isQAMode });
   }
 }
 
 async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: number) {
   const persona = QA_PERSONAS[personaKey];
   const convInit = await initializeConversation(scenario);
+  const derivedTemperature = Number.isFinite(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))
+    ? Math.max(1, Math.min(10, Math.round(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))))
+    : personaKey === "strong_rep" ? 3 : personaKey === "weak_rep" ? 9 : 6;
+
+  const selection = buildPredictiveSeedFromScenario(scenario || {});
+  const deterministicProfile = buildPredictiveProfile(selection);
+  const predictiveProfile = {
+    type: String(selection?.behaviorArchetype || scenario?.persona || "").trim(),
+    source: "deterministic",
+    specialistTitle: scenario?.stakeholder || "Clinical Specialist",
+  };
+  const sections = deterministicProfile?.sections || {};
+  const predictivePromptContext = [
+    "PREDICTIVE HCP LENS (runtime, scenario-derived):",
+    "- Source: deterministic",
+    `- Specialist frame: ${predictiveProfile.specialistTitle}`,
+    `- Seed disease state: ${selection?.diseaseState || ""}`,
+    `- Seed HCP type: ${selection?.hcpType || ""}`,
+    `- Seed journey stage: ${selection?.journeyStage || ""}`,
+    `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
+    `- Seed influence driver: ${selection?.influenceDriver || ""}`,
+    `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
+    `- Mindset headline: ${sections?.mindset?.headline || ""}`,
+    `- Objection headline: ${sections?.objections?.headline || ""}`,
+    `- Response style headline: ${sections?.responseStyle?.headline || ""}`,
+    `- Rep approach headline: ${sections?.repApproach?.headline || ""}`,
+  ].join("\n");
+
+  const scenarioWithRuntime = {
+    ...scenario,
+    runtimeTemperature: derivedTemperature,
+  };
 
   let turns: any[] = [];
   let allSignals: any[] = [];
@@ -390,6 +471,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       turns,
       currentBehaviorState,
       currentJourneyState,
+      personaKey,
       persona,
       turnIndex: i,
       maxTurns,
@@ -417,7 +499,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     }));
 
     const response = await retry(() => withTimeout(generateHcpResponse(
-      scenario,
+      scenarioWithRuntime,
       conversationHistory,
       currentBehaviorState,
       currentJourneyState,
@@ -427,6 +509,24 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       i,
       currentVolatilityProfile as any,
       QA_HCP_TOKEN_CAP,
+      predictiveProfile,
+      predictivePromptContext,
+      {
+        hcpPersona: predictiveProfile,
+        temperature: derivedTemperature,
+        previousInteraction: finalRepReply.text || "",
+        previousConcernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
+        escalationLevel: 0,
+        interactionHistory: turns
+          .filter((turn) => turn?.speaker === "rep" || turn?.speaker === "hcp")
+          .slice(-6)
+          .map((turn) => ({
+            rep: turn?.speaker === "rep" ? turn?.text : "",
+            hcp: turn?.speaker === "hcp" ? turn?.text : "",
+            concernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
+            behaviorState: currentBehaviorState,
+          })),
+      },
     ), `${scenario.title} hcp turn ${i + 1}`));
 
     if (response.coachingNudge) {
@@ -442,6 +542,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       timestamp: new Date().toISOString(),
       cues: response.activeCues || [],
       nudge: null,
+      runtimeTrace: response.runtimeTrace || null,
     }];
 
     allSignals = [...allSignals, response.behaviorSignals || {}];
@@ -508,11 +609,17 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     capabilityLevels,
     review,
     assertions: summarizeAssertions(scenario, turns, allSignals, review),
+    runtimeValidation: evaluateRuntimePath(turns),
   };
 }
 
 async function main() {
-  const scenarioFilter = process.argv.slice(4).join(" ").trim().toLowerCase();
+  const argv = process.argv.slice(2);
+  const flags = new Set(argv.filter((arg) => arg.startsWith("--")));
+  const positionalArgs = argv.filter((arg) => !arg.startsWith("--"));
+  const disableCache = flags.has("--fresh") || flags.has("--no-cache") || process.env.QA_DISABLE_CACHE === "1";
+  const disableHistory = disableCache || flags.has("--no-history") || process.env.QA_DISABLE_HISTORY === "1";
+  const scenarioFilter = positionalArgs.slice(2).join(" ").trim().toLowerCase();
   const familyAliasMap: Record<string, string[]> = {
     "cost/value": ["evidence"],
     cost: ["evidence"],
@@ -538,23 +645,29 @@ async function main() {
         requestedFamilies.includes(concernFamily);
     })
     : ALL_SCENARIOS;
-  const personaKey = parsePersonaKey(process.argv[2]);
-  const maxTurns = Number(process.argv[3] || 4);
+  const personaKey = parsePersonaKey(positionalArgs[0]);
+  const maxTurns = Number(positionalArgs[1] || 4);
   const results = [];
   const fingerprint = await computeQaFingerprint();
-  const cache = await readQaCache();
-  const priorRunHistory = await readQaRunHistory();
+  const cache = disableCache ? {} : await readQaCache();
+  const priorRunHistory = disableHistory ? [] : await readQaRunHistory();
 
   if (scenarios.length === 0) {
-    console.error(`No scenarios matched filter: "${process.argv.slice(4).join(" ")}"`);
+    console.error(`No scenarios matched filter: "${positionalArgs.slice(2).join(" ")}"`);
     process.exit(1);
   }
 
   console.log(`Running QA matrix for ${scenarios.length} scenario(s) as ${personaKey} with ${maxTurns} rep turn(s) each...`);
+  if (disableCache) {
+    console.log("CACHE BYPASS ENABLED :: ignoring .qa-matrix-cache.json");
+  }
+  if (disableHistory) {
+    console.log("HISTORY BYPASS ENABLED :: ignoring artifacts/qa-matrix/run-history.json");
+  }
 
   for (const scenario of scenarios) {
     const cacheKey = `${fingerprint}::${personaKey}::${maxTurns}::${scenario.id || scenario.title}`;
-    const cachedResult = cache[cacheKey];
+    const cachedResult = disableCache ? null : cache[cacheKey];
     if (cachedResult) {
       console.log(`Running scenario: ${scenario.title}`);
       console.log(`CACHE HIT :: ${scenario.title}`);
@@ -568,10 +681,16 @@ async function main() {
     console.log(`Running scenario: ${scenario.title}`);
     const result = await runSession(scenario, personaKey, maxTurns);
     results.push(result);
-    cache[cacheKey] = result;
-    await writeQaCache(cache);
+    if (!disableCache) {
+      cache[cacheKey] = result;
+      await writeQaCache(cache);
+    }
     const failed = Object.entries(result.assertions).filter(([key, value]) => key.endsWith("Pass") && !value);
-    const summary = failed.length ? `FAIL ${failed.map(([key]) => key).join(", ")}` : "PASS";
+    const runtimeFailure = result.runtimeValidation?.system_runtime_status === "FAIL";
+    const summaryParts = [];
+    if (failed.length) summaryParts.push(failed.map(([key]) => key).join(", "));
+    if (runtimeFailure) summaryParts.push("runtime_banned_phrase");
+    const summary = summaryParts.length ? `FAIL ${summaryParts.join(", ")}` : "PASS";
     console.log(`${summary} :: ${scenario.title}`);
   }
 
@@ -680,6 +799,13 @@ async function main() {
       title: result.scenario.title,
       journeyStage: result.scenario.journeyStage,
       concernFamily: getScenarioConcernFamily(result.scenario) || "general",
+      system_runtime_status: result.runtimeValidation?.system_runtime_status || "PASS",
+      generator_version: result.runtimeValidation?.generator_version || HCP_GENERATOR_VERSION,
+      runtime_source_path: result.runtimeValidation?.source_path || QA_RUNTIME_SOURCE_PATH,
+      runtime_banned_phrase_findings: result.runtimeValidation?.banned_phrase_findings || [],
+      scenario_grounding_applied: Boolean(result.runtimeValidation?.scenario_grounding_applied),
+      banned_phrase_filter_applied: result.runtimeValidation?.banned_phrase_filter_applied !== false,
+      scenario_anchors_used: result.runtimeValidation?.scenario_anchors_used || [],
       assertions: result.assertions,
       capabilityLevels: result.capabilityLevels,
       finalPrediction: result.finalPrediction,
@@ -696,6 +822,7 @@ async function main() {
           cue: turn.cues?.[0]?.label || "",
           cueDescription: turn.cues?.[0]?.description || "",
           nudge: turn.nudge?.guidance || "",
+          runtimeTrace: turn.runtimeTrace || null,
         }))
         : undefined,
       predictionTrace: results.length === 1
@@ -726,8 +853,10 @@ async function main() {
     };
   });
 
-  const updatedHistory = [...priorRunHistory, ...historyToAppend].slice(-5000);
-  await writeQaRunHistory(updatedHistory);
+  if (!disableHistory) {
+    const updatedHistory = [...priorRunHistory, ...historyToAppend].slice(-5000);
+    await writeQaRunHistory(updatedHistory);
+  }
 
   const finalExitCode = releaseBlockerRule.enabled && !releaseBlockerRule.pass ? 2 : 0;
   console.log(`\nJSON_SUMMARY_START\n${JSON.stringify(out, null, 2)}\nJSON_SUMMARY_END | SOFT_WARNINGS: ${softWarnings.length} | EXIT: ${finalExitCode}`);
