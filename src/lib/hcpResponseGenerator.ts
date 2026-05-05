@@ -866,16 +866,16 @@ function normalizeBehaviorSignals(
       ? "weak"
       : premiseCorrected
         ? "strong"
-      : screeningResponsive
-        ? "strong"
-      : rawSignals?.response_alignment === "strong"
-        ? "strong"
-        : inferredAlignment,
+        : screeningResponsive
+          ? "strong"
+          : rawSignals?.response_alignment === "strong"
+            ? "strong"
+            : inferredAlignment,
     objection_type: (forceHesitationFamily || forceAdoptionCautionFamily)
       ? "none"
       : rawSignals?.objection_type && rawSignals.objection_type !== "none"
-      ? rawSignals.objection_type
-      : inferredObjectionType,
+        ? rawSignals.objection_type
+        : inferredObjectionType,
     engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"
       ? rawSignals.engagement_level
       : inferredEngagement,
@@ -886,11 +886,11 @@ function normalizeBehaviorSignals(
       ? "missed"
       : premiseCorrected
         ? "responsive"
-      : screeningResponsive
-        ? "responsive"
-      : rawSignals?.listening_pattern === "responsive"
-        ? "responsive"
-        : inferredListening,
+        : screeningResponsive
+          ? "responsive"
+          : rawSignals?.listening_pattern === "responsive"
+            ? "responsive"
+            : inferredListening,
     commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
       ? rawSignals.commitment_attempt
       : inferredCommitmentAttempt,
@@ -941,11 +941,11 @@ export async function generateHcpResponse(
     volatility.profile !== "stable";
   const responseTokenBudget =
     turnDirectives.targetWordBudget <= 22 ? 300
-    : turnDirectives.targetWordBudget <= 28 ? 340
-    : runtimeProfile.brevity === "tight" ? 380
-    : isHighPressureTurn ? 420
-    : runtimeProfile.brevity === "moderate" ? 600
-    : 560;
+      : turnDirectives.targetWordBudget <= 28 ? 340
+        : runtimeProfile.brevity === "tight" ? 380
+          : isHighPressureTurn ? 420
+            : runtimeProfile.brevity === "moderate" ? 600
+              : 560;
   const finalResponseTokenBudget = typeof responseTokenCap === "number"
     ? Math.min(responseTokenBudget, responseTokenCap)
     : responseTokenBudget;

@@ -544,7 +544,7 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
     const rawArchetype = str(hcpBrain.selections?.behavior_archetype);
     const archetype = rawArchetype.replace(/_/g, " ");
     const stage = str(hcpBrain.selections?.journey_stage).replace(/_/g, " ");
-    
+
     // ── Resolve realism tier from live_temperature ──────────────────────────────────
     const temp = Number(hcpBrain.live_temperature ?? hcpBrain.initial_temperature ?? 5);
     const realismLevel = Math.max(1, Math.min(10, Math.round(temp)));
@@ -556,27 +556,27 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
 
     // LOW tier (1–3): Cooperative, direct, minimal friction
     if (realismLevel <= 3) {
-      realismTier = "low";
-      cooperationLevel = 0.85;      // High willingness
-      resistanceLevel = 0.15;       // Low resistance
-      interruptionLikelihood = 0.1; // Rarely interrupts
-      escalationLevel = 0.05;       // Almost no escalation
+        realismTier = "low";
+        cooperationLevel = 0.85;      // High willingness
+        resistanceLevel = 0.15;       // Low resistance
+        interruptionLikelihood = 0.1; // Rarely interrupts
+        escalationLevel = 0.05;       // Almost no escalation
     }
     // HIGH tier (7–10): Strong resistance, demands specificity
     else if (realismLevel >= 7) {
-      realismTier = "high";
-      cooperationLevel = 0.15;      // Low willingness
-      resistanceLevel = 0.85;       // High resistance
-      interruptionLikelihood = 0.7; // Frequently interrupts
-      escalationLevel = 0.75;       // Frequent escalation pressure
+        realismTier = "high";
+        cooperationLevel = 0.15;      // Low willingness
+        resistanceLevel = 0.85;       // High resistance
+        interruptionLikelihood = 0.7; // Frequently interrupts
+        escalationLevel = 0.75;       // Frequent escalation pressure
     }
     // MID tier (4–6): Selective skepticism, requires clarity
     else {
-      realismTier = "mid";
-      cooperationLevel = 0.5;       // Balanced
-      resistanceLevel = 0.5;        // Balanced
-      interruptionLikelihood = 0.35; // Occasional interrupts
-      escalationLevel = 0.4;        // Moderate escalation risk
+        realismTier = "mid";
+        cooperationLevel = 0.5;       // Balanced
+        resistanceLevel = 0.5;        // Balanced
+        interruptionLikelihood = 0.35; // Occasional interrupts
+        escalationLevel = 0.4;        // Moderate escalation risk
     }
 
     return [

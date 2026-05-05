@@ -670,8 +670,8 @@ function enforceRealismTierTone(sentences = [], { tier = "mid", interactionPress
 
     // HIGH: Force second sentence as strong demand or deflection
     if (!list[1]) {
-      list[1] = constrained 
-        ? "Give me the direct answer or I'm done here." 
+      list[1] = constrained
+        ? "Give me the direct answer or I'm done here."
         : "You need to make a compelling case, and I don't see it yet.";
     } else {
       list[1] = normalizeText(list[1])
