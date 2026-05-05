@@ -7,11 +7,13 @@
  * No page may define its own duplicate dropdown options for these concepts.
  *
  * Primary user-facing labels:
- *   1. HCP Role              (maps to hcp_type internally)
- *   2. Conversation Moment   (maps to journey_stage internally)
- *   3. Challenge Focus       (maps to influence_driver + pressure + archetype internally)
+ *   1. HCP Profile       (maps to hcp_type internally)
+ *   2. Scenario Stage    (maps to journey_stage internally)
+ *   3. Challenge Context (maps to influence_driver + pressure + archetype internally)
  *
- * Realism Level remains a separate slider where applicable.
+ * Realism remains a separate slider where applicable.
+ *
+ * Fixed contract: 4 canonical controls (3 selectors + realism).
  *
  * Advanced / internal labels (hidden by default):
  *   Journey Stage, Influence Driver, Interaction Pressure,
@@ -43,14 +45,21 @@ export const SPECIALTIES = [
     { value: "academic", label: "Academic / KOL" },
 ];
 
+export const RPS_UI_LABELS = {
+    hcpType: "HCP Profile",
+    stage: "Scenario Stage",
+    challenge: "Challenge Context",
+    realism: "Realism",
+} as const;
+
 // ── Primary user-facing controls ──────────────────────────────────────────
 
 /**
- * Conversation Moment options for the simplified 3-control experience.
+ * Scenario Stage options for the fixed 4-control contract (3 selectors + realism).
  * Values map to journey_stage internally through mapUIToBrain().
  */
 export const SCENARIO_CONTEXT_OPTIONS = [
-    { value: "all", label: "All Conversation Moments" },
+     { value: "all", label: "All Scenario Stages" },
     { value: "first_exposure", label: "First Exposure" },
     { value: "early_exploration", label: "Early Exploration" },
     { value: "access_logistics", label: "Access / Logistics" },
@@ -61,7 +70,7 @@ export const SCENARIO_CONTEXT_OPTIONS = [
 export const CONVERSATION_STAGE_OPTIONS = SCENARIO_CONTEXT_OPTIONS;
 
 /**
- * Conversation Moment Display Hints — shown in Advanced Controls to explain
+ * Scenario Stage display hints for derived mappings.
  * which journey-stage value the moment maps to.
  */
 export const SCENARIO_CONTEXT_HINTS: Record<string, string> = {
@@ -73,18 +82,18 @@ export const SCENARIO_CONTEXT_HINTS: Record<string, string> = {
 };
 
 /**
- * HCP Role as the primary visible persona control.
+ * HCP Profile as the primary visible persona control.
  * Maps directly to hcp_type internally.
  */
 export const HCP_ROLE_OPTIONS = [
-    { value: "all", label: "All HCP Roles" },
+    { value: "all", label: "All HCP Profiles" },
     { value: "treating_clinician", label: "Treating Clinician" },
     { value: "influencer", label: "Influencer" },
     { value: "thought_leader", label: "Thought Leader" },
 ];
 
 export const CHALLENGE_CONTEXT_OPTIONS = [
-    { value: "all", label: "All Challenge Focuses" },
+    { value: "all", label: "All Challenge Contexts" },
     { value: "access_barrier", label: "Access Barrier" },
     { value: "time_constraint", label: "Time Constraint" },
     { value: "skepticism", label: "Skepticism" },
@@ -93,7 +102,7 @@ export const CHALLENGE_CONTEXT_OPTIONS = [
 ];
 
 /**
- * HCP Mindset — replaces "Influence Driver" as the primary visible label.
+ * HCP Mindset — internal mapping layer, not user-facing.
  * Maps to influence_driver internally.
  * Includes workflow_protective as a new option.
  */
@@ -217,4 +226,4 @@ export const ADVANCED_INTERNAL_FIELD_LABELS: Record<string, string> = {
 };
 
 export const ADVANCED_CONTROLS_WARNING =
-    "Advanced overrides may change scenario behavior. These fields are derived automatically under normal use.";
+    "These fields are derived automatically under normal use.";

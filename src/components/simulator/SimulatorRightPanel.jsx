@@ -94,7 +94,6 @@ export default function SimulatorRightPanel({
   hasRepSpoken = false,
   predictiveLens = null,
   temperature = 5,
-  onTemperatureChange = () => { },
 }) {
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
@@ -200,20 +199,11 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      <DarkSection icon={Activity} title="Realism Lever">
+      <DarkSection icon={Activity} title="Realism">
         <div className="space-y-2">
-          <Row label="Temperature">
+          <Row label="Level">
             <Pill>{Math.max(1, Math.min(10, Number(temperature) || 5))}/10</Pill>
           </Row>
-          <input
-            type="range"
-            min={1}
-            max={10}
-            value={Math.max(1, Math.min(10, Number(temperature) || 5))}
-            onChange={(event) => onTemperatureChange(event.target.value)}
-            className="w-full accent-teal-400"
-            aria-label="Realism Lever"
-          />
           <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
             <span>1 (Open)</span>
             <span>5 (Balanced)</span>

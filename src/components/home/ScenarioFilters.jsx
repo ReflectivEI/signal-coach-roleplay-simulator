@@ -1,20 +1,12 @@
 import { useState } from "react";
-import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
-  DISEASE_STATES,
-  SPECIALTIES,
   CHALLENGE_CONTEXT_OPTIONS,
   CONVERSATION_STAGE_OPTIONS,
   HCP_ROLE_OPTIONS,
-  INTERACTION_PRESSURES,
-  JOURNEY_STAGES,
+  RPS_UI_LABELS,
 } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain } from "@/lib/scenarioInputResolver";
-
-// Re-export from shared module so downstream consumers don't break
-export { DISEASE_STATES, SPECIALTIES, INTERACTION_PRESSURES, JOURNEY_STAGES };
-export { HCP_ROLE_OPTIONS as HCP_TYPES };
-export { CHALLENGE_CONTEXT_OPTIONS as INFLUENCE_DRIVERS };
 
 function FilterDropdown({ label, options, value, onChange }) {
   const [open, setOpen] = useState(false);
@@ -74,7 +66,6 @@ function FilterDropdown({ label, options, value, onChange }) {
 }
 
 export default function ScenarioFilters({ filters, onChange }) {
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const set = (key) => (val) => onChange({ ...filters, [key]: val });
   const activeCount = Object.entries(filters)
     .filter(([key, value]) => key !== "realism" && value !== "all")
@@ -84,16 +75,16 @@ export default function ScenarioFilters({ filters, onChange }) {
   return (
     <div className="mb-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <FilterDropdown label="HCP Role" options={HCP_ROLE_OPTIONS} value={filters.hcpType} onChange={set("hcpType")} />
-        <FilterDropdown label="Conversation Moment" options={CONVERSATION_STAGE_OPTIONS} value={filters.stage} onChange={set("stage")} />
-        <FilterDropdown label="Challenge Focus" options={CHALLENGE_CONTEXT_OPTIONS} value={filters.challenge} onChange={set("challenge")} />
+        <FilterDropdown label={RPS_UI_LABELS.hcpType} options={HCP_ROLE_OPTIONS} value={filters.hcpType} onChange={set("hcpType")} />
+        <FilterDropdown label={RPS_UI_LABELS.stage} options={CONVERSATION_STAGE_OPTIONS} value={filters.stage} onChange={set("stage")} />
+        <FilterDropdown label={RPS_UI_LABELS.challenge} options={CHALLENGE_CONTEXT_OPTIONS} value={filters.challenge} onChange={set("challenge")} />
       </div>
 
       <div className="mt-2 rounded-lg border px-3.5 py-2"
         style={{ borderColor: "rgba(176, 212, 230, 0.32)", background: "rgba(18, 53, 94, 0.46)" }}>
         <div className="flex items-center justify-between gap-3 mb-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "rgba(236, 245, 245, 0.82)" }}>
-            Realism Lever
+            {RPS_UI_LABELS.realism}
           </p>
           <span className="text-xs font-semibold" style={{ color: "hsl(174 84% 84%)" }}>{realism}/10</span>
         </div>
@@ -104,36 +95,13 @@ export default function ScenarioFilters({ filters, onChange }) {
           value={realism}
           onChange={(event) => onChange({ ...filters, realism: Number(event.target.value) })}
           className="w-full accent-teal-400"
-          aria-label="Realism Lever"
+          aria-label={RPS_UI_LABELS.realism}
         />
         <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
           <span>1 (Cooperative)</span>
           <span>5 (Neutral)</span>
           <span>10 (Sharp)</span>
         </div>
-      </div>
-
-      <div className="mt-2">
-        <button
-          onClick={() => setShowAdvanced(v => !v)}
-          className="flex items-center gap-1.5 text-xs transition-colors"
-          style={{ color: showAdvanced ? "hsl(174 80% 72%)" : "rgba(241, 250, 250, 0.62)" }}
-        >
-          <SlidersHorizontal className="w-3 h-3" />
-          {showAdvanced ? "Hide" : "Advanced"}
-          <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
-        </button>
-        {showAdvanced && (
-          <div className="mt-2 pt-2 border-t" style={{ borderColor: "rgba(97, 182, 181, 0.22)" }}>
-            <p className="text-xs mb-2" style={{ color: "rgba(241, 250, 250, 0.52)" }}>
-              Advanced filters are optional and intended for internal/debug narrowing only.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-              <FilterDropdown label="Specialty" options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
-              <FilterDropdown label="Disease State" options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
-            </div>
-          </div>
-        )}
       </div>
 
       {activeCount > 0 && (
@@ -159,51 +127,11 @@ export function applyScenarioFilters(scenarios, filters) {
     if (filters.hcpType !== "all" && mappedHcpType !== filters.hcpType) return false;
     if (filters.stage !== "all" && mappedStage !== filters.stage) return false;
     if (filters.challenge !== "all" && mappedChallenge !== filters.challenge) return false;
-    if (filters.diseaseState !== "all") {
-      const mappedDiseaseState = s.gridMapping?.diseaseState || s.predictiveSeed?.diseaseState;
-      if (mappedDiseaseState) {
-        if (mappedDiseaseState !== filters.diseaseState) return false;
-      } else {
-        const haystack = `${s.stakeholder} ${s.context} ${s.title}`.toLowerCase();
-        const termMap = {
-          pulmonology: ["pulmonol", "pulmonary", "lung", "respiratory"],
-          cardiology: ["cardiol", "cardiac", "heart", "cardiovascular"],
-          rheumatology: ["rheumatol", "arthritis"],
-          neurology: ["neurolog", "brain"],
-          oncology: ["oncolog", "cancer", "tumor"],
-          nephrology: ["nephrolog", "kidney", "renal"],
-          dermatology: ["dermatol", "skin"],
-          hematology: ["hematolog", "blood"],
-          gastroenterology: ["gastro", "gi ", "gastroenterol"],
-          endocrinology: ["endocrin", "diabetes", "thyroid"],
-          primary_care: ["primary care", "internal medicine", "hospitalist", "community"],
-        };
-        const terms = termMap[filters.diseaseState] || [];
-        if (!terms.some(t => haystack.includes(t))) return false;
-      }
-    }
-    if (filters.specialty !== "all") {
-      const mappedSpecialty = s.gridMapping?.specialty;
-      if (mappedSpecialty) {
-        if (mappedSpecialty !== filters.specialty) return false;
-      } else {
-        const haystack = `${s.stakeholder} ${s.context}`.toLowerCase();
-        if (filters.specialty === "academic" && !haystack.includes("academic") && !haystack.includes("kol") && !haystack.includes("committee")) return false;
-        if (filters.specialty === "hospital_medicine" && !haystack.includes("hospital")) return false;
-        if (filters.specialty === "primary_care" && !haystack.includes("primary care") && !haystack.includes("internal medicine") && !haystack.includes("hospitalist")) return false;
-        if (filters.specialty === "specialist") {
-          const nonSpec = ["primary care", "hospitalist", "internal medicine"];
-          if (nonSpec.some(t => haystack.includes(t))) return false;
-        }
-      }
-    }
     return true;
   });
 }
 
 export const DEFAULT_FILTERS = {
-  diseaseState: "all",
-  specialty: "all",
   hcpType: "all",
   stage: "all",
   challenge: "all",

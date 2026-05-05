@@ -4,7 +4,7 @@ import {
   INFLUENCE_DRIVERS,
   INTERACTION_PRESSURES,
   JOURNEY_STAGES,
-} from "@/components/home/ScenarioFilters";
+} from "@/lib/rpsUserInputOptions";
 
 export const PREDICTIVE_SELECTOR_OPTIONS = {
   diseaseState: DISEASE_STATES.filter((opt) => opt.value !== "all"),

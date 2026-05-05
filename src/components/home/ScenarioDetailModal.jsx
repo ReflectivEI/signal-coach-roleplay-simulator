@@ -8,12 +8,15 @@ import { initializeConversation } from "@/lib/conversationInit";
 import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import {
+  CHALLENGE_CONTEXT_OPTIONS,
+  CONVERSATION_STAGE_OPTIONS,
+  HCP_ROLE_OPTIONS,
+  REALISM_LEVEL_LABELS,
+  RPS_UI_LABELS,
+} from "@/lib/rpsUserInputOptions";
+import { deriveUISelectionFromBrain } from "@/lib/scenarioInputResolver";
+import {
   SIGNAL_INTELLIGENCE_CAPABILITIES,
-  JOURNEY_STAGE_LABELS,
-  BEHAVIOR_STATE_SIMPLE_LABELS,
-  HCP_ROLE_LABELS,
-  DECISION_ORIENTATION_LABELS,
-  PRESSURE_LABELS,
 } from "@/lib/signalIntelligence";
 
 // ── Field label ───────────────────────────────────────────────────────────────
@@ -404,10 +407,11 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
   };
   const difficulty = getDiff();
   const focusCaps = scenario.suggestedFocusCapabilities || [];
-  const pressures = (scenario.interactionPressure || []).slice(0, 3);
   const challenges = (scenario.keyChallenges || []).slice(0, 3);
   const predictiveSeed = useMemo(() => buildPredictiveSeedFromScenario(scenario), [scenario]);
   const predictiveProfile = useMemo(() => buildPredictiveProfile(predictiveSeed), [predictiveSeed]);
+  const controlSelection = useMemo(() => deriveUISelectionFromBrain(scenario), [scenario]);
+  const realismValue = deriveContractTemperature(scenario);
   const predictiveHighlights = [
     { label: "Mindset", value: predictiveProfile?.sections?.mindset?.headline },
     { label: "Likely objection", value: predictiveProfile?.sections?.objections?.headline },
@@ -430,6 +434,8 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
     const sep = raw.indexOf(" — ");
     return sep !== -1 ? raw.slice(sep + 3) : raw;
   })();
+
+  const getControlLabel = (options, value) => options.find((option) => option.value === value)?.label || value;
 
   return (
     <TooltipProvider>
@@ -632,20 +638,20 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Conversation Moment</p>
-                    <VarPill>{JOURNEY_STAGE_LABELS[scenario.journeyStage] || scenario.journeyStage}</VarPill>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.hcpType}</p>
+                    <VarPill>{getControlLabel(HCP_ROLE_OPTIONS, controlSelection.hcpType)}</VarPill>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Behavior State</p>
-                    <VarPill>{BEHAVIOR_STATE_SIMPLE_LABELS[scenario.startingBehaviorState] || scenario.startingBehaviorState}</VarPill>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.stage}</p>
+                    <VarPill>{getControlLabel(CONVERSATION_STAGE_OPTIONS, controlSelection.stage)}</VarPill>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>HCP Role</p>
-                    <VarPill>{HCP_ROLE_LABELS[scenario.hcpRoleType] || scenario.hcpRoleType}</VarPill>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.challenge}</p>
+                    <VarPill>{getControlLabel(CHALLENGE_CONTEXT_OPTIONS, controlSelection.challenge)}</VarPill>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Decision Orientation</p>
-                    <VarPill>{DECISION_ORIENTATION_LABELS[scenario.decisionOrientation] || scenario.decisionOrientation}</VarPill>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.realism}</p>
+                    <VarPill>{`${realismValue}/10 — ${REALISM_LEVEL_LABELS[realismValue] || ""}`}</VarPill>
                   </div>
                 </div>
               </div>
@@ -679,16 +685,6 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
                       }
                     </div>
                   </div>
-                  {pressures.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Interaction Pressure</p>
-                      <div className="space-y-2">
-                        {pressures.map(p => (
-                          <CapPill key={p}>{PRESSURE_LABELS[p] || p}</CapPill>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

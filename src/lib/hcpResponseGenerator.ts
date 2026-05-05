@@ -31,6 +31,7 @@ import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDire
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
+import { deriveUISelectionFromBrain, mapUIToBrain } from "./scenarioInputResolver";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -117,6 +118,36 @@ const CHATBOT_STYLE_PATTERNS = [
   /\bi want to make sure i understand\b/i,
   /\bto be honest, the biggest challenge i'm seeing is\b/i,
 ];
+
+function buildDerivedScenarioContext(scenario: any) {
+  const uiSelection = deriveUISelectionFromBrain(scenario || {});
+  if (!uiSelection?.hcpType || !uiSelection?.stage || !uiSelection?.challenge) {
+    return scenario;
+  }
+
+  const mapped = mapUIToBrain({
+    hcpType: uiSelection.hcpType,
+    stage: uiSelection.stage,
+    challenge: uiSelection.challenge,
+    realism: Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature ?? 5),
+    diseaseState: scenario?.predictiveSeed?.diseaseState || scenario?.disease_state || "primary_care",
+    specialty: scenario?.specialty || scenario?.specialty_type || "",
+  });
+
+  return {
+    ...scenario,
+    persona: scenario?.persona || mapped.resolvedFields.behavior_archetype,
+    interactionPressure: Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length
+      ? scenario.interactionPressure
+      : mapped.resolvedFields.interaction_pressure,
+    decisionOrientation: scenario?.decisionOrientation || mapped.resolvedFields.influence_driver,
+    repObjective: scenario?.repObjective || mapped.resolvedFields.rep_objective,
+    accessBarrierContext: scenario?.accessBarrierContext || mapped.resolvedFields.access_barrier_context,
+    startingBehaviorState: scenario?.startingBehaviorState || "neutral",
+    hcpRoleType: scenario?.hcpRoleType || mapped.resolvedFields.hcp_type,
+    journeyStage: scenario?.journeyStage || mapped.resolvedFields.journey_stage,
+  };
+}
 
 function needsNaturalnessRewrite(text: string): boolean {
   const line = String(text || "").trim();
@@ -909,6 +940,7 @@ export async function generateHcpResponse(
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
 ): Promise<SimulatorResponse> {
+  scenario = buildDerivedScenarioContext(scenario);
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
     .join("\n");
