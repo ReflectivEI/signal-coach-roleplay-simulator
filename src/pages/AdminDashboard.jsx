@@ -5,8 +5,19 @@ import { Trash2, Eye, EyeOff, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/lib/scenarioStorage";
 
+/**
+ * @typedef {{
+ *   id: string,
+ *   title?: string,
+ *   description?: string,
+ *   journeyStage?: string,
+ *   isBuiltIn?: boolean,
+ *   isPublished?: boolean
+ * }} AdminScenario
+ */
+
 export default function AdminDashboard() {
-  const [scenarios, setScenarios] = useState([]);
+  const [scenarios, setScenarios] = useState(/** @type {AdminScenario[]} */ ([]));
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -18,11 +29,13 @@ export default function AdminDashboard() {
     void load();
   }, []);
 
+  /** @param {string} id @param {boolean} isPublished */
   const handleToggleVisibility = async (id, isPublished) => {
     await updateCustomScenario(id, { isPublished: !isPublished });
     setScenarios((current) => current.map((s) => s.id === id ? { ...s, isPublished: !isPublished } : s));
   };
 
+  /** @param {string} id @param {string | undefined} title */
   const handleDelete = async (id, title) => {
     if (!confirm(`Delete "${title}"?`)) return;
     await deleteCustomScenario(id);
@@ -74,7 +87,7 @@ export default function AdminDashboard() {
                 {!scenario.isBuiltIn && (
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     <button
-                      onClick={() => handleToggleVisibility(scenario.id, scenario.isPublished)}
+                      onClick={() => handleToggleVisibility(scenario.id, Boolean(scenario.isPublished))}
                       className="p-1.5 rounded hover:bg-surface/80 transition-colors text-muted-foreground hover:text-foreground"
                       title={scenario.isPublished ? "Unpublish" : "Publish"}
                     >

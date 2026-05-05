@@ -678,9 +678,9 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       addCounts(failureCounts, type);
       const confidence =
         obligationFailure?.type === type ? obligationFailure.confidence :
-        stagnationFailure?.type === type ? stagnationFailure.confidence :
-        continuity.failures.find((item) => item.type === type)?.confidence ||
-        (type === "chatbot_phrasing" ? chatbot.confidence : "medium");
+          stagnationFailure?.type === type ? stagnationFailure.confidence :
+            continuity.failures.find((item) => item.type === type)?.confidence ||
+            (type === "chatbot_phrasing" ? chatbot.confidence : "medium");
       failures.push({
         turnNumber,
         type,

@@ -283,108 +283,108 @@ export function parseJsonWithErrorCategory(extracted) {
  * (invokeWorkerJson applies only basic extraction, so we need to intercept earlier)
  */
 export async function invokeWorkerJsonWithRetry({
-  invokerFn,
-  maxRetries = 5,
-  temperature = 0.18,
-  onRetry = null,
+    invokerFn,
+    maxRetries = 5,
+    temperature = 0.18,
+    onRetry = null,
 }) {
-  let lastError = null;
-  const errors = [];
+    let lastError = null;
+    const errors = [];
 
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    try {
-      debugLog("invokeWorkerJsonWithRetry", { attempt: attempt + 1, maxRetries: maxRetries + 1 });
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        try {
+            debugLog("invokeWorkerJsonWithRetry", { attempt: attempt + 1, maxRetries: maxRetries + 1 });
 
-      // Call the invoker function, which should return raw STRING payload (not parsed)
-      // invokerFn receives temperature and should make the actual worker call
-      const adjustedTemp = temperature - attempt * 0.02;
-      let rawPayload;
+            // Call the invoker function, which should return raw STRING payload (not parsed)
+            // invokerFn receives temperature and should make the actual worker call
+            const adjustedTemp = temperature - attempt * 0.02;
+            let rawPayload;
 
-      try {
-        rawPayload = await invokerFn(adjustedTemp);
-      } catch (invokerErr) {
-        // If invokerFn throws, it might be a network error or worker down
-        debugWarn("invokeWorkerJsonWithRetry", `Invoker error: ${invokerErr.message}`);
-        errors.push({
-          attempt: attempt + 1,
-          category: "invoker_error",
-          message: invokerErr.message,
-        });
+            try {
+                rawPayload = await invokerFn(adjustedTemp);
+            } catch (invokerErr) {
+                // If invokerFn throws, it might be a network error or worker down
+                debugWarn("invokeWorkerJsonWithRetry", `Invoker error: ${invokerErr.message}`);
+                errors.push({
+                    attempt: attempt + 1,
+                    category: "invoker_error",
+                    message: invokerErr.message,
+                });
 
-        if (attempt < maxRetries) {
-          const delayMs = Math.min(1000 * Math.pow(1.5, attempt), 8000);
-          debugLog("invokeWorkerJsonWithRetry", `Waiting ${delayMs}ms before retry after invoker error`);
+                if (attempt < maxRetries) {
+                    const delayMs = Math.min(1000 * Math.pow(1.5, attempt), 8000);
+                    debugLog("invokeWorkerJsonWithRetry", `Waiting ${delayMs}ms before retry after invoker error`);
 
-          if (onRetry) {
-            onRetry({
-              attempt: attempt + 1,
-              category: "invoker_error",
-              willRetry: true,
-              delayMs,
-              error: invokerErr.message,
+                    if (onRetry) {
+                        onRetry({
+                            attempt: attempt + 1,
+                            category: "invoker_error",
+                            willRetry: true,
+                            delayMs,
+                            error: invokerErr.message,
+                        });
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    lastError = invokerErr;
+                }
+                continue;
+            }
+
+            // We got a response (either string or object)
+            // If object with .response field, extract that
+            if (rawPayload && typeof rawPayload === "object" && rawPayload.response) {
+                rawPayload = rawPayload.response;
+            }
+
+            const payloadStr = String(rawPayload || "");
+            debugLog("invokeWorkerJsonWithRetry", { payloadReceived: true, length: payloadStr.length });
+
+            // Apply robust 6-layer extraction pipeline
+            const extracted = robustJsonExtraction(payloadStr);
+
+            // Attempt parse with error categorization
+            const parseResult = parseJsonWithErrorCategory(extracted);
+
+            if (parseResult.success) {
+                debugLog("invokeWorkerJsonWithRetry", "Success on attempt " + (attempt + 1));
+                return parseResult.data;
+            }
+
+            // Parse failed; will retry
+            errors.push({
+                attempt: attempt + 1,
+                category: parseResult.category,
+                message: parseResult.errorMessage,
+                extractedLength: extracted.length,
             });
-          }
 
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-          lastError = invokerErr;
-        }
-        continue;
-      }
+            if (attempt < maxRetries) {
+                const delayMs = Math.min(500 * Math.pow(1.5, attempt), 5000);
+                debugLog("invokeWorkerJsonWithRetry", `Waiting ${delayMs}ms before retry`);
 
-      // We got a response (either string or object)
-      // If object with .response field, extract that
-      if (rawPayload && typeof rawPayload === "object" && rawPayload.response) {
-        rawPayload = rawPayload.response;
-      }
+                if (onRetry) {
+                    onRetry({
+                        attempt: attempt + 1,
+                        category: parseResult.category,
+                        willRetry: true,
+                        delayMs,
+                    });
+                }
 
-      const payloadStr = String(rawPayload || "");
-      debugLog("invokeWorkerJsonWithRetry", { payloadReceived: true, length: payloadStr.length });
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        } catch (err) {
+            // Unexpected error during extraction/parsing
+            debugWarn("invokeWorkerJsonWithRetry", `Unexpected error: ${err.message}`);
+            errors.push({
+                attempt: attempt + 1,
+                category: "unexpected_error",
+                message: err.message,
+            });
 
-      // Apply robust 6-layer extraction pipeline
-      const extracted = robustJsonExtraction(payloadStr);
-
-      // Attempt parse with error categorization
-      const parseResult = parseJsonWithErrorCategory(extracted);
-
-      if (parseResult.success) {
-        debugLog("invokeWorkerJsonWithRetry", "Success on attempt " + (attempt + 1));
-        return parseResult.data;
-      }
-
-      // Parse failed; will retry
-      errors.push({
-        attempt: attempt + 1,
-        category: parseResult.category,
-        message: parseResult.errorMessage,
-        extractedLength: extracted.length,
-      });
-
-      if (attempt < maxRetries) {
-        const delayMs = Math.min(500 * Math.pow(1.5, attempt), 5000);
-        debugLog("invokeWorkerJsonWithRetry", `Waiting ${delayMs}ms before retry`);
-
-        if (onRetry) {
-          onRetry({
-            attempt: attempt + 1,
-            category: parseResult.category,
-            willRetry: true,
-            delayMs,
-          });
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-      }
-    } catch (err) {
-      // Unexpected error during extraction/parsing
-      debugWarn("invokeWorkerJsonWithRetry", `Unexpected error: ${err.message}`);
-      errors.push({
-        attempt: attempt + 1,
-        category: "unexpected_error",
-        message: err.message,
-      });
-
-      if (attempt < maxRetries) {
-        const delayMs = Math.min(500 * Math.pow(1.5, attempt), 5000);
+            if (attempt < maxRetries) {
+                const delayMs = Math.min(500 * Math.pow(1.5, attempt), 5000);
             }
 
             lastError = err;

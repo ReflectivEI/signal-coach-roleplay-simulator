@@ -994,7 +994,7 @@ export function evaluateRepResponse({
     // HCP State Progression — deterministic, uses hcpBrain + voiceAdaptation + evaluation
     const safeConversationMemory = /** @type {any} */ (conversationMemory || {});
     const previousState = previousHcpState || safeConversationMemory.hcp_state || null;
-    const stateProgression = computeHcpStateProgression(/** @type {any} */ ({
+    const stateProgression = computeHcpStateProgression(/** @type {any} */({
         hcpBrain,
         previousHcpState: previousState,
         repResponseTranscript: line,

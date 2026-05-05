@@ -12,7 +12,7 @@ function formatReference(entry) {
 }
 
 export default function PredictiveBuilderReferences() {
-    const [references, setReferences] = useState(/** @type {PredictiveReference[]} */ (PREDICTIVE_REFERENCE_APPENDIX));
+    const [references, setReferences] = useState(/** @type {PredictiveReference[]} */(PREDICTIVE_REFERENCE_APPENDIX));
 
     useEffect(() => {
         let isMounted = true;
@@ -22,7 +22,7 @@ export default function PredictiveBuilderReferences() {
                 const sources = await listEvidenceSources();
                 if (!isMounted || !sources.length) return;
 
-                const merged = sources.map(/** @param {any} source */ (source) => {
+                const merged = sources.map(/** @param {any} source */(source) => {
                     const existing = PREDICTIVE_REFERENCE_APPENDIX.find((item) => item.id === source.id);
                     return {
                         id: source.id,

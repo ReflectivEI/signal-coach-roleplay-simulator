@@ -4,6 +4,8 @@ import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp, MessageSquare, Ear, Heart, Users, Shield, BarChart2, RefreshCw, Target } from "lucide-react";
 
+/** @typedef {typeof SIGNAL_INTELLIGENCE_CAPABILITIES[number]} Capability */
+
 // Icon map per capability
 const CAP_ICONS = {
   question_quality: MessageSquare,
@@ -16,9 +18,11 @@ const CAP_ICONS = {
   commitment_gaining: Target,
 };
 
+/** @param {{ cap: Capability; index: number }} props */
 function CapabilityCard({ cap, index }) {
   const [expanded, setExpanded] = useState(false);
-  const Icon = CAP_ICONS[cap.id] || MessageSquare;
+  const iconKey = /** @type {keyof typeof CAP_ICONS} */ (cap.id);
+  const Icon = CAP_ICONS[iconKey] || MessageSquare;
 
   return (
     <motion.div
@@ -86,7 +90,7 @@ function CapabilityCard({ cap, index }) {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest mb-2 text-slate-600">Effective Signals</p>
                   <ul className="space-y-1.5">
-                    {cap.whatGoodLooksLike.map((item, j) => (
+                    {cap.whatGoodLooksLike.map((/** @type {string} */ item, /** @type {number} */ j) => (
                       <li key={j} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "hsl(174 55% 42%)" }} />
                         {item}
@@ -97,7 +101,7 @@ function CapabilityCard({ cap, index }) {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest mb-2 text-amber-700">Signals to Watch</p>
                   <ul className="space-y-1.5">
-                    {cap.whatToAvoid.map((item, j) => (
+                    {cap.whatToAvoid.map((/** @type {string} */ item, /** @type {number} */ j) => (
                       <li key={j} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                         {item}

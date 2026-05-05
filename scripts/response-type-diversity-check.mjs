@@ -61,7 +61,7 @@ function runMixedFlowTest() {
             conversation_stage: i >= 4 ? "conditional_openness" : "concern_clarification",
         };
 
-        const selection = selectHcpResponseType(/** @type {any} */ ({
+        const selection = selectHcpResponseType(/** @type {any} */({
             hcp_state: state,
             previous_response_types: history,
             rep_quality: repQuality,
@@ -120,7 +120,7 @@ function runWeakEscalationTest() {
         rep_uses_vague_product_language: true,
     });
 
-    const selection = selectHcpResponseType(/** @type {any} */ ({
+    const selection = selectHcpResponseType(/** @type {any} */({
         hcp_state: state,
         previous_response_types: history,
         rep_quality: "weak",
