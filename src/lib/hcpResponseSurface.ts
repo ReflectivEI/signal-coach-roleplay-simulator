@@ -47,8 +47,6 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.")
     .replace(/\s+\b(what [^.?!]*?)\s+\bfor\./i, " $1?")
     .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?")
-    .replace(/\s+\bwith\?$/i, "?")
-    .replace(/\s+\bwith\.$/i, ".")
     .replace(/\bkeep it to\.$/i, "keep it to one point.");
 
   output = output.replace(/\.\./g, ".");
@@ -170,343 +168,18 @@ function dedupeLateStageQuestions(text = ""): string {
 
 function hasNaturalTimePressureDirective(text = ""): boolean {
   const value = normalizeText(text);
-  return /\b(get to the point|short version|bottom line|one thing|one practical point|keep it brief|keep this brief|keep it short|keep this tight|only got a minute|only have a minute|few minutes|give me the short version|brief version|quick version)\b/i.test(value);
+  return /\b(get to the point|short version|bottom line|one thing|only got a minute|only have a minute|few minutes|give me the short version|brief version|quick version)\b/i.test(value);
 }
 
-function extractDirectiveSignature(text = ""): string | null {
-  const value = normalizeText(text).toLowerCase();
-  if (!value) return null;
-
-  if (/\bget to the point\b/.test(value)) return "get_to_point";
-  if (/\bgive me the short version\b/.test(value) || /\bshort version\b/.test(value)) return "short_version";
-  if (/\bgive me one practical point\b/.test(value) || /\bone practical point\b/.test(value)) return "one_practical_point";
-  if (/\bkeep (it|this) brief\b/.test(value) || /\bkeep it short\b/.test(value) || /\bkeep this tight\b/.test(value) || /\bmake it quick\b/.test(value)) return "keep_brief";
-  if (/\bonly got a minute\b/.test(value) || /\bonly have a minute\b/.test(value)) return "one_minute";
-
-  return null;
-}
-
-function collectRecentDirectiveSignatures(recentHcpReplies: string[] = []): Set<string> {
-  const signatures = new Set<string>();
-  recentHcpReplies.forEach((line) => {
-    const sig = extractDirectiveSignature(line);
-    if (sig) signatures.add(sig);
-  });
-  return signatures;
-}
-
-function replaceDirectivePhrase(text = "", replacement = ""): string {
-  const output = normalizeText(text);
-  if (!output || !replacement) return output;
-
-  const replaced = output
-    .replace(/\bget to the point\b\.?/i, replacement)
-    .replace(/\bgive me the short version\b\.?/i, replacement)
-    .replace(/\bkeep (it|this) brief\b\.?/i, replacement)
-    .replace(/\bkeep it short\b\.?/i, replacement)
-    .replace(/\bmake it quick\b\.?/i, replacement)
-    .replace(/\bi(?:'ve| have) only got a minute\b\.?/i, replacement)
-    .replace(/\bi only have a minute\b\.?/i, replacement)
-    .replace(/\bgive me one practical point\b\.?/i, replacement)
-    .replace(/\bone practical point\b\.?/i, replacement);
-
-  return normalizeText(replaced);
-}
-
-function rotateRepeatedDirective(
-  text = "",
-  recentHcpReplies: string[] = [],
-  seed = "",
-): string {
-  const output = normalizeText(text);
-  if (!output) return output;
-
-  const current = extractDirectiveSignature(output);
-  if (!current) return output;
-
-  const recent = collectRecentDirectiveSignatures(recentHcpReplies);
-  if (!recent.has(current)) return output;
-
-  const alternativesBySignature: Record<string, string[]> = {
-    get_to_point: [
-      "Give me one practical point.",
-      "Keep it brief and practical.",
-      "Give me the short version.",
-    ],
-    short_version: [
-      "Keep it brief and practical.",
-      "Give me one practical point.",
-      "I've only got a minute.",
-    ],
-    keep_brief: [
-      "Give me the short version.",
-      "Give me one practical point.",
-      "I've only got a minute.",
-    ],
-    one_minute: [
-      "Keep it brief and practical.",
-      "Give me one practical point.",
-      "Give me the short version.",
-    ],
-    one_practical_point: [
-      "Keep it brief and practical.",
-      "I've only got a minute.",
-      "Give me the short version.",
-    ],
-  };
-
-  const alternatives = (alternativesBySignature[current] || []).filter(
-    (candidate) => !recent.has(extractDirectiveSignature(candidate) || ""),
-  );
-
-  if (!alternatives.length) return output;
-  const replacement = deterministicPick(alternatives, `${seed}|${output}`);
-  return replaceDirectivePhrase(output, replacement);
-}
-
-function extractPrimaryQuestion(text = ""): string {
-  const sentences = splitSentences(text);
-  return sentences.find((sentence) => /\?$/.test(sentence.trim())) || "";
-}
-
-function stripDirectiveSuffixes(text = ""): string {
-  return normalizeText(text)
-    .replace(/\b(give me the short version|give me one practical point|keep (it|this) brief(?: and practical)?|keep it short|keep this tight|make it quick|get to the point)\b\.?/gi, "")
-    .replace(/\bi(?:'ve| have) only got a minute\b\.?/gi, "")
-    .replace(/\bi only have a minute\b\.?/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function extractQuestionScaffoldSignature(text = ""): string | null {
-  const question = stripDirectiveSuffixes(extractPrimaryQuestion(text) || text).toLowerCase();
-  if (!question) return null;
-
-  if (/^what(?:'s| is) the one\b/.test(question)) return "one_focus_what";
-  if (/^what single\b/.test(question)) return "single_focus_what";
-  if (/^what specific\b/.test(question)) return "specific_what";
-  if (/^which part\b/.test(question)) return "which_part";
-  if (/^which step\b/.test(question)) return "which_step";
-  if (/^where does this fit\b/.test(question)) return "where_fit";
-  if (/^what does this (cut|change|simplify)\b/.test(question)) return "what_does_this_change";
-
-  const compact = question
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\b(prior|auth|authorization|workflow|callbacks?|staff|team|process|step|change|one|single|specific|this|that|my|our|the|a|an|is|does|what|which|where)\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (!compact) return "generic_question";
-  return `generic_${compact.split(" ").slice(0, 3).join("_")}`;
-}
-
-function collectRecentQuestionScaffoldSignatures(recentHcpReplies: string[] = []): Set<string> {
-  const signatures = new Set<string>();
-  recentHcpReplies.forEach((line) => {
-    const sig = extractQuestionScaffoldSignature(line);
-    if (sig) signatures.add(sig);
-  });
-  return signatures;
-}
-
-function extractQuestionStarter(text = ""): string {
-  const question = stripDirectiveSuffixes(extractPrimaryQuestion(text) || text)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!question) return "";
-  return question.split(" ").slice(0, 2).join(" ");
-}
-
-function collectRecentQuestionStarters(recentHcpReplies: string[] = []): Set<string> {
-  const starters = new Set<string>();
-  recentHcpReplies.forEach((line) => {
-    const starter = extractQuestionStarter(line);
-    if (starter) starters.add(starter);
-  });
-  return starters;
-}
-
-function extractQuestionLeadWord(text = ""): string {
-  const question = stripDirectiveSuffixes(extractPrimaryQuestion(text) || text)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (!question) return "";
-  return question.split(" ")[0] || "";
-}
-
-function countRepeatsInWindow(values: string[], target: string): number {
-  if (!target) return 0;
-  return values.reduce((count, value) => (value === target ? count + 1 : count), 0);
-}
-
-function buildQuestionTopicContext(text = "", concernFamily = "general") {
-  const value = normalizeText(text).toLowerCase();
-  const topic = /prior auth|authorization|approval/.test(value)
-    ? "prior_auth"
-    : /callback/.test(value)
-      ? "callbacks"
-      : /workflow|staff|team/.test(value)
-        ? "workflow"
-        : /cost|spend|budget/.test(value)
-          ? "cost"
-          : /evidence|proof|data|guideline|signal/.test(value)
-            ? "evidence"
-            : concernFamily;
-
-  return topic;
-}
-
-function buildQuestionAlternatives({
-  concernFamily,
-  topic,
-}: {
-  concernFamily: string;
-  topic: string;
-}): string[] {
-  if (topic === "prior_auth") {
-    return [
-      "Which part of prior auth is still causing the delays?",
-      "Where is prior auth still breaking down for your team?",
-      "What step in prior auth is still driving rework?",
-      "What single prior auth change would your staff feel first?",
-      "How is prior auth still slowing the team down?",
-    ];
-  }
-
-  if (topic === "callbacks") {
-    return [
-      "Which step is still generating callbacks for your team?",
-      "Where are callbacks still coming from in this process?",
-      "What single process change would cut callbacks fastest?",
-      "What part is still forcing the callback loop?",
-      "How are callbacks still getting triggered in the current process?",
-    ];
-  }
-
-  if (topic === "evidence" || concernFamily === "evidence") {
-    return [
-      "Which proof point would actually move this decision?",
-      "What evidence would make this actionable in practice?",
-      "What single data point would settle this concern?",
-      "What would you need to see to change the decision?",
-      "How would you want this evidence framed for a real decision?",
-    ];
-  }
-
-  if (topic === "cost" || concernFamily === "access") {
-    return [
-      "What changes in the total cost once implementation is included?",
-      "Where does the real cost pressure show up in practice?",
-      "What one number would make the value case clear?",
-      "What still blocks this from being workable on spend?",
-      "How would the all-in spend change once this is live?",
-    ];
-  }
-
-  if (topic === "workflow" || concernFamily === "workflow" || concernFamily === "time") {
-    return [
-      "Which step still slows the team down most?",
-      "Where is the workflow still getting stuck?",
-      "What single change would your staff feel first?",
-      "What still adds extra work for the team?",
-      "How is this still affecting day-to-day workflow?",
-    ];
-  }
-
-  return [
-    "What part still needs to become practical here?",
-    "Where is this still not working in practice?",
-    "What single change would make this usable now?",
-    "What would need to be clearer to move forward?",
-    "How would you make this practical in the room today?",
-  ];
-}
-
-function rotateRepeatedQuestionScaffold({
-  text,
-  recentHcpReplies = [],
-  concernFamily = "general",
-  seed = "",
-}: {
-  text: string;
-  recentHcpReplies?: string[];
-  concernFamily?: string;
-  seed?: string;
-}): string {
-  const output = normalizeText(text);
-  if (!output) return output;
-
-  const currentSignature = extractQuestionScaffoldSignature(output);
-  const currentStarter = extractQuestionStarter(output);
-  if (!currentSignature && !currentStarter) return output;
-
-  const recentWindow = recentHcpReplies.slice(-4);
-  const recentSignatures = collectRecentQuestionScaffoldSignatures(recentWindow);
-  const recentStarters = collectRecentQuestionStarters(recentWindow);
-  const recentStarterList = recentWindow.map((line) => extractQuestionStarter(line)).filter(Boolean);
-  const recentLeadWordList = recentWindow.map((line) => extractQuestionLeadWord(line)).filter(Boolean);
-  const currentLeadWord = extractQuestionLeadWord(output);
-  const lastStarter = recentStarterList[recentStarterList.length - 1] || "";
-  const lastLeadWord = recentLeadWordList[recentLeadWordList.length - 1] || "";
-
-  const signatureRepeated = Boolean(currentSignature && recentSignatures.has(currentSignature));
-  const starterRepeated = Boolean(currentStarter && recentStarters.has(currentStarter));
-  const starterOverused = countRepeatsInWindow(recentStarterList, currentStarter) >= 2;
-  const leadOverused = countRepeatsInWindow(recentLeadWordList, currentLeadWord) >= 3;
-  const adjacentStarterRepeat = Boolean(currentStarter && lastStarter && currentStarter === lastStarter);
-  const adjacentLeadRepeat = Boolean(currentLeadWord && lastLeadWord && currentLeadWord === lastLeadWord);
-  if (!signatureRepeated && !starterRepeated && !starterOverused && !leadOverused) return output;
-  if (!adjacentStarterRepeat && !adjacentLeadRepeat && !starterOverused && !leadOverused) return output;
-
-  const currentQuestion = extractPrimaryQuestion(output);
-  if (!currentQuestion) return output;
-
-  const topic = buildQuestionTopicContext(output, concernFamily);
-  const disallowedRecentStarters = new Set(recentStarterList.slice(-2));
-  const disallowedRecentLeadWords = new Set(recentLeadWordList.slice(-2));
-  const alternatives = buildQuestionAlternatives({ concernFamily, topic }).filter((candidate) => {
-    const sig = extractQuestionScaffoldSignature(candidate);
-    const starter = extractQuestionStarter(candidate);
-    const leadWord = extractQuestionLeadWord(candidate);
-    const sigAllowed = sig ? !recentSignatures.has(sig) : true;
-    const starterAllowed = starter ? !disallowedRecentStarters.has(starter) : true;
-    const leadAllowed = leadWord ? !disallowedRecentLeadWords.has(leadWord) : true;
-    return sigAllowed && starterAllowed && leadAllowed;
-  });
-
-  if (!alternatives.length) {
-    const fallback = buildQuestionAlternatives({ concernFamily, topic }).filter((candidate) => {
-      const leadWord = extractQuestionLeadWord(candidate);
-      return leadWord && leadWord !== currentLeadWord;
-    });
-    if (!fallback.length) return output;
-    const replacement = deterministicPick(fallback, `${seed}|${output}|${topic}|fallback`);
-    return normalizeText(output.replace(currentQuestion, replacement));
-  }
-  const replacement = deterministicPick(alternatives, `${seed}|${output}|${topic}`);
-  return normalizeText(output.replace(currentQuestion, replacement));
-}
-
-function pickDeterministicTimeTail(seed = "", recentHcpReplies: string[] = []): string {
+function pickDeterministicTimeTail(seed = ""): string {
   const options = [
     "Give me the short version.",
-    "Keep it brief and practical.",
-    "Give me one practical point.",
-    "I've only got a minute.",
+    "Get to the point.",
+    "Just give me the short version.",
   ];
-  const recent = collectRecentDirectiveSignatures(recentHcpReplies);
-  const filtered = options.filter((candidate) => {
-    const sig = extractDirectiveSignature(candidate);
-    return sig ? !recent.has(sig) : true;
-  });
-  const pool = filtered.length ? filtered : options;
   const key = normalizeText(seed);
   const score = Array.from(key).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return pool[score % pool.length];
+  return options[score % options.length];
 }
 
 function enforceSentenceBoundaries(text = ""): string {
@@ -574,20 +247,20 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\bI keep coming back to the same question\b/gi, "I still need to understand")
     .replace(/\bI still need to understand:\s*/gi, "I still need to understand ")
     .replace(/\bThe practical test is whether\b/gi, "I need to see whether")
-    .replace(/\bThe useful answer is whether\b/gi, "What matters is whether")
-    .replace(/\bThe useful answer is the\b/gi, "What matters is the")
-    .replace(/\bThe useful answer is an\b/gi, "What matters is an")
+    .replace(/\bThe useful answer is whether\b/gi, "I need to know whether")
+    .replace(/\bThe useful answer is the\b/gi, "The")
+    .replace(/\bThe useful answer is an\b/gi, "An")
     .replace(/\bThe useful answer is\b/gi, "What matters is")
-    .replace(/\bThe direct answer is that\b/gi, "Directly,")
-    .replace(/\bThe direct answer is\b/gi, "Directly,")
+    .replace(/\bThe direct answer is that\b/gi, "")
+    .replace(/\bThe direct answer is\b/gi, "")
     .replace(/\bThe real question is\b/gi, "I still need to understand")
     .replace(/\bIf the real blocker is\b/gi, "If that's really the sticking point,")
     .replace(/\bIf the blocker is\b/gi, "If that's the sticking point,")
     .replace(/\bThe one thing to know is whether\b/gi, "What I need to know is whether")
     .replace(/\bThe one thing that usually slows care is\b/gi, "What usually slows care is")
     .replace(/\bThe one step that should save time is\b/gi, "The step that should save time is")
-    .replace(/\bcan you make this quick\b/gi, "can you keep this short")
-    .replace(/\bmake this quick\b/gi, "keep this short")
+    .replace(/\bcan you make this quick\b/gi, "keep it short")
+    .replace(/\bmake this quick\b/gi, "keep it short")
     .replace(/\bI need to see whether:\s*/gi, "I need to see whether ")
     .replace(/\bI need to know whether:\s*/gi, "I need to know whether ")
     .replace(/\b(Then the real question is|The real question is|The practical test is|The useful answer is|The direct answer is|The one thing is|The one change is|That is the gap)\s*:\s*/g, "$1. ")
@@ -595,9 +268,9 @@ function applyGlobalSpokenRewrites(text = ""): string {
     .replace(/\s+:\s+/g, ". ");
 
   output = output
-    .replace(/\bKeep it brief\b/gi, "Keep this brief")
-    .replace(/\bKeep this brief\b/gi, "Keep this brief")
-    .replace(/\bKeep it tight\b/gi, "Keep this tight")
+    .replace(/\bKeep it brief\b/gi, "Give me the short version")
+    .replace(/\bKeep this brief\b/gi, "Give me the short version")
+    .replace(/\bKeep it tight\b/gi, "Give me the short version")
     .replace(/\bMake it quick\b/gi, "Keep it short")
     .replace(/\bover the access\b/gi, "through that access step")
     .replace(/\bnot just the product\s+(What single data point would change that\?)/gi, "not just the product. $1");
@@ -967,23 +640,23 @@ function applyShapeCompression(
   const preserveOpeningSentenceCount =
     firstHcpTurn
       ? Math.min(
-        3,
-        Math.max(
-          ["initial_access", "discovery", "clinical_value", "adoption_implementation", "commitment_close"].includes(journeyStage)
-            ? 2
-            : 1,
-          authoredOpeningSentenceCount || 1,
-        ),
-      )
+          3,
+          Math.max(
+            ["initial_access", "discovery", "clinical_value", "adoption_implementation", "commitment_close"].includes(journeyStage)
+              ? 2
+              : 1,
+            authoredOpeningSentenceCount || 1,
+          ),
+        )
       : 0;
   const maxSentences =
     preserveOpeningSentenceCount > 0
       ? preserveOpeningSentenceCount
       : turn.responseShape === "compressed_probe" || turn.responseShape === "conditional_close"
+      ? 1
+      : turn.responseShape === "pushback" || profile.brevity === "tight"
         ? 1
-        : turn.responseShape === "pushback" || profile.brevity === "tight"
-          ? 1
-          : 2;
+        : 2;
   output = trimToSentences(output, maxSentences);
 
   const words = output.split(/\s+/).filter(Boolean);
@@ -1101,7 +774,7 @@ function applyContinuityPressure(
 
   if (turn.escalationStage === "high_pressure" || turn.escalationStage === "disengaging") {
     output = output
-      .replace(/\bLet me step back\b/gi, "No, stay with it")
+      .replace(/\bLet me step back\b/gi, "Let's stay on the point")
       .replace(/\bBefore we get ahead of ourselves\b/gi, "Before we go further")
       .replace(/\bI'm trying to understand\b/gi, "I'm looking at")
       .replace(/\bI'm still trying to understand\b/gi, "I'm still looking at");
@@ -1115,20 +788,71 @@ function applyContinuityPressure(
   return normalizeText(output);
 }
 
+function applyProfessionalBoundaryBalance(
+  text: string,
+  turn: HcpTurnDirectiveSet,
+  profile: HcpRuntimeProfile,
+  scenario: any,
+  hcpTurnCount = 0,
+): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  // Keep pressure professional: remove abrupt phrasing that reads as hostile.
+  output = output
+    .replace(/\bNo, stay with it\b/gi, "Let's stay on the point")
+    .replace(/\bNo\. Stay with it\b/gi, "Let's stay on the point")
+    .replace(/\bI don't have time for this\b/gi, "I don't have time for a long loop here")
+    .replace(/\bThis is a waste of time\b/gi, "This isn't useful if it stays this broad")
+    .replace(/\bYou're not listening\b/gi, "We're not aligned on the concern yet");
+
+  // Avoid over-accommodating language in guarded/high-pressure states.
+  if (
+    profile.warmth === "guarded" ||
+    profile.patienceThreshold === "low" ||
+    turn.escalationStage === "high_pressure" ||
+    turn.escalationStage === "disengaging"
+  ) {
+    output = output
+      .replace(/\bI can stay with this if it stays concrete\b/gi, "Keep this concrete or we should pause here")
+      .replace(/\bI can stay with it\b/gi, "Keep it concrete")
+      .replace(/\bI can keep looking at it\b/gi, "Keep it decision-relevant")
+      .replace(/\bI can look at it\b/gi, "Make it practical")
+      .replace(/\bI can hear one more practical point\b/gi, "Give me one practical point");
+  }
+
+  // Deterministic polite wrap-up when repeated misses + low patience indicate low value.
+  const sustainedMisses = Array.isArray(turn.repeatedMisses) && turn.repeatedMisses.length >= 2;
+  const shouldWrap =
+    hcpTurnCount >= 2 &&
+    sustainedMisses &&
+    (turn.escalationStage === "disengaging" || profile.patienceThreshold === "low");
+
+  if (shouldWrap && !/pause here|circle back|send me the one point|come back better prepared|send me one concrete point/i.test(output)) {
+    const wrapSeed = `${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${hcpTurnCount}`;
+    const wrapLine = deterministicPick([
+      "Let's pause here. If you can send one concrete point that addresses this blocker, we can revisit.",
+      "I need to get back to patients. Send one decision-relevant point on this exact concern and we'll circle back.",
+      "Let's stop here for now. If you come back with one concrete answer to this blocker, we can continue.",
+    ], wrapSeed);
+    output = trimToSentences(`${output.replace(/[.?!]+$/, "")}. ${wrapLine}`, 2);
+  }
+
+  return normalizeText(output);
+}
+
 export function applyHcpResponseSurface({
   hcpReply,
   scenario,
   turn,
   profile,
   hcpTurnCount = 0,
-  recentHcpReplies = [],
 }: {
   hcpReply: string;
   scenario: any;
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
   hcpTurnCount?: number;
-  recentHcpReplies?: string[];
 }): string {
   let output = normalizeText(hcpReply);
   if (!output) return "";
@@ -1147,16 +871,20 @@ export function applyHcpResponseSurface({
   output = applyDomainCadence(output, turn.domain, turn.concernFamily);
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
+  output = applyProfessionalBoundaryBalance(output, turn, profile, scenario, hcpTurnCount);
   output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
-  // Validator-demotion: avoid authoring directive templates in the surface layer.
-  output = rotateRepeatedQuestionScaffold({
-    text: output,
-    recentHcpReplies,
-    concernFamily: turn.concernFamily,
-    seed: `${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${turn.domain}|${hcpTurnCount}`,
-  });
 
-  // Validator-demotion: do not append deterministic time-pressure tails.
+  if (
+    hcpTurnCount > 0 &&
+    scenario?.interactionPressure?.includes("time_constrained") &&
+    !/clock|time|quick|brief|tight|patient|schedule|doorway|room/i.test(output) &&
+    !hasNaturalTimePressureDirective(output) &&
+    turn.escalationStage !== "baseline"
+  ) {
+    output = ensureTerminalPunctuation(output.replace(/[.?!]+$/, ""));
+    output = `${output} ${pickDeterministicTimeTail(`${turn.phase}|${turn.concernFamily}|${turn.domain}|${output}`)}`;
+    output = trimToSentences(enforceSentenceBoundaries(output), 2);
+  }
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
     output = output

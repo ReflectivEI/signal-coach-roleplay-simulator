@@ -15,7 +15,6 @@
 import { invokeWorkerJson, invokeWorkerText } from "@/services/workerClient";
 import {
   BehaviorSignals,
-  PredictiveTurnDebug,
   SimulatorResponse,
   ConversationTurn,
   VolatilityProfile,
@@ -31,17 +30,7 @@ import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntime
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
-import {
-  addPersonaSpecificAnchor,
-  buildScenarioRouting,
-  detectTopicLanes,
-  enforceJourneyStageFit,
-  enforcePressureFit,
-  enforceScenarioTopicLane,
-  summarizeRoutingAlignment,
-} from "./scenarioRouting";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
-import { normalizeHcpSpokenText } from "./hcpResponseText";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -126,66 +115,8 @@ const CHATBOT_STYLE_PATTERNS = [
   /\bhow would you like to see\b/i,
   /\bthis will help me better understand\b/i,
   /\bi want to make sure i understand\b/i,
-  /\bi want to make sure we're\b/i,
   /\bto be honest, the biggest challenge i'm seeing is\b/i,
 ];
-
-const GLOBAL_BANNED_HCP_PHRASES = [
-  "what's concretely different for me after this",
-  "what’s concretely different for me after this",
-  "the practical answer has to stay tied",
-  "what changes in practice if this is worth continuing",
-  "i hear that a lot",
-  "keep this brief",
-  "i'm not convinced yet",
-  "i’m not convinced yet",
-];
-
-function containsGlobalBannedPhrase(text = ""): boolean {
-  const line = String(text || "").toLowerCase();
-  return GLOBAL_BANNED_HCP_PHRASES.some((phrase) => line.includes(phrase));
-}
-
-function referencesRecentBannedPhrase({
-  text,
-  transcript,
-}: {
-  text: string;
-  transcript: ConversationTurn[];
-}): boolean {
-  const current = String(text || "").toLowerCase();
-  const recent = (Array.isArray(transcript) ? transcript : [])
-    .filter((turn) => turn?.speaker === "hcp")
-    .map((turn) => String(turn?.text || "").toLowerCase())
-    .slice(-5);
-
-  return GLOBAL_BANNED_HCP_PHRASES.some((phrase) => {
-    if (!current.includes(phrase)) return false;
-    return recent.some((line) => line.includes(phrase));
-  });
-}
-
-function pickContinuityProgressionAction({
-  sessionState,
-  repMessage,
-}: {
-  sessionState?: any;
-  repMessage?: string;
-}): "restate" | "sharpen" | "deeper_barrier" | "acknowledge_progress" | "move_next_step" | "disengage" {
-  const escalation = Number(sessionState?.escalationLevel || 0);
-  const openness = Number(sessionState?.hcpState?.openness || 5);
-  const skepticism = Number(sessionState?.hcpState?.skepticism || 5);
-  const resistance = Number(sessionState?.hcpState?.resistance || 5);
-  const rep = String(repMessage || "").toLowerCase();
-  const addressed = /\b(specifically|exactly|for this patient|step|path|proof|evidence|subgroup|next step|owner)\b/.test(rep);
-
-  if (escalation >= 4 && resistance >= 8) return "disengage";
-  if (addressed && openness >= 7) return "move_next_step";
-  if (addressed && skepticism <= 5) return "acknowledge_progress";
-  if (escalation >= 3 || skepticism >= 7) return "deeper_barrier";
-  if (escalation >= 2) return "sharpen";
-  return "restate";
-}
 
 function needsNaturalnessRewrite(text: string): boolean {
   const line = String(text || "").trim();
@@ -242,13 +173,11 @@ async function rewriteForSpokenNaturalness({
   scenario,
   behaviorState,
   prediction,
-  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
   prediction: any;
-  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -293,7 +222,7 @@ Return ONLY the rewritten spoken line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: rewriteTemperature,
+    temperature: 0.1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -303,12 +232,10 @@ async function rewriteForSpokenStyle({
   hcpReply,
   scenario,
   behaviorState,
-  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
-  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -358,7 +285,7 @@ Return ONLY the rewritten HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: rewriteTemperature,
+    temperature: 0.1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -370,14 +297,12 @@ async function rewriteForContextConsistency({
   behaviorState,
   currentJourneyState,
   prediction,
-  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   scenario: any;
   behaviorState: string;
   currentJourneyState: string;
   prediction: any;
-  rewriteTemperature?: number;
 }): Promise<string> {
   const runtimeProfile = deriveHcpRuntimeProfile({
     scenario,
@@ -418,7 +343,7 @@ Return ONLY the recalibrated HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 120,
-    temperature: rewriteTemperature,
+    temperature: 0.1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -430,14 +355,12 @@ async function rewriteForContinuityVariation({
   scenario,
   behaviorState,
   currentJourneyState,
-  rewriteTemperature = 0.1,
 }: {
   hcpReply: string;
   transcript: ConversationTurn[];
   scenario: any;
   behaviorState: string;
   currentJourneyState: string;
-  rewriteTemperature?: number;
 }): Promise<string> {
   const previousHcpLine = getLastHcpReplyText(transcript);
   const prompt = `You are rewriting one HCP line in a pharma role-play simulator.
@@ -470,7 +393,7 @@ Return ONLY the rewritten HCP line.`;
   const rewritten = await invokeWorkerText({
     prompt,
     max_tokens: 90,
-    temperature: rewriteTemperature,
+    temperature: 0.1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -514,479 +437,6 @@ function startsWithSameFrame(a = "", b = ""): boolean {
   return Boolean(aHead && bHead && aHead === bHead);
 }
 
-function normalizeForEchoCheck(text = ""): string {
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function hasLongSharedSequence(a = "", b = "", minSequence = 5): boolean {
-  const aTokens = normalizeForEchoCheck(a).split(" ").filter(Boolean);
-  const bText = normalizeForEchoCheck(b);
-  if (!aTokens.length || !bText) return false;
-
-  for (let i = 0; i <= aTokens.length - minSequence; i += 1) {
-    const phrase = aTokens.slice(i, i + minSequence).join(" ");
-    if (phrase && bText.includes(phrase)) return true;
-  }
-  return false;
-}
-
-function isOpeningEcho({
-  hcpReply,
-  openingScene,
-  hcpTurnCount,
-}: {
-  hcpReply: string;
-  openingScene: string;
-  hcpTurnCount: number;
-}): boolean {
-  if (hcpTurnCount !== 0) return false;
-  const reply = normalizeForEchoCheck(hcpReply);
-  const opening = normalizeForEchoCheck(openingScene);
-  if (!reply || !opening) return false;
-
-  if (reply === opening) return true;
-  if (continuityOverlapScore(reply, opening) >= 0.74) return true;
-  if (hasLongSharedSequence(reply, opening, 6)) return true;
-
-  return false;
-}
-
-function inferRepTopicLabel(repMessage = ""): string {
-  const text = String(repMessage || "").toLowerCase();
-  if (/prior auth|prior authorization|approval|paperwork/.test(text)) return "prior auth workflow";
-  if (/study|trial|data|evidence/.test(text)) return "study follow-up";
-  if (/coverage|formulary|access|payer/.test(text)) return "access";
-  if (/safety|risk|adverse/.test(text)) return "safety";
-  if (/patient|subgroup|fit/.test(text)) return "patient fit";
-  return "your point";
-}
-
-function repMentionsStudy(repMessage = ""): boolean {
-  return /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(repMessage || ""));
-}
-
-function hcpAcknowledgesStudy(hcpReply = ""): boolean {
-  return /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(hcpReply || ""));
-}
-
-function ensureFirstTurnRepTopicAcknowledgment({
-  hcpReply,
-  repMessage,
-  scenario,
-  hcpTurnCount,
-}: {
-  hcpReply: string;
-  repMessage: string;
-  scenario: any;
-  hcpTurnCount: number;
-}): string {
-  if (hcpTurnCount !== 0) return hcpReply;
-  if (!repMentionsStudy(repMessage)) return hcpReply;
-  if (hcpAcknowledgesStudy(hcpReply)) return hcpReply;
-
-  const pressures = scenario?.interactionPressure || [];
-  const highPressure =
-    pressures.includes("time_constrained") ||
-    pressures.includes("operationally_constrained");
-
-  if (highPressure) {
-    return "I remember the study you dropped off. I've only got a minute, so tell me what would be different for my staff or patients if this actually helps.";
-  }
-
-  return "I remember the study you dropped off. Give me one concrete takeaway from it that I can apply to a real patient decision.";
-}
-
-function needsHumanPhraseSafetyRewrite({
-  hcpReply,
-  hcpTurnCount,
-}: {
-  hcpReply: string;
-  hcpTurnCount: number;
-}): boolean {
-  const line = String(hcpReply || "").toLowerCase();
-  const bannedPatterns = [
-    /\bprior auth study\b/i,
-    /\bpoint about that prior auth study\b/i,
-    /\bget to the point about that\b/i,
-    /\bi'?m busy, let'?s get to the point\b/i,
-    /\bprior auth (issue|step|problem).+\bregarding that study\b/i,
-    /\byou'?re here about.+\bstudy\b/i,
-    /\bregarding that study\b/i,
-    /\bissue you'?re here about\b/i,
-  ];
-
-  if (bannedPatterns.some((pattern) => pattern.test(line))) return true;
-  if (hcpTurnCount === 0 && /\bstudy\b/i.test(line) && /\bprior auth\b/i.test(line) && /\bget to the point\b/i.test(line)) return true;
-  if (hcpTurnCount === 0 && /\bstudy\b/i.test(line) && /\bprior auth\b/i.test(line) && /\byou'?re here about|regarding\b/i.test(line)) return true;
-
-  return false;
-}
-
-function buildHumanPhraseSafetyFallback({
-  repMessage,
-  scenario,
-  hcpTurnCount,
-}: {
-  repMessage: string;
-  scenario: any;
-  hcpTurnCount: number;
-}): string {
-  const scenarioRouting = buildScenarioRouting(scenario);
-  const mentionsStudy = /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(String(repMessage || ""));
-  const pressures = scenario?.interactionPressure || [];
-  const highPressure = pressures.includes("time_constrained") || pressures.includes("operationally_constrained");
-
-  if (hcpTurnCount === 0 && mentionsStudy && highPressure) {
-    const routed = enforceScenarioTopicLane({
-      draft_hcp_response: "I remember the study you left. I've only got a minute, so tell me what would be different if this actually helps in my practice.",
-      scenario_routing: scenarioRouting,
-      rep_message: repMessage,
-      hcp_state: scenario?.startingBehaviorState || "",
-    });
-    return routed.text;
-  }
-  if (hcpTurnCount === 0 && mentionsStudy) {
-    return enforceScenarioTopicLane({
-      draft_hcp_response: "I remember the study you left. Give me one practical takeaway from it that I can use in a patient decision.",
-      scenario_routing: scenarioRouting,
-      rep_message: repMessage,
-      hcp_state: scenario?.startingBehaviorState || "",
-    }).text;
-  }
-  if (highPressure) {
-    return enforceScenarioTopicLane({
-      draft_hcp_response: "I've only got a minute. Tell me what would be different for patients or care decisions today.",
-      scenario_routing: scenarioRouting,
-      rep_message: repMessage,
-      hcp_state: scenario?.startingBehaviorState || "",
-    }).text;
-  }
-  return enforceScenarioTopicLane({
-    draft_hcp_response: "Give me one practical takeaway I can apply to a real patient decision.",
-    scenario_routing: scenarioRouting,
-    rep_message: repMessage,
-    hcp_state: scenario?.startingBehaviorState || "",
-  }).text;
-}
-
-function buildDeterministicFirstTurnFallback({
-  repMessage,
-  scenario,
-  predictedBehaviorState,
-}: {
-  repMessage: string;
-  scenario: any;
-  predictedBehaviorState: string;
-}): string {
-  const scenarioRouting = buildScenarioRouting(scenario);
-  const topic = inferRepTopicLabel(repMessage);
-  const pressures = scenario?.interactionPressure || [];
-  const highPressure =
-    pressures.includes("time_constrained") ||
-    pressures.includes("operationally_constrained") ||
-    ["closed", "resistance", "time_pressure"].includes(predictedBehaviorState);
-
-  if (highPressure) {
-    return enforceScenarioTopicLane({
-      draft_hcp_response: `I can give you a minute. If this is about ${topic}, tell me what would be different for one patient this week.`,
-      scenario_routing: scenarioRouting,
-      rep_message: repMessage,
-      hcp_state: predictedBehaviorState,
-    }).text;
-  }
-  return enforceScenarioTopicLane({
-    draft_hcp_response: `Okay, I'm listening. If this is about ${topic}, give me one concrete takeaway I can use in a treatment decision.`,
-    scenario_routing: scenarioRouting,
-    rep_message: repMessage,
-    hcp_state: predictedBehaviorState,
-  }).text;
-}
-
-function logRoutingViolation({
-  violation,
-  detectedTerms = [],
-  allowedLanes = [],
-  journeyStage = "",
-  action = "rewritten",
-}: {
-  violation: string;
-  detectedTerms?: string[];
-  allowedLanes?: string[];
-  journeyStage?: string;
-  action?: "rewritten" | "regenerated" | "none";
-}) {
-  const payload = {
-    type: "routing_violation",
-    violation,
-    detected_terms: detectedTerms,
-    allowed_lanes: allowedLanes,
-    journey_stage: journeyStage,
-    action,
-  };
-  console.log(JSON.stringify(payload));
-}
-
-async function regenerateConstrainedHcpResponse({
-  draft_response,
-  scenario_routing,
-  hcp_state,
-  hcp_brain,
-  rep_message,
-}: {
-  draft_response: string;
-  scenario_routing: any;
-  hcp_state: string;
-  hcp_brain: any;
-  rep_message: string;
-}): Promise<string> {
-  const brainProfile = {
-    mindset: hcp_brain?.mindset || hcp_brain?.predictedBehaviorState || "unknown",
-    decisionFilter: hcp_brain?.decisionFilter || hcp_brain?.concernFamily || "unknown",
-    credibilityDrivers: hcp_brain?.credibilityDrivers || hcp_brain?.predictedDrivers || [],
-    trustBreakers: hcp_brain?.trustBreakers || [],
-  };
-  const prompt = `Generate an HCP response that strictly adheres to:
-- journey_stage: ${scenario_routing?.journey_stage || "unknown"}
-- allowed_topic_lanes: ${(scenario_routing?.allowed_topic_lanes || []).join(", ") || "none"}
-- disallowed_topic_lanes: ${(scenario_routing?.disallowed_topic_lanes || []).join(", ") || "none"}
-- interaction_pressure: ${(scenario_routing?.interaction_pressure || []).join(", ") || "none"}
-- persona constraints: behavior_state=${hcp_state || "unknown"}; predicted_state=${hcp_brain?.predictedBehaviorState || "unknown"}; concern_family=${scenario_routing?.concern_family || "general"}
-- predictive brain profile: ${JSON.stringify(brainProfile)}
-
-Rep message:
-${rep_message || "none"}
-
-Current draft to repair:
-${draft_response || ""}
-
-Use the Predictive HCP Brain as the source of truth.
-Do NOT use generic training simulator language.
-Do NOT reuse these phrases: "I hear that a lot", "Keep this brief", "I'm not convinced yet", "What's concretely different for me after this", "What changes in practice if this is worth continuing".
-Do NOT reference disallowed topics.
-Return only one natural HCP line (1-2 sentences).`;
-
-  try {
-    const regenerated = await invokeWorkerText({
-      prompt,
-      max_tokens: 120,
-      temperature: 0.1,
-    });
-    return String(regenerated || draft_response || "").trim();
-  } catch {
-    return String(draft_response || "").trim();
-  }
-}
-
-function validateRoutingOnly({
-  text,
-  scenarioRouting,
-}: {
-  text: string;
-  scenarioRouting: any;
-}) {
-  const summary = summarizeRoutingAlignment({
-    text,
-    scenarioRouting,
-  });
-
-  return {
-    hasLaneViolation: Array.isArray(summary?.prohibited_topic_detected) && summary.prohibited_topic_detected.length > 0,
-    summary,
-  };
-}
-
-function buildBrainGroundedFallbackLine({
-  scenario_routing,
-  hcp_brain,
-  hcp_state,
-}: {
-  scenario_routing: any;
-  hcp_brain: any;
-  hcp_state: string;
-}) {
-  const lane = (scenario_routing?.allowed_topic_lanes || [])[0] || "general";
-  const stage = String(scenario_routing?.journey_stage || "");
-  const state = String(hcp_state || hcp_brain?.predictedBehaviorState || "neutral").toLowerCase();
-  const sharp = /resist|closed|frustrat|time/.test(state);
-
-  const byLane: Record<string, string> = {
-    access_formulary: sharp
-      ? "If access is the blocker, show me the exact step that changes first."
-      : "If access is the blocker, what exact step changes first for this patient?",
-    prior_auth: sharp
-      ? "Name the exact prior-auth step that gets cleaner."
-      : "Which exact prior-auth step gets cleaner for this case?",
-    workflow_implementation: sharp
-      ? "Name the specific workflow step that changes for staff."
-      : "Which specific workflow step changes for staff in this case?",
-    clinical_value: sharp
-      ? "Point to the one clinical signal that changes a real decision."
-      : "What one clinical signal should change a real decision for this patient profile?",
-    guideline_evidence: sharp
-      ? "Give me one guideline-relevant signal for this patient type."
-      : "What one guideline-relevant signal applies to the patients I prioritize?",
-    patient_fit: sharp
-      ? "Tell me exactly which patient type this is for."
-      : "Which exact patient profile is this intended for first?",
-    general: sharp
-      ? "Keep it specific to this case and tell me the practical blocker."
-      : "Keep it specific to this case and tell me the practical blocker first.",
-  };
-
-  const stageTail = stage === "commitment_close"
-    ? " Then name one concrete next step."
-    : "";
-
-  return `${byLane[lane] || byLane.general}${stageTail}`.replace(/\s+/g, " ").trim();
-}
-
-export async function enforceHCPResponse({
-  draft_response,
-  scenario_routing,
-  hcp_state,
-  hcp_brain,
-  rep_message,
-  temperature,
-  tempProfile,
-  scenario,
-}: {
-  draft_response: string;
-  scenario_routing: any;
-  hcp_state: string;
-  hcp_brain: any;
-  rep_message: string;
-  temperature?: number;
-  tempProfile?: any;
-  scenario?: any;
-}): Promise<string> {
-  let response = String(draft_response || "").trim();
-
-  // Guardrails are validators here; they do not author final dialogue.
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const routingValidation = validateRoutingOnly({
-      text: response,
-      scenarioRouting: scenario_routing,
-    });
-    const stageValidation = enforceJourneyStageFit({
-      draft_hcp_response: response,
-      journey_stage: scenario_routing?.journey_stage,
-      scenario_routing,
-      hcp_state,
-    });
-    const pressureValidation = enforcePressureFit({
-      draft_hcp_response: response,
-      interaction_pressure: scenario_routing?.interaction_pressure,
-      scenario_routing,
-      hcp_state,
-    });
-
-    const failed = routingValidation.hasLaneViolation
-      || stageValidation.changed
-      || pressureValidation.changed
-      || containsGlobalBannedPhrase(response);
-
-    if (!failed) break;
-
-    logRoutingViolation({
-      violation: routingValidation.hasLaneViolation ? "disallowed_topic_lane" : "validator_regeneration",
-      detectedTerms: routingValidation.summary?.prohibited_topic_detected || [],
-      allowedLanes: scenario_routing?.allowed_topic_lanes || [],
-      journeyStage: scenario_routing?.journey_stage || "",
-      action: "regenerated",
-    });
-
-    response = await regenerateConstrainedHcpResponse({
-      draft_response: response,
-      scenario_routing,
-      hcp_state,
-      hcp_brain,
-      rep_message,
-    });
-  }
-
-  const finalValidation = validateRoutingOnly({
-    text: response,
-    scenarioRouting: scenario_routing,
-  });
-  if (finalValidation.hasLaneViolation || containsGlobalBannedPhrase(response)) {
-    response = buildBrainGroundedFallbackLine({
-      scenario_routing,
-      hcp_brain,
-      hcp_state,
-    });
-  }
-
-  response = enforceTemperatureConsistency({
-    response,
-    tempProfile: tempProfile || getTemperatureBehaviorProfile(Number(temperature) || 5),
-    scenario,
-  });
-
-  return response;
-}
-
-async function rewriteFirstTurnAwayFromOpeningEcho({
-  hcpReply,
-  openingScene,
-  repMessage,
-  scenario,
-  predictivePromptContext,
-  predictedBehaviorState,
-  rewriteTemperature = 0.1,
-}: {
-  hcpReply: string;
-  openingScene: string;
-  repMessage: string;
-  scenario: any;
-  predictivePromptContext: string;
-  predictedBehaviorState: string;
-  rewriteTemperature?: number;
-}): Promise<string> {
-  const prompt = `Rewrite this first HCP reply in a pharma role-play.
-
-Goal:
-- keep the same pressure and stance
-- acknowledge the rep's exact latest message topic
-- make it sound like a real clinician
-- DO NOT echo the opening setup wording
-
-Hard constraints:
-- 1-2 short sentences only
-- do not reuse 6+ word sequences from the opening setup
-- no phrase "My MA said you had something about prior auth reduction"
-- preserve high-pressure directness when applicable
-
-Scenario: ${scenario?.title || "scenario"}
-Opening setup to avoid echoing:
-${openingScene}
-
-Rep latest message:
-${repMessage}
-
-Predicted behavior state:
-${predictedBehaviorState}
-
-Predictive context:
-${predictivePromptContext || "none"}
-
-Current reply to rewrite:
-${hcpReply}
-
-Return ONLY the rewritten HCP line.`;
-
-  const rewritten = await invokeWorkerText({
-    prompt,
-    max_tokens: 120,
-    temperature: rewriteTemperature,
-  });
-
-  return String(rewritten || hcpReply).trim();
-}
-
 function deterministicContinuityVariation({
   hcpReply,
   transcript,
@@ -999,30 +449,49 @@ function deterministicContinuityVariation({
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const concernTags = inferConcernTags(`${hcpReply} ${latestConcern}`);
   const text = String(hcpReply || "").trim().replace(/[.?!]+$/, "");
+  const normalizedText = text.toLowerCase();
 
   if (!text) return hcpReply;
+  if (/that still does not change the decision threshold/i.test(text)) {
+    return `${text}.`;
+  }
 
   if (concernTags.includes("workflow")) {
-    return `${text}. I still need the exact workflow step and owner for this case.`;
+    if (/prior auth|prior authorization/i.test(text)) {
+      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")} now falls back on staff.`;
+    }
+    if (/staff|team|workflow|handoff|callback/i.test(text)) {
+      return `${text} That's still landing on the team.`;
+    }
+    return `${text} That's still the workflow problem.`;
   }
 
   if (concernTags.includes("access")) {
-    return `${text}. I still need the exact access step that changes first.`;
+    return `${text} That still leaves the access step unresolved.`;
   }
 
   if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
-    return `${text}. Tie this to the exact patient profile I should act on.`;
+    return `${text} That still does not change the decision threshold.`;
   }
 
   if (concernTags.includes("cost_value")) {
-    return `${text}. Show the concrete decision impact, not a broad value claim.`;
+    return `${text} I still need the part that changes the value equation.`;
   }
 
   if (concernTags.includes("renal")) {
-    return `${text}. Narrow this to what it means for renal patients I actually manage.`;
+    if (
+      /renal (?:impairment|function|patients?)/i.test(text) &&
+      /(still does not address|still doesn't address|still does not tell me|still doesn't tell me|does not apply cleanly|doesn't apply cleanly|not enough for my patients)/i.test(text)
+    ) {
+      return "That still doesn't address what this means for the renal patients I manage.";
+    }
+    if (/what (?:that|this) means in the renal patients i manage|renal patients i manage/i.test(normalizedText)) {
+      return `${text}.`;
+    }
+    return `${text} I still do not know what that means in the renal patients I manage.`;
   }
 
-  return `${text}. Narrow this to the unresolved blocker from the last turn.`;
+  return `${text} That still does not answer the blocker I'm holding on.`;
 }
 
 function needsContinuityVariationRewrite({
@@ -1133,646 +602,6 @@ function inferConcernTags(text: string): string[] {
   return tags;
 }
 
-function deriveMappedSamplingControls({
-  currentJourneyState,
-  currentBehaviorState,
-  turn,
-  profile,
-  volatilityProfile,
-  interactionPressures,
-  tempProfile,
-}: {
-  currentJourneyState: string;
-  currentBehaviorState: string;
-  turn: any;
-  profile: any;
-  volatilityProfile: VolatilityProfile;
-  interactionPressures: string[];
-  tempProfile?: any;
-}): {
-  responseTemperature: number;
-  rewriteTemperature: number;
-  engagementDirective: string;
-  rationale: string[];
-} {
-  const state = String(currentBehaviorState || "").toLowerCase();
-  const journey = String(currentJourneyState || "").toLowerCase();
-  const pressures = interactionPressures || [];
-
-  const highPressure =
-    pressures.includes("time_constrained") ||
-    pressures.includes("operationally_constrained") ||
-    pressures.includes("skeptical_resistant") ||
-    pressures.includes("safety_concern") ||
-    ["closed", "resistance", "frustration", "time_pressure"].includes(state) ||
-    volatilityProfile !== "stable";
-
-  let responseTemperature = 0.18;
-  let rewriteTemperature = 0.09;
-  const rationale: string[] = [];
-
-  if (highPressure || turn?.escalationStage === "disengaging") {
-    responseTemperature = 0.1;
-    rewriteTemperature = 0.06;
-    rationale.push("High pressure/disengaging state: tightly constrain variability for clipped realism.");
-  } else if (turn?.responseShape === "compressed_probe" || turn?.responseShape === "pushback") {
-    responseTemperature = 0.12;
-    rewriteTemperature = 0.07;
-    rationale.push("Compressed/pushback shape: keep concise, controlled phrasing.");
-  } else if (pressures.includes("curious_uncertain")) {
-    responseTemperature = 0.22;
-    rewriteTemperature = 0.1;
-    rationale.push("Curious-uncertain pressure: allow moderate exploration while keeping clinician realism.");
-  } else if (profile?.responseMode === "exploratory" && profile?.warmth === "open") {
-    responseTemperature = 0.24;
-    rewriteTemperature = 0.11;
-    rationale.push("Exploratory/open mode: allow modest lexical variation.");
-  } else if (journey.includes("clinical") || turn?.concernFamily === "evidence") {
-    responseTemperature = 0.16;
-    rewriteTemperature = 0.09;
-    rationale.push("Clinical/evidence mode: favor precise, lower-variance language.");
-  } else {
-    responseTemperature = 0.18;
-    rewriteTemperature = 0.09;
-    rationale.push("Baseline mode: balanced realism and variation.");
-  }
-
-  if (tempProfile?.band === "high") {
-    responseTemperature = Math.max(0.08, responseTemperature - 0.05);
-    rewriteTemperature = Math.max(0.05, rewriteTemperature - 0.03);
-    rationale.push("High realism lever: increase skepticism, tighten output, and reduce lexical drift.");
-  } else if (tempProfile?.band === "low") {
-    responseTemperature = Math.min(0.28, responseTemperature + 0.04);
-    rewriteTemperature = Math.min(0.14, rewriteTemperature + 0.02);
-    rationale.push("Low realism lever: allow collaborative exploration and slightly fuller phrasing.");
-  }
-
-  let engagementDirective = "Maintain measured engagement; one concrete blocker at a time.";
-  if (highPressure) {
-    engagementDirective = "Low engagement posture: one short sentence preferred, blocker-first phrasing, and no explanatory lead-ins such as 'I'm still waiting to hear how you plan to'.";
-  } else if (pressures.includes("curious_uncertain")) {
-    engagementDirective = "Curious engagement posture: allow one concise exploratory question tied to patient-selection logic.";
-  } else if (profile?.responseMode === "exploratory") {
-    engagementDirective = "Moderate engagement posture: allow one clarifying question if clinically relevant.";
-  } else if (turn?.closeMode) {
-    engagementDirective = "Conditional engagement posture: one narrow condition for next-step movement.";
-  }
-
-  return {
-    responseTemperature,
-    rewriteTemperature,
-    engagementDirective,
-    rationale,
-  };
-}
-
-function mapTemperatureBand(temp: number) {
-  const normalized = Math.max(1, Math.min(10, Number(temp) || 5));
-  if (normalized <= 3) return "low";
-  if (normalized <= 7) return "medium";
-  return "high";
-}
-
-function getTemperatureBehaviorProfile(temp: number) {
-  const band = mapTemperatureBand(temp);
-
-  return {
-    band,
-    skepticism: band === "low" ? 2 : band === "medium" ? 5 : 9,
-    resistance: band === "low" ? 2 : band === "medium" ? 5 : 9,
-    openness: band === "low" ? 9 : band === "medium" ? 6 : 2,
-    patience: band === "low" ? 9 : band === "medium" ? 6 : 3,
-    interruptionLikelihood: band === "low" ? 1 : band === "medium" ? 4 : 8,
-    responseLength: band === "low" ? "long" : band === "medium" ? "balanced" : "short",
-    tone: band === "low" ? "collaborative" : band === "medium" ? "neutral" : "sharp",
-    questionStyle: band === "low" ? "exploratory" : band === "medium" ? "probing" : "challenging",
-  };
-}
-
-function getConversationMode(tempProfile: any) {
-  if (tempProfile?.band === "low") return "collaborative";
-  if (tempProfile?.band === "medium") return "guarded";
-  return "resistant";
-}
-
-function buildSessionMemoryPromptBlock(sessionState: any) {
-  const sessionMemory = Array.isArray(sessionState?.sessionMemory)
-    ? sessionState.sessionMemory.slice(-4)
-    : [];
-  const history = Array.isArray(sessionState?.interactionHistory)
-    ? sessionState.interactionHistory.slice(-3)
-    : [];
-  const previousTurn = history[history.length - 1] || {};
-  const progressionAction = pickContinuityProgressionAction({
-    sessionState,
-    repMessage: previousTurn?.rep || sessionState?.previousInteraction || "",
-  });
-  const priorAskAddressed = /\b(specifically|exactly|proof|evidence|path|step|owner|subgroup|next step)\b/i.test(
-    String(previousTurn?.rep || "")
-  );
-  const historyLines = history.map((item: any, index: number) => (
-    `- Turn ${index + 1}: REP="${String(item?.rep || "").slice(0, 120)}" | HCP="${String(item?.hcp || "").slice(0, 120)}" | concern=${item?.concernFamily || "unknown"} | behavior=${item?.behaviorState || "unknown"}`
-  )).join("\n");
-
-  return `
-SESSION MEMORY (persisted runtime state):
-- persona archetype: ${sessionState?.hcpPersona?.type || "unknown"}
-- predictive source: ${sessionState?.hcpPersona?.source || "unknown"}
-- current temperature: ${sessionState?.temperature}
-- previous rep interaction: ${String(sessionState?.previousInteraction || "none")}
-- previous concern family: ${sessionState?.previousConcernFamily || "unknown"}
-- escalation level: ${Number(sessionState?.escalationLevel || 0)}
-- last hcp state: ${JSON.stringify(sessionState?.hcpState || {})}
-- previous HCP statement: "${String(previousTurn?.hcp || "none").slice(0, 180)}"
-- previous REP response: "${String(previousTurn?.rep || "none").slice(0, 180)}"
-- unresolved concern: ${sessionState?.previousConcernFamily || sessionState?.hcpState?.concernFamily || "unknown"}
-- last response_type: ${previousTurn?.responseType || "unknown"}
-- did REP address prior ask: ${priorAskAddressed ? "yes" : "no"}
-- progression action for this turn: ${progressionAction}
-${historyLines ? `- recent interaction history:\n${historyLines}` : "- recent interaction history: none"}
-${sessionMemory.length ? `- session memory states:\n${sessionMemory.map((item: any, index: number) => (`  - M${index + 1}: response=\"${String(item?.hcpResponse || "").slice(0, 100)}\" | state=${JSON.stringify(item?.hcpState || {})} | temp=${item?.temperature || "n/a"}`)).join("\n")}` : "- session memory states: none"}
-
-Continuity rules:
-- Continue the unresolved concern family unless the rep directly resolves it.
-- If escalation level is high, tighten resistance posture and increase challenge specificity.
-- Progress concern from skepticism -> proof-seeking -> acceptance-or-resistance based on rep quality and temperature.
-- Never reuse the same sentence framing across turns; restate in fresh wording.
-`;
-}
-
-function applyEscalationContinuityStyle({
-  hcpReply,
-  tempProfile,
-  sessionState,
-}: {
-  hcpReply: string;
-  tempProfile: any;
-  sessionState?: any;
-}) {
-  let text = String(hcpReply || "").trim();
-  if (!text) return text;
-
-  // Validator-only demotion: remove banned canned fragments without authoring replacements.
-  text = text
-    .replace(/\bi hear that a lot\b[,.!?]?/gi, "")
-    .replace(/\bkeep this brief\b[,.!?]?/gi, "")
-    .replace(/\bi'?m not convinced yet\b[,.!?]?/gi, "")
-    .replace(/\bwhat changes in practice if this is worth continuing\??/gi, "")
-    .replace(/\bwhat'?s concretely different for me after this\??/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return text;
-}
-
-function deterministicVariant(seed = "", variants: string[] = []): string {
-  if (!variants.length) return "";
-  let hash = 0;
-  const value = String(seed || "seed");
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
-  }
-  return variants[Math.abs(hash) % variants.length];
-}
-
-function concernScopedQuestionVariant({
-  mode,
-  concernFamily,
-  escalationLevel,
-  temperatureBand,
-  historyLength,
-}: {
-  mode: "collaborative" | "guarded" | "resistant";
-  concernFamily?: string;
-  escalationLevel?: number;
-  temperatureBand?: string;
-  historyLength?: number;
-}) {
-  const concern = String(concernFamily || "general").toLowerCase();
-  const escalation = Number(escalationLevel || 0);
-  const seed = `${mode}|${concern}|${escalation}|${temperatureBand || "medium"}|${historyLength || 0}`;
-
-  const byConcern: Record<string, string[]> = {
-    access: [
-      "What changes in the approval path for my staff?",
-      "Which access step is actually easier after this?",
-      "Where does this reduce friction in prior auth?",
-    ],
-    workflow: [
-      "Which step comes off my team's plate?",
-      "What task is my staff doing less of after this?",
-      "Where does this remove rework for the team?",
-    ],
-    patient_fit: [
-      "Which patient profile are you actually targeting first?",
-      "Who specifically is the right first patient?",
-      "What patient type should I test this in first?",
-    ],
-    evidence: [
-      "What proof changes a real treatment decision for me?",
-      "Which data point would actually change practice?",
-      "What evidence should move me from maybe to action?",
-    ],
-  };
-
-  const fallback = [
-    "Which concrete detail in this case should change my next decision?",
-    "What specific condition would make this relevant for my patients?",
-    "What practical detail is still unresolved for this case?",
-  ];
-
-  const pickedQuestion = deterministicVariant(seed, byConcern[concern] || fallback);
-  const leadByMode = {
-    collaborative: deterministicVariant(`${seed}|lead`, [
-      "That helps.",
-      "Understood.",
-      "Okay, that gives me context.",
-    ]),
-    guarded: deterministicVariant(`${seed}|lead`, [
-      "Fine, stay practical.",
-      "I hear you, keep this specific.",
-      "Okay, keep this focused.",
-    ]),
-    resistant: deterministicVariant(`${seed}|lead`, escalation >= 3
-      ? [
-        "We've been circling this.",
-        "I'm still not seeing a real shift.",
-        "We've covered this and the blocker is still there.",
-      ]
-      : [
-        "I still need a clearer basis.",
-        "I'm still skeptical.",
-        "This still feels unresolved.",
-      ]),
-  } as const;
-
-  return `${leadByMode[mode]} ${pickedQuestion}`.replace(/\s+/g, " ").trim();
-}
-
-function scenarioRequiresTimePressureLanguage(scenario: any) {
-  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
-  return pressures.includes("time_constrained");
-}
-
-function removeTimePressureLanguage(text: string) {
-  return String(text || "")
-    .replace(/\b(i have|i've got|i got)\s+(one|two|three|a few|few)\s+minutes?\b[,.!?]?/gi, "")
-    .replace(/\b(i have|i've got|i got)\s+no\s+time\b[,.!?]?/gi, "")
-    .replace(/\b(i'?m|i am)\s+short\s+on\s+time\b[,.!?]?/gi, "")
-    .replace(/\btime\s+is\s+tight\b[,.!?]?/gi, "")
-    .replace(/\bi\s+don'?t\s+have\s+time\b[,.!?]?/gi, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[,.;:\s-]+/, "")
-    .trim();
-}
-
-function enforceBehavioralDivergence(response: string, tempProfile: any) {
-  let text = String(response || "").trim();
-  if (!text) return text;
-
-  if (tempProfile?.band === "low" && /\b(not convinced yet|i hear that a lot|keep this brief)\b/i.test(text)) {
-    text = text
-      .replace(/i'?m\s+still\s+not\s+convinced\s+yet\.?/gi, "")
-      .replace(/i\s+hear\s+that\s+a\s+lot\.?/gi, "")
-      .replace(/keep\s+this\s+brief\.?/gi, "")
-      .trim();
-  }
-
-  if (tempProfile?.band === "high" && /\bi'?m\s+open\b/i.test(text)) {
-    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
-  }
-
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function enforceConversationModeStructure({
-  response,
-  tempProfile,
-  scenario,
-  sessionState,
-}: {
-  response: string;
-  tempProfile: any;
-  scenario?: any;
-  sessionState?: any;
-}) {
-  const mode = getConversationMode(tempProfile);
-  const sentences = String(response || "")
-    .trim()
-    .split(/(?<=[.!?])\s+/)
-    .filter(Boolean);
-  let text = sentences.slice(0, 2).join(" ") || String(response || "").trim();
-
-  if (!scenarioRequiresTimePressureLanguage(scenario) && (Number(tempProfile?.temperature ?? 5) <= 4 || tempProfile?.band === "low")) {
-    text = removeTimePressureLanguage(text);
-  }
-
-  if (mode === "collaborative") {
-    text = text.replace(/\bi'?m\s+not\s+convinced\s+yet\b[,.!?]?/gi, "").trim();
-  } else if (mode === "guarded") {
-    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
-  } else {
-    text = text.replace(/\bi'?m\s+open\b[^.?!]*[.?!]?/gi, "").trim();
-  }
-
-  text = enforceBehavioralDivergence(text, tempProfile);
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function applyTemperatureStateAdjustments({
-  currentBehaviorState,
-  currentJourneyState,
-  nextBehaviorState,
-  nextJourneyState,
-  tempProfile,
-}: {
-  currentBehaviorState: string;
-  currentJourneyState: string;
-  nextBehaviorState: string;
-  nextJourneyState: string;
-  tempProfile: any;
-}) {
-  let adjustedBehavior = String(nextBehaviorState || currentBehaviorState || "neutral");
-  let adjustedJourney = String(nextJourneyState || currentJourneyState || "initial_access");
-
-  if (tempProfile?.resistance > 7 && adjustedJourney !== currentJourneyState) {
-    adjustedJourney = currentJourneyState;
-  }
-
-  if (tempProfile?.band === "high" && ["open", "engaged", "collaborative"].includes(adjustedBehavior)) {
-    adjustedBehavior = "neutral";
-  }
-
-  if (tempProfile?.band === "low") {
-    if (["closed", "resistance", "frustration", "time_pressure"].includes(adjustedBehavior)) {
-      adjustedBehavior = "open";
-    } else if (adjustedBehavior === "neutral") {
-      adjustedBehavior = "open";
-    }
-  }
-
-  return {
-    nextBehaviorState: adjustedBehavior,
-    nextJourneyState: adjustedJourney,
-  };
-}
-
-function applyTemperatureResponseStyle({
-  hcpReply,
-  tempProfile,
-  scenario,
-  sessionState,
-}: {
-  hcpReply: string;
-  tempProfile: any;
-  scenario?: any;
-  sessionState?: any;
-}) {
-  let text = String(hcpReply || "").trim();
-  if (!text) return text;
-
-  // Temperature modulates intensity only; it must not author canned phrases.
-  const wordBudget = tempProfile?.band === "high" ? 22 : tempProfile?.band === "low" ? 40 : 30;
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length > wordBudget) {
-    text = words.slice(0, wordBudget).join(" ").replace(/[,.!?;:]+$/, "").trim();
-  }
-
-  text = enforceConversationModeStructure({
-    response: text,
-    tempProfile,
-    scenario,
-    sessionState,
-  });
-  return text;
-}
-
-function enforceTemperatureConsistency({
-  response,
-  tempProfile,
-  scenario,
-  sessionState,
-}: {
-  response: string;
-  tempProfile: any;
-  scenario?: any;
-  sessionState?: any;
-}) {
-  let text = String(response || "").trim();
-  if (!text) return text;
-
-  text = enforceBehavioralDivergence(text, tempProfile);
-  text = enforceConversationModeStructure({
-    response: text,
-    tempProfile,
-    scenario,
-    sessionState,
-  });
-  return text.replace(/\s+/g, " ").trim();
-}
-
-function ensureEscalationContinuityNoRepeat({
-  hcpReply,
-  transcript,
-  sessionState,
-  tempProfile,
-  scenario,
-}: {
-  hcpReply: string;
-  transcript: ConversationTurn[];
-  sessionState?: any;
-  tempProfile?: any;
-  scenario?: any;
-}) {
-  const current = String(hcpReply || "").trim();
-  if (!current) return current;
-
-  const recent = transcript
-    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
-    .map((turn) => String(turn.text || ""))
-    .slice(-2);
-  const last = recent[recent.length - 1] || "";
-  const repeated = needsContinuityVariationRewrite({ hcpReply: current, transcript })
-    || (last && continuityOverlapScore(current, last) >= 0.7);
-
-  if (!repeated) return current;
-
-  // Validator-only demotion: avoid concatenating/templating fallback language here.
-  // Async continuity regeneration happens later in the pipeline.
-  return current;
-}
-
-function logTemperatureApplication({
-  temperature,
-  tempProfile,
-}: {
-  temperature: number;
-  tempProfile: any;
-}) {
-  console.log(JSON.stringify({
-    type: "temperature_profile_applied",
-    temperature,
-    band: tempProfile?.band || "medium",
-    applied_behavior: tempProfile,
-  }));
-}
-
-function enforceHighPressureClippedPhrasing({
-  hcpReply,
-  repMessage,
-  scenario,
-  behaviorState,
-}: {
-  hcpReply: string;
-  repMessage: string;
-  scenario: any;
-  behaviorState: string;
-}): string {
-  // ─────────────────────────────────────────────────────────────────────────
-  // PHRASE-REGRESSION GUARD — Deterministic Clipping Table
-  // ─────────────────────────────────────────────────────────────────────────
-  // Purpose: Remove polished lead-ins and enforce blocker-first phrasing
-  //          in high-pressure scenarios. Guards against GPT-class model
-  //          regression toward consultative, cushioned language.
-  //
-  // Research: PM360/PharmaVoice (2020–2024) — "Polished Lead-In Syndrome"
-  //           73% of high-pressure encounters show clinician preference for
-  //           blocker-first language. Reps who match this see 2.1x higher
-  //           conversion in access/formulary conversations.
-  //
-  // Patterns: Formal regex table with fallback replacements.
-  //           All patterns are case-insensitive, anchor to start of response.
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const text = String(hcpReply || "").trim();
-  if (!text) return text;
-
-  const pressures = scenario?.interactionPressure || [];
-  const highPressure =
-    pressures.includes("time_constrained") ||
-    pressures.includes("operationally_constrained") ||
-    pressures.includes("skeptical_resistant") ||
-    ["closed", "resistance", "time_pressure", "frustration"].includes(String(behaviorState || "").toLowerCase());
-
-  if (!highPressure) return text;
-
-  // Phrase-Regression Table: Forbidden patterns → Blocker-First replacements
-  // Each pattern is tested in order; first match is replaced and returned.
-
-  // Pattern 1: "I'm still waiting to hear how you..." (generic wait statement)
-  if (/^i'?m still waiting to hear how you\b/i.test(text)) {
-    const priorAuthContext = /prior auth|approval|coverage|callback/i.test(`${repMessage} ${text}`);
-    if (priorAuthContext) {
-      return "Which specific prior auth step is driving callbacks for my staff right now?";
-    }
-    return "Which specific step is creating the delay right now?";
-  }
-
-  // Pattern 2: "I need to make sure..." (consultative lead-in)
-  if (/^i need to make sure\b/i.test(text)) {
-    return "What's the actual blocker right now?";
-  }
-
-  // Pattern 3: "I'd like to understand..." (open-ended discovery)
-  if (/^i'd like to understand\b/i.test(text)) {
-    return "Tell me the specific gap you're seeing.";
-  }
-
-  // Pattern 4: "I think it's important..." (editorializing)
-  if (/^i think it'?s important\b/i.test(text)) {
-    return "Here's what actually matters.";
-  }
-
-  // Pattern 5: "Let me be clear..." (defensive framing)
-  if (/^let me be clear\b/i.test(text)) {
-    return "The reality is:";
-  }
-
-  // Pattern 6: Generic minimalism at start ("Only have a few minutes...")
-  if (/^i only have (?:a )?few minutes to spare[,.]?\s*/i.test(text)) {
-    return text.replace(/^i only have (?:a )?few minutes to spare[,.]?\s*/i, "");
-  }
-
-  // Pattern 7: Colloquial hedge ("Look, ...")
-  if (/^look[,.]?\s+/i.test(text)) {
-    // Preserve "Look," if it's crisp; only remove if it leads to weak phrasing
-    const afterLook = text.replace(/^look[,.]?\s+/i, "").trim();
-    if (afterLook.length < 10 || /^i|^what|^which|^the/i.test(afterLook)) {
-      return text; // Keep "Look, ..." form if followed by strong phrasing
-    }
-  }
-
-  return text;
-}
-
-
-function readPredictiveLine(context: string, label: string): string {
-  const pattern = new RegExp(`- ${label}:\\s*(.+)`, "i");
-  const match = String(context || "").match(pattern);
-  return String(match?.[1] || "").trim();
-}
-
-function buildPredictiveTurnDebug({
-  predictivePromptContext,
-  hcpReply,
-  nextBehaviorState,
-}: {
-  predictivePromptContext: string;
-  hcpReply: string;
-  nextBehaviorState: string;
-}): PredictiveTurnDebug | null {
-  const context = String(predictivePromptContext || "").trim();
-  if (!context) {
-    throw new Error("Missing predictive profile");
-  }
-
-  const sourceRaw = readPredictiveLine(context, "Source");
-  const source: PredictiveTurnDebug["source"] =
-    /ai/i.test(sourceRaw) ? "ai"
-      : /deterministic/i.test(sourceRaw) ? "deterministic"
-        : "unknown";
-
-  const seed = {
-    diseaseState: readPredictiveLine(context, "Seed disease state"),
-    hcpType: readPredictiveLine(context, "Seed HCP type"),
-    journeyStage: readPredictiveLine(context, "Seed journey stage"),
-    interactionPressure: readPredictiveLine(context, "Seed interaction pressure"),
-    influenceDriver: readPredictiveLine(context, "Seed influence driver"),
-    behaviorArchetype: readPredictiveLine(context, "Seed behavior archetype"),
-  };
-
-  const concernTags = inferConcernTags(hcpReply);
-  const surfacedSignals: string[] = [];
-
-  if (seed.interactionPressure) surfacedSignals.push(`Pressure profile: ${seed.interactionPressure}`);
-  if (seed.influenceDriver) surfacedSignals.push(`Decision lens: ${seed.influenceDriver}`);
-  if (seed.behaviorArchetype) surfacedSignals.push(`Archetype: ${seed.behaviorArchetype}`);
-
-  if (concernTags.includes("workflow")) surfacedSignals.push("Surfaced blocker: workflow/staff burden");
-  if (concernTags.includes("access")) surfacedSignals.push("Surfaced blocker: access/prior auth");
-  if (concernTags.includes("screening") || concernTags.includes("patient_fit")) surfacedSignals.push("Surfaced blocker: patient-fit criteria");
-  if (concernTags.includes("guideline") || concernTags.includes("cost_value")) surfacedSignals.push("Surfaced blocker: evidence/value threshold");
-  if (["closed", "resistance", "time_pressure"].includes(nextBehaviorState)) {
-    surfacedSignals.push(`Behavior posture: ${nextBehaviorState}`);
-  }
-
-  const uniqueSignals = [...new Set(surfacedSignals)].slice(0, 5);
-
-  return {
-    contextApplied: true,
-    source,
-    specialistTitle: readPredictiveLine(context, "Specialist frame") || "Clinical Specialist",
-    seed: Object.values(seed).every(Boolean) ? seed : null,
-    surfacedSignals: uniqueSignals,
-    anchorHeadlines: {
-      mindset: readPredictiveLine(context, "Mindset headline"),
-      objections: readPredictiveLine(context, "Objection headline"),
-      responseStyle: readPredictiveLine(context, "Response style headline"),
-      repApproach: readPredictiveLine(context, "Rep approach headline"),
-    },
-  };
-}
-
 function isPremiseChallenge(text: string): boolean {
   return /what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|what do you want me to know|relevance|what makes you think/i.test(String(text || "").toLowerCase());
 }
@@ -1881,33 +710,16 @@ function inferResponseAlignment(
   repMessage: string,
   latestConcern: string,
   scenario?: any,
-  transcript: ConversationTurn[] = [],
 ): BehaviorSignals["response_alignment"] {
   if (repAddressesPremiseChallenge(repMessage, latestConcern)) {
     return "strong";
   }
-  const repText = String(repMessage || "").toLowerCase();
   const repTags = inferConcernTags(repMessage);
   const concernTags = inferConcernTags(latestConcern);
   const shared = concernTags.filter((tag) => repTags.includes(tag));
   if (shared.length >= 1) {
     return "strong";
   }
-
-  const commitmentCloseEvidence =
-    String(scenario?.journeyStage || "").toLowerCase() === "commitment_close" &&
-    (scenarioMatchesConcernFamily(scenario, "evidence") || concernTags.includes("guideline") || concernTags.includes("patient_fit"));
-  const repeatedEvidenceConcern = transcript
-    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
-    .slice(-4)
-    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
-  const evidencePivotAcknowledged =
-    /\bone data point\b|\bthe one data point\b|\bfor this decision\b|\bchange treatment choice\b|\bsubgroup\b|\bexcluded patients?\b|\brenal\b|\breal-?world fit\b/.test(repText);
-
-  if (commitmentCloseEvidence && repeatedEvidenceConcern && evidencePivotAcknowledged) {
-    return "strong";
-  }
-
   if (isScreeningDiscoveryResponse(repMessage, scenario)) {
     const screeningConcern =
       concernTags.includes("screening") ||
@@ -1933,9 +745,8 @@ function inferListeningPattern(
   repMessage: string,
   latestConcern: string,
   scenario?: any,
-  transcript: ConversationTurn[] = [],
 ): BehaviorSignals["listening_pattern"] {
-  const alignment = inferResponseAlignment(repMessage, latestConcern, scenario, transcript);
+  const alignment = inferResponseAlignment(repMessage, latestConcern, scenario);
   if (alignment === "strong") return "responsive";
   if (alignment === "partial") return "partially_responsive";
   return "missed";
@@ -1999,46 +810,23 @@ function inferEngagementLevel(hcpReply: string): BehaviorSignals["engagement_lev
 function inferCommitmentAttempt(
   repMessage: string,
   transcript: ConversationTurn[],
-  scenario: any,
-  latestConcern: string,
+  scenario: any
 ): BehaviorSignals["commitment_attempt"] {
   const text = String(repMessage || "").toLowerCase();
   const repTurns = transcript.filter((turn) => turn?.speaker === "rep").length;
-  const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
-  const journeyState = String(scenario?.journeyState || "").toLowerCase();
-  const concernText = String(latestConcern || "").toLowerCase();
+  const lateEnoughForAsk =
+    repTurns >= 2 ||
+    ["commitment_close", "access_formulary", "adoption_implementation"].includes(String(scenario?.journeyStage || "")) ||
+    String(scenario?.journeyState || "").includes("commitment");
 
-  // Explicit next-step asks always count (clear commitment)
   if (/\bcan we\b|\bwould you be open to\b|\bnext step\b|\bset up\b|\bfollow-up\b|\breview together\b|\bbring this to\b|\bpilot\b|\btry this with\b|\bidentify a patient\b|\bflagging that chart\b|\bbring to the next formulary discussion\b|\bconcrete step you could take\b|\bwhat one thing could you take back\b|\bmake a strong case\b/.test(text)) {
     return "clear";
   }
 
-  // Exploratory commitment asks: weak if late stage OR early discovery with directional framing
-  const lateEnoughForAsk = repTurns >= 2 || ["commitment_close", "access_formulary", "adoption_implementation"].includes(journeyStage) || journeyState.includes("commitment");
-  const earlyDiscoveryStage = ["initial_access", "discovery"].includes(journeyStage);
-  const hasDirectionalFrame = /\bfirst patient\b|\bwhat would you need\b|\bwhat matters most\b|\bwhere do we start\b|\bwhat's your biggest concern\b/.test(text);
-
   if (
-    (lateEnoughForAsk || (earlyDiscoveryStage && hasDirectionalFrame)) &&
+    lateEnoughForAsk &&
     /\bwhat would you need to see\b|\bwhich patient type\b|\bwhat outcome carries the most weight\b|\bwhere does .* break down\b|\bwhat specifically would you need to see\b|\bwhat would make this feel usable\b|\bwhat would it take for you to feel confident\b|\bwhat's the next formulary committee meeting\b|\bwhat's the one workflow requirement\b|\bwhat's one concrete step\b|\bwhat's the one data point\b|\bwhat specific info do you need(?: to see)?\b|\bwhat kind of data\b|\bmove the needle with the formulary team\b/.test(text)
   ) {
-    return "weak";
-  }
-
-  const commitmentCloseEvidence =
-    journeyStage === "commitment_close" &&
-    (scenarioMatchesConcernFamily(scenario, "evidence") || /subgroup|trial|evidence|data|renal|real-?world/.test(concernText));
-  const repeatedEvidenceObjection = transcript
-    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
-    .slice(-4)
-    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
-  const objectionSofteningCue = /if there is one data point|if you can make the evidence specific|keep it to one point|i can stay with it|i can look at it/.test(concernText);
-  const onePointCommitMove = /\bone data point\b|\bone point\b|\bwould you be open\b|\bif we align on\b|\bnext step\b|\breview one case\b/.test(text);
-
-  if (commitmentCloseEvidence && repTurns >= 5 && repeatedEvidenceObjection && objectionSofteningCue && onePointCommitMove) {
-    return "clear";
-  }
-  if (commitmentCloseEvidence && repTurns >= 4 && repeatedEvidenceObjection && /\bone data point\b|\bfor this decision\b|\bchange treatment choice\b/.test(text)) {
     return "weak";
   }
 
@@ -2055,11 +843,11 @@ function normalizeBehaviorSignals(
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const premiseCorrected = repAddressesRecentPremiseChallenge(repMessage, transcript);
   const inferredQuestionType = detectQuestionType(repMessage);
-  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario, transcript);
-  const inferredListening = inferListeningPattern(repMessage, latestConcern, scenario, transcript);
+  const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario);
+  const inferredListening = inferListeningPattern(repMessage, latestConcern, scenario);
   const inferredObjectionType = inferObjectionType(latestConcern, scenario);
   const inferredEngagement = inferEngagementLevel(hcpReply);
-  const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario, latestConcern);
+  const inferredCommitmentAttempt = inferCommitmentAttempt(repMessage, transcript, scenario);
   const genericPitch = isGenericProductPitch(repMessage);
   const talkedPastConcern = ignoredDirectConcern(repMessage, latestConcern);
   const forceWeakAlignment = !premiseCorrected && (genericPitch || talkedPastConcern);
@@ -2067,15 +855,6 @@ function normalizeBehaviorSignals(
   const forceHesitationFamily = isHesitationToCommitmentScenario(scenario, latestConcern);
   const forceAdoptionCautionFamily = isAdoptionCautionScenario(scenario, latestConcern);
   const screeningResponsive = isScreeningDiscoveryResponse(repMessage, scenario);
-  const commitmentCloseEvidence =
-    String(scenario?.journeyStage || "").toLowerCase() === "commitment_close" &&
-    (scenarioMatchesConcernFamily(scenario, "evidence") || /subgroup|trial|evidence|data|renal|real-?world/.test(String(latestConcern || "")));
-  const repeatedEvidenceObjection = transcript
-    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
-    .slice(-4)
-    .filter((turn) => /subgroup|excluded|trial|data|evidence|renal|real-?world|change treatment|decision/.test(String(turn.text || "").toLowerCase())).length >= 2;
-  const pivotSignal = /\bone data point\b|\bfor this decision\b|\bchange treatment choice\b|\bif we align on\b|\bnext step\b|\bwould you be open\b/.test(String(repMessage || "").toLowerCase());
-  const forceAdaptivePivot = commitmentCloseEvidence && repeatedEvidenceObjection && pivotSignal;
 
   return {
     question_type: forceRepDominant
@@ -2085,44 +864,36 @@ function normalizeBehaviorSignals(
         : inferredQuestionType,
     response_alignment: forceWeakAlignment
       ? "weak"
-      : forceAdaptivePivot
+      : premiseCorrected
         ? "strong"
-        : premiseCorrected
-          ? "strong"
-          : screeningResponsive
-            ? "strong"
-            : rawSignals?.response_alignment === "strong"
-              ? "strong"
-              : inferredAlignment,
+      : screeningResponsive
+        ? "strong"
+      : rawSignals?.response_alignment === "strong"
+        ? "strong"
+        : inferredAlignment,
     objection_type: (forceHesitationFamily || forceAdoptionCautionFamily)
       ? "none"
       : rawSignals?.objection_type && rawSignals.objection_type !== "none"
-        ? rawSignals.objection_type
-        : inferredObjectionType,
+      ? rawSignals.objection_type
+      : inferredObjectionType,
     engagement_level: rawSignals?.engagement_level && rawSignals.engagement_level !== "low"
       ? rawSignals.engagement_level
       : inferredEngagement,
     control_pattern: forceRepDominant
       ? "rep_dominant"
-      : forceAdaptivePivot
-        ? "balanced"
-        : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
+      : rawSignals?.control_pattern || (inferredQuestionType === "open_ended" ? "balanced" : "hcp_dominant"),
     listening_pattern: forceWeakAlignment
       ? "missed"
-      : forceAdaptivePivot
+      : premiseCorrected
         ? "responsive"
-        : premiseCorrected
-          ? "responsive"
-          : screeningResponsive
-            ? "responsive"
-            : rawSignals?.listening_pattern === "responsive"
-              ? "responsive"
-              : inferredListening,
+      : screeningResponsive
+        ? "responsive"
+      : rawSignals?.listening_pattern === "responsive"
+        ? "responsive"
+        : inferredListening,
     commitment_attempt: rawSignals?.commitment_attempt && rawSignals.commitment_attempt !== "none"
       ? rawSignals.commitment_attempt
-      : forceAdaptivePivot && inferredCommitmentAttempt === "none"
-        ? "weak"
-        : inferredCommitmentAttempt,
+      : inferredCommitmentAttempt,
   };
 }
 
@@ -2137,42 +908,7 @@ export async function generateHcpResponse(
   turnCount: number = 0,
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
-  predictiveProfile?: any,
-  predictivePromptContext: string = "",
-  sessionState?: any,
 ): Promise<SimulatorResponse> {
-  if (!scenario) {
-    throw new Error("Missing scenario context");
-  }
-  if (!predictiveProfile) {
-    throw new Error("Missing predictive profile");
-  }
-  const context = String(predictivePromptContext || "").trim();
-  if (!context) {
-    throw new Error("Missing predictive profile");
-  }
-
-  const runtimeTemperatureRaw = Number(scenario?.runtimeTemperature);
-  if (!Number.isFinite(runtimeTemperatureRaw)) {
-    throw new Error("Missing temperature");
-  }
-
-  console.log("predictive_profile_attached", {
-    hasProfile: !!predictiveProfile,
-    personaType: predictiveProfile?.type,
-  });
-
-  console.log("temperature_applied", {
-    value: runtimeTemperatureRaw,
-    band: mapTemperatureBand(runtimeTemperatureRaw),
-  });
-
-  console.log("session_memory_attached", {
-    hasPersona: !!sessionState?.hcpPersona,
-    historyTurns: Array.isArray(sessionState?.interactionHistory) ? sessionState.interactionHistory.length : 0,
-    escalationLevel: Number(sessionState?.escalationLevel || 0),
-  });
-
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
     .join("\n");
@@ -2180,17 +916,6 @@ export async function generateHcpResponse(
   const focusCaps = (scenario.suggestedFocusCapabilities || []).join(", ");
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
-  const runtimeTemperature = Math.max(1, Math.min(10, runtimeTemperatureRaw));
-  const tempProfile = {
-    ...getTemperatureBehaviorProfile(runtimeTemperature),
-    temperature: runtimeTemperature,
-  };
-  const conversationMode = getConversationMode(tempProfile);
-  logTemperatureApplication({
-    temperature: runtimeTemperature,
-    tempProfile,
-  });
-
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
   const turnDirectives = deriveHcpTurnDirectives({
     scenario,
@@ -2216,23 +941,14 @@ export async function generateHcpResponse(
     volatility.profile !== "stable";
   const responseTokenBudget =
     turnDirectives.targetWordBudget <= 22 ? 300
-      : turnDirectives.targetWordBudget <= 28 ? 340
-        : runtimeProfile.brevity === "tight" ? 380
-          : isHighPressureTurn ? 420
-            : runtimeProfile.brevity === "moderate" ? 600
-              : 560;
+    : turnDirectives.targetWordBudget <= 28 ? 340
+    : runtimeProfile.brevity === "tight" ? 380
+    : isHighPressureTurn ? 420
+    : runtimeProfile.brevity === "moderate" ? 600
+    : 560;
   const finalResponseTokenBudget = typeof responseTokenCap === "number"
     ? Math.min(responseTokenBudget, responseTokenCap)
     : responseTokenBudget;
-  const mappedControls = deriveMappedSamplingControls({
-    currentJourneyState,
-    currentBehaviorState,
-    turn: turnDirectives,
-    profile: runtimeProfile,
-    volatilityProfile: volatility.profile,
-    interactionPressures,
-    tempProfile,
-  });
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -2289,33 +1005,6 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
   const continuityBlock = `
 ${summarizeConcernContinuity(transcript, scenario)}
 `;
-  const predictiveContextBlock = context
-    ? `\n${predictivePromptContext}\n`
-    : "";
-  const sessionMemoryBlock = buildSessionMemoryPromptBlock({
-    hcpPersona: sessionState?.hcpPersona || predictiveProfile,
-    temperature: sessionState?.temperature ?? runtimeTemperature,
-    previousInteraction: sessionState?.previousInteraction || repMessage,
-    previousConcernFamily: sessionState?.previousConcernFamily || prediction?.concernFamily || "",
-    escalationLevel: Number(sessionState?.escalationLevel || 0),
-    interactionHistory: sessionState?.interactionHistory || [],
-  });
-
-  const temperatureBehaviorBlock = `
-HCP conversational mode: ${conversationMode}
-
-Behavior rules:
-- collaborative: open, exploratory, curious
-- guarded: neutral, selective, requires proof
-- resistant: skeptical, challenging, dismissive
-
-Mode constraints:
-- collaborative: must include an openness phrase and an exploratory question; do not challenge aggressively
-- guarded: must include a skeptical phrase and a proof-oriented clarifying question
-- resistant: must include a pushback phrase and a challenge question; do not ask exploratory open-ended questions
-
-Respond STRICTLY according to this mode.
-`;
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -2343,17 +1032,6 @@ ${runtimeProfileBlock}
 
 ${realismBackboneBlock}
 
-${predictiveContextBlock}
-
-${sessionMemoryBlock}
-
-PREDICTIVE BRAIN AUTHORITY (STRICT):
-- Use the Predictive HCP Brain as the source of truth.
-- Do not use generic training simulator language.
-- Speak as this exact HCP mindset, decision filter, credibility drivers, trust breakers, and current state.
-- Temperature may change intensity only (soft/guarded/sharp), not canned wording.
-- If prior concern is unresolved, progress it with fresh wording (restate, sharpen, reveal deeper barrier, acknowledge progress, move next step, or disengage).
-
 ${dialogueDirectiveBlock}
 
 ${buildTurnDirectivePrompt(turnDirectives)}
@@ -2361,14 +1039,6 @@ ${buildTurnDirectivePrompt(turnDirectives)}
 ${volatilityBlock}
 
 ${continuityBlock}
-
-${temperatureBehaviorBlock}
-
-GLOBAL TONE/SAMPLING MAP (deterministic controls):
-- Response temperature target: ${mappedControls.responseTemperature}
-- Rewrite temperature target: ${mappedControls.rewriteTemperature}
-- Engagement directive: ${mappedControls.engagementDirective}
-${mappedControls.rationale.map((line) => `- ${line}`).join("\n")}
 
 ${CAPABILITY_RULES}
 
@@ -2423,14 +1093,6 @@ INSTRUCTIONS:
 28. Do not end an HCP line on an incomplete ask such as "reduce?", "change?", "help with?", or any question missing what is actually being asked about.
 29. Avoid comma splices in HCP dialogue. If there are two complete thoughts, split them into separate sentences.
 30. In operational or access questions, explicitly name the object of the ask such as the queue, the prior auth step, the approval path, the callback burden, the monitoring step, or the staff task.
-31. Use grammatically clean written English with realistic spoken cadence; avoid run-on chains joined by repeated commas.
-32. Prefer short sentence boundaries over semicolons unless the sentence truly requires one.
-33. Avoid overly formal phrasing; keep wording natural, clinician-realistic, and concise.
-34. Do not lead with meta-framing such as "So I want to make sure..."; start with the actual clinical point or concern.
-35. On the very first HCP reply, do not repeat the Opening HCP Setup line verbatim; acknowledge the rep's latest message and move to one concrete blocker or ask.
-36. Follow the GLOBAL TONE/SAMPLING MAP above exactly; engagement posture must match the mapped engagement directive.
-37. Do not repeat the same urgency directive across consecutive HCP turns (for example repeating "get to the point" or "short version"). Keep pressure real, but vary wording naturally.
-38. Do not output any of these stock phrases: "I hear that a lot", "Keep this brief", "I'm not convinced yet", "What's concretely different for me after this", "What changes in practice if this is worth continuing".
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -2464,7 +1126,7 @@ Return ONLY valid JSON:
   const result = await invokeWorkerJson({
     prompt,
     max_tokens: finalResponseTokenBudget,
-    temperature: mappedControls.responseTemperature,
+    temperature: 0.2,
     response_json_schema: {
       type: "object",
       properties: {
@@ -2478,16 +1140,6 @@ Return ONLY valid JSON:
     }
   });
 
-  const adjustedState = applyTemperatureStateAdjustments({
-    currentBehaviorState,
-    currentJourneyState,
-    nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
-    nextJourneyState: result.nextJourneyState || currentJourneyState,
-    tempProfile,
-  });
-  result.nextBehaviorState = adjustedState.nextBehaviorState;
-  result.nextJourneyState = adjustedState.nextJourneyState;
-
   let hcpReply = result.hcpReply || "";
   if (needsNaturalnessRewrite(hcpReply)) {
     try {
@@ -2496,7 +1148,6 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         prediction,
-        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
@@ -2508,7 +1159,6 @@ Return ONLY valid JSON:
         hcpReply,
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
-        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
@@ -2526,25 +1176,11 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
         prediction,
-        rewriteTemperature: mappedControls.rewriteTemperature,
       });
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
   }
-  hcpReply = applyTemperatureResponseStyle({ hcpReply, tempProfile, scenario, sessionState });
-  hcpReply = applyEscalationContinuityStyle({
-    hcpReply,
-    tempProfile,
-    sessionState,
-  });
-  hcpReply = ensureEscalationContinuityNoRepeat({
-    hcpReply,
-    transcript,
-    sessionState,
-    tempProfile,
-    scenario,
-  });
   let continuityAdjusted = false;
 
   if (needsContinuityVariationRewrite({
@@ -2558,7 +1194,6 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
-        rewriteTemperature: mappedControls.rewriteTemperature,
       });
       continuityAdjusted = true;
     } catch {
@@ -2577,18 +1212,12 @@ Return ONLY valid JSON:
       transcript,
     });
   }
-  const recentHcpReplies = transcript
-    .filter((turn: any) => turn?.speaker === "hcp" && turn?.text)
-    .map((turn: any) => String(turn.text))
-    .slice(-4);
-
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
     turn: turnDirectives,
     profile: runtimeProfile,
     hcpTurnCount,
-    recentHcpReplies,
   });
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
@@ -2601,7 +1230,6 @@ Return ONLY valid JSON:
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
-        rewriteTemperature: mappedControls.rewriteTemperature,
       });
       continuityAdjusted = true;
       hcpReply = applyHcpResponseSurface({
@@ -2610,7 +1238,6 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
-        recentHcpReplies,
       });
     } catch {
       continuityAdjusted = true;
@@ -2624,112 +1251,9 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
-        recentHcpReplies,
       });
     }
   }
-
-  hcpReply = normalizeHcpSpokenText(hcpReply, 3);
-
-  const openingSetup = String(scenario.openingScene || "");
-  if (isOpeningEcho({
-    hcpReply,
-    openingScene: openingSetup,
-    hcpTurnCount,
-  })) {
-    try {
-      const rewritten = await rewriteFirstTurnAwayFromOpeningEcho({
-        hcpReply,
-        openingScene: openingSetup,
-        repMessage,
-        scenario,
-        predictivePromptContext,
-        predictedBehaviorState: result.nextBehaviorState || currentBehaviorState,
-        rewriteTemperature: mappedControls.rewriteTemperature,
-      });
-      hcpReply = normalizeHcpSpokenText(rewritten, 3);
-    } catch {
-      hcpReply = buildDeterministicFirstTurnFallback({
-        repMessage,
-        scenario,
-        predictedBehaviorState: result.nextBehaviorState || currentBehaviorState,
-      });
-    }
-  }
-
-  hcpReply = ensureFirstTurnRepTopicAcknowledgment({
-    hcpReply,
-    repMessage,
-    scenario,
-    hcpTurnCount,
-  });
-
-  if (needsHumanPhraseSafetyRewrite({
-    hcpReply,
-    hcpTurnCount,
-  })) {
-    hcpReply = buildHumanPhraseSafetyFallback({
-      repMessage,
-      scenario,
-      hcpTurnCount,
-    });
-  }
-
-  hcpReply = enforceHighPressureClippedPhrasing({
-    hcpReply,
-    repMessage,
-    scenario,
-    behaviorState: result.nextBehaviorState || currentBehaviorState,
-  });
-
-  const scenarioRouting = buildScenarioRouting(scenario);
-  if (containsGlobalBannedPhrase(hcpReply) || referencesRecentBannedPhrase({ text: hcpReply, transcript })) {
-    hcpReply = await regenerateConstrainedHcpResponse({
-      draft_response: hcpReply,
-      scenario_routing: scenarioRouting,
-      hcp_state: result.nextBehaviorState || currentBehaviorState,
-      hcp_brain: prediction,
-      rep_message: repMessage,
-    });
-  }
-
-  hcpReply = await enforceHCPResponse({
-    draft_response: hcpReply,
-    scenario_routing: scenarioRouting,
-    hcp_state: result.nextBehaviorState || currentBehaviorState,
-    hcp_brain: prediction,
-    rep_message: repMessage,
-    temperature: runtimeTemperature,
-    tempProfile,
-    scenario,
-  });
-  hcpReply = ensureEscalationContinuityNoRepeat({
-    hcpReply,
-    transcript,
-    sessionState,
-    tempProfile,
-    scenario,
-  });
-
-  const anchored = addPersonaSpecificAnchor({
-    draft_hcp_response: hcpReply,
-    scenario_routing: scenarioRouting,
-  });
-  hcpReply = anchored.text;
-  if (containsGlobalBannedPhrase(hcpReply) || referencesRecentBannedPhrase({ text: hcpReply, transcript })) {
-    hcpReply = buildBrainGroundedFallbackLine({
-      scenario_routing: scenarioRouting,
-      hcp_brain: prediction,
-      hcp_state: result.nextBehaviorState || currentBehaviorState,
-    });
-  }
-  hcpReply = ensureEscalationContinuityNoRepeat({
-    hcpReply,
-    transcript,
-    sessionState,
-    tempProfile,
-    scenario,
-  });
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
@@ -2760,22 +1284,6 @@ Return ONLY valid JSON:
     ...cue,
   }] : [];
 
-  const memoryLength = Array.isArray(sessionState?.sessionMemory)
-    ? sessionState.sessionMemory.length
-    : Array.isArray(sessionState?.interactionHistory)
-      ? sessionState.interactionHistory.length
-      : 0;
-  console.log(JSON.stringify({
-    type: "continuity_escalation_generator",
-    sessionMemoryLength: memoryLength,
-    currentTemperature: runtimeTemperature,
-    lastHCPState: sessionState?.hcpState || null,
-    lastResponse: sessionState?.sessionMemory?.[sessionState?.sessionMemory?.length - 1]?.hcpResponse || "",
-    generatedResponse: hcpReply,
-    concernFamily: prediction?.concernFamily || "",
-    escalationLevel: Number(sessionState?.escalationLevel || 0),
-  }));
-
   return {
     hcpReply,
     nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
@@ -2791,10 +1299,5 @@ Return ONLY valid JSON:
     coachingNudge: result.coachingNudge || null,
     volatilityState: volatility,
     prediction,
-    predictiveDebug: buildPredictiveTurnDebug({
-      predictivePromptContext,
-      hcpReply,
-      nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
-    }),
   };
 }

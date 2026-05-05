@@ -1,10 +1,7 @@
 const REQUIRED_KEYS = [
-    "hcp_profile",
-    "journey_stage",
-    "disease_state",
-    "interaction_pressure",
-    "access_barrier_context",
-    "rep_objective",
+    "hcpType",
+    "stage",
+    "challenge",
 ];
 
 export function isGenerateDisabled(form, busy) {

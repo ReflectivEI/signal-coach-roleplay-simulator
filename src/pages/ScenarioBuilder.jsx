@@ -2,21 +2,22 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Sparkles, Loader2, Check, Wand2 } from "lucide-react";
+import { ArrowLeft, Plus, Sparkles, Loader2, Check, Wand2, SlidersHorizontal, ChevronDown } from "lucide-react";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { createCustomScenario } from "@/lib/scenarioStorage";
 import { invokeWorkerJson } from "@/services/workerClient";
 import { PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
+import {
+  CHALLENGE_CONTEXT_OPTIONS,
+  CONVERSATION_STAGE_OPTIONS,
+  HCP_ROLE_OPTIONS,
+  INTERACTION_PRESSURES,
+  ADVANCED_CONTROLS_WARNING,
+} from "@/lib/rpsUserInputOptions";
+import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
-const journeyStages = [
-  { value: "initial_access", label: "Initial Access" },
-  { value: "discovery", label: "Discovery" },
-  { value: "clinical_value", label: "Clinical Value" },
-  { value: "objection_handling", label: "Objection Handling" },
-  { value: "access_formulary", label: "Access & Formulary" },
-  { value: "adoption_implementation", label: "Adoption & Implementation" },
-  { value: "commitment_close", label: "Commitment & Close" },
-];
+// Scenario Context options without the "all" sentinel (for required field)
+const journeyStages = CONVERSATION_STAGE_OPTIONS.filter(o => o.value !== "all");
 
 const journeyStateForStage = {
   initial_access: "early_discovery",
@@ -28,18 +29,18 @@ const journeyStateForStage = {
   commitment_close: "adoption_commitment",
 };
 
-const hcpRoleTypes = [
-  { value: "treating_clinician", label: "Treating Clinician" },
-  { value: "influencer", label: "Influencer" },
-  { value: "thought_leader", label: "Thought Leader" },
-];
+const challengeDefaultBehaviorState = {
+  workflow_friction: "time_pressure",
+  evidence_scrutiny: "neutral",
+  guideline_alignment: "neutral",
+  access_coverage: "resistance",
+  safety_risk: "resistance",
+  cautious_commitment: "curiosity",
+};
 
-const decisionOrientations = [
-  { value: "patient_centric", label: "Patient-Centric" },
-  { value: "evidence_driven", label: "Evidence-Driven" },
-  { value: "risk_averse", label: "Risk-Averse" },
-  { value: "guideline_anchored", label: "Guideline-Anchored" },
-];
+// HCP Role + Mindset: import from shared module (no "all" sentinel for form selects)
+const hcpRoleTypes = HCP_ROLE_OPTIONS.filter(o => o.value !== "all");
+const challengeContexts = CHALLENGE_CONTEXT_OPTIONS.filter(o => o.value !== "all");
 
 const behaviorStates = [
   { value: "closed", label: "Closed" },
@@ -51,15 +52,7 @@ const behaviorStates = [
   { value: "time_pressure", label: "Time Pressure" },
 ];
 
-const pressures = [
-  { value: "time_constrained", label: "Time Constrained" },
-  { value: "skeptical_resistant", label: "Skeptical / Resistant" },
-  { value: "curious_uncertain", label: "Curious / Uncertain" },
-  { value: "operationally_constrained", label: "Operationally Constrained" },
-  { value: "competitive_bias", label: "Competitive Bias" },
-  { value: "safety_concern", label: "Safety Concern" },
-  { value: "access_barrier", label: "Access Barrier" },
-];
+const pressures = INTERACTION_PRESSURES.filter(o => o.value !== "all");
 
 const predictiveSeedFields = [
   "diseaseState",
@@ -101,6 +94,29 @@ function validatePredictiveSeed(seed = {}) {
   }
 
   return { ok: true, normalized, message: "" };
+}
+
+function AdvancedControlsSection({ label, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+        style={{ color: open ? "hsl(174 80% 40%)" : "hsl(215 18% 46%)" }}
+      >
+        <SlidersHorizontal className="w-3 h-3" />
+        Advanced: {label}
+        <ChevronDown className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-2 pt-2 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.22)" }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -196,18 +212,24 @@ export default function ScenarioBuilder() {
     journeyState: "",
     hcpRoleType: "",
     decisionOrientation: "",
+    challengeContext: "",
     persona: "curious_uncertain_adopter",
     startingBehaviorState: "",
     interactionPressure: [],
     keyChallenges: "",
     suggestedFocusCapabilities: [],
     predictiveSeed: {
-      diseaseState: "",
+      diseaseState: "primary_care",
       hcpType: "",
       journeyStage: "",
       interactionPressure: "",
       influenceDriver: "",
       behaviorArchetype: "",
+    },
+    predictiveSeedUI: {
+      hcpType: "",
+      stage: "",
+      challenge: "",
     },
   });
   const [saving, setSaving] = useState(false);
@@ -216,6 +238,54 @@ export default function ScenarioBuilder() {
   const [saveError, setSaveError] = useState("");
 
   const set = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
+
+  const applyTopLevelMapping = (current, partial) => {
+    const next = { ...current, ...partial };
+    if (!next.hcpRoleType || !next.journeyStage || !next.challengeContext) {
+      return next;
+    }
+
+    const mapped = mapUIToBrain({
+      hcpType: next.hcpRoleType,
+      stage: next.journeyStage,
+      challenge: next.challengeContext,
+      diseaseState: next.predictiveSeed?.diseaseState || "primary_care",
+    });
+
+    return {
+      ...next,
+      journeyStage: mapped.resolvedFields.journey_stage,
+      journeyState: journeyStateForStage[mapped.resolvedFields.journey_stage] || next.journeyState,
+      hcpRoleType: mapped.resolvedFields.hcp_type,
+      decisionOrientation: mapped.resolvedFields.influence_driver,
+      persona: mapped.resolvedFields.behavior_archetype,
+      startingBehaviorState: next.startingBehaviorState || challengeDefaultBehaviorState[next.challengeContext] || "neutral",
+      interactionPressure: mapped.resolvedFields.interaction_pressure,
+    };
+  };
+
+  const applyPredictiveSeedMapping = (current, partialUi) => {
+    const predictiveSeedUI = { ...current.predictiveSeedUI, ...partialUi };
+    if (!predictiveSeedUI.hcpType || !predictiveSeedUI.stage || !predictiveSeedUI.challenge) {
+      return { ...current, predictiveSeedUI };
+    }
+
+    const mapped = mapUIToBrain({
+      hcpType: predictiveSeedUI.hcpType,
+      stage: predictiveSeedUI.stage,
+      challenge: predictiveSeedUI.challenge,
+      diseaseState: current.predictiveSeed?.diseaseState || "primary_care",
+    });
+
+    return {
+      ...current,
+      predictiveSeedUI,
+      predictiveSeed: {
+        ...mapped.predictiveSelection,
+        diseaseState: current.predictiveSeed?.diseaseState || mapped.predictiveSelection.diseaseState,
+      },
+    };
+  };
 
   const generateWithAI = async () => {
     if (!form.title && !form.coreTension && !form.stakeholder) return;
@@ -323,8 +393,10 @@ Return ONLY valid JSON:
       });
 
       const seedValidation = validatePredictiveSeed(result.predictiveSeed || {});
+      const derivedTopLevelUi = deriveUISelectionFromBrain(result || {});
+      const derivedSeedUi = deriveUISelectionFromBrain(result?.predictiveSeed || {});
 
-      setForm((f) => ({
+      setForm((f) => applyPredictiveSeedMapping(applyTopLevelMapping({
         ...f,
         title: result.title || f.title,
         coreTension: result.coreTension || f.coreTension,
@@ -338,6 +410,7 @@ Return ONLY valid JSON:
         journeyState: journeyStateForStage[result.journeyStage] || f.journeyState,
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
         decisionOrientation: result.decisionOrientation || f.decisionOrientation,
+        challengeContext: derivedTopLevelUi.challenge || f.challengeContext,
         startingBehaviorState: result.startingBehaviorState || f.startingBehaviorState,
         interactionPressure: result.interactionPressure?.length ? result.interactionPressure : f.interactionPressure,
         keyChallenges: (result.keyChallenges || []).join("\n") || f.keyChallenges,
@@ -345,6 +418,14 @@ Return ONLY valid JSON:
         predictiveSeed: seedValidation.ok && seedValidation.normalized
           ? seedValidation.normalized
           : f.predictiveSeed,
+      }, {
+        hcpRoleType: result.hcpRoleType || f.hcpRoleType,
+        journeyStage: result.journeyStage || f.journeyStage,
+        challengeContext: derivedTopLevelUi.challenge || f.challengeContext,
+      }), {
+        hcpType: derivedSeedUi.hcpType || f.predictiveSeedUI.hcpType,
+        stage: derivedSeedUi.stage || f.predictiveSeedUI.stage,
+        challenge: derivedSeedUi.challenge || f.predictiveSeedUI.challenge,
       }));
     } finally {
       setAiGenerating(false);
@@ -509,75 +590,61 @@ Return ONLY valid JSON:
                   <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Realism Variables</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Journey Stage *">
-                    <Select value={form.journeyStage} onChange={set("journeyStage")} options={journeyStages} />
+                  <Field label="Conversation Stage *">
+                    <Select value={form.journeyStage} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { journeyStage: value }))} options={journeyStages} />
                   </Field>
-                  <Field label="Starting Behavior State *">
-                    <Select value={form.startingBehaviorState} onChange={set("startingBehaviorState")} options={behaviorStates} />
+                  <Field label="HCP Type">
+                    <Select value={form.hcpRoleType} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { hcpRoleType: value }))} options={hcpRoleTypes} />
                   </Field>
-                  <Field label="HCP Role Type">
-                    <Select value={form.hcpRoleType} onChange={set("hcpRoleType")} options={hcpRoleTypes} />
-                  </Field>
-                  <Field label="Decision Orientation">
-                    <Select value={form.decisionOrientation} onChange={set("decisionOrientation")} options={decisionOrientations} />
+                  <Field label="Challenge Context">
+                    <Select value={form.challengeContext} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { challengeContext: value }))} options={challengeContexts} />
                   </Field>
                 </div>
-                <Field label="Interaction Pressures">
-                  <MultiToggle options={pressures} selected={form.interactionPressure} onChange={set("interactionPressure")} />
-                </Field>
 
-                <div className="pt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-                  <h4 className="text-sm font-semibold mb-3" style={{ color: "hsl(174 55% 34%)" }}>
-                    Predictive HCP Seed (Optional)
-                  </h4>
-                  <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
-                    If provided, all 6 fields are required. This powers auto-derived runtime predictive context in the simulator.
-                  </p>
+                <p className="text-xs" style={{ color: "hsl(215 18% 46%)" }}>
+                  {ADVANCED_CONTROLS_WARNING}
+                </p>
+                <AdvancedControlsSection label="Derived Scenario Fields">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Disease State">
-                      <Select
-                        value={form.predictiveSeed.diseaseState}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, diseaseState: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.diseaseState}
-                      />
+                    <Field label="Starting Behavior State *">
+                      <Select value={form.startingBehaviorState} onChange={set("startingBehaviorState")} options={behaviorStates} />
                     </Field>
-                    <Field label="HCP Type">
-                      <Select
-                        value={form.predictiveSeed.hcpType}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, hcpType: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.hcpType}
-                      />
-                    </Field>
-                    <Field label="Journey Stage">
-                      <Select
-                        value={form.predictiveSeed.journeyStage}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, journeyStage: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.journeyStage}
-                      />
-                    </Field>
-                    <Field label="Interaction Pressure">
-                      <Select
-                        value={form.predictiveSeed.interactionPressure}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, interactionPressure: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.interactionPressure}
-                      />
-                    </Field>
-                    <Field label="Influence Driver">
-                      <Select
-                        value={form.predictiveSeed.influenceDriver}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, influenceDriver: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.influenceDriver}
-                      />
-                    </Field>
-                    <Field label="Behavior Archetype">
-                      <Select
-                        value={form.predictiveSeed.behaviorArchetype}
-                        onChange={(value) => setForm((f) => ({ ...f, predictiveSeed: { ...f.predictiveSeed, behaviorArchetype: value } }))}
-                        options={PREDICTIVE_SELECTOR_OPTIONS.behaviorArchetype}
-                      />
+                    <Field label="Interaction Pressures">
+                      <MultiToggle options={pressures} selected={form.interactionPressure} onChange={set("interactionPressure")} />
                     </Field>
                   </div>
-                </div>
+                  <div className="pt-3 mt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
+                    <h4 className="text-sm font-semibold mb-3" style={{ color: "hsl(174 55% 34%)" }}>
+                      Predictive HCP Seed (Debug)
+                    </h4>
+                    <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
+                      Optional override for debugging only. Default flow derives this automatically from the 3-control model.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="HCP Type">
+                        <Select
+                          value={form.predictiveSeedUI.hcpType}
+                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { hcpType: value }))}
+                          options={hcpRoleTypes}
+                        />
+                      </Field>
+                      <Field label="Conversation Stage">
+                        <Select
+                          value={form.predictiveSeedUI.stage}
+                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { stage: value }))}
+                          options={journeyStages}
+                        />
+                      </Field>
+                      <Field label="Challenge Context">
+                        <Select
+                          value={form.predictiveSeedUI.challenge}
+                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { challenge: value }))}
+                          options={challengeContexts}
+                        />
+                      </Field>
+                    </div>
+                  </div>
+                </AdvancedControlsSection>
               </div>
 
               <div

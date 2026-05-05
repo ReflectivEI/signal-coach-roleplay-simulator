@@ -1,5 +1,5 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import { fileURLToPath, URL } from "node:url";
 import os from "node:os";
 
@@ -10,10 +10,9 @@ const workerPaths = [
   "/api/roleplay/sessions",
   "/api/roleplay/start",
   "/api/roleplay/respond",
-  "/api/evidence/sources",
-  "/api/evidence/records",
-  "/api/evidence/ingest",
 ];
+
+const localWorkerUrl = "http://127.0.0.1:8787";
 
 function getLocalNetworkUrl(port) {
   const interfaces = os.networkInterfaces();
@@ -27,17 +26,9 @@ function getLocalNetworkUrl(port) {
   return null;
 }
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
-  const roleplayWorkerUrl = process.env.VITE_ROLEPLAY_WORKER_URL || env.VITE_ROLEPLAY_WORKER_URL;
-
-  if (!roleplayWorkerUrl) {
-    throw new Error("Missing required env var VITE_ROLEPLAY_WORKER_URL for Vite proxy target");
-  }
-
-  return {
-    logLevel: "error",
-    plugins: [
+export default defineConfig({
+  logLevel: "error",
+  plugins: [
     react(),
     {
       name: "local-network-access-logger",
@@ -51,27 +42,26 @@ export default defineConfig(({ mode }) => {
       },
     },
   ],
-    resolve: {
-      dedupe: ["react", "react-dom"],
-      alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-      },
+  resolve: {
+    dedupe: ["react", "react-dom"],
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
-    server: {
-      host: true,
-      port: 5173,
-      strictPort: true,
-      allowedHosts: true,
-      proxy: Object.fromEntries(
-        workerPaths.map((path) => [
-          path,
-          {
-            target: roleplayWorkerUrl,
-            changeOrigin: true,
-            secure: false,
-          },
-        ]),
-      ),
-    },
-  };
+  },
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    allowedHosts: true,
+    proxy: Object.fromEntries(
+      workerPaths.map((path) => [
+        path,
+        {
+          target: localWorkerUrl,
+          changeOrigin: true,
+          secure: false,
+        },
+      ]),
+    ),
+  },
 });

@@ -1,5 +1,4 @@
 import { HCP_REALISM_LANGUAGE_PACK, pickHcpRealismExamples, validateHcpHumanRealism } from "../../src/lib/hcpRealismLanguagePack.js";
-import { EVIDENCE_ALLOWLIST } from "../../src/lib/predictiveReferences.js";
 
 const workerImportHealth = {
   hcpRealismLanguagePack: Boolean(HCP_REALISM_LANGUAGE_PACK),
@@ -16,7 +15,6 @@ const allowedHeaders = "Content-Type,Authorization";
 const memoryState = {
   scenarios: [],
   sessions: [],
-  evidenceRecords: [],
 };
 const groqKeyCooldowns = new Map();
 
@@ -108,60 +106,6 @@ const allowedInteractionPressures = new Set([
   "curious_uncertain",
 ]);
 
-const allowedPredictiveDiseaseStates = new Set([
-  "pulmonology",
-  "cardiology",
-  "rheumatology",
-  "neurology",
-  "oncology",
-  "nephrology",
-  "dermatology",
-  "hematology",
-  "gastroenterology",
-  "endocrinology",
-  "primary_care",
-]);
-
-const allowedPredictiveHcpTypes = new Set([
-  "treating_clinician",
-  "influencer",
-  "thought_leader",
-]);
-
-const allowedPredictiveJourneyStages = new Set([
-  "initial_access",
-  "discovery",
-  "clinical_value",
-  "objection_handling",
-  "adoption_implementation",
-  "access_formulary",
-  "commitment_close",
-]);
-
-const allowedPredictiveInteractionPressures = new Set([
-  "time_constrained",
-  "operationally_constrained",
-  "skeptical_resistant",
-  "competitive_bias",
-  "safety_concern",
-  "access_barrier",
-  "curious_uncertain",
-]);
-
-const allowedPredictiveInfluenceDrivers = new Set([
-  "patient_centric",
-  "evidence_driven",
-  "risk_averse",
-  "guideline_anchored",
-]);
-
-const allowedPredictiveBehaviorArchetypes = new Set([
-  "time_constrained_community_doctor",
-  "skeptical_specialist",
-  "curious_uncertain_adopter",
-  "cost_focused_decision_maker",
-]);
-
 const allowedFocusCapabilities = new Set([
   "question_quality",
   "listening_responsiveness",
@@ -181,20 +125,8 @@ const allowedTurnSpeakers = new Set([
 
 const MAX_SCENARIO_COUNT = 100;
 const MAX_SESSION_COUNT = 200;
-const MAX_EVIDENCE_RECORD_COUNT = 1000;
 const MAX_TRANSCRIPT_TURNS = 60;
 const MAX_SIGNAL_ITEMS = 60;
-
-const EVIDENCE_ALLOWLIST_BY_HOST = new Map(
-  EVIDENCE_ALLOWLIST.map((source) => {
-    try {
-      const host = new URL(source.url).hostname.replace(/^www\./, "").toLowerCase();
-      return [host, source];
-    } catch {
-      return null;
-    }
-  }).filter(Boolean),
-);
 
 function safeBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -223,103 +155,8 @@ function asObject(value, fallback = {}) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : fallback;
 }
 
-function parseIsoDate(value) {
-  const text = safeString(value);
-  if (!text) return null;
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
-}
-
-function hostFromUrl(value) {
-  try {
-    return new URL(value).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
-function computeFreshnessScore(publishedAtIso) {
-  const publishedDate = parseIsoDate(publishedAtIso);
-  if (!publishedDate) return 45;
-
-  const now = Date.now();
-  const ageDays = Math.floor((now - publishedDate.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (ageDays <= 30) return 100;
-  if (ageDays <= 90) return 92;
-  if (ageDays <= 180) return 84;
-  if (ageDays <= 365) return 74;
-  if (ageDays <= 730) return 62;
-  return 50;
-}
-
-function normalizeEvidenceRecord(raw = {}, index = 0, ingestionMeta = {}) {
-  const sourceUrl = safeString(raw.sourceUrl || raw.url);
-  const sourceHost = hostFromUrl(sourceUrl);
-  const allowlistEntry = EVIDENCE_ALLOWLIST_BY_HOST.get(sourceHost);
-  const sourceName = safeString(raw.sourceName || raw.organization || allowlistEntry?.organization);
-  const publishedAt = asIsoDate(raw.publishedAt || raw.datePublished || ingestionMeta.ingestedAt);
-  const domain = safeString(raw.domain || allowlistEntry?.domain || "cross-domain");
-  const title = asLimitedText(raw.title, 220);
-
-  return {
-    id: safeString(raw.id || raw.externalId) || createId("evidence", `${title || sourceName || index}`),
-    title,
-    summary: asLimitedText(raw.summary || raw.abstract || raw.description, 1600),
-    diseaseState: safeString(raw.diseaseState),
-    treatmentClass: safeString(raw.treatmentClass),
-    domain,
-    tags: asStringArray(raw.tags, 12, 80),
-    publishedAt,
-    freshnessScore: computeFreshnessScore(publishedAt),
-    provenance: {
-      sourceName,
-      sourceUrl,
-      sourceHost,
-      allowlisted: Boolean(allowlistEntry),
-      allowlistId: allowlistEntry?.id || "",
-      sourceType: allowlistEntry?.type || safeString(raw.sourceType),
-      ingestedAt: ingestionMeta.ingestedAt,
-      ingestedBy: safeString(ingestionMeta.ingestedBy, "pipeline"),
-    },
-    metadata: {
-      publisher: safeString(raw.publisher),
-      year: safeString(raw.year),
-      confidence: Math.max(0, Math.min(1, Number(raw.confidence ?? 0.8))),
-    },
-    updatedAt: ingestionMeta.ingestedAt,
-  };
-}
-
 function uniqueStrings(values) {
   return [...new Set((Array.isArray(values) ? values : []).map((value) => safeString(value)).filter(Boolean))];
-}
-
-function normalizePredictiveSeed(rawSeed = null, existingSeed = null) {
-  const seed = asObject(rawSeed, asObject(existingSeed, null));
-  if (!seed) return null;
-
-  const normalized = {
-    diseaseState: asLimitedText(seed.diseaseState, 80),
-    hcpType: asLimitedText(seed.hcpType, 80),
-    journeyStage: asLimitedText(seed.journeyStage, 80),
-    interactionPressure: asLimitedText(seed.interactionPressure, 80),
-    influenceDriver: asLimitedText(seed.influenceDriver, 80),
-    behaviorArchetype: asLimitedText(seed.behaviorArchetype, 80),
-  };
-
-  const allFilled = Object.values(normalized).every(Boolean);
-  if (!allFilled) return null;
-
-  if (!allowedPredictiveDiseaseStates.has(normalized.diseaseState)) return null;
-  if (!allowedPredictiveHcpTypes.has(normalized.hcpType)) return null;
-  if (!allowedPredictiveJourneyStages.has(normalized.journeyStage)) return null;
-  if (!allowedPredictiveInteractionPressures.has(normalized.interactionPressure)) return null;
-  if (!allowedPredictiveInfluenceDrivers.has(normalized.influenceDriver)) return null;
-  if (!allowedPredictiveBehaviorArchetypes.has(normalized.behaviorArchetype)) return null;
-
-  return normalized;
 }
 
 function normalizeScenarioPayload(body = {}, existingScenario = null) {
@@ -346,7 +183,6 @@ function normalizeScenarioPayload(body = {}, existingScenario = null) {
   const interactionPressure = uniqueStrings(body.interactionPressure).filter((value) => allowedInteractionPressures.has(value));
   const suggestedFocusCapabilities = uniqueStrings(body.suggestedFocusCapabilities).filter((value) => allowedFocusCapabilities.has(value));
   const keyChallenges = uniqueStrings(body.keyChallenges);
-  const predictiveSeed = normalizePredictiveSeed(body.predictiveSeed, existingScenario?.predictiveSeed);
 
   return {
     ...existingScenario,
@@ -367,7 +203,6 @@ function normalizeScenarioPayload(body = {}, existingScenario = null) {
     interactionPressure,
     suggestedFocusCapabilities,
     keyChallenges,
-    predictiveSeed,
     isBuiltIn: false,
     isPublished: body?.isPublished ?? existingScenario?.isPublished ?? true,
   };
@@ -390,11 +225,11 @@ function normalizeTranscriptTurn(turn = {}, index = 0) {
     })).filter((cue) => cue.label),
     nudge: turn?.nudge && typeof turn.nudge === "object"
       ? {
-        title: asLimitedText(turn.nudge?.title, 120),
-        guidance: asLimitedText(turn.nudge?.guidance, 240),
-        capabilityId: asLimitedText(turn.nudge?.capabilityId, 80),
-        capabilityName: asLimitedText(turn.nudge?.capabilityName, 120),
-      }
+          title: asLimitedText(turn.nudge?.title, 120),
+          guidance: asLimitedText(turn.nudge?.guidance, 240),
+          capabilityId: asLimitedText(turn.nudge?.capabilityId, 80),
+          capabilityName: asLimitedText(turn.nudge?.capabilityName, 120),
+        }
       : null,
   };
 }
@@ -408,36 +243,6 @@ function normalizeSignalItem(signal = {}) {
     control_pattern: asLimitedText(signal?.control_pattern, 80),
     listening_pattern: asLimitedText(signal?.listening_pattern, 80),
     commitment_attempt: asLimitedText(signal?.commitment_attempt, 80),
-  };
-}
-
-function normalizePredictiveLens(rawLens = null) {
-  const lens = asObject(rawLens, null);
-  if (!lens) return null;
-
-  const selection = asObject(lens.selection, {});
-  const sections = asObject(lens.sections, {});
-
-  return {
-    selection: {
-      diseaseState: asLimitedText(selection.diseaseState, 80),
-      hcpType: asLimitedText(selection.hcpType, 80),
-      journeyStage: asLimitedText(selection.journeyStage, 80),
-      interactionPressure: asLimitedText(selection.interactionPressure, 80),
-      influenceDriver: asLimitedText(selection.influenceDriver, 80),
-      behaviorArchetype: asLimitedText(selection.behaviorArchetype, 80),
-    },
-    synthesisSource: asLimitedText(lens.synthesisSource, 32),
-    synthesisError: asLimitedText(lens.synthesisError, 240),
-    specialistTitle: asLimitedText(lens.specialistTitle, 140),
-    sections: {
-      mindset: asObject(sections.mindset, {}),
-      objections: asObject(sections.objections, {}),
-      responseStyle: asObject(sections.responseStyle, {}),
-      repApproach: asObject(sections.repApproach, {}),
-    },
-    hcpPerspective: asObject(lens.hcpPerspective, {}),
-    repPreparation: asObject(lens.repPreparation, {}),
   };
 }
 
@@ -464,8 +269,6 @@ function normalizeSessionPayload(body = {}, existingSession = null) {
     ? behaviorStateCandidate
     : existingSession?.currentBehaviorState || "neutral";
 
-  const predictiveLens = normalizePredictiveLens(body?.predictiveLens || existingSession?.predictiveLens || null);
-
   return {
     ...existingSession,
     id: safeString(body?.id, existingSession?.id || ""),
@@ -491,7 +294,6 @@ function normalizeSessionPayload(body = {}, existingSession = null) {
     signals,
     review: body?.review && typeof body.review === "object" ? body.review : existingSession?.review || null,
     summary: asStringArray(body?.summary || existingSession?.summary || [], 8, 240),
-    predictiveLens,
     createdAt: asIsoDate(body?.createdAt || existingSession?.createdAt),
     endedAt: body?.endedAt ? asIsoDate(body.endedAt) : existingSession?.endedAt || null,
     updatedAt: new Date().toISOString(),
@@ -1241,61 +1043,14 @@ function normalizeRoleplayEntryTone(hcpReply = "", scenarioContext = {}, convers
   const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
   const pressures = uniqueStrings(scenarioContext?.interactionPressure).join(" ").toLowerCase();
 
+  if (journeyStage !== "initial_access" || turnCount > 1) {
+    return text;
+  }
+
   let normalized = text
-    .replace(
-      /^you'?re following up on (?:that|the) study[^,]*,\s*i remember you dropping it off,?\s*(.*)$/i,
-      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
-    )
-    .replace(
-      /^you'?re following up on (?:that|the) study you dropped off last week,?\s*(.*)$/i,
-      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
-    )
-    .replace(
-      /^you'?re following up on (?:that|the) study you dropped off,?\s*(.*)$/i,
-      (_, rest) => `I remember the study you dropped off.${rest ? ` ${safeString(rest)}` : ""}`,
-    )
-    .replace(
-      /^you'?re following up on (?:that|the) study,?\s*(.*)$/i,
-      (_, rest) => `I remember that study.${rest ? ` ${safeString(rest)}` : ""}`,
-    )
     .replace(/^look,\s*/i, "")
     .replace(/\bcan you make it quick\b/i, "can you give me the short version")
     .replace(/\bmake it quick\b/i, "keep it brief");
-
-  normalized = normalized
-    .replace(
-      /^(I remember[^.?!]{0,140}),\s*(I(?:'ve| have) got[^,]{3,120}),\s*(what'?s|why|how|where|when|who|can we)\b/i,
-      "$1. $2, so $3",
-    )
-    .replace(
-      /^(I(?:'ve| have) got[^.?!]{0,120}),\s*(what'?s|why|how|where|when|who|can we)\b/i,
-      "$1, so $2",
-    )
-    .replace(/that'?s usually not where it breaks for us\.\s*But to be honest,\s*/gi, "that's usually not where we get stuck, and ")
-    .replace(/\.\s*But to be honest,\s*/g, ". To be honest, ")
-    .replace(/\byet,\s*what specifically\b/gi, "yet. What specifically")
-    .replace(/\.\s*but\b/gi, ". But")
-    .replace(/\.\s*and\b/gi, ". And");
-
-  if (turnCount <= 0 && /^I remember that study\.?$/i.test(safeString(normalized))) {
-    if (/time_constrained|operationally_constrained/.test(pressures)) {
-      normalized = "I remember that study. I've only got a minute, so what's the key point that would help my staff or patients today?";
-    } else {
-      normalized = "I remember that study. What's the key takeaway you want me to apply for patients?";
-    }
-  }
-
-  if (turnCount <= 0 && /^I remember the study you dropped off\.?$/i.test(safeString(normalized))) {
-    if (/time_constrained|operationally_constrained/.test(pressures)) {
-      normalized = "I remember the study you dropped off. I've only got a minute, so what's the key point that would help my staff or patients today?";
-    } else {
-      normalized = "I remember the study you dropped off. What's the key takeaway you want me to apply for patients?";
-    }
-  }
-
-  if (journeyStage !== "initial_access" || turnCount > 1) {
-    return safeString(normalized);
-  }
 
   if (/slammed today|waiting room full of patients/i.test(normalized)) {
     normalized = "I've got a couple minutes before my next patient, so what's this about?";
@@ -1323,29 +1078,6 @@ function deterministicRoleplayPick(options = [], seed = "") {
   if (!Array.isArray(options) || !options.length) return "";
   const score = Array.from(String(seed || "")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return options[score % options.length];
-}
-
-function enforceNonTrivialFirstTurnReply(text = "", scenarioContext = {}, conversationState = {}, repMessage = "") {
-  let line = safeString(text)
-    .replace(/that's usually not where it breaks for us/gi, "that's usually not where we get stuck")
-    .replace(/\.\s*But to be honest,\s*/g, ". To be honest, ")
-    .replace(/^I remember that study\.\s*you left with me last week,?\s*/i, "I remember the study you left with me last week. ")
-    .replace(/^I remember that study\.\s*You left here last week,\s*/i, "I remember the study you left last week. ")
-    .replace(/([.?!]\s+)([a-z])/g, (_, punct, char) => `${punct}${char.toUpperCase()}`);
-  const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
-  if (!line || turnCount > 0) return line;
-
-  const pressures = uniqueStrings(scenarioContext?.interactionPressure).join(" ").toLowerCase();
-  const highPressure = /time_constrained|operationally_constrained/.test(pressures);
-
-  if (/^I remember that study\.?$/i.test(line) || /^I remember the study you dropped off\.?$/i.test(line)) {
-    if (highPressure) {
-      return "I remember the study you dropped off. I've only got a minute, so what's the key point that would help my staff or patients today?";
-    }
-    return "I remember the study you dropped off. What's the key takeaway you want me to apply for patients?";
-  }
-
-  return line;
 }
 
 export function addHcpMicroAcknowledgment(text = "", context = {}) {
@@ -1491,7 +1223,6 @@ async function handleRoleplayStart(request, env) {
       hasPriorContextSignal: false,
     },
   ).text;
-  variedReply = enforceNonTrivialFirstTurnReply(variedReply, scenarioContext, conversationState, "");
   const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
 
   return json({
@@ -1554,7 +1285,6 @@ async function handleRoleplayRespond(request, env) {
       hasPriorContextSignal: extractRepOpeningContext(repMessage, scenarioContext).hasPriorContextSignal,
     },
   ).text;
-  variedReply = enforceNonTrivialFirstTurnReply(variedReply, scenarioContext, conversationState, repMessage);
   const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
 
   return json({
@@ -1803,115 +1533,6 @@ async function handleSessions(request, env) {
   return json({ error: "Method not allowed" }, { status: 405 }, request);
 }
 
-async function handleEvidenceSources(request) {
-  if (request.method !== "GET") {
-    return json({ error: "Method not allowed" }, { status: 405 }, request);
-  }
-
-  return json({
-    sources: EVIDENCE_ALLOWLIST,
-    total: EVIDENCE_ALLOWLIST.length,
-  }, {}, request);
-}
-
-async function handleEvidenceRecords(request, env) {
-  const key = "evidenceRecords";
-
-  if (request.method !== "GET") {
-    return json({ error: "Method not allowed" }, { status: 405 }, request);
-  }
-
-  const records = await readCollection(env, key);
-  const url = new URL(request.url);
-  const requestedDomain = safeString(url.searchParams.get("domain"));
-  const requestedDisease = safeString(url.searchParams.get("diseaseState"));
-  const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-
-  const filtered = records
-    .filter((record) => (requestedDomain ? record?.domain === requestedDomain : true))
-    .filter((record) => (requestedDisease ? record?.diseaseState === requestedDisease : true))
-    .sort((left, right) => {
-      const leftScore = Number(left?.freshnessScore || 0);
-      const rightScore = Number(right?.freshnessScore || 0);
-      return rightScore - leftScore;
-    })
-    .slice(0, limit);
-
-  return json({
-    records: filtered,
-    total: filtered.length,
-  }, {}, request);
-}
-
-async function handleEvidenceIngest(request, env) {
-  const key = "evidenceRecords";
-
-  if (request.method !== "POST") {
-    return json({ error: "Method not allowed" }, { status: 405 }, request);
-  }
-
-  const body = await request.json().catch(() => ({}));
-  const recordsInput = Array.isArray(body?.records) ? body.records : [];
-
-  if (!recordsInput.length) {
-    return json({ error: "No evidence records provided" }, { status: 400 }, request);
-  }
-
-  const existing = await readCollection(env, key);
-  const ingestedAt = new Date().toISOString();
-  const ingestionMeta = {
-    ingestedAt,
-    ingestedBy: safeString(body?.ingestedBy, "pipeline"),
-  };
-
-  const rejected = [];
-  const accepted = [];
-
-  for (let index = 0; index < recordsInput.length; index += 1) {
-    const normalized = normalizeEvidenceRecord(asObject(recordsInput[index]), index, ingestionMeta);
-    if (!normalized.provenance.allowlisted) {
-      rejected.push({
-        index,
-        reason: "source_not_allowlisted",
-        sourceUrl: normalized.provenance.sourceUrl,
-      });
-      continue;
-    }
-
-    if (!normalized.title || !normalized.summary) {
-      rejected.push({
-        index,
-        reason: "missing_required_fields",
-      });
-      continue;
-    }
-
-    accepted.push(normalized);
-  }
-
-  const byId = new Map(existing.map((record) => [record.id, record]));
-  for (const record of accepted) {
-    byId.set(record.id, {
-      ...byId.get(record.id),
-      ...record,
-    });
-  }
-
-  const next = [...byId.values()]
-    .sort((left, right) => String(right?.updatedAt || "").localeCompare(String(left?.updatedAt || "")))
-    .slice(0, MAX_EVIDENCE_RECORD_COUNT);
-
-  await writeCollection(env, key, next);
-
-  return json({
-    success: true,
-    ingestedCount: accepted.length,
-    records: accepted,
-    rejected,
-    totalStored: next.length,
-  }, { status: 201 }, request);
-}
-
 function handleHealth(env, request) {
   const { provider, openaiApiKey, groqApiKey, groqApiKeys } = getLlmProvider(env);
   return json({
@@ -1930,17 +1551,7 @@ function handleHealth(env, request) {
     keyPools: {
       groq: groqApiKeys?.length || 0,
     },
-    endpoints: [
-      "/health",
-      "/api/llm/invoke",
-      "/api/scenarios",
-      "/api/roleplay/sessions",
-      "/api/roleplay/start",
-      "/api/roleplay/respond",
-      "/api/evidence/sources",
-      "/api/evidence/records",
-      "/api/evidence/ingest",
-    ],
+    endpoints: ["/health", "/api/llm/invoke", "/api/scenarios", "/api/roleplay/sessions", "/api/roleplay/start", "/api/roleplay/respond"],
   }, {}, request);
 }
 
@@ -1983,18 +1594,6 @@ export default {
         } catch (error) {
           return json({ error: "fallback", details: String(error?.message || error || "unknown") }, { status: 200 }, request);
         }
-      }
-
-      if (url.pathname === "/api/evidence/sources") {
-        return handleEvidenceSources(request);
-      }
-
-      if (url.pathname === "/api/evidence/records") {
-        return handleEvidenceRecords(request, env);
-      }
-
-      if (url.pathname === "/api/evidence/ingest") {
-        return handleEvidenceIngest(request, env);
       }
 
       return json({ error: "Not found" }, { status: 404 }, request);

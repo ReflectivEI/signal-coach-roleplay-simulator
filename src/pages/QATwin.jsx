@@ -13,8 +13,6 @@ import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
 import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
 import { buildMatrixAuditSummary, buildTranscriptAudit } from "@/lib/qaTwinAudit";
-import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
-import { buildPredictiveProfile } from "@/lib/predictiveBuilderModel";
 
 function createSafeId() {
   const cryptoApi = globalThis.crypto;
@@ -237,42 +235,6 @@ async function retryWithBackoff(fn, maxRetries = 3) {
 async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   const persona = QA_PERSONAS[personaKey];
   const convInit = await initializeConversation(scenario);
-  const derivedTemperature = Number.isFinite(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))
-    ? Math.max(1, Math.min(10, Math.round(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))))
-    : personaKey === "strong_rep" ? 3 : personaKey === "weak_rep" ? 9 : 6;
-
-  const selection = buildPredictiveSeedFromScenario(scenario || {});
-  const deterministicProfile = buildPredictiveProfile(selection);
-  const predictiveProfile = {
-    type: String(selection?.behaviorArchetype || scenario?.persona || "").trim(),
-    source: "deterministic",
-    specialistTitle: scenario?.stakeholder || "Clinical Specialist",
-  };
-  const sections = deterministicProfile?.sections || {};
-  const predictivePromptContext = [
-    "PREDICTIVE HCP LENS (runtime, scenario-derived):",
-    "- Source: deterministic",
-    `- Specialist frame: ${predictiveProfile.specialistTitle}`,
-    `- Seed disease state: ${selection?.diseaseState || ""}`,
-    `- Seed HCP type: ${selection?.hcpType || ""}`,
-    `- Seed journey stage: ${selection?.journeyStage || ""}`,
-    `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
-    `- Seed influence driver: ${selection?.influenceDriver || ""}`,
-    `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
-    `- Mindset headline: ${sections?.mindset?.headline || ""}`,
-    `- Objection headline: ${sections?.objections?.headline || ""}`,
-    `- Response style headline: ${sections?.responseStyle?.headline || ""}`,
-    `- Rep approach headline: ${sections?.repApproach?.headline || ""}`,
-  ].join("\n");
-
-  if (!predictiveProfile.type || !predictivePromptContext.trim()) {
-    throw new Error("Missing predictive profile");
-  }
-
-  const scenarioWithRuntime = {
-    ...scenario,
-    runtimeTemperature: derivedTemperature,
-  };
 
   const session = {
     id: createSafeId(),
@@ -306,7 +268,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
       ));
       const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
       const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-      let repReply = buildDeterministicQaRepReply({ scenario, turns, draft: repDraft });
+      let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
       if (lastHcpQuestionType === "solution_seeking") {
         repReply = enforceRepAnswerFirstContract({
           scenario,
@@ -336,7 +298,7 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
         cues: t.cues || [],
       }));
       const response = await retryWithBackoff(() => withTimeout(generateHcpResponse(
-        scenarioWithRuntime,
+        scenario,
         conversationHistory,
         currentBehaviorState,
         currentJourneyState,
@@ -346,24 +308,6 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
         i,
         currentVolatilityProfile,
         QA_HCP_TOKEN_CAP,
-        predictiveProfile,
-        predictivePromptContext,
-        {
-          hcpPersona: predictiveProfile,
-          temperature: derivedTemperature,
-          previousInteraction: repReply.text || "",
-          previousConcernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
-          escalationLevel: 0,
-          interactionHistory: turns
-            .filter((turn) => turn?.speaker === "rep" || turn?.speaker === "hcp")
-            .slice(-6)
-            .map((turn) => ({
-              rep: turn?.speaker === "rep" ? turn?.text : "",
-              hcp: turn?.speaker === "hcp" ? turn?.text : "",
-              concernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
-              behaviorState: currentBehaviorState,
-            })),
-        },
       ), `${scenario.title} hcp turn ${i + 1}`));
 
       const hcpTurnObj = {
@@ -724,10 +668,11 @@ function MatrixRow({ result, index }) {
                   {(result.review?.capabilityInsights || []).map((ci) => (
                     <span
                       key={ci.capabilityId}
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
-                        : ci.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
-                          : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                        }`}
+                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
+                        ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                          : ci.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
+                            : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
+                      }`}
                     >
                       {(ci.capabilityName || capabilityLabelMap[ci.capabilityId] || ci.capabilityId.replace(/_/g, " "))}: {ci.observationLevel}
                     </span>
@@ -895,70 +840,14 @@ export default function QATwin() {
 
   const exportResults = (results) => {
     const exportAudit = buildMatrixAuditSummary(results);
-    const classifyAuditStatuses = (qaAudit = {}) => {
-      const failures = Array.isArray(qaAudit?.failures) ? qaAudit.failures : [];
-      const hasType = (types = []) => failures.some((failure) => types.includes(String(failure?.type || "")));
-
-      const repFailureTypes = [
-        "question_obligation_failure",
-        "weak_answer",
-        "conversation_stagnation",
-        "repetition_or_looping",
-      ];
-      const realismFailureTypes = [
-        "chatbot_phrasing",
-        "over_precise",
-        "over_written",
-        "over_explained",
-        "weak_skepticism",
-        "wrong_emotional_temperature",
-        "poor_persona_fit",
-        "poor_specialty_fit",
-        "workflow_implausible",
-        "access_implausible",
-        "clinical_implausible",
-      ];
-      const continuityFailureTypes = [
-        "continuity_break",
-        "repetition_or_looping",
-        "conversation_stagnation",
-      ];
-      const runtimeFailureTypes = [
-        "journey_stage_mismatch",
-        "interaction_pressure_mismatch",
-      ];
-
-      const rep_evaluation_status = hasType(repFailureTypes) ? "FAIL" : "PASS";
-      const hcp_realism_status = hasType(realismFailureTypes) ? "FAIL" : "PASS";
-      const continuity_status = hasType(continuityFailureTypes) ? "FAIL" : "PASS";
-      const system_runtime_status = hasType(runtimeFailureTypes) ? "FAIL" : "PASS";
-      const final_verdict = [rep_evaluation_status, hcp_realism_status, continuity_status, system_runtime_status].every((status) => status === "PASS")
-        ? "PASS"
-        : "FAIL";
-
-      return {
-        rep_evaluation_status,
-        hcp_realism_status,
-        continuity_status,
-        system_runtime_status,
-        final_verdict,
-      };
-    };
-
     const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Turns per scenario: ${maxTurns}`, "", "Aggregate Failure Counts:"];
     Object.entries(exportAudit.failureCounts).forEach(([type, count]) => lines.push(`  ${type}: ${count}`));
     lines.push("", "Per Persona:");
     Object.entries(exportAudit.perPersona).forEach(([key, value]) => lines.push(`  ${key}: ${value.pass} pass / ${value.fail} fail`));
     lines.push("");
     for (const r of results) {
-      const statusBreakdown = classifyAuditStatuses(r.qaAudit || {});
       lines.push(`=== ${r.scenario.title} [${r.personaKey}] ===`);
       lines.push(`QA Verdict: ${r.qaAudit?.verdict || "FAIL"}`);
-      lines.push(`rep_evaluation_status: ${statusBreakdown.rep_evaluation_status}`);
-      lines.push(`hcp_realism_status: ${statusBreakdown.hcp_realism_status}`);
-      lines.push(`continuity_status: ${statusBreakdown.continuity_status}`);
-      lines.push(`system_runtime_status: ${statusBreakdown.system_runtime_status}`);
-      lines.push(`final_verdict: ${statusBreakdown.final_verdict}`);
       lines.push(`Assertions: ${r.assertions.filter((a) => a.pass).length}/${r.assertions.length} passed`);
       r.assertions.forEach((a) => lines.push(`  [${a.pass ? "PASS" : "FAIL"}] ${a.label}: ${a.detail}`));
       lines.push("Capabilities:");
@@ -1186,10 +1075,11 @@ export default function QATwin() {
                 {(singleResult.review?.capabilityInsights || []).map((q) => (
                   <span
                     key={q.capabilityId}
-                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
-                      : q.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
-                        : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                      }`}
+                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
+                      q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                        : q.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
+                          : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
+                    }`}
                   >
                     {(q.capabilityName || capabilityLabelMap[q.capabilityId] || q.capabilityId.replace(/_/g, " "))}: {q.observationLevel}
                   </span>

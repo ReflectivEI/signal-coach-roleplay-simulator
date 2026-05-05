@@ -1,65 +1,20 @@
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
+import {
+  DISEASE_STATES,
+  SPECIALTIES,
+  CHALLENGE_CONTEXT_OPTIONS,
+  CONVERSATION_STAGE_OPTIONS,
+  HCP_ROLE_OPTIONS,
+  INTERACTION_PRESSURES,
+  JOURNEY_STAGES,
+} from "@/lib/rpsUserInputOptions";
+import { deriveUISelectionFromBrain } from "@/lib/scenarioInputResolver";
 
-export const DISEASE_STATES = [
-  { value: "all", label: "All Disease States" },
-  { value: "pulmonology", label: "Pulmonology" },
-  { value: "cardiology", label: "Cardiology" },
-  { value: "rheumatology", label: "Rheumatology" },
-  { value: "neurology", label: "Neurology" },
-  { value: "oncology", label: "Oncology" },
-  { value: "nephrology", label: "Nephrology" },
-  { value: "dermatology", label: "Dermatology" },
-  { value: "hematology", label: "Hematology" },
-  { value: "gastroenterology", label: "Gastroenterology" },
-  { value: "endocrinology", label: "Endocrinology" },
-  { value: "primary_care", label: "Primary Care" },
-];
-
-export const SPECIALTIES = [
-  { value: "all", label: "All Specialties" },
-  { value: "specialist", label: "Specialist" },
-  { value: "primary_care", label: "Primary Care" },
-  { value: "hospital_medicine", label: "Hospital Medicine" },
-  { value: "academic", label: "Academic / KOL" },
-];
-
-export const HCP_TYPES = [
-  { value: "all", label: "All HCP Types" },
-  { value: "treating_clinician", label: "Treating Clinician" },
-  { value: "influencer", label: "Influencer" },
-  { value: "thought_leader", label: "Thought Leader" },
-];
-
-export const INFLUENCE_DRIVERS = [
-  { value: "all", label: "All Influence Drivers" },
-  { value: "patient_centric", label: "Patient-Centric" },
-  { value: "evidence_driven", label: "Evidence-Driven" },
-  { value: "risk_averse", label: "Risk-Averse" },
-  { value: "guideline_anchored", label: "Guideline-Anchored" },
-];
-
-export const JOURNEY_STAGES = [
-  { value: "all", label: "All Journey Stages" },
-  { value: "initial_access", label: "Initial Access" },
-  { value: "discovery", label: "Discovery" },
-  { value: "clinical_value", label: "Clinical Value" },
-  { value: "objection_handling", label: "Objection Handling" },
-  { value: "adoption_implementation", label: "Adoption & Implementation" },
-  { value: "access_formulary", label: "Access & Formulary" },
-  { value: "commitment_close", label: "Commitment & Close" },
-];
-
-export const INTERACTION_PRESSURES = [
-  { value: "all", label: "All Interaction Pressures" },
-  { value: "time_constrained", label: "Time Constrained" },
-  { value: "operationally_constrained", label: "Operationally Constrained" },
-  { value: "skeptical_resistant", label: "Skeptical / Resistant" },
-  { value: "competitive_bias", label: "Competitive Bias" },
-  { value: "safety_concern", label: "Safety Concern" },
-  { value: "access_barrier", label: "Access Barrier" },
-  { value: "curious_uncertain", label: "Curious / Uncertain" },
-];
+// Re-export from shared module so downstream consumers don't break
+export { DISEASE_STATES, SPECIALTIES, INTERACTION_PRESSURES, JOURNEY_STAGES };
+export { HCP_ROLE_OPTIONS as HCP_TYPES };
+export { CHALLENGE_CONTEXT_OPTIONS as INFLUENCE_DRIVERS };
 
 function FilterDropdown({ options, value, onChange }) {
   const [open, setOpen] = useState(false);
@@ -116,19 +71,41 @@ function FilterDropdown({ options, value, onChange }) {
 }
 
 export default function ScenarioFilters({ filters, onChange }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const set = (key) => (val) => onChange({ ...filters, [key]: val });
   const activeCount = Object.values(filters).filter(v => v !== "all").length;
 
   return (
     <div className="mb-5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <FilterDropdown options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
-        <FilterDropdown options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
-        <FilterDropdown options={HCP_TYPES} value={filters.hcpType} onChange={set("hcpType")} />
-        <FilterDropdown options={INFLUENCE_DRIVERS} value={filters.influenceDriver} onChange={set("influenceDriver")} />
-        <FilterDropdown options={JOURNEY_STAGES} value={filters.journeyStage} onChange={set("journeyStage")} />
-        <FilterDropdown options={INTERACTION_PRESSURES} value={filters.interactionPressure} onChange={set("interactionPressure")} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <FilterDropdown options={HCP_ROLE_OPTIONS} value={filters.hcpType} onChange={set("hcpType")} />
+        <FilterDropdown options={CONVERSATION_STAGE_OPTIONS} value={filters.stage} onChange={set("stage")} />
+        <FilterDropdown options={CHALLENGE_CONTEXT_OPTIONS} value={filters.challenge} onChange={set("challenge")} />
       </div>
+
+      <div className="mt-2">
+        <button
+          onClick={() => setShowAdvanced(v => !v)}
+          className="flex items-center gap-1.5 text-xs transition-colors"
+          style={{ color: showAdvanced ? "hsl(174 80% 72%)" : "rgba(241, 250, 250, 0.62)" }}
+        >
+          <SlidersHorizontal className="w-3 h-3" />
+          {showAdvanced ? "Hide" : "Advanced"}
+          <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+        </button>
+        {showAdvanced && (
+          <div className="mt-2 pt-2 border-t" style={{ borderColor: "rgba(97, 182, 181, 0.22)" }}>
+            <p className="text-xs mb-2" style={{ color: "rgba(241, 250, 250, 0.52)" }}>
+              Advanced filters are optional and intended for internal/debug narrowing only.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+              <FilterDropdown options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
+              <FilterDropdown options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
+            </div>
+          </div>
+        )}
+      </div>
+
       {activeCount > 0 && (
         <button
           onClick={() => onChange(DEFAULT_FILTERS)}
@@ -144,16 +121,14 @@ export default function ScenarioFilters({ filters, onChange }) {
 
 export function applyScenarioFilters(scenarios, filters) {
   return scenarios.filter(s => {
-    const mappedHcpType = s.gridMapping?.hcpType || s.hcpRoleType;
-    const mappedInfluenceDriver = s.gridMapping?.influenceDriver || s.decisionOrientation;
-    const mappedJourneyStage = s.gridMapping?.journeyStage || s.journeyStage;
+    const uiSelection = deriveUISelectionFromBrain(s);
+    const mappedHcpType = uiSelection.hcpType || s.gridMapping?.hcpType || s.hcpRoleType;
+    const mappedStage = uiSelection.stage || s.gridMapping?.journeyStage || s.journeyStage;
+    const mappedChallenge = uiSelection.challenge;
 
     if (filters.hcpType !== "all" && mappedHcpType !== filters.hcpType) return false;
-    if (filters.influenceDriver !== "all" && mappedInfluenceDriver !== filters.influenceDriver) return false;
-    if (filters.journeyStage !== "all" && mappedJourneyStage !== filters.journeyStage) return false;
-    if (filters.interactionPressure !== "all") {
-      if (!s.interactionPressure?.includes(filters.interactionPressure)) return false;
-    }
+    if (filters.stage !== "all" && mappedStage !== filters.stage) return false;
+    if (filters.challenge !== "all" && mappedChallenge !== filters.challenge) return false;
     if (filters.diseaseState !== "all") {
       const mappedDiseaseState = s.gridMapping?.diseaseState || s.predictiveSeed?.diseaseState;
       if (mappedDiseaseState) {
@@ -200,7 +175,6 @@ export const DEFAULT_FILTERS = {
   diseaseState: "all",
   specialty: "all",
   hcpType: "all",
-  influenceDriver: "all",
-  journeyStage: "all",
-  interactionPressure: "all",
+  stage: "all",
+  challenge: "all",
 };

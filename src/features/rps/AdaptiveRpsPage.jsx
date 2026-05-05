@@ -1,96 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Mic, MicOff, Sparkles, Save } from "lucide-react";
+import { ArrowLeft, ChevronDown, Mic, MicOff, SlidersHorizontal, Sparkles, Save } from "lucide-react";
 import { Link } from "react-router-dom";
 import { generateAdaptiveScenario, evaluateAdaptiveResponse, saveAdaptiveSession } from "./api";
 import { useSpeechInput } from "./useSpeechInput";
 import { clampTemperature, extractEightBehavioralMetricRows, isGenerateDisabled } from "./interactionState";
+import { HCP_ROLE_OPTIONS, CONVERSATION_STAGE_OPTIONS, CHALLENGE_CONTEXT_OPTIONS } from "@/lib/rpsUserInputOptions";
+import { REALISM_LEVEL_LABELS } from "@/lib/rpsUserInputOptions";
+import { mapUIToBrain } from "@/lib/scenarioInputResolver";
 
 const defaults = {
-    hcp_profile: "",
-    journey_stage: "",
-    disease_state: "",
-    interaction_pressure: "",
-    hcp_type: "",
-    behavior_archetype: "",
-    influence_driver: "",
-    access_barrier_context: "",
-    rep_objective: "",
-};
-
-const SELECT_OPTIONS = {
-    hcp_profile: [
-        ["", "Select HCP profile"],
-        ["community_time_pressed", "Community Clinician (Time-Pressed)"],
-        ["skeptical_specialist", "Skeptical Specialist"],
-        ["access_constrained_decision_maker", "Access-Constrained Decision Maker"],
-        ["guideline_anchored_evaluator", "Guideline-Anchored Evaluator"],
-        ["early_adopter_cautious", "Cautious Early Adopter"],
-    ],
-    journey_stage: [
-        ["", "Select journey stage"],
-        ["initial_access", "Initial Access"],
-        ["discovery", "Discovery"],
-        ["clinical_value", "Clinical Value"],
-        ["objection_handling", "Objection Handling"],
-        ["adoption_implementation", "Adoption Implementation"],
-        ["access_formulary", "Access/Formulary"],
-        ["commitment_close", "Commitment Close"],
-    ],
-    disease_state: [
-        ["", "Select disease state"],
-        ["pulmonology", "Pulmonology"],
-        ["cardiology", "Cardiology"],
-        ["oncology", "Oncology"],
-        ["primary_care", "Primary Care"],
-    ],
-    interaction_pressure: [
-        ["", "Select interaction pressure"],
-        ["time_constrained", "Time Constrained"],
-        ["operationally_constrained", "Operationally Constrained"],
-        ["skeptical_resistant", "Skeptical / Resistant"],
-        ["competitive_bias", "Competitive Bias"],
-        ["safety_concern", "Safety Concern"],
-        ["access_barrier", "Access Barrier"],
-        ["curious_uncertain", "Curious / Uncertain"],
-    ],
-    hcp_type: [
-        ["", "Select HCP type"],
-        ["treating_clinician", "Treating Clinician"],
-        ["influencer", "Influencer"],
-        ["thought_leader", "Thought Leader"],
-    ],
-    behavior_archetype: [
-        ["", "Select behavior archetype"],
-        ["time_constrained_community_doctor", "Time-Constrained Community Doctor"],
-        ["skeptical_specialist", "Skeptical Specialist"],
-        ["curious_uncertain_adopter", "Curious Uncertain Adopter"],
-        ["cost_focused_decision_maker", "Cost-Focused Decision Maker"],
-    ],
-    influence_driver: [
-        ["", "Select influence driver"],
-        ["patient_centric", "Patient-Centric"],
-        ["evidence_driven", "Evidence-Driven"],
-        ["risk_averse", "Risk-Averse"],
-        ["guideline_anchored", "Guideline-Anchored"],
-    ],
-    access_barrier_context: [
-        ["", "Select access barrier context"],
-        ["none", "No Immediate Access Barrier"],
-        ["prior_auth_volume", "High Prior Authorization Volume"],
-        ["step_therapy_restriction", "Step-Therapy Restriction"],
-        ["formulary_non_preferred", "Non-Preferred Formulary Status"],
-        ["payer_policy_variability", "Payer Policy Variability"],
-        ["staffing_limited_follow_up", "Limited Staff Follow-Up Capacity"],
-    ],
-    rep_objective: [
-        ["", "Select REP objective"],
-        ["establish_relevance", "Establish Relevance Quickly"],
-        ["uncover_primary_blocker", "Uncover Primary Blocker"],
-        ["validate_patient_fit", "Validate Patient Fit"],
-        ["align_on_evidence", "Align on Evidence Threshold"],
-        ["resolve_access_concern", "Resolve Access Concern"],
-        ["secure_small_next_step", "Secure Small Next Step"],
-    ],
+    hcpType: "",
+    stage: "",
+    challenge: "",
 };
 
 function DashboardCard({ title, children }) {
@@ -99,6 +20,29 @@ function DashboardCard({ title, children }) {
             <h3 className="si-dark-title mb-3 text-sm font-semibold uppercase tracking-wide">{title}</h3>
             {children}
         </section>
+    );
+}
+
+function AdvancedAdaptiveSection({ children }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="mt-4">
+            <button
+                type="button"
+                onClick={() => setOpen((value) => !value)}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-300"
+            >
+                <SlidersHorizontal className="h-3 w-3" />
+                Advanced
+                <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
+            </button>
+            {open && (
+                <div className="mt-3 rounded-lg border border-[#335a72] bg-[#0b2235] p-3 text-xs text-slate-300">
+                    {children}
+                </div>
+            )}
+        </div>
     );
 }
 
@@ -121,6 +65,20 @@ export default function AdaptiveRpsPage() {
         setRepText(speech.transcript);
     }, [speech.transcript]);
 
+    const mappedUi = useMemo(() => {
+        if (!form.hcpType || !form.stage || !form.challenge) return null;
+        return mapUIToBrain({
+            hcpType: form.hcpType,
+            stage: form.stage,
+            challenge: form.challenge,
+            realism: temperature,
+        });
+    }, [form.challenge, form.hcpType, form.stage, temperature]);
+
+    function setFormField(key, value) {
+        setForm((current) => ({ ...current, [key]: value }));
+    }
+
     const repTranscript = useMemo(() => {
         return (repText || "").trim();
     }, [repText]);
@@ -129,13 +87,19 @@ export default function AdaptiveRpsPage() {
     const metricRows = extractEightBehavioralMetricRows(evaluation);
 
     async function handleGenerateScenario() {
+        if (!mappedUi) return;
         setBusy(true);
         setError("");
         setEvaluation(null);
         setSavedId("");
         try {
             const data = await generateAdaptiveScenario({
-                ...form,
+                ...mappedUi.legacyAdaptivePayload,
+                selected_dropdowns: {
+                    ...form,
+                    ...mappedUi.legacyAdaptivePayload,
+                },
+                resolved_brain: mappedUi.resolvedFields,
                 hcp_default_temperature: 5,
                 rep_selected_temperature: temperature,
                 live_temperature: temperature,
@@ -163,6 +127,11 @@ export default function AdaptiveRpsPage() {
             return;
         }
 
+        if (!mappedUi) {
+            setError("Complete all three dropdowns before evaluating.");
+            return;
+        }
+
         setBusy(true);
         setError("");
         setSavedId("");
@@ -173,7 +142,10 @@ export default function AdaptiveRpsPage() {
                 scenario_context: scenario,
                 rep_response_transcript: repTranscript,
                 voice_metadata: speech.voiceMetadata,
-                selected_dropdowns: form,
+                selected_dropdowns: {
+                    ...form,
+                    ...mappedUi.legacyAdaptivePayload,
+                },
                 rep_selected_temperature: temperature,
                 live_temperature: temperature,
                 hcp_state: conversationMemory?.hcp_state || hcpState || scenario?.hcp_state || null,
@@ -202,11 +174,19 @@ export default function AdaptiveRpsPage() {
             return;
         }
 
+        if (!mappedUi) {
+            setError("Complete all three dropdowns before saving.");
+            return;
+        }
+
         setBusy(true);
         setError("");
         try {
             const result = await saveAdaptiveSession({
-                dropdown_selections: form,
+                dropdown_selections: {
+                    ...form,
+                    ...mappedUi.legacyAdaptivePayload,
+                },
                 temperature,
                 initial_temperature: temperature,
                 live_temperature: temperature,
@@ -226,6 +206,7 @@ export default function AdaptiveRpsPage() {
                 next_best_question: evaluation.next_best_question,
                 what_hcp_likely_heard: evaluation.what_hcp_likely_heard,
                 improved_response_example: evaluation.improved_response_example,
+                resolved_brain: mappedUi.resolvedFields,
             });
             setSavedId(result?.session_id || "saved");
         } catch (err) {
@@ -254,37 +235,54 @@ export default function AdaptiveRpsPage() {
 
                 <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
                     <DashboardCard title="Scenario Controls">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            {Object.entries(form).map(([key, value]) => (
-                                <label key={key} className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                    {key.replace(/_/g, " ")}
-                                    {SELECT_OPTIONS[key] ? (
-                                        <select
-                                            value={value}
-                                            onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                                            className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
-                                        >
-                                            {SELECT_OPTIONS[key].map(([optionValue, optionLabel]) => (
-                                                <option key={optionValue || "empty"} value={optionValue}>
-                                                    {optionLabel}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <input
-                                            value={value}
-                                            onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                                            className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
-                                        />
-                                    )}
-                                </label>
-                            ))}
+                        <div className="grid gap-3 sm:grid-cols-3">
+                            <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
+                                HCP Type
+                                <select
+                                    value={form.hcpType}
+                                    onChange={(e) => setFormField("hcpType", e.target.value)}
+                                    className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
+                                >
+                                    <option value="">Select HCP type</option>
+                                    {HCP_ROLE_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
+                                Conversation Stage
+                                <select
+                                    value={form.stage}
+                                    onChange={(e) => setFormField("stage", e.target.value)}
+                                    className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
+                                >
+                                    <option value="">Select stage</option>
+                                    {CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
+                                Challenge Context
+                                <select
+                                    value={form.challenge}
+                                    onChange={(e) => setFormField("challenge", e.target.value)}
+                                    className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
+                                >
+                                    <option value="">Select challenge</option>
+                                    {CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all").map((option) => (
+                                        <option key={option.value} value={option.value}>{option.label}</option>
+                                    ))}
+                                </select>
+                            </label>
                         </div>
 
                         <div className="mt-4 space-y-2">
                             <div className="flex items-center justify-between text-sm">
-                                <span>REP Realism Lever</span>
-                                <span className="rounded-md border border-[#44708c] bg-[#0a223a] px-2 py-1 font-semibold text-[#e8f5ff]">{temperature}/10</span>
+                                <span>Realism Level</span>
+                                <span className="rounded-md border border-[#44708c] bg-[#0a223a] px-2 py-1 font-semibold text-[#e8f5ff]">
+                                    {temperature}/10 — {REALISM_LEVEL_LABELS[temperature] ?? ""}
+                                </span>
                             </div>
                             <input
                                 type="range"
@@ -295,6 +293,20 @@ export default function AdaptiveRpsPage() {
                                 className="w-full accent-teal-400"
                             />
                         </div>
+
+                        <p className="mt-4 text-xs text-slate-400">
+                            `mapUIToBrain()` derives interaction pressure, influence driver, behavior archetype, access context, and rep objective automatically for the worker payload.
+                        </p>
+                        {mappedUi && (
+                            <AdvancedAdaptiveSection>
+                                <div className="space-y-1.5">
+                                    <p><span className="font-semibold text-slate-100">Influence Driver:</span> {mappedUi.resolvedFields.influence_driver}</p>
+                                    <p><span className="font-semibold text-slate-100">Interaction Pressure:</span> {Array.isArray(mappedUi.resolvedFields.interaction_pressure) ? mappedUi.resolvedFields.interaction_pressure.join(", ") : "none"}</p>
+                                    <p><span className="font-semibold text-slate-100">Behavior Archetype:</span> {mappedUi.resolvedFields.behavior_archetype}</p>
+                                    <p><span className="font-semibold text-slate-100">REP Objective:</span> {mappedUi.resolvedFields.rep_objective}</p>
+                                </div>
+                            </AdvancedAdaptiveSection>
+                        )}
 
                         <button
                             type="button"

@@ -94,20 +94,21 @@ Card height and spacing were tightened to improve visual consistency in mixed-ti
 
 Implemented in `src/components/home/ScenarioCard.jsx`.
 
-## 4. Six-Dimension Scenario Mapping Model
+## 4. Three-Control Scenario Input Model
 
-The scenario grid uses six top filters:
+The primary user-facing scenario model now uses three top-level controls:
 
-1. diseaseState
-2. specialty
-3. hcpType
-4. influenceDriver
-5. journeyStage
-6. interactionPressure
+1. hcpType
+2. stage
+3. challenge
+
+All other realism and predictive fields are derived through `src/lib/scenarioInputResolver.ts` and exposed only through advanced/debug controls when needed.
 
 ### 4.1 Deterministic Mapping for Built-In Scenarios
 
-All built-in scenarios are now explicitly mapped to all six dimensions through `scenario.gridMapping` in `src/lib/scenarioCatalog.js`.
+All built-in scenarios are still explicitly mapped to richer internal dimensions through `scenario.gridMapping` in `src/lib/scenarioCatalog.js`.
+
+Built-in scenarios still preserve richer internal mapping fields for runtime and archival compatibility, but discovery now resolves through a simplified external model.
 
 `scenario.gridMapping` contains:
 
@@ -120,23 +121,35 @@ All built-in scenarios are now explicitly mapped to all six dimensions through `
 
 This removes ambiguity and prevents text-heuristic drift for built-ins.
 
+The shared resolver derives:
+
+- `influence_driver`
+- `interaction_pressure`
+- `behavior_archetype`
+- `access_barrier_context`
+- `rep_objective`
+- predictive seed fields
+
+from the visible three-control selection.
+
 ### 4.2 Filter Resolution Logic
 
 `applyScenarioFilters` in `src/components/home/ScenarioFilters.jsx` now resolves with precedence:
 
-1. Explicit `scenario.gridMapping` values
-2. Predictive seed disease fallback for diseaseState
-3. Legacy text heuristics fallback for scenarios without explicit mapping (primarily legacy/custom compatibility)
+1. Derived UI selection from `deriveUISelectionFromBrain`
+2. Explicit `scenario.gridMapping` values where still present
+3. Predictive seed disease fallback for diseaseState
+4. Legacy text heuristics fallback for scenarios without explicit mapping (primarily legacy/custom compatibility)
 
 This ensures deterministic behavior for canonical content while preserving backward compatibility.
 
-### 4.3 Why Dropdowns Remain
+### 4.3 Why Three Dropdowns Remain
 
-The six dropdowns are intentional and still valid because they provide:
+The simplified dropdown set is intentional because it provides:
 
 - Controlled navigation through canonical scenario dimensions
-- Fast segmentation of training cases by clinical and behavioral attributes
-- Consistent bridge to Predictive Builder dimensions
+- A cleaner external contract across Scenario Builder, Predictive Builder, Adaptive RPS, and filters
+- A stable bridge into the richer internal runtime brain mapping
 
 ## 5. Where Preview Brief Content Comes From
 
@@ -162,7 +175,7 @@ No separate shadow brief store is required for standard scenario brief display.
 The architecture intentionally separates:
 
 - Canonical scenario semantics (scenario object fields)
-- Grid discoverability semantics (six-dimension filter mapping)
+- Grid discoverability semantics (three-control public filters plus derived internal mapping)
 - Runtime behavior semantics (journey, pressure, persona, volatility)
 
 Design intent:
@@ -253,14 +266,13 @@ Result: behavior extraction is not a post-hoc single-pass summary; it is accumul
 
 ### 10.1 What It Does
 
-Predictive HCP Builder (`src/pages/PredictiveBuilder.jsx`) creates a profile from six selections:
+Predictive HCP Builder (`src/pages/PredictiveBuilder.jsx`) now creates a profile from three visible selections:
 
-- diseaseState
 - hcpType
-- journeyStage
-- interactionPressure
-- influenceDriver
-- behaviorArchetype
+- stage
+- challenge
+
+These are expanded by `mapUIToBrain()` into the richer predictive/runtime fields the system still needs internally.
 
 It produces:
 
@@ -284,9 +296,9 @@ Predictive Builder:
 
 In short: cards are case-driven; builder is profile-driven.
 
-### 10.3 How Six Selections Map in Builder
+### 10.3 How the Three Selections Map in Builder
 
-`buildPredictiveProfile(selection)` in `src/lib/predictiveBuilderModel.js` combines:
+`mapUIToBrain()` in `src/lib/scenarioInputResolver.ts` first derives the predictive seed, then `buildPredictiveProfile(selection)` in `src/lib/predictiveBuilderModel.js` combines:
 
 - Disease intelligence blocks
 - HCP type drivers
@@ -307,14 +319,22 @@ The Build Your Own entry card in the grid routes to Scenario Builder (`src/pages
 
 Scenario Builder supports:
 
-- Manual entry of canonical fields
+- Manual entry of the three primary realism controls
 - AI-assisted canonical formatting (`generateWithAI`)
-- Validation of predictive seed completeness
+- Optional advanced/debug overrides for derived fields
 - Save through `createCustomScenario`
 
 ### 11.3 Predictive Seed and Correct Mapping
 
-Custom scenarios can include `predictiveSeed` with all six required fields:
+Custom scenarios may still include `predictiveSeed`, but the default flow now derives it automatically from:
+
+- hcpType
+- stage
+- challenge
+
+Advanced/debug mode can still override the resulting predictive seed when needed.
+
+When explicitly set, `predictiveSeed` still contains the full internal mapping fields:
 
 - diseaseState
 - hcpType
@@ -398,7 +418,7 @@ Command:
 
 Validates:
 
-- Six-dimension grid mapping exists for every built-in scenario
+- Internal grid mapping exists for every built-in scenario
 - Concern family and capability profile coverage
 - Five-section feedback labels exist in UI
 - Session review contract sections exist
@@ -416,14 +436,14 @@ Validates core realism/consistency gates for runtime response behavior.
 
 ### 15.1 Scenario Grid Usage
 
-1. Use six filters to narrow by training context.
+1. Use the three primary filters to narrow by training context.
 2. Open Preview Brief to read scenario tension, objective, and context.
 3. Start scenario and run roleplay.
 4. End session and review five-section feedback.
 
 ### 15.2 Predictive Builder Usage
 
-1. Select all six profile dimensions.
+1. Select HCP Type, Stage, and Challenge.
 2. Review deterministic profile card (and AI synthesis when available).
 3. Use test-response panel to probe likely HCP reactions.
 4. Translate learnings into roleplay opening strategy.
@@ -431,8 +451,8 @@ Validates core realism/consistency gates for runtime response behavior.
 ### 15.3 Build Your Own Usage
 
 1. Create scenario manually or use AI formatter.
-2. Fill realism variables and key challenges.
-3. Provide full predictive seed for strongest mapping alignment.
+2. Fill the three primary realism variables and key challenges.
+3. Use advanced controls only if a derived field needs explicit override.
 4. Save and run through standard simulator pipeline.
 
 ## 16. Current State Summary
@@ -440,7 +460,7 @@ Validates core realism/consistency gates for runtime response behavior.
 Current architecture now provides:
 
 - Cleaner, non-redundant scenario card UI
-- Deterministic six-dimension built-in scenario mapping
+- Deterministic three-control public input model backed by derived runtime mapping
 - Verified five-section feedback pipeline
 - Deterministic + AI-constrained review model
 - Predictive Builder and custom scenario workflows that feed runtime mapping coherently

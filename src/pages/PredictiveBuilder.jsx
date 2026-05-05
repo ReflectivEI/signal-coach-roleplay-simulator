@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, BrainCircuit, ChevronDown, ChevronUp, FlaskConical, Loader2, MessageSquareText, Stethoscope } from "lucide-react";
+import { ArrowLeft, BrainCircuit, ChevronDown, ChevronUp, FlaskConical, Loader2, MessageSquareText, SlidersHorizontal, Stethoscope } from "lucide-react";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
-import { checkWorkerHealth, invokeWorkerText, invokeWorkerJsonRawPayload, listEvidenceRecords } from "@/services/workerClient";
+import { checkWorkerHealth, getWorkerRuntimeDescriptor, invokeWorkerText, invokeWorkerJsonRawPayload, listEvidenceRecords } from "@/services/workerClient";
 import { invokeWorkerJsonWithRetry } from "@/services/workerJsonRetryHandler";
 import { getWorkerHealthReport, shouldAttemptWorkerSynthesis } from "@/services/workerOfflineSafeguard";
 import { getProfileMemory, recordProfileInteraction } from "@/lib/predictiveMemoryStore";
@@ -15,6 +15,8 @@ import {
 } from "@/lib/specialistSynthesisPrompts";
 import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 import { normalizeHcpSpokenText } from "@/lib/hcpResponseText";
+import { CHALLENGE_CONTEXT_OPTIONS, CONVERSATION_STAGE_OPTIONS, HCP_ROLE_OPTIONS } from "@/lib/rpsUserInputOptions";
+import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
 const DEV_DEBUG_SYNTHESIS = import.meta?.env?.DEV && localStorage?.getItem("DEBUG_SYNTHESIS") === "true";
 
@@ -23,14 +25,19 @@ function debugLog(label, data) {
   console.log(`[PredictiveBuilder] ${label}`, data);
 }
 
-const INITIAL_SELECTION = {
-  diseaseState: "",
+const INITIAL_UI_SELECTION = {
   hcpType: "",
-  journeyStage: "",
-  interactionPressure: "",
-  influenceDriver: "",
-  behaviorArchetype: "",
+  stage: "",
+  challenge: "",
 };
+
+function formatWorkerBinding(workerBaseUrl) {
+  try {
+    return new URL(workerBaseUrl).hostname.split(".")[0] || workerBaseUrl;
+  } catch {
+    return workerBaseUrl || "unconfigured";
+  }
+}
 
 const CHATBOT_STYLE_PATTERNS = [
   /\bi appreciate your willingness\b/i,
@@ -129,6 +136,32 @@ function buildRepPreparationFallback(synthesized = {}, normalizedSections = {}) 
   };
 }
 
+function AdvancedPredictiveSection({ children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium transition-colors"
+        style={{ color: open ? "hsl(174 55% 34%)" : "hsl(215 18% 46%)" }}
+      >
+        <SlidersHorizontal className="w-3 h-3" />
+        Advanced Controls
+        <ChevronDown className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-3 pt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.22)" }}>
+          <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
+            These fields are derived automatically. Override only when explicit control is needed.
+          </p>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SelectField({ label, value, options, onChange }) {
   return (
     <div className="space-y-1.5">
@@ -157,12 +190,12 @@ function SelectField({ label, value, options, onChange }) {
 }
 
 export default function PredictiveBuilder() {
-  const [selection, setSelection] = useState(INITIAL_SELECTION);
+  const [uiSelection, setUiSelection] = useState(INITIAL_UI_SELECTION);
   const [repQuestion, setRepQuestion] = useState("");
   const [testReply, setTestReply] = useState("");
   const [testError, setTestError] = useState("");
   const [isTesting, setIsTesting] = useState(false);
-  const [workerStatus, setWorkerStatus] = useState("unknown");
+  const [workerHealth, setWorkerHealth] = useState("checking");
 
   // AI synthesis state
   const [evidenceRecords, setEvidenceRecords] = useState([]);
@@ -171,44 +204,75 @@ export default function PredictiveBuilder() {
   const [synthesisError, setSynthesisError] = useState("");
   const [synthesisSource, setSynthesisSource] = useState(""); // "ai" | "static"
   const synthAbortRef = useRef(null);
+  const workerBinding = useMemo(() => formatWorkerBinding(getWorkerRuntimeDescriptor().workerBaseUrl), []);
 
-  const allSelected = Object.values(selection).every(Boolean);
+  const brainMapping = useMemo(() => {
+    if (!uiSelection.hcpType || !uiSelection.stage || !uiSelection.challenge) return null;
+    return mapUIToBrain({
+      hcpType: uiSelection.hcpType,
+      stage: uiSelection.stage,
+      challenge: uiSelection.challenge,
+    });
+  }, [uiSelection.challenge, uiSelection.hcpType, uiSelection.stage]);
+
+  const selection = brainMapping?.predictiveSelection ?? null;
+
+  const allSelected = Object.values(uiSelection).every(Boolean);
 
   const profile = useMemo(() => {
-    if (!allSelected) return null;
+    if (!allSelected || !selection) return null;
     return buildPredictiveProfile(selection);
   }, [allSelected, selection]);
 
   const profileMemory = useMemo(() => {
-    if (!allSelected) return null;
+    if (!allSelected || !selection) return null;
     return getProfileMemory(selection);
   }, [allSelected, selection, testReply]);
 
-  const setField = (field) => (value) => setSelection((current) => ({ ...current, [field]: value }));
+  const setField = (field) => (value) => setUiSelection((current) => ({ ...current, [field]: value }));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search || "");
-    const fromQuery = {
-      diseaseState: params.get("diseaseState") || "",
-      hcpType: params.get("hcpType") || "",
-      journeyStage: params.get("journeyStage") || "",
-      interactionPressure: params.get("interactionPressure") || "",
+    const derived = deriveUISelectionFromBrain({
+      hcpRoleType: params.get("hcpType") || "",
+      journeyStage: params.get("conversationStage") || params.get("journeyStage") || "",
       influenceDriver: params.get("influenceDriver") || "",
+      interactionPressure: params.get("interactionPressure") ? [params.get("interactionPressure")] : [],
       behaviorArchetype: params.get("behaviorArchetype") || "",
+    });
+
+    const fromQuery = {
+      hcpType: params.get("hcpType") || derived.hcpType || "",
+      stage: params.get("stage") || params.get("conversationStage") || params.get("journeyStage") || derived.stage || "",
+      challenge: params.get("challenge") || params.get("challengeContext") || derived.challenge || "",
     };
 
     const hasAny = Object.values(fromQuery).some(Boolean);
     if (!hasAny) return;
 
-    const validated = Object.fromEntries(
-      Object.entries(fromQuery).map(([field, value]) => {
-        const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
-        const allowed = new Set(options.map((item) => item.value));
-        return [field, allowed.has(value) ? value : ""];
-      }),
-    );
+    const allowed = {
+      hcpType: new Set(HCP_ROLE_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value)),
+      stage: new Set(CONVERSATION_STAGE_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value)),
+      challenge: new Set(CHALLENGE_CONTEXT_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value)),
+    };
 
-    setSelection(validated);
+    const validated = Object.fromEntries(Object.entries(fromQuery).map(([field, value]) => [field, allowed[field]?.has(value) ? value : ""]));
+
+    setUiSelection(validated);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getWorkerHealthReport()
+      .then((report) => {
+        if (!cancelled) setWorkerHealth(report.status || "unknown");
+      })
+      .catch(() => {
+        if (!cancelled) setWorkerHealth("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const getOptionLabel = (field, value) => {
@@ -244,7 +308,7 @@ export default function PredictiveBuilder() {
         // Step 1: Pre-flight health check using safeguard
         const healthReport = await getWorkerHealthReport();
         if (ticket.cancelled) return;
-        setWorkerStatus(healthReport.status);
+        setWorkerHealth(healthReport.status);
 
         if (!shouldAttemptWorkerSynthesis(healthReport.status)) {
           setSynthesisSource("static");
@@ -343,7 +407,7 @@ export default function PredictiveBuilder() {
       ticket.cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSelected, selection.diseaseState, selection.hcpType, selection.journeyStage, selection.interactionPressure, selection.influenceDriver, selection.behaviorArchetype]);
+  }, [allSelected, selection?.diseaseState, selection?.hcpType, selection?.journeyStage, selection?.interactionPressure, selection?.influenceDriver, selection?.behaviorArchetype]);
 
   // ─── Derive the active card data (AI synthesis or static fallback) ────────
   const activeCard = aiSynthesis || (profile ? {
@@ -363,7 +427,7 @@ export default function PredictiveBuilder() {
 
     try {
       const health = await checkWorkerHealth();
-      setWorkerStatus(health);
+      setWorkerHealth(health);
 
       if (health === "offline") {
         throw new Error("Worker is offline. Start it with `npm run worker:dev` and keep `npm run dev` running.");
@@ -501,7 +565,7 @@ Return only rewritten response text.`;
               </span>
             )}
           </div>
-          <p className="text-xs shrink-0" style={{ color: "hsl(215 18% 46%)" }}>Worker: {workerStatus}</p>
+          <p className="text-xs shrink-0" style={{ color: "hsl(215 18% 46%)" }}>Worker: {workerBinding} · {workerHealth}</p>
         </div>
       </div>
 
@@ -520,19 +584,37 @@ Return only rewritten response text.`;
             boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
           }}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            <SelectField label="Disease State" value={selection.diseaseState} options={PREDICTIVE_SELECTOR_OPTIONS.diseaseState} onChange={setField("diseaseState")} />
-            <SelectField label="Specialty / HCP Type" value={selection.hcpType} options={PREDICTIVE_SELECTOR_OPTIONS.hcpType} onChange={setField("hcpType")} />
-            <SelectField label="Journey Stage" value={selection.journeyStage} options={PREDICTIVE_SELECTOR_OPTIONS.journeyStage} onChange={setField("journeyStage")} />
-            <SelectField label="Interaction Pressure" value={selection.interactionPressure} options={PREDICTIVE_SELECTOR_OPTIONS.interactionPressure} onChange={setField("interactionPressure")} />
-            <SelectField label="Influence Driver" value={selection.influenceDriver} options={PREDICTIVE_SELECTOR_OPTIONS.influenceDriver} onChange={setField("influenceDriver")} />
-            <SelectField label="Behavior Archetype" value={selection.behaviorArchetype} options={PREDICTIVE_SELECTOR_OPTIONS.behaviorArchetype} onChange={setField("behaviorArchetype")} />
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
+            <SelectField label="HCP Type" value={uiSelection.hcpType} options={HCP_ROLE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("hcpType")} />
+            <SelectField label="Conversation Stage" value={uiSelection.stage} options={CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("stage")} />
+            <SelectField label="Challenge Context" value={uiSelection.challenge} options={CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("challenge")} />
           </div>
+          <p className="text-xs" style={{ color: "hsl(215 18% 46%)" }}>
+            `mapUIToBrain()` derives influence driver, interaction pressure, behavior archetype, and the full predictive seed automatically.
+          </p>
+          {brainMapping && (
+            <AdvancedPredictiveSection>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs" style={{ color: "hsl(215 22% 34%)" }}>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
+                  <p className="font-semibold uppercase tracking-wider">Influence Driver</p>
+                  <p className="mt-1">{brainMapping.resolvedFields.influence_driver}</p>
+                </div>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
+                  <p className="font-semibold uppercase tracking-wider">Interaction Pressure</p>
+                  <p className="mt-1">{Array.isArray(brainMapping.resolvedFields.interaction_pressure) ? brainMapping.resolvedFields.interaction_pressure.join(", ") : "none"}</p>
+                </div>
+                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
+                  <p className="font-semibold uppercase tracking-wider">Behavior Archetype</p>
+                  <p className="mt-1">{brainMapping.resolvedFields.behavior_archetype}</p>
+                </div>
+              </div>
+            </AdvancedPredictiveSection>
+          )}
         </div>
 
         {!allSelected && (
           <div className="rounded-2xl p-5 text-sm" style={{ background: "rgba(30, 64, 175, 0.07)", border: "1px solid rgba(30, 64, 175, 0.2)", color: "hsl(220 30% 32%)" }}>
-            Select all six fields to render the Predictive Profile Card with AI specialist synthesis.
+            Select HCP Type, Conversation Stage, and Challenge Context to render the Predictive Profile Card with AI specialist synthesis.
           </div>
         )}
 

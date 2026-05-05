@@ -115,8 +115,16 @@ export default function SimulatorRightPanel({
     }
 
     const params = new URLSearchParams();
+    const stage = selection.stage || selection.conversationStage || selection.journeyStage;
+    const challenge = selection.challenge || selection.challengeContext;
+
+    if (selection.hcpType) params.set("hcpType", String(selection.hcpType));
+    if (stage) params.set("stage", String(stage));
+    if (challenge) params.set("challenge", String(challenge));
+
     Object.entries(selection).forEach(([key, value]) => {
-      if (value) params.set(key, String(value));
+      if (!value || params.has(key)) return;
+      params.set(key, String(value));
     });
     const suffix = params.toString();
     navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
