@@ -83,6 +83,7 @@ function stripSystemReferences(text = "") {
 
   return String(text)
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, "")
+    .replace(/\b(?:in\s+)?turn\s*#?\d+\b/gi, "early in the conversation")
     .replace(/\bturn\s*\[[^\]]+\]/gi, "early in the conversation")
     .replace(/\bas seen in turn[^.,;:!?]*/gi, "early in the conversation")
     .replace(/\bas evidenced by\b/gi, "for example")
@@ -94,6 +95,9 @@ function stripSystemReferences(text = "") {
     .replace(/\bthis pattern indicates\b/gi, "this means")
     .replace(/\bthe conversation failed to advance\b/gi, "the conversation stalled")
     .replace(/\bthe hcp remained somewhat disengaged\b/gi, "the HCP disengaged")
+    .replace(/\b(as seen in|for example:?)\s*[.]+/gi, "")
+    .replace(/\bearly in the conversation\s+early in the conversation\b/gi, "early in the conversation")
+    .replace(/\s+([.,;:!?])/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -102,15 +106,29 @@ function tightenSentences(text = "", maxWords = 22) {
   if (!text) return "";
   const fragments = String(text).split(/(?<=[.!?])\s+/).filter(Boolean);
 
-  return fragments
-    .map((fragment) => {
-      const words = fragment.trim().split(/\s+/).filter(Boolean);
-      if (words.length <= maxWords) return fragment.trim();
-      return `${words.slice(0, maxWords).join(" ").replace(/[.,;:!?]+$/, "")}.`;
-    })
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
+  const completeFragments = [];
+  let totalWords = 0;
+
+  for (const fragment of fragments) {
+    const trimmed = fragment.trim();
+    if (!trimmed) continue;
+
+    const words = trimmed.split(/\s+/).filter(Boolean);
+    if (completeFragments.length > 0 && totalWords + words.length > maxWords) {
+      break;
+    }
+
+    completeFragments.push(trimmed);
+    totalWords += words.length;
+
+    if (totalWords >= maxWords) {
+      break;
+    }
+  }
+
+  return (completeFragments[0] || "")
+    ? completeFragments.join(" ").replace(/\s+/g, " ").trim()
+    : String(text).replace(/\s+/g, " ").trim();
 }
 
 function cleanCoachingCopy(text = "") {
