@@ -181,16 +181,24 @@ function isRenderableCoachingParagraph(text = "") {
   return true;
 }
 
+function normalizeQuotedPunctuation(text = "") {
+  return String(text || "")
+    .replace(/([?!.])(["'])\./g, "$1$2")
+    .replace(/([?!.])(["'])\,/g, "$1$2")
+    .replace(/([?!.])(["'])\:/g, "$1$2")
+    .trim();
+}
+
 function buildSpecificStrengthParagraph(insight) {
   if (!insight) return "";
   const evidence = insight.transcriptEvidence ? `"${cleanCoachingCopy(insight.transcriptEvidence)}"` : "";
   const behavior = cleanCoachingCopy(insight.whatHappened || insight.whatGoodLooksLike || "");
   const impact = cleanCoachingCopy(insight.whyItMattered || "");
   if (!behavior && !impact && !evidence) return "";
-  return [behavior, evidence ? `For example: ${evidence}.` : "", impact]
+  return normalizeQuotedPunctuation([behavior, evidence ? `For example: ${evidence}.` : "", impact]
     .filter(Boolean)
     .join(" ")
-    .trim();
+    .trim());
 }
 
 function buildAttemptedStrengthParagraph(insight) {
@@ -200,12 +208,12 @@ function buildAttemptedStrengthParagraph(insight) {
   const impact = cleanCoachingCopyExpanded(insight.whyItMattered || "", 38);
   const pattern = cleanCoachingCopyExpanded(insight.pattern || "", 24);
 
-  return [
+  return normalizeQuotedPunctuation([
     behavior,
     evidence ? `For example: "${evidence}".` : "",
     impact,
     pattern && !/isolated moment/i.test(pattern) ? pattern : "",
-  ].filter(Boolean).join(" ").trim();
+  ].filter(Boolean).join(" ").trim());
 }
 
 function lowerCaseLead(text = "") {
@@ -256,12 +264,12 @@ function buildTranscriptAttemptParagraph(session) {
   const questionText = cleanTranscriptQuote(firstRepQuestion.text, 12);
   const hcpReply = cleanTranscriptQuote(findNextHcpTurn(session, firstRepQuestion.text)?.text || "", 24);
 
-  return [
+  return normalizeQuotedPunctuation([
     `The one usable behavior was that you kept the exchange moving by asking "${questionText}" instead of stopping after the cold opening.`,
     hcpReply
       ? `That at least invited a response, but the reply "${hcpReply}" shows the question was still too generic to uncover the HCP's real concern.`
       : "That kept the exchange alive, but it still did not clarify what the HCP actually needed from the conversation.",
-  ].join(" ").trim();
+  ].join(" ").trim());
 }
 
 function buildTranscriptStrengthParagraphs(session) {
@@ -280,7 +288,7 @@ function buildTranscriptStrengthParagraphs(session) {
     repTurns.length >= 3
       ? `You also kept each reply brief enough for the HCP to respond. The issue was not over-talking; it was that the short replies never turned that space into a credible direction for the conversation.`
       : "",
-  ].filter(Boolean);
+  ].filter(Boolean).map(normalizeQuotedPunctuation);
 }
 
 function buildExchangeSpecificSummary({ review, insightByCapability, session }) {
@@ -350,16 +358,16 @@ function buildSpecificDevelopmentParagraph(insight) {
   const impact = cleanCoachingCopy(insight.whyItMattered || "");
   const action = cleanCoachingCopy(insight.nextTimeAction || insight.whatGoodLooksLike || "");
   if (!behavior && !impact && !action && !evidence) return "";
-  return [behavior, evidence ? `For example: ${evidence}.` : "", impact, action]
+  return normalizeQuotedPunctuation([behavior, evidence ? `For example: ${evidence}.` : "", impact, action]
     .filter(Boolean)
     .join(" ")
-    .trim();
+    .trim());
 }
 
 function buildActionItemParagraph(insight) {
   if (!insight?.nextTimeAction) return "";
   const rewrite = insight.exampleRewrite ? ` Example phrasing: "${cleanCoachingCopy(insight.exampleRewrite)}".` : "";
-  return cleanCoachingCopy(`${insight.nextTimeAction}${rewrite}`);
+  return normalizeQuotedPunctuation(cleanCoachingCopy(`${insight.nextTimeAction}${rewrite}`));
 }
 
 function buildGuidanceParagraph(item, insightByCapability = {}) {
@@ -370,12 +378,12 @@ function buildGuidanceParagraph(item, insightByCapability = {}) {
   const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || "", 36);
   const rewrite = cleanCoachingCopyExpanded(item.exampleRewrite || insight?.exampleRewrite || "", 24);
 
-  return [
+  return normalizeQuotedPunctuation([
     guidance,
     evidence ? `Anchor it to moments like: "${evidence}".` : "",
     impact ? `Why this matters: ${impact}` : "",
     rewrite ? `Example phrasing: "${rewrite}".` : "",
-  ].filter(Boolean).join(" ").trim();
+  ].filter(Boolean).join(" ").trim());
 }
 
 function buildRobustImprovementPoint(insight) {
@@ -395,7 +403,7 @@ function buildRobustImprovementPoint(insight) {
     !action && behavior ? `Observed pattern to fix: ${behavior}` : "",
   ].filter(Boolean);
 
-  return parts.join(" ").trim();
+  return normalizeQuotedPunctuation(parts.join(" ").trim());
 }
 
 function formatUiPressureLabel(value = "") {
@@ -851,7 +859,7 @@ export default function SessionSummaryModal({
         const evidence = cleanCoachingCopyExpanded(insight?.transcriptEvidence || "", 24);
         const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || "", 24);
         if (!evidence && !impact) return "";
-        return `${insight?.capabilityName || insight?.title || "Observed signal"}: ${evidence || impact}${evidence && impact ? ` Why it mattered: ${impact}` : ""}`;
+        return normalizeQuotedPunctuation(`${insight?.capabilityName || insight?.title || "Observed signal"}: ${evidence || impact}${evidence && impact ? ` Why it mattered: ${impact}` : ""}`);
       })
       .filter(Boolean),
   ).slice(0, 4);
