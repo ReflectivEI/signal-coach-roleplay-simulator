@@ -1,3 +1,5 @@
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
+
 function normalizeText(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -549,15 +551,10 @@ export function buildHcpRealismNotes({
 
 function resolveRealismLevel(context = {}) {
   const scenario = context?.scenario || {};
-  const raw = Number(
-    context?.realismLevel
-    ?? scenario?.runtimeTemperature
-    ?? scenario?.live_temperature
-    ?? scenario?.rep_selected_temperature
-    ?? scenario?.hcp_default_temperature
-    ?? 5
+  const level = requireRealismContract(
+    context?.realismLevel ?? scenario?.runtimeTemperature,
+    "hcp realism context",
   );
-  const level = Number.isNaN(raw) ? 5 : Math.max(1, Math.min(10, Math.round(raw)));
   if (level <= 3) return { level, tier: "low" };
   if (level >= 8) return { level, tier: "high" };
   return { level, tier: "mid" };

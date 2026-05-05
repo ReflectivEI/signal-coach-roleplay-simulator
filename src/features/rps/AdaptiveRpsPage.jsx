@@ -5,7 +5,7 @@ import { generateAdaptiveScenario, evaluateAdaptiveResponse, saveAdaptiveSession
 import { useSpeechInput } from "./useSpeechInput";
 import { clampTemperature, extractEightBehavioralMetricRows, isGenerateDisabled } from "./interactionState";
 import { HCP_ROLE_OPTIONS, CONVERSATION_STAGE_OPTIONS, CHALLENGE_CONTEXT_OPTIONS, REALISM_LEVEL_LABELS, RPS_UI_LABELS } from "@/lib/rpsUserInputOptions";
-import { mapUIToBrain } from "@/lib/scenarioInputResolver";
+import { mapUIToBrain, requireRealismContract } from "@/lib/scenarioInputResolver";
 
 const defaults = {
     hcpType: "",
@@ -71,22 +71,26 @@ export default function AdaptiveRpsPage() {
 
     async function handleGenerateScenario() {
         if (!mappedUi) return;
+        const contractRealism = requireRealismContract(temperature, "AdaptiveRpsPage generate realism");
         setBusy(true);
         setError("");
         setEvaluation(null);
         setSavedId("");
         try {
-            const data = await generateAdaptiveScenario({
+            const payload = {
                 ...mappedUi.legacyAdaptivePayload,
-                selected_dropdowns: canonicalSelections,
+                selected_dropdowns: {
+                    ...canonicalSelections,
+                    realism: contractRealism,
+                },
                 resolved_brain: mappedUi.resolvedFields,
-                hcp_default_temperature: 5,
-                rep_selected_temperature: temperature,
-                live_temperature: temperature,
-                initial_temperature: temperature,
+                rep_selected_temperature: contractRealism,
+                live_temperature: contractRealism,
+                initial_temperature: contractRealism,
                 temperature_shift_history: [],
                 conversation_memory: conversationMemory || {},
-            });
+            };
+            const data = await generateAdaptiveScenario(payload);
             setScenario(data);
             setConversationMemory(data?.conversation_memory || null);
             setHcpState(data?.hcp_state || null);
@@ -117,14 +121,19 @@ export default function AdaptiveRpsPage() {
         setSavedId("");
 
         try {
+            const contractRealism = requireRealismContract(temperature, "AdaptiveRpsPage evaluate realism");
             const result = await evaluateAdaptiveResponse({
                 scenario_id: scenario.scenario_id,
                 scenario_context: scenario,
                 rep_response_transcript: repTranscript,
                 voice_metadata: speech.voiceMetadata,
-                selected_dropdowns: canonicalSelections,
-                rep_selected_temperature: temperature,
-                live_temperature: temperature,
+                selected_dropdowns: {
+                    ...canonicalSelections,
+                    realism: contractRealism,
+                },
+                rep_selected_temperature: contractRealism,
+                live_temperature: contractRealism,
+                initial_temperature: contractRealism,
                 hcp_state: conversationMemory?.hcp_state || hcpState || scenario?.hcp_state || null,
                 conversation_memory: {
                     ...(conversationMemory || scenario?.conversation_memory || {}),
@@ -159,11 +168,15 @@ export default function AdaptiveRpsPage() {
         setBusy(true);
         setError("");
         try {
+            const contractRealism = requireRealismContract(temperature, "AdaptiveRpsPage save realism");
             const result = await saveAdaptiveSession({
-                dropdown_selections: canonicalSelections,
-                temperature,
-                initial_temperature: temperature,
-                live_temperature: temperature,
+                dropdown_selections: {
+                    ...canonicalSelections,
+                    realism: contractRealism,
+                },
+                temperature: contractRealism,
+                initial_temperature: contractRealism,
+                live_temperature: contractRealism,
                 temperature_shift_history: [],
                 scenario,
                 transcript: repTranscript,

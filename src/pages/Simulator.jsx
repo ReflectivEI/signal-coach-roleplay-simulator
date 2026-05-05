@@ -20,6 +20,7 @@ import { generateRealtimeFeedback, createWorkerSession } from "@/services/worker
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import { buildPredictivePromptContext, buildPredictiveRuntimeLens } from "@/lib/predictiveRuntimeService";
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
 import { toast } from "@/components/ui/use-toast";
 
 function createSafeId() {
@@ -31,10 +32,7 @@ function createSafeId() {
 }
 
 function createLocalSession(scData, convInit) {
-  const initialTemperature = Number(scData?.runtimeTemperature ?? scData?.defaultTemperature);
-  if (!Number.isFinite(initialTemperature)) {
-    throw new Error("Missing temperature");
-  }
+  const initialRealism = requireRealismContract(scData?.runtimeTemperature, "scenario.runtimeTemperature");
   return {
     id: createSafeId(),
     scenarioId: scData.id,
@@ -42,7 +40,8 @@ function createLocalSession(scData, convInit) {
     currentJourneyState: scData.journeyState,
     currentBehaviorState: convInit.initialBehaviorState,
     turnCount: 0,
-    temperature: Math.max(1, Math.min(10, Math.round(initialTemperature))),
+    realism: initialRealism,
+    temperature: initialRealism,
     predictiveProfile: null,
     hcpPersona: null,
     hcpState: {
@@ -52,8 +51,9 @@ function createLocalSession(scData, convInit) {
       emotion: "guarded",
       behaviorState: convInit.initialBehaviorState,
       concernFamily: "",
-      temperature: Math.max(1, Math.min(10, Math.round(initialTemperature))),
-      temperaturePersonaTraits: temperatureTraits(initialTemperature),
+      realism: initialRealism,
+      temperature: initialRealism,
+      temperaturePersonaTraits: temperatureTraits(initialRealism),
       updatedAt: new Date().toISOString(),
     },
     sessionMemory: [],
@@ -75,18 +75,6 @@ function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
     source: runtimeLens?.synthesisSource || "deterministic",
     specialistTitle: runtimeLens?.specialistTitle || scenario?.stakeholder || "Clinical Specialist",
   };
-}
-
-function defaultTemperatureFromScenario(scData) {
-  const explicit = Number(scData?.defaultTemperature || scData?.runtimeTemperature);
-  if (Number.isFinite(explicit) && explicit >= 1 && explicit <= 10) return Math.round(explicit);
-
-  const persona = String(scData?.persona || "").toLowerCase();
-  if (persona.includes("skeptical")) return 7;
-  if (persona.includes("time_constrained")) return 6;
-  if (persona.includes("cost_focused")) return 6;
-  if (persona.includes("curious_uncertain")) return 4;
-  return 5;
 }
 
 function temperatureTraits(temperature) {
@@ -251,7 +239,6 @@ export default function Simulator() {
       const resolvedSeed = buildPredictiveSeedFromScenario(scData);
       const scenarioWithSeed = {
         ...scData,
-        defaultTemperature: defaultTemperatureFromScenario(scData),
         predictiveSeed: {
           ...resolvedSeed,
           ...(scData.predictiveSeed || {}),
@@ -344,8 +331,10 @@ export default function Simulator() {
       return;
     }
 
-    const temperature = Number(session?.temperature);
-    if (!Number.isFinite(temperature)) {
+    let temperature;
+    try {
+      temperature = requireRealismContract(session?.realism, "session.realism");
+    } catch {
       const message = "Missing temperature";
       setLastRuntimeError(message);
       toast({
@@ -486,6 +475,7 @@ export default function Simulator() {
 
       const updatedSession = {
         ...session,
+        realism: temperature,
         predictiveProfile,
         hcpPersona: predictiveProfile,
         previousInteraction: repText,
@@ -527,6 +517,7 @@ export default function Simulator() {
               behaviorSignals: response?.behaviorSignals,
               temperature,
             }),
+            realism: temperature,
             temperature,
             concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
             repMessage: repText,
@@ -863,7 +854,7 @@ export default function Simulator() {
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
-              temperature={session?.temperature}
+              realism={session?.realism}
             />
           </div>
         </div>
@@ -892,7 +883,7 @@ export default function Simulator() {
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
-              temperature={session?.temperature}
+              realism={session?.realism}
             />
           </motion.div>
         )}

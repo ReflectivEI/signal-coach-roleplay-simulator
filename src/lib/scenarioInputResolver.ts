@@ -97,6 +97,14 @@ export interface UnifiedScenarioInput {
 
 export type ConsolidatedUiInputs = UnifiedScenarioInput;
 
+export function requireRealismContract(value: unknown, source = "realism"): number {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+        throw new Error(`Missing or invalid ${source}; expected integer realism 1-10.`);
+    }
+    return parsed;
+}
+
 // ── Scenario Context → internal field map ─────────────────────────────────
 // Maps each Scenario Context value to derived journey_stage, interaction_pressure,
 // behavior_archetype, rep_objective, access_barrier_context, anchors, topic lanes.
@@ -381,15 +389,16 @@ export function resolveRpsUserInputs(inputs: RpsUserInputs): ResolvedRpsFields {
         scenarioContext = "discovery",
         hcpRole = "treating_clinician",
         hcpMindset = "patient_centric",
-        realismLevel = 5,
+        realismLevel,
         diseaseState = "",
         specialty = "",
         optionalOverrides = {},
     } = inputs;
+    const contractRealism = requireRealismContract(realismLevel, "resolver realismLevel");
 
     const contextEntry = SCENARIO_CONTEXT_MAP[scenarioContext] ?? SCENARIO_CONTEXT_MAP.discovery;
     const mindsetEntry = HCP_MINDSET_MAP[hcpMindset] ?? HCP_MINDSET_MAP.patient_centric;
-    const adaptiveSeed = deriveAdaptiveSeed(realismLevel);
+    const adaptiveSeed = deriveAdaptiveSeed(contractRealism);
 
     // Merge anchors from context + mindset
     const mergedAnchors = [
@@ -415,8 +424,8 @@ export function resolveRpsUserInputs(inputs: RpsUserInputs): ResolvedRpsFields {
         behavior_archetype: behaviorArchetype,
         access_barrier_context: contextEntry.access_barrier_context,
         rep_objective: contextEntry.rep_objective,
-        realism_level: realismLevel,
-        runtime_temperature: realismLevel,
+        realism_level: contractRealism,
+        runtime_temperature: contractRealism,
         scenario_language_anchors: mergedAnchors,
         allowed_topic_lanes: contextEntry.allowed_topic_lanes,
         predictive_profile_seed: {
@@ -438,7 +447,7 @@ export function resolveRpsUserInputs(inputs: RpsUserInputs): ResolvedRpsFields {
             scenarioContext,
             hcpRole: normalizedHcpRole,
             hcpMindset: normalizedMindset,
-            realismLevel,
+            realismLevel: contractRealism,
             resolvedFields: {
                 journey_stage: contextEntry.journey_stage,
                 influence_driver: mindsetEntry.influence_driver,
@@ -482,7 +491,7 @@ function normalizeUnifiedScenarioInput(inputs: UnifiedScenarioInput & {
         hcpType: inputs?.hcpType || "treating_clinician",
         stage,
         challenge: challengeAliasMap[rawChallenge] || rawChallenge,
-        realism: inputs?.realism ?? inputs?.realismLevel ?? 5,
+        realism: inputs?.realism ?? inputs?.realismLevel,
         diseaseState: inputs?.diseaseState,
         specialty: inputs?.specialty,
         optionalOverrides: inputs?.optionalOverrides,
@@ -498,11 +507,12 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
         hcpType = "treating_clinician",
         stage = "early_exploration",
         challenge = "skepticism",
-        realism = 5,
+        realism,
         diseaseState = DEFAULT_DISEASE_STATE,
         specialty = "",
         optionalOverrides = {},
     } = normalizeUnifiedScenarioInput(inputs);
+    const contractRealism = requireRealismContract(realism, "ui realism");
 
     const internalStage = CONVERSATION_MOMENT_TO_STAGE[stage] || "discovery";
     const challengeEntry = CHALLENGE_CONTEXT_MAP[challenge] ?? CHALLENGE_CONTEXT_MAP.skepticism;
@@ -520,7 +530,7 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
         scenarioContext: internalStage,
         hcpRole: hcpType,
         hcpMindset: hcpMindsetByChallenge[challenge] || "patient_centric",
-        realismLevel: realism,
+        realismLevel: contractRealism,
         diseaseState,
         specialty,
         optionalOverrides,
@@ -618,19 +628,9 @@ export function deriveUserFacingInputsFromScenario(
         scenario?.influence_driver ??
         "patient_centric",
     );
-    const realismLevel = Math.max(
-        1,
-        Math.min(
-            10,
-            Math.round(
-                Number(
-                    scenario?.runtimeTemperature ??
-                    scenario?.runtime_temperature ??
-                    scenario?.defaultTemperature ??
-                    5,
-                ),
-            ),
-        ),
+    const realismLevel = requireRealismContract(
+        scenario?.runtimeTemperature ?? scenario?.runtime_temperature,
+        "scenario realism",
     );
     const hcpRole = String(
         scenario?.hcpRoleType ??

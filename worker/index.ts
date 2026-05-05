@@ -132,6 +132,48 @@ function clampScore(value: unknown, fallback = 5): number {
     return Math.max(1, Math.min(10, Math.round(parsed)));
 }
 
+function requireRealismContract(value: unknown, source: string): number {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+        throw new Error(`Missing or invalid ${source}; expected integer realism 1-10.`);
+    }
+    return parsed;
+}
+
+function requireAdaptiveRealismContract(
+    body: Record<string, unknown>,
+    route: string,
+    options: { includeInitialTemperature?: boolean } = {},
+): number {
+    const dropdowns = asObject(
+        (body.selected_dropdowns || body.dropdown_selections) as Record<string, unknown>,
+        {} as Record<string, unknown>,
+    );
+    const values = [
+        dropdowns.realism,
+        body.live_temperature,
+        body.rep_selected_temperature,
+        body.temperature,
+    ].filter((value) => value !== undefined && value !== null && value !== "");
+
+    if (options.includeInitialTemperature && body.initial_temperature !== undefined && body.initial_temperature !== null && body.initial_temperature !== "") {
+        values.push(body.initial_temperature);
+    }
+
+    if (!values.length) {
+        throw new Error(`Missing realism contract for ${route}.`);
+    }
+
+    const contractRealism = requireRealismContract(values[0], `${route} realism`);
+    values.forEach((value) => {
+        if (requireRealismContract(value, `${route} realism`) !== contractRealism) {
+            throw new Error(`Realism contract mismatch for ${route}.`);
+        }
+    });
+
+    return contractRealism;
+}
+
 function safeStructuredLog(route: string, missingFields: string[], normalizationApplied: boolean): void {
     if (!missingFields.length && !normalizationApplied) return;
     console.warn(JSON.stringify({
@@ -769,7 +811,7 @@ async function handleGenerateScenario(request: Request, env: Env): Promise<Respo
     const wantsRegenerate = Boolean(body.regenerate_question);
     const previousQuestion = text(body.previous_hcp_statement_or_question);
     const baseScenario = buildScenarioContract(body);
-    const liveTemperature = Number(body.live_temperature ?? body.rep_selected_temperature ?? body.hcp_default_temperature ?? 5);
+    const liveTemperature = requireAdaptiveRealismContract(body, "/api/rps/generate-scenario");
     const temp = mapTemperatureToBehavior(liveTemperature);
     const conversationMemory = ((body.conversation_memory || body.scenario_memory || {}) as Record<string, unknown>);
     const hcpBrain = buildHcpBrain({
@@ -780,7 +822,7 @@ async function handleGenerateScenario(request: Request, env: Env): Promise<Respo
         interaction_pressure: body.interaction_pressure,
         influence_driver: body.influence_driver,
         behavior_archetype: body.behavior_archetype,
-        initial_temperature: body.initial_temperature ?? liveTemperature,
+        initial_temperature: liveTemperature,
         live_temperature: liveTemperature,
     });
     const hcpBrainSummary = buildHcpBrainSummary(hcpBrain);
@@ -849,7 +891,7 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
 
     const scenarioContext = (body.scenario_context || {}) as Record<string, unknown>;
     const cueSignal = text(scenarioContext.cue_signal, "cue");
-    const repSelectedTemperature = Number(body.live_temperature ?? body.rep_selected_temperature ?? 5);
+    const repSelectedTemperature = requireAdaptiveRealismContract(body, "/api/rps/evaluate-response");
     const conversationMemory = (body.conversation_memory || scenarioContext.conversation_memory || {}) as Record<string, unknown>;
     const selectedDropdowns = asObject(body.selected_dropdowns as Record<string, unknown>, {} as Record<string, unknown>);
     const hcpBrain = asObject(
@@ -862,7 +904,7 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
             interaction_pressure: selectedDropdowns.interaction_pressure || body.interaction_pressure,
             influence_driver: selectedDropdowns.influence_driver || body.influence_driver,
             behavior_archetype: selectedDropdowns.behavior_archetype || body.behavior_archetype,
-            initial_temperature: body.initial_temperature ?? repSelectedTemperature,
+            initial_temperature: repSelectedTemperature,
             live_temperature: repSelectedTemperature,
         }) as Record<string, unknown>,
     );
@@ -999,8 +1041,10 @@ async function handleSaveSession(request: Request, env: Env): Promise<Response> 
     const clean = sanitizeNoPhi(body) as Record<string, unknown>;
 
     const sessionId = text(clean.session_id, `adaptive-session-${Date.now()}`);
-    const liveTemperature = Number(clean.live_temperature ?? clean.temperature ?? 5);
-    const initialTemperature = Number(clean.initial_temperature ?? liveTemperature);
+    const liveTemperature = requireAdaptiveRealismContract(clean, "/api/rps/save-session");
+    const initialTemperature = clean.initial_temperature === undefined || clean.initial_temperature === null || clean.initial_temperature === ""
+        ? liveTemperature
+        : requireRealismContract(clean.initial_temperature, "/api/rps/save-session initial_temperature");
     const record = {
         id: sessionId,
         created_at: new Date().toISOString(),

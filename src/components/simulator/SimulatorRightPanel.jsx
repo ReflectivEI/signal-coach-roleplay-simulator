@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
   return (
@@ -93,8 +94,9 @@ export default function SimulatorRightPanel({
   conversationInit = null,
   hasRepSpoken = false,
   predictiveLens = null,
-  temperature = 5,
+  realism,
 }) {
+  const displayRealism = requireRealismContract(realism, "session.realism display");
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
@@ -202,7 +204,7 @@ export default function SimulatorRightPanel({
       <DarkSection icon={Activity} title="Realism">
         <div className="space-y-2">
           <Row label="Level">
-            <Pill>{Math.max(1, Math.min(10, Number(temperature) || 5))}/10</Pill>
+            <Pill>{displayRealism}/10</Pill>
           </Row>
           <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
             <span>1 (Open)</span>

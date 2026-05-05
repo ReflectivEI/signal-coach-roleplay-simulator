@@ -31,7 +31,7 @@ import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDire
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
-import { deriveUISelectionFromBrain, mapUIToBrain } from "./scenarioInputResolver";
+import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -124,18 +124,20 @@ function buildDerivedScenarioContext(scenario: any) {
   if (!uiSelection?.hcpType || !uiSelection?.stage || !uiSelection?.challenge) {
     return scenario;
   }
+  const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
 
   const mapped = mapUIToBrain({
     hcpType: uiSelection.hcpType,
     stage: uiSelection.stage,
     challenge: uiSelection.challenge,
-    realism: Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature ?? 5),
+    realism: contractRealism,
     diseaseState: scenario?.predictiveSeed?.diseaseState || scenario?.disease_state || "primary_care",
     specialty: scenario?.specialty || scenario?.specialty_type || "",
   });
 
   return {
     ...scenario,
+    runtimeTemperature: contractRealism,
     persona: scenario?.persona || mapped.resolvedFields.behavior_archetype,
     interactionPressure: Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length
       ? scenario.interactionPressure
@@ -1155,6 +1157,7 @@ Return ONLY valid JSON:
   }` : ""}
 }`;
 
+  requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
   const result = await invokeWorkerJson({
     prompt,
     max_tokens: finalResponseTokenBudget,

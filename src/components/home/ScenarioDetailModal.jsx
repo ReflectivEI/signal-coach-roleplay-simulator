@@ -14,7 +14,7 @@ import {
   REALISM_LEVEL_LABELS,
   RPS_UI_LABELS,
 } from "@/lib/rpsUserInputOptions";
-import { deriveUISelectionFromBrain } from "@/lib/scenarioInputResolver";
+import { deriveUISelectionFromBrain, requireRealismContract } from "@/lib/scenarioInputResolver";
 import {
   SIGNAL_INTELLIGENCE_CAPABILITIES,
 } from "@/lib/signalIntelligence";
@@ -35,13 +35,7 @@ const TOOLTIP_DESCRIPTIONS = {
 };
 
 function deriveContractTemperature(scenario) {
-  const explicit = Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature);
-  if (Number.isFinite(explicit)) return Math.max(1, Math.min(10, Math.round(explicit)));
-
-  const persona = String(scenario?.persona || "").toLowerCase();
-  if (persona.includes("skeptical")) return 8;
-  if (persona.includes("curious")) return 4;
-  return 6;
+  return requireRealismContract(scenario?.runtimeTemperature, "scenario detail realism");
 }
 
 function buildPredictiveContract(scenario) {

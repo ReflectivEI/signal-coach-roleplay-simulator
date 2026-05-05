@@ -668,11 +668,10 @@ function MatrixRow({ result, index }) {
                   {(result.review?.capabilityInsights || []).map((ci) => (
                     <span
                       key={ci.capabilityId}
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                        ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
                           : ci.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
                             : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                      }`}
+                        }`}
                     >
                       {(ci.capabilityName || capabilityLabelMap[ci.capabilityId] || ci.capabilityId.replace(/_/g, " "))}: {ci.observationLevel}
                     </span>
@@ -1070,11 +1069,10 @@ export default function QATwin() {
                 {(singleResult.review?.capabilityInsights || []).map((q) => (
                   <span
                     key={q.capabilityId}
-                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                      q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
                         : q.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
                           : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                    }`}
+                      }`}
                   >
                     {(q.capabilityName || capabilityLabelMap[q.capabilityId] || q.capabilityId.replace(/_/g, " "))}: {q.observationLevel}
                   </span>
