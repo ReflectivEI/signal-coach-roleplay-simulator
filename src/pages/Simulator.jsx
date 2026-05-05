@@ -215,6 +215,7 @@ export default function Simulator() {
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
   const [realtimeFeedback, setRealtimeFeedback] = useState(null);
   const [reviewStage, setReviewStage] = useState("");
+  const regenerateToastRef = useRef(null);
   const [lastRuntimeError, setLastRuntimeError] = useState("");
   const [predictiveLens, setPredictiveLens] = useState({ isLoading: false, data: null });
   const predictiveLensRef = useRef({ isLoading: false, data: null });
@@ -680,11 +681,13 @@ export default function Simulator() {
         reviewData: JSON.stringify(nextReview),
       } : current);
 
-      toast({
+      regenerateToastRef.current?.dismiss?.();
+      regenerateToastRef.current = toast({
         title: "Feedback regenerated",
         description: "Updated coaching sections are ready.",
       });
     } catch (error) {
+      regenerateToastRef.current?.dismiss?.();
       logReviewError("regenerate", error, {
         scenarioId: scenario?.id || null,
         turnCount: turns.length,
