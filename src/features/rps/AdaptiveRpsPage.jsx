@@ -237,39 +237,39 @@ export default function AdaptiveRpsPage() {
                     <DashboardCard title="Scenario Controls">
                         <div className="grid gap-3 sm:grid-cols-3">
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                HCP Type
+                                HCP Role
                                 <select
                                     value={form.hcpType}
                                     onChange={(e) => setFormField("hcpType", e.target.value)}
                                     className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                 >
-                                    <option value="">Select HCP type</option>
+                                    <option value="">Select HCP role</option>
                                     {HCP_ROLE_OPTIONS.filter((option) => option.value !== "all").map((option) => (
                                         <option key={option.value} value={option.value}>{option.label}</option>
                                     ))}
                                 </select>
                             </label>
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                Conversation Stage
+                                Conversation Moment
                                 <select
                                     value={form.stage}
                                     onChange={(e) => setFormField("stage", e.target.value)}
                                     className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                 >
-                                    <option value="">Select stage</option>
+                                    <option value="">Select moment</option>
                                     {CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all").map((option) => (
                                         <option key={option.value} value={option.value}>{option.label}</option>
                                     ))}
                                 </select>
                             </label>
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                Challenge Context
+                                Challenge Focus
                                 <select
                                     value={form.challenge}
                                     onChange={(e) => setFormField("challenge", e.target.value)}
                                     className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                 >
-                                    <option value="">Select challenge</option>
+                                    <option value="">Select focus</option>
                                     {CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all").map((option) => (
                                         <option key={option.value} value={option.value}>{option.label}</option>
                                     ))}
@@ -279,7 +279,7 @@ export default function AdaptiveRpsPage() {
 
                         <div className="mt-4 space-y-2">
                             <div className="flex items-center justify-between text-sm">
-                                <span>Realism Level</span>
+                                <span>Realism Lever</span>
                                 <span className="rounded-md border border-[#44708c] bg-[#0a223a] px-2 py-1 font-semibold text-[#e8f5ff]">
                                     {temperature}/10 — {REALISM_LEVEL_LABELS[temperature] ?? ""}
                                 </span>

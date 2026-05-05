@@ -68,6 +68,10 @@ export interface AdaptiveBehaviorSeed {
     temperature_band: "low" | "moderate" | "high";
     interruption_likelihood: "low" | "moderate" | "high";
     consequence_behavior: "minimal" | "proportionate" | "escalating";
+    volatility_frequency: "low" | "moderate" | "high";
+    response_sharpness: "soft" | "neutral" | "sharp";
+    vague_answer_tolerance: "high" | "moderate" | "low";
+    anti_loop_sensitivity: "low" | "moderate" | "high";
 }
 
 export interface ResolvedInputModel {
@@ -234,53 +238,68 @@ const HCP_MINDSET_MAP: Record<string, MindsetEntry> = {
 };
 
 interface ChallengeContextEntry {
-    hcpMindset: string;
-    interactionPressure?: string[];
-    behaviorArchetype?: string;
-    accessBarrierContext?: string;
-    repObjective?: string;
+    interactionPressure: string[];
+    behaviorArchetype: string;
+    influenceDriver: string;
+    accessBarrierContext: string;
+    repObjective: string;
 }
 
 const DEFAULT_DISEASE_STATE = "primary_care";
 
+const CONVERSATION_MOMENT_TO_STAGE: Record<string, string> = {
+    first_exposure: "initial_access",
+    early_exploration: "discovery",
+    access_logistics: "access_formulary",
+    objection_resistance: "objection_handling",
+    followup_commitment: "commitment_close",
+};
+
+const STAGE_TO_CONVERSATION_MOMENT: Record<string, string> = {
+    initial_access: "first_exposure",
+    discovery: "early_exploration",
+    clinical_value: "early_exploration",
+    objection_handling: "objection_resistance",
+    access_formulary: "access_logistics",
+    adoption_implementation: "access_logistics",
+    commitment_close: "followup_commitment",
+};
+
 const CHALLENGE_CONTEXT_MAP: Record<string, ChallengeContextEntry> = {
-    workflow_friction: {
-        hcpMindset: "workflow_protective",
-        interactionPressure: ["operationally_constrained"],
-        behaviorArchetype: "time_constrained_community_doctor",
-        accessBarrierContext: "staffing_limited_follow_up",
-        repObjective: "validate_patient_fit",
-    },
-    evidence_scrutiny: {
-        hcpMindset: "evidence_driven",
-        interactionPressure: ["skeptical_resistant"],
-        behaviorArchetype: "skeptical_specialist",
-        repObjective: "align_on_evidence",
-    },
-    guideline_alignment: {
-        hcpMindset: "guideline_anchored",
-        interactionPressure: ["skeptical_resistant"],
-        behaviorArchetype: "protocol_guardian",
-        repObjective: "align_on_evidence",
-    },
-    access_coverage: {
-        hcpMindset: "patient_centric",
+    access_barrier: {
         interactionPressure: ["access_barrier"],
         behaviorArchetype: "cost_focused_decision_maker",
+        influenceDriver: "patient_centric",
         accessBarrierContext: "formulary_non_preferred",
         repObjective: "resolve_access_concern",
     },
-    safety_risk: {
-        hcpMindset: "risk_averse",
-        interactionPressure: ["safety_concern"],
-        behaviorArchetype: "skeptical_specialist",
+    time_constraint: {
+        interactionPressure: ["time_constrained", "operationally_constrained"],
+        behaviorArchetype: "time_constrained_community_doctor",
+        influenceDriver: "patient_centric",
+        accessBarrierContext: "staffing_limited_follow_up",
         repObjective: "validate_patient_fit",
     },
-    cautious_commitment: {
-        hcpMindset: "evidence_driven",
-        interactionPressure: ["curious_uncertain"],
+    skepticism: {
+        interactionPressure: ["skeptical_resistant"],
+        behaviorArchetype: "skeptical_specialist",
+        influenceDriver: "evidence_driven",
+        accessBarrierContext: "none",
+        repObjective: "align_on_evidence",
+    },
+    prior_experience: {
+        interactionPressure: ["competitive_bias", "skeptical_resistant"],
+        behaviorArchetype: "protocol_guardian",
+        influenceDriver: "guideline_anchored",
+        accessBarrierContext: "none",
+        repObjective: "align_on_evidence",
+    },
+    competing_priorities: {
+        interactionPressure: ["operationally_constrained", "curious_uncertain"],
         behaviorArchetype: "curious_uncertain_adopter",
-        repObjective: "secure_small_next_step",
+        influenceDriver: "patient_centric",
+        accessBarrierContext: "none",
+        repObjective: "uncover_primary_blocker",
     },
 };
 
@@ -301,6 +320,10 @@ function deriveAdaptiveSeed(realismLevel: number): AdaptiveBehaviorSeed {
             temperature_band: "low",
             interruption_likelihood: "low",
             consequence_behavior: "minimal",
+            volatility_frequency: "low",
+            response_sharpness: "soft",
+            vague_answer_tolerance: "high",
+            anti_loop_sensitivity: "low",
         };
     }
 
@@ -315,6 +338,10 @@ function deriveAdaptiveSeed(realismLevel: number): AdaptiveBehaviorSeed {
             temperature_band: "moderate",
             interruption_likelihood: "low",
             consequence_behavior: "proportionate",
+            volatility_frequency: "moderate",
+            response_sharpness: "neutral",
+            vague_answer_tolerance: "moderate",
+            anti_loop_sensitivity: "moderate",
         };
     }
 
@@ -328,6 +355,10 @@ function deriveAdaptiveSeed(realismLevel: number): AdaptiveBehaviorSeed {
         temperature_band: "high",
         interruption_likelihood: "moderate",
         consequence_behavior: "escalating",
+        volatility_frequency: "high",
+        response_sharpness: "sharp",
+        vague_answer_tolerance: "low",
+        anti_loop_sensitivity: "high",
     };
 }
 
@@ -432,10 +463,25 @@ function normalizeUnifiedScenarioInput(inputs: UnifiedScenarioInput & {
     challengeContext?: string;
     realismLevel?: number;
 }) {
+    const rawStage = inputs?.stage || inputs?.conversationStage || "early_exploration";
+    const stage = CONVERSATION_MOMENT_TO_STAGE[rawStage]
+        ? rawStage
+        : STAGE_TO_CONVERSATION_MOMENT[rawStage] || "early_exploration";
+
+    const rawChallenge = inputs?.challenge || inputs?.challengeContext || "skepticism";
+    const challengeAliasMap: Record<string, string> = {
+        workflow_friction: "time_constraint",
+        evidence_scrutiny: "skepticism",
+        guideline_alignment: "prior_experience",
+        access_coverage: "access_barrier",
+        safety_risk: "skepticism",
+        cautious_commitment: "competing_priorities",
+    };
+
     return {
         hcpType: inputs?.hcpType || "treating_clinician",
-        stage: inputs?.stage || inputs?.conversationStage || "discovery",
-        challenge: inputs?.challenge || inputs?.challengeContext || "evidence_scrutiny",
+        stage,
+        challenge: challengeAliasMap[rawChallenge] || rawChallenge,
         realism: inputs?.realism ?? inputs?.realismLevel ?? 5,
         diseaseState: inputs?.diseaseState,
         specialty: inputs?.specialty,
@@ -450,33 +496,51 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
 }) {
     const {
         hcpType = "treating_clinician",
-        stage = "discovery",
-        challenge = "evidence_scrutiny",
+        stage = "early_exploration",
+        challenge = "skepticism",
         realism = 5,
         diseaseState = DEFAULT_DISEASE_STATE,
         specialty = "",
         optionalOverrides = {},
     } = normalizeUnifiedScenarioInput(inputs);
 
-    const challengeEntry = CHALLENGE_CONTEXT_MAP[challenge] ?? CHALLENGE_CONTEXT_MAP.evidence_scrutiny;
+    const internalStage = CONVERSATION_MOMENT_TO_STAGE[stage] || "discovery";
+    const challengeEntry = CHALLENGE_CONTEXT_MAP[challenge] ?? CHALLENGE_CONTEXT_MAP.skepticism;
+    const momentDefaults = SCENARIO_CONTEXT_MAP[internalStage] ?? SCENARIO_CONTEXT_MAP.discovery;
+
+    const hcpMindsetByChallenge: Record<string, string> = {
+        access_barrier: "patient_centric",
+        time_constraint: "workflow_protective",
+        skepticism: "skeptical",
+        prior_experience: "guideline_anchored",
+        competing_priorities: "patient_centric",
+    };
+
     const baseResolved = resolveRpsUserInputs({
-        scenarioContext: stage,
+        scenarioContext: internalStage,
         hcpRole: hcpType,
-        hcpMindset: challengeEntry.hcpMindset,
+        hcpMindset: hcpMindsetByChallenge[challenge] || "patient_centric",
         realismLevel: realism,
         diseaseState,
         specialty,
         optionalOverrides,
     });
 
-    const interactionPressure = challengeEntry.interactionPressure ?? baseResolved.interaction_pressure;
-    const behaviorArchetype = challengeEntry.behaviorArchetype ?? baseResolved.behavior_archetype;
-    const accessBarrierContext = challengeEntry.accessBarrierContext ?? baseResolved.access_barrier_context;
-    const repObjective = challengeEntry.repObjective ?? baseResolved.rep_objective;
+    const interactionPressure = [
+        ...new Set([
+            ...(momentDefaults.interaction_pressure || []),
+            ...challengeEntry.interactionPressure,
+        ]),
+    ];
+    const behaviorArchetype = challengeEntry.behaviorArchetype;
+    const accessBarrierContext = challengeEntry.accessBarrierContext;
+    const repObjective = challengeEntry.repObjective;
+    const influenceDriver = challengeEntry.influenceDriver;
 
     const resolvedFields: ResolvedRpsFields = {
         ...baseResolved,
         interaction_pressure: interactionPressure,
+        influence_driver: influenceDriver,
         behavior_archetype: behaviorArchetype,
         access_barrier_context: accessBarrierContext,
         rep_objective: repObjective,
@@ -485,7 +549,7 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
             hcpType: baseResolved.hcp_type,
             journeyStage: baseResolved.journey_stage,
             interactionPressure: interactionPressure[0] ?? "",
-            influenceDriver: baseResolved.influence_driver,
+            influenceDriver: influenceDriver,
             behaviorArchetype: behaviorArchetype,
         },
         resolved_input_model: {
@@ -494,6 +558,7 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
             resolvedFields: {
                 ...baseResolved.resolved_input_model.resolvedFields,
                 interaction_pressure: interactionPressure,
+                influence_driver: influenceDriver,
                 behavior_archetype: behaviorArchetype,
                 access_barrier_context: accessBarrierContext,
                 rep_objective: repObjective,
@@ -504,7 +569,7 @@ export function mapUIToBrain(inputs: UnifiedScenarioInput & {
     return {
         uiSelection: {
             hcpType: baseResolved.hcp_type,
-            stage: baseResolved.journey_stage,
+            stage,
             challenge,
         },
         predictiveSelection: resolvedFields.predictive_profile_seed,
@@ -640,30 +705,32 @@ export function deriveUISelectionFromBrain(
         scenario?.rep_objective ?? scenario?.repObjective ?? "",
     );
 
-    let challenge = "evidence_scrutiny";
+    let challenge = "skepticism";
     if (interactionPressure.includes("access_barrier") || accessBarrierContext === "formulary_non_preferred") {
-        challenge = "access_coverage";
-    } else if (base.hcpMindset === "guideline_anchored" || behaviorArchetype === "protocol_guardian") {
-        challenge = "guideline_alignment";
-    } else if (base.hcpMindset === "risk_averse" || interactionPressure.includes("safety_concern")) {
-        challenge = "safety_risk";
+        challenge = "access_barrier";
     } else if (
-        interactionPressure.includes("operationally_constrained") ||
-        accessBarrierContext === "staffing_limited_follow_up" ||
+        interactionPressure.includes("time_constrained") ||
         behaviorArchetype === "time_constrained_community_doctor"
     ) {
-        challenge = "workflow_friction";
+        challenge = "time_constraint";
+    } else if (
+        interactionPressure.includes("competitive_bias") ||
+        base.hcpMindset === "guideline_anchored" ||
+        behaviorArchetype === "protocol_guardian"
+    ) {
+        challenge = "prior_experience";
     } else if (
         interactionPressure.includes("curious_uncertain") ||
-        behaviorArchetype === "curious_uncertain_adopter" ||
-        repObjective === "secure_small_next_step"
+        repObjective === "uncover_primary_blocker"
     ) {
-        challenge = "cautious_commitment";
+        challenge = "competing_priorities";
     }
+
+    const stage = STAGE_TO_CONVERSATION_MOMENT[base.scenarioContext] || "early_exploration";
 
     return {
         hcpType: base.hcpRole,
-        stage: base.scenarioContext,
+        stage,
         challenge,
     };
 }

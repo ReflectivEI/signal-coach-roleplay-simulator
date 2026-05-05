@@ -55,8 +55,8 @@ function buildPredictiveContract(scenario) {
     "- Source: deterministic",
     `- Specialist frame: ${predictiveProfile.specialistTitle}`,
     `- Seed disease state: ${selection?.diseaseState || ""}`,
-    `- Seed HCP type: ${selection?.hcpType || ""}`,
-    `- Seed journey stage: ${selection?.journeyStage || ""}`,
+    `- Seed HCP role: ${selection?.hcpType || ""}`,
+    `- Seed conversation moment: ${selection?.journeyStage || ""}`,
     `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
     `- Seed influence driver: ${selection?.influenceDriver || ""}`,
     `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
@@ -632,7 +632,7 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
                 </div>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Journey Stage</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>Conversation Moment</p>
                     <VarPill>{JOURNEY_STAGE_LABELS[scenario.journeyStage] || scenario.journeyStage}</VarPill>
                   </div>
                   <div>

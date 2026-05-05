@@ -547,6 +547,84 @@ export function buildHcpRealismNotes({
   return notes;
 }
 
+function resolveRealismLevel(context = {}) {
+  const scenario = context?.scenario || {};
+  const raw = Number(
+    context?.realismLevel
+    ?? scenario?.runtimeTemperature
+    ?? scenario?.live_temperature
+    ?? scenario?.rep_selected_temperature
+    ?? scenario?.hcp_default_temperature
+    ?? 5
+  );
+  const level = Number.isNaN(raw) ? 5 : Math.max(1, Math.min(10, Math.round(raw)));
+  if (level <= 3) return { level, tier: "low" };
+  if (level >= 8) return { level, tier: "high" };
+  return { level, tier: "mid" };
+}
+
+function enforceRealismTierTone(sentences = [], { tier = "mid", interactionPressures = [] } = {}) {
+  const list = [...(sentences || [])].filter(Boolean);
+  if (!list.length) return list;
+
+  let first = list[0];
+
+  const softenSkepticalLanguage = (text = "") => normalizeText(text)
+    .replace(/\bI'?m not convinced yet\b/gi, "I'm willing to look at this")
+    .replace(/\bThat still feels broad\b/gi, "That's close, but I need one concrete detail")
+    .replace(/\bwon't move\b/gi, "could move")
+    .replace(/\bdoesn'?t move\b/gi, "is hard to move");
+
+  if (tier === "low") {
+    first = softenSkepticalLanguage(first)
+      .replace(/\bThat still doesn't\b/gi, "I still need to understand how")
+      .replace(/\bIf this doesn't\b/gi, "If this can");
+
+    if (!/\bI'?m open\b|\bI can work with\b|\bI can look at\b|\bI'?m willing to look at\b/i.test(first)) {
+      first = `I'm open to this if it stays practical, and ${first.replace(/[.?!]+$/g, "")}`;
+    }
+
+    if (list[1]) {
+      list[1] = softenSkepticalLanguage(list[1])
+        .replace(/\bI need something more specific before I can react to that\b/gi, "Give me one concrete example and I can test it in practice")
+        .replace(/\bneed something more specific\b/gi, "give me one concrete detail")
+        .replace(/\bnot convinced\b/gi, "still deciding");
+    }
+  }
+
+  if (tier === "mid") {
+    first = first
+      .replace(/\bI'?m open to this if it stays practical\b/gi, "I can listen, but this needs to be specific")
+      .replace(/\bI can work with this\b/gi, "I can stay with this if you keep it concrete");
+
+    if (!/\bI can listen\b/i.test(first)) {
+      first = `I can listen, but this needs to be specific for my practice. ${first}`;
+    }
+  }
+
+  if (tier === "high") {
+    first = first
+      .replace(/\bI'?m open to this if it stays practical\b/gi, "I'm not convinced yet")
+      .replace(/\bI can listen, but\b/gi, "I'm not convinced yet, and")
+      .replace(/\bcould move\b/gi, "won't move");
+
+    if (!/\bnot convinced\b|\bprove\b|\bdirect answer\b|\bdoesn't move\b|\bwon't move\b/i.test(first)) {
+      first = `I'm not convinced yet. ${first}`;
+    }
+
+    if ((interactionPressures || []).includes("time_constrained") && !/\bminute\b|\bshort\b|\bbrief\b/i.test(first)) {
+      first = `${first} Keep it brief.`;
+    }
+
+    if (!list[1]) {
+      list[1] = "Give me a direct, decision-relevant answer or this won't move.";
+    }
+  }
+
+  list[0] = normalizeText(first);
+  return list;
+}
+
 function buildTopicAcknowledgment({
   topic = "general",
   interactionPressures = [],
@@ -615,6 +693,7 @@ export function validateHcpHumanRealism(text = "", context = {}) {
     turnCount = 0,
     hasPriorContextSignal = false,
   } = context;
+  const realism = resolveRealismLevel(context);
 
   const topic = inferHcpScenarioTopic(scenario, repMessage);
   const repMentionedTopic = Boolean(repMessage && inferTopicFromText(repMessage) === topic);
@@ -656,6 +735,15 @@ export function validateHcpHumanRealism(text = "", context = {}) {
       .replace(/\bI would want to discuss this in detail\b/gi, "Keep it focused for me")
       .trim();
     issues.push("overwritten");
+  }
+
+  const tiered = enforceRealismTierTone(sentences, {
+    tier: realism.tier,
+    interactionPressures,
+  });
+  if (joinSentences(tiered) !== joinSentences(sentences)) {
+    issues.push(`realism_tier_${realism.tier}`);
+    sentences = tiered;
   }
 
   output = joinSentences(sentences);

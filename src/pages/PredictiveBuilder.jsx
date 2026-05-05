@@ -29,6 +29,7 @@ const INITIAL_UI_SELECTION = {
   hcpType: "",
   stage: "",
   challenge: "",
+  realism: 5,
 };
 
 function formatWorkerBinding(workerBaseUrl) {
@@ -212,12 +213,13 @@ export default function PredictiveBuilder() {
       hcpType: uiSelection.hcpType,
       stage: uiSelection.stage,
       challenge: uiSelection.challenge,
+      realism: uiSelection.realism,
     });
-  }, [uiSelection.challenge, uiSelection.hcpType, uiSelection.stage]);
+  }, [uiSelection.challenge, uiSelection.hcpType, uiSelection.realism, uiSelection.stage]);
 
   const selection = brainMapping?.predictiveSelection ?? null;
 
-  const allSelected = Object.values(uiSelection).every(Boolean);
+  const allSelected = Boolean(uiSelection.hcpType && uiSelection.stage && uiSelection.challenge);
 
   const profile = useMemo(() => {
     if (!allSelected || !selection) return null;
@@ -245,9 +247,10 @@ export default function PredictiveBuilder() {
       hcpType: params.get("hcpType") || derived.hcpType || "",
       stage: params.get("stage") || params.get("conversationStage") || params.get("journeyStage") || derived.stage || "",
       challenge: params.get("challenge") || params.get("challengeContext") || derived.challenge || "",
+      realism: Number(params.get("realism") || params.get("runtimeTemperature") || 5),
     };
 
-    const hasAny = Object.values(fromQuery).some(Boolean);
+    const hasAny = Boolean(fromQuery.hcpType || fromQuery.stage || fromQuery.challenge);
     if (!hasAny) return;
 
     const allowed = {
@@ -257,6 +260,8 @@ export default function PredictiveBuilder() {
     };
 
     const validated = Object.fromEntries(Object.entries(fromQuery).map(([field, value]) => [field, allowed[field]?.has(value) ? value : ""]));
+
+    validated.realism = Math.max(1, Math.min(10, Number(fromQuery.realism) || 5));
 
     setUiSelection(validated);
   }, []);
@@ -462,8 +467,8 @@ Deterministic profile context:
 
 HCP profile:
 - Disease state: ${getOptionLabel("diseaseState", selection.diseaseState)}
-- HCP type: ${getOptionLabel("hcpType", selection.hcpType)}
-- Journey stage: ${getOptionLabel("journeyStage", selection.journeyStage)}
+- HCP role: ${getOptionLabel("hcpType", selection.hcpType)}
+- Conversation moment: ${getOptionLabel("journeyStage", selection.journeyStage)}
 - Interaction pressure: ${getOptionLabel("interactionPressure", selection.interactionPressure)}
 - Influence driver: ${getOptionLabel("influenceDriver", selection.influenceDriver)}
 - Behavior archetype: ${getOptionLabel("behaviorArchetype", selection.behaviorArchetype)}
@@ -585,9 +590,30 @@ Return only rewritten response text.`;
           }}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
-            <SelectField label="HCP Type" value={uiSelection.hcpType} options={HCP_ROLE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("hcpType")} />
-            <SelectField label="Conversation Stage" value={uiSelection.stage} options={CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("stage")} />
-            <SelectField label="Challenge Context" value={uiSelection.challenge} options={CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("challenge")} />
+            <SelectField label="HCP Role" value={uiSelection.hcpType} options={HCP_ROLE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("hcpType")} />
+            <SelectField label="Conversation Moment" value={uiSelection.stage} options={CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("stage")} />
+            <SelectField label="Challenge Focus" value={uiSelection.challenge} options={CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("challenge")} />
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(222 46% 25%)" }}>
+                Realism Lever
+              </label>
+              <div className="rounded-xl px-3.5 py-2.5" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,249,249,0.98) 100%)", border: "1.5px solid rgba(92, 135, 165, 0.42)" }}>
+                <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: "hsl(215 18% 46%)" }}>
+                  <span>1 (Cooperative)</span>
+                  <span className="font-semibold" style={{ color: "hsl(173 42% 28%)" }}>{Math.max(1, Math.min(10, Number(uiSelection.realism) || 5))}/10</span>
+                  <span>10 (Sharp)</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={Math.max(1, Math.min(10, Number(uiSelection.realism) || 5))}
+                  onChange={(e) => setField("realism")(Number(e.target.value))}
+                  className="w-full accent-teal-600"
+                  aria-label="Realism Lever"
+                />
+              </div>
+            </div>
           </div>
           <p className="text-xs" style={{ color: "hsl(215 18% 46%)" }}>
             `mapUIToBrain()` derives influence driver, interaction pressure, behavior archetype, and the full predictive seed automatically.
@@ -614,7 +640,7 @@ Return only rewritten response text.`;
 
         {!allSelected && (
           <div className="rounded-2xl p-5 text-sm" style={{ background: "rgba(30, 64, 175, 0.07)", border: "1px solid rgba(30, 64, 175, 0.2)", color: "hsl(220 30% 32%)" }}>
-            Select HCP Type, Conversation Stage, and Challenge Context to render the Predictive Profile Card with AI specialist synthesis.
+            Select HCP Role, Conversation Moment, and Challenge Focus to render the Predictive Profile Card with AI specialist synthesis.
           </div>
         )}
 

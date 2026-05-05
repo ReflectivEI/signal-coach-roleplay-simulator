@@ -540,12 +540,14 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
     const ps = hcpBrain.pressure_signals || {};
     const ra = hcpBrain.recommended_rep_approach || {};
     const persona = hcpBrain.persona || {};
-    const archetype = str(hcpBrain.selections?.behavior_archetype).replace(/_/g, " ");
+    const rawArchetype = str(hcpBrain.selections?.behavior_archetype);
+    const archetype = rawArchetype.replace(/_/g, " ");
     const stage = str(hcpBrain.selections?.journey_stage).replace(/_/g, " ");
 
     return [
+        "HCP Brain Persona Context",
         "══════════ PREDICTIVE HCP BRAIN (persona-first source) ══════════",
-        `Archetype: ${archetype} | Stage: ${stage}`,
+        `Archetype: ${archetype} (${rawArchetype}) | Stage: ${stage}`,
         `Internal monologue: "${str(persona.internalMonologue)}"`,
         `Quality test: "${str(cp.quality_test_question)}"`,
         `Likely objection: "${str((lo.key_factors || [])[0])}"`,

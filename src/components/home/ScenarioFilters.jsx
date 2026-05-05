@@ -16,13 +16,16 @@ export { DISEASE_STATES, SPECIALTIES, INTERACTION_PRESSURES, JOURNEY_STAGES };
 export { HCP_ROLE_OPTIONS as HCP_TYPES };
 export { CHALLENGE_CONTEXT_OPTIONS as INFLUENCE_DRIVERS };
 
-function FilterDropdown({ options, value, onChange }) {
+function FilterDropdown({ label, options, value, onChange }) {
   const [open, setOpen] = useState(false);
   const selected = options.find(o => o.value === value) || options[0];
   const isActive = value !== "all";
 
   return (
     <div className="relative">
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "rgba(236, 245, 245, 0.78)" }}>
+        {label}
+      </p>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-2 px-3.5 py-2 rounded-lg border transition-colors"
@@ -73,14 +76,41 @@ function FilterDropdown({ options, value, onChange }) {
 export default function ScenarioFilters({ filters, onChange }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const set = (key) => (val) => onChange({ ...filters, [key]: val });
-  const activeCount = Object.values(filters).filter(v => v !== "all").length;
+  const activeCount = Object.entries(filters)
+    .filter(([key, value]) => key !== "realism" && value !== "all")
+    .length;
+  const realism = Math.max(1, Math.min(10, Number(filters.realism) || 5));
 
   return (
     <div className="mb-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <FilterDropdown options={HCP_ROLE_OPTIONS} value={filters.hcpType} onChange={set("hcpType")} />
-        <FilterDropdown options={CONVERSATION_STAGE_OPTIONS} value={filters.stage} onChange={set("stage")} />
-        <FilterDropdown options={CHALLENGE_CONTEXT_OPTIONS} value={filters.challenge} onChange={set("challenge")} />
+        <FilterDropdown label="HCP Role" options={HCP_ROLE_OPTIONS} value={filters.hcpType} onChange={set("hcpType")} />
+        <FilterDropdown label="Conversation Moment" options={CONVERSATION_STAGE_OPTIONS} value={filters.stage} onChange={set("stage")} />
+        <FilterDropdown label="Challenge Focus" options={CHALLENGE_CONTEXT_OPTIONS} value={filters.challenge} onChange={set("challenge")} />
+      </div>
+
+      <div className="mt-2 rounded-lg border px-3.5 py-2"
+        style={{ borderColor: "rgba(176, 212, 230, 0.32)", background: "rgba(18, 53, 94, 0.46)" }}>
+        <div className="flex items-center justify-between gap-3 mb-1.5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: "rgba(236, 245, 245, 0.82)" }}>
+            Realism Lever
+          </p>
+          <span className="text-xs font-semibold" style={{ color: "hsl(174 84% 84%)" }}>{realism}/10</span>
+        </div>
+        <input
+          type="range"
+          min={1}
+          max={10}
+          value={realism}
+          onChange={(event) => onChange({ ...filters, realism: Number(event.target.value) })}
+          className="w-full accent-teal-400"
+          aria-label="Realism Lever"
+        />
+        <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
+          <span>1 (Cooperative)</span>
+          <span>5 (Neutral)</span>
+          <span>10 (Sharp)</span>
+        </div>
       </div>
 
       <div className="mt-2">
@@ -99,8 +129,8 @@ export default function ScenarioFilters({ filters, onChange }) {
               Advanced filters are optional and intended for internal/debug narrowing only.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-              <FilterDropdown options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
-              <FilterDropdown options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
+              <FilterDropdown label="Specialty" options={SPECIALTIES} value={filters.specialty} onChange={set("specialty")} />
+              <FilterDropdown label="Disease State" options={DISEASE_STATES} value={filters.diseaseState} onChange={set("diseaseState")} />
             </div>
           </div>
         )}
@@ -177,4 +207,5 @@ export const DEFAULT_FILTERS = {
   hcpType: "all",
   stage: "all",
   challenge: "all",
+  realism: 5,
 };

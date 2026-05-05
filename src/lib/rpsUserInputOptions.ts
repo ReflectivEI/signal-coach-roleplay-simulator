@@ -7,9 +7,9 @@
  * No page may define its own duplicate dropdown options for these concepts.
  *
  * Primary user-facing labels:
- *   1. HCP Type           (maps to hcp_type internally)
- *   2. Conversation Stage (maps to journey_stage internally)
- *   3. Challenge Context  (maps to influence_driver + pressure + archetype internally)
+ *   1. HCP Role              (maps to hcp_type internally)
+ *   2. Conversation Moment   (maps to journey_stage internally)
+ *   3. Challenge Focus       (maps to influence_driver + pressure + archetype internally)
  *
  * Realism Level remains a separate slider where applicable.
  *
@@ -46,39 +46,34 @@ export const SPECIALTIES = [
 // ── Primary user-facing controls ──────────────────────────────────────────
 
 /**
- * Scenario Context — the high-level conversation context the rep is navigating.
- * Replaces "Journey Stage" as the primary visible label.
- * Values map 1:1 to journey_stage internally via SCENARIO_CONTEXT_TO_JOURNEY_STAGE.
+ * Conversation Moment options for the simplified 3-control experience.
+ * Values map to journey_stage internally through mapUIToBrain().
  */
 export const SCENARIO_CONTEXT_OPTIONS = [
-    { value: "all", label: "All Scenario Contexts" },
-    { value: "initial_access", label: "Initial Meeting" },
-    { value: "discovery", label: "Discovery" },
-    { value: "clinical_value", label: "Clinical Evidence Review" },
-    { value: "objection_handling", label: "Objection Handling" },
-    { value: "adoption_implementation", label: "Workflow Barrier" },
-    { value: "access_formulary", label: "Access / Coverage" },
-    { value: "commitment_close", label: "Commitment & Close" },
+    { value: "all", label: "All Conversation Moments" },
+    { value: "first_exposure", label: "First Exposure" },
+    { value: "early_exploration", label: "Early Exploration" },
+    { value: "access_logistics", label: "Access / Logistics" },
+    { value: "objection_resistance", label: "Objection / Resistance" },
+    { value: "followup_commitment", label: "Follow-up / Commitment" },
 ];
 
 export const CONVERSATION_STAGE_OPTIONS = SCENARIO_CONTEXT_OPTIONS;
 
 /**
- * Scenario Context Display Hints — shown in Advanced Controls to explain
- * which Journey Stage value the context maps to.
+ * Conversation Moment Display Hints — shown in Advanced Controls to explain
+ * which journey-stage value the moment maps to.
  */
 export const SCENARIO_CONTEXT_HINTS: Record<string, string> = {
-    initial_access: "Journey Stage: Initial Access",
-    discovery: "Journey Stage: Discovery",
-    clinical_value: "Journey Stage: Clinical Value",
-    objection_handling: "Journey Stage: Objection Handling",
-    adoption_implementation: "Journey Stage: Adoption & Implementation",
-    access_formulary: "Journey Stage: Access & Formulary",
-    commitment_close: "Journey Stage: Commitment & Close",
+    first_exposure: "Journey Stage: Initial Access",
+    early_exploration: "Journey Stage: Discovery",
+    access_logistics: "Journey Stage: Access & Formulary",
+    objection_resistance: "Journey Stage: Objection Handling",
+    followup_commitment: "Journey Stage: Commitment & Close",
 };
 
 /**
- * HCP Role — replaces "HCP Type" / "Specialty / HCP Type" as the primary visible label.
+ * HCP Role as the primary visible persona control.
  * Maps directly to hcp_type internally.
  */
 export const HCP_ROLE_OPTIONS = [
@@ -89,13 +84,12 @@ export const HCP_ROLE_OPTIONS = [
 ];
 
 export const CHALLENGE_CONTEXT_OPTIONS = [
-    { value: "all", label: "All Challenge Contexts" },
-    { value: "workflow_friction", label: "Workflow / Staff Friction" },
-    { value: "evidence_scrutiny", label: "Evidence Scrutiny" },
-    { value: "guideline_alignment", label: "Guideline Alignment" },
-    { value: "access_coverage", label: "Access / Coverage Barrier" },
-    { value: "safety_risk", label: "Safety / Risk Concern" },
-    { value: "cautious_commitment", label: "Commitment Hesitation" },
+    { value: "all", label: "All Challenge Focuses" },
+    { value: "access_barrier", label: "Access Barrier" },
+    { value: "time_constraint", label: "Time Constraint" },
+    { value: "skepticism", label: "Skepticism" },
+    { value: "prior_experience", label: "Prior Experience" },
+    { value: "competing_priorities", label: "Competing Priorities" },
 ];
 
 /**

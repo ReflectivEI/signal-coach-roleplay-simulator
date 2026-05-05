@@ -46,6 +46,66 @@ function countConsecutiveFromEnd(list = [], target) {
     return count;
 }
 
+function normalizeSimilarityText(value = "") {
+    return str(value)
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function similarityRatio(a = "", b = "") {
+    const leftTokens = new Set(normalizeSimilarityText(a).split(" ").filter((token) => token.length > 2));
+    const rightTokens = new Set(normalizeSimilarityText(b).split(" ").filter((token) => token.length > 2));
+    if (!leftTokens.size || !rightTokens.size) return 0;
+
+    let shared = 0;
+    leftTokens.forEach((token) => {
+        if (rightTokens.has(token)) shared += 1;
+    });
+    return shared / Math.max(leftTokens.size, rightTokens.size);
+}
+
+function isNearDuplicateResponse(nextLine = "", previousLine = "") {
+    const current = normalizeSimilarityText(nextLine);
+    const previous = normalizeSimilarityText(previousLine);
+    if (!current || !previous) return false;
+    if (current === previous) return true;
+    return similarityRatio(current, previous) >= 0.8;
+}
+
+function forceNonRepeatingVariation({
+    hcpState,
+    hcpBrain,
+    liveTemperature = 5,
+    previousLine = "",
+    candidateLine = "",
+} = {}) {
+    const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
+    const barrier = pickBarrierText(hcpState, hcpBrain);
+    const revealed = pickRevealedBarrier(hcpState, hcpBrain);
+    const emphasisPool = [
+        `I still need a concrete workflow answer on ${barrier}.`,
+        `I still need to understand what this changes for the patients I'd actually consider.`,
+        `If this remains unclear on access and approval flow, it still won't move here.`,
+    ];
+    const seed = `${previousLine}|${candidateLine}|${hcpState?.conversation_stage || "stage"}|${temp}`;
+    const score = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const base = emphasisPool[score % emphasisPool.length];
+
+    const realismTail = temp >= 8
+        ? " I need the direct version."
+        : temp <= 3
+            ? " I'm open if you keep it practical."
+            : " Keep it specific for my practice.";
+
+    const clarified = revealed && !base.toLowerCase().includes("access")
+        ? `${base.replace(/\.$/, "") } The unresolved part is still ${revealed}.`
+        : base;
+
+    return clipToSentenceCount(`${clarified}${realismTail}`, temp >= 8 ? 1 : 2);
+}
+
 // ─── Stage and position maps ──────────────────────────────────────────────────
 
 const CONVERSATION_STAGES = [
@@ -119,6 +179,7 @@ export function buildInitialHcpState(hcpBrain, liveTemperature = 5) {
         next_expected_rep_move: str(persona.repApproach, "Address primary concern and ask diagnostic question."),
         repetition_count: 0,
         last_hcp_response_type: null,
+        last_hcp_response_text: "",
         previous_response_types: [],
         previous_rep_qualities: [],
         progression_reason: "initial",
@@ -501,6 +562,7 @@ export function updateHcpState({
         next_expected_rep_move,
         repetition_count: newRepetitionCount,
         last_hcp_response_type: previous.last_hcp_response_type, // Will be updated in generateHcpResponse
+        last_hcp_response_text: str(previous.last_hcp_response_text, ""),
         previous_response_types: dedupeTail(previous.previous_response_types || [], 6),
         previous_rep_qualities: nextRepQualities,
         progression_reason: delta.reason,
@@ -942,6 +1004,10 @@ export function generateHcpResponse({
     const credibilityHook = pickCredibilityHook(hcpBrain);
     const stage = hcpState.conversation_stage;
     const repQuality = hcpState.last_rep_quality;
+    const previousHcpLine = str(
+        hcpState.last_hcp_response_text || conversationMemory.last_hcp_response_text,
+        "",
+    );
 
     // Resistance/patience-aware sentence suffix
     const urgencyTag = hcpState.patience_level <= 3
@@ -1089,6 +1155,20 @@ export function generateHcpResponse({
         hcp_progression_explanation = `${hcp_progression_explanation} Persona-fit enforcement applied.`.trim();
     }
 
+    if (isNearDuplicateResponse(hcp_statement, previousHcpLine)) {
+        const varied = forceNonRepeatingVariation({
+            hcpState,
+            hcpBrain,
+            liveTemperature,
+            previousLine: previousHcpLine,
+            candidateLine: hcp_statement,
+        });
+        hcp_statement = isNearDuplicateResponse(varied, previousHcpLine)
+            ? clipToSentenceCount(`I still need one concrete reason this changes ${barrier}.`, liveTemperature >= 8 ? 1 : 2)
+            : varied;
+        hcp_progression_explanation = `${hcp_progression_explanation} Text-level anti-repetition variation applied.`.trim();
+    }
+
     return {
         hcp_statement: hcp_statement.trim(),
         hcp_response_type: responseType,
@@ -1156,6 +1236,7 @@ export function computeHcpStateProgression({
     const finalState = {
         ...newState,
         last_hcp_response_type: responseType,
+        last_hcp_response_text: str(responseResult.hcp_statement, ""),
         previous_response_types: finalHistory,
     };
 

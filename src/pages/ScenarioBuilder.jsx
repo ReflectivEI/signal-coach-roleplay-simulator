@@ -20,6 +20,11 @@ import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputRes
 const journeyStages = CONVERSATION_STAGE_OPTIONS.filter(o => o.value !== "all");
 
 const journeyStateForStage = {
+  first_exposure: "early_discovery",
+  early_exploration: "early_discovery",
+  access_logistics: "access_formulary",
+  objection_resistance: "objection_phase",
+  followup_commitment: "adoption_commitment",
   initial_access: "early_discovery",
   discovery: "early_discovery",
   clinical_value: "clinical_evaluation",
@@ -30,12 +35,11 @@ const journeyStateForStage = {
 };
 
 const challengeDefaultBehaviorState = {
-  workflow_friction: "time_pressure",
-  evidence_scrutiny: "neutral",
-  guideline_alignment: "neutral",
-  access_coverage: "resistance",
-  safety_risk: "resistance",
-  cautious_commitment: "curiosity",
+  access_barrier: "resistance",
+  time_constraint: "time_pressure",
+  skepticism: "neutral",
+  prior_experience: "neutral",
+  competing_priorities: "curiosity",
 };
 
 // HCP Role + Mindset: import from shared module (no "all" sentinel for form selects)
@@ -213,6 +217,7 @@ export default function ScenarioBuilder() {
     hcpRoleType: "",
     decisionOrientation: "",
     challengeContext: "",
+    runtimeTemperature: 5,
     persona: "curious_uncertain_adopter",
     startingBehaviorState: "",
     interactionPressure: [],
@@ -249,12 +254,13 @@ export default function ScenarioBuilder() {
       hcpType: next.hcpRoleType,
       stage: next.journeyStage,
       challenge: next.challengeContext,
+      realism: next.runtimeTemperature,
       diseaseState: next.predictiveSeed?.diseaseState || "primary_care",
     });
 
     return {
       ...next,
-      journeyStage: mapped.resolvedFields.journey_stage,
+      journeyStage: next.journeyStage,
       journeyState: journeyStateForStage[mapped.resolvedFields.journey_stage] || next.journeyState,
       hcpRoleType: mapped.resolvedFields.hcp_type,
       decisionOrientation: mapped.resolvedFields.influence_driver,
@@ -274,6 +280,7 @@ export default function ScenarioBuilder() {
       hcpType: predictiveSeedUI.hcpType,
       stage: predictiveSeedUI.stage,
       challenge: predictiveSeedUI.challenge,
+      realism: current.runtimeTemperature,
       diseaseState: current.predictiveSeed?.diseaseState || "primary_care",
     });
 
@@ -310,8 +317,8 @@ Core Tension: ${form.coreTension || "not specified"}
 Stakeholder: ${form.stakeholder || "not specified"}
 Context: ${form.context || "not specified"}
 Objective: ${form.objective || "not specified"}
-Journey Stage: ${form.journeyStage || "not specified"}
-HCP Role Type: ${form.hcpRoleType || "not specified"}
+Conversation Moment: ${form.journeyStage || "not specified"}
+HCP Role: ${form.hcpRoleType || "not specified"}
 Decision Orientation: ${form.decisionOrientation || "not specified"}
 Starting Behavior: ${form.startingBehaviorState || "not specified"}
 Interaction Pressures: ${form.interactionPressure?.join(", ") || "not specified"}
@@ -406,7 +413,7 @@ Return ONLY valid JSON:
         context: result.context || f.context,
         openingScene: result.openingScene || f.openingScene,
         visualScene: result.visualScene || f.visualScene,
-        journeyStage: result.journeyStage || f.journeyStage,
+        journeyStage: derivedTopLevelUi.stage || f.journeyStage,
         journeyState: journeyStateForStage[result.journeyStage] || f.journeyState,
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
         decisionOrientation: result.decisionOrientation || f.decisionOrientation,
@@ -420,7 +427,7 @@ Return ONLY valid JSON:
           : f.predictiveSeed,
       }, {
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
-        journeyStage: result.journeyStage || f.journeyStage,
+        journeyStage: derivedTopLevelUi.stage || f.journeyStage,
         challengeContext: derivedTopLevelUi.challenge || f.challengeContext,
       }), {
         hcpType: derivedSeedUi.hcpType || f.predictiveSeedUI.hcpType,
@@ -443,12 +450,24 @@ Return ONLY valid JSON:
     setSaveError("");
     setSaving(true);
 
+    const mappedForSave = mapUIToBrain({
+      hcpType: form.hcpRoleType,
+      stage: form.journeyStage,
+      challenge: form.challengeContext,
+      realism: form.runtimeTemperature,
+      diseaseState: form.predictiveSeed?.diseaseState || "primary_care",
+    });
+
     await createCustomScenario({
       ...form,
       predictiveSeed: seedValidation.normalized,
-      journeyState: journeyStateForStage[form.journeyStage] || "early_discovery",
+      journeyStage: mappedForSave.resolvedFields.journey_stage,
+      decisionOrientation: mappedForSave.resolvedFields.influence_driver,
+      persona: mappedForSave.resolvedFields.behavior_archetype,
+      interactionPressure: mappedForSave.resolvedFields.interaction_pressure,
+      runtimeTemperature: Math.max(1, Math.min(10, Number(form.runtimeTemperature) || 5)),
+      journeyState: journeyStateForStage[mappedForSave.resolvedFields.journey_stage] || "early_discovery",
       keyChallenges: form.keyChallenges.split("\n").filter(Boolean),
-      interactionPressure: form.interactionPressure,
       isBuiltIn: false,
       isPublished: true,
     });
@@ -590,14 +609,32 @@ Return ONLY valid JSON:
                   <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Realism Variables</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Conversation Stage *">
+                  <Field label="Conversation Moment *">
                     <Select value={form.journeyStage} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { journeyStage: value }))} options={journeyStages} />
                   </Field>
-                  <Field label="HCP Type">
+                  <Field label="HCP Role">
                     <Select value={form.hcpRoleType} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { hcpRoleType: value }))} options={hcpRoleTypes} />
                   </Field>
-                  <Field label="Challenge Context">
+                  <Field label="Challenge Focus">
                     <Select value={form.challengeContext} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { challengeContext: value }))} options={challengeContexts} />
+                  </Field>
+                  <Field label="Realism Lever">
+                    <div className="rounded-xl px-3.5 py-2.5" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,249,249,0.98) 100%)", border: "1.5px solid rgba(92, 135, 165, 0.42)" }}>
+                      <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: "hsl(215 18% 46%)" }}>
+                        <span>1 (Cooperative)</span>
+                        <span className="font-semibold" style={{ color: "hsl(173 42% 28%)" }}>{Math.max(1, Math.min(10, Number(form.runtimeTemperature) || 5))}/10</span>
+                        <span>10 (Sharp)</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={10}
+                        value={Math.max(1, Math.min(10, Number(form.runtimeTemperature) || 5))}
+                        onChange={(event) => setForm((f) => applyTopLevelMapping(f, { runtimeTemperature: Number(event.target.value) }))}
+                        className="w-full accent-teal-600"
+                        aria-label="Realism Lever"
+                      />
+                    </div>
                   </Field>
                 </div>
 
@@ -621,21 +658,21 @@ Return ONLY valid JSON:
                       Optional override for debugging only. Default flow derives this automatically from the 3-control model.
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Field label="HCP Type">
+                      <Field label="HCP Role">
                         <Select
                           value={form.predictiveSeedUI.hcpType}
                           onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { hcpType: value }))}
                           options={hcpRoleTypes}
                         />
                       </Field>
-                      <Field label="Conversation Stage">
+                      <Field label="Conversation Moment">
                         <Select
                           value={form.predictiveSeedUI.stage}
                           onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { stage: value }))}
                           options={journeyStages}
                         />
                       </Field>
-                      <Field label="Challenge Context">
+                      <Field label="Challenge Focus">
                         <Select
                           value={form.predictiveSeedUI.challenge}
                           onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { challenge: value }))}
