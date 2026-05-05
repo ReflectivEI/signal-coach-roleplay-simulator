@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronRight, Plus, Brain, FlaskConical, Zap, MapPin, Settings } from "lucide-react";
+import { BookOpen, ChevronRight, Zap, MapPin } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
 import ScenarioCard from "@/components/home/ScenarioCard";
 import BuildYourOwnCard from "@/components/home/BuildYourOwnCard";
 import ScenarioFilters, { applyScenarioFilters, DEFAULT_FILTERS } from "@/components/home/ScenarioFilters";
@@ -48,77 +49,7 @@ export default function Home() {
         background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)",
       }}
     >
-
-      {/* Top nav — clean white */}
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-[1420px] mx-auto px-5 xl:px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{
-                background: "linear-gradient(145deg, hsl(223 56% 18%), hsl(182 48% 23%))",
-                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.14)",
-              }}
-            >
-              <Zap className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
-            </div>
-            <div>
-              <span className="font-semibold text-[1.02rem]" style={{ color: "hsl(222 48% 22%)" }}>Signal Intelligence</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/library" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <BookOpen className="w-3.5 h-3.5" />
-              Library
-            </Link>
-            <Link to="/builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Plus className="w-3.5 h-3.5" />
-              Build Scenario
-            </Link>
-            <Link to="/predictive-builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Brain className="w-3.5 h-3.5" />
-              Predictive Builder
-            </Link>
-            <Link to="/rps-adaptive" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Zap className="w-3.5 h-3.5" />
-              Adaptive RPS
-            </Link>
-            <Link to="/capabilities" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Brain className="w-3.5 h-3.5" />
-              Capabilities
-            </Link>
-            <Link to="/qa" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <FlaskConical className="w-3.5 h-3.5" />
-              QA Twin
-            </Link>
-            <Link to="/admin" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Settings className="w-3.5 h-3.5" />
-              Admin
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-[1420px]" />
 
       <div className="w-full max-w-[1480px] mx-auto px-5 xl:px-6 py-8 space-y-8">
 

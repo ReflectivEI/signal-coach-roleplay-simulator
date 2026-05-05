@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AppHeader from '@/components/layout/AppHeader';
 import ScenarioFilters, { applyScenarioFilters, DEFAULT_FILTERS } from '@/components/home/ScenarioFilters';
 import { listPublishedScenarios } from '@/lib/scenarioStorage';
 
@@ -23,18 +24,13 @@ export default function ScenarioLibrary() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border/40 bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
-          <button onClick={() => navigate('/')} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <h1 className="text-2xl font-bold text-foreground">Scenario Library</h1>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-6xl" />
 
       {/* Content */}
       <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-foreground">Scenario Library</h1>
+        </div>
         {/* Filters */}
         <div className="rounded-xl px-5 py-4 mb-6" style={{ background: "hsl(174 40% 97%)", border: "1px solid hsl(162 50% 80%)" }}>
           <ScenarioFilters filters={filters} onChange={setFilters} />
