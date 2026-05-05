@@ -817,12 +817,7 @@ export default function SessionSummaryModal({
 
               <SectionCard label="3) What You Did Well" surface={sectionSurface.coaching}>
                 {strengthsList.length > 0
-                  ? strengthsList.map((item, index) => (
-                    <p key={`strength-${index}`} className="flex items-start gap-2">
-                      <span style={{ color: "hsl(169 56% 34%)" }}>•</span>
-                      <span>{item}</span>
-                    </p>
-                  ))
+                  ? strengthsList.map((item, index) => <p key={`strength-${index}`}>{item}</p>)
                   : <NotObservedMarker />}
               </SectionCard>
 
@@ -920,7 +915,7 @@ export default function SessionSummaryModal({
                       className="text-[11px] font-bold uppercase tracking-[0.16em]"
                       style={{ color: "hsl(214 28% 28%)" }}
                     >
-                      7) Skill Breakdown
+                      Skill Breakdown
                     </p>
                     <p className="text-sm font-bold mt-0.5" style={{ color: "hsl(215 34% 22%)" }}>
                       Overall {overallScore}/5
