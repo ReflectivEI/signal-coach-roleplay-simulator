@@ -532,6 +532,7 @@ export function buildHcpBrainSummary(hcpBrain) {
 /**
  * Returns a multi-line string to inject into scenario/evaluation prompts.
  * Grounds the LLM dialogue generation and evaluation in this HCP persona.
+ * INCLUDES realism tier metadata for QA validation and internal tracing.
  */
 export function buildHcpBrainPersonaContext(hcpBrain) {
     if (!hcpBrain) return "";
@@ -543,6 +544,40 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
     const rawArchetype = str(hcpBrain.selections?.behavior_archetype);
     const archetype = rawArchetype.replace(/_/g, " ");
     const stage = str(hcpBrain.selections?.journey_stage).replace(/_/g, " ");
+    
+    // ── Resolve realism tier from live_temperature ──────────────────────────────────
+    const temp = Number(hcpBrain.live_temperature ?? hcpBrain.initial_temperature ?? 5);
+    const realismLevel = Math.max(1, Math.min(10, Math.round(temp)));
+    let realismTier = "mid";
+    let cooperationLevel = 0.5;
+    let resistanceLevel = 0.5;
+    let interruptionLikelihood = 0.3;
+    let escalationLevel = 0.3;
+
+    // LOW tier (1–3): Cooperative, direct, minimal friction
+    if (realismLevel <= 3) {
+      realismTier = "low";
+      cooperationLevel = 0.85;      // High willingness
+      resistanceLevel = 0.15;       // Low resistance
+      interruptionLikelihood = 0.1; // Rarely interrupts
+      escalationLevel = 0.05;       // Almost no escalation
+    }
+    // HIGH tier (7–10): Strong resistance, demands specificity
+    else if (realismLevel >= 7) {
+      realismTier = "high";
+      cooperationLevel = 0.15;      // Low willingness
+      resistanceLevel = 0.85;       // High resistance
+      interruptionLikelihood = 0.7; // Frequently interrupts
+      escalationLevel = 0.75;       // Frequent escalation pressure
+    }
+    // MID tier (4–6): Selective skepticism, requires clarity
+    else {
+      realismTier = "mid";
+      cooperationLevel = 0.5;       // Balanced
+      resistanceLevel = 0.5;        // Balanced
+      interruptionLikelihood = 0.35; // Occasional interrupts
+      escalationLevel = 0.4;        // Moderate escalation risk
+    }
 
     return [
         "HCP Brain Persona Context",
@@ -552,6 +587,11 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
         `Quality test: "${str(cp.quality_test_question)}"`,
         `Likely objection: "${str((lo.key_factors || [])[0])}"`,
         `Pressure signal: "${str((ps.key_factors || [])[0])}"`,
+        "",
+        "REALISM TIER METADATA:",
+        `  Realism Level: ${realismLevel}/10 | Tier: ${realismTier.toUpperCase()}`,
+        `  Cooperation Level: ${(cooperationLevel * 100).toFixed(0)}% | Resistance Level: ${(resistanceLevel * 100).toFixed(0)}%`,
+        `  Interruption Likelihood: ${(interruptionLikelihood * 100).toFixed(0)}% | Escalation Level: ${(escalationLevel * 100).toFixed(0)}%`,
         "",
         "Trust breakers (rep speech patterns that raise guardedness):",
         (cp.trust_breakers || []).slice(0, 2).map((b) => `  • ${b}`).join("\n"),
@@ -567,6 +607,7 @@ export function buildHcpBrainPersonaContext(hcpBrain) {
         `  • If REP demonstrates a credibility driver → soften slightly, offer more clinical detail`,
         `  • If REP satisfies quality test → show conditional openness, may reveal real barrier`,
         `  • If REP fails quality test → challenge relevance, stay guarded`,
+        `  • REALISM TIER ENFORCEMENT: Apply ${realismTier.toUpperCase()} tier behavioral rules (cooperation=${cooperationLevel.toFixed(2)}, resistance=${resistanceLevel.toFixed(2)})`,
         "═════════════════════════════════════════════════════════════════",
     ].filter(Boolean).join("\n");
 }
