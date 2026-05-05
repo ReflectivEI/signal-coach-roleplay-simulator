@@ -708,7 +708,8 @@ function getNextConcept(used = []) {
 }
 
 function asRepReplyPayload(reply = "", concept = null, context = {}) {
-  const rawText = typeof reply === "string" ? reply : String(reply?.text || "");
+  const replyRecord = /** @type {{ text?: string } | null} */ (reply && typeof reply === "object" ? reply : null);
+  const rawText = typeof reply === "string" ? reply : String(replyRecord?.text || "");
   const scenarioRouting = context?.scenario ? buildScenarioRouting(context.scenario) : null;
   const finalized = finalizeRepReply(rawText, context);
   const aligned = scenarioRouting
@@ -794,6 +795,7 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
   }
 }
 
+/** @param {{ rep_script?: string, scenario_routing?: Record<string, any>, personaKey?: string }} params */
 export function enforceRepScenarioAlignment({
   rep_script = "",
   scenario_routing = {},
@@ -877,6 +879,7 @@ function renderConcept(type = "core_change", context = {}) {
   }
 }
 
+/** @param {string} layer @param {{ bucket?: string, context?: Record<string, any> }} [options] */
 function generateIsolatedLayerResponse(layer, { bucket = "general_staff_burden", context = {} } = {}) {
   const { step, stop, instead } = operationalPartsForBucket(bucket);
   const askType = context?.askType || "";
@@ -1473,7 +1476,10 @@ function resolvePersonaTier(personaKey = "strong_rep") {
   return "strong";
 }
 
-function buildMediocreSolutionSeekingAnswer({ scenario = {}, turns = [] }) {
+/** @param {{ scenario?: Record<string, any>, turns?: Array<Record<string, any>> }} [params] */
+/** @param {{ scenario?: Record<string, any>, turns?: Array<Record<string, any>> }} params */
+function buildMediocreSolutionSeekingAnswer(params = {}) {
+  const { scenario = {}, turns = [] } = params;
   const lastHcpMessage = getLastHcpText(turns);
   const response = normalizeForMatch(lastHcpMessage);
   const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
@@ -1496,7 +1502,10 @@ function buildMediocreSolutionSeekingAnswer({ scenario = {}, turns = [] }) {
   return "The practical change would have to be something that feels relevant to your current patients instead of just sounding directionally positive.";
 }
 
-function buildWeakSolutionSeekingAnswer({ scenario = {}, turns = [] }) {
+/** @param {{ scenario?: Record<string, any>, turns?: Array<Record<string, any>> }} [params] */
+/** @param {{ scenario?: Record<string, any>, turns?: Array<Record<string, any>> }} params */
+function buildWeakSolutionSeekingAnswer(params = {}) {
+  const { scenario = {}, turns = [] } = params;
   const lastHcpMessage = getLastHcpText(turns);
   const response = normalizeForMatch(lastHcpMessage);
   const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();

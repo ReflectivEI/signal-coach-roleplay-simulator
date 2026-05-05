@@ -585,7 +585,7 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
         const conversationHistory = [
             {
                 id: crypto.randomUUID(),
-                speaker: "rep",
+                speaker: "rep" as const,
                 text: repMessage,
                 timestamp: new Date().toISOString(),
                 cues: [],

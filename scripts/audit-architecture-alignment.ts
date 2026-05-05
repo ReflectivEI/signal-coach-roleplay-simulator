@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { ALL_SCENARIOS } from "../src/lib/scenarioCatalog.js";
-import { getScenarioCapabilityProfile, getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry.ts";
+import { getScenarioCapabilityProfile, getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
 
 const ALLOWED = {
     diseaseState: new Set([

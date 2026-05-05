@@ -57,6 +57,16 @@ const DISALLOWED_TERM_PATTERNS = {
     access_formulary: [/\bformulary\b/gi, /\bpayer\b/gi, /\bcoverage\b/gi, /\bstep therapy\b/gi],
 };
 
+/**
+ * @typedef {{
+ *   journey_stage?: string,
+ *   allowed_topic_lanes?: string[],
+ *   disallowed_topic_lanes?: string[],
+ *   stage_behavior_rules?: string[],
+ *   concern_family?: string
+ * }} ScenarioRoutingLike
+ */
+
 function normalizeText(value = "") {
     return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -248,6 +258,7 @@ function getLaneTermReplacement(lane = "", stage = "") {
     return "practical decision point";
 }
 
+/** @param {{ text?: string, disallowedLanes?: string[], scenarioRouting?: ScenarioRoutingLike }} params */
 function rewriteDisallowedTerms({
     text = "",
     disallowedLanes = [],
@@ -280,6 +291,7 @@ function rewriteDisallowedTerms({
     };
 }
 
+/** @param {{ draft_hcp_response?: string, scenario_routing?: ScenarioRoutingLike, rep_message?: string, hcp_state?: string }} params */
 export function enforceScenarioTopicLane({
     draft_hcp_response = "",
     scenario_routing = {},
@@ -350,6 +362,7 @@ export function enforceScenarioTopicLane({
     };
 }
 
+/** @param {{ draft_hcp_response?: string, journey_stage?: string, scenario_routing?: ScenarioRoutingLike, hcp_state?: string }} params */
 export function enforceJourneyStageFit({
     draft_hcp_response = "",
     journey_stage = "",
@@ -382,6 +395,7 @@ export function enforceJourneyStageFit({
     };
 }
 
+/** @param {{ draft_hcp_response?: string, interaction_pressure?: string[], scenario_routing?: ScenarioRoutingLike }} params */
 export function enforcePressureFit({
     draft_hcp_response = "",
     interaction_pressure = [],
@@ -426,6 +440,7 @@ export function enforcePressureFit({
     return { text: normalizeText(text), changed };
 }
 
+/** @param {{ draft_hcp_response?: string, scenario_routing?: ScenarioRoutingLike }} params */
 export function addPersonaSpecificAnchor({
     draft_hcp_response = "",
     scenario_routing = {},
@@ -447,6 +462,7 @@ export function addPersonaSpecificAnchor({
     return { text, changed: true };
 }
 
+/** @param {{ text?: string, scenarioRouting?: ScenarioRoutingLike }} params */
 export function summarizeRoutingAlignment({ text = "", scenarioRouting = {} }) {
     const matched = detectTopicLanes(text);
     const prohibited = matched.filter((lane) => (scenarioRouting?.disallowed_topic_lanes || []).includes(lane));
@@ -461,6 +477,7 @@ export function summarizeRoutingAlignment({ text = "", scenarioRouting = {} }) {
     };
 }
 
+/** @param {string} [text] @param {ScenarioRoutingLike} [scenarioRouting] */
 export function scrubStaleFallbackPhrases(text = "", scenarioRouting = {}) {
     const input = normalizeText(text);
     if (!input) return input;

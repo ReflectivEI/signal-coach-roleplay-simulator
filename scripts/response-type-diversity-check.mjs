@@ -61,7 +61,7 @@ function runMixedFlowTest() {
             conversation_stage: i >= 4 ? "conditional_openness" : "concern_clarification",
         };
 
-        const selection = selectHcpResponseType({
+        const selection = selectHcpResponseType(/** @type {any} */ ({
             hcp_state: state,
             previous_response_types: history,
             rep_quality: repQuality,
@@ -76,7 +76,7 @@ function runMixedFlowTest() {
                     credibility_drivers_demonstrated: i >= 4 ? ["specificity"] : [],
                 },
             },
-        });
+        }));
 
         history.push(selection.responseType);
 
@@ -120,7 +120,7 @@ function runWeakEscalationTest() {
         rep_uses_vague_product_language: true,
     });
 
-    const selection = selectHcpResponseType({
+    const selection = selectHcpResponseType(/** @type {any} */ ({
         hcp_state: state,
         previous_response_types: history,
         rep_quality: "weak",
@@ -136,7 +136,7 @@ function runWeakEscalationTest() {
                 credibility_drivers_demonstrated: [],
             },
         },
-    });
+    }));
 
     assert(["challenge_assumption", "disengage"].includes(selection.responseType), `Weak streak escalates response type (got ${selection.responseType})`);
     assert(selection.responseTypeTransitionExplanation.includes("->"), "Weak streak emits transition explanation");

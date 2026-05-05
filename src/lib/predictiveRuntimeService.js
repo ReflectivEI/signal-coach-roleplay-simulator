@@ -109,7 +109,7 @@ export function buildPredictivePromptContext(runtimeLens = null) {
 
 /**
  * @typedef {Object} PredictiveRuntimeLensOptions
- * @property {Object} selection
+ * @property {Object} [selection]
  * @property {string} [scenarioTitle]
  */
 

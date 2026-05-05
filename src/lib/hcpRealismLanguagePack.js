@@ -455,6 +455,18 @@ function buildCompositeExamples({
   return unique(composites);
 }
 
+/**
+ * @param {{
+ *   scenario?: Record<string, any>,
+ *   journeyStage?: string,
+ *   interactionPressures?: string[],
+ *   behaviorState?: string,
+ *   scenarioTopic?: string,
+ *   repIntentType?: string,
+ *   hcpTurnCount?: number,
+ *   repMessage?: string
+ * }} [params]
+ */
 export function pickHcpRealismExamples({
   scenario = {},
   journeyStage = "",

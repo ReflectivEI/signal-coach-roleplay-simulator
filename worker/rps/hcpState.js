@@ -20,6 +20,8 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
+/** @typedef {Record<string, any>} AnyRecord */
+
 function str(v, fallback = "") {
     return String(v ?? "").trim() || fallback;
 }
@@ -101,6 +103,7 @@ function isNearDuplicateResponse(nextLine = "", previousLine = "") {
     return similarityRatio(current, previous) >= 0.8;
 }
 
+/** @param {{ hcpState?: Record<string, any>, hcpBrain?: Record<string, any>, liveTemperature?: number, previousLine?: string, candidateLine?: string }} [params] */
 function forceNonRepeatingVariation({
     hcpState,
     hcpBrain,
@@ -181,6 +184,7 @@ function countTrailingSameBucket(bucketHistory = [], bucket) {
     return count;
 }
 
+/** @param {{ targetBucket?: string, barrier?: string, revealedBarrier?: string, variationSeed?: number, liveTemperature?: number }} [params] */
 function buildForcedBucketLine({
     targetBucket,
     barrier,
@@ -235,6 +239,7 @@ function buildForcedBucketLine({
     return clipToSentenceCount(softenSpecificityLexicon(base), 2);
 }
 
+/** @param {{ hcpStatement?: string, hcpState?: AnyRecord, hcpBrain?: AnyRecord, liveTemperature?: number, conversationMemory?: AnyRecord }} [params] */
 function enforceDeterministicAntiLoop({
     hcpStatement,
     hcpState,
@@ -383,6 +388,7 @@ function enforceDeterministicAntiLoop({
     };
 }
 
+/** @param {{ previousState?: AnyRecord, nextState?: AnyRecord, liveTemperature?: number }} [params] */
 function enforceRealismTrajectory({ previousState, nextState, liveTemperature = 5 } = {}) {
     const prev = previousState || {};
     const next = { ...(nextState || {}) };
@@ -826,6 +832,7 @@ function updateConcerns(previousState, delta, evaluation, hcpBrain) {
  * Updates HCP state after a REP turn.
  * Returns { newState, delta }.
  */
+/** @param {{ hcpBrain?: AnyRecord, previousHcpState?: AnyRecord, repResponseTranscript?: string, evaluation?: AnyRecord, voiceBehaviorAdaptation?: AnyRecord, liveTemperature?: number, conversationMemory?: AnyRecord }} [params] */
 export function updateHcpState({
     hcpBrain,
     previousHcpState,
@@ -1007,6 +1014,7 @@ function isDominatingOverHalf(history = [], candidate, consistentlyFailing) {
  *   evaluation,
  * })
  */
+/** @param {{ hcp_state?: AnyRecord, previous_response_types?: any[], rep_quality?: string, voice_behavior_adaptation?: AnyRecord, live_temperature?: number, evaluation?: AnyRecord }} [params] */
 export function selectHcpResponseType({
     hcp_state,
     previous_response_types = [],
@@ -1247,6 +1255,7 @@ function hasPersonaAnchor(text = "") {
     return /\bpatients?\b|\bpractice\b|\bclinic\b|\bstaff\b|\bworkflow\b|\bformulary\b|\bprior auth\b|\bcase\b/.test(str(text).toLowerCase());
 }
 
+/** @param {{ line?: string, hcpState?: AnyRecord, hcpBrain?: AnyRecord }} [params] */
 export function validateWorkflowPlausibility({ line, hcpState, hcpBrain } = {}) {
     const text = str(line);
     const state = str(hcpState?.conversation_stage).toLowerCase();
@@ -1272,6 +1281,7 @@ export function validateWorkflowPlausibility({ line, hcpState, hcpBrain } = {}) 
     };
 }
 
+/** @param {{ line?: string, hcpState?: AnyRecord, hcpBrain?: AnyRecord }} [params] */
 export function validatePersonaFit({ line, hcpState, hcpBrain } = {}) {
     const text = str(line);
     const personaSignals = [
@@ -1292,6 +1302,7 @@ export function validatePersonaFit({ line, hcpState, hcpBrain } = {}) {
     };
 }
 
+/** @param {{ line?: string, hcpState?: AnyRecord, liveTemperature?: number }} [params] */
 export function enforcePressureBehavior({ line, hcpState, liveTemperature = 5 } = {}) {
     const text = str(line);
     if (!text) return text;
@@ -1312,6 +1323,7 @@ export function enforcePressureBehavior({ line, hcpState, liveTemperature = 5 } 
     return clipToSentenceCount(normalized, 2);
 }
 
+/** @param {{ line?: string, hcpState?: AnyRecord }} [params] */
 export function enforceJourneyStageBehavior({ line, hcpState } = {}) {
     const text = str(line);
     if (!text) return text;
@@ -1340,6 +1352,7 @@ export function enforceJourneyStageBehavior({ line, hcpState } = {}) {
  * Generates the HCP next response based on response_type and state.
  * Returns { hcp_statement, hcp_response_type, hcp_progression_explanation }.
  */
+/** @param {{ responseType?: string, hcpState?: AnyRecord, hcpBrain?: AnyRecord, liveTemperature?: number, conversationMemory?: AnyRecord }} [params] */
 export function generateHcpResponse({
     responseType,
     hcpState,
@@ -1552,6 +1565,7 @@ export function generateHcpResponse({
  * Usage in engine.js:
  *   const stateResult = computeHcpStateProgression({ hcpBrain, previousHcpState, evaluation, voiceBehaviorAdaptation, liveTemperature, conversationMemory });
  */
+/** @param {{ hcpBrain?: AnyRecord, previousHcpState?: AnyRecord, repResponseTranscript?: string, evaluation?: AnyRecord, voiceBehaviorAdaptation?: AnyRecord, liveTemperature?: number, conversationMemory?: AnyRecord }} [params] */
 export function computeHcpStateProgression({
     hcpBrain,
     previousHcpState,
@@ -1579,11 +1593,11 @@ export function computeHcpStateProgression({
         nextState: newState,
         liveTemperature,
     });
-    const adjustedState = {
+    const adjustedState = /** @type {AnyRecord} */ ({
         ...trajectoryEnforcement.nextState,
         realism_trajectory_enforced: trajectoryEnforcement.realism_trajectory_enforced,
         realism_trajectory_reason: trajectoryEnforcement.realism_trajectory_reason,
-    };
+    });
 
     // 2. Select response type
     const selection = selectHcpResponseType({

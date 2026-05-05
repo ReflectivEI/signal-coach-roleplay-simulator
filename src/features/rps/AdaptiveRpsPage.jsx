@@ -7,12 +7,27 @@ import { clampTemperature, extractEightBehavioralMetricRows, isGenerateDisabled 
 import { HCP_ROLE_OPTIONS, CONVERSATION_STAGE_OPTIONS, CHALLENGE_CONTEXT_OPTIONS, REALISM_LEVEL_LABELS, RPS_UI_LABELS } from "@/lib/rpsUserInputOptions";
 import { mapUIToBrain, requireRealismContract } from "@/lib/scenarioInputResolver";
 
+/**
+ * @typedef {{
+ *   scenario_id?: string,
+ *   opening_scene?: string,
+ *   hcp_statement_or_question?: string,
+ *   cue_signal?: string,
+ *   hcp_brain_summary?: Record<string, any>,
+ *   conversation_memory?: Record<string, any>,
+ *   hcp_state?: Record<string, any>
+ * }} AdaptiveScenario
+ */
+
+/** @typedef {Record<string, any>} LooseRecord */
+
 const defaults = {
     hcpType: "",
     stage: "",
     challenge: "",
 };
 
+/** @param {{ title: string; children: import("react").ReactNode }} props */
 function DashboardCard({ title, children }) {
     return (
         <section className="si-dark-panel rounded-2xl p-4">
@@ -25,11 +40,11 @@ function DashboardCard({ title, children }) {
 export default function AdaptiveRpsPage() {
     const [form, setForm] = useState(defaults);
     const [temperature, setTemperature] = useState(6);
-    const [scenario, setScenario] = useState(null);
-    const [conversationMemory, setConversationMemory] = useState(null);
-    const [hcpState, setHcpState] = useState(null);
+    const [scenario, setScenario] = useState(/** @type {AdaptiveScenario | null} */ (null));
+    const [conversationMemory, setConversationMemory] = useState(/** @type {LooseRecord | null} */ (null));
+    const [hcpState, setHcpState] = useState(/** @type {LooseRecord | null} */ (null));
     const [repText, setRepText] = useState("");
-    const [evaluation, setEvaluation] = useState(null);
+    const [evaluation, setEvaluation] = useState(/** @type {LooseRecord | null} */ (null));
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [savedId, setSavedId] = useState("");
@@ -51,6 +66,7 @@ export default function AdaptiveRpsPage() {
         });
     }, [form.challenge, form.hcpType, form.stage, temperature]);
 
+    /** @param {keyof typeof defaults} key @param {string} value */
     function setFormField(key, value) {
         setForm((current) => ({ ...current, [key]: value }));
     }
@@ -95,7 +111,7 @@ export default function AdaptiveRpsPage() {
             setConversationMemory(data?.conversation_memory || null);
             setHcpState(data?.hcp_state || null);
         } catch (err) {
-            setError(String(err?.message || err));
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setBusy(false);
         }
@@ -148,7 +164,7 @@ export default function AdaptiveRpsPage() {
             setConversationMemory(newMemory);
             setHcpState(result?.hcp_state || null);
         } catch (err) {
-            setError(String(err?.message || err));
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setBusy(false);
         }
@@ -197,7 +213,7 @@ export default function AdaptiveRpsPage() {
             });
             setSavedId(result?.session_id || "saved");
         } catch (err) {
-            setError(String(err?.message || err));
+            setError(err instanceof Error ? err.message : String(err));
         } finally {
             setBusy(false);
         }
@@ -490,7 +506,7 @@ export default function AdaptiveRpsPage() {
                             {evaluation.hcp_state?.unresolved_concerns?.length > 0 && (
                                 <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3">
                                     <p className="mb-1 text-xs uppercase tracking-wide text-rose-200">Unresolved Concerns</p>
-                                    {evaluation.hcp_state.unresolved_concerns.map((c, i) => (
+                                    {evaluation.hcp_state.unresolved_concerns.map((/** @type {string} */ c, /** @type {number} */ i) => (
                                         <p key={i} className="text-rose-100 text-xs">{c}</p>
                                     ))}
                                 </div>

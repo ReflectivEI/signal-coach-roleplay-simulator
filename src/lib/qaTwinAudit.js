@@ -252,6 +252,38 @@ export function detectHumanClinicianCadence(text = "") {
   };
 }
 
+/** @param {{ turn?: { text?: string }, scenario?: { persona?: string }, humanCadence?: { grounded?: boolean }, decisionDriven?: boolean, personaCadence?: boolean }} [params] */
+export function validatePersonaFit({
+  turn = {},
+  scenario = {},
+  humanCadence,
+  decisionDriven,
+  personaCadence,
+} = {}) {
+  const text = normalize(turn?.text || "");
+  const cadence = humanCadence || detectHumanClinicianCadence(text);
+  const decision = typeof decisionDriven === "boolean" ? decisionDriven : hasDecisionLogic(text);
+  const persona = typeof personaCadence === "boolean" ? personaCadence : hasPersonaDecisionCadence(text);
+
+  if (!cadence.grounded && !decision && !persona) {
+    return {
+      pass: false,
+      type: "poor_persona_fit",
+      note: "Line lacks clinician/workflow/context anchors.",
+    };
+  }
+
+  if (scenario?.persona?.includes("community") && !/practice|patients|staff|office|workflow|formulary|prior auth|guideline/i.test(text)) {
+    return {
+      pass: false,
+      type: "poor_specialty_fit",
+      note: "Line lacks the concrete practice framing expected for this persona.",
+    };
+  }
+
+  return { pass: true, type: null, note: "" };
+}
+
 export function detectJourneyStageSignal(text = "", scenario = {}) {
   const value = normalize(text);
   const entries = Object.entries(JOURNEY_SIGNAL_PATTERNS);
@@ -434,13 +466,15 @@ export function detectQuestionObligationFailure({ previousTurn, currentTurn }) {
   return null;
 }
 
+/** @param {{ turn?: any, scenario?: any, scenarioRouting?: any, detectedJourneyStage?: any, detectedPressures?: any, tone?: string }} [params] */
 export function validateTurnAgainstScenarioState({
   turn,
   scenario,
+  scenarioRouting = null,
   detectedJourneyStage,
   detectedPressures,
   tone,
-}) {
+} = {}) {
   const failures = [];
   const notes = [];
   if (turn.speaker === "hcp") {

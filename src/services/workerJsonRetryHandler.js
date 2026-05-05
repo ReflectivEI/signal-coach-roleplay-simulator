@@ -400,7 +400,7 @@ export async function invokeWorkerJsonWithRetry({
         lastError,
     };
 
-    const error = new Error("Worker JSON invocation failed after all retries");
+    const error = /** @type {Error & { code?: string, summary?: unknown }} */ (new Error("Worker JSON invocation failed after all retries"));
     error.code = "WORKER_JSON_RETRY_EXHAUSTED";
     error.summary = summary;
     throw error;
@@ -421,5 +421,5 @@ export function setDebugJsonParsing(enabled) {
 
 // Expose for development
 if (import.meta?.env?.DEV) {
-    window.setDebugJsonParsing = setDebugJsonParsing;
+    /** @type {any} */ (window).setDebugJsonParsing = setDebugJsonParsing;
 }

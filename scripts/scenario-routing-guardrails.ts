@@ -93,7 +93,7 @@ test("Workflow scenario allows workflow language and QA does not falsely flag la
         detectedJourneyStage: "adoption_implementation",
         detectedPressures: ["operationally_constrained"],
         tone: "neutral",
-    });
+    } as any);
 
     const hasLaneMismatch = validation.failures.some((failure: any) =>
         failure.type === "journey_stage_mismatch" && Array.isArray(failure.prohibited_topic_detected) && failure.prohibited_topic_detected.length > 0,

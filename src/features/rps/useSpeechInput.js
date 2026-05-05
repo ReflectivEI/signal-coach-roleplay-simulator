@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+const browserWindow = /** @type {any} */ (typeof window !== "undefined" ? window : null);
 const SpeechRecognitionCtor =
-    typeof window !== "undefined"
-        ? window.SpeechRecognition || window.webkitSpeechRecognition
+    browserWindow
+        ? browserWindow.SpeechRecognition || browserWindow.webkitSpeechRecognition
         : null;
 
 export function useSpeechInput() {

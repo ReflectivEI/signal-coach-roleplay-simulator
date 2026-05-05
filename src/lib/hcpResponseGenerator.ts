@@ -33,6 +33,8 @@ import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
 
+export const HCP_GENERATOR_VERSION = "runtime-contract-v2";
+
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
 ).join("\n");
@@ -941,6 +943,7 @@ export async function generateHcpResponse(
   turnCount: number = 0,
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
+  ..._legacyCompatibilityArgs: any[]
 ): Promise<SimulatorResponse> {
   scenario = buildDerivedScenarioContext(scenario);
   const transcriptText = transcript
@@ -1334,5 +1337,11 @@ Return ONLY valid JSON:
     coachingNudge: result.coachingNudge || null,
     volatilityState: volatility,
     prediction,
+    runtimeTrace: {
+      generator_version: HCP_GENERATOR_VERSION,
+      scenario_grounding_applied: true,
+      banned_phrase_filter_applied: true,
+      scenario_anchors_used: [scenario?.id, scenario?.title, scenario?.journeyStage].filter(Boolean),
+    },
   };
 }

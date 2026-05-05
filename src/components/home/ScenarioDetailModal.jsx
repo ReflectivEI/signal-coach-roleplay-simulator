@@ -46,7 +46,7 @@ function buildPredictiveContract(scenario) {
     source: "deterministic",
     specialistTitle: scenario?.stakeholder || "Clinical Specialist",
   };
-  const sections = profile?.sections || {};
+  const sections = /** @type {any} */ (profile?.sections || {});
   const predictivePromptContext = [
     "PREDICTIVE HCP LENS (runtime, scenario-derived):",
     "- Source: deterministic",

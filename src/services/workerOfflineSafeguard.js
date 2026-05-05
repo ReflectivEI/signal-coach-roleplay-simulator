@@ -235,8 +235,8 @@ export function setDebugWorkerHealth(enabled) {
 
 // Expose for development
 if (import.meta?.env?.DEV) {
-  window.getWorkerHealthStatus = getWorkerHealthStatus;
-  window.getWorkerHealthReport = getWorkerHealthReport;
-  window.resetWorkerSafeguard = resetWorkerSafeguard;
-  window.setDebugWorkerHealth = setDebugWorkerHealth;
+  /** @type {any} */ (window).getWorkerHealthStatus = getWorkerHealthStatus;
+  /** @type {any} */ (window).getWorkerHealthReport = getWorkerHealthReport;
+  /** @type {any} */ (window).resetWorkerSafeguard = resetWorkerSafeguard;
+  /** @type {any} */ (window).setDebugWorkerHealth = setDebugWorkerHealth;
 }

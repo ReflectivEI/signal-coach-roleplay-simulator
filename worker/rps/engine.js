@@ -992,8 +992,9 @@ export function evaluateRepResponse({
     };
 
     // HCP State Progression — deterministic, uses hcpBrain + voiceAdaptation + evaluation
-    const previousState = previousHcpState || (conversationMemory?.hcp_state) || null;
-    const stateProgression = computeHcpStateProgression({
+    const safeConversationMemory = /** @type {any} */ (conversationMemory || {});
+    const previousState = previousHcpState || safeConversationMemory.hcp_state || null;
+    const stateProgression = computeHcpStateProgression(/** @type {any} */ ({
         hcpBrain,
         previousHcpState: previousState,
         repResponseTranscript: line,
@@ -1001,13 +1002,13 @@ export function evaluateRepResponse({
         voiceBehaviorAdaptation: voiceAdaptation,
         liveTemperature: repSelectedTemperature,
         conversationMemory,
-    });
+    }));
 
     const updatedMemory = updateConversationMemory(conversationMemory, signals, commitment, temp.band, voiceAdaptation);
     // Persist hcp_state into conversation memory
     updatedMemory.hcp_state = stateProgression.hcp_state;
     updatedMemory.response_type_history = [
-        ...(Array.isArray(conversationMemory?.response_type_history) ? conversationMemory.response_type_history : []),
+        ...(Array.isArray(safeConversationMemory.response_type_history) ? safeConversationMemory.response_type_history : []),
         stateProgression.hcp_response_type,
     ].filter(Boolean).slice(-8);
 

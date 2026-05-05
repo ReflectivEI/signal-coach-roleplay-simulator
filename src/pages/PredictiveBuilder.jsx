@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { BrainCircuit, FlaskConical, Loader2, MessageSquareText, Stethoscope } from "lucide-react";
+import { BrainCircuit, ChevronDown, ChevronUp, FlaskConical, Loader2, MessageSquareText, Stethoscope } from "lucide-react";
 import AppHeader from "@/components/layout/AppHeader";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
@@ -233,7 +233,7 @@ export default function PredictiveBuilder() {
       challenge: new Set(CHALLENGE_CONTEXT_OPTIONS.filter((item) => item.value !== "all").map((item) => item.value)),
     };
 
-    const validated = Object.fromEntries(Object.entries(fromQuery).map(([field, value]) => [field, allowed[field]?.has(value) ? value : ""]));
+    const validated = /** @type {typeof INITIAL_UI_SELECTION} */ (Object.fromEntries(Object.entries(fromQuery).map(([field, value]) => [field, allowed[field]?.has(value) ? value : ""])));
 
     validated.realism = Math.max(1, Math.min(10, Number(fromQuery.realism) || 5));
 

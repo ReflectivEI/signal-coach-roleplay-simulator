@@ -4,12 +4,15 @@ import { ExternalLink, FileText } from "lucide-react";
 import { PREDICTIVE_REFERENCE_APPENDIX } from "@/lib/predictiveReferences";
 import { listEvidenceSources } from "@/services/workerClient";
 
+/** @typedef {{ id: string; organization: string; title: string; publisher: string; year: string; url: string; domain?: string; type?: string }} PredictiveReference */
+
+/** @param {PredictiveReference} entry */
 function formatReference(entry) {
     return `${entry.organization}. ${entry.title}. ${entry.publisher}; ${entry.year}. Available from: ${entry.url}`;
 }
 
 export default function PredictiveBuilderReferences() {
-    const [references, setReferences] = useState(PREDICTIVE_REFERENCE_APPENDIX);
+    const [references, setReferences] = useState(/** @type {PredictiveReference[]} */ (PREDICTIVE_REFERENCE_APPENDIX));
 
     useEffect(() => {
         let isMounted = true;
@@ -19,7 +22,7 @@ export default function PredictiveBuilderReferences() {
                 const sources = await listEvidenceSources();
                 if (!isMounted || !sources.length) return;
 
-                const merged = sources.map((source) => {
+                const merged = sources.map(/** @param {any} source */ (source) => {
                     const existing = PREDICTIVE_REFERENCE_APPENDIX.find((item) => item.id === source.id);
                     return {
                         id: source.id,

@@ -71,6 +71,8 @@ export interface SimulatorResponse {
   coachingNudge: CoachingNudge | null;
   volatilityState: VolatilityState;
   prediction?: BehaviorPrediction;
+  runtimeTrace?: Record<string, any> | null;
+  predictiveDebug?: Record<string, any> | null;
 }
 
 export interface BehaviorPrediction {

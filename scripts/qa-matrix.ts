@@ -455,7 +455,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     source: "deterministic",
     specialistTitle: scenario?.stakeholder || "Clinical Specialist",
   };
-  const sections = deterministicProfile?.sections || {};
+  const sections = deterministicProfile?.sections as any || {};
   const predictivePromptContext = [
     "PREDICTIVE HCP LENS (runtime, scenario-derived):",
     "- Source: deterministic",

@@ -15,9 +15,30 @@ import {
 } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
-// Scenario Context options without the "all" sentinel (for required field)
-const journeyStages = CONVERSATION_STAGE_OPTIONS.filter(o => o.value !== "all");
+/** @typedef {{ value: string; label: string }} SelectOption */
+/**
+ * @typedef {{
+ *   title: string,
+ *   coreTension: string,
+ *   description: string,
+ *   stakeholder: string,
+ *   objective: string,
+ *   context: string,
+ *   openingScene: string,
+ *   visualScene: string,
+ *   journeyStage: string,
+ *   hcpRoleType: string,
+ *   challengeContext: string,
+ *   runtimeTemperature: number,
+ *   keyChallenges: string,
+ *   suggestedFocusCapabilities: string[]
+ * }} ScenarioForm
+ */
 
+// Scenario Context options without the "all" sentinel (for required field)
+const journeyStages = CONVERSATION_STAGE_OPTIONS.filter(/** @param {SelectOption} o */ (o) => o.value !== "all");
+
+/** @type {Record<string, string>} */
 const journeyStateForStage = {
   first_exposure: "early_discovery",
   early_exploration: "early_discovery",
@@ -33,6 +54,7 @@ const journeyStateForStage = {
   commitment_close: "adoption_commitment",
 };
 
+/** @type {Record<string, string>} */
 const challengeDefaultBehaviorState = {
   access_barrier: "resistance",
   time_constraint: "time_pressure",
@@ -42,8 +64,8 @@ const challengeDefaultBehaviorState = {
 };
 
 // HCP Role + Mindset: import from shared module (no "all" sentinel for form selects)
-const hcpRoleTypes = HCP_ROLE_OPTIONS.filter(o => o.value !== "all");
-const challengeContexts = CHALLENGE_CONTEXT_OPTIONS.filter(o => o.value !== "all");
+const hcpRoleTypes = HCP_ROLE_OPTIONS.filter(/** @param {SelectOption} o */ (o) => o.value !== "all");
+const challengeContexts = CHALLENGE_CONTEXT_OPTIONS.filter(/** @param {SelectOption} o */ (o) => o.value !== "all");
 
 /**
  * @param {{ label: string; hint?: string; children: any }} props
@@ -58,6 +80,7 @@ function Field({ label, hint = "", children }) {
   );
 }
 
+/** @param {{ value: string; onChange: (value: string) => void; placeholder: string; multiline?: boolean }} props */
 function Input({ value, onChange, placeholder, multiline = false }) {
   const cls = "w-full rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-colors";
   const style = {
@@ -71,6 +94,7 @@ function Input({ value, onChange, placeholder, multiline = false }) {
   return <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cls} style={style} />;
 }
 
+/** @param {{ value: string; onChange: (value: string) => void; options: SelectOption[] }} props */
 function Select({ value, onChange, options }) {
   return (
     <select
@@ -89,7 +113,9 @@ function Select({ value, onChange, options }) {
   );
 }
 
+/** @param {{ options: SelectOption[]; selected: string[]; onChange: (value: string[]) => void }} props */
 function MultiToggle({ options, selected, onChange }) {
+  /** @param {string} v */
   const toggle = (v) => {
     if (selected.includes(v)) onChange(selected.filter((s) => s !== v));
     else onChange([...selected, v]);
@@ -125,7 +151,7 @@ function MultiToggle({ options, selected, onChange }) {
 
 export default function ScenarioBuilder() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(/** @type {ScenarioForm} */ ({
     title: "",
     coreTension: "",
     description: "",
@@ -140,14 +166,16 @@ export default function ScenarioBuilder() {
     runtimeTemperature: 5,
     keyChallenges: "",
     suggestedFocusCapabilities: [],
-  });
+  }));
   const [saving, setSaving] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
 
-  const set = (key) => (val) => setForm((f) => ({ ...f, [key]: val }));
+  /** @param {keyof ScenarioForm} key */
+  const set = (key) => /** @param {ScenarioForm[keyof ScenarioForm]} val */ (val) => setForm((f) => ({ ...f, [key]: val }));
 
+  /** @param {ScenarioForm} current @param {Partial<ScenarioForm>} partial */
   const applyTopLevelMapping = (current, partial) => {
     const next = { ...current, ...partial };
     return next;
