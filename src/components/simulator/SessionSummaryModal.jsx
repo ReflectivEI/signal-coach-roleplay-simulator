@@ -204,6 +204,22 @@ function buildActionItemParagraph(insight) {
   return cleanCoachingCopy(`${insight.nextTimeAction}${rewrite}`);
 }
 
+function buildGuidanceParagraph(item, insightByCapability = {}) {
+  if (!item) return "";
+  const insight = item.capabilityId ? insightByCapability[item.capabilityId] : null;
+  const guidance = cleanCoachingCopyExpanded(item.guidance || "", 80);
+  const evidence = cleanCoachingCopyExpanded(insight?.transcriptEvidence || "", 28);
+  const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || "", 36);
+  const rewrite = cleanCoachingCopyExpanded(item.exampleRewrite || insight?.exampleRewrite || "", 24);
+
+  return [
+    guidance,
+    evidence ? `Anchor it to moments like: "${evidence}".` : "",
+    impact ? `Why this matters: ${impact}` : "",
+    rewrite ? `Example phrasing: "${rewrite}".` : "",
+  ].filter(Boolean).join(" ").trim();
+}
+
 function buildRobustImprovementPoint(insight) {
   if (!insight) return "";
 
@@ -567,27 +583,51 @@ export default function SessionSummaryModal({
     .map(buildSpecificStrengthParagraph)
     .filter(Boolean)
     .slice(0, 3);
-  const didWellFallback = uniqCoachingPoints(legacyWhatWorked.map(cleanCoachingCopy));
+  const didWellFallback = uniqCoachingPoints(legacyWhatWorked.map((item) => cleanCoachingCopyExpanded(item, 72)));
 
   const biggestGapParagraphs = growthInsights
     .map(buildSpecificDevelopmentParagraph)
     .filter(Boolean)
     .slice(0, 3);
-  const biggestGapFallback = uniqCoachingPoints(legacyWhatWasMissed.map(cleanCoachingCopy));
+  const biggestGapFallback = uniqCoachingPoints(legacyWhatWasMissed.map((item) => cleanCoachingCopyExpanded(item, 80)));
 
   const actionItemParagraphs = growthInsights
     .map(buildRobustImprovementPoint)
     .filter(Boolean)
     .slice(0, 3);
-  const actionItemFallback = uniqCoachingPoints(legacyCoaching.map((item) => cleanCoachingCopyExpanded(item, 44)));
+  const actionItemFallback = uniqCoachingPoints(legacyCoaching.map((item) => cleanCoachingCopyExpanded(item, 80)));
 
-  const outcomeText = [briefRationale, cleanCoachingCopy(splitParagraphs(review.signalResponseAlignment)?.[2] || "")]
+  const outcomeText = [
+    cleanCoachingCopyExpanded(review.briefRationale || review.overallSummary?.[0] || "", 84),
+    cleanCoachingCopyExpanded(splitParagraphs(review.signalResponseAlignment)?.[2] || review.biggestGap || "", 84),
+  ]
     .filter(Boolean)
     .slice(0, 2);
 
-  const strengthsList = uniqCoachingPoints((didWellParagraphs.length > 0 ? didWellParagraphs : didWellFallback).map(cleanCoachingCopy)).slice(0, 3);
-  const limitationsList = uniqCoachingPoints((biggestGapParagraphs.length > 0 ? biggestGapParagraphs : biggestGapFallback).map(cleanCoachingCopy)).slice(0, 3);
-  const improvementText = uniqCoachingPoints((actionItemParagraphs.length > 0 ? actionItemParagraphs : actionItemFallback).map((item) => cleanCoachingCopyExpanded(item, 44))).slice(0, 3);
+  const strengthsList = uniqCoachingPoints([
+    ...didWellParagraphs.map((item) => cleanCoachingCopyExpanded(item, 84)),
+    ...didWellFallback,
+    ...splitParagraphs(review.didWell || "").map((item) => cleanCoachingCopyExpanded(item, 84)),
+    ...splitParagraphs(review.strengthsProse || []).map((item) => cleanCoachingCopyExpanded(item, 84)),
+  ]).slice(0, 3);
+
+  const limitationsList = uniqCoachingPoints([
+    ...biggestGapParagraphs.map((item) => cleanCoachingCopyExpanded(item, 90)),
+    ...biggestGapFallback,
+    ...splitParagraphs(review.biggestGap || "").map((item) => cleanCoachingCopyExpanded(item, 90)),
+    ...splitParagraphs(review.developProse || []).map((item) => cleanCoachingCopyExpanded(item, 90)),
+    ...(review.improvementAreas || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
+    ...(review.missedOpportunities || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
+  ]).slice(0, 3);
+
+  const improvementText = uniqCoachingPoints([
+    ...actionItemParagraphs.map((item) => cleanCoachingCopyExpanded(item, 96)),
+    ...actionItemFallback,
+    ...splitParagraphs(review.nextAdjustment || "").map((item) => cleanCoachingCopyExpanded(item, 96)),
+    ...splitParagraphs(review.actionPlanProse || []).map((item) => cleanCoachingCopyExpanded(item, 96)),
+    ...(review.suggestedReframes || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
+    ...(review.improvementAreas || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
+  ]).slice(0, 3);
 
   const bestRewrite = insightByCapability["listening_responsiveness"]?.exampleRewrite
     || growthInsights.find((insight) => insight?.exampleRewrite)?.exampleRewrite
@@ -609,10 +649,11 @@ export default function SessionSummaryModal({
 
   const patternInsight = scenario?.rep_profile || scenario?.patternInsight || "";
   const signalAlignmentParagraphs = uniqCoachingPoints([
-    briefRationale,
+    cleanCoachingCopyExpanded(review.briefRationale || review.overallSummary?.[0] || "", 84),
     ...splitParagraphs(review.signalResponseAlignment),
     ...splitParagraphs(review.overallSummary).slice(1, 3),
-  ].map((item) => cleanCoachingCopyExpanded(item, 38))).slice(0, 4);
+    ...splitParagraphs(review.biggestGap || ""),
+  ].map((item) => cleanCoachingCopyExpanded(item, 84))).slice(0, 4);
   const temperatureValue = Number(session?.realism ?? session?.temperature);
   const temperatureBand = !Number.isFinite(temperatureValue)
     ? "unknown"
