@@ -173,6 +173,14 @@ function uniqCoachingPoints(items = []) {
   });
 }
 
+function isRenderableCoachingParagraph(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  if (/turns\s*\[\]/i.test(value)) return false;
+  if (/\b[a-z]+_[a-z]+\b/.test(value)) return false;
+  return true;
+}
+
 function buildSpecificStrengthParagraph(insight) {
   if (!insight) return "";
   const evidence = insight.transcriptEvidence ? `"${cleanCoachingCopy(insight.transcriptEvidence)}"` : "";
@@ -183,6 +191,156 @@ function buildSpecificStrengthParagraph(insight) {
     .filter(Boolean)
     .join(" ")
     .trim();
+}
+
+function buildAttemptedStrengthParagraph(insight) {
+  if (!insight) return "";
+  const behavior = cleanCoachingCopyExpanded(insight.whatHappened || "", 80);
+  const evidence = cleanCoachingCopyExpanded(insight.transcriptEvidence || "", 24);
+  const impact = cleanCoachingCopyExpanded(insight.whyItMattered || "", 38);
+  const pattern = cleanCoachingCopyExpanded(insight.pattern || "", 24);
+
+  return [
+    behavior,
+    evidence ? `For example: "${evidence}".` : "",
+    impact,
+    pattern && !/isolated moment/i.test(pattern) ? pattern : "",
+  ].filter(Boolean).join(" ").trim();
+}
+
+function lowerCaseLead(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return "";
+  return `${value.charAt(0).toLowerCase()}${value.slice(1)}`;
+}
+
+function cleanTranscriptQuote(text = "", maxWords = 24) {
+  const normalized = String(text || "")
+    .replace(/^"|"$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) return "";
+
+  const words = normalized.split(/\s+/);
+  if (words.length <= maxWords) return normalized;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+function getTranscriptTurns(session, speaker) {
+  const turns = Array.isArray(session?.transcript) ? session.transcript : [];
+  return speaker ? turns.filter((turn) => turn?.speaker === speaker) : turns;
+}
+
+function findNextHcpTurn(session, repText = "") {
+  const turns = getTranscriptTurns(session);
+  const repIndex = turns.findIndex(
+    (turn) => turn?.speaker === "rep" && String(turn?.text || "").trim() === String(repText || "").trim(),
+  );
+
+  if (repIndex < 0) return null;
+  return turns.slice(repIndex + 1).find((turn) => turn?.speaker === "hcp") || null;
+}
+
+function buildTranscriptAttemptParagraph(session) {
+  const repTurns = getTranscriptTurns(session, "rep");
+  const firstRepQuestion = repTurns.find((turn) => /\?/.test(String(turn?.text || "")));
+
+  if (!firstRepQuestion) {
+    if (repTurns.length > 1) {
+      return "You did stay in the conversation after the initial pushback instead of ending the exchange immediately, but each follow-up stayed too vague to rebuild credibility.";
+    }
+    return "";
+  }
+
+  const questionText = cleanTranscriptQuote(firstRepQuestion.text, 12);
+  const hcpReply = cleanTranscriptQuote(findNextHcpTurn(session, firstRepQuestion.text)?.text || "", 24);
+
+  return [
+    `The one usable behavior was that you kept the exchange moving by asking "${questionText}" instead of stopping after the cold opening.`,
+    hcpReply
+      ? `That at least invited a response, but the reply "${hcpReply}" shows the question was still too generic to uncover the HCP's real concern.`
+      : "That kept the exchange alive, but it still did not clarify what the HCP actually needed from the conversation.",
+  ].join(" ").trim();
+}
+
+function buildTranscriptStrengthParagraphs(session) {
+  const repTurns = getTranscriptTurns(session, "rep");
+  const hcpTurns = getTranscriptTurns(session, "hcp");
+  const patientChallenge = cleanTranscriptQuote(
+    hcpTurns.find((turn) => /what makes you think/i.test(String(turn?.text || "")))?.text || "",
+    24,
+  );
+
+  return [
+    buildTranscriptAttemptParagraph(session),
+    patientChallenge
+      ? `You did stay in the interaction long enough to surface the HCP's real decision filter: "${patientChallenge}". That gave you a clear opening to explore patient applicability, even though you did not capitalize on it.`
+      : "",
+    repTurns.length >= 3
+      ? `You also kept each reply brief enough for the HCP to respond. The issue was not over-talking; it was that the short replies never turned that space into a credible direction for the conversation.`
+      : "",
+  ].filter(Boolean);
+}
+
+function buildExchangeSpecificSummary({ review, insightByCapability, session }) {
+  const listening = insightByCapability.listening_responsiveness || null;
+  const question = insightByCapability.question_quality || null;
+  const valueFraming = insightByCapability.making_it_matter || null;
+  const repTurns = getTranscriptTurns(session, "rep");
+  const hcpTurns = getTranscriptTurns(session, "hcp");
+
+  const openingRep = cleanTranscriptQuote(repTurns[0]?.text || "", 10);
+  const followUpRep = cleanTranscriptQuote(repTurns[1]?.text || "", 10);
+  const lateRep = cleanTranscriptQuote(repTurns[repTurns.length - 1]?.text || "", 10);
+  const expectationMismatch = cleanTranscriptQuote(
+    hcpTurns.find((turn) => /case discussion|don't usually take rep visits|do not usually take rep visits|don't usually meet with reps|do not usually meet with reps/i.test(String(turn?.text || "")))?.text || "",
+    28,
+  );
+  const patientChallenge = cleanTranscriptQuote(
+    hcpTurns.find((turn) => /what makes you think/i.test(String(turn?.text || "")))?.text || hcpTurns[hcpTurns.length - 1]?.text || "",
+    24,
+  );
+
+  const transcriptSpecificSummary = [
+    openingRep && expectationMismatch
+      ? `The conversation broke down immediately because the rep opened with "${openingRep}" even after the HCP signaled an expectation mismatch: "${expectationMismatch}".`
+      : "",
+    followUpRep
+      ? `The follow-up "${followUpRep}" kept the exchange alive, but it still did not acknowledge the HCP's concern or clarify what they actually wanted from the visit.`
+      : "",
+    lateRep && patientChallenge
+      ? `By the time the rep reached "${lateRep}", the HCP was still pushing back with "${patientChallenge}", which shows credibility was never established around the HCP's actual patient context.`
+      : "",
+  ].filter(Boolean);
+
+  if (transcriptSpecificSummary.length > 0) {
+    return transcriptSpecificSummary.slice(0, 3);
+  }
+
+  const dominantPattern = listening && question
+    ? "The dominant pattern in this interaction was the rep's failure to listen responsively and ask targeted questions."
+    : cleanCoachingCopyExpanded(review?.briefRationale || review?.overallSummary?.[0] || "", 84);
+
+  const causalMechanism = cleanCoachingCopyExpanded(
+    listening?.whyItMattered || question?.whyItMattered || valueFraming?.whyItMattered || "",
+    48,
+  );
+
+  const decisiveEvidence = cleanCoachingCopyExpanded(
+    listening?.transcriptEvidence || question?.transcriptEvidence || valueFraming?.transcriptEvidence || "",
+    30,
+  );
+
+  const decisiveMoment = decisiveEvidence
+    ? `The decisive breakdown occurred when ${lowerCaseLead(decisiveEvidence.replace(/^"|"$/g, ""))}.`
+    : "";
+
+  return [
+    dominantPattern,
+    causalMechanism,
+    decisiveMoment,
+  ].filter(Boolean);
 }
 
 function buildSpecificDevelopmentParagraph(insight) {
@@ -572,6 +730,7 @@ export default function SessionSummaryModal({
     .filter(Boolean);
   const effectiveInsights = insights.filter((insight) => insight.observationLevel === "effective");
   const growthInsights = insights.filter((insight) => insight.observationLevel !== "effective");
+  const developingInsights = insights.filter((insight) => insight.observationLevel === "developing");
   const overallScore = (
     SIGNAL_INTELLIGENCE_CAPABILITIES.reduce((sum, cap) => {
       const level = insightByCapability[cap.id]?.observationLevel;
@@ -581,6 +740,9 @@ export default function SessionSummaryModal({
 
   const didWellParagraphs = effectiveInsights
     .map(buildSpecificStrengthParagraph)
+    .filter(Boolean)
+    .slice(0, 3);
+  const attemptedStrengthParagraphs = uniqCoachingPoints(buildTranscriptStrengthParagraphs(session))
     .filter(Boolean)
     .slice(0, 3);
   const didWellFallback = uniqCoachingPoints(legacyWhatWorked.map((item) => cleanCoachingCopyExpanded(item, 72)));
@@ -597,19 +759,21 @@ export default function SessionSummaryModal({
     .slice(0, 3);
   const actionItemFallback = uniqCoachingPoints(legacyCoaching.map((item) => cleanCoachingCopyExpanded(item, 80)));
 
-  const outcomeText = [
-    cleanCoachingCopyExpanded(review.briefRationale || review.overallSummary?.[0] || "", 84),
-    cleanCoachingCopyExpanded(splitParagraphs(review.signalResponseAlignment)?.[2] || review.biggestGap || "", 84),
-  ]
-    .filter(Boolean)
-    .slice(0, 2);
+  const specificSummary = buildExchangeSpecificSummary({ review, insightByCapability, session });
+
+  const outcomeText = (specificSummary.length > 0
+    ? specificSummary
+    : [cleanCoachingCopyExpanded(splitParagraphs(review.signalResponseAlignment)?.[2] || review.biggestGap || "", 84)])
+    .filter(isRenderableCoachingParagraph)
+    .slice(0, 3);
 
   const strengthsList = uniqCoachingPoints([
     ...didWellParagraphs.map((item) => cleanCoachingCopyExpanded(item, 84)),
+    ...attemptedStrengthParagraphs.map((item) => cleanCoachingCopyExpanded(item, 84)),
     ...didWellFallback,
     ...splitParagraphs(review.didWell || "").map((item) => cleanCoachingCopyExpanded(item, 84)),
     ...splitParagraphs(review.strengthsProse || []).map((item) => cleanCoachingCopyExpanded(item, 84)),
-  ]).slice(0, 3);
+  ].filter(isRenderableCoachingParagraph)).slice(0, 3);
 
   const limitationsList = uniqCoachingPoints([
     ...biggestGapParagraphs.map((item) => cleanCoachingCopyExpanded(item, 90)),
@@ -649,11 +813,11 @@ export default function SessionSummaryModal({
 
   const patternInsight = scenario?.rep_profile || scenario?.patternInsight || "";
   const signalAlignmentParagraphs = uniqCoachingPoints([
-    cleanCoachingCopyExpanded(review.briefRationale || review.overallSummary?.[0] || "", 84),
+    ...specificSummary,
     ...splitParagraphs(review.signalResponseAlignment),
     ...splitParagraphs(review.overallSummary).slice(1, 3),
     ...splitParagraphs(review.biggestGap || ""),
-  ].map((item) => cleanCoachingCopyExpanded(item, 84))).slice(0, 4);
+  ].map((item) => cleanCoachingCopyExpanded(item, 84)).filter(isRenderableCoachingParagraph)).slice(0, 4);
   const temperatureValue = Number(session?.realism ?? session?.temperature);
   const temperatureBand = !Number.isFinite(temperatureValue)
     ? "unknown"
@@ -662,6 +826,8 @@ export default function SessionSummaryModal({
       : temperatureValue <= 7
         ? "medium"
         : "high";
+  const responseStyleHeadline = cleanCoachingCopyExpanded(session?.predictiveLens?.sections?.responseStyle?.headline || "", 20);
+  const hasGenericResponseStyleHeadline = /predicted conversational behavior/i.test(responseStyleHeadline);
   const runtimeSignalItems = uniqCoachingPoints([
     session?.predictiveLens?.runtimeSignals?.predictive_profile_attached?.hasProfile || session?.predictiveProfile?.type
       ? `Predictive profile attached: ${(session?.predictiveLens?.runtimeSignals?.predictive_profile_attached?.personaType || session?.predictiveProfile?.type || "active").replaceAll("_", " ")}.`
@@ -672,8 +838,10 @@ export default function SessionSummaryModal({
     session?.predictiveLens?.sections?.mindset?.headline
       ? `Mindset signal: ${cleanCoachingCopyExpanded(session.predictiveLens.sections.mindset.headline, 20)}`
       : "",
-    session?.predictiveLens?.sections?.responseStyle?.headline
-      ? `Expected response style: ${cleanCoachingCopyExpanded(session.predictiveLens.sections.responseStyle.headline, 20)}`
+    responseStyleHeadline && !hasGenericResponseStyleHeadline
+      ? `Expected response style: ${responseStyleHeadline}`
+      : session?.predictiveLens?.repPreparation?.conversationFrame
+        ? `Expected response style: ${cleanCoachingCopyExpanded(session.predictiveLens.repPreparation.conversationFrame, 20)}`
       : "",
   ]).slice(0, 4);
   const transcriptEvidenceItems = uniqCoachingPoints(
