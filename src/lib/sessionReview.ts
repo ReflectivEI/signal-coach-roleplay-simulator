@@ -80,24 +80,16 @@ const DEFAULT_OVERALL_GUIDANCE = "This analysis is based on observable behaviors
 const TRAILING_SENTENCE_REPAIRS: Array<[RegExp, string]> = [
   [/\bbreakdown in\.$/i, "breakdown in the conversation."],
   [/\black of progress in\.$/i, "lack of progress in the conversation."],
+  [/\bmove forward in a\.$/i, "move forward in a meaningful way."],
   [/\bconversation did not\.$/i, "conversation did not progress."],
   [/\bthe conversation did not\.$/i, "the conversation did not progress."],
   [/\bwith a\.$/i, "with a response that acknowledged the concern."],
+  [/\bunderstanding of the\.$/i, "understanding of the HCP's concern."],
   [/\bthe hcp stayed\.$/i, "the HCP stayed unengaged."],
   [/\badjust their approach to\.$/i, "adjust their approach to re-engage the HCP."],
+  [/\bbecause the rep's questions\.$/i, "Because the rep's questions were not specific enough to move the conversation forward."],
+  [/\bbecause the rep\.$/i, "Because the rep did not respond specifically enough to the HCP's concern."],
 ];
-
-function hasDanglingSentenceEnding(sentence: string): boolean {
-  const normalized = String(sentence || "")
-    .replace(/["')\]]+$/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-
-  if (!normalized) return false;
-
-  return /(\ba\b|\ban\b|\bthe\b|\bin\b|\bon\b|\bat\b|\bto\b|\bfor\b|\bwith\b|\bby\b|\bof\b|\bfrom\b|\bas\b|\bor\b|\band\b|\bdid not\b|\bstayed\b|\bsuch as\b|\bfor example\b|\bthis can be achieved by\b|\boccurred when\b)$/.test(normalized);
-}
 
 function repairGeneratedText(value: unknown, fallback = ""): string {
   let text = String(value ?? "").replace(/\s+/g, " ").trim();
@@ -107,23 +99,9 @@ function repairGeneratedText(value: unknown, fallback = ""): string {
     text = text.replace(pattern, replacement);
   }
 
-  const singleQuotes = (text.match(/'/g) || []).length;
-  if (singleQuotes % 2 === 1) {
-    const lastQuote = text.lastIndexOf("'");
-    if (lastQuote >= 0) {
-      const trailing = text.slice(lastQuote + 1).trim();
-      if (trailing && !/[.!?]$/.test(trailing)) {
-        text = text.slice(0, lastQuote).replace(/[\s,:;-]+$/, "").trim();
-      }
-    }
-  }
-
-  const sentences = text.match(/[^.!?]+[.!?]?/g)?.map((item) => item.trim()).filter(Boolean) || [];
-  while (sentences.length > 1 && hasDanglingSentenceEnding(sentences[sentences.length - 1])) {
-    sentences.pop();
-  }
-
-  const repaired = (sentences.length > 0 ? sentences.join(" ") : text)
+  const repaired = text
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/([.!?])(?=[A-Za-z])/g, "$1 ")
     .replace(/\s+/g, " ")
     .trim();
 
