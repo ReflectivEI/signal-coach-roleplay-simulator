@@ -66,6 +66,33 @@ function similarityRatio(a = "", b = "") {
     return shared / Math.max(leftTokens.size, rightTokens.size);
 }
 
+function semanticSimilarityScore(a = "", b = "") {
+    const left = normalizeSimilarityText(a);
+    const right = normalizeSimilarityText(b);
+    if (!left || !right) return 0;
+    if (left === right) return 1;
+
+    const tokenScore = similarityRatio(left, right);
+    const prefixScore = left.slice(0, 90) === right.slice(0, 90) ? 1 : 0;
+    const leftBigrams = new Set(left.split(" ").filter((token) => token.length > 2).map((token, idx, arrTokens) => {
+        if (idx >= arrTokens.length - 1) return "";
+        return `${token} ${arrTokens[idx + 1]}`;
+    }).filter(Boolean));
+    const rightBigrams = new Set(right.split(" ").filter((token) => token.length > 2).map((token, idx, arrTokens) => {
+        if (idx >= arrTokens.length - 1) return "";
+        return `${token} ${arrTokens[idx + 1]}`;
+    }).filter(Boolean));
+    let sharedBigrams = 0;
+    leftBigrams.forEach((pair) => {
+        if (rightBigrams.has(pair)) sharedBigrams += 1;
+    });
+    const bigramScore = leftBigrams.size && rightBigrams.size
+        ? sharedBigrams / Math.max(leftBigrams.size, rightBigrams.size)
+        : 0;
+
+    return (tokenScore * 0.55) + (bigramScore * 0.35) + (prefixScore * 0.1);
+}
+
 function isNearDuplicateResponse(nextLine = "", previousLine = "") {
     const current = normalizeSimilarityText(nextLine);
     const previous = normalizeSimilarityText(previousLine);
@@ -97,13 +124,333 @@ function forceNonRepeatingVariation({
         ? " I need the direct version."
         : temp <= 3
             ? " I'm open if you keep it practical."
-            : " Keep it specific for my practice.";
+            : " Keep it focused for my practice.";
 
     const clarified = revealed && !base.toLowerCase().includes("access")
-        ? `${base.replace(/\.$/, "") } The unresolved part is still ${revealed}.`
+        ? `${base.replace(/\.$/, "")} The unresolved part is still ${revealed}.`
         : base;
 
     return clipToSentenceCount(`${clarified}${realismTail}`, temp >= 8 ? 1 : 2);
+}
+
+function softenSpecificityLexicon(line = "") {
+    return str(line)
+        .replace(/\bspecific\b/gi, "focused")
+        .replace(/\bconcrete\b/gi, "clear")
+        .replace(/\bpractical\b/gi, "usable")
+        .replace(/\bdetails\b/gi, "signal")
+        .replace(/\bexact\b/gi, "clear");
+}
+
+const INTENT_BUCKET_ORDER = [
+    "workflow",
+    "evidence",
+    "access",
+    "implementation",
+    "time",
+    "risk",
+    "patient_fit",
+];
+
+function inferIntentBucketFromLine(line = "", hcpState = {}, hcpBrain = {}) {
+    const text = normalizeSimilarityText(line);
+    const combined = text;
+
+    if (/\bworkflow\b|\bstaff\b|\bhandoff\b|\bcallback\b|\bprocess\b|\boperational\b/.test(combined)) return "workflow";
+    if (/\bevidence\b|\btrial\b|\bdata\b|\bsubgroup\b|\boutcome\b|\breal world\b/.test(combined)) return "evidence";
+    if (/\baccess\b|\bprior auth\b|\bapproval\b|\bformulary\b|\bpayer\b|\bcoverage\b/.test(combined)) return "access";
+    if (/\bimplementation\b|\brollout\b|\badopt\b|\bexecution\b|\bowner\b|\bstep\b/.test(combined)) return "implementation";
+    if (/\btime\b|\bminute\b|\bbrief\b|\bquick\b|\bout of time\b/.test(combined)) return "time";
+    if (/\brisk\b|\bsafety\b|\buncertain\b|\bconfidence\b|\bunknown\b/.test(combined)) return "risk";
+    if (/\bpatient\b|\bprofile\b|\bfit\b|\bcriteria\b|\bcandidate\b/.test(combined)) return "patient_fit";
+    return "workflow";
+}
+
+function nextIntentBucket(bucket = "workflow") {
+    const idx = INTENT_BUCKET_ORDER.indexOf(bucket);
+    if (idx < 0) return INTENT_BUCKET_ORDER[0];
+    return INTENT_BUCKET_ORDER[(idx + 1) % INTENT_BUCKET_ORDER.length];
+}
+
+function countTrailingSameBucket(bucketHistory = [], bucket) {
+    let count = 0;
+    for (let i = bucketHistory.length - 1; i >= 0; i -= 1) {
+        if (bucketHistory[i] === bucket) count += 1;
+        else break;
+    }
+    return count;
+}
+
+function buildForcedBucketLine({
+    targetBucket,
+    barrier,
+    revealedBarrier,
+    variationSeed = 0,
+    liveTemperature = 5,
+} = {}) {
+    const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
+    const high = temp >= 8;
+    const templates = {
+        workflow: [
+            `Operational path first: who owns the next handoff and what task drops?`,
+            `Keep this operational: identify the next handoff owner and the removed step.`,
+            `I need the care-path sequence: who takes the first handoff and what clears?`,
+        ],
+        evidence: [
+            `Evidence-level clarity now. Which data point supports this in real patients?`,
+            `Stay on evidence: which real-world signal shifts this decision?`,
+            `Give one evidence point that changes confidence.`,
+        ],
+        access: [
+            `Payer path first: which approval step moves and where does denial risk fall?`,
+            `Give me the payer sequence: what shifts in approval timing or denial risk?`,
+            `Keep this on payer access: which approval gate moves first?`,
+        ],
+        implementation: [
+            `Keep this usable: who owns the first implementation step and what do they do?`,
+            `I need one implementation detail: which role executes step one?`,
+            `Implementation answer only: what gets added and who coordinates it?`,
+        ],
+        time: [
+            `I need the short version. Which immediate minute-level burden drops first?`,
+            `Time is tight. Give me one change that saves time this week.`,
+            `Be brief: which immediate burden drops?`,
+        ],
+        risk: [
+            `I still see risk here. Which signal reduces uncertainty for my patients and team?`,
+            `Give me a risk signal: what shifts safety confidence in real practice?`,
+            `I need one risk control before this moves forward.`,
+        ],
+        patient_fit: [
+            `Which patient profile is this for, and who should be excluded at the start?`,
+            `Stay on patient fit: which subgroup should I treat and which should I avoid?`,
+            `I need one fit rule for patient selection before I proceed.`,
+        ],
+    };
+    const options = templates[targetBucket] || templates.workflow;
+    const base = options[Math.abs(Number(variationSeed) || 0) % options.length];
+    if (high) {
+        return clipToSentenceCount(softenSpecificityLexicon(base), 2);
+    }
+    return clipToSentenceCount(softenSpecificityLexicon(base), 2);
+}
+
+function enforceDeterministicAntiLoop({
+    hcpStatement,
+    hcpState,
+    hcpBrain,
+    liveTemperature = 5,
+    conversationMemory = {},
+} = {}) {
+    const recentHistory = dedupeTail([
+        ...arr(conversationMemory?.hcp_response_history || []),
+        ...arr(hcpState?.hcp_response_history || []),
+    ], 5).filter(Boolean);
+
+    const intentHistory = dedupeTail([
+        ...arr(conversationMemory?.intent_bucket_history || []),
+        ...arr(hcpState?.intent_bucket_history || []),
+    ], 5).filter(Boolean);
+
+    const barrier = pickBarrierText(hcpState, hcpBrain);
+    const revealedBarrier = pickRevealedBarrier(hcpState, hcpBrain);
+    const candidateBucket = inferIntentBucketFromLine(hcpStatement, hcpState, hcpBrain);
+    const trailingBucketRun = countTrailingSameBucket(intentHistory, candidateBucket);
+
+    let maxSimilarity = 0;
+    for (const historicalLine of recentHistory) {
+        const score = semanticSimilarityScore(hcpStatement, historicalLine);
+        if (score > maxSimilarity) maxSimilarity = score;
+    }
+
+    const similarityBlocked = maxSimilarity > 0.75;
+    const bucketBlocked = trailingBucketRun >= 2;
+    const blocked = similarityBlocked || bucketBlocked;
+    if (!blocked) {
+        return {
+            line: hcpStatement,
+            anti_loop_intervention_triggered: false,
+            anti_loop_intervention_reason: "none",
+            intent_bucket: candidateBucket,
+            semantic_similarity_max: Number(maxSimilarity.toFixed(3)),
+            trailing_bucket_run: trailingBucketRun,
+        };
+    }
+
+    const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
+    const targetBucket = bucketBlocked ? nextIntentBucket(candidateBucket) : candidateBucket;
+    let forcedLine = hcpStatement;
+    let reason = similarityBlocked ? `semantic_similarity>${maxSimilarity.toFixed(3)}` : "intent_bucket_repeat_run>2";
+    const variationSeed = Number(hcpState?.anti_loop_intervention_count || 0) + trailingBucketRun + recentHistory.length;
+
+    if (temp >= 8) {
+        forcedLine = buildForcedBucketLine({
+            targetBucket,
+            barrier,
+            revealedBarrier,
+            variationSeed,
+            liveTemperature,
+        });
+        reason = `${reason}|escalate_resistance`;
+    } else if (bucketBlocked) {
+        forcedLine = buildForcedBucketLine({
+            targetBucket,
+            barrier,
+            revealedBarrier,
+            variationSeed,
+            liveTemperature,
+        });
+        reason = `${reason}|shift_dimension:${candidateBucket}->${targetBucket}`;
+    } else {
+        const constraintPool = [
+            `What changes for staff ownership on ${barrier}?`,
+            `What changes in payer approval timing on ${barrier}?`,
+            `What changes in the time burden in my day-to-day workflow?`,
+            `What changes in clinical risk for the patients I actually treat?`,
+        ];
+        const seed = `${barrier}|${revealedBarrier}|${candidateBucket}|${temp}|${recentHistory.join("|")}`;
+        const score = Array.from(seed).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        const injectedConstraint = constraintPool[score % constraintPool.length];
+        forcedLine = clipToSentenceCount(`I still need one concrete answer. ${injectedConstraint}`, 2);
+        reason = `${reason}|introduce_new_constraint`;
+    }
+
+    let uniquenessBucket = targetBucket;
+    let forcedNorm = normalizeSimilarityText(forcedLine);
+    const normalizedRecent = new Set(recentHistory.map((line) => normalizeSimilarityText(line)).filter(Boolean));
+    let uniquenessAttempts = 0;
+    while (forcedNorm && normalizedRecent.has(forcedNorm) && uniquenessAttempts < INTENT_BUCKET_ORDER.length) {
+        uniquenessBucket = nextIntentBucket(uniquenessBucket);
+        forcedLine = clipToSentenceCount(
+            buildForcedBucketLine({
+                targetBucket: uniquenessBucket,
+                barrier,
+                revealedBarrier,
+                variationSeed: variationSeed + 1 + uniquenessAttempts,
+                liveTemperature,
+            }),
+            2,
+        );
+        forcedNorm = normalizeSimilarityText(forcedLine);
+        uniquenessAttempts += 1;
+    }
+
+    const postInterventionSimilarity = recentHistory.reduce((max, historicalLine) => {
+        return Math.max(max, semanticSimilarityScore(forcedLine, historicalLine));
+    }, 0);
+    let finalBucket = uniquenessBucket;
+    if (postInterventionSimilarity > 0.75) {
+        finalBucket = nextIntentBucket(targetBucket);
+        forcedLine = clipToSentenceCount(
+            buildForcedBucketLine({
+                targetBucket: finalBucket,
+                barrier,
+                revealedBarrier,
+                variationSeed: variationSeed + 1,
+                liveTemperature,
+            }),
+            2,
+        );
+        reason = `${reason}|post_similarity_breaker`;
+    }
+
+    let finalNorm = normalizeSimilarityText(forcedLine);
+    let finalAttempts = 0;
+    while (finalNorm && normalizedRecent.has(finalNorm) && finalAttempts < INTENT_BUCKET_ORDER.length) {
+        finalBucket = nextIntentBucket(finalBucket);
+        forcedLine = clipToSentenceCount(
+            buildForcedBucketLine({
+                targetBucket: finalBucket,
+                barrier,
+                revealedBarrier,
+                variationSeed: variationSeed + 2 + finalAttempts,
+                liveTemperature,
+            }),
+            2,
+        );
+        finalNorm = normalizeSimilarityText(forcedLine);
+        finalAttempts += 1;
+        reason = `${reason}|final_uniqueness_rotation`;
+    }
+
+    return {
+        line: softenSpecificityLexicon(forcedLine),
+        anti_loop_intervention_triggered: true,
+        anti_loop_intervention_reason: reason,
+        intent_bucket: finalBucket,
+        semantic_similarity_max: Number(maxSimilarity.toFixed(3)),
+        trailing_bucket_run: trailingBucketRun,
+    };
+}
+
+function enforceRealismTrajectory({ previousState, nextState, liveTemperature = 5 } = {}) {
+    const prev = previousState || {};
+    const next = { ...(nextState || {}) };
+    const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
+    const deltaTrust = Number(next.trust_level || 0) - Number(prev.trust_level || 0);
+    const deltaResistance = Number(next.resistance_level || 0) - Number(prev.resistance_level || 0);
+
+    let enforced = false;
+    let reason = "none";
+
+    if (temp <= 3) {
+        if (deltaTrust < 1) {
+            next.trust_level = clamp(Number(prev.trust_level || 0) + 1, 0, 10);
+            enforced = true;
+        }
+        if (deltaResistance > -1) {
+            next.resistance_level = clamp(Number(prev.resistance_level || 0) - 1, 0, 10);
+            enforced = true;
+        }
+        if (enforced) reason = "low_tier_requires_trust_up_resistance_down";
+
+        const stageFlow = [
+            "guarded_opening",
+            "resistance_surface",
+            "concern_clarification",
+            "deeper_barrier_reveal",
+            "conditional_openness",
+            "next_step_consideration",
+        ];
+        const prevStage = str(prev.conversation_stage, "guarded_opening");
+        const nextStage = str(next.conversation_stage, prevStage);
+        const prevIdx = stageFlow.indexOf(prevStage);
+        const nextIdx = stageFlow.indexOf(nextStage);
+        const turnDepth = arr(prev.hcp_response_history).length;
+        if (turnDepth >= 4 && prevIdx >= 0 && nextIdx === prevIdx && nextIdx < stageFlow.length - 1) {
+            next.conversation_stage = stageFlow[nextIdx + 1];
+            enforced = true;
+            reason = "low_tier_forced_late_stage_progression";
+        }
+    } else if (temp >= 8) {
+        if (deltaResistance < 0) {
+            next.resistance_level = clamp(Number(prev.resistance_level || 0), 0, 10);
+            enforced = true;
+        }
+        if (deltaTrust > 0) {
+            next.trust_level = clamp(Number(prev.trust_level || 0), 0, 10);
+            enforced = true;
+        }
+        if (enforced) reason = "high_tier_requires_resistance_non_decreasing_and_trust_non_increasing";
+    } else {
+        const clampedTrustDelta = clamp(deltaTrust, -1, 1);
+        const clampedResistanceDelta = clamp(deltaResistance, -1, 1);
+        if (clampedTrustDelta !== deltaTrust) {
+            next.trust_level = clamp(Number(prev.trust_level || 0) + clampedTrustDelta, 0, 10);
+            enforced = true;
+        }
+        if (clampedResistanceDelta !== deltaResistance) {
+            next.resistance_level = clamp(Number(prev.resistance_level || 0) + clampedResistanceDelta, 0, 10);
+            enforced = true;
+        }
+        if (enforced) reason = "mid_tier_conditional_change_only";
+    }
+
+    return {
+        nextState: next,
+        realism_trajectory_enforced: enforced,
+        realism_trajectory_reason: reason,
+    };
 }
 
 // ─── Stage and position maps ──────────────────────────────────────────────────
@@ -178,6 +525,9 @@ export function buildInitialHcpState(hcpBrain, liveTemperature = 5) {
         hcp_position,
         next_expected_rep_move: str(persona.repApproach, "Address primary concern and ask diagnostic question."),
         repetition_count: 0,
+        hcp_response_history: [],
+        intent_bucket_history: [],
+        anti_loop_intervention_count: 0,
         last_hcp_response_type: null,
         last_hcp_response_text: "",
         previous_response_types: [],
@@ -1169,10 +1519,27 @@ export function generateHcpResponse({
         hcp_progression_explanation = `${hcp_progression_explanation} Text-level anti-repetition variation applied.`.trim();
     }
 
+    const antiLoopEnforcement = enforceDeterministicAntiLoop({
+        hcpStatement: hcp_statement,
+        hcpState,
+        hcpBrain,
+        liveTemperature,
+        conversationMemory,
+    });
+    hcp_statement = clipToSentenceCount(str(antiLoopEnforcement.line, hcp_statement), liveTemperature >= 8 ? 2 : 2);
+    if (antiLoopEnforcement.anti_loop_intervention_triggered) {
+        hcp_progression_explanation = `${hcp_progression_explanation} Deterministic anti-loop intervention applied (${antiLoopEnforcement.anti_loop_intervention_reason}).`.trim();
+    }
+
     return {
         hcp_statement: hcp_statement.trim(),
         hcp_response_type: responseType,
         hcp_progression_explanation,
+        anti_loop_intervention_triggered: Boolean(antiLoopEnforcement.anti_loop_intervention_triggered),
+        anti_loop_intervention_reason: str(antiLoopEnforcement.anti_loop_intervention_reason, "none"),
+        intent_bucket: str(antiLoopEnforcement.intent_bucket, inferIntentBucketFromLine(hcp_statement, hcpState, hcpBrain)),
+        semantic_similarity_max: Number(antiLoopEnforcement.semantic_similarity_max || 0),
+        trailing_bucket_run: Number(antiLoopEnforcement.trailing_bucket_run || 0),
     };
 }
 
@@ -1194,6 +1561,8 @@ export function computeHcpStateProgression({
     liveTemperature = 5,
     conversationMemory = {},
 } = {}) {
+    const previous = previousHcpState || buildInitialHcpState(hcpBrain, liveTemperature);
+
     // 1. Update state
     const { newState, delta } = updateHcpState({
         hcpBrain,
@@ -1205,14 +1574,25 @@ export function computeHcpStateProgression({
         conversationMemory,
     });
 
+    const trajectoryEnforcement = enforceRealismTrajectory({
+        previousState: previous,
+        nextState: newState,
+        liveTemperature,
+    });
+    const adjustedState = {
+        ...trajectoryEnforcement.nextState,
+        realism_trajectory_enforced: trajectoryEnforcement.realism_trajectory_enforced,
+        realism_trajectory_reason: trajectoryEnforcement.realism_trajectory_reason,
+    };
+
     // 2. Select response type
     const selection = selectHcpResponseType({
-        hcp_state: newState,
+        hcp_state: adjustedState,
         previous_response_types: dedupeTail([
             ...(arr(conversationMemory?.response_type_history).slice(-6)),
-            ...arr(newState.previous_response_types).slice(-6),
+            ...arr(adjustedState.previous_response_types).slice(-6),
         ], 6),
-        rep_quality: newState.last_rep_quality,
+        rep_quality: adjustedState.last_rep_quality,
         voice_behavior_adaptation: voiceBehaviorAdaptation,
         live_temperature: liveTemperature,
         evaluation,
@@ -1222,7 +1602,7 @@ export function computeHcpStateProgression({
     // 3. Generate response
     const responseResult = generateHcpResponse({
         responseType,
-        hcpState: newState,
+        hcpState: adjustedState,
         hcpBrain,
         liveTemperature,
         conversationMemory,
@@ -1230,14 +1610,25 @@ export function computeHcpStateProgression({
 
     // 4. Stamp response type into state
     const finalHistory = dedupeTail([
-        ...arr(newState.previous_response_types),
+        ...arr(adjustedState.previous_response_types),
         responseType,
     ], 6);
+    const finalResponseHistory = dedupeTail([
+        ...arr(adjustedState.hcp_response_history),
+        str(responseResult.hcp_statement, ""),
+    ], 8);
+    const finalIntentHistory = dedupeTail([
+        ...arr(adjustedState.intent_bucket_history),
+        str(responseResult.intent_bucket, inferIntentBucketFromLine(responseResult.hcp_statement, adjustedState, hcpBrain)),
+    ], 8);
     const finalState = {
-        ...newState,
+        ...adjustedState,
         last_hcp_response_type: responseType,
         last_hcp_response_text: str(responseResult.hcp_statement, ""),
         previous_response_types: finalHistory,
+        hcp_response_history: finalResponseHistory,
+        intent_bucket_history: finalIntentHistory,
+        anti_loop_intervention_count: Number(adjustedState.anti_loop_intervention_count || 0) + (responseResult.anti_loop_intervention_triggered ? 1 : 0),
     };
 
     return {
@@ -1249,5 +1640,10 @@ export function computeHcpStateProgression({
         response_type_transition_explanation: selection.responseTypeTransitionExplanation,
         hcp_progression_explanation: responseResult.hcp_progression_explanation,
         simulated_hcp_next_response: responseResult.hcp_statement,
+        anti_loop_intervention_triggered: Boolean(responseResult.anti_loop_intervention_triggered),
+        anti_loop_intervention_reason: str(responseResult.anti_loop_intervention_reason, "none"),
+        intent_bucket: str(responseResult.intent_bucket, "workflow"),
+        semantic_similarity_max: Number(responseResult.semantic_similarity_max || 0),
+        trailing_bucket_run: Number(responseResult.trailing_bucket_run || 0),
     };
 }

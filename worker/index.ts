@@ -309,6 +309,8 @@ function defaultConversationMemory(base: Record<string, unknown> = {}) {
     return {
         prior_rep_moves: Array.isArray(base.prior_rep_moves) ? base.prior_rep_moves : [],
         prior_hcp_reactions: Array.isArray(base.prior_hcp_reactions) ? base.prior_hcp_reactions : [],
+        hcp_response_history: Array.isArray(base.hcp_response_history) ? base.hcp_response_history : [],
+        intent_bucket_history: Array.isArray(base.intent_bucket_history) ? base.intent_bucket_history : [],
         unresolved_cues: Array.isArray(base.unresolved_cues) ? base.unresolved_cues : [],
         addressed_cues: Array.isArray(base.addressed_cues) ? base.addressed_cues : [],
         delivery_trend: text(base.delivery_trend, "neutral"),
@@ -912,6 +914,11 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
     (deterministicWithBrain as Record<string, unknown>).response_type_transition_explanation = fullStateProgression.response_type_transition_explanation;
     (deterministicWithBrain as Record<string, unknown>).hcp_progression_explanation = fullStateProgression.hcp_progression_explanation;
     (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response = fullStateProgression.simulated_hcp_next_response;
+    (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_triggered = Boolean(fullStateProgression.anti_loop_intervention_triggered);
+    (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_reason = fullStateProgression.anti_loop_intervention_reason;
+    (deterministicWithBrain as Record<string, unknown>).intent_bucket = fullStateProgression.intent_bucket;
+    (deterministicWithBrain as Record<string, unknown>).semantic_similarity_max = fullStateProgression.semantic_similarity_max;
+    (deterministicWithBrain as Record<string, unknown>).trailing_bucket_run = fullStateProgression.trailing_bucket_run;
     // Persist hcp_state and response-type history in conversation_memory
     (deterministicWithBrain as Record<string, unknown>).conversation_memory = {
         ...asObject((deterministic as Record<string, unknown>).conversation_memory as Record<string, unknown>, {} as Record<string, unknown>),
@@ -922,6 +929,18 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
                 fullStateProgression.hcp_response_type,
             ].filter(Boolean).slice(-8)
             : [fullStateProgression.hcp_response_type],
+        hcp_response_history: Array.isArray((conversationMemory as Record<string, unknown>)?.hcp_response_history)
+            ? [
+                ...((conversationMemory as Record<string, unknown>).hcp_response_history as unknown[]),
+                fullStateProgression.simulated_hcp_next_response,
+            ].filter(Boolean).slice(-8)
+            : [fullStateProgression.simulated_hcp_next_response].filter(Boolean),
+        intent_bucket_history: Array.isArray((conversationMemory as Record<string, unknown>)?.intent_bucket_history)
+            ? [
+                ...((conversationMemory as Record<string, unknown>).intent_bucket_history as unknown[]),
+                fullStateProgression.intent_bucket,
+            ].filter(Boolean).slice(-8)
+            : [fullStateProgression.intent_bucket].filter(Boolean),
     };
 
     const evalPrompt = buildEvaluationPrompt({
