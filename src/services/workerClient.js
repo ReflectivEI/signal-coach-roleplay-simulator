@@ -188,7 +188,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TI
 
 async function parseWorkerResponse(response) {
   if (!response.ok) {
-    throw new Error(await response.text().catch(() => `Worker request failed with ${response.status}`));
+    const message = await response.text().catch(() => `Worker request failed with ${response.status}`);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -454,12 +457,26 @@ export async function listEvidenceSources() {
 
 export async function listEvidenceRecords(filters = {}) {
   const params = new URLSearchParams();
-  if (filters.domain) params.set("domain", filters.domain);
-  if (filters.diseaseState) params.set("diseaseState", filters.diseaseState);
+  const domain = String(filters.domain || filters.diseaseState || "").trim();
+  const diseaseState = String(filters.diseaseState || "").trim();
+  if (domain) params.set("domain", domain);
+  if (diseaseState) params.set("diseaseState", diseaseState);
   if (filters.limit) params.set("limit", String(filters.limit));
   const url = params.toString() ? `${evidenceRecordsUrl}?${params.toString()}` : evidenceRecordsUrl;
-  const data = await requestWorkerJson(url);
-  return Array.isArray(data?.records) ? data.records : [];
+  try {
+    const data = await requestWorkerJson(url);
+    return Array.isArray(data?.records) ? data.records : [];
+  } catch (error) {
+    if (error?.status === 404) {
+      console.warn("[workerClient] Evidence endpoint unavailable; continuing without evidence.", {
+        url,
+        domain: domain || null,
+        diseaseState: diseaseState || null,
+      });
+      return [];
+    }
+    throw error;
+  }
 }
 
 export async function ingestEvidenceRecords(payload = {}) {

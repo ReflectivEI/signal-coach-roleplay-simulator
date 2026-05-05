@@ -77,6 +77,24 @@ function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
   };
 }
 
+function getTemperatureBandLabel(value) {
+  const temperature = Number(value);
+  if (!Number.isFinite(temperature)) return "unknown";
+  if (temperature <= 3) return "low";
+  if (temperature <= 7) return "medium";
+  return "high";
+}
+
+function logReviewError(stage, error, extras = {}) {
+  const message = error instanceof Error ? error.message : String(error || "unknown_error");
+  console.error("[Simulator] review_error", {
+    stage,
+    message,
+    stack: error instanceof Error ? error.stack : undefined,
+    ...extras,
+  });
+}
+
 function temperatureTraits(temperature) {
   const temp = Math.max(1, Math.min(10, Number(temperature) || 5));
   if (temp <= 4) {
@@ -556,7 +574,17 @@ export default function Simulator() {
     setReviewStage("Generating coaching feedback (15–30 s)…");
 
     try {
-      const reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      let reviewData;
+      try {
+        reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      } catch (error) {
+        logReviewError("generate", error, {
+          scenarioId: scenario?.id || null,
+          turnCount: turns.length,
+          signalCount: allSignals.length,
+        });
+        throw error;
+      }
       console.debug("[Simulator] Session review payload:", reviewData);
 
       setReviewStage("Saving session…");
@@ -574,24 +602,38 @@ export default function Simulator() {
           synthesisSource: predictiveLens.data.synthesisSource,
           synthesisError: predictiveLens.data.synthesisError,
           specialistTitle: predictiveLens.data.specialistTitle,
+          evidenceRecords: predictiveLens.data.evidenceRecords || [],
           sections: predictiveLens.data.lens?.sections || null,
           hcpPerspective: predictiveLens.data.lens?.hcpPerspective || null,
           repPreparation: predictiveLens.data.lens?.repPreparation || null,
+          runtimeSignals: {
+            predictive_profile_attached: {
+              hasProfile: Boolean(session?.predictiveProfile),
+              personaType: session?.predictiveProfile?.type || null,
+            },
+            temperature_applied: {
+              value: session?.realism ?? session?.temperature ?? null,
+              band: getTemperatureBandLabel(session?.realism ?? session?.temperature),
+            },
+          },
         } : null,
       };
       console.debug("[Simulator] Save session payload:", completedSession);
       await createWorkerSession(completedSession).catch(() => null);
-      setSession((current) => current ? ({
-        ...current,
+      setSession({
+        ...completedSession,
         isComplete: true,
-        endedAt: new Date().toISOString(),
         reviewData: JSON.stringify(reviewData),
-      }) : current);
+      });
 
       setReview(reviewData);
       setShowSummary(true);
     } catch (error) {
-      console.error("[Simulator] Session review failed:", error);
+      logReviewError("end_session", error, {
+        scenarioId: scenario?.id || null,
+        turnCount: turns.length,
+        signalCount: allSignals.length,
+      });
       toast({
         title: "Session review failed",
         description: error instanceof Error ? error.message : "Unable to generate feedback. Check console for details.",
@@ -619,27 +661,35 @@ export default function Simulator() {
 
     try {
       const regenerated = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      const nextReview = !review ? regenerated : {
+        ...regenerated,
+        // Keep section 1 stable when user regenerates coaching sections.
+        briefRationale: review.briefRationale || regenerated.briefRationale,
+        overallSummary: Array.isArray(review.overallSummary) && review.overallSummary.length
+          ? review.overallSummary
+          : regenerated.overallSummary,
+        signalResponseAlignment: Array.isArray(review.signalResponseAlignment) && review.signalResponseAlignment.length
+          ? review.signalResponseAlignment
+          : regenerated.signalResponseAlignment,
+      };
 
-      setReview((current) => {
-        if (!current) return regenerated;
-        return {
-          ...regenerated,
-          // Keep section 1 stable when user regenerates coaching sections.
-          briefRationale: current.briefRationale || regenerated.briefRationale,
-          overallSummary: Array.isArray(current.overallSummary) && current.overallSummary.length
-            ? current.overallSummary
-            : regenerated.overallSummary,
-          signalResponseAlignment: Array.isArray(current.signalResponseAlignment) && current.signalResponseAlignment.length
-            ? current.signalResponseAlignment
-            : regenerated.signalResponseAlignment,
-        };
-      });
+      setReview(nextReview);
+      setSession((current) => current ? {
+        ...current,
+        review: nextReview,
+        reviewData: JSON.stringify(nextReview),
+      } : current);
 
       toast({
         title: "Feedback regenerated",
         description: "Updated coaching sections are ready.",
       });
     } catch (error) {
+      logReviewError("regenerate", error, {
+        scenarioId: scenario?.id || null,
+        turnCount: turns.length,
+        signalCount: allSignals.length,
+      });
       toast({
         title: "Regeneration failed",
         description: error instanceof Error ? error.message : "Unable to regenerate coaching feedback.",
@@ -889,6 +939,7 @@ export default function Simulator() {
         <SessionSummaryModal
           review={review}
           scenario={scenario}
+          session={session}
           sessionTurnCount={turns.filter((t) => t.speaker === "rep").length}
           onClose={() => setShowSummary(false)}
           onExport={handleExport}

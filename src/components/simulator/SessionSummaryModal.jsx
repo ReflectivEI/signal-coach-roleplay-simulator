@@ -27,12 +27,9 @@ const metricColorTokens = {
 };
 
 const sectionSurface = {
-  outcome: { border: "rgba(64, 112, 150, 0.34)", bg: "linear-gradient(180deg, rgba(247,251,255,0.98) 0%, rgba(241,247,252,0.98) 100%)" },
-  well: { border: "rgba(47, 132, 128, 0.34)", bg: "linear-gradient(180deg, rgba(246,252,251,0.98) 0%, rgba(239,248,247,0.98) 100%)" },
-  limits: { border: "rgba(152, 95, 74, 0.34)", bg: "linear-gradient(180deg, rgba(253,249,246,0.98) 0%, rgba(248,242,238,0.98) 100%)" },
-  testing: { border: "rgba(99, 111, 150, 0.34)", bg: "linear-gradient(180deg, rgba(248,249,254,0.98) 0%, rgba(241,243,251,0.98) 100%)" },
-  improve: { border: "rgba(138, 93, 125, 0.34)", bg: "linear-gradient(180deg, rgba(252,248,252,0.98) 0%, rgba(246,240,247,0.98) 100%)" },
-  rewrite: { border: "rgba(56, 123, 110, 0.34)", bg: "linear-gradient(180deg, rgba(246,252,249,0.98) 0%, rgba(240,248,244,0.98) 100%)" },
+  signal: { border: "rgba(64, 112, 150, 0.34)", bg: "linear-gradient(180deg, rgba(247,251,255,0.98) 0%, rgba(241,247,252,0.98) 100%)" },
+  coaching: { border: "rgba(47, 132, 128, 0.34)", bg: "linear-gradient(180deg, rgba(246,252,251,0.98) 0%, rgba(239,248,247,0.98) 100%)" },
+  evidence: { border: "rgba(99, 111, 150, 0.34)", bg: "linear-gradient(180deg, rgba(248,249,254,0.98) 0%, rgba(241,243,251,0.98) 100%)" },
 };
 
 function getMetricColor(score) {
@@ -320,6 +317,14 @@ function OverallBlock({ label, children }) {
   );
 }
 
+function SectionCard({ label, surface, children }) {
+  return (
+    <div className="rounded-xl border px-5 py-5" style={{ borderColor: surface.border, background: surface.bg }}>
+      <OverallBlock label={label}>{children}</OverallBlock>
+    </div>
+  );
+}
+
 // ─── Deep-dive sub-block ──────────────────────────────────────────────────────
 
 function DeepDiveBlock({ number, title, children }) {
@@ -470,6 +475,7 @@ function CapabilityRow({ cap, insight }) {
  * @param {{
  *   review: any;
  *   scenario: any;
+ *   session?: any;
  *   sessionTurnCount: number;
  *   onClose: () => void;
  *   onExport: () => void;
@@ -480,6 +486,7 @@ function CapabilityRow({ cap, insight }) {
 export default function SessionSummaryModal({
   review,
   scenario,
+  session = null,
   sessionTurnCount,
   onClose,
   onExport,
@@ -583,6 +590,55 @@ export default function SessionSummaryModal({
   ].filter(Boolean);
 
   const patternInsight = scenario?.rep_profile || scenario?.patternInsight || "";
+  const signalAlignmentParagraphs = uniqCoachingPoints([
+    briefRationale,
+    ...splitParagraphs(review.signalResponseAlignment),
+    ...splitParagraphs(review.overallSummary).slice(1, 3),
+  ].map((item) => cleanCoachingCopyExpanded(item, 38))).slice(0, 4);
+  const temperatureValue = Number(session?.realism ?? session?.temperature);
+  const temperatureBand = !Number.isFinite(temperatureValue)
+    ? "unknown"
+    : temperatureValue <= 3
+      ? "low"
+      : temperatureValue <= 7
+        ? "medium"
+        : "high";
+  const runtimeSignalItems = uniqCoachingPoints([
+    session?.predictiveLens?.runtimeSignals?.predictive_profile_attached?.hasProfile || session?.predictiveProfile?.type
+      ? `Predictive profile attached: ${(session?.predictiveLens?.runtimeSignals?.predictive_profile_attached?.personaType || session?.predictiveProfile?.type || "active").replaceAll("_", " ")}.`
+      : "",
+    Number.isFinite(temperatureValue)
+      ? `Temperature applied: ${temperatureValue}/10 (${temperatureBand} realism).`
+      : "",
+    session?.predictiveLens?.sections?.mindset?.headline
+      ? `Mindset signal: ${cleanCoachingCopyExpanded(session.predictiveLens.sections.mindset.headline, 20)}`
+      : "",
+    session?.predictiveLens?.sections?.responseStyle?.headline
+      ? `Expected response style: ${cleanCoachingCopyExpanded(session.predictiveLens.sections.responseStyle.headline, 20)}`
+      : "",
+  ]).slice(0, 4);
+  const transcriptEvidenceItems = uniqCoachingPoints(
+    (review.capabilityInsights || [])
+      .filter((insight) => insight?.transcriptEvidence || insight?.whyItMattered)
+      .map((insight) => {
+        const evidence = cleanCoachingCopyExpanded(insight?.transcriptEvidence || "", 24);
+        const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || "", 24);
+        if (!evidence && !impact) return "";
+        return `${insight?.capabilityName || insight?.title || "Observed signal"}: ${evidence || impact}${evidence && impact ? ` Why it mattered: ${impact}` : ""}`;
+      })
+      .filter(Boolean),
+  ).slice(0, 4);
+  const evidenceRecords = Array.isArray(session?.predictiveLens?.evidenceRecords) ? session.predictiveLens.evidenceRecords : [];
+  const evidenceReferenceItems = evidenceRecords
+    .map((record, index) => ({
+      id: record?.id || `evidence-${index}`,
+      title: record?.title || record?.headline || record?.sourceTitle || record?.organization || "Reference",
+      detail: cleanCoachingCopyExpanded(record?.summary || record?.snippet || record?.finding || record?.description || "", 32),
+      url: record?.url || record?.sourceUrl || "",
+    }))
+    .filter((item) => item.title || item.detail)
+    .slice(0, 4);
+  const showEvidenceSection = transcriptEvidenceItems.length > 0 || evidenceReferenceItems.length > 0 || Boolean(session?.predictiveLens?.synthesisError);
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 py-8">
@@ -731,79 +787,126 @@ export default function SessionSummaryModal({
             )}
 
             <div className="space-y-6">
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.outcome.border, background: sectionSurface.outcome.bg }}>
-                <OverallBlock label="1) Interaction Outcome">
-                  {outcomeText.length > 0
-                    ? outcomeText.map((p, i) => <p key={i} style={{ color: i === 0 ? REVIEW_TEXT : REVIEW_MUTED }}>{p}</p>)
-                    : <NotObservedMarker />}
-                </OverallBlock>
-              </div>
+              <SectionCard label="1) Signal Intelligence Summary" surface={sectionSurface.signal}>
+                {signalAlignmentParagraphs.length > 0
+                  ? signalAlignmentParagraphs.map((paragraph, index) => (
+                    <p key={`signal-${index}`} style={{ color: index === 0 ? REVIEW_TEXT : REVIEW_MUTED }}>{paragraph}</p>
+                  ))
+                  : <NotObservedMarker />}
 
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.well.border, background: sectionSurface.well.bg }}>
-                <OverallBlock label="2) What You Did Well">
-                  {strengthsList.length > 0
-                    ? (strengthsList.length === 1
-                      ? <p>{strengthsList[0]}</p>
-                      : strengthsList.map((item, i) => (
-                        <p key={i} className="flex items-start gap-2">
-                          <span style={{ color: "hsl(169 56% 34%)" }}>•</span>
-                          <span>{item}</span>
-                        </p>
-                      )))
-                    : <NotObservedMarker />}
-                </OverallBlock>
-              </div>
-
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.limits.border, background: sectionSurface.limits.bg }}>
-                <OverallBlock label="3) What Limited the Interaction">
-                  {limitationsList.length > 0
-                    ? (limitationsList.length === 1
-                      ? <p>{limitationsList[0]}</p>
-                      : limitationsList.map((item, i) => (
-                        <p key={i} className="flex items-start gap-2">
-                          <span style={{ color: "hsl(8 56% 44%)" }}>•</span>
-                          <span>{item}</span>
-                        </p>
-                      )))
-                    : <NotObservedMarker />}
-                </OverallBlock>
-              </div>
-
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.testing.border, background: sectionSurface.testing.bg }}>
-                <OverallBlock label="4) What the HCP Was Testing">
-                  {hcpWasTesting.length > 0 ? hcpWasTesting.map((item, i) => <p key={i}>{item}</p>) : <NotObservedMarker />}
-                  {patternInsight && (
-                    <p className="text-xs mt-2 pt-2 border-t" style={{ color: REVIEW_FAINT, borderColor: "rgba(152, 160, 171, 0.18)" }}>
-                      Pattern Insight: {patternInsight}
+                {runtimeSignalItems.length > 0 && (
+                  <div className="pt-3 mt-3 border-t space-y-2" style={{ borderColor: "rgba(152, 160, 171, 0.18)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: REVIEW_FAINT }}>
+                      Runtime signals
                     </p>
-                  )}
-                </OverallBlock>
-              </div>
+                    {runtimeSignalItems.map((item, index) => (
+                      <p key={`runtime-${index}`} className="flex items-start gap-2">
+                        <span style={{ color: "hsl(208 48% 42%)" }}>•</span>
+                        <span>{item}</span>
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </SectionCard>
 
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.improve.border, background: sectionSurface.improve.bg }}>
-                <OverallBlock label="5) How to Improve">
-                  {improvementText.length > 0
-                    ? (improvementText.length === 1
-                      ? <p>{improvementText[0]}</p>
-                      : improvementText.map((item, i) => (
-                        <p key={i} className="flex items-start gap-2">
-                          <span style={{ color: "hsl(313 45% 40%)" }}>•</span>
-                          <span>{item}</span>
-                        </p>
-                      )))
-                    : <NotObservedMarker />}
-                </OverallBlock>
-              </div>
+              <SectionCard label="2) Interaction Outcome" surface={sectionSurface.coaching}>
+                {outcomeText.length > 0
+                  ? outcomeText.map((item, index) => <p key={`outcome-${index}`}>{item}</p>)
+                  : <NotObservedMarker />}
+              </SectionCard>
 
-              <div className="rounded-xl border px-5 py-5" style={{ borderColor: sectionSurface.rewrite.border, background: sectionSurface.rewrite.bg }}>
-                <OverallBlock label="6) Better Way to Say It">
-                  {cleanedBestRewrite ? (
-                    <div className="rounded-lg border px-4 py-3" style={{ borderColor: "rgba(5,150,105,0.28)", background: "rgba(5,150,105,0.06)", color: REVIEW_TEXT }}>
-                      "{cleanedBestRewrite}"
+              <SectionCard label="3) What You Did Well" surface={sectionSurface.coaching}>
+                {strengthsList.length > 0
+                  ? strengthsList.map((item, index) => (
+                    <p key={`strength-${index}`} className="flex items-start gap-2">
+                      <span style={{ color: "hsl(169 56% 34%)" }}>•</span>
+                      <span>{item}</span>
+                    </p>
+                  ))
+                  : <NotObservedMarker />}
+              </SectionCard>
+
+              <SectionCard label="4) What Limited the Interaction" surface={sectionSurface.coaching}>
+                {limitationsList.length > 0
+                  ? limitationsList.map((item, index) => (
+                    <p key={`limit-${index}`} className="flex items-start gap-2">
+                      <span style={{ color: "hsl(8 56% 44%)" }}>•</span>
+                      <span>{item}</span>
+                    </p>
+                  ))
+                  : <NotObservedMarker />}
+              </SectionCard>
+
+              <SectionCard label="5) What the HCP Was Testing" surface={sectionSurface.coaching}>
+                {hcpWasTesting.length > 0
+                  ? hcpWasTesting.map((item, index) => <p key={`hcp-test-${index}`}>{item}</p>)
+                  : <NotObservedMarker />}
+                {patternInsight ? <p style={{ color: REVIEW_MUTED }}>Pattern insight: {patternInsight}</p> : null}
+              </SectionCard>
+
+              <SectionCard label="6) How to Improve" surface={sectionSurface.coaching}>
+                {improvementText.length > 0
+                  ? improvementText.map((item, index) => (
+                    <p key={`improve-${index}`} className="flex items-start gap-2">
+                      <span style={{ color: "hsl(313 45% 40%)" }}>•</span>
+                      <span>{item}</span>
+                    </p>
+                  ))
+                  : <NotObservedMarker />}
+                {cleanedBestRewrite && (
+                  <div className="rounded-lg border px-4 py-3 mt-1" style={{ borderColor: "rgba(5,150,105,0.28)", background: "rgba(5,150,105,0.06)", color: REVIEW_TEXT }}>
+                    Better way to say it: "{cleanedBestRewrite}"
+                  </div>
+                )}
+              </SectionCard>
+
+              {showEvidenceSection && (
+                <SectionCard label="7) Evidence / References" surface={sectionSurface.evidence}>
+                  {transcriptEvidenceItems.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: REVIEW_FAINT }}>Conversation evidence</p>
+                      {transcriptEvidenceItems.map((item, index) => (
+                        <div key={`evidence-${index}`} className="rounded-lg border px-4 py-3" style={{ borderColor: "rgba(120, 156, 208, 0.34)", background: "rgba(255,255,255,0.68)" }}>
+                          <p style={{ color: REVIEW_TEXT }}>{item}</p>
+                        </div>
+                      ))}
                     </div>
-                  ) : <NotObservedMarker />}
-                </OverallBlock>
-              </div>
+                  )}
+
+                  {evidenceReferenceItems.length > 0 && (
+                    <div className="space-y-2 pt-3 mt-3 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.18)" }}>
+                      <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: REVIEW_FAINT }}>Supporting references</p>
+                      {evidenceReferenceItems.map((item) => (
+                        <div key={item.id} className="rounded-lg border px-4 py-3" style={{ borderColor: "rgba(120, 156, 208, 0.34)", background: "rgba(255,255,255,0.68)" }}>
+                          <p className="font-semibold" style={{ color: REVIEW_TEXT }}>{item.title}</p>
+                          {item.detail ? <p className="mt-1" style={{ color: REVIEW_MUTED }}>{item.detail}</p> : null}
+                          {item.url ? (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs font-semibold underline mt-2 inline-block"
+                              style={{ color: "hsl(198 57% 35%)" }}
+                            >
+                              Open reference
+                            </a>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {session?.predictiveLens?.synthesisError ? (
+                    <div className="rounded-lg border px-4 py-3 mt-3" style={{ borderColor: "rgba(180, 120, 20, 0.28)", background: "rgba(180, 120, 20, 0.08)", color: "hsl(38 62% 34%)" }}>
+                      {session.predictiveLens.synthesisError}
+                    </div>
+                  ) : null}
+
+                  {!transcriptEvidenceItems.length && !evidenceReferenceItems.length && !session?.predictiveLens?.synthesisError
+                    ? <NotObservedMarker />
+                    : null}
+                </SectionCard>
+              )}
 
               <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(152, 160, 171, 0.30)", background: "rgba(255,255,255,0.72)" }}>
                 <button
