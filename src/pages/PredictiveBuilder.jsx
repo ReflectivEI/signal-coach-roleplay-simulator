@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, BrainCircuit, ChevronDown, ChevronUp, FlaskConical, Loader2, MessageSquareText, SlidersHorizontal, Stethoscope } from "lucide-react";
+import { BrainCircuit, FlaskConical, Loader2, MessageSquareText, Stethoscope } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
 import { checkWorkerHealth, getWorkerRuntimeDescriptor, invokeWorkerText, invokeWorkerJsonRawPayload, listEvidenceRecords } from "@/services/workerClient";
@@ -15,7 +16,7 @@ import {
 } from "@/lib/specialistSynthesisPrompts";
 import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 import { normalizeHcpSpokenText } from "@/lib/hcpResponseText";
-import { CHALLENGE_CONTEXT_OPTIONS, CONVERSATION_STAGE_OPTIONS, HCP_ROLE_OPTIONS } from "@/lib/rpsUserInputOptions";
+import { CHALLENGE_CONTEXT_OPTIONS, CONVERSATION_STAGE_OPTIONS, HCP_ROLE_OPTIONS, RPS_UI_LABELS } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
 const DEV_DEBUG_SYNTHESIS = import.meta?.env?.DEV && localStorage?.getItem("DEBUG_SYNTHESIS") === "true";
@@ -137,32 +138,6 @@ function buildRepPreparationFallback(synthesized = {}, normalizedSections = {}) 
   };
 }
 
-function AdvancedPredictiveSection({ children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-1">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 text-xs font-medium transition-colors"
-        style={{ color: open ? "hsl(174 55% 34%)" : "hsl(215 18% 46%)" }}
-      >
-        <SlidersHorizontal className="w-3 h-3" />
-        Advanced Controls
-        <ChevronDown className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="mt-3 pt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.22)" }}>
-          <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
-            These fields are derived automatically. Override only when explicit control is needed.
-          </p>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function SelectField({ label, value, options, onChange }) {
   return (
     <div className="space-y-1.5">
@@ -198,12 +173,11 @@ export default function PredictiveBuilder() {
   const [isTesting, setIsTesting] = useState(false);
   const [workerHealth, setWorkerHealth] = useState("checking");
 
-  // AI synthesis state
   const [evidenceRecords, setEvidenceRecords] = useState([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [aiSynthesis, setAiSynthesis] = useState(null);
   const [synthesisError, setSynthesisError] = useState("");
-  const [synthesisSource, setSynthesisSource] = useState(""); // "ai" | "static"
+  const [synthesisSource, setSynthesisSource] = useState("");
   const synthAbortRef = useRef(null);
   const workerBinding = useMemo(() => formatWorkerBinding(getWorkerRuntimeDescriptor().workerBaseUrl), []);
 
@@ -286,7 +260,7 @@ export default function PredictiveBuilder() {
     return match?.label || value;
   };
 
-  // ─── AI synthesis effect: fires when all 6 selectors are filled ──────────
+  // ─── AI synthesis effect: fires when the 4 canonical controls are complete ──────────
   useEffect(() => {
     if (!allSelected || !profile) {
       setAiSynthesis(null);
@@ -543,38 +517,25 @@ Return only rewritten response text.`;
 
   return (
     <div className="min-h-screen font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-[1180px] mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/" className="transition-colors" style={{ color: "hsl(222 52% 24%)" }}>
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <span className="font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Predictive HCP Builder</span>
-            {isSynthesizing && (
-              <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(19, 78, 74, 0.1)", color: "hsl(173 42% 28%)", border: "1px solid rgba(19, 78, 74, 0.22)" }}>
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Synthesizing {resolveSpecialistPersona(selection).title}...
-              </span>
-            )}
-            {synthesisSource === "ai" && !isSynthesizing && (
-              <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(19, 78, 74, 0.1)", color: "hsl(173 42% 28%)", border: "1px solid rgba(19, 78, 74, 0.22)" }}>
-                <Stethoscope className="w-3 h-3" />
-                AI specialist synthesis active
-              </span>
-            )}
-          </div>
-          <p className="text-xs shrink-0" style={{ color: "hsl(215 18% 46%)" }}>Worker: {workerBinding} · {workerHealth}</p>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-[1180px]" />
 
       <div className="max-w-[1180px] mx-auto px-6 py-8 space-y-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Predictive HCP Builder</span>
+          {isSynthesizing && (
+            <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(19, 78, 74, 0.1)", color: "hsl(173 42% 28%)", border: "1px solid rgba(19, 78, 74, 0.22)" }}>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Synthesizing {resolveSpecialistPersona(selection).title}...
+            </span>
+          )}
+          {synthesisSource === "ai" && !isSynthesizing && (
+            <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full" style={{ background: "rgba(19, 78, 74, 0.1)", color: "hsl(173 42% 28%)", border: "1px solid rgba(19, 78, 74, 0.22)" }}>
+              <Stethoscope className="w-3 h-3" />
+              AI specialist synthesis active
+            </span>
+          )}
+          <p className="text-xs sm:ml-auto" style={{ color: "hsl(215 18% 46%)" }}>Worker: {workerBinding} · {workerHealth}</p>
+        </div>
         <EnterpriseBanner
           title="Predictive HCP Builder"
           subtitle="AI-synthesized dual-perspective profile — clinician intelligence and rep preparation from a specialist lens."
@@ -590,12 +551,12 @@ Return only rewritten response text.`;
           }}
         >
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
-            <SelectField label="HCP Role" value={uiSelection.hcpType} options={HCP_ROLE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("hcpType")} />
-            <SelectField label="Conversation Moment" value={uiSelection.stage} options={CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("stage")} />
-            <SelectField label="Challenge Focus" value={uiSelection.challenge} options={CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("challenge")} />
+            <SelectField label={RPS_UI_LABELS.hcpType} value={uiSelection.hcpType} options={HCP_ROLE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("hcpType")} />
+            <SelectField label={RPS_UI_LABELS.stage} value={uiSelection.stage} options={CONVERSATION_STAGE_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("stage")} />
+            <SelectField label={RPS_UI_LABELS.challenge} value={uiSelection.challenge} options={CHALLENGE_CONTEXT_OPTIONS.filter((option) => option.value !== "all")} onChange={setField("challenge")} />
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(222 46% 25%)" }}>
-                Realism Lever
+                {RPS_UI_LABELS.realism}
               </label>
               <div className="rounded-xl px-3.5 py-2.5" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,249,249,0.98) 100%)", border: "1.5px solid rgba(92, 135, 165, 0.42)" }}>
                 <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: "hsl(215 18% 46%)" }}>
@@ -610,37 +571,19 @@ Return only rewritten response text.`;
                   value={Math.max(1, Math.min(10, Number(uiSelection.realism) || 5))}
                   onChange={(e) => setField("realism")(Number(e.target.value))}
                   className="w-full accent-teal-600"
-                  aria-label="Realism Lever"
+                  aria-label={RPS_UI_LABELS.realism}
                 />
               </div>
             </div>
           </div>
           <p className="text-xs" style={{ color: "hsl(215 18% 46%)" }}>
-            `mapUIToBrain()` derives influence driver, interaction pressure, behavior archetype, and the full predictive seed automatically.
+            Hidden fields are derived automatically from these four controls before the predictive payload is built.
           </p>
-          {brainMapping && (
-            <AdvancedPredictiveSection>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs" style={{ color: "hsl(215 22% 34%)" }}>
-                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
-                  <p className="font-semibold uppercase tracking-wider">Influence Driver</p>
-                  <p className="mt-1">{brainMapping.resolvedFields.influence_driver}</p>
-                </div>
-                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
-                  <p className="font-semibold uppercase tracking-wider">Interaction Pressure</p>
-                  <p className="mt-1">{Array.isArray(brainMapping.resolvedFields.interaction_pressure) ? brainMapping.resolvedFields.interaction_pressure.join(", ") : "none"}</p>
-                </div>
-                <div className="rounded-xl px-3 py-2" style={{ background: "rgba(92, 135, 165, 0.08)" }}>
-                  <p className="font-semibold uppercase tracking-wider">Behavior Archetype</p>
-                  <p className="mt-1">{brainMapping.resolvedFields.behavior_archetype}</p>
-                </div>
-              </div>
-            </AdvancedPredictiveSection>
-          )}
         </div>
 
         {!allSelected && (
           <div className="rounded-2xl p-5 text-sm" style={{ background: "rgba(30, 64, 175, 0.07)", border: "1px solid rgba(30, 64, 175, 0.2)", color: "hsl(220 30% 32%)" }}>
-            Select HCP Role, Conversation Moment, and Challenge Focus to render the Predictive Profile Card with AI specialist synthesis.
+            Complete the 4 canonical controls (3 selectors + realism) to render the Predictive Profile Card with AI specialist synthesis.
           </div>
         )}
 
@@ -660,7 +603,7 @@ Return only rewritten response text.`;
                 AI Specialist Synthesis Running
               </p>
               <p className="text-xs" style={{ color: "hsl(193 35% 70%)" }}>
-                Acting as {resolveSpecialistPersona(selection).title} — consolidating all 6 profile dimensions into dual-perspective clinical intelligence...
+                Acting as {resolveSpecialistPersona(selection).title} — grounding dual-perspective clinical intelligence from the 4 canonical controls...
               </p>
             </div>
             {evidenceRecords.length > 0 && (

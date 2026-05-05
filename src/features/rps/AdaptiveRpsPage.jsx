@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ChevronDown, Mic, MicOff, SlidersHorizontal, Sparkles, Save } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Mic, MicOff, Sparkles, Save } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
 import { generateAdaptiveScenario, evaluateAdaptiveResponse, saveAdaptiveSession } from "./api";
 import { useSpeechInput } from "./useSpeechInput";
 import { clampTemperature, extractEightBehavioralMetricRows, isGenerateDisabled } from "./interactionState";
-import { HCP_ROLE_OPTIONS, CONVERSATION_STAGE_OPTIONS, CHALLENGE_CONTEXT_OPTIONS } from "@/lib/rpsUserInputOptions";
-import { REALISM_LEVEL_LABELS } from "@/lib/rpsUserInputOptions";
+import { HCP_ROLE_OPTIONS, CONVERSATION_STAGE_OPTIONS, CHALLENGE_CONTEXT_OPTIONS, REALISM_LEVEL_LABELS, RPS_UI_LABELS } from "@/lib/rpsUserInputOptions";
 import { mapUIToBrain } from "@/lib/scenarioInputResolver";
 
 const defaults = {
@@ -20,29 +19,6 @@ function DashboardCard({ title, children }) {
             <h3 className="si-dark-title mb-3 text-sm font-semibold uppercase tracking-wide">{title}</h3>
             {children}
         </section>
-    );
-}
-
-function AdvancedAdaptiveSection({ children }) {
-    const [open, setOpen] = useState(false);
-
-    return (
-        <div className="mt-4">
-            <button
-                type="button"
-                onClick={() => setOpen((value) => !value)}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-300"
-            >
-                <SlidersHorizontal className="h-3 w-3" />
-                Advanced
-                <ChevronDown className={`h-3 w-3 transition-transform ${open ? "rotate-180" : ""}`} />
-            </button>
-            {open && (
-                <div className="mt-3 rounded-lg border border-[#335a72] bg-[#0b2235] p-3 text-xs text-slate-300">
-                    {children}
-                </div>
-            )}
-        </div>
     );
 }
 
@@ -83,6 +59,13 @@ export default function AdaptiveRpsPage() {
         return (repText || "").trim();
     }, [repText]);
 
+    const canonicalSelections = useMemo(() => ({
+        hcpType: form.hcpType,
+        stage: form.stage,
+        challenge: form.challenge,
+        realism: temperature,
+    }), [form.challenge, form.hcpType, form.stage, temperature]);
+
     const disableGenerate = isGenerateDisabled(form, busy);
     const metricRows = extractEightBehavioralMetricRows(evaluation);
 
@@ -95,10 +78,7 @@ export default function AdaptiveRpsPage() {
         try {
             const data = await generateAdaptiveScenario({
                 ...mappedUi.legacyAdaptivePayload,
-                selected_dropdowns: {
-                    ...form,
-                    ...mappedUi.legacyAdaptivePayload,
-                },
+                selected_dropdowns: canonicalSelections,
                 resolved_brain: mappedUi.resolvedFields,
                 hcp_default_temperature: 5,
                 rep_selected_temperature: temperature,
@@ -128,7 +108,7 @@ export default function AdaptiveRpsPage() {
         }
 
         if (!mappedUi) {
-            setError("Complete all three dropdowns before evaluating.");
+            setError("Complete the 4 canonical controls (3 selectors + realism) before evaluating.");
             return;
         }
 
@@ -142,10 +122,7 @@ export default function AdaptiveRpsPage() {
                 scenario_context: scenario,
                 rep_response_transcript: repTranscript,
                 voice_metadata: speech.voiceMetadata,
-                selected_dropdowns: {
-                    ...form,
-                    ...mappedUi.legacyAdaptivePayload,
-                },
+                selected_dropdowns: canonicalSelections,
                 rep_selected_temperature: temperature,
                 live_temperature: temperature,
                 hcp_state: conversationMemory?.hcp_state || hcpState || scenario?.hcp_state || null,
@@ -175,7 +152,7 @@ export default function AdaptiveRpsPage() {
         }
 
         if (!mappedUi) {
-            setError("Complete all three dropdowns before saving.");
+            setError("Complete the 4 canonical controls (3 selectors + realism) before saving.");
             return;
         }
 
@@ -183,10 +160,7 @@ export default function AdaptiveRpsPage() {
         setError("");
         try {
             const result = await saveAdaptiveSession({
-                dropdown_selections: {
-                    ...form,
-                    ...mappedUi.legacyAdaptivePayload,
-                },
+                dropdown_selections: canonicalSelections,
                 temperature,
                 initial_temperature: temperature,
                 live_temperature: temperature,
@@ -219,6 +193,8 @@ export default function AdaptiveRpsPage() {
     return (
         <div className="si-dark-shell min-h-screen px-4 py-6 md:px-8">
             <div className="mx-auto max-w-6xl space-y-4">
+                <AppHeader maxWidthClassName="max-w-6xl" />
+
                 <header className="si-dark-panel rounded-2xl bg-gradient-to-r from-slate-950/95 via-blue-950/90 to-teal-950/90 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -226,10 +202,6 @@ export default function AdaptiveRpsPage() {
                             <h1 className="text-2xl font-semibold">Real-Time HCP Interaction Lab</h1>
                             <p className="si-dark-label mt-1 text-sm">Evaluates what the REP said, how they said it, and whether the interaction advanced.</p>
                         </div>
-                        <Link to="/" className="inline-flex items-center gap-2 rounded-lg border border-[#4f7e9a] px-3 py-2 text-sm text-slate-100 hover:bg-[#12314d]">
-                            <ArrowLeft className="h-4 w-4" />
-                            Back to Library
-                        </Link>
                     </div>
                 </header>
 
@@ -237,20 +209,20 @@ export default function AdaptiveRpsPage() {
                     <DashboardCard title="Scenario Controls">
                         <div className="grid gap-3 sm:grid-cols-3">
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                HCP Role
+                                {RPS_UI_LABELS.hcpType}
                                 <select
                                     value={form.hcpType}
                                     onChange={(e) => setFormField("hcpType", e.target.value)}
                                     className="si-dark-field w-full rounded-lg px-3 py-2 text-sm normal-case"
                                 >
-                                    <option value="">Select HCP role</option>
+                                    <option value="">Select HCP profile</option>
                                     {HCP_ROLE_OPTIONS.filter((option) => option.value !== "all").map((option) => (
                                         <option key={option.value} value={option.value}>{option.label}</option>
                                     ))}
                                 </select>
                             </label>
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                Conversation Moment
+                                {RPS_UI_LABELS.stage}
                                 <select
                                     value={form.stage}
                                     onChange={(e) => setFormField("stage", e.target.value)}
@@ -263,7 +235,7 @@ export default function AdaptiveRpsPage() {
                                 </select>
                             </label>
                             <label className="si-dark-label space-y-1 text-xs uppercase tracking-wide">
-                                Challenge Focus
+                                {RPS_UI_LABELS.challenge}
                                 <select
                                     value={form.challenge}
                                     onChange={(e) => setFormField("challenge", e.target.value)}
@@ -279,7 +251,7 @@ export default function AdaptiveRpsPage() {
 
                         <div className="mt-4 space-y-2">
                             <div className="flex items-center justify-between text-sm">
-                                <span>Realism Lever</span>
+                                <span>{RPS_UI_LABELS.realism}</span>
                                 <span className="rounded-md border border-[#44708c] bg-[#0a223a] px-2 py-1 font-semibold text-[#e8f5ff]">
                                     {temperature}/10 — {REALISM_LEVEL_LABELS[temperature] ?? ""}
                                 </span>
@@ -295,18 +267,8 @@ export default function AdaptiveRpsPage() {
                         </div>
 
                         <p className="mt-4 text-xs text-slate-400">
-                            `mapUIToBrain()` derives interaction pressure, influence driver, behavior archetype, access context, and rep objective automatically for the worker payload.
+                            Hidden fields are derived automatically from these four controls before the worker payload is built.
                         </p>
-                        {mappedUi && (
-                            <AdvancedAdaptiveSection>
-                                <div className="space-y-1.5">
-                                    <p><span className="font-semibold text-slate-100">Influence Driver:</span> {mappedUi.resolvedFields.influence_driver}</p>
-                                    <p><span className="font-semibold text-slate-100">Interaction Pressure:</span> {Array.isArray(mappedUi.resolvedFields.interaction_pressure) ? mappedUi.resolvedFields.interaction_pressure.join(", ") : "none"}</p>
-                                    <p><span className="font-semibold text-slate-100">Behavior Archetype:</span> {mappedUi.resolvedFields.behavior_archetype}</p>
-                                    <p><span className="font-semibold text-slate-100">REP Objective:</span> {mappedUi.resolvedFields.rep_objective}</p>
-                                </div>
-                            </AdvancedAdaptiveSection>
-                        )}
 
                         <button
                             type="button"

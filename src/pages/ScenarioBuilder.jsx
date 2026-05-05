@@ -2,17 +2,16 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Sparkles, Loader2, Check, Wand2, SlidersHorizontal, ChevronDown } from "lucide-react";
+import { Plus, Sparkles, Loader2, Check, Wand2 } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { createCustomScenario } from "@/lib/scenarioStorage";
 import { invokeWorkerJson } from "@/services/workerClient";
-import { PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
 import {
   CHALLENGE_CONTEXT_OPTIONS,
   CONVERSATION_STAGE_OPTIONS,
   HCP_ROLE_OPTIONS,
-  INTERACTION_PRESSURES,
-  ADVANCED_CONTROLS_WARNING,
+  RPS_UI_LABELS,
 } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
@@ -45,83 +44,6 @@ const challengeDefaultBehaviorState = {
 // HCP Role + Mindset: import from shared module (no "all" sentinel for form selects)
 const hcpRoleTypes = HCP_ROLE_OPTIONS.filter(o => o.value !== "all");
 const challengeContexts = CHALLENGE_CONTEXT_OPTIONS.filter(o => o.value !== "all");
-
-const behaviorStates = [
-  { value: "closed", label: "Closed" },
-  { value: "neutral", label: "Neutral" },
-  { value: "open", label: "Open" },
-  { value: "curiosity", label: "Curiosity" },
-  { value: "resistance", label: "Resistance" },
-  { value: "frustration", label: "Frustration" },
-  { value: "time_pressure", label: "Time Pressure" },
-];
-
-const pressures = INTERACTION_PRESSURES.filter(o => o.value !== "all");
-
-const predictiveSeedFields = [
-  "diseaseState",
-  "hcpType",
-  "journeyStage",
-  "interactionPressure",
-  "influenceDriver",
-  "behaviorArchetype",
-];
-
-function validatePredictiveSeed(seed = {}) {
-  const normalized = Object.fromEntries(
-    predictiveSeedFields.map((field) => [field, String(seed?.[field] || "").trim()]),
-  );
-
-  const filledCount = Object.values(normalized).filter(Boolean).length;
-  if (filledCount === 0) {
-    return { ok: true, normalized: null, message: "" };
-  }
-
-  if (filledCount !== predictiveSeedFields.length) {
-    return {
-      ok: false,
-      normalized: null,
-      message: "If using Predictive HCP Seed, all 6 fields are required.",
-    };
-  }
-
-  for (const field of predictiveSeedFields) {
-    const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
-    const allowed = new Set(options.map((item) => item.value));
-    if (!allowed.has(normalized[field])) {
-      return {
-        ok: false,
-        normalized: null,
-        message: `Predictive seed field \"${field}\" has an invalid value.`,
-      };
-    }
-  }
-
-  return { ok: true, normalized, message: "" };
-}
-
-function AdvancedControlsSection({ label, children }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="mt-3">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 text-xs font-medium transition-colors"
-        style={{ color: open ? "hsl(174 80% 40%)" : "hsl(215 18% 46%)" }}
-      >
-        <SlidersHorizontal className="w-3 h-3" />
-        Advanced: {label}
-        <ChevronDown className={`w-3 h-3 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="mt-2 pt-2 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.22)" }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * @param {{ label: string; hint?: string; children: any }} props
@@ -213,29 +135,11 @@ export default function ScenarioBuilder() {
     openingScene: "",
     visualScene: "",
     journeyStage: "",
-    journeyState: "",
     hcpRoleType: "",
-    decisionOrientation: "",
     challengeContext: "",
     runtimeTemperature: 5,
-    persona: "curious_uncertain_adopter",
-    startingBehaviorState: "",
-    interactionPressure: [],
     keyChallenges: "",
     suggestedFocusCapabilities: [],
-    predictiveSeed: {
-      diseaseState: "primary_care",
-      hcpType: "",
-      journeyStage: "",
-      interactionPressure: "",
-      influenceDriver: "",
-      behaviorArchetype: "",
-    },
-    predictiveSeedUI: {
-      hcpType: "",
-      stage: "",
-      challenge: "",
-    },
   });
   const [saving, setSaving] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -246,52 +150,7 @@ export default function ScenarioBuilder() {
 
   const applyTopLevelMapping = (current, partial) => {
     const next = { ...current, ...partial };
-    if (!next.hcpRoleType || !next.journeyStage || !next.challengeContext) {
-      return next;
-    }
-
-    const mapped = mapUIToBrain({
-      hcpType: next.hcpRoleType,
-      stage: next.journeyStage,
-      challenge: next.challengeContext,
-      realism: next.runtimeTemperature,
-      diseaseState: next.predictiveSeed?.diseaseState || "primary_care",
-    });
-
-    return {
-      ...next,
-      journeyStage: next.journeyStage,
-      journeyState: journeyStateForStage[mapped.resolvedFields.journey_stage] || next.journeyState,
-      hcpRoleType: mapped.resolvedFields.hcp_type,
-      decisionOrientation: mapped.resolvedFields.influence_driver,
-      persona: mapped.resolvedFields.behavior_archetype,
-      startingBehaviorState: next.startingBehaviorState || challengeDefaultBehaviorState[next.challengeContext] || "neutral",
-      interactionPressure: mapped.resolvedFields.interaction_pressure,
-    };
-  };
-
-  const applyPredictiveSeedMapping = (current, partialUi) => {
-    const predictiveSeedUI = { ...current.predictiveSeedUI, ...partialUi };
-    if (!predictiveSeedUI.hcpType || !predictiveSeedUI.stage || !predictiveSeedUI.challenge) {
-      return { ...current, predictiveSeedUI };
-    }
-
-    const mapped = mapUIToBrain({
-      hcpType: predictiveSeedUI.hcpType,
-      stage: predictiveSeedUI.stage,
-      challenge: predictiveSeedUI.challenge,
-      realism: current.runtimeTemperature,
-      diseaseState: current.predictiveSeed?.diseaseState || "primary_care",
-    });
-
-    return {
-      ...current,
-      predictiveSeedUI,
-      predictiveSeed: {
-        ...mapped.predictiveSelection,
-        diseaseState: current.predictiveSeed?.diseaseState || mapped.predictiveSelection.diseaseState,
-      },
-    };
+    return next;
   };
 
   const generateWithAI = async () => {
@@ -300,12 +159,6 @@ export default function ScenarioBuilder() {
 
     try {
       const capabilityIds = SIGNAL_INTELLIGENCE_CAPABILITIES.map((c) => c.id).join(", ");
-      const predictiveOptions = Object.fromEntries(
-        predictiveSeedFields.map((field) => [
-          field,
-          (PREDICTIVE_SELECTOR_OPTIONS[field] || []).map((item) => item.value).join(", "),
-        ]),
-      );
 
       const prompt = `You are building a canonical Signal Intelligence Coaching Simulator scenario for pharma rep training.
 
@@ -317,11 +170,9 @@ Core Tension: ${form.coreTension || "not specified"}
 Stakeholder: ${form.stakeholder || "not specified"}
 Context: ${form.context || "not specified"}
 Objective: ${form.objective || "not specified"}
-Conversation Moment: ${form.journeyStage || "not specified"}
-HCP Role: ${form.hcpRoleType || "not specified"}
-Decision Orientation: ${form.decisionOrientation || "not specified"}
-Starting Behavior: ${form.startingBehaviorState || "not specified"}
-Interaction Pressures: ${form.interactionPressure?.join(", ") || "not specified"}
+Scenario Stage: ${form.journeyStage || "not specified"}
+HCP Profile: ${form.hcpRoleType || "not specified"}
+Challenge Context: ${form.challengeContext || "not specified"}
 
 SCHEMA RULES:
 - coreTension: The fundamental conversational challenge. One sentence. What makes this hard.
@@ -334,16 +185,6 @@ SCHEMA RULES:
 - suggestedFocusCapabilities: Pick 2-3 from this exact list: ${capabilityIds}
 - journeyStage: one of: initial_access, discovery, clinical_value, objection_handling, access_formulary, adoption_implementation, commitment_close
 - hcpRoleType: one of: treating_clinician, influencer, thought_leader
-- decisionOrientation: one of: patient_centric, evidence_driven, risk_averse, guideline_anchored
-- startingBehaviorState: one of: closed, neutral, open, curiosity, resistance, frustration, time_pressure
-- interactionPressure: array, each value from: time_constrained, skeptical_resistant, curious_uncertain, operationally_constrained, competitive_bias, safety_concern, access_barrier
-- predictiveSeed: optional object with ALL 6 fields if present. Allowed values:
-  - diseaseState: ${predictiveOptions.diseaseState}
-  - hcpType: ${predictiveOptions.hcpType}
-  - journeyStage: ${predictiveOptions.journeyStage}
-  - interactionPressure: ${predictiveOptions.interactionPressure}
-  - influenceDriver: ${predictiveOptions.influenceDriver}
-  - behaviorArchetype: ${predictiveOptions.behaviorArchetype}
 
 Return ONLY valid JSON:
 {
@@ -357,19 +198,8 @@ Return ONLY valid JSON:
   "visualScene": "string",
   "journeyStage": "string",
   "hcpRoleType": "string",
-  "decisionOrientation": "string",
-  "startingBehaviorState": "string",
-  "interactionPressure": ["string"],
   "keyChallenges": ["string", "string", "string"],
-  "suggestedFocusCapabilities": ["string", "string"],
-  "predictiveSeed": {
-    "diseaseState": "string",
-    "hcpType": "string",
-    "journeyStage": "string",
-    "interactionPressure": "string",
-    "influenceDriver": "string",
-    "behaviorArchetype": "string"
-  }
+  "suggestedFocusCapabilities": ["string", "string"]
 }`;
 
       const result = await invokeWorkerJson({
@@ -389,21 +219,15 @@ Return ONLY valid JSON:
             visualScene: { type: "string" },
             journeyStage: { type: "string" },
             hcpRoleType: { type: "string" },
-            decisionOrientation: { type: "string" },
-            startingBehaviorState: { type: "string" },
-            interactionPressure: { type: "array", items: { type: "string" } },
             keyChallenges: { type: "array", items: { type: "string" } },
             suggestedFocusCapabilities: { type: "array", items: { type: "string" } },
-            predictiveSeed: { type: "object" },
           },
         },
       });
 
-      const seedValidation = validatePredictiveSeed(result.predictiveSeed || {});
       const derivedTopLevelUi = deriveUISelectionFromBrain(result || {});
-      const derivedSeedUi = deriveUISelectionFromBrain(result?.predictiveSeed || {});
 
-      setForm((f) => applyPredictiveSeedMapping(applyTopLevelMapping({
+      setForm((f) => applyTopLevelMapping({
         ...f,
         title: result.title || f.title,
         coreTension: result.coreTension || f.coreTension,
@@ -414,25 +238,14 @@ Return ONLY valid JSON:
         openingScene: result.openingScene || f.openingScene,
         visualScene: result.visualScene || f.visualScene,
         journeyStage: derivedTopLevelUi.stage || f.journeyStage,
-        journeyState: journeyStateForStage[result.journeyStage] || f.journeyState,
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
-        decisionOrientation: result.decisionOrientation || f.decisionOrientation,
         challengeContext: derivedTopLevelUi.challenge || f.challengeContext,
-        startingBehaviorState: result.startingBehaviorState || f.startingBehaviorState,
-        interactionPressure: result.interactionPressure?.length ? result.interactionPressure : f.interactionPressure,
         keyChallenges: (result.keyChallenges || []).join("\n") || f.keyChallenges,
         suggestedFocusCapabilities: result.suggestedFocusCapabilities?.length ? result.suggestedFocusCapabilities : f.suggestedFocusCapabilities,
-        predictiveSeed: seedValidation.ok && seedValidation.normalized
-          ? seedValidation.normalized
-          : f.predictiveSeed,
       }, {
         hcpRoleType: result.hcpRoleType || f.hcpRoleType,
         journeyStage: derivedTopLevelUi.stage || f.journeyStage,
         challengeContext: derivedTopLevelUi.challenge || f.challengeContext,
-      }), {
-        hcpType: derivedSeedUi.hcpType || f.predictiveSeedUI.hcpType,
-        stage: derivedSeedUi.stage || f.predictiveSeedUI.stage,
-        challenge: derivedSeedUi.challenge || f.predictiveSeedUI.challenge,
       }));
     } finally {
       setAiGenerating(false);
@@ -440,10 +253,8 @@ Return ONLY valid JSON:
   };
 
   const handleSave = async () => {
-    if (!form.title || !form.openingScene || !form.journeyStage || !form.startingBehaviorState) return;
-    const seedValidation = validatePredictiveSeed(form.predictiveSeed);
-    if (!seedValidation.ok) {
-      setSaveError(seedValidation.message);
+    if (!form.title || !form.openingScene || !form.hcpRoleType || !form.journeyStage || !form.challengeContext) {
+      setSaveError("Complete HCP Profile, Scenario Stage, Challenge Context, title, and opening scene before saving.");
       return;
     }
 
@@ -455,18 +266,19 @@ Return ONLY valid JSON:
       stage: form.journeyStage,
       challenge: form.challengeContext,
       realism: form.runtimeTemperature,
-      diseaseState: form.predictiveSeed?.diseaseState || "primary_care",
+      diseaseState: "primary_care",
     });
 
     await createCustomScenario({
       ...form,
-      predictiveSeed: seedValidation.normalized,
+      predictiveSeed: mappedForSave.predictiveSelection,
       journeyStage: mappedForSave.resolvedFields.journey_stage,
+      journeyState: journeyStateForStage[mappedForSave.resolvedFields.journey_stage] || "early_discovery",
       decisionOrientation: mappedForSave.resolvedFields.influence_driver,
       persona: mappedForSave.resolvedFields.behavior_archetype,
+      startingBehaviorState: challengeDefaultBehaviorState[form.challengeContext] || "neutral",
       interactionPressure: mappedForSave.resolvedFields.interaction_pressure,
       runtimeTemperature: Math.max(1, Math.min(10, Number(form.runtimeTemperature) || 5)),
-      journeyState: journeyStateForStage[mappedForSave.resolvedFields.journey_stage] || "early_discovery",
       keyChallenges: form.keyChallenges.split("\n").filter(Boolean),
       isBuiltIn: false,
       isPublished: true,
@@ -476,36 +288,21 @@ Return ONLY valid JSON:
     setTimeout(() => navigate("/"), 1200);
   };
 
-  const isValid = form.title && form.openingScene && form.journeyStage && form.startingBehaviorState;
+  const isValid = form.title && form.openingScene && form.hcpRoleType && form.journeyStage && form.challengeContext;
 
   return (
     <div
       className="min-h-screen font-inter"
       style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}
     >
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-[1180px] mx-auto px-6 py-4 flex items-center gap-3">
-          <Link to="/" className="transition-colors" style={{ color: "hsl(222 52% 24%)" }}
-            onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
+      <AppHeader maxWidthClassName="max-w-[1180px]" />
+
+      <div className="max-w-[1180px] mx-auto px-6 py-8">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <div>
             <span className="font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Scenario Builder</span>
             <span className="text-sm ml-2" style={{ color: "hsl(215 18% 46%)" }}>Create a custom training scenario</span>
           </div>
-        </div>
-      </div>
-
-      <div className="max-w-[1180px] mx-auto px-6 py-8">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           <EnterpriseBanner
             title="Build a Scenario"
             subtitle="Create a custom training scenario formatted to the same canonical structure as all built-in scenarios."
@@ -609,16 +406,16 @@ Return ONLY valid JSON:
                   <h3 className="font-semibold" style={{ color: "hsl(174 55% 34%)" }}>Realism Variables</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Conversation Moment *">
-                    <Select value={form.journeyStage} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { journeyStage: value }))} options={journeyStages} />
-                  </Field>
-                  <Field label="HCP Role">
+                  <Field label={`${RPS_UI_LABELS.hcpType} *`}>
                     <Select value={form.hcpRoleType} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { hcpRoleType: value }))} options={hcpRoleTypes} />
                   </Field>
-                  <Field label="Challenge Focus">
+                  <Field label={`${RPS_UI_LABELS.stage} *`}>
+                    <Select value={form.journeyStage} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { journeyStage: value }))} options={journeyStages} />
+                  </Field>
+                  <Field label={`${RPS_UI_LABELS.challenge} *`}>
                     <Select value={form.challengeContext} onChange={(value) => setForm((f) => applyTopLevelMapping(f, { challengeContext: value }))} options={challengeContexts} />
                   </Field>
-                  <Field label="Realism Lever">
+                  <Field label={RPS_UI_LABELS.realism}>
                     <div className="rounded-xl px-3.5 py-2.5" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(244,249,249,0.98) 100%)", border: "1.5px solid rgba(92, 135, 165, 0.42)" }}>
                       <div className="flex items-center justify-between text-xs mb-1.5" style={{ color: "hsl(215 18% 46%)" }}>
                         <span>1 (Cooperative)</span>
@@ -632,56 +429,14 @@ Return ONLY valid JSON:
                         value={Math.max(1, Math.min(10, Number(form.runtimeTemperature) || 5))}
                         onChange={(event) => setForm((f) => applyTopLevelMapping(f, { runtimeTemperature: Number(event.target.value) }))}
                         className="w-full accent-teal-600"
-                        aria-label="Realism Lever"
+                        aria-label={RPS_UI_LABELS.realism}
                       />
                     </div>
                   </Field>
                 </div>
-
                 <p className="text-xs" style={{ color: "hsl(215 18% 46%)" }}>
-                  {ADVANCED_CONTROLS_WARNING}
+                  Starting behavior, interaction pressure, predictive seed, and other runtime fields are derived automatically from these four controls.
                 </p>
-                <AdvancedControlsSection label="Derived Scenario Fields">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Field label="Starting Behavior State *">
-                      <Select value={form.startingBehaviorState} onChange={set("startingBehaviorState")} options={behaviorStates} />
-                    </Field>
-                    <Field label="Interaction Pressures">
-                      <MultiToggle options={pressures} selected={form.interactionPressure} onChange={set("interactionPressure")} />
-                    </Field>
-                  </div>
-                  <div className="pt-3 mt-3 border-t" style={{ borderColor: "rgba(92, 135, 165, 0.18)" }}>
-                    <h4 className="text-sm font-semibold mb-3" style={{ color: "hsl(174 55% 34%)" }}>
-                      Predictive HCP Seed (Debug)
-                    </h4>
-                    <p className="text-xs mb-3" style={{ color: "hsl(215 18% 46%)" }}>
-                      Optional override for debugging only. Default flow derives this automatically from the 3-control model.
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <Field label="HCP Role">
-                        <Select
-                          value={form.predictiveSeedUI.hcpType}
-                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { hcpType: value }))}
-                          options={hcpRoleTypes}
-                        />
-                      </Field>
-                      <Field label="Conversation Moment">
-                        <Select
-                          value={form.predictiveSeedUI.stage}
-                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { stage: value }))}
-                          options={journeyStages}
-                        />
-                      </Field>
-                      <Field label="Challenge Focus">
-                        <Select
-                          value={form.predictiveSeedUI.challenge}
-                          onChange={(value) => setForm((f) => applyPredictiveSeedMapping(f, { challenge: value }))}
-                          options={challengeContexts}
-                        />
-                      </Field>
-                    </div>
-                  </div>
-                </AdvancedControlsSection>
               </div>
 
               <div

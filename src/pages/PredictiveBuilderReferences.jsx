@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, FileText } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
+import { ExternalLink, FileText } from "lucide-react";
 import { PREDICTIVE_REFERENCE_APPENDIX } from "@/lib/predictiveReferences";
 import { listEvidenceSources } from "@/services/workerClient";
 
@@ -48,24 +48,7 @@ export default function PredictiveBuilderReferences() {
 
     return (
         <div className="min-h-screen font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
-            <div
-                className="sticky top-0 z-10 backdrop-blur-xl"
-                style={{
-                    background: "rgba(255,255,255,0.84)",
-                    borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-                    boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-                }}
-            >
-                <div className="max-w-[1180px] mx-auto px-6 py-4 flex items-center gap-3">
-                    <Link to="/predictive-builder" className="transition-colors" style={{ color: "hsl(222 52% 24%)" }}>
-                        <ArrowLeft className="w-4 h-4" />
-                    </Link>
-                    <div>
-                        <span className="font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Predictive Builder References</span>
-                        <span className="text-sm ml-2" style={{ color: "hsl(215 18% 46%)" }}>Appendix of credible clinical and publication sources</span>
-                    </div>
-                </div>
-            </div>
+            <AppHeader maxWidthClassName="max-w-[1180px]" />
 
             <div className="max-w-[1180px] mx-auto px-6 py-8 space-y-6">
                 <div
@@ -76,6 +59,10 @@ export default function PredictiveBuilderReferences() {
                         boxShadow: "0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68)",
                     }}
                 >
+                    <div className="mb-4">
+                        <span className="font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Predictive Builder References</span>
+                        <span className="text-sm ml-2" style={{ color: "hsl(215 18% 46%)" }}>Appendix of credible clinical and publication sources</span>
+                    </div>
                     <div className="flex items-center gap-2 mb-4" style={{ color: "hsl(222 48% 22%)" }}>
                         <FileText className="w-4 h-4" />
                         <h1 className="text-sm font-semibold uppercase tracking-wider">References Appendix</h1>

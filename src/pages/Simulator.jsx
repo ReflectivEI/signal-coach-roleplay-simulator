@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import AppHeader from "@/components/layout/AppHeader";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { generateSessionReview } from "@/lib/sessionReview";
@@ -10,7 +11,7 @@ import MessageInput from "@/components/simulator/MessageInput";
 import SimulatorRightPanel from "@/components/simulator/SimulatorRightPanel";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
-import { ArrowLeft, Square, ChevronDown } from "lucide-react";
+import { Square, ChevronDown } from "lucide-react";
 import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
@@ -730,6 +731,8 @@ export default function Simulator() {
 
   return (
     <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+      <AppHeader maxWidthClassName="max-w-none" />
+
       <div
         className="shrink-0 z-10 backdrop-blur-xl"
         style={{
@@ -739,16 +742,6 @@ export default function Simulator() {
       >
         <div className="grid grid-cols-[minmax(240px,auto)_1fr_auto] items-center px-5 py-3.5 gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={() => navigate("/")}
-              className="transition-colors shrink-0 p-1"
-              style={{ color: "rgba(244,249,249,0.92)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 62%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "rgba(244,249,249,0.92)"; }}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="w-px h-5 shrink-0" style={{ background: "rgba(255,255,255,0.18)" }} />
             <h1 className="font-semibold text-base leading-none truncate max-w-[320px]" style={{ color: "rgba(255,255,255,0.96)" }}>
               {scenario?.title}
             </h1>
@@ -871,13 +864,6 @@ export default function Simulator() {
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
               temperature={session?.temperature}
-              onTemperatureChange={(value) => {
-                const numeric = Number(value);
-                if (!Number.isFinite(numeric)) return;
-                const next = Math.max(1, Math.min(10, numeric));
-                setSession((current) => current ? { ...current, temperature: next } : current);
-                console.debug("[Simulator] Temperature updated:", next);
-              }}
             />
           </div>
         </div>
@@ -907,13 +893,6 @@ export default function Simulator() {
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
               temperature={session?.temperature}
-              onTemperatureChange={(value) => {
-                const numeric = Number(value);
-                if (!Number.isFinite(numeric)) return;
-                const next = Math.max(1, Math.min(10, numeric));
-                setSession((current) => current ? { ...current, temperature: next } : current);
-                console.debug("[Simulator] Temperature updated:", next);
-              }}
             />
           </motion.div>
         )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Trash2, Eye, EyeOff, Plus, ArrowLeft } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
+import { Trash2, Eye, EyeOff, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/lib/scenarioStorage";
 
@@ -38,22 +39,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b border-border/40 bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <h1 className="text-2xl font-bold text-foreground">Scenario Management</h1>
-          </div>
+      <AppHeader maxWidthClassName="max-w-6xl" />
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Scenario Management</h1>
           <button onClick={() => navigate("/builder")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
             <Plus className="w-4 h-4" />
             Create Scenario
           </button>
         </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="space-y-3">
           {scenarios.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">

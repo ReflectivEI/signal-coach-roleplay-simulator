@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import AppHeader from "@/components/layout/AppHeader";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronDown, ChevronUp, MessageSquare, Ear, Heart, Users, Shield, BarChart2, RefreshCw, Target } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageSquare, Ear, Heart, Users, Shield, BarChart2, RefreshCw, Target } from "lucide-react";
 
 // Icon map per capability
 const CAP_ICONS = {
@@ -106,7 +106,7 @@ function CapabilityCard({ cap, index }) {
                   </ul>
                 </div>
               </div>
-              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -117,34 +117,7 @@ function CapabilityCard({ cap, index }) {
 export default function Capabilities() {
   return (
     <div className="min-h-screen font-inter" style={{ background: "#f8fafb" }}>
-
-      {/* Top nav — clean white bar */}
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center gap-3">
-          <Link
-            to="/"
-            className="transition-colors"
-            style={{ color: "hsl(222 52% 24%)" }}
-            onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="w-px h-4" style={{ background: "rgba(38, 67, 117, 0.14)" }} />
-          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 55% 38%)" }}>
-            Signal Intelligence
-          </span>
-          <span className="text-xs mx-1" style={{ color: "rgba(38, 67, 117, 0.28)" }}>/</span>
-          <span className="text-sm font-medium" style={{ color: "hsl(222 38% 31%)" }}>Behavioral Metrics</span>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-5xl" />
 
       <div className="max-w-5xl mx-auto px-6 py-10">
 
