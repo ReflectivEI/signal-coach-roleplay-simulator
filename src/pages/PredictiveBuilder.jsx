@@ -30,7 +30,7 @@ const INITIAL_UI_SELECTION = {
   hcpType: "",
   stage: "",
   challenge: "",
-  realism: 5,
+  realism: 5, // Default middle value for realism scale (1-10)
 };
 
 function formatWorkerBinding(workerBaseUrl) {

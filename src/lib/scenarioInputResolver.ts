@@ -487,11 +487,15 @@ function normalizeUnifiedScenarioInput(inputs: UnifiedScenarioInput & {
         cautious_commitment: "competing_priorities",
     };
 
+    // Ensure realism always has a valid default (1-10, preferring 5 as middle)
+    const rawRealism = inputs?.realism ?? inputs?.realismLevel;
+    const realism = (rawRealism !== undefined && rawRealism !== null) ? rawRealism : 5;
+
     return {
         hcpType: inputs?.hcpType || "treating_clinician",
         stage,
         challenge: challengeAliasMap[rawChallenge] || rawChallenge,
-        realism: inputs?.realism ?? inputs?.realismLevel,
+        realism,
         diseaseState: inputs?.diseaseState,
         specialty: inputs?.specialty,
         optionalOverrides: inputs?.optionalOverrides,
