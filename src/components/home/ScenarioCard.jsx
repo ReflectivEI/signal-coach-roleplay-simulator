@@ -24,12 +24,14 @@ function getDifficulty(scenario) {
   return { label: "Foundational", cls: "text-emerald-600 border-emerald-200 bg-emerald-50" };
 }
 
-export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) {
+export default function ScenarioCard({ scenario, index, isFeatured, onDelete, selectedRealism = 5 }) {
   const [showDetail, setShowDetail] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const difficulty = getDifficulty(scenario);
+  const normalizedRealism = Math.max(1, Math.min(10, Number(selectedRealism) || 5));
+  const launchUrl = `/simulator?scenarioId=${encodeURIComponent(scenario.id)}&realism=${normalizedRealism}`;
   const displayTitle = scenario.title === "The Warm Intro That Turns Cold"
     ? "Warm Intro Turns Cold"
     : scenario.title.replace(/^The\s+/, "");
@@ -94,7 +96,7 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             Preview Brief
           </button>
           <button
-            onClick={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
+            onClick={() => navigate(launchUrl)}
             className="py-1 px-4 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
             style={{
               background: hovered
@@ -134,7 +136,7 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             scenario={scenario}
             difficulty={difficulty}
             onClose={() => setShowDetail(false)}
-            onStart={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
+            onStart={() => navigate(launchUrl)}
           />
         )}
       </AnimatePresence>

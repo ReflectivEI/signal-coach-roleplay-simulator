@@ -193,6 +193,9 @@ export default function Simulator() {
   const navigate = useNavigate();
   const urlParams = new URLSearchParams(window.location.search);
   const scenarioId = urlParams.get("scenarioId");
+  const realismOverrideRaw = urlParams.get("realism") ?? urlParams.get("runtimeTemperature");
+  const realismOverride = Number(realismOverrideRaw);
+  const hasRealismOverride = Number.isInteger(realismOverride) && realismOverride >= 1 && realismOverride <= 10;
 
   const [scenario, setScenario] = useState(null);
   const [session, setSession] = useState(null);
@@ -230,7 +233,7 @@ export default function Simulator() {
   useEffect(() => {
     if (scenarioId) void initSession();
     else navigate("/");
-  }, [scenarioId]);
+  }, [navigate, scenarioId, realismOverrideRaw]);
 
   const initSession = async () => {
     setIsInitializing(true);
@@ -258,6 +261,7 @@ export default function Simulator() {
       const resolvedSeed = buildPredictiveSeedFromScenario(scData);
       const scenarioWithSeed = {
         ...scData,
+        runtimeTemperature: hasRealismOverride ? realismOverride : scData.runtimeTemperature,
         predictiveSeed: {
           ...resolvedSeed,
           ...(scData.predictiveSeed || {}),

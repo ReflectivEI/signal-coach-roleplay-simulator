@@ -153,6 +153,7 @@ export default function Home() {
                   scenario={scenario}
                   index={i}
                   isFeatured={i === 0}
+                  selectedRealism={filters.realism}
                   onDelete={handleDeleteScenario}
                 />
               ))}
