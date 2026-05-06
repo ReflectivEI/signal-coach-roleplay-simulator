@@ -632,10 +632,12 @@ export function deriveUserFacingInputsFromScenario(
         scenario?.influence_driver ??
         "patient_centric",
     );
-    const realismLevel = requireRealismContract(
-        scenario?.runtimeTemperature ?? scenario?.runtime_temperature,
-        "scenario realism",
-    );
+    const rawScenarioRealism = scenario?.runtimeTemperature ?? scenario?.runtime_temperature;
+    const parsedScenarioRealism = Number(rawScenarioRealism);
+    // Keep UI hydration resilient to legacy/corrupt scenario records.
+    const realismLevel = Number.isInteger(parsedScenarioRealism) && parsedScenarioRealism >= 1 && parsedScenarioRealism <= 10
+        ? parsedScenarioRealism
+        : 5;
     const hcpRole = String(
         scenario?.hcpRoleType ??
         scenario?.hcp_type ??
