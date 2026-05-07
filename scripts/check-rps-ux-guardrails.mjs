@@ -74,6 +74,20 @@ const canonicalOptionValueMarkers = [
     "Follow-up / Commitment",
 ];
 
+const adaptiveRpsPagePath = path.join(rootDir, "src/features/rps/AdaptiveRpsPage.jsx");
+const adaptiveRequiredSignatures = [
+    'hcpType: ""',
+    'stage: ""',
+    'challenge: ""',
+    "REALISM_LEVEL_LABELS",
+];
+const adaptiveForbiddenSignatures = [
+    'hcp_profile: ""',
+    'journey_stage: ""',
+    'access_barrier_context: ""',
+    'rep_objective: ""',
+];
+
 function walkDir(directory, fileList = []) {
     const entries = fs.readdirSync(directory, { withFileTypes: true });
     for (const entry of entries) {
@@ -164,6 +178,31 @@ for (const relativePath of auditedUiFiles) {
     for (const label of advancedControlLabels) {
         if (hasRenderedText(content, label)) {
             addIssue(issues, filePath, `possible advanced/selectable regression found: \"${label}\"`);
+        }
+    }
+}
+
+if (!fs.existsSync(adaptiveRpsPagePath)) {
+    addIssue(issues, adaptiveRpsPagePath, "Adaptive RPS page missing");
+} else {
+    const adaptiveSource = fs.readFileSync(adaptiveRpsPagePath, "utf8");
+    for (const signature of adaptiveRequiredSignatures) {
+        if (!adaptiveSource.includes(signature)) {
+            addIssue(
+                issues,
+                adaptiveRpsPagePath,
+                `required Adaptive RPS signature missing: \"${signature}\"`
+            );
+        }
+    }
+
+    for (const signature of adaptiveForbiddenSignatures) {
+        if (adaptiveSource.includes(signature)) {
+            addIssue(
+                issues,
+                adaptiveRpsPagePath,
+                `legacy Adaptive RPS signature detected: \"${signature}\"`
+            );
         }
     }
 }
