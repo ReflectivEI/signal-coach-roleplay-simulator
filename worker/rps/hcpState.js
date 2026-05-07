@@ -191,6 +191,7 @@ function getRepTopicSignals(textValue = "") {
         patient_fit: /\b(patient profile|which patients|patient subgroup|subgroup|fit|criteria|who fits)\b/.test(lower),
         access: /\b(prior auth|prior authorization|approval|payer|coverage|formulary|access)\b/.test(lower),
         workflow: /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower),
+        safety: /\b(safety|risk|adverse|side effect|hepatic|liver)\b/.test(lower),
     };
 }
 
@@ -201,6 +202,7 @@ function inferRepTopic(textValue = "") {
     const signals = getRepTopicSignals(lower);
     if (signals.access) return "access";
     if (signals.workflow) return "workflow";
+    if (signals.safety) return "safety";
     // Prefer patient-fit when subgroup language is explicit, even if trial/data is also present.
     if (signals.patient_fit) return "patient_fit";
     if (signals.study) return "study";
@@ -214,6 +216,7 @@ function topicAcknowledged(line = "", topic = "none") {
     if (topic === "patient_fit") return /\b(patient|patients|subgroup|fit|criteria|profile)\b/.test(lower);
     if (topic === "access") return /\b(prior auth|approval|payer|coverage|formulary|access)\b/.test(lower);
     if (topic === "workflow") return /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower);
+    if (topic === "safety") return /\b(safety|risk|adverse|side effect|hepatic|liver)\b/.test(lower);
     return true;
 }
 
@@ -223,9 +226,10 @@ function hasConflictingTopicSignal(sentence = "", topic = "none") {
     const signals = getRepTopicSignals(lower);
 
     if (topic === "study") return signals.patient_fit || signals.access || signals.workflow;
-    if (topic === "patient_fit") return signals.study || signals.access || signals.workflow;
-    if (topic === "access") return signals.study || signals.patient_fit || signals.workflow;
-    if (topic === "workflow") return signals.study || signals.patient_fit || signals.access;
+    if (topic === "patient_fit") return signals.study || signals.access || signals.workflow || signals.safety;
+    if (topic === "access") return signals.study || signals.patient_fit || signals.workflow || signals.safety;
+    if (topic === "workflow") return signals.study || signals.patient_fit || signals.access || signals.safety;
+    if (topic === "safety") return signals.study || signals.patient_fit || signals.access || signals.workflow;
     return false;
 }
 
@@ -250,6 +254,9 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) 
     }
     if (topic === "workflow") {
         return "If this is about workflow, tell me what concrete staff step gets easier first.";
+    }
+    if (topic === "safety") {
+        return "If this is about safety, I need to know what signal lowers risk for the patients I actually treat.";
     }
     return "I need a direct answer tied to what I just asked.";
 }
