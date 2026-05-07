@@ -17,7 +17,7 @@ import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/
  */
 
 export default function AdminDashboard() {
-  const [scenarios, setScenarios] = useState(/** @type {AdminScenario[]} */ ([]));
+  const [scenarios, setScenarios] = useState(/** @type {AdminScenario[]} */([]));
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 

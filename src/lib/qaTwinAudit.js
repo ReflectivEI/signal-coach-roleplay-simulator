@@ -571,6 +571,17 @@ function deriveTopCorrections(failureCounts = {}) {
     .map(([type]) => type.replace(/_/g, " "));
 }
 
+function deriveFailureHierarchy(failureCounts = {}) {
+  const sorted = Object.entries(failureCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([type]) => type);
+  return {
+    primaryFailureDriver: sorted[0] || "none",
+    secondaryEffects: sorted.slice(1, 3),
+    downstreamConsequences: sorted.slice(0, 3),
+  };
+}
+
 function normalizeFailureEntry(failure, defaultConfidence = "medium") {
   if (!failure) return null;
   if (typeof failure === "string") {
@@ -855,6 +866,7 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       : "Journey, pressure, and tone alignment remained within expected bounds.",
     severityCounts,
     rootCauseClassification,
+    failureHierarchy: deriveFailureHierarchy(failureCounts),
     topCorrections: deriveTopCorrections(failureCounts),
     calibrationCases: runInternalAuditCalibrationCases(),
   };

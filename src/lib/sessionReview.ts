@@ -425,6 +425,41 @@ ${CAPABILITY_RULES}
 
 You MUST produce ALL of the following. Do not omit any field. Do not summarize generically.
 
+── REQUIRED FAILURE HIERARCHY (GLOBAL) ──
+You MUST derive exactly:
+1) one Primary Failure Driver
+2) up to two Secondary Effects
+3) one Downstream Consequence chain
+
+Represent this hierarchy consistently across briefRationale, biggestGap, nextAdjustment, signalResponseAlignment, and overallSummary.
+Do not restate the same idea in different sections with different wording.
+
+Hierarchy format to enforce in prose:
+- Primary Failure Driver: [single dominant behavior failure]
+- Secondary Effects: [up to two concrete effects]
+- Downstream Consequences: [HCP reaction and conversation outcome]
+
+If multiple failures are present, pick the dominant one by causal impact, not frequency.
+
+── EVIDENCE ANCHOR FORMAT (MANDATORY) ──
+Every meaningful insight must include transcript anchoring in this structure:
+Rep: "..."
+HCP: "..."
+→ Impact: ...
+
+If an insight cannot be anchored to transcript evidence, do not include it.
+
+At least 2 anchored evidence moments are required in capabilityInsights + signalResponseAlignment.
+
+── POSITIVITY GUARDRAIL ──
+Do not include filler strengths.
+If no trajectory-changing strength exists, explicitly state that no meaningful strength changed the interaction trajectory.
+
+── REALISM TONE ENFORCEMENT ──
+When realism/temperature is high (>= 7), use decisive language.
+Disallow hedging forms such as: "could have", "might help", "consider", "try to".
+Use direct causal framing: "This failed because..." and "This caused...".
+
 ─── BLOCK A: BRIEF RATIONALE ───
 Field: briefRationale (single string)
 

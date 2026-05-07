@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ChevronDown, ChevronUp, RefreshCw, MessageSquare, FileText, Target, AlertTriangle, CheckCircle2, AlertCircle, XCircle, Maximize2, Minimize2 } from "lucide-react";
+import { capabilityStateFromObservationLevel, capabilityStateTone } from "@/lib/capabilityStates";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 
 const metricColorTokens = {
@@ -32,17 +33,19 @@ const sectionSurface = {
   evidence: { border: "rgba(99, 111, 150, 0.34)", bg: "linear-gradient(180deg, rgba(248,249,254,0.98) 0%, rgba(241,243,251,0.98) 100%)" },
 };
 
-function getMetricColor(score) {
-  if (score >= 4) return metricColorTokens.success;
-  if (score === 3) return metricColorTokens.warning;
-  if (score <= 2) return metricColorTokens.danger;
+function getMetricColor(state) {
+  const tone = capabilityStateTone(state);
+  if (tone === "success") return metricColorTokens.success;
+  if (tone === "warning") return metricColorTokens.warning;
+  if (tone === "danger") return metricColorTokens.danger;
   return metricColorTokens.neutral;
 }
 
-function getMetricSignal(score) {
-  if (score >= 4) return { Icon: CheckCircle2, tone: "text-emerald-500" };
-  if (score === 3) return { Icon: AlertCircle, tone: "text-amber-500" };
-  if (score <= 2) return { Icon: XCircle, tone: "text-red-500" };
+function getMetricSignal(state) {
+  const tone = capabilityStateTone(state);
+  if (tone === "success") return { Icon: CheckCircle2, tone: "text-emerald-500" };
+  if (tone === "warning") return { Icon: AlertCircle, tone: "text-amber-500" };
+  if (tone === "danger") return { Icon: XCircle, tone: "text-red-500" };
   return { Icon: AlertCircle, tone: "text-slate-500" };
 }
 
@@ -51,12 +54,6 @@ const CAP_SUBLABELS = {
   listening_responsiveness: "Show that the rep heard the real issue, not just the topic.",
   making_it_matter: "Connect the point to the HCP's real-world decision threshold.",
   customer_engagement_signals: "Track whether the HCP is leaning in, narrowing, or pulling back.",
-};
-
-const LEVEL_TO_SCORE = {
-  effective: 5,
-  developing: 3,
-  missed: 1,
 };
 
 const REVIEW_TEXT = "hsl(222 44% 17%)";
@@ -351,6 +348,60 @@ function buildExchangeSpecificSummary({ review, insightByCapability, session }) 
   ].filter(Boolean);
 }
 
+function applyDecisiveTone(text = "", isHighRealism = false) {
+  const value = cleanCoachingCopyExpanded(text, 96);
+  if (!isHighRealism) return value;
+  return String(value)
+    .replace(/\byou could have\b/gi, "this failed because")
+    .replace(/\bit might help\b/gi, "this caused")
+    .replace(/\bconsider\b/gi, "do")
+    .replace(/\btry to\b/gi, "do")
+    .replace(/\bcould\b/gi, "did not")
+    .replace(/\bmight\b/gi, "did")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function scoreFromObservationLevel(level = "developing") {
+  if (level === "missed") return 1;
+  if (level === "effective") return 5;
+  return 2;
+}
+
+function buildAnchoredEvidenceMoments(session = null, insights = [], max = 3) {
+  const moments = [];
+  const transcriptTurns = Array.isArray(session?.transcript) ? session.transcript : [];
+
+  for (const insight of insights) {
+    const repQuote = cleanTranscriptQuote(insight?.transcriptEvidence || "", 22);
+    if (!repQuote) continue;
+    const repTurn = transcriptTurns.find((turn) => turn?.speaker === "rep" && String(turn?.text || "").includes(repQuote.slice(0, 18)));
+    const repIndex = repTurn ? transcriptTurns.findIndex((turn) => turn?.id === repTurn.id) : -1;
+    const hcpTurn = repIndex >= 0
+      ? transcriptTurns.slice(repIndex + 1).find((turn) => turn?.speaker === "hcp")
+      : null;
+    const hcpQuote = cleanTranscriptQuote(hcpTurn?.text || "", 20) || "HCP response stayed resistant and did not concede a next step.";
+    const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || insight?.nextTimeAction || "", 28);
+    if (!impact) continue;
+    moments.push(`Rep: "${repQuote}"\nHCP: "${hcpQuote}"\n→ Impact: ${impact}`);
+    if (moments.length >= max) break;
+  }
+
+  if (moments.length < 2) {
+    for (let i = 0; i < transcriptTurns.length - 1 && moments.length < Math.max(2, max); i += 1) {
+      const rep = transcriptTurns[i];
+      const hcp = transcriptTurns[i + 1];
+      if (rep?.speaker !== "rep" || hcp?.speaker !== "hcp") continue;
+      const repQuote = cleanTranscriptQuote(rep?.text || "", 18);
+      const hcpQuote = cleanTranscriptQuote(hcp?.text || "", 18);
+      if (!repQuote || !hcpQuote) continue;
+      moments.push(`Rep: "${repQuote}"\nHCP: "${hcpQuote}"\n→ Impact: The exchange narrowed and exposed the decision barrier without securing commitment.`);
+    }
+  }
+
+  return uniqCoachingPoints(moments).slice(0, max);
+}
+
 function buildSpecificDevelopmentParagraph(insight) {
   if (!insight) return "";
   const evidence = insight.transcriptEvidence ? `"${cleanCoachingCopy(insight.transcriptEvidence)}"` : "";
@@ -543,9 +594,11 @@ function DeepDiveBlock({ number, title, children }) {
 function CapabilityRow({ cap, insight }) {
   const [open, setOpen] = useState(false);
   const sublabel = CAP_SUBLABELS[cap.id];
-  const score = LEVEL_TO_SCORE[insight?.observationLevel] || 0;
-  const metricColor = getMetricColor(score);
-  const { Icon: SignalIcon, tone } = getMetricSignal(score);
+  const capabilityState = capabilityStateFromObservationLevel(insight?.observationLevel);
+  const metricColor = getMetricColor(capabilityState);
+  const { Icon: SignalIcon, tone } = getMetricSignal(capabilityState);
+  const rowDiagnosis = cleanCoachingCopy(insight?.whatHappened || insight?.nextTimeAction || sublabel || "Behavior not observed clearly enough to diagnose.");
+  const rowConsequence = cleanCoachingCopy(insight?.whyItMattered || insight?.pattern || "No direct interaction consequence was surfaced in this moment.");
   const hasStructuredContent = Boolean(
     insight?.whatHappened ||
     insight?.transcriptEvidence ||
@@ -569,16 +622,16 @@ function CapabilityRow({ cap, insight }) {
         </span>
 
         <span className={`text-xs font-medium shrink-0 ${metricColor.text}`}>
-          Score {score}/5
+          {capabilityState}
         </span>
 
-        {sublabel && !open && (
-          <span className="text-xs flex-1" style={{ color: REVIEW_FAINT }}>{sublabel}</span>
+        {!open && (
+          <span className="text-xs flex-1" style={{ color: REVIEW_FAINT }}>{rowDiagnosis}</span>
         )}
-        {!sublabel && <span className="flex-1" />}
+        {open ? <span className="flex-1" /> : null}
 
         <span className={`text-xs font-semibold px-3 py-1 rounded-md border shrink-0 transition-opacity ${metricColor.text} ${metricColor.bg} ${metricColor.border}`}>
-          Analyze
+          View Diagnosis
         </span>
 
         {open
@@ -599,12 +652,12 @@ function CapabilityRow({ cap, insight }) {
             <div className={`pb-5 px-4 space-y-4 border-t border-l-2 pt-4 ${metricColor.border}`} style={{ borderTopColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
               <div className={`rounded-md border px-3 py-2 ${metricColor.bg} ${metricColor.border}`}>
                 <p className={`text-xs font-semibold uppercase tracking-wide ${metricColor.text}`}>
-                  Behavioral Analysis
+                  Capability State: {capabilityState}
                 </p>
               </div>
 
               {insight.whatHappened && (
-                <DeepDiveBlock number="1" title="What You Did">
+                <DeepDiveBlock number="1" title="Behavioral Diagnosis">
                   <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.whatHappened)}</p>
                   {insight.transcriptEvidence && (
                     <div className="mt-2 p-3 rounded-lg border-l-2" style={{ background: REVIEW_EVIDENCE_BG, borderColor: REVIEW_EVIDENCE_BORDER }}>
@@ -616,20 +669,20 @@ function CapabilityRow({ cap, insight }) {
                 </DeepDiveBlock>
               )}
 
-              {insight.whyItMattered && (
-                <DeepDiveBlock number="2" title="How the HCP Reacted">
-                  <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.whyItMattered)}</p>
+              {(insight.whyItMattered || rowConsequence) && (
+                <DeepDiveBlock number="2" title="Interaction Consequence">
+                  <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{rowConsequence}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.pattern && (
-                <DeepDiveBlock number="3" title="If This Continues">
+                <DeepDiveBlock number="3" title="Recurring Pattern">
                   <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.pattern)}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.whatGoodLooksLike && (
-                <DeepDiveBlock number="4" title="What to Do Instead">
+                <DeepDiveBlock number="4" title="Coaching Direction">
                   <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.whatGoodLooksLike)}</p>
                   {insight.exampleRewrite && (
                     <div className="mt-2 p-3 rounded-lg bg-signal-positive/5 border border-signal-positive/20">
@@ -641,7 +694,7 @@ function CapabilityRow({ cap, insight }) {
               )}
 
               {insight.nextTimeAction && (
-                <DeepDiveBlock number="5" title="Next Time">
+                <DeepDiveBlock number="5" title="Next Interaction">
                   <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.nextTimeAction)}</p>
                 </DeepDiveBlock>
               )}
@@ -732,74 +785,46 @@ export default function SessionSummaryModal({
   const legacyCoaching = splitParagraphs(review.coaching_recommendations || review.nextAdjustment || review.actionPlanProse);
   const legacyImprovedResponse = splitParagraphs(review.improved_response || review.suggested_response || review.suggestedReframes?.[0]?.exampleRewrite);
 
-  const briefRationale = cleanCoachingCopy(review.briefRationale || review.overallSummary?.[0] || "");
   const insights = SIGNAL_INTELLIGENCE_CAPABILITIES
     .map((cap) => insightByCapability[cap.id])
     .filter(Boolean);
+  const temperatureValue = Number(session?.realism ?? session?.temperature);
+  const isHighRealismTone = Number.isFinite(temperatureValue) && temperatureValue >= 7;
+  const briefRationale = applyDecisiveTone(cleanCoachingCopy(review.briefRationale || review.overallSummary?.[0] || ""), isHighRealismTone);
   const effectiveInsights = insights.filter((insight) => insight.observationLevel === "effective");
   const growthInsights = insights.filter((insight) => insight.observationLevel !== "effective");
-  const developingInsights = insights.filter((insight) => insight.observationLevel === "developing");
-  const overallScore = (
-    SIGNAL_INTELLIGENCE_CAPABILITIES.reduce((sum, cap) => {
-      const level = insightByCapability[cap.id]?.observationLevel;
-      return sum + (LEVEL_TO_SCORE[level] || 0);
-    }, 0) / SIGNAL_INTELLIGENCE_CAPABILITIES.length
-  ).toFixed(1);
+  const rankedGrowth = [...growthInsights].sort((a, b) => scoreFromObservationLevel(a?.observationLevel) - scoreFromObservationLevel(b?.observationLevel));
+  const primaryFailure = rankedGrowth[0] || null;
+  const primaryFailureState = primaryFailure
+    ? capabilityStateFromObservationLevel(primaryFailure?.observationLevel)
+    : "Not Observed";
+  const secondaryEffects = rankedGrowth.slice(1, 3);
 
-  const didWellParagraphs = effectiveInsights
-    .map(buildSpecificStrengthParagraph)
-    .filter(Boolean)
-    .slice(0, 3);
-  const attemptedStrengthParagraphs = uniqCoachingPoints(buildTranscriptStrengthParagraphs(session))
-    .filter(Boolean)
-    .slice(0, 3);
-  const didWellFallback = uniqCoachingPoints(legacyWhatWorked.map((item) => cleanCoachingCopyExpanded(item, 72)));
+  const primaryFailureLine = primaryFailure
+    ? applyDecisiveTone(`${primaryFailure.capabilityName}: ${primaryFailure.whatHappened || review.biggestGap || "The rep failed to answer the HCP's decisive ask."}`, isHighRealismTone)
+    : applyDecisiveTone(review.biggestGap || "No primary failure was detected.", isHighRealismTone);
+  const whyItHappenedLine = applyDecisiveTone(primaryFailure?.whyItMattered || briefRationale || "The HCP stayed unconvinced because the rep did not resolve the practical barrier.", isHighRealismTone);
+  const whatItCausedLine = applyDecisiveTone(primaryFailure?.pattern || review.nextAdjustment || "This caused resistance to persist and blocked commitment.", isHighRealismTone);
 
-  const biggestGapParagraphs = growthInsights
-    .map(buildSpecificDevelopmentParagraph)
-    .filter(Boolean)
-    .slice(0, 3);
-  const biggestGapFallback = uniqCoachingPoints(legacyWhatWasMissed.map((item) => cleanCoachingCopyExpanded(item, 80)));
+  const signalAlignmentParagraphs = [primaryFailureLine];
+  const outcomeText = [whatItCausedLine];
 
-  const actionItemParagraphs = growthInsights
-    .map(buildRobustImprovementPoint)
-    .filter(Boolean)
-    .slice(0, 3);
-  const actionItemFallback = uniqCoachingPoints(legacyCoaching.map((item) => cleanCoachingCopyExpanded(item, 80)));
+  const limitationsList = secondaryEffects.length > 0
+    ? secondaryEffects.map((item) => applyDecisiveTone(`${item.capabilityName}: ${item.whyItMattered || item.whatHappened || "This amplified the primary failure."}`, isHighRealismTone))
+    : [applyDecisiveTone("No secondary effect was stronger than the primary failure driver.", isHighRealismTone)];
 
-  const specificSummary = buildExchangeSpecificSummary({ review, insightByCapability, session });
-
-  const outcomeText = (specificSummary.length > 0
-    ? specificSummary
-    : [cleanCoachingCopyExpanded(splitParagraphs(review.signalResponseAlignment)?.[2] || review.biggestGap || "", 84)])
-    .filter(isRenderableCoachingParagraph)
-    .slice(0, 3);
-
-  const strengthsList = uniqCoachingPoints([
-    ...didWellParagraphs.map((item) => cleanCoachingCopyExpanded(item, 84)),
-    ...attemptedStrengthParagraphs.map((item) => cleanCoachingCopyExpanded(item, 84)),
-    ...didWellFallback,
-    ...splitParagraphs(review.didWell || "").map((item) => cleanCoachingCopyExpanded(item, 84)),
-    ...splitParagraphs(review.strengthsProse || []).map((item) => cleanCoachingCopyExpanded(item, 84)),
-  ].filter(isRenderableCoachingParagraph)).slice(0, 3);
-
-  const limitationsList = uniqCoachingPoints([
-    ...biggestGapParagraphs.map((item) => cleanCoachingCopyExpanded(item, 90)),
-    ...biggestGapFallback,
-    ...splitParagraphs(review.biggestGap || "").map((item) => cleanCoachingCopyExpanded(item, 90)),
-    ...splitParagraphs(review.developProse || []).map((item) => cleanCoachingCopyExpanded(item, 90)),
-    ...(review.improvementAreas || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
-    ...(review.missedOpportunities || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
-  ]).slice(0, 3);
+  const strengthsList = effectiveInsights
+    .map((insight) => applyDecisiveTone(buildSpecificStrengthParagraph(insight), isHighRealismTone))
+    .filter((line) => /moved|shifted|opened|advanced|commitment|trajectory|reduced resistance/i.test(String(line || "")))
+    .slice(0, 2);
+  if (!strengthsList.length) {
+    strengthsList.push("No meaningful strength changed interaction trajectory in this exchange.");
+  }
 
   const improvementText = uniqCoachingPoints([
-    ...actionItemParagraphs.map((item) => cleanCoachingCopyExpanded(item, 96)),
-    ...actionItemFallback,
-    ...splitParagraphs(review.nextAdjustment || "").map((item) => cleanCoachingCopyExpanded(item, 96)),
-    ...splitParagraphs(review.actionPlanProse || []).map((item) => cleanCoachingCopyExpanded(item, 96)),
-    ...(review.suggestedReframes || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
-    ...(review.improvementAreas || []).map((item) => buildGuidanceParagraph(item, insightByCapability)),
-  ]).slice(0, 3);
+    applyDecisiveTone(review.nextAdjustment || "Respond to the HCP's exact barrier first, then ask one narrow follow-up tied to workflow, access, or evidence.", isHighRealismTone),
+    ...(review.improvementAreas || []).map((item) => applyDecisiveTone(buildGuidanceParagraph(item, insightByCapability), isHighRealismTone)),
+  ]).filter(Boolean).slice(0, 3);
 
   const bestRewrite = insightByCapability["listening_responsiveness"]?.exampleRewrite
     || growthInsights.find((insight) => insight?.exampleRewrite)?.exampleRewrite
@@ -820,13 +845,6 @@ export default function SessionSummaryModal({
   ].filter(Boolean);
 
   const patternInsight = scenario?.rep_profile || scenario?.patternInsight || "";
-  const signalAlignmentParagraphs = uniqCoachingPoints([
-    ...specificSummary,
-    ...splitParagraphs(review.signalResponseAlignment),
-    ...splitParagraphs(review.overallSummary).slice(1, 3),
-    ...splitParagraphs(review.biggestGap || ""),
-  ].map((item) => cleanCoachingCopyExpanded(item, 84)).filter(isRenderableCoachingParagraph)).slice(0, 4);
-  const temperatureValue = Number(session?.realism ?? session?.temperature);
   const temperatureBand = !Number.isFinite(temperatureValue)
     ? "unknown"
     : temperatureValue <= 3
@@ -852,17 +870,16 @@ export default function SessionSummaryModal({
         ? `Expected response style: ${cleanCoachingCopyExpanded(session.predictiveLens.repPreparation.conversationFrame, 20)}`
       : "",
   ]).slice(0, 4);
-  const transcriptEvidenceItems = uniqCoachingPoints(
-    (review.capabilityInsights || [])
-      .filter((insight) => insight?.transcriptEvidence || insight?.whyItMattered)
-      .map((insight) => {
-        const evidence = cleanCoachingCopyExpanded(insight?.transcriptEvidence || "", 24);
-        const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || "", 24);
-        if (!evidence && !impact) return "";
-        return normalizeQuotedPunctuation(`${insight?.capabilityName || insight?.title || "Observed signal"}: ${evidence || impact}${evidence && impact ? ` Why it mattered: ${impact}` : ""}`);
-      })
-      .filter(Boolean),
-  ).slice(0, 4);
+  const transcriptEvidenceItems = buildAnchoredEvidenceMoments(session, review.capabilityInsights || [], 3)
+    .map((item) => applyDecisiveTone(item, isHighRealismTone));
+  const failureHierarchyItems = [
+    `Primary Failure Driver: ${primaryFailureLine}`,
+    `Capability State: ${primaryFailureState}`,
+    `Behavioral Diagnosis: ${primaryFailure?.whatHappened || review.biggestGap || "The rep did not resolve the HCP's active barrier."}`,
+    `Secondary Effects: ${secondaryEffects.length ? secondaryEffects.map((item) => item.capabilityName).join(", ") : "none"}`,
+    `Interaction Consequence: ${whatItCausedLine}`,
+    `Coaching Direction: ${review.nextAdjustment || "Answer the exact barrier first, then use one narrow question to move the exchange forward."}`,
+  ];
   const evidenceRecords = Array.isArray(session?.predictiveLens?.evidenceRecords) ? session.predictiveLens.evidenceRecords : [];
   const evidenceReferenceItems = evidenceRecords
     .map((record, index) => ({
@@ -1022,7 +1039,7 @@ export default function SessionSummaryModal({
             )}
 
             <div className="space-y-6">
-              <SectionCard label="1) Signal Intelligence Summary" surface={sectionSurface.signal}>
+              <SectionCard label="1) Primary Diagnosis" surface={sectionSurface.signal}>
                 {signalAlignmentParagraphs.length > 0
                   ? signalAlignmentParagraphs.map((paragraph, index) => (
                     <p key={`signal-${index}`} style={{ color: index === 0 ? REVIEW_TEXT : REVIEW_MUTED }}>{paragraph}</p>
@@ -1044,19 +1061,28 @@ export default function SessionSummaryModal({
                 )}
               </SectionCard>
 
-              <SectionCard label="2) Interaction Outcome" surface={sectionSurface.coaching}>
+              <SectionCard label="2) Failure Hierarchy" surface={sectionSurface.coaching}>
+                {failureHierarchyItems.map((item, index) => (
+                  <p key={`hierarchy-${index}`} className="flex items-start gap-2">
+                    <span style={{ color: "hsl(8 56% 44%)" }}>•</span>
+                    <span>{item}</span>
+                  </p>
+                ))}
+              </SectionCard>
+
+              <SectionCard label="3) Interaction Consequence" surface={sectionSurface.coaching}>
                 {outcomeText.length > 0
                   ? outcomeText.map((item, index) => <p key={`outcome-${index}`}>{item}</p>)
                   : <NotObservedMarker />}
               </SectionCard>
 
-              <SectionCard label="3) What You Did Well" surface={sectionSurface.coaching}>
+              <SectionCard label="4) What You Did Well" surface={sectionSurface.coaching}>
                 {strengthsList.length > 0
                   ? strengthsList.map((item, index) => <p key={`strength-${index}`}>{item}</p>)
                   : <NotObservedMarker />}
               </SectionCard>
 
-              <SectionCard label="4) What Limited the Interaction" surface={sectionSurface.coaching}>
+              <SectionCard label="5) What Limited the Interaction" surface={sectionSurface.coaching}>
                 {limitationsList.length > 0
                   ? limitationsList.map((item, index) => (
                     <p key={`limit-${index}`} className="flex items-start gap-2">
@@ -1067,14 +1093,14 @@ export default function SessionSummaryModal({
                   : <NotObservedMarker />}
               </SectionCard>
 
-              <SectionCard label="5) What the HCP Was Testing" surface={sectionSurface.coaching}>
+              <SectionCard label="6) What the HCP Was Testing" surface={sectionSurface.coaching}>
                 {hcpWasTesting.length > 0
                   ? hcpWasTesting.map((item, index) => <p key={`hcp-test-${index}`}>{item}</p>)
                   : <NotObservedMarker />}
                 {patternInsight ? <p style={{ color: REVIEW_MUTED }}>Pattern insight: {patternInsight}</p> : null}
               </SectionCard>
 
-              <SectionCard label="6) How to Improve" surface={sectionSurface.coaching}>
+              <SectionCard label="7) Coaching Direction" surface={sectionSurface.coaching}>
                 {improvementText.length > 0
                   ? improvementText.map((item, index) => (
                     <p key={`improve-${index}`} className="flex items-start gap-2">
@@ -1091,13 +1117,13 @@ export default function SessionSummaryModal({
               </SectionCard>
 
               {showEvidenceSection && (
-                <SectionCard label="7) Evidence / References" surface={sectionSurface.evidence}>
+                <SectionCard label="8) Evidence / References" surface={sectionSurface.evidence}>
                   {transcriptEvidenceItems.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: REVIEW_FAINT }}>Conversation evidence</p>
                       {transcriptEvidenceItems.map((item, index) => (
                         <div key={`evidence-${index}`} className="rounded-lg border px-4 py-3" style={{ borderColor: "rgba(120, 156, 208, 0.34)", background: "rgba(255,255,255,0.68)" }}>
-                          <p style={{ color: REVIEW_TEXT }}>{item}</p>
+                          <p style={{ color: REVIEW_TEXT, whiteSpace: "pre-line" }}>{item}</p>
                         </div>
                       ))}
                     </div>
@@ -1150,13 +1176,13 @@ export default function SessionSummaryModal({
                       className="text-[11px] font-bold uppercase tracking-[0.16em]"
                       style={{ color: "hsl(214 28% 28%)" }}
                     >
-                      Skill Breakdown
+                      Capability Diagnosis
                     </p>
                     <p className="text-sm font-bold mt-0.5" style={{ color: "hsl(215 34% 22%)" }}>
-                      Overall {overallScore}/5
+                      {primaryFailure ? `Primary Failure Driver: ${primaryFailure.capabilityName}` : "Primary Failure Driver: none detected"}
                     </p>
                     <p className="text-xs mt-0.5 font-medium" style={{ color: "hsl(215 16% 40%)" }}>
-                      All 8 behavioral metrics with score-led analysis.
+                      All 8 behavioral metrics rendered as capability-state diagnosis.
                     </p>
                   </div>
                   <span

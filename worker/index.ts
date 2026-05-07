@@ -368,11 +368,56 @@ function defaultConversationMemory(base: Record<string, unknown> = {}) {
 
 function normalizeMetric(metricValue: unknown, fallbackScore: number, fallbackRationale: string) {
     const metricObj = asObject(metricValue as Record<string, unknown>, {} as Record<string, unknown>);
-    const score = clampScore(metricObj.score_1_to_10 ?? metricObj.score ?? fallbackScore, fallbackScore);
+    const rawScore = clampScore(metricObj.score_1_to_10 ?? metricObj.score ?? fallbackScore, fallbackScore);
+    // Decompress mid-band scoring so feedback does not collapse around average values.
+    const score = rawScore <= 2 ? 2 : rawScore <= 4 ? 4 : rawScore <= 7 ? 8 : 10;
     return {
         score_1_to_10: score,
         rationale: text(metricObj.rationale, fallbackRationale),
     };
+}
+
+function computeDecisiveOverallScore(metrics: Record<string, unknown>): number {
+    const weights: Record<string, number> = {
+        context_awareness: 1.25,
+        cue_recognition: 1.35,
+        empathy_acknowledgment: 1.05,
+        strategic_questioning: 1.2,
+        evidence_framing: 1.1,
+        objection_handling: 1.2,
+        conversational_control: 1,
+        tone_pace_confidence: 0.85,
+    };
+
+    const fiveScale = REQUIRED_METRIC_KEYS.map((key) => {
+        const metric = asObject(metrics[key] as Record<string, unknown>, {} as Record<string, unknown>);
+        const score10 = Number(metric.score_1_to_10 || 2);
+        const score5 = score10 <= 2 ? 1 : score10 <= 4 ? 2 : score10 <= 8 ? 4 : 5;
+        return { key, score5, weight: Number(weights[key] || 1) };
+    });
+
+    const weightedSum = fiveScale.reduce((sum, item) => sum + item.score5 * item.weight, 0);
+    const totalWeight = fiveScale.reduce((sum, item) => sum + item.weight, 0) || 1;
+    let overall5 = weightedSum / totalWeight;
+
+    const criticalFailures = fiveScale.filter((item) => item.score5 === 1).length;
+    const majorFailures = fiveScale.filter((item) => item.score5 <= 2).length;
+
+    if (criticalFailures >= 1) {
+        overall5 -= 0.85;
+    }
+
+    if (majorFailures >= 1) {
+        overall5 = Math.min(overall5, 2.5);
+    }
+
+    if (criticalFailures >= 2) {
+        overall5 = Math.min(overall5, 1.9);
+    }
+
+    const clamped5 = Math.max(1, Math.min(5, overall5));
+    const scaled10 = Math.max(1, Math.min(10, Math.round(clamped5 * 2)));
+    return scaled10;
 }
 
 function normalizeHcpBrainAlignment(value: unknown, fallback: Record<string, unknown> = {}) {
@@ -656,12 +701,7 @@ export function normalizeEvaluationResponse(
         );
     }
 
-    const computedOverall = Math.round(
-        REQUIRED_METRIC_KEYS
-            .map((key) => Number(asObject(metrics[key] as Record<string, unknown>, {} as Record<string, unknown>).score_1_to_10 || 5))
-            .reduce((sum, value) => sum + value, 0) / REQUIRED_METRIC_KEYS.length,
-    );
-
+    const computedOverall = computeDecisiveOverallScore(metrics);
     let overall = clampScore(merged.overall_score, computedOverall);
     const transcriptLower = text(context.transcript).toLowerCase();
     const lacksCueAlignment = !/\b(prior auth|workflow|access|staff|barrier|fit)\b/.test(transcriptLower);

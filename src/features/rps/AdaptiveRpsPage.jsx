@@ -37,6 +37,34 @@ function DashboardCard({ title, children }) {
     );
 }
 
+/** @param {string} state */
+function describeCapabilityConsequence(state) {
+    if (state === "Breakdown") return "This left the HCP's active barrier unresolved and stalled the exchange.";
+    if (state === "Unstable") return "This weakened credibility and made the interaction harder to advance.";
+    if (state === "Developing") return "This showed partial traction, but it did not move the interaction decisively.";
+    if (state === "Effective") return "This supported forward movement and improved interaction quality.";
+    if (state === "Strong") return "This clearly advanced credibility and next-step momentum.";
+    return "This influenced the interaction, but the effect was not clearly differentiated.";
+}
+
+/** @param {number | null | undefined} value @param {string} positiveText @param {string} negativeText @param {string} neutralText */
+function describeDelta(value, positiveText, negativeText, neutralText) {
+    const numeric = Number(value ?? 0);
+    if (numeric > 0) return positiveText;
+    if (numeric < 0) return negativeText;
+    return neutralText;
+}
+
+/** @param {number | null | undefined} value */
+function describeLevel(value) {
+    const numeric = Number(value ?? 0);
+    if (numeric >= 8) return "very high";
+    if (numeric >= 6) return "high";
+    if (numeric >= 4) return "moderate";
+    if (numeric >= 2) return "low";
+    return "very low";
+}
+
 export default function AdaptiveRpsPage() {
     const [form, setForm] = useState(defaults);
     const [temperature, setTemperature] = useState(6);
@@ -84,6 +112,27 @@ export default function AdaptiveRpsPage() {
 
     const disableGenerate = isGenerateDisabled(form, busy);
     const metricRows = extractEightBehavioralMetricRows(evaluation);
+    const rankedMetricRows = useMemo(() => {
+        return [...metricRows]
+            .filter((row) => Number.isFinite(row.score))
+            .sort((a, b) => (a.score ?? 99) - (b.score ?? 99));
+    }, [metricRows]);
+    const primaryMetric = rankedMetricRows[0] || null;
+    const primaryFailureDriver = primaryMetric?.label || (evaluation?.missed_cues?.[0] ? "Cue Alignment" : "Interaction Progression");
+    const primaryCapabilityState = primaryMetric?.state || "Developing";
+    const behavioralDiagnosis = primaryMetric?.rationale
+        || evaluation?.missed_cues?.[0]
+        || evaluation?.delivery_issues?.[0]
+        || "The response did not address the HCP's live barrier clearly enough to move the conversation.";
+    const interactionConsequence = evaluation?.outcome_analysis?.progression_rationale
+        || evaluation?.outcome_analysis?.outcome_rationale
+        || evaluation?.delivery_impact_on_hcp?.likely_hcp_reaction
+        || evaluation?.hcp_progression_explanation
+        || "The interaction stayed selective and did not advance decisively.";
+    const coachingDirection = evaluation?.coaching_feedback?.[0]
+        || evaluation?.delivery_coaching?.recommended_delivery_adjustment
+        || evaluation?.next_best_question
+        || "Acknowledge the HCP's active barrier first, then ask one narrower follow-up question.";
 
     async function handleGenerateScenario() {
         if (!mappedUi) return;
@@ -400,21 +449,41 @@ export default function AdaptiveRpsPage() {
 
                     <DashboardCard title="Evaluation Dashboard">
                         {!evaluation ? (
-                            <p className="si-dark-label text-sm">Run an evaluation to see scoring, cue alignment, delivery analysis, and coaching feedback.</p>
+                            <p className="si-dark-label text-sm">Run an evaluation to see capability-state diagnosis, interaction consequence, and coaching direction.</p>
                         ) : (
                             <div className="space-y-3 text-sm">
-                                <p className="text-lg font-semibold text-teal-200">Overall Score: {evaluation.overall_score}/10</p>
+                                <div className="rounded-lg border border-teal-300/40 bg-teal-500/16 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-100">Primary Failure Driver</p>
+                                    <p className="font-semibold text-slate-100">{primaryFailureDriver}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Capability State</p>
+                                    <p className="font-semibold text-slate-100">{primaryCapabilityState}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Behavioral Diagnosis</p>
+                                    <p className="text-slate-100">{behavioralDiagnosis}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Interaction Consequence</p>
+                                    <p className="text-slate-100">{interactionConsequence}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Coaching Direction</p>
+                                    <p className="text-slate-100">{coachingDirection}</p>
+                                </div>
                                 <div className="si-dark-field rounded-lg p-3">
-                                    <p className="si-dark-muted mb-2 text-xs uppercase tracking-wide">Behavioral Metric Scores (8)</p>
+                                    <p className="si-dark-muted mb-2 text-xs uppercase tracking-wide">Capability Diagnosis (8)</p>
                                     <div className="space-y-1.5">
                                         {metricRows.map((row) => (
-                                            <p key={row.key}>
-                                                <span className="font-semibold text-slate-100">{row.key}:</span> {row.score ?? "N/A"} {row.rationale ? `- ${row.rationale}` : ""}
-                                            </p>
+                                            <div key={row.key} className="rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
+                                                <p>
+                                                    <span className="font-semibold text-slate-100">{row.label} — {row.state}</span>
+                                                </p>
+                                                {row.rationale ? <p className="mt-1 text-slate-300">{row.rationale}</p> : null}
+                                                <p className="mt-1 text-xs text-slate-400">{describeCapabilityConsequence(row.state)}</p>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
-                                <p><span className="font-semibold text-slate-200">Outcome:</span> {JSON.stringify(evaluation.outcome_analysis)}</p>
+                                <div className="rounded-lg border border-white/10 bg-slate-950/35 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Outcome Read</p>
+                                    <p><span className="font-semibold text-slate-200">Actual Outcome:</span> {evaluation.outcome_analysis?.actual_outcome || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-200">Conversation Advanced:</span> {evaluation.outcome_analysis?.conversation_advanced ? "Yes" : "No"}</p>
+                                    <p><span className="font-semibold text-slate-200">Progression Rationale:</span> {evaluation.outcome_analysis?.progression_rationale || evaluation.outcome_analysis?.outcome_rationale || "Not available."}</p>
+                                </div>
                                 <p><span className="font-semibold text-slate-200">Strengths:</span> {evaluation.observed_strengths?.join(" | ") || "None"}</p>
                                 <p><span className="font-semibold text-slate-200">Missed Cues:</span> {evaluation.missed_cues?.join(" | ") || "None"}</p>
                                 <p><span className="font-semibold text-slate-200">Delivery Issues:</span> {evaluation.delivery_issues?.join(" | ") || "None"}</p>
@@ -422,7 +491,7 @@ export default function AdaptiveRpsPage() {
                                     <p className="mb-1 text-xs uppercase tracking-wide text-teal-100">Delivery Impact on HCP</p>
                                     <p><span className="font-semibold text-slate-200">Perceived Listening:</span> {evaluation.voice_behavior_adaptation?.perceived_listening_signal || "unknown"}</p>
                                     <p><span className="font-semibold text-slate-200">Likely HCP Reaction:</span> {evaluation.delivery_impact_on_hcp?.likely_hcp_reaction || evaluation.voice_behavior_adaptation?.hcp_reaction_modifier || "hold"}</p>
-                                    <p><span className="font-semibold text-slate-200">Resistance / Trust Impact:</span> {`${evaluation.voice_behavior_adaptation?.resistance_delta ?? 0} / ${evaluation.voice_behavior_adaptation?.trust_delta ?? 0}`}</p>
+                                    <p><span className="font-semibold text-slate-200">Interaction Pressure Effect:</span> {`${describeDelta(evaluation.voice_behavior_adaptation?.resistance_delta, "Resistance increased.", "Resistance eased.", "Resistance held steady.")} ${describeDelta(evaluation.voice_behavior_adaptation?.trust_delta, "Trust improved.", "Trust dropped.", "Trust held steady.")}`}</p>
                                     <p><span className="font-semibold text-slate-200">Delivery Tip:</span> {evaluation.delivery_coaching?.recommended_delivery_adjustment || "Acknowledge, pause, and ask one diagnostic question."}</p>
                                 </div>
                                 <div className="rounded-lg border border-violet-300/40 bg-violet-500/16 p-3">
@@ -443,8 +512,6 @@ export default function AdaptiveRpsPage() {
                                     <p><span className="font-semibold text-slate-200">Recommended Rep Move:</span> {evaluation.hcp_brain_coaching?.recommended_rep_move_feedback || "Not available."}</p>
                                     <p><span className="font-semibold text-slate-200">Grounded Improved Response:</span> {evaluation.hcp_brain_coaching?.improved_response_grounded_in_hcp_brain || "Not available."}</p>
                                 </div>
-                                <p><span className="font-semibold text-slate-200">Voice Behavior Signals:</span> {JSON.stringify(evaluation.voice_behavior_signals || {})}</p>
-                                <p><span className="font-semibold text-slate-200">Voice-to-Metric Mapping:</span> {JSON.stringify(evaluation.score_rationale?.voice_behavior_mapping || {})}</p>
                                 <p><span className="font-semibold text-slate-200">Coaching:</span> {(evaluation.coaching_feedback || []).join(" | ")}</p>
                                 <p><span className="font-semibold text-slate-200">Better Phrasing:</span> {evaluation.better_phrasing}</p>
                                 <p><span className="font-semibold text-slate-200">Next Best Question:</span> {evaluation.next_best_question}</p>
@@ -474,7 +541,7 @@ export default function AdaptiveRpsPage() {
                                             <div className="flex-1 rounded bg-slate-800 h-2">
                                                 <div className={`h-2 rounded ${color}`} style={{ width: `${(Number(value) || 0) * 10}%` }} />
                                             </div>
-                                            <span className="w-6 text-right text-xs font-semibold">{value ?? "—"}</span>
+                                            <span className="w-16 text-right text-xs font-semibold text-slate-300">{describeLevel(value)}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -489,8 +556,8 @@ export default function AdaptiveRpsPage() {
                             {evaluation.hcp_state_delta && (
                                 <div className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 p-3">
                                     <p className="mb-1 text-xs uppercase tracking-wide text-indigo-200">State Delta (this turn)</p>
-                                    <p><span className="font-semibold text-slate-200">Resistance:</span> {evaluation.hcp_state_delta.resistance_change >= 0 ? "+" : ""}{evaluation.hcp_state_delta.resistance_change}</p>
-                                    <p><span className="font-semibold text-slate-200">Trust:</span> {evaluation.hcp_state_delta.trust_change >= 0 ? "+" : ""}{evaluation.hcp_state_delta.trust_change}</p>
+                                    <p><span className="font-semibold text-slate-200">Resistance:</span> {describeDelta(evaluation.hcp_state_delta.resistance_change, "increased", "eased", "held steady")}</p>
+                                    <p><span className="font-semibold text-slate-200">Trust:</span> {describeDelta(evaluation.hcp_state_delta.trust_change, "improved", "dropped", "held steady")}</p>
                                     <p><span className="font-semibold text-slate-200">Stage Change:</span> {evaluation.hcp_state_delta.stage_change || "unchanged"}</p>
                                     <p><span className="font-semibold text-slate-200">Concern Movement:</span> {evaluation.hcp_state_delta.concern_movement?.replace(/_/g, " ") || "none"}</p>
                                     <p className="mt-1 text-slate-300">{evaluation.hcp_state_delta.reason}</p>

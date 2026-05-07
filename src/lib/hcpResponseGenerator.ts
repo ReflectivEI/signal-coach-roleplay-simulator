@@ -121,6 +121,330 @@ const CHATBOT_STYLE_PATTERNS = [
   /\bto be honest, the biggest challenge i'm seeing is\b/i,
 ];
 
+type HcpEngagementState = "Resistant" | "Neutral" | "Selectively Engaged" | "Engaged";
+type HcpTrustLevel = "Low" | "Medium" | "High";
+type HcpIntent = "Deflect" | "Test" | "Clarify" | "Advance";
+
+type TurnConstraintResolution = {
+  engagementState: HcpEngagementState;
+  trustLevel: HcpTrustLevel;
+  resolvedIntent: HcpIntent;
+  allowedIntents: HcpIntent[];
+  blockedIntents: HcpIntent[];
+  allowedTone: string[];
+  progressionGuardrails: string[];
+  reasoning: string[];
+};
+
+function stepWithin<T>(ordered: readonly T[], current: T, delta: number): T {
+  const index = ordered.indexOf(current);
+  const safeIndex = index < 0 ? 0 : index;
+  const next = Math.max(0, Math.min(ordered.length - 1, safeIndex + delta));
+  return ordered[next];
+}
+
+function deriveBaseEngagementState(currentBehaviorState: string, predictedBehaviorState: string): HcpEngagementState {
+  const behavior = String(currentBehaviorState || "").toLowerCase();
+  const predicted = String(predictedBehaviorState || "").toLowerCase();
+
+  if (["resistance", "closed", "time_pressure", "frustration"].includes(behavior) || ["resistance", "frustration"].includes(predicted)) {
+    return "Resistant";
+  }
+  if (predicted === "openness") return "Engaged";
+  if (predicted === "curiosity") return "Selectively Engaged";
+  return "Neutral";
+}
+
+function deriveBaseTrustLevel(currentBehaviorState: string, predictedResistanceLevel: string): HcpTrustLevel {
+  const behavior = String(currentBehaviorState || "").toLowerCase();
+  const resistance = String(predictedResistanceLevel || "").toLowerCase();
+
+  if (["closed", "resistance", "frustration", "time_pressure"].includes(behavior) || resistance === "high") {
+    return "Low";
+  }
+  if (resistance === "low") return "High";
+  return "Medium";
+}
+
+function latestHcpQuestion(transcript: ConversationTurn[]): string {
+  for (let i = transcript.length - 1; i >= 0; i -= 1) {
+    if (transcript[i]?.speaker !== "hcp") continue;
+    const text = String(transcript[i]?.text || "").trim();
+    if (text.includes("?")) return text;
+  }
+  return "";
+}
+
+function repAcknowledgesConcern(repMessage: string): boolean {
+  return /\b(i hear|i understand|that makes sense|you'?re right|fair point|i get that|you raised|you mentioned)\b/i.test(String(repMessage || ""));
+}
+
+function repProvidesRelevantValue(repMessage: string, latestConcern: string): boolean {
+  const repText = String(repMessage || "");
+  const repTags = inferConcernTags(repText);
+  const concernTags = inferConcernTags(latestConcern);
+  const shared = concernTags.filter((tag) => repTags.includes(tag));
+  if (shared.length > 0) return true;
+  return /\b(outcome|evidence|data|workflow|prior auth|approval|staff|patient profile|subgroup|decision)\b/i.test(repText);
+}
+
+function countRecentMissedCues(allPriorSignals: BehaviorSignals[]): number {
+  const window = allPriorSignals.slice(-3);
+  return window.filter((signal) =>
+    signal?.response_alignment === "weak" || signal?.listening_pattern === "missed"
+  ).length;
+}
+
+function repAnsweredDirectQuestion(repMessage: string, transcript: ConversationTurn[], latestConcern: string): boolean {
+  const hcpQuestion = latestHcpQuestion(transcript);
+  if (!hcpQuestion) return false;
+
+  const repTags = inferConcernTags(repMessage);
+  const questionTags = inferConcernTags(hcpQuestion);
+  const concernTags = inferConcernTags(latestConcern);
+  const sharedWithQuestion = questionTags.filter((tag) => repTags.includes(tag));
+  const sharedWithConcern = concernTags.filter((tag) => repTags.includes(tag));
+  const genericLoop = isGenericDiscoveryLoop(repMessage, latestConcern);
+
+  return !genericLoop && (sharedWithQuestion.length > 0 || sharedWithConcern.length > 0);
+}
+
+function isGenericDiscoveryLoop(repMessage: string, latestConcern: string): boolean {
+  const text = String(repMessage || "").toLowerCase();
+  const concernTags = inferConcernTags(latestConcern);
+  const repTags = inferConcernTags(text);
+  const shared = concernTags.filter((tag) => repTags.includes(tag));
+
+  const genericDiscovery = /\b(can you tell me more|tell me more|what are your challenges|what else concerns you|what are your thoughts|help me understand)\b/i.test(text);
+  return genericDiscovery && shared.length === 0;
+}
+
+function resolveAllowedIntent(engagementState: HcpEngagementState, trustLevel: HcpTrustLevel): {
+  resolvedIntent: HcpIntent;
+  allowedIntents: HcpIntent[];
+  blockedIntents: HcpIntent[];
+  allowedTone: string[];
+} {
+  if (engagementState === "Resistant" && trustLevel === "Low") {
+    return {
+      resolvedIntent: "Test",
+      allowedIntents: ["Deflect", "Test", "Clarify"],
+      blockedIntents: ["Advance"],
+      allowedTone: ["guarded", "skeptical", "direct"],
+    };
+  }
+
+  if (engagementState === "Resistant") {
+    return {
+      resolvedIntent: "Test",
+      allowedIntents: ["Test", "Clarify"],
+      blockedIntents: ["Advance", "Deflect"],
+      allowedTone: ["skeptical", "constrained", "professional"],
+    };
+  }
+
+  if (engagementState === "Neutral") {
+    return {
+      resolvedIntent: "Clarify",
+      allowedIntents: ["Test", "Clarify"],
+      blockedIntents: ["Advance"],
+      allowedTone: ["neutral", "selective", "professional"],
+    };
+  }
+
+  if (engagementState === "Selectively Engaged") {
+    return {
+      resolvedIntent: "Clarify",
+      allowedIntents: ["Test", "Clarify"],
+      blockedIntents: ["Advance"],
+      allowedTone: ["conditionally open", "probing", "practical"],
+    };
+  }
+
+  return {
+    resolvedIntent: "Advance",
+    allowedIntents: ["Clarify", "Advance"],
+    blockedIntents: ["Deflect"],
+    allowedTone: ["collaborative", "specific", "decision-oriented"],
+  };
+}
+
+function resolveTurnConstraintState({
+  transcript,
+  repMessage,
+  latestConcern,
+  allPriorSignals,
+  currentBehaviorState,
+  prediction,
+}: {
+  transcript: ConversationTurn[];
+  repMessage: string;
+  latestConcern: string;
+  allPriorSignals: BehaviorSignals[];
+  currentBehaviorState: string;
+  prediction: any;
+}): TurnConstraintResolution {
+  const engagementOrder: readonly HcpEngagementState[] = ["Resistant", "Neutral", "Selectively Engaged", "Engaged"];
+  const trustOrder: readonly HcpTrustLevel[] = ["Low", "Medium", "High"];
+
+  let engagementState = deriveBaseEngagementState(currentBehaviorState, prediction?.predictedBehaviorState || "");
+  let trustLevel = deriveBaseTrustLevel(currentBehaviorState, prediction?.predictedResistanceLevel || "moderate");
+
+  const acknowledgement = repAcknowledgesConcern(repMessage);
+  const relevantValue = repProvidesRelevantValue(repMessage, latestConcern);
+  const missedCue = ignoredDirectConcern(repMessage, latestConcern);
+  const repeatedMissedCues = countRecentMissedCues(allPriorSignals);
+  const answeredQuestion = repAnsweredDirectQuestion(repMessage, transcript, latestConcern);
+  const genericLoop = isGenericDiscoveryLoop(repMessage, latestConcern);
+  const reasoning: string[] = [];
+
+  if (acknowledgement && relevantValue && !missedCue) {
+    engagementState = stepWithin(engagementOrder, engagementState, 1);
+    reasoning.push("Acknowledgement + relevant value + no missed cue allowed one-step engagement increase.");
+  }
+
+  if (repeatedMissedCues >= 2 || missedCue) {
+    engagementState = stepWithin(engagementOrder, engagementState, -1);
+    trustLevel = stepWithin(trustOrder, trustLevel, -1);
+    reasoning.push("Repeated missed cues degraded engagement/trust by one level.");
+  }
+
+  if (answeredQuestion && !genericLoop) {
+    trustLevel = stepWithin(trustOrder, trustLevel, 1);
+    reasoning.push("Direct answer to HCP question increased trust by one level.");
+  }
+
+  if (genericLoop) {
+    trustLevel = stepWithin(trustOrder, trustLevel, 0);
+    reasoning.push("Generic discovery loop cannot increase trust.");
+  }
+
+  const intent = resolveAllowedIntent(engagementState, trustLevel);
+
+  return {
+    engagementState,
+    trustLevel,
+    resolvedIntent: intent.resolvedIntent,
+    allowedIntents: intent.allowedIntents,
+    blockedIntents: intent.blockedIntents,
+    allowedTone: intent.allowedTone,
+    progressionGuardrails: [
+      "No engagement jump greater than one level in a single turn.",
+      "Resistant to Engaged requires acknowledged concern + relevant value + no missed cue.",
+      "Generic discovery without specificity cannot increase trust.",
+    ],
+    reasoning,
+  };
+}
+
+function buildTurnConstraintPromptBlock(constraint: TurnConstraintResolution): string {
+  return [
+    "TURN-LEVEL HCP CONSTRAINTS (deterministic - must obey):",
+    `- Engagement State: ${constraint.engagementState}`,
+    `- Trust Level: ${constraint.trustLevel}`,
+    `- Required Intent: ${constraint.resolvedIntent}`,
+    `- Allowed Intents: ${constraint.allowedIntents.join(", ")}`,
+    `- Blocked Intents: ${constraint.blockedIntents.join(", ")}`,
+    `- Allowed Tone: ${constraint.allowedTone.join(", ")}`,
+    ...constraint.progressionGuardrails.map((line) => `- ${line}`),
+    ...constraint.reasoning.map((line) => `- Reasoning: ${line}`),
+    "- Do not emit agreement, commitment, or cooperative exploration when blocked above.",
+    "- If state is Selectively Engaged, keep response conditional/probing rather than fully cooperative.",
+  ].join("\n");
+}
+
+function inferIntentFromReply(hcpReply: string): HcpIntent {
+  const text = String(hcpReply || "").toLowerCase();
+  if (/\b(i'?m open to|let'?s move forward|we can proceed|i can move ahead|i'll do that|i can start)\b/.test(text)) {
+    return "Advance";
+  }
+  if (/\b(not now|not interested|no time|we'?re done|leave it there|not the right time)\b/.test(text)) {
+    return "Deflect";
+  }
+  if (/\b(what evidence|show me|why should|what makes you think|convince me|what specifically)\b|\?/.test(text)) {
+    return "Test";
+  }
+  return "Clarify";
+}
+
+function containsForwardCommitment(hcpReply: string): boolean {
+  return /\b(let'?s do it|i'?ll start|i'?m ready|i can commit|go ahead and set it up|move forward with this)\b/i.test(String(hcpReply || ""));
+}
+
+function violatesTurnConstraint(hcpReply: string, constraint: TurnConstraintResolution): boolean {
+  const intent = inferIntentFromReply(hcpReply);
+  if (!constraint.allowedIntents.includes(intent)) return true;
+  if (constraint.blockedIntents.includes("Advance") && containsForwardCommitment(hcpReply)) return true;
+  if (constraint.engagementState === "Selectively Engaged" && containsForwardCommitment(hcpReply)) return true;
+  return false;
+}
+
+async function rewriteForConstraintCompliance({
+  hcpReply,
+  constraint,
+  scenario,
+}: {
+  hcpReply: string;
+  constraint: TurnConstraintResolution;
+  scenario: any;
+}): Promise<string> {
+  const prompt = `You are correcting one HCP reply line to match deterministic behavioral constraints.
+
+Current line:
+${hcpReply}
+
+Required constraints:
+- Engagement State: ${constraint.engagementState}
+- Trust Level: ${constraint.trustLevel}
+- Allowed Intents: ${constraint.allowedIntents.join(", ")}
+- Blocked Intents: ${constraint.blockedIntents.join(", ")}
+- Allowed Tone: ${constraint.allowedTone.join(", ")}
+
+Hard rules:
+- Keep same concern family and scenario context
+- Keep natural spoken clinician style
+- 1-2 sentences only
+- Remove any blocked intent (especially premature agreement/commitment)
+- Keep conditional/probing stance unless Advance is allowed
+
+Scenario: ${scenario?.title || ""}
+
+Return ONLY the corrected HCP line.`;
+
+  const rewritten = await invokeWorkerText({
+    prompt,
+    max_tokens: 110,
+    temperature: 0.1,
+  });
+
+  return String(rewritten || hcpReply).trim();
+}
+
+function deterministicConstraintFallback(hcpReply: string, constraint: TurnConstraintResolution): string {
+  const base = String(hcpReply || "").replace(/\s+/g, " ").trim().replace(/[.?!]+$/, "");
+  if (constraint.blockedIntents.includes("Advance") && containsForwardCommitment(base)) {
+    if (constraint.engagementState === "Resistant") {
+      return `${base}. I'm not ready to move this forward yet.`;
+    }
+    if (constraint.engagementState === "Selectively Engaged") {
+      return `${base}. I'm open to clarifying one point first before any next step.`;
+    }
+    return `${base}. I need one concrete clarification before we discuss next steps.`;
+  }
+  return `${base}.`;
+}
+
+function mapEngagementStateToBehaviorState(state: HcpEngagementState, currentBehaviorState: string): string {
+  if (state === "Resistant") {
+    return ["time_pressure", "frustration", "closed"].includes(String(currentBehaviorState || ""))
+      ? String(currentBehaviorState)
+      : "resistance";
+  }
+  if (state === "Neutral") return "neutral";
+  if (state === "Selectively Engaged") return "curiosity";
+  return "openness";
+}
+
 function buildDerivedScenarioContext(scenario: any) {
   const uiSelection = deriveUISelectionFromBrain(scenario || {});
   if (!uiSelection?.hcpType || !uiSelection?.stage || !uiSelection?.challenge) {
@@ -951,9 +1275,18 @@ export async function generateHcpResponse(
     .join("\n");
 
   const focusCaps = (scenario.suggestedFocusCapabilities || []).join(", ");
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
+  const turnConstraint = resolveTurnConstraintState({
+    transcript,
+    repMessage,
+    latestConcern,
+    allPriorSignals,
+    currentBehaviorState,
+    prediction,
+  });
   const turnDirectives = deriveHcpTurnDirectives({
     scenario,
     currentBehaviorState,
@@ -1077,6 +1410,8 @@ ${volatilityBlock}
 
 ${continuityBlock}
 
+${buildTurnConstraintPromptBlock(turnConstraint)}
+
 ${CAPABILITY_RULES}
 
 SPOKEN REALISM GUARDRAILS:
@@ -1130,6 +1465,9 @@ INSTRUCTIONS:
 28. Do not end an HCP line on an incomplete ask such as "reduce?", "change?", "help with?", or any question missing what is actually being asked about.
 29. Avoid comma splices in HCP dialogue. If there are two complete thoughts, split them into separate sentences.
 30. In operational or access questions, explicitly name the object of the ask such as the queue, the prior auth step, the approval path, the callback burden, the monitoring step, or the staff task.
+31. Obey the TURN-LEVEL HCP CONSTRAINTS exactly. Do not output blocked intents.
+32. If blocked intent includes Advance, avoid agreement language and avoid commitment-forward phrases.
+33. If engagement is Selectively Engaged, keep the response conditional/probing and do not leap to full cooperation.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -1250,6 +1588,22 @@ Return ONLY valid JSON:
       transcript,
     });
   }
+
+  if (violatesTurnConstraint(hcpReply, turnConstraint)) {
+    try {
+      const corrected = await rewriteForConstraintCompliance({
+        hcpReply,
+        constraint: turnConstraint,
+        scenario,
+      });
+      hcpReply = violatesTurnConstraint(corrected, turnConstraint)
+        ? deterministicConstraintFallback(corrected, turnConstraint)
+        : corrected;
+    } catch {
+      hcpReply = deterministicConstraintFallback(hcpReply, turnConstraint);
+    }
+  }
+
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
@@ -1322,9 +1676,14 @@ Return ONLY valid JSON:
     ...cue,
   }] : [];
 
+  const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
+    turnConstraint.engagementState,
+    result.nextBehaviorState || currentBehaviorState,
+  );
+
   return {
     hcpReply,
-    nextBehaviorState: result.nextBehaviorState || currentBehaviorState,
+    nextBehaviorState: constrainedNextBehaviorState,
     nextJourneyState: result.nextJourneyState || currentJourneyState,
     activeCues,
     behaviorSignals: normalizeBehaviorSignals(
@@ -1342,6 +1701,12 @@ Return ONLY valid JSON:
       scenario_grounding_applied: true,
       banned_phrase_filter_applied: true,
       scenario_anchors_used: [scenario?.id, scenario?.title, scenario?.journeyStage].filter(Boolean),
+      turn_constraint_state: {
+        engagement_state: turnConstraint.engagementState,
+        trust_level: turnConstraint.trustLevel,
+        resolved_intent: turnConstraint.resolvedIntent,
+        allowed_intents: turnConstraint.allowedIntents,
+      },
     },
   };
 }

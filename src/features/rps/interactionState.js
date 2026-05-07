@@ -1,8 +1,21 @@
+import { capabilityStateFromTenPoint } from "@/lib/capabilityStates";
+
 const REQUIRED_KEYS = [
     "hcpType",
     "stage",
     "challenge",
 ];
+
+const METRIC_LABELS = {
+    context_awareness: "Context Awareness",
+    cue_recognition: "Cue Recognition",
+    empathy_acknowledgment: "Empathy & Acknowledgment",
+    strategic_questioning: "Strategic Questioning",
+    evidence_framing: "Evidence Framing",
+    objection_handling: "Objection Handling",
+    conversational_control: "Conversational Control",
+    tone_pace_confidence: "Tone, Pace & Confidence",
+};
 
 export function isGenerateDisabled(form, busy) {
     if (busy) return true;
@@ -31,7 +44,9 @@ export function extractEightBehavioralMetricRows(evaluation) {
 
     return expectedOrder.map((key) => ({
         key,
+        label: METRIC_LABELS[key] || key,
         score: metrics?.[key]?.score_1_to_10 ?? null,
+        state: capabilityStateFromTenPoint(metrics?.[key]?.score_1_to_10 ?? 5),
         rationale: metrics?.[key]?.rationale ?? "",
     }));
 }
