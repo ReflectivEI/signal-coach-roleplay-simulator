@@ -665,13 +665,21 @@ function deriveNextJourneyState(currentJourneyState = "", scenarioContext = {}) 
 function inferTopicFromText(text = "") {
   const normalized = safeString(text).toLowerCase();
   if (!normalized) return "";
-  if (/patient|fit|subgroup|renal/.test(normalized)) return "patient_fit";
-  if (/prior auth|prior authorization|approval|paperwork|callback/.test(normalized)) return "prior_auth";
-  if (/formulary|non-preferred|committee|payer/.test(normalized)) return "formulary_issue";
-  if (/access|coverage|approved/.test(normalized)) return "access_issue";
-  if (/workflow|staff|handoff|process|operational/.test(normalized)) return "workflow_burden";
-  if (/safety|risk|hepatic|adverse|side effect/.test(normalized)) return "safety_question";
-  if (/study|trial|data|evidence|guideline/.test(normalized)) return "study_follow_up";
+  const hasPatientFit = /patient|fit|subgroup|renal/.test(normalized);
+  const hasPriorAuth = /prior auth|prior authorization|approval|paperwork/.test(normalized);
+  const hasWorkflow = /workflow|staff|handoff|process|operational|callback/.test(normalized);
+  const hasFormulary = /formulary|non-preferred|committee|payer/.test(normalized);
+  const hasAccess = /access|coverage|approved/.test(normalized);
+  const hasSafety = /safety|risk|hepatic|adverse|side effect/.test(normalized);
+  const hasStudy = /study|trial|data|evidence|guideline/.test(normalized);
+
+  if (hasPriorAuth) return "prior_auth";
+  if (hasWorkflow) return "workflow_burden";
+  if (hasPatientFit) return "patient_fit";
+  if (hasFormulary) return "formulary_issue";
+  if (hasAccess) return "access_issue";
+  if (hasSafety) return "safety_question";
+  if (hasStudy) return "study_follow_up";
   return "";
 }
 
@@ -759,6 +767,38 @@ function splitFirstSentence(text = "") {
   };
 }
 
+function normalizeReplyForComparison(text = "") {
+  return safeString(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function overlapRatio(a = "", b = "") {
+  const left = new Set(normalizeReplyForComparison(a).split(" ").filter((token) => token.length > 2));
+  const right = new Set(normalizeReplyForComparison(b).split(" ").filter((token) => token.length > 2));
+  if (!left.size || !right.size) return 0;
+  let shared = 0;
+  left.forEach((token) => {
+    if (right.has(token)) shared += 1;
+  });
+  return shared / Math.max(left.size, right.size);
+}
+
+function sanitizeAlignedRemainder(remainder = "", rewrittenFirstSentence = "", repTopic = "") {
+  const normalized = safeString(remainder).replace(/^\s+/, "").replace(/^(and|but)\s+/i, "").trim();
+  if (!normalized) return "";
+
+  const { firstSentence: remainderFirstSentence } = splitFirstSentence(normalized);
+  const remainderTopic = inferTopicFromText(remainderFirstSentence || normalized);
+
+  if (overlapRatio(rewrittenFirstSentence, remainderFirstSentence || normalized) >= 0.72) return "";
+  if (repTopic && remainderTopic && repTopic !== remainderTopic) return "";
+
+  return normalized;
+}
+
 function buildFirstTurnAcknowledgment({ repContext = {}, scenarioContext = {}, conversationState = {} }) {
   const topic = repContext.explicitTopic || repContext.scenarioTopic || "general";
   const label = topicLabel(topic);
@@ -839,7 +879,11 @@ function enforceLiveRepAcknowledgment(hcpReply = "", repMessage = "", scenarioCo
     scenarioContext,
     conversationState,
   });
-  const normalizedRemainder = safeString(remainder).replace(/^\s+/, "").replace(/^(and|but)\s+/i, "");
+  const normalizedRemainder = sanitizeAlignedRemainder(
+    remainder,
+    rewrittenFirstSentence,
+    repContext.explicitTopic || repContext.scenarioTopic || "",
+  );
   return normalizedRemainder ? `${rewrittenFirstSentence} ${normalizedRemainder}`.trim() : rewrittenFirstSentence;
 }
 

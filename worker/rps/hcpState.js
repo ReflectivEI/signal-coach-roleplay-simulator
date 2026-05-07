@@ -184,13 +184,26 @@ function countTrailingSameBucket(bucketHistory = [], bucket) {
     return count;
 }
 
+function getRepTopicSignals(textValue = "") {
+    const lower = str(textValue).toLowerCase();
+    return {
+        study: /\b(jama|study|trial|data|evidence|paper|guideline)\b/.test(lower),
+        patient_fit: /\b(patient profile|which patients|patient subgroup|subgroup|fit|criteria|who fits)\b/.test(lower),
+        access: /\b(prior auth|prior authorization|approval|payer|coverage|formulary|access)\b/.test(lower),
+        workflow: /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower),
+    };
+}
+
 function inferRepTopic(textValue = "") {
     const lower = str(textValue).toLowerCase();
     if (!lower) return "none";
-    if (/\b(jama|study|trial|data|evidence|paper|guideline)\b/.test(lower)) return "study";
-    if (/\b(patient profile|which patients|patient subgroup|subgroup|fit|criteria|who fits)\b/.test(lower)) return "patient_fit";
-    if (/\b(prior auth|prior authorization|approval|payer|coverage|formulary|access)\b/.test(lower)) return "access";
-    if (/\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower)) return "workflow";
+
+    const signals = getRepTopicSignals(lower);
+    if (signals.access) return "access";
+    if (signals.workflow) return "workflow";
+    // Prefer patient-fit when subgroup language is explicit, even if trial/data is also present.
+    if (signals.patient_fit) return "patient_fit";
+    if (signals.study) return "study";
     return "none";
 }
 
@@ -202,6 +215,18 @@ function topicAcknowledged(line = "", topic = "none") {
     if (topic === "access") return /\b(prior auth|approval|payer|coverage|formulary|access)\b/.test(lower);
     if (topic === "workflow") return /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower);
     return true;
+}
+
+function hasConflictingTopicSignal(sentence = "", topic = "none") {
+    const lower = str(sentence).toLowerCase();
+    if (!lower || topic === "none") return false;
+    const signals = getRepTopicSignals(lower);
+
+    if (topic === "study") return signals.patient_fit || signals.access || signals.workflow;
+    if (topic === "patient_fit") return signals.study || signals.access || signals.workflow;
+    if (topic === "access") return signals.study || signals.patient_fit || signals.workflow;
+    if (topic === "workflow") return signals.study || signals.patient_fit || signals.access;
+    return false;
 }
 
 function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) {
@@ -234,12 +259,24 @@ function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState =
     if (!current) return current;
     const topic = inferRepTopic(repTranscript);
     if (topic === "none") return current;
-    if (topicAcknowledged(current, topic)) return current;
+    const sentences = current.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const firstSentence = str(sentences[0]);
+    const acknowledgesAnywhere = topicAcknowledged(current, topic);
+    const acknowledgesLead = topicAcknowledged(firstSentence, topic) && !hasConflictingTopicSignal(firstSentence, topic);
+    const filteredTail = sentences
+        .slice(1)
+        .filter((sentence) => !hasConflictingTopicSignal(sentence, topic))
+        .slice(0, 1)
+        .join(" ")
+        .trim();
+
+    if (acknowledgesAnywhere && acknowledgesLead) {
+        const stabilized = filteredTail ? `${firstSentence} ${filteredTail}` : firstSentence;
+        return clipToSentenceCount(stabilized, 2);
+    }
 
     const lead = buildRepAlignedLead(topic, repTranscript, hcpState);
-    const sentences = current.split(/(?<=[.!?])\s+/).filter(Boolean);
-    const tail = sentences.slice(1).join(" ").trim();
-    const merged = tail ? `${lead} ${tail}` : lead;
+    const merged = filteredTail ? `${lead} ${filteredTail}` : lead;
     return clipToSentenceCount(merged, 2);
 }
 
