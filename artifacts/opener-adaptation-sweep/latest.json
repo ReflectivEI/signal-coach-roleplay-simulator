@@ -1,29 +1,13 @@
 {
-  "timestamp": "2026-05-07T21:49:24.582Z",
+  "timestamp": "2026-05-07T21:54:36.541Z",
   "workerUrl": "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev",
   "scenariosEvaluated": 12,
   "openersEvaluated": 4,
   "casesEvaluated": 48,
-  "passCount": 47,
-  "failCount": 1,
-  "passRate": 0.9791666666666666,
+  "passCount": 48,
+  "failCount": 0,
+  "passRate": 1,
   "threshold": 0.92,
   "pass": true,
-  "failures": [
-    {
-      "scenarioId": "builtin-the-guideline-anchor",
-      "scenarioTitle": "The Guideline Anchor",
-      "openerId": "workflow_friction",
-      "opener": "I want to focus on the exact workflow step causing callback loops for your office team.",
-      "pass": false,
-      "reason": "generation_error:{\"error\":\"LLM_SERVICE_UNAVAILABLE\",\"details\":\"upstream connect error or disconnect/reset before headers. reset reason: remote connection failure, transport failure reason: delayed connect error: Connection refused\",\"provider\":\"groq\",\"model\":\"llama-3.3-70b-versatile\",\"keyIndex\":0,\"keyPoolSize\":1}",
-      "reply": "",
-      "cue": null,
-      "overlapTags": [],
-      "expectedTags": [
-        "workflow",
-        "access"
-      ]
-    }
-  ]
+  "failures": []
 }
