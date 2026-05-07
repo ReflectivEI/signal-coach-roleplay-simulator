@@ -184,6 +184,65 @@ function countTrailingSameBucket(bucketHistory = [], bucket) {
     return count;
 }
 
+function inferRepTopic(textValue = "") {
+    const lower = str(textValue).toLowerCase();
+    if (!lower) return "none";
+    if (/\b(jama|study|trial|data|evidence|paper|guideline)\b/.test(lower)) return "study";
+    if (/\b(patient profile|which patients|patient subgroup|subgroup|fit|criteria|who fits)\b/.test(lower)) return "patient_fit";
+    if (/\b(prior auth|prior authorization|approval|payer|coverage|formulary|access)\b/.test(lower)) return "access";
+    if (/\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower)) return "workflow";
+    return "none";
+}
+
+function topicAcknowledged(line = "", topic = "none") {
+    const lower = str(line).toLowerCase();
+    if (!lower || topic === "none") return true;
+    if (topic === "study") return /\b(jama|study|trial|paper)\b/.test(lower);
+    if (topic === "patient_fit") return /\b(patient|patients|subgroup|fit|criteria|profile)\b/.test(lower);
+    if (topic === "access") return /\b(prior auth|approval|payer|coverage|formulary|access)\b/.test(lower);
+    if (topic === "workflow") return /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower);
+    return true;
+}
+
+function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) {
+    const pressureTight = Number(hcpState?.patience_level || 5) <= 4;
+    const repLower = str(repTranscript).toLowerCase();
+    const hasFollowupSignal = /\b(last week|follow up|following up|dropped off|earlier|as we discussed|you asked)\b/.test(repLower);
+
+    if (topic === "study") {
+        if (hasFollowupSignal) {
+            return pressureTight
+                ? "I remember the study you dropped off last week. What in that data changes a real treatment decision for my patients?"
+                : "I remember that study from last week. What in the data changes a real treatment decision for my patients?";
+        }
+        return "If we're talking about that study, what exactly changes for the patients I actually treat?";
+    }
+    if (topic === "patient_fit") {
+        return "If we're discussing patient fit, tell me exactly which patients you mean and who should be excluded.";
+    }
+    if (topic === "access") {
+        return "If this is about access, I need to know which approval step changes for my team.";
+    }
+    if (topic === "workflow") {
+        return "If this is about workflow, tell me what concrete staff step gets easier first.";
+    }
+    return "I need a direct answer tied to what I just asked.";
+}
+
+function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState = {}) {
+    const current = str(line);
+    if (!current) return current;
+    const topic = inferRepTopic(repTranscript);
+    if (topic === "none") return current;
+    if (topicAcknowledged(current, topic)) return current;
+
+    const lead = buildRepAlignedLead(topic, repTranscript, hcpState);
+    const sentences = current.split(/(?<=[.!?])\s+/).filter(Boolean);
+    const tail = sentences.slice(1).join(" ").trim();
+    const merged = tail ? `${lead} ${tail}` : lead;
+    return clipToSentenceCount(merged, 2);
+}
+
 /** @param {{ targetBucket?: string, barrier?: string, revealedBarrier?: string, variationSeed?: number, liveTemperature?: number }} [params] */
 function buildForcedBucketLine({
     targetBucket,
@@ -1359,6 +1418,7 @@ export function generateHcpResponse({
     hcpBrain,
     liveTemperature = 5,
     conversationMemory = {},
+    repResponseTranscript = "",
 } = {}) {
     const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
     const band = temp <= 3 ? "low" : temp <= 7 ? "mid" : "high";
@@ -1540,6 +1600,10 @@ export function generateHcpResponse({
         conversationMemory,
     });
     hcp_statement = clipToSentenceCount(str(antiLoopEnforcement.line, hcp_statement), liveTemperature >= 8 ? 2 : 2);
+
+    // Final global guard: never allow generated HCP line to drift away from the rep's latest topic.
+    hcp_statement = enforceRepTranscriptAlignment(hcp_statement, repResponseTranscript, hcpState);
+
     if (antiLoopEnforcement.anti_loop_intervention_triggered) {
         hcp_progression_explanation = `${hcp_progression_explanation} Deterministic anti-loop intervention applied (${antiLoopEnforcement.anti_loop_intervention_reason}).`.trim();
     }
@@ -1620,6 +1684,7 @@ export function computeHcpStateProgression({
         hcpBrain,
         liveTemperature,
         conversationMemory,
+        repResponseTranscript,
     });
 
     // 4. Stamp response type into state
