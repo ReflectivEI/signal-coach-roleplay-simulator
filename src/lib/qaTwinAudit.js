@@ -171,7 +171,7 @@ function hasConcreteAnswerSignal(text = "") {
   const hasSpecificity =
     /\bresubmission\b|\bmissing info\b|\bmissing information\b|\bcallback\b|\bkicked back\b|\bdenied\b|\breopened\b|\bpayer\b|\bdocumentation\b|\bicd\b|\bstep therapy\b|\bchart notes\b|\bform\b|\bfront desk\b|\bma\b|\boffice staff\b|\bapproval\b|\bclean first time\b|\bsame authorization\b|\bsame pa\b|\bsame prior auth\b/.test(value);
   const shortDirect =
-    /\bno resubmissions\b|\bit goes through clean the first time\b|\bstaff not doing same pa twice\b|\bma no chase missing info\b|\bless callback\b|\bless fixing same authorization\b/.test(value);
+    /\bno resubmissions\b|\bit goes through clean the first time\b|\bstaff not doing same pa twice\b|\bma no chase missing info\b|\bless callback\b|\bfewer callback loops\b|\bless fixing same authorization\b/.test(value);
   return (((hasDomain && hasChange && hasSpecificity) || shortDirect) && !/\?$/.test(value));
 }
 
@@ -367,8 +367,10 @@ export function detectDialogueContinuityBreak({
     const repeatedRepQuestion = currentTurn?.concept
       ? recentRepTurns.some((turn) => turn?.concept && turn.concept === currentTurn.concept)
       : recentRepTurns.some((turn) => overlapScore(turn.text, currentText) >= 0.72);
+    const hasAnswerLeadIn = /^(the change is|the first change is|right now, the clearest gain is|it means|that means)/i.test(currentText);
+    const hasRepForwardProgress = hasConcreteAnswerSignal(currentText) || hasAnswerLeadIn || (!repeatedRepQuestion && hasForwardProgression(currentText, previousText));
 
-    if (repeatedRepQuestion) {
+    if (repeatedRepQuestion && !hasRepForwardProgress) {
       failures.push({ type: "repetition_or_looping", confidence: "high" });
       notes.push("REP repeated a prior discovery path instead of advancing the exchange.");
     }
@@ -481,7 +483,7 @@ export function validateTurnAgainstScenarioState({
     const decisionDriven = hasDecisionLogic(turn.text || "");
     const expectedJourney = scenario?.journeyStage;
     if (expectedJourney && detectedJourneyStage && expectedJourney !== detectedJourneyStage) {
-      failures.push("journey_stage_mismatch");
+      failures.push({ type: "journey_stage_mismatch", confidence: "medium" });
       notes.push(`Turn sounds like ${detectedJourneyStage} language, but scenario is ${expectedJourney}.`);
     }
 
@@ -491,24 +493,24 @@ export function validateTurnAgainstScenarioState({
       detectedPressures.length &&
       !detectedPressures.some((pressure) => configuredPressures.includes(pressure))
     ) {
-      failures.push("interaction_pressure_mismatch");
+      failures.push({ type: "interaction_pressure_mismatch", confidence: "medium" });
       notes.push("Turn pressure signal does not match configured scenario pressure.");
     }
 
     if (configuredPressures.includes("skeptical_resistant") && tone === "open") {
-      failures.push("weak_skepticism");
+      failures.push({ type: "weak_skepticism", confidence: "medium" });
       notes.push("HCP sounds too open for a skeptical/resistant exchange.");
     }
     if (configuredPressures.includes("time_constrained") && !detectedPressures.includes("time_constrained") && !decisionDriven) {
-      failures.push("interaction_pressure_mismatch");
+      failures.push({ type: "interaction_pressure_mismatch", confidence: "high" });
       notes.push("Time-constrained scenario lost time-pressure language.");
     }
     if (configuredPressures.includes("operationally_constrained") && !WORKFLOW_PATTERNS.some((pattern) => pattern.test(turn.text || ""))) {
-      failures.push("workflow_implausible");
+      failures.push({ type: "workflow_implausible", confidence: "high" });
       notes.push("Operationally constrained HCP did not sound staff/workflow aware.");
     }
     if (configuredPressures.includes("access_barrier") && !ACCESS_PATTERNS.some((pattern) => pattern.test(turn.text || ""))) {
-      failures.push("access_implausible");
+      failures.push({ type: "access_implausible", confidence: "high" });
       notes.push("Access-barrier scenario did not surface access/formulary language.");
     }
   }
@@ -569,6 +571,86 @@ function deriveTopCorrections(failureCounts = {}) {
     .map(([type]) => type.replace(/_/g, " "));
 }
 
+function normalizeFailureEntry(failure, defaultConfidence = "medium") {
+  if (!failure) return null;
+  if (typeof failure === "string") {
+    return { type: failure, confidence: defaultConfidence };
+  }
+  if (typeof failure === "object" && failure.type) {
+    return {
+      ...failure,
+      confidence: failure.confidence || defaultConfidence,
+    };
+  }
+  return null;
+}
+
+function classifyFailureSeverity(type, confidence = "medium") {
+  if (["question_obligation_failure", "continuity_break", "conversation_stagnation"].includes(type)) {
+    return "high";
+  }
+  if (["workflow_implausible", "access_implausible", "clinical_implausible", "interaction_pressure_mismatch"].includes(type)) {
+    return confidence === "high" ? "high" : "medium";
+  }
+  return confidence === "high" ? "medium" : "low";
+}
+
+function classifyRootCause(type) {
+  if (["workflow_implausible", "access_implausible", "clinical_implausible", "journey_stage_mismatch", "interaction_pressure_mismatch"].includes(type)) {
+    return "state_alignment";
+  }
+  if (["continuity_break", "question_obligation_failure", "repetition_or_looping", "conversation_stagnation", "unearned_tone_shift"].includes(type)) {
+    return "dialogue_continuity";
+  }
+  return "realism_quality";
+}
+
+function deriveExpectedTopicLanes(scenario = {}) {
+  const byStage = {
+    initial_access: ["access", "workflow", "relevance"],
+    early_discovery: ["workflow", "patient_fit", "clinical"],
+    discovery: ["workflow", "patient_fit", "clinical"],
+    clinical_value: ["clinical", "evidence", "cost"],
+    objection_handling: ["workflow", "access", "clinical"],
+    adoption_implementation: ["workflow", "implementation", "access"],
+    access_formulary: ["access", "workflow", "coverage"],
+    commitment_close: ["next_step", "implementation", "access"],
+  };
+  return byStage[scenario?.journeyStage] || ["workflow", "clinical", "access"];
+}
+
+function detectMatchedTopicLane(text = "", expectedLanes = []) {
+  const value = normalize(text).toLowerCase();
+  const lanePatterns = {
+    workflow: WORKFLOW_PATTERNS,
+    implementation: WORKFLOW_PATTERNS,
+    access: ACCESS_PATTERNS,
+    coverage: ACCESS_PATTERNS,
+    clinical: CLINICAL_PATTERNS,
+    evidence: CLINICAL_PATTERNS,
+    patient_fit: [/\bpatient\b/i, /\bsubgroup\b/i, /\bfit\b/i],
+    relevance: [/\babout\b/i, /\brelevant\b/i, /\bwhy\b/i],
+    cost: [/\bcost\b/i, /\bvalue\b/i],
+    next_step: [/\bnext step\b/i, /\bwould you be open\b/i],
+  };
+  const hit = expectedLanes.find((lane) => (lanePatterns[lane] || []).some((pattern) => pattern.test(value)));
+  return hit || "general";
+}
+
+function deriveExpectedStageBehavior(stage) {
+  const byStage = {
+    initial_access: ["gatekeeping", "brevity", "time awareness"],
+    discovery: ["diagnostic specificity", "patient/practice context"],
+    early_discovery: ["diagnostic specificity", "patient/practice context"],
+    clinical_value: ["evidence scrutiny", "outcome framing"],
+    objection_handling: ["explicit objection", "practical barrier testing"],
+    adoption_implementation: ["workflow feasibility", "implementation planning"],
+    access_formulary: ["formulary/access constraints", "payer process realism"],
+    commitment_close: ["owned next-step", "conditional commitment"],
+  };
+  return byStage[stage] || ["clinical realism", "workflow relevance"];
+}
+
 export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) {
   const transcript = [];
   const failureCounts = {};
@@ -609,6 +691,13 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     const realismNotes = [];
     const continuityNotes = [...continuity.notes, ...stateValidation.notes, ...transitionValidation.notes];
     const turnFailures = [];
+    const normalizedContinuityFailures = (continuity.failures || []).map((failure) => normalizeFailureEntry(failure, "medium")).filter(Boolean);
+    const normalizedStateFailures = (stateValidation.failures || []).map((failure) => normalizeFailureEntry(failure, "medium")).filter(Boolean);
+    const normalizedTransitionFailures = (transitionValidation.failures || []).map((failure) => normalizeFailureEntry(failure, "medium")).filter(Boolean);
+    const normalizedStructuralFailures = [...normalizedContinuityFailures, ...normalizedStateFailures, ...normalizedTransitionFailures];
+    const expectedTopicLanes = deriveExpectedTopicLanes(scenario);
+    const matchedTopicLane = detectMatchedTopicLane(rawMessage, expectedTopicLanes);
+    const expectedStageBehavior = deriveExpectedStageBehavior(scenario?.journeyStage);
 
     if (turn.speaker === "hcp") {
       if (chatbot.flagged) {
@@ -669,24 +758,38 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       continuityNotes.push(stagnationFailure.note);
     }
 
-    [...continuity.failures, ...stateValidation.failures.map((type) => ({ type, confidence: "medium" })), ...transitionValidation.failures.map((type) => ({ type, confidence: "medium" }))].forEach((failure) => {
-      turnFailures.push(typeof failure === "string" ? failure : failure.type);
+    normalizedStructuralFailures.forEach((failure) => {
+      turnFailures.push(failure.type);
     });
 
     const uniqueTurnFailures = [...new Set(turnFailures)];
     uniqueTurnFailures.forEach((type) => {
       addCounts(failureCounts, type);
+      const structuralFailure = normalizedStructuralFailures.find((item) => item.type === type);
       const confidence =
         obligationFailure?.type === type ? obligationFailure.confidence :
           stagnationFailure?.type === type ? stagnationFailure.confidence :
-            continuity.failures.find((item) => item.type === type)?.confidence ||
+            structuralFailure?.confidence ||
             (type === "chatbot_phrasing" ? chatbot.confidence : "medium");
+      const severity = classifyFailureSeverity(type, confidence);
       failures.push({
         turnNumber,
         type,
         evidence: buildEvidenceSnippet(rawMessage),
+        evidenceDetails: {
+          speaker: turn.speaker,
+          detectedIntent,
+          detectedTone,
+          detectedJourneyStage,
+          detectedPressures,
+        },
         note: [...realismNotes, ...continuityNotes].join(" "),
         confidence,
+        severity,
+        rootCause: classifyRootCause(type),
+        expected_topic_lanes: expectedTopicLanes,
+        matched_topic_lane: matchedTopicLane,
+        expected_stage_behavior: expectedStageBehavior,
       });
     });
 
@@ -726,6 +829,12 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
   const continuityFailures = failures.filter((failure) =>
     ["continuity_break", "question_obligation_failure", "repetition_or_looping", "unearned_tone_shift"].includes(failure.type)
   );
+  const severityCounts = {};
+  const rootCauseClassification = {};
+  failures.forEach((failure) => {
+    addCounts(severityCounts, failure.severity || "medium");
+    addCounts(rootCauseClassification, failure.rootCause || "realism_quality");
+  });
 
   return {
     verdict: pass ? "PASS" : "FAIL",
@@ -744,6 +853,8 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     )
       ? "Turn-level state alignment drift was detected."
       : "Journey, pressure, and tone alignment remained within expected bounds.",
+    severityCounts,
+    rootCauseClassification,
     topCorrections: deriveTopCorrections(failureCounts),
     calibrationCases: runInternalAuditCalibrationCases(),
   };
