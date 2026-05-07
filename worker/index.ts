@@ -1051,6 +1051,21 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
         const merged = normalizeEvaluationResponse({
             ...deterministicWithBrain,
             ...parsed,
+            // Deterministic HCP progression outputs are authoritative and must not be overwritten by free-form model text.
+            simulated_hcp_next_response: (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response,
+            hcp_state: (deterministicWithBrain as Record<string, unknown>).hcp_state,
+            hcp_state_delta: (deterministicWithBrain as Record<string, unknown>).hcp_state_delta,
+            hcp_response_type: (deterministicWithBrain as Record<string, unknown>).hcp_response_type,
+            response_type_reason: (deterministicWithBrain as Record<string, unknown>).response_type_reason,
+            previous_response_types: (deterministicWithBrain as Record<string, unknown>).previous_response_types,
+            response_type_transition_explanation: (deterministicWithBrain as Record<string, unknown>).response_type_transition_explanation,
+            hcp_progression_explanation: (deterministicWithBrain as Record<string, unknown>).hcp_progression_explanation,
+            anti_loop_intervention_triggered: (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_triggered,
+            anti_loop_intervention_reason: (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_reason,
+            intent_bucket: (deterministicWithBrain as Record<string, unknown>).intent_bucket,
+            semantic_similarity_max: (deterministicWithBrain as Record<string, unknown>).semantic_similarity_max,
+            trailing_bucket_run: (deterministicWithBrain as Record<string, unknown>).trailing_bucket_run,
+            conversation_memory: (deterministicWithBrain as Record<string, unknown>).conversation_memory,
             metric_scores: {
                 ...(asObject(deterministicWithBrain.metric_scores as Record<string, unknown>, {} as Record<string, unknown>)),
                 ...((asObject(parsed.metric_scores as Record<string, unknown>, {} as Record<string, unknown>))),
