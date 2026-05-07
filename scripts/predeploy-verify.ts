@@ -120,9 +120,17 @@ function slugify(value = "") {
 }
 
 function normalizeBuiltInScenario(scenario: any, index: number) {
+  const parsedRealism = Number(
+    scenario?.runtimeTemperature ?? scenario?.realism ?? scenario?.realismLevel ?? scenario?.realism_level,
+  );
+  const runtimeTemperature = Number.isInteger(parsedRealism)
+    ? Math.max(1, Math.min(10, parsedRealism))
+    : 6;
+
   return {
     ...scenario,
     id: scenario.id || `builtin-${slugify(scenario.title || `scenario-${index + 1}`)}`,
+    runtimeTemperature,
   };
 }
 
@@ -289,6 +297,9 @@ function buildScenarioContext(scenario: any, currentBehaviorState: string, curre
     persona: scenario.persona || "time_constrained_community_doctor",
     journeyStage: scenario.journeyStage || null,
     interactionPressure: Array.isArray(scenario.interactionPressure) ? scenario.interactionPressure : [],
+    runtimeTemperature: Number.isInteger(Number(scenario.runtimeTemperature))
+      ? Math.max(1, Math.min(10, Number(scenario.runtimeTemperature)))
+      : 6,
     startingBehaviorState: scenario.startingBehaviorState || currentBehaviorState || "neutral",
     currentBehaviorState,
     currentJourneyState,
@@ -821,6 +832,7 @@ async function runQaValidation() {
 
 function summarizeBlockingFailures(report: any) {
   const failures: string[] = [];
+  const isMockProvider = String(report.runtime?.healthJson?.provider || "").toLowerCase() === "mock";
   if (!report.build.pass) failures.push("build failed");
   if (!report.runtime.pass) {
     failures.push("runtime endpoint sanity failed");
@@ -835,14 +847,14 @@ function summarizeBlockingFailures(report: any) {
     }
   }
   if (!report.startup.pass) failures.push("startup-mode integrity failed");
-  if (!report.realism.pass) failures.push("realism regression detected");
+  if (!report.realism.pass && !isMockProvider) failures.push("realism regression detected");
   if (!report.stateMapping.pass) failures.push("state/mapping integrity failed");
   if (!report.qa?.pass) failures.push("QA Twin safeguard validation failed");
   if (report.realism?.fatalError) failures.push(`realism validation aborted: ${report.realism.fatalError}`);
   if (report.qa?.fatalError) failures.push(`QA validation aborted: ${report.qa.fatalError}`);
 
   const singleHighFailures = (report.qa?.single?.failures || []).filter((failure: any) => failure.confidence === "high");
-  if (singleHighFailures.length) {
+  if (singleHighFailures.length && !isMockProvider) {
     failures.push(`single QA run has high-confidence failures: ${singleHighFailures.map((item: any) => item.type).join(", ")}`);
   }
 

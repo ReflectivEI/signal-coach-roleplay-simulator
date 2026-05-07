@@ -626,6 +626,7 @@ function applyShapeCompression(
   profile: HcpRuntimeProfile,
   scenario: any,
   hcpTurnCount = 0,
+  liveRepAlignmentActive = false,
 ): string {
   let output = normalizeText(text);
   const firstHcpTurn = hcpTurnCount === 0;
@@ -638,7 +639,7 @@ function applyShapeCompression(
       .filter(Boolean)
       .length;
   const preserveOpeningSentenceCount =
-    firstHcpTurn
+    firstHcpTurn && !liveRepAlignmentActive
       ? Math.min(
           3,
           Math.max(
@@ -847,12 +848,14 @@ export function applyHcpResponseSurface({
   turn,
   profile,
   hcpTurnCount = 0,
+  liveRepAlignmentActive = false,
 }: {
   hcpReply: string;
   scenario: any;
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
   hcpTurnCount?: number;
+  liveRepAlignmentActive?: boolean;
 }): string {
   let output = normalizeText(hcpReply);
   if (!output) return "";
@@ -872,7 +875,7 @@ export function applyHcpResponseSurface({
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
   output = applyProfessionalBoundaryBalance(output, turn, profile, scenario, hcpTurnCount);
-  output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
+  output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount, liveRepAlignmentActive);
 
   if (
     hcpTurnCount > 0 &&

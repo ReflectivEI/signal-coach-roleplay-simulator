@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-05-07T21:50:39.809Z",
+  "promoted": false,
+  "pass": true,
+  "score": 0.9808,
+  "metrics": {
+    "confidenceGate": 1,
+    "openerAdaptation": 0.9791666666666666,
+    "highRiskLowOpennessRatio": 0,
+    "personaLanePassRate": 1,
+    "crossPathParity": 0.9
+  },
+  "policy": {
+    "minConfidenceGate": 0.95,
+    "minOpenerAdaptation": 0.92,
+    "maxHighRiskLowOpennessRatio": 0.4,
+    "minPersonaLanePassRate": 0.9,
+    "minCrossPathParity": 0.9
+  },
+  "weights": {
+    "confidence": 0.3,
+    "openerAdaptation": 0.2,
+    "highRiskLowOpenness": 0.15,
+    "personaLane": 0.2,
+    "crossPathParity": 0.15
+  },
+  "failures": [],
+  "outputProfilePath": "/Users/anthonyabdelmalak/Desktop/New Folder With Items/signal-coach-core/src/lib/continuousLearningProfile.json"
+}

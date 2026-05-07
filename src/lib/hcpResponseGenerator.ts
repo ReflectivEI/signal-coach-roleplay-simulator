@@ -136,6 +136,14 @@ type TurnConstraintResolution = {
   reasoning: string[];
 };
 
+type FirstTurnRepTopic = "study_follow_up" | "access" | "workflow" | "screening" | "evidence" | "general";
+
+type FirstTurnAlignmentResult = {
+  applied: boolean;
+  hcpReply: string;
+  cueOverride: string;
+};
+
 function stepWithin<T>(ordered: readonly T[], current: T, delta: number): T {
   const index = ordered.indexOf(current);
   const safeIndex = index < 0 ? 0 : index;
@@ -475,6 +483,24 @@ function buildDerivedScenarioContext(scenario: any) {
     hcpRoleType: scenario?.hcpRoleType || mapped.resolvedFields.hcp_type,
     journeyStage: scenario?.journeyStage || mapped.resolvedFields.journey_stage,
   };
+}
+
+function deriveSamplingTemperatureFromRealism(realism: number, opts?: { highPressure?: boolean; profileBrevity?: string }): number {
+  const contractRealism = requireRealismContract(realism, "scenario.runtimeTemperature");
+  let base = 0.24;
+  if (contractRealism <= 3) base = 0.16;
+  else if (contractRealism <= 6) base = 0.24;
+  else if (contractRealism <= 8) base = 0.34;
+  else base = 0.42;
+
+  if (opts?.highPressure) {
+    base = Math.max(0.14, base - 0.04);
+  }
+  if (opts?.profileBrevity === "tight") {
+    base = Math.max(0.14, base - 0.02);
+  }
+
+  return Number(base.toFixed(2));
 }
 
 function needsNaturalnessRewrite(text: string): boolean {
@@ -887,6 +913,254 @@ function getLatestHcpConcern(transcript: ConversationTurn[], scenario: any): str
   return String(scenario?.openingScene || "").toLowerCase();
 }
 
+function hasPriorHcpTurns(transcript: ConversationTurn[]): boolean {
+  return transcript.some((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string" && turn.text.trim().length > 0);
+}
+
+function deriveFirstTurnRepTopic(repMessage: string): FirstTurnRepTopic {
+  const text = String(repMessage || "").toLowerCase();
+  if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(text)) return "study_follow_up";
+  if (/\bpatient profile\b|\bright patient\b|\bwhich patients\b|\bwho fits\b|\bpatient type\b|\bsubgroup\b/.test(text)) return "screening";
+  if (/\bprior auth\b|\bprior authorization\b|\bcoverage\b|\bformulary\b|\bpayer\b|\bapproval\b|\baccess\b/.test(text)) return "access";
+  if (/\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b|\brework\b/.test(text)) return "workflow";
+  if (/\bevidence\b|\bguideline\b|\boutcome\b|\bsafety\b/.test(text)) return "evidence";
+  return "general";
+}
+
+function extractRepFocusPhrase(repMessage: string): string {
+  const text = String(repMessage || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+
+  const patterns = [
+    /\b(?:discuss|talk about|talk through|review|revisit|follow up on|following up on|go over|ask about|ask you about|come back to|circle back to|bring up|check in on)\s+(.+?)(?:[?.!]|$)/i,
+    /\b(?:about|regarding|on)\s+(.+?)(?:[?.!]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    const candidate = String(match?.[1] || "")
+      .replace(/^the\s+/i, "")
+      .replace(/^(a|an)\s+/i, "")
+      .replace(/\b(i dropped off|you asked for|last week|earlier)\b/gi, (value) => value.toLowerCase())
+      .replace(/\s+/g, " ")
+      .trim();
+    if (candidate && candidate.split(/\s+/).length <= 12) {
+      return candidate;
+    }
+  }
+
+  return "";
+}
+
+function tokenizeFocusPhrase(text: string): string[] {
+  const stopwords = new Set([
+    "about", "with", "that", "this", "have", "been", "your", "their", "from", "into", "what", "which", "would", "could", "should", "there", "here", "where", "when", "them", "they", "were", "late", "line"
+  ]);
+
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 4 && !stopwords.has(token));
+}
+
+function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): string {
+  const focusPhrase = extractRepFocusPhrase(repMessage);
+  const practicalAsk = deriveFirstTurnPracticalAsk(deriveFirstTurnRepTopic(repMessage), scenario);
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  const timeConstrained = pressures.includes("time_constrained");
+
+  if (focusPhrase) {
+    return timeConstrained
+      ? `If we're talking about ${focusPhrase}, keep it tight. ${practicalAsk}`
+      : `If we're talking about ${focusPhrase}, be specific. ${practicalAsk}`;
+  }
+
+  return timeConstrained
+    ? "I can give you a minute, but keep it specific and practical."
+    : "I can listen, but keep it specific and practical.";
+}
+
+function deriveLiveConversationConcern(transcript: ConversationTurn[], scenario: any, repMessage: string): string {
+  if (hasPriorHcpTurns(transcript)) {
+    const latestConcern = getLatestHcpConcern(transcript, scenario);
+    if (repAddressesPremiseChallenge(repMessage, latestConcern) || repAddressesRecentPremiseChallenge(repMessage, transcript)) {
+      return [String(repMessage || "").trim().toLowerCase(), latestConcern].filter(Boolean).join(" | ");
+    }
+
+    const repTags = inferConcernTags(repMessage);
+    const concernTags = inferConcernTags(latestConcern);
+    const sharedTags = repTags.filter((tag) => concernTags.includes(tag));
+    if (sharedTags.length > 0) {
+      return [latestConcern, String(repMessage || "").trim().toLowerCase()].filter(Boolean).join(" | ");
+    }
+
+    return latestConcern;
+  }
+
+  const repText = String(repMessage || "").trim().toLowerCase();
+  const scenarioText = String(scenario?.objective || scenario?.description || scenario?.openingScene || "").trim().toLowerCase();
+  return [repText, scenarioText].filter(Boolean).join(" | ");
+}
+
+function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): string {
+  const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
+  const accessTagged = /\bprior auth\b|\bcoverage\b|\bformulary\b|\bapproval\b|\baccess\b/.test(scenarioText);
+  const workflowTagged = /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b/.test(scenarioText);
+  const screeningTagged = /\bpatient\b|\bsubgroup\b|\bfit\b|\bselection\b/.test(scenarioText);
+
+  if (topic === "study_follow_up") {
+    return "What in that study do you think should change a real treatment decision for me?";
+  }
+  if (topic === "access" || accessTagged) {
+    return "What changes in the access step or for my staff if this actually matters?";
+  }
+  if (topic === "workflow" || workflowTagged) {
+    return "What changes in the workflow for my staff if this is worth discussing?";
+  }
+  if (topic === "screening" || screeningTagged) {
+    return "Which patients do you think this actually changes for?";
+  }
+  if (topic === "evidence") {
+    return "What do you think the evidence changes for how I treat patients?";
+  }
+  return "What do you think this changes for me or for my patients?";
+}
+
+function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
+  const topic = deriveFirstTurnRepTopic(repMessage);
+  const text = String(repMessage || "").toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
+  const timeConstrained = pressures.includes("time_constrained");
+  const practicalAsk = deriveFirstTurnPracticalAsk(topic, scenario);
+  const hasFollowUpSignal = /\bfollow(?:ing)? up\b|\blast week\b|\byou asked\b|\bdropped off\b|\bwe discussed\b|\bearlier\b/.test(text);
+
+  if (topic === "study_follow_up") {
+    if (timeConstrained && hasFollowUpSignal) return `I remember the study, but you'll need to keep this quick. ${practicalAsk}`;
+    if (hasFollowUpSignal) return `I remember the study. ${practicalAsk}`;
+    return `If this is about the study, be specific. ${practicalAsk}`;
+  }
+  if (topic === "access") {
+    return timeConstrained
+      ? `If this is about access, keep it tight. ${practicalAsk}`
+      : `If this is about access, be specific. ${practicalAsk}`;
+  }
+  if (topic === "workflow") {
+    return timeConstrained
+      ? `If this is about workflow, keep it tight. ${practicalAsk}`
+      : `If this is about workflow, be specific. ${practicalAsk}`;
+  }
+  if (topic === "screening") {
+    return `If you're talking patient fit, be specific. ${practicalAsk}`;
+  }
+  if (topic === "evidence") {
+    return `If this is about the evidence, be specific. ${practicalAsk}`;
+  }
+  return buildGenericLiveAdaptiveReply(repMessage, scenario);
+}
+
+function firstTurnReplyIgnoresRep(hcpReply: string, repMessage: string, transcript: ConversationTurn[]): boolean {
+  const replyText = String(hcpReply || "").toLowerCase();
+  const repText = String(repMessage || "").toLowerCase();
+  const repTags = inferConcernTags(repText);
+  const replyTags = inferConcernTags(replyText);
+  const sharedTags = repTags.filter((tag) => replyTags.includes(tag));
+  const focusTokens = tokenizeFocusPhrase(extractRepFocusPhrase(repMessage));
+
+  if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(repText) && !/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(replyText)) {
+    return true;
+  }
+
+  if (sharedTags.length === 0 && repTags.length > 0) {
+    return true;
+  }
+
+  if (focusTokens.length > 0 && !focusTokens.some((token) => replyText.includes(token))) {
+    return true;
+  }
+
+  if (hasPriorHcpTurns(transcript) && /\bwhy are you here\b|\bwhat'?s this about\b|\bwhat is this about\b/.test(replyText)
+    && (repAddressesRecentPremiseChallenge(repMessage, transcript) || repAddressesPremiseChallenge(repMessage, getLatestHcpConcern(transcript, {})))) {
+    return true;
+  }
+
+  if (/\bmy patients are doing pretty well\b|\bwhat would make you think i need something different\b/.test(replyText)
+    && /\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(repText)) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildFirstTurnCueOverride(repMessage: string, scenario: any): string {
+  const topic = deriveFirstTurnRepTopic(repMessage);
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
+  const timeConstrained = pressures.includes("time_constrained");
+
+  if (topic === "study_follow_up") {
+    return timeConstrained
+      ? "Keeps the study page in view, checks the clock once, then looks back for the point."
+      : "Keeps the study page in view and looks back like the relevance still has to be proven.";
+  }
+  if (topic === "access") {
+    return timeConstrained
+      ? "Checks the clock, prior-auth notes still in view, and looks back for one practical answer."
+      : "Keeps the access notes in view and looks back for one practical answer.";
+  }
+  if (topic === "workflow") {
+    return timeConstrained
+      ? "Checks the schedule, one hand still on the clinic notes, and looks back for the point."
+      : "Keeps a hand on the clinic notes and looks back like this needs to get practical quickly.";
+  }
+  if (topic === "screening") {
+    return "Keeps the patient list in view and waits for you to get specific.";
+  }
+  return timeConstrained
+    ? "Checks the clock, then looks back for the point."
+    : "Looks back with professional reserve, waiting for you to get specific.";
+}
+
+function enforceFirstTurnRepAdaptation({
+  hcpReply,
+  repMessage,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): FirstTurnAlignmentResult {
+  if (!firstTurnReplyIgnoresRep(hcpReply, repMessage, transcript)) {
+    return {
+      applied: false,
+      hcpReply,
+      cueOverride: "",
+    };
+  }
+
+  return {
+    applied: true,
+    hcpReply: hasPriorHcpTurns(transcript)
+      ? buildFirstTurnAlignedReply(repMessage, scenario)
+        .replace(/^I remember the study, but you'll need to keep this quick\.\s*/i, "")
+        .replace(/^I remember the study\.\s*/i, "")
+        .replace(/^If this is about the study, be specific\.\s*/i, "")
+        .replace(/^If this is about access, keep it tight\.\s*/i, "")
+        .replace(/^If this is about access, be specific\.\s*/i, "")
+        .replace(/^If this is about workflow, keep it tight\.\s*/i, "")
+        .replace(/^If this is about workflow, be specific\.\s*/i, "")
+        .replace(/^If you're talking patient fit, be specific\.\s*/i, "")
+        .replace(/^If this is about the evidence, be specific\.\s*/i, "")
+        .trim()
+      : buildFirstTurnAlignedReply(repMessage, scenario),
+    cueOverride: buildFirstTurnCueOverride(repMessage, scenario),
+  };
+}
+
 function getLastHcpReplyText(transcript: ConversationTurn[]): string {
   for (let i = transcript.length - 1; i >= 0; i -= 1) {
     if (transcript[i]?.speaker === "hcp" && transcript[i]?.text) {
@@ -896,7 +1170,7 @@ function getLastHcpReplyText(transcript: ConversationTurn[]): string {
   return "";
 }
 
-function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: any): string {
+function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: any, repMessage: string): string {
   const hcpTurns = transcript
     .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
     .slice(-4)
@@ -908,7 +1182,7 @@ function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: an
     return acc;
   }, {});
   const dominantConcern = Object.entries(concernCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "none";
-  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const latestConcern = deriveLiveConversationConcern(transcript, scenario, repMessage);
   const repeatedLatest = hcpTurns.filter((line) => {
     const tags = inferConcernTags(line);
     const latestTags = inferConcernTags(latestConcern);
@@ -1199,7 +1473,7 @@ function normalizeBehaviorSignals(
   scenario: any,
   hcpReply: string
 ): BehaviorSignals {
-  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const latestConcern = deriveLiveConversationConcern(transcript, scenario, repMessage);
   const premiseCorrected = repAddressesRecentPremiseChallenge(repMessage, transcript);
   const inferredQuestionType = detectQuestionType(repMessage);
   const inferredAlignment = inferResponseAlignment(repMessage, latestConcern, scenario);
@@ -1270,12 +1544,13 @@ export async function generateHcpResponse(
   ..._legacyCompatibilityArgs: any[]
 ): Promise<SimulatorResponse> {
   scenario = buildDerivedScenarioContext(scenario);
+  const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
     .join("\n");
 
   const focusCaps = (scenario.suggestedFocusCapabilities || []).join(", ");
-  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const latestConcern = deriveLiveConversationConcern(transcript, scenario, repMessage);
 
   const windowSignals = allPriorSignals.length > 0 ? allPriorSignals : [];
   const prediction = predictHcpBehavior(windowSignals, windowSignals, scenario);
@@ -1319,6 +1594,10 @@ export async function generateHcpResponse(
   const finalResponseTokenBudget = typeof responseTokenCap === "number"
     ? Math.min(responseTokenBudget, responseTokenCap)
     : responseTokenBudget;
+  const generationTemperature = deriveSamplingTemperatureFromRealism(contractRealism, {
+    highPressure: isHighPressureTurn,
+    profileBrevity: runtimeProfile?.brevity,
+  });
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -1373,7 +1652,7 @@ ${volatility.curveballType ? `Curveball Type: ${volatility.curveballType}` : ""}
 ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volatility.curveballTriggerSignal}` : ""}
 `;
   const continuityBlock = `
-${summarizeConcernContinuity(transcript, scenario)}
+${summarizeConcernContinuity(transcript, scenario, repMessage)}
 `;
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
@@ -1498,11 +1777,10 @@ Return ONLY valid JSON:
   }` : ""}
 }`;
 
-  requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
   const result = await invokeWorkerJson({
     prompt,
     max_tokens: finalResponseTokenBudget,
-    temperature: 0.2,
+    temperature: generationTemperature,
     response_json_schema: {
       type: "object",
       properties: {
@@ -1558,6 +1836,16 @@ Return ONLY valid JSON:
     }
   }
   let continuityAdjusted = false;
+  const firstTurnAlignment = enforceFirstTurnRepAdaptation({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+  let cueOverride = firstTurnAlignment.cueOverride;
+  if (firstTurnAlignment.applied) {
+    hcpReply = firstTurnAlignment.hcpReply;
+  }
 
   if (needsContinuityVariationRewrite({
     hcpReply,
@@ -1610,6 +1898,7 @@ Return ONLY valid JSON:
     turn: turnDirectives,
     profile: runtimeProfile,
     hcpTurnCount,
+    liveRepAlignmentActive: firstTurnAlignment.applied,
   });
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
@@ -1630,6 +1919,7 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
+        liveRepAlignmentActive: firstTurnAlignment.applied,
       });
     } catch {
       continuityAdjusted = true;
@@ -1643,8 +1933,20 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
+        liveRepAlignmentActive: firstTurnAlignment.applied,
       });
     }
+  }
+
+  const finalLiveAlignment = enforceFirstTurnRepAdaptation({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+  if (finalLiveAlignment.applied) {
+    hcpReply = finalLiveAlignment.hcpReply;
+    cueOverride = finalLiveAlignment.cueOverride;
   }
 
   const recentCueLabels = transcript
@@ -1653,12 +1955,14 @@ Return ONLY valid JSON:
     .map((cue: any) => cue?.label)
     .filter(Boolean)
     .slice(-8);
-  const cue = resolveObservedCue(result.hcpCue || "", {
+  const cue = resolveObservedCue(cueOverride || result.hcpCue || "", {
     hcpReply,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
     hcpTurnCount,
     interactionPressures: scenario.interactionPressure || [],
     recentCueLabels,
+    repMessage,
+    allowFirstTurnCandidateCue: firstTurnAlignment.applied || finalLiveAlignment.applied,
     scenario: {
       id: scenario.id,
       title: scenario.title,
@@ -1698,6 +2002,8 @@ Return ONLY valid JSON:
     prediction,
     runtimeTrace: {
       generator_version: HCP_GENERATOR_VERSION,
+      realism_level: contractRealism,
+      sampling_temperature: generationTemperature,
       scenario_grounding_applied: true,
       banned_phrase_filter_applied: true,
       scenario_anchors_used: [scenario?.id, scenario?.title, scenario?.journeyStage].filter(Boolean),

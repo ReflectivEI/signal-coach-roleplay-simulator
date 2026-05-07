@@ -1,4 +1,9 @@
 import { HCP_REALISM_LANGUAGE_PACK, pickHcpRealismExamples, validateHcpHumanRealism } from "../../src/lib/hcpRealismLanguagePack.js";
+import {
+  ingestGovernedEvidenceRecords,
+  listGovernedSources,
+  queryGovernedEvidenceRecords,
+} from "./evidenceGovernance.js";
 
 const workerImportHealth = {
   hcpRealismLanguagePack: Boolean(HCP_REALISM_LANGUAGE_PACK),
@@ -15,6 +20,7 @@ const allowedHeaders = "Content-Type,Authorization";
 const memoryState = {
   scenarios: [],
   sessions: [],
+  evidence_records: [],
 };
 const groqKeyCooldowns = new Map();
 
@@ -42,6 +48,26 @@ function preflight(request) {
 function safeString(value, fallback = "") {
   const text = String(value ?? "").trim();
   return text || fallback;
+}
+
+function clampRealism(value, fallback = 5) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.max(1, Math.min(10, parsed));
+}
+
+function deriveRoleplaySamplingTemperature(scenarioContext = {}, conversationState = {}) {
+  const realism = clampRealism(
+    scenarioContext?.runtimeTemperature
+      ?? scenarioContext?.runtime_temperature
+      ?? conversationState?.runtimeTemperature
+      ?? conversationState?.live_temperature
+      ?? 5,
+  );
+  if (realism <= 3) return 0.16;
+  if (realism <= 6) return 0.24;
+  if (realism <= 8) return 0.34;
+  return 0.42;
 }
 
 function slugify(value) {
@@ -127,6 +153,7 @@ const MAX_SCENARIO_COUNT = 100;
 const MAX_SESSION_COUNT = 200;
 const MAX_TRANSCRIPT_TURNS = 60;
 const MAX_SIGNAL_ITEMS = 60;
+const MAX_EVIDENCE_RECORDS = 1200;
 
 function safeBoolean(value, fallback = false) {
   if (typeof value === "boolean") return value;
@@ -638,13 +665,13 @@ function deriveNextJourneyState(currentJourneyState = "", scenarioContext = {}) 
 function inferTopicFromText(text = "") {
   const normalized = safeString(text).toLowerCase();
   if (!normalized) return "";
+  if (/patient|fit|subgroup|renal/.test(normalized)) return "patient_fit";
   if (/prior auth|prior authorization|approval|paperwork|callback/.test(normalized)) return "prior_auth";
   if (/formulary|non-preferred|committee|payer/.test(normalized)) return "formulary_issue";
   if (/access|coverage|approved/.test(normalized)) return "access_issue";
   if (/workflow|staff|handoff|process|operational/.test(normalized)) return "workflow_burden";
   if (/safety|risk|hepatic|adverse|side effect/.test(normalized)) return "safety_question";
   if (/study|trial|data|evidence|guideline/.test(normalized)) return "study_follow_up";
-  if (/patient|fit|subgroup|renal/.test(normalized)) return "patient_fit";
   return "";
 }
 
@@ -781,10 +808,8 @@ function buildFirstTurnAcknowledgment({ repContext = {}, scenarioContext = {}, c
 }
 
 function firstSentenceNeedsAlignment(firstSentence = "", repContext = {}, turnCount = 0) {
-  if (turnCount > 0) return false;
-
   const sentence = safeString(firstSentence);
-  const topic = repContext.explicitTopic || repContext.scenarioTopic;
+  const topic = repContext.explicitTopic || (turnCount <= 0 ? repContext.scenarioTopic : "");
   const pattern = topicPattern(topic);
   const acknowledgesTopic = Boolean(pattern && pattern.test(sentence));
   const hasProxyReset =
@@ -793,15 +818,15 @@ function firstSentenceNeedsAlignment(firstSentence = "", repContext = {}, turnCo
     /\bwhat'?s this about\b|\bwhy are you here\b|\bwhat do you need from me\b/i.test(sentence);
 
   if (repContext.hasPriorContextSignal && hasProxyReset) return true;
-  if (repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
-  if (!repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
+  if (repContext.explicitTopic && !acknowledgesTopic) return true;
+  if (turnCount <= 0 && repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
+  if (turnCount <= 0 && !repContext.repIncludesScenarioTopic && !acknowledgesTopic) return true;
   if (repContext.repIncludesScenarioTopic && hasGenericReset) return true;
   return false;
 }
 
-function enforceFirstTurnRepAcknowledgment(hcpReply = "", repMessage = "", scenarioContext = {}, conversationState = {}) {
+function enforceLiveRepAcknowledgment(hcpReply = "", repMessage = "", scenarioContext = {}, conversationState = {}) {
   const turnCount = Number(conversationState?.turnCount || scenarioContext?.turnCount || 0);
-  if (turnCount > 0) return safeString(hcpReply);
 
   const repContext = extractRepOpeningContext(repMessage, scenarioContext);
   const { firstSentence, remainder } = splitFirstSentence(hcpReply);
@@ -1183,10 +1208,11 @@ async function handleRoleplayStart(request, env) {
   const conversationState = asObject(body?.conversationState);
   const sessionId = safeString(body?.sessionId, createId("roleplay-session", scenarioContext?.title || "session"));
 
+  const samplingTemperature = deriveRoleplaySamplingTemperature(scenarioContext, conversationState);
   const rawHcpReply = await invokeWorkerModel(env, {
     prompt: buildRoleplayStartPrompt({ scenarioContext, conversationState }),
     max_tokens: 180,
-    temperature: 0.2,
+    temperature: samplingTemperature,
     roleplay: true,
     provider: "groq",
   });
@@ -1243,15 +1269,16 @@ async function handleRoleplayRespond(request, env) {
     return json({ error: "repMessage is required" }, { status: 400 }, request);
   }
 
+  const samplingTemperature = deriveRoleplaySamplingTemperature(scenarioContext, conversationState);
   const rawHcpReply = await invokeWorkerModel(env, {
     prompt: buildRoleplayRespondPrompt({ repMessage, scenarioContext, conversationState }),
     max_tokens: 220,
-    temperature: 0.2,
+    temperature: samplingTemperature,
     roleplay: true,
     provider: "groq",
   });
   const hcpReply = normalizeRoleplayEntryTone(
-    enforceFirstTurnRepAcknowledgment(rawHcpReply, repMessage, scenarioContext, conversationState),
+    enforceLiveRepAcknowledgment(rawHcpReply, repMessage, scenarioContext, conversationState),
     scenarioContext,
     conversationState,
   );
@@ -1533,6 +1560,68 @@ async function handleSessions(request, env) {
   return json({ error: "Method not allowed" }, { status: 405 }, request);
 }
 
+async function handleEvidenceSources(request) {
+  if (request.method !== "GET") {
+    return json({ error: "Method not allowed" }, { status: 405 }, request);
+  }
+
+  return json({ sources: listGovernedSources() }, {}, request);
+}
+
+async function handleEvidenceRecords(request, env) {
+  const key = "evidence_records";
+
+  if (request.method === "GET") {
+    const records = await readCollection(env, key);
+    const url = new URL(request.url);
+    const domain = safeString(url.searchParams.get("domain") || "");
+    const diseaseState = safeString(url.searchParams.get("diseaseState") || "");
+    const limit = Number(url.searchParams.get("limit") || 25);
+    const filtered = queryGovernedEvidenceRecords(records, {
+      domain: domain || diseaseState,
+      limit,
+    });
+
+    return json({ records: filtered }, {}, request);
+  }
+
+  if (request.method === "DELETE") {
+    await writeCollection(env, key, []);
+    return json({ success: true }, {}, request);
+  }
+
+  return json({ error: "Method not allowed" }, { status: 405 }, request);
+}
+
+async function handleEvidenceIngest(request, env) {
+  if (request.method !== "POST") {
+    return json({ error: "Method not allowed" }, { status: 405 }, request);
+  }
+
+  const key = "evidence_records";
+  const body = await request.json().catch(() => ({}));
+  const payloadRecords = Array.isArray(body?.records)
+    ? body.records
+    : Array.isArray(body?.items)
+      ? body.items
+      : [];
+
+  const existing = await readCollection(env, key);
+  const ingested = ingestGovernedEvidenceRecords(existing, payloadRecords);
+  const capped = ingested.records
+    .sort((a, b) => Number(b?.governance?.overallScore || 0) - Number(a?.governance?.overallScore || 0))
+    .slice(0, MAX_EVIDENCE_RECORDS);
+  await writeCollection(env, key, capped);
+
+  return json({
+    ingestedCount: ingested.ingestedCount,
+    rejectedCount: ingested.rejectedCount,
+    contradictionCount: ingested.contradictionCount,
+    totalRecords: capped.length,
+    rejections: ingested.rejections,
+  }, { status: 201 }, request);
+}
+
 function handleHealth(env, request) {
   const { provider, openaiApiKey, groqApiKey, groqApiKeys } = getLlmProvider(env);
   return json({
@@ -1551,7 +1640,22 @@ function handleHealth(env, request) {
     keyPools: {
       groq: groqApiKeys?.length || 0,
     },
-    endpoints: ["/health", "/api/llm/invoke", "/api/scenarios", "/api/roleplay/sessions", "/api/roleplay/start", "/api/roleplay/respond"],
+    endpoints: [
+      "/health",
+      "/api/llm/invoke",
+      "/api/scenarios",
+      "/api/roleplay/sessions",
+      "/api/roleplay/start",
+      "/api/roleplay/respond",
+      "/api/evidence/sources",
+      "/api/evidence/records",
+      "/api/evidence/ingest",
+    ],
+    evidenceGovernance: {
+      enabled: true,
+      recordsStore: "evidence_records",
+      allowlistedSourceCount: listGovernedSources().length,
+    },
   }, {}, request);
 }
 
@@ -1578,6 +1682,18 @@ export default {
 
       if (url.pathname === "/api/roleplay/sessions") {
         return handleSessions(request, env);
+      }
+
+      if (url.pathname === "/api/evidence/sources") {
+        return handleEvidenceSources(request);
+      }
+
+      if (url.pathname === "/api/evidence/records") {
+        return handleEvidenceRecords(request, env);
+      }
+
+      if (url.pathname === "/api/evidence/ingest") {
+        return handleEvidenceIngest(request, env);
       }
 
       if (url.pathname === "/api/roleplay/start" && request.method === "POST") {

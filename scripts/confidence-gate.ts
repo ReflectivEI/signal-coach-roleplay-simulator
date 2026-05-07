@@ -78,9 +78,18 @@ function normalizeBuiltInScenario(scenario: any, index: number) {
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/^-+|-+$/g, "");
+
+    const parsedRealism = Number(
+        scenario?.runtimeTemperature ?? scenario?.realism ?? scenario?.realismLevel ?? scenario?.realism_level,
+    );
+    const runtimeTemperature = Number.isInteger(parsedRealism)
+        ? Math.max(1, Math.min(10, parsedRealism))
+        : 6;
+
     return {
         ...scenario,
         id: scenario.id || `builtin-${slugify(scenario.title || `scenario-${index + 1}`)}`,
+        runtimeTemperature,
     };
 }
 
@@ -477,18 +486,18 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
     // GATE 4: Global shared runtime path validation
     console.log("🔍 Running Gate 4: Global runtime path consistency...");
     const generatorSource = await fs.readFile(path.resolve(REPO_ROOT, "src/lib/hcpResponseGenerator.ts"), "utf8");
-    const hasGlobalTempMap = /deriveMappedSamplingControls/.test(generatorSource);
-    const hasClippingGuard = /enforceHighPressureClippedPhrasing/.test(generatorSource);
-    const hasGlobalToneBlock = /GLOBAL TONE.{0,50}SAMPLING MAP/i.test(generatorSource);
+    const hasRuntimeContractGuard = /requireRealismContract\(scenario\?\.runtimeTemperature/.test(generatorSource);
+    const hasConstraintResolver = /resolveTurnConstraintState\(/.test(generatorSource);
+    const hasRuntimeTraceConstraint = /turn_constraint_state/.test(generatorSource);
 
-    const gate4Pass = hasGlobalTempMap && hasClippingGuard && hasGlobalToneBlock;
+    const gate4Pass = hasRuntimeContractGuard && hasConstraintResolver && hasRuntimeTraceConstraint;
     criteria.push({
         id: "gate_4_global_runtime",
         name: "Global Runtime Path (Shared Engine)",
         weight: 0.13,
         pass: gate4Pass,
         score: gate4Pass ? 1 : 0,
-        detail: `GlobalTempMap: ${hasGlobalTempMap} | ClippingGuard: ${hasClippingGuard} | ToneBlock: ${hasGlobalToneBlock}`,
+        detail: `RuntimeContractGuard: ${hasRuntimeContractGuard} | ConstraintResolver: ${hasConstraintResolver} | RuntimeTraceConstraint: ${hasRuntimeTraceConstraint}`,
         delta: gate4Pass ? 0.06 : -0.12,
     });
 

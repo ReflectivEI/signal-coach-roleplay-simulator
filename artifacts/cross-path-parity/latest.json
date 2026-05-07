@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-05-07T21:50:15.157Z",
+  "workerUrl": "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev",
+  "threshold": 0.8,
+  "scenarioCount": 10,
+  "openerCount": 3,
+  "caseCount": 30,
+  "passCount": 27,
+  "failCount": 3,
+  "passRate": 0.9,
+  "pass": true,
+  "failures": [
+    {
+      "scenarioId": "builtin-the-gatekeeper-filter",
+      "scenarioTitle": "The Gatekeeper Filter",
+      "openerId": "study",
+      "pass": false,
+      "reason": "opener_alignment_mismatch",
+      "sharedReply": "If this is about the study, be specific. What in that study do you think should change a real treatment decision for me?",
+      "workerReply": "I can listen, but this needs to be specific for my practice. Workflow is where this usually stops being simple for us. Keep it focused for me.",
+      "sharedTags": [
+        "evidence"
+      ],
+      "workerTags": [
+        "workflow"
+      ]
+    },
+    {
+      "scenarioId": "builtin-the-no-show-follow-up",
+      "scenarioTitle": "The No-Show Follow-Up",
+      "openerId": "safety",
+      "pass": false,
+      "reason": "opener_alignment_mismatch",
+      "sharedReply": "If this is about the evidence, be specific. What changes in the workflow for my staff if this is worth discussing?",
+      "workerReply": "I can listen, but this needs to be specific for my practice. Yes, that's the part I need answered cleanly. Keep it focused for me.",
+      "sharedTags": [
+        "evidence",
+        "workflow"
+      ],
+      "workerTags": []
+    },
+    {
+      "scenarioId": "builtin-the-undefined-patient-profile",
+      "scenarioTitle": "The Undefined Patient Profile",
+      "openerId": "access",
+      "pass": false,
+      "reason": "opener_alignment_mismatch",
+      "sharedReply": "If this is about access, be specific. What changes in the access step or for my staff if this actually matters?",
+      "workerReply": "I can listen, but this needs to be specific for my practice. Yes, that's a real issue for us. But I need to understand how this changes what I'm already doing. But I need to understand how this changes what I'm already doing.",
+      "sharedTags": [
+        "access",
+        "workflow"
+      ],
+      "workerTags": []
+    }
+  ]
+}
