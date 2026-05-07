@@ -1312,6 +1312,8 @@ async function handleRoleplayRespond(request, env) {
       hasPriorContextSignal: extractRepOpeningContext(repMessage, scenarioContext).hasPriorContextSignal,
     },
   ).text;
+  // Re-enforce alignment after stylistic post-processing to prevent late drift.
+  variedReply = enforceLiveRepAcknowledgment(variedReply, repMessage, scenarioContext, conversationState);
   const metadata = buildRoleplayMetadata({ hcpReply: variedReply, scenarioContext, conversationState });
 
   return json({
