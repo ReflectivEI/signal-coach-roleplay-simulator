@@ -8,6 +8,8 @@
     "build": "vite build",
     "build:cd30": "node ./scripts/restore-cd30-bundle.mjs",
     "deploy": "npx wrangler deploy",
+    "deploy:worker:manual": "npx wrangler deploy --config wrangler.toml",
+    "deploy:pages:manual": "npm run ci:build && npx wrangler pages deploy dist/client --project-name reflect-ai-now --branch=main",
     "worker:dev": "set -a && . ./.env.local && set +a && wrangler dev --local",
     "worker:dev:prod": "wrangler dev",
     "lint": "eslint . --quiet",
