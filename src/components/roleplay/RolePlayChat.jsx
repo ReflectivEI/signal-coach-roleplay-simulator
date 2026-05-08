@@ -1,3 +1,55 @@
+    // Voice session evaluation state
+    const [voiceSessionEvaluation, setVoiceSessionEvaluation] = useState(null);
+
+    // When the voice session ends, produce a robust evaluation
+    useEffect(() => {
+      if (voiceSessionEnded && voiceSessionAnalysis.length > 0) {
+        // Example: summarize adaptive criteria and session quality
+        const totalTurns = voiceSessionAnalysis.length;
+        const states = voiceSessionAnalysis.map(a => a.state).filter(Boolean);
+        const uniqueStates = Array.from(new Set(states));
+        const cues = voiceSessionAnalysis.map(a => a.cue).filter(Boolean);
+        const repMessages = voiceSessionAnalysis.map(a => a.repMessage).filter(Boolean);
+        const hcpDialogues = voiceSessionAnalysis.map(a => a.hcpDialogue).filter(Boolean);
+        // Simple scoring: count state transitions and cue diversity
+        const stateTransitions = uniqueStates.length - 1;
+        const cueDiversity = Array.from(new Set(cues)).length;
+        // Example summary
+        setVoiceSessionEvaluation({
+          totalTurns,
+          stateTransitions,
+          cueDiversity,
+          repMessages,
+          hcpDialogues,
+          summary: `Voice session covered ${totalTurns} turns, ${stateTransitions} state transitions, and ${cueDiversity} unique cues. Adaptive analysis and dialogue diversity tracked throughout.`
+        });
+      }
+    }, [voiceSessionEnded, voiceSessionAnalysis]);
+  // Voice session adaptive analysis state
+  const [voiceSessionAnalysis, setVoiceSessionAnalysis] = useState([]);
+
+  // Collect adaptive analysis per turn if voice session is active
+  useEffect(() => {
+    if (!voiceSessionActive) return;
+    if (!turns || turns.length === 0) return;
+    // Collect analysis for the latest turn
+    const lastTurn = turns[turns.length - 1];
+    if (!lastTurn) return;
+    setVoiceSessionAnalysis(prev => ([...prev, {
+      turn: turns.length,
+      state: lastTurn.state,
+      temperature: lastTurn.temperature,
+      cue: lastTurn.cueBefore,
+      hcpDialogue: lastTurn.hcpDialogueBefore,
+      repMessage: lastTurn.repMessage,
+      timestamp: Date.now(),
+    }]));
+  }, [turns, voiceSessionActive]);
+
+  // Reset analysis when session restarts
+  useEffect(() => {
+    if (!voiceSessionActive) setVoiceSessionAnalysis([]);
+  }, [voiceSessionActive]);
 // @ts-nocheck
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -48,6 +100,24 @@ import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
 import { useVoice } from "./useVoice";
 import VoiceControls from "./VoiceControls";
+
+// Voice session state management
+function useVoiceSessionControl() {
+  const [voiceSessionActive, setVoiceSessionActive] = useState(false);
+  const [voiceSessionEnded, setVoiceSessionEnded] = useState(false);
+  // Only the rep can end the voice session
+  const startVoiceSession = () => {
+    setVoiceSessionActive(true);
+    setVoiceSessionEnded(false);
+  };
+  const endVoiceSession = (byRep = false) => {
+    if (byRep) {
+      setVoiceSessionActive(false);
+      setVoiceSessionEnded(true);
+    }
+  };
+  return { voiceSessionActive, voiceSessionEnded, startVoiceSession, endVoiceSession };
+}
 import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
@@ -2590,6 +2660,19 @@ function buildRepGuidance(turn, allTurns = []) {
 }
 
 export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
+  // Voice session state
+  const {
+    voiceSessionActive,
+    voiceSessionEnded,
+    startVoiceSession,
+    endVoiceSession,
+  } = useVoiceSessionControl();
+
+  // Handler to allow only rep to end the voice session
+  const handleEndVoiceSession = () => {
+    // Add rep authentication/role check if needed
+    endVoiceSession(true);
+  };
   const [turns, setTurns] = useState([]);
   // Only use unique opening scene from scenario, never fallback placeholder
   const openingScene = scenario.opening_scene || scenario.openingScene || null;
@@ -5895,6 +5978,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                     onStopSpeaking={stopSpeaking}
                     onChangeSettings={setVoiceSettings}
                   />
+                  {/* Voice session controls (rep only) */}
+                  {!voiceSessionActive && !voiceSessionEnded && (
+                    <Button
+                      type="button"
+                      className="ml-2 px-3 py-1 rounded bg-teal-600 text-white hover:bg-teal-700"
+                      onClick={startVoiceSession}
+                    >
+                      Start Voice Session
+                    </Button>
+                  )}
+                  {voiceSessionActive && (
+                    <Button
+                      type="button"
+                      className="ml-2 px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                      onClick={handleEndVoiceSession}
+                    >
+                      End Voice Session (Rep Only)
+                    </Button>
+                  )}
                   <Button type="submit" disabled={isLoading || isEnding || conversationTerminalClosed || (!sanitizeUserMessage(input) && !interim)} style={{ background: "#39ACAC" }} className="hover:opacity-90 text-white px-4 py-2 rounded">
                     <Send className="w-4 h-4" />
                   </Button>
@@ -5926,7 +6028,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
               </div>
               {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
               <div className="mb-6">
-                <CapabilityFeedbackPanel messages={flatMessages} turns={turns} scenario={scenario} />
+                <CapabilityFeedbackPanel
+                  messages={flatMessages}
+                  turns={turns}
+                  scenario={scenario}
+                  voiceSessionEvaluation={voiceSessionEvaluation}
+                />
               </div>
               {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel */}
               {isEnding && (

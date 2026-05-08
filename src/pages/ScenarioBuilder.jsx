@@ -13,6 +13,9 @@ import {
   CONVERSATION_STAGE_OPTIONS,
   HCP_ROLE_OPTIONS,
   RPS_UI_LABELS,
+  DISEASE_STATES,
+  SPECIALTIES,
+  HCP_MINDSET_OPTIONS
 } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain, mapUIToBrain } from "@/lib/scenarioInputResolver";
 
@@ -609,10 +612,11 @@ function exportScenarioPdf(scenario) {
   doc.save(`scenario-${safeName}.pdf`);
 }
 
-const diseaseStates = ["HIV", "PrEP (HIV Prevention)", "Oncology", "Cardiology", "Neurology", "Vaccines / Immunization"];
-const specialties = ["Family Medicine", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Neurology"];
-const hcpCategories = ["KOL / Thought Leader", "Prescriber / Treater", "Non-Prescribing Influencer", "Low Engagement"];
-const influenceDrivers = ["Evidence-Based", "Patient-Centered", "Risk-Averse", "Guideline-Anchored"];
+
+const diseaseStates = DISEASE_STATES.filter((d) => d.value !== "all");
+const specialties = SPECIALTIES.filter((s) => s.value !== "all");
+const hcpCategories = HCP_ROLE_OPTIONS.filter((h) => h.value !== "all");
+const influenceDrivers = HCP_MINDSET_OPTIONS.filter((i) => i.value !== "all");
 const difficulties = ["beginner", "intermediate", "advanced"];
 
 /** @type {ScenarioForm} */
@@ -836,43 +840,29 @@ export default function ScenarioBuilder() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Specialty</label>
-                  <SelectField value={form.specialty} onValueChange={(v) => setForm({ ...form, specialty: v })}>
-                    <SelectTriggerField><SelectValueField placeholder="Select specialty" /></SelectTriggerField>
-                    <SelectContentField>
-                      {specialties.map((s) => <SelectItemField key={s} value={s}>{s}</SelectItemField>)}
-                    </SelectContentField>
-                  </SelectField>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Disease State</label>
-                  <SelectField value={form.disease_state} onValueChange={(v) => setForm({ ...form, disease_state: v })}>
-                    <SelectTriggerField><SelectValueField placeholder="Select disease state" /></SelectTriggerField>
-                    <SelectContentField>
-                      {diseaseStates.map((d) => <SelectItemField key={d} value={d}>{d}</SelectItemField>)}
-                    </SelectContentField>
-                  </SelectField>
-                </div>
-              </div>
+
+              {/* Only canonical 3 dropdowns + realism remain. Specialty and Disease State removed for SOT compliance. */}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">HCP Category</label>
+                  <label className="text-xs font-semibold text-gray-600 mb-1 block">HCP Profile</label>
                   <SelectField value={form.hcp_category} onValueChange={(v) => setForm({ ...form, hcp_category: v })}>
-                    <SelectTriggerField><SelectValueField placeholder="Select HCP type" /></SelectTriggerField>
+                    <SelectTriggerField><SelectValueField placeholder="Select HCP profile" /></SelectTriggerField>
                     <SelectContentField>
-                      {hcpCategories.map((h) => <SelectItemField key={h} value={h}>{h}</SelectItemField>)}
+                      {hcpCategories.map((h) => (
+                        <SelectItemField key={h.value} value={h.value}>{h.label}</SelectItemField>
+                      ))}
                     </SelectContentField>
                   </SelectField>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Influence Driver</label>
+                  <label className="text-xs font-semibold text-gray-600 mb-1 block">Mindset</label>
                   <SelectField value={form.influence_driver} onValueChange={(v) => setForm({ ...form, influence_driver: v })}>
-                    <SelectTriggerField><SelectValueField placeholder="Select driver" /></SelectTriggerField>
+                    <SelectTriggerField><SelectValueField placeholder="Select mindset" /></SelectTriggerField>
                     <SelectContentField>
-                      {influenceDrivers.map((i) => <SelectItemField key={i} value={i}>{i}</SelectItemField>)}
+                      {influenceDrivers.map((i) => (
+                        <SelectItemField key={i.value} value={i.value}>{i.label}</SelectItemField>
+                      ))}
                     </SelectContentField>
                   </SelectField>
                 </div>

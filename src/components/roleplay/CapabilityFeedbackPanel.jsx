@@ -162,7 +162,8 @@ const colorMap = {
   green: { btn: "bg-green-50 hover:bg-green-100 text-green-700 border-green-200", badge: "bg-green-100 text-green-700", result: "border-green-200 bg-green-50" },
 };
 
-export default function CapabilityFeedbackPanel({ messages, turns = [], scenario }) {
+// Accept voiceSessionEvaluation as a prop
+export default function CapabilityFeedbackPanel({ messages, turns = [], scenario, voiceSessionEvaluation }) {
   const focusCaps = scenario?.focus_capabilities || [];
   const [capFeedback, setCapFeedback] = useState({});
   const [loading, setLoading] = useState({});
@@ -273,6 +274,20 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
 
   return (
     <div className="px-4 py-3 space-y-2.5">
+      {/* Voice Session Evaluation Section */}
+      {voiceSessionEvaluation && (
+        <div className="mb-2 rounded-xl border-2 border-amber-400 bg-amber-50 px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <Zap className="w-3.5 h-3.5 text-amber-500" />
+            <span className="font-bold text-sm text-amber-900">Voice Session Evaluation</span>
+          </div>
+          <div className="mt-1 text-xs text-amber-900">
+            <strong>Summary:</strong> {voiceSessionEvaluation.summary}
+            <br />
+            <strong>Turns:</strong> {voiceSessionEvaluation.totalTurns} | <strong>State transitions:</strong> {voiceSessionEvaluation.stateTransitions} | <strong>Cue diversity:</strong> {voiceSessionEvaluation.cueDiversity}
+          </div>
+        </div>
+      )}
       <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-1.5 mb-0.5">
           <Zap className="w-3.5 h-3.5 text-teal-500" />
