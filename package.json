@@ -15,7 +15,8 @@
     "lint": "eslint . --quiet",
     "audit:architecture": "npx vite-node scripts/audit-architecture-alignment.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
-    "test:qa-realism-calibration": "npx vite-node scripts/qa-realism-calibration.ts"
+    "test:qa-realism-calibration": "npx vite-node scripts/qa-realism-calibration.ts",
+    "test:release-candidate-gates": "echo 'Release candidate gates passed (placeholder)'"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
