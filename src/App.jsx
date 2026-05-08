@@ -15,8 +15,6 @@ import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
 import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway';
 // import RolePlaySimulator from './pages/RolePlaySimulator';
 
-function ExternalRpsRedirect() {
-
 
 const AppRoutes = () => {
   return (
