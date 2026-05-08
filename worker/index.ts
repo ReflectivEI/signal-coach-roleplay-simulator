@@ -89,13 +89,44 @@ const REQUIRED_OUTCOME_FIELDS = [
     "outcome_alignment_to_temperature",
 ] as const;
 
+// FDA-grade CORS posture: credentialed responses require an explicit allowlist.
+// Unknown origins receive a non-credentialed wildcard response so legitimate
+// public probes (status pages, health checks) are not broken, but no cookies
+// or Authorization headers can be sent cross-origin from unknown surfaces.
+const CORS_ALLOWLIST: ReadonlyArray<string | RegExp> = [
+    "https://signal-coach-roleplay-simulator.pages.dev",
+    /^https:\/\/[a-z0-9-]+\.signal-coach-roleplay-simulator\.pages\.dev$/i,
+    "https://reflectiv-ai.com",
+    "https://www.reflectiv-ai.com",
+    "https://reflect-ai-now.pages.dev",
+    /^https:\/\/[a-z0-9-]+\.reflect-ai-now\.pages\.dev$/i,
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8788",
+    "http://127.0.0.1:8788",
+];
+
+function isAllowedOrigin(origin: string): boolean {
+    if (!origin) return false;
+    return CORS_ALLOWLIST.some((entry) =>
+        typeof entry === "string" ? entry === origin : entry.test(origin),
+    );
+}
+
 function withCors(response: Response, request: Request): Response {
     const headers = response.headers;
-    const origin = request.headers.get("Origin") || "*";
-    headers.set("Access-Control-Allow-Origin", origin);
+    const origin = request.headers.get("Origin") || "";
+    if (origin && isAllowedOrigin(origin)) {
+        headers.set("Access-Control-Allow-Origin", origin);
+        headers.set("Access-Control-Allow-Credentials", "true");
+        headers.set("Vary", "Origin");
+    } else {
+        headers.set("Access-Control-Allow-Origin", "*");
+        // Intentionally NOT setting Allow-Credentials with "*" — browsers reject it,
+        // and we never want to grant credentialed access to unknown origins.
+    }
     headers.set("Access-Control-Allow-Methods", allowedMethods);
     headers.set("Access-Control-Allow-Headers", allowedHeaders);
-    headers.set("Access-Control-Allow-Credentials", "true");
     headers.set("Cache-Control", "no-cache");
     return response;
 }
@@ -274,9 +305,27 @@ async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<st
 function sanitizeNoPhi(input: unknown): unknown {
     if (typeof input === "string") {
         return input
+            // Direct identifiers (HIPAA Safe-Harbor 18-element scope, prioritized).
             .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
             .replace(/\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/g, "[redacted-phone]")
-            .replace(/\b\d{1,5}\s+[A-Za-z0-9.\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln)\b/gi, "[redacted-address]");
+            .replace(/\b\d{1,5}\s+[A-Za-z0-9.\s]+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way|Place|Pl|Terrace|Ter)\b/gi, "[redacted-address]")
+            // SSN — 9 digits with or without dashes, but only when contextual or fully formatted to avoid stripping valid identifiers.
+            .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[redacted-ssn]")
+            // Date of birth (mm/dd/yyyy, mm-dd-yyyy, yyyy-mm-dd).
+            .replace(/\b(?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12]\d|3[01])[\/\-](?:19|20)\d{2}\b/g, "[redacted-dob]")
+            .replace(/\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b/g, "[redacted-dob]")
+            // ZIP+4.
+            .replace(/\b\d{5}-\d{4}\b/g, "[redacted-zip]")
+            // IPv4.
+            .replace(/\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g, "[redacted-ip]")
+            // MRN — explicitly labeled medical record number.
+            .replace(/\bMRN[:#\s-]*\d{4,12}\b/gi, "[redacted-mrn]")
+            // NPI — National Provider Identifier (10 digits with NPI label).
+            .replace(/\bNPI[:#\s-]*\d{10}\b/gi, "[redacted-npi]")
+            // DEA registration number — 2 letters + 7 digits, with optional DEA label.
+            .replace(/\bDEA[:#\s-]*[A-Z]{2}\d{7}\b/gi, "[redacted-dea]")
+            // NDC — National Drug Code, 4-4-2 / 5-3-2 / 5-4-1 / 5-4-2 hyphenated forms only.
+            .replace(/\b\d{4,5}-\d{3,4}-\d{1,2}\b/g, "[redacted-ndc]");
     }
 
     if (Array.isArray(input)) {
@@ -847,7 +896,8 @@ async function writeSessions(env: Env, sessions: unknown[]): Promise<void> {
 }
 
 async function handleGenerateScenario(request: Request, env: Env): Promise<Response> {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = sanitizeNoPhi(rawBody) as Record<string, unknown>;
     const wantsRegenerate = Boolean(body.regenerate_question);
     const previousQuestion = text(body.previous_hcp_statement_or_question);
     const baseScenario = buildScenarioContract(body);
@@ -923,7 +973,8 @@ async function handleGenerateScenario(request: Request, env: Env): Promise<Respo
 }
 
 async function handleEvaluateResponse(request: Request, env: Env): Promise<Response> {
-    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const body = sanitizeNoPhi(rawBody) as Record<string, unknown>;
     const transcript = text(body.rep_response_transcript);
     if (!transcript) {
         return json(request, { error: "rep_response_transcript is required" }, 400);

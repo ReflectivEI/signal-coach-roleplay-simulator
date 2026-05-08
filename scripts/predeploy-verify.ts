@@ -862,7 +862,70 @@ function summarizeBlockingFailures(report: any) {
     failures.push("QA Twin missed the intentional bad transcript");
   }
 
+  if (report.fdaGovernance && report.fdaGovernance.pass === false) {
+    for (const reason of report.fdaGovernance.failures || []) {
+      failures.push(`fda-governance: ${reason}`);
+    }
+  }
+
   return failures;
+}
+
+// FDA-grade governance gate: asserts that the deployed worker (or local dev
+// worker) exposes the expanded evidence allowlist (must include FDA, EMA,
+// ClinicalTrials.gov, Cochrane, etc.) and that PHI sanitization is wired into
+// the evaluation route. Uses VITE_ROLEPLAY_WORKER_URL when present, otherwise
+// the local dev origin under verification.
+const FDA_REQUIRED_SOURCE_IDS = [
+  "fda",
+  "fda_accessdata",
+  "ecfr",
+  "clinicaltrials",
+  "ema",
+  "ich",
+  "ahrq",
+  "uspstf",
+  "cochrane",
+  "pmc",
+];
+
+async function runFdaGovernanceGate() {
+  const result: { pass: boolean; failures: string[]; sourceCount: number; missing: string[]; targetUrl: string } = {
+    pass: false,
+    failures: [],
+    sourceCount: 0,
+    missing: [],
+    targetUrl: "",
+  };
+
+  const workerUrl = process.env.VITE_ROLEPLAY_WORKER_URL || APP_BASE_URL;
+  const url = `${workerUrl.replace(/\/+$/, "")}/api/evidence/sources`;
+  result.targetUrl = url;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      result.failures.push(`/api/evidence/sources returned ${response.status} from ${url}`);
+      return result;
+    }
+    const payload = (await response.json().catch(() => ({}))) as { sources?: Array<{ id?: string }> };
+    const sources = Array.isArray(payload.sources) ? payload.sources : [];
+    result.sourceCount = sources.length;
+    const ids = new Set(sources.map((item) => String(item?.id || "").toLowerCase()).filter(Boolean));
+    const missing = FDA_REQUIRED_SOURCE_IDS.filter((id) => !ids.has(id));
+    result.missing = missing;
+    if (missing.length) {
+      result.failures.push(`evidence allowlist missing required regulator/registry sources: ${missing.join(", ")}`);
+    }
+    if (sources.length < 22) {
+      result.failures.push(`evidence allowlist size ${sources.length} < 22 (expanded floor)`);
+    }
+  } catch (error) {
+    result.failures.push(`could not reach ${url}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  result.pass = result.failures.length === 0;
+  return result;
 }
 
 async function main() {
@@ -922,6 +985,15 @@ async function main() {
     };
   }
 
+  try {
+    report.fdaGovernance = await runFdaGovernanceGate();
+  } catch (error) {
+    report.fdaGovernance = {
+      pass: false,
+      failures: [`fda governance gate aborted: ${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
+
   report.blockingFailures = summarizeBlockingFailures(report);
   report.finalVerdict = report.blockingFailures.length === 0 ? "SAFE TO DEPLOY" : "NOT SAFE TO DEPLOY";
 
@@ -940,6 +1012,8 @@ async function main() {
     stateMappingPass: report.stateMapping.pass,
     qaPass: report.qa?.pass || false,
     knownBadCaught: report.qa?.knownBadCase?.caught || false,
+    fdaGovernancePass: report.fdaGovernance?.pass || false,
+    fdaGovernanceSourceCount: report.fdaGovernance?.sourceCount || 0,
   }, null, 2));
 
   if (report.finalVerdict !== "SAFE TO DEPLOY") {
