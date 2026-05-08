@@ -41,11 +41,11 @@
     "preview": "vite preview",
     "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
     "dev:worker": "wrangler dev --config wrangler.toml --port 8787",
-    "worker:deploy": "wrangler deploy --config wrangler.toml",
+    "worker:deploy": "node scripts/protected-rps-target-guard.js worker:deploy && wrangler deploy --config wrangler.toml",
     "prefrontend:deploy": "npm run check:rps-ux-guardrails",
-    "frontend:deploy": "wrangler pages deploy dist --project-name signal-coach-roleplay-simulator --commit-dirty=true",
+    "frontend:deploy": "node scripts/protected-rps-target-guard.js frontend:deploy && wrangler pages deploy dist --project-name signal-coach-roleplay-simulator --commit-dirty=true",
     "frontend:deploy:staging:verified": "bash scripts/deploy-staging-verified.sh",
-    "deploy:full": "node scripts/deploy-guard.js && npm run build && npm run worker:deploy && npm run frontend:deploy"
+    "deploy:full": "node scripts/protected-rps-target-guard.js deploy:full && node scripts/deploy-guard.js && npm run build && npm run worker:deploy && npm run frontend:deploy"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

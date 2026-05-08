@@ -1,14 +1,10 @@
 /**
- * DEPLOY GUARD — signal-coach-core (PRODUCTION)
+ * Legacy production deploy guard.
  *
- * Runs before every `deploy:full`. Validates that:
- *  1. wrangler.toml worker name is exactly "reflectivai-rps-api" (no -staging suffix)
- *  2. wrangler.pages.toml pages name is exactly "signal-coach-roleplay-simulator"
- *  3. package.json name is "signal-coach-core"
- *  4. DEPLOY_TO_PRODUCTION=true env var is set (explicit intent gate)
- *
- * Blocks deployment on ANY failure.
- * To deploy production: DEPLOY_TO_PRODUCTION=true npm run deploy:full
+ * NOTE: This repo is now protected by scripts/protected-rps-target-guard.js,
+ * which blocks deploys to the protected RPS worker/pages targets before this
+ * script can run. This file remains only as a secondary identity check for any
+ * future non-protected retargeting.
  */
 
 import fs from "fs";
@@ -43,7 +39,7 @@ console.log(
     `\n${COLORS.bold}${COLORS.red}╔════════════════════════════════════════════════╗${COLORS.reset}`
 );
 console.log(
-    `${COLORS.bold}${COLORS.red}║   DEPLOY GUARD — ⚠️  PRODUCTION ENVIRONMENT    ║${COLORS.reset}`
+    `${COLORS.bold}${COLORS.red}║   DEPLOY GUARD — SECONDARY IDENTITY CHECK      ║${COLORS.reset}`
 );
 console.log(
     `${COLORS.bold}${COLORS.red}╚════════════════════════════════════════════════╝${COLORS.reset}\n`
