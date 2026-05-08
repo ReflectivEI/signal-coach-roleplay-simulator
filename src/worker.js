@@ -20,6 +20,11 @@ const assetManifest = JSON.parse(manifestJSON);
 // ────────────────────────────────────────────────────────────────────────────
 
 const PRIMARY_ORIGIN = "https://reflectiv-ai.com";
+const DEFAULT_GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-70b-versatile",
+    "llama-3.1-8b-instant"
+];
 
 function resolveAllowedOrigin(request) {
     const origin = request.headers.get("Origin");
@@ -44,6 +49,192 @@ function setCorsHeaders(request, response) {
 
 function handlePreflight(request) {
     return setCorsHeaders(request, new Response(null, { status: 204 }));
+}
+
+function normalizeEnvValue(value) {
+    return String(value || "").trim();
+}
+
+function collectGroqApiKeys(env) {
+    const values = [
+        env?.GROQ_API_KEY,
+        env?.GROQ_API_KEY_1,
+        env?.GROQ_API_KEY_2,
+        env?.GROQ_API_KEY_3,
+        env?.GROQ_API_KEY_4,
+        env?.GROQ_API_KEY_5,
+    ].map(normalizeEnvValue).filter(Boolean);
+
+    return [...new Set(values)];
+}
+
+function collectGroqModels(env) {
+    const csvModels = normalizeEnvValue(env?.GROQ_MODELS)
+        .split(",")
+        .map((model) => model.trim())
+        .filter(Boolean);
+
+    const explicitModels = [
+        env?.GROQ_MODEL_1,
+        env?.GROQ_MODEL_2,
+        env?.GROQ_MODEL_3,
+    ].map(normalizeEnvValue).filter(Boolean);
+
+    const models = [...csvModels, ...explicitModels, ...DEFAULT_GROQ_MODELS];
+    return [...new Set(models)];
+}
+
+function hashString(value) {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+}
+
+function buildGroqAttemptPlan({ apiKeys, models, seed, maxAttempts = 3, forcedModel }) {
+    if (!apiKeys.length) return [];
+
+    const effectiveModels = forcedModel ? [forcedModel] : models;
+    if (!effectiveModels.length) return [];
+
+    const pairCount = apiKeys.length * effectiveModels.length;
+    const attemptCount = Math.min(pairCount, Math.max(1, maxAttempts));
+    const startIndex = hashString(seed) % pairCount;
+
+    return Array.from({ length: attemptCount }, (_, attemptIndex) => {
+        const pairIndex = (startIndex + attemptIndex) % pairCount;
+        const modelIndex = Math.floor(pairIndex / apiKeys.length) % effectiveModels.length;
+        const keyIndex = pairIndex % apiKeys.length;
+
+        return {
+            apiKey: apiKeys[keyIndex],
+            model: effectiveModels[modelIndex],
+            keyIndex,
+            modelIndex,
+        };
+    });
+}
+
+async function executeChatCompletion({
+    provider,
+    openaiApiKey,
+    groqApiKeys,
+    groqModels,
+    requestedModel,
+    messages,
+    temperature,
+    max_tokens,
+    responseFormat,
+    timeoutMs,
+    seed,
+    groqAttemptLimit,
+}) {
+    if (provider === "openai") {
+        const model = requestedModel || "gpt-4-turbo";
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${openaiApiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    temperature,
+                    max_tokens,
+                    response_format: responseFormat,
+                }),
+                signal: controller.signal,
+            });
+
+            if (!response.ok) {
+                return {
+                    ok: false,
+                    provider,
+                    model,
+                    status: response.status,
+                    details: await response.text(),
+                };
+            }
+
+            return {
+                ok: true,
+                provider,
+                model,
+                data: await response.json(),
+            };
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    const attempts = buildGroqAttemptPlan({
+        apiKeys: groqApiKeys,
+        models: groqModels,
+        seed,
+        maxAttempts: groqAttemptLimit,
+        forcedModel: requestedModel,
+    });
+
+    let lastFailure = { provider: "groq", model: requestedModel || groqModels[0] || "unknown", details: "No Groq attempts available." };
+
+    for (const attempt of attempts) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${attempt.apiKey}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    model: attempt.model,
+                    messages,
+                    temperature,
+                    max_tokens,
+                    response_format: responseFormat,
+                }),
+                signal: controller.signal,
+            });
+
+            if (response.ok) {
+                return {
+                    ok: true,
+                    provider: "groq",
+                    model: attempt.model,
+                    data: await response.json(),
+                };
+            }
+
+            lastFailure = {
+                ok: false,
+                provider: "groq",
+                model: attempt.model,
+                status: response.status,
+                details: await response.text(),
+            };
+            console.error(`Groq attempt failed (key ${attempt.keyIndex + 1}, model ${attempt.model}):`, lastFailure.status, lastFailure.details);
+        } catch (error) {
+            lastFailure = {
+                ok: false,
+                provider: "groq",
+                model: attempt.model,
+                details: error.message,
+            };
+            console.error(`Groq attempt threw (key ${attempt.keyIndex + 1}, model ${attempt.model}):`, error.message);
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    return lastFailure;
 }
 
 // ─── ASSET SERVING ──────────────────────────────────────────────────────
@@ -669,7 +860,8 @@ async function handleAppSettings(pathname) {
 
 function getLlmProvider(env, requestedProvider) {
     const openaiApiKey = env?.OPENAI_API_KEY;
-    const groqApiKey = env?.GROQ_API_KEY;
+    const groqApiKeys = collectGroqApiKeys(env);
+    const groqModels = collectGroqModels(env);
 
     const providerOrder = requestedProvider === "openai" || requestedProvider === "groq"
         ? [requestedProvider, requestedProvider === "openai" ? "groq" : "openai"]
@@ -677,74 +869,62 @@ function getLlmProvider(env, requestedProvider) {
 
     const provider = providerOrder.find((candidate) => {
         if (candidate === "openai") return Boolean(openaiApiKey);
-        if (candidate === "groq") return Boolean(groqApiKey);
+        if (candidate === "groq") return groqApiKeys.length > 0;
         return false;
     }) || null;
 
     return {
         provider,
         openaiApiKey,
-        groqApiKey
+        groqApiKeys,
+        groqModels,
     };
 }
 
 async function invokeStructuredLlm({ env, prompt, schemaHint, max_tokens = 900, temperature = 0.2, provider: requestedProvider }) {
-    const { provider, openaiApiKey, groqApiKey } = getLlmProvider(env, requestedProvider);
+    const { provider, openaiApiKey, groqApiKeys, groqModels } = getLlmProvider(env, requestedProvider);
 
     if (!provider) {
         return { unavailable: true };
     }
 
-    const model = provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4-turbo";
-    const llmUrl = provider === "groq"
-        ? "https://api.groq.com/openai/v1/chat/completions"
-        : "https://api.openai.com/v1/chat/completions";
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Number(env?.LLM_TIMEOUT_MS || 25000));
-
     try {
-        const response = await fetch(llmUrl, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${provider === "groq" ? groqApiKey : openaiApiKey}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                model,
-                temperature,
-                max_tokens,
-                response_format: { type: "json_object" },
-                messages: [
-                    {
-                        role: "system",
-                        content: `You are a performance-focused sales coaching system. You MUST use ONLY provided structured data, avoid generic advice, tie every recommendation to a specific observed gap, and use behavior-based coaching. Return strict JSON only. Reject vague language, unsupported claims, personality judgments, and scoring changes. ${schemaHint}`
-                    },
-                    { role: "user", content: prompt }
-                ]
-            }),
-            signal: controller.signal
+        const completion = await executeChatCompletion({
+            provider,
+            openaiApiKey,
+            groqApiKeys,
+            groqModels,
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a performance-focused sales coaching system. You MUST use ONLY provided structured data, avoid generic advice, tie every recommendation to a specific observed gap, and use behavior-based coaching. Return strict JSON only. Reject vague language, unsupported claims, personality judgments, and scoring changes. ${schemaHint}`
+                },
+                { role: "user", content: prompt }
+            ],
+            temperature,
+            max_tokens,
+            responseFormat: { type: "json_object" },
+            timeoutMs: Number(env?.LLM_TIMEOUT_MS || 25000),
+            seed: `${prompt.slice(0, 120)}:${max_tokens}:${temperature}:structured`,
+            groqAttemptLimit: Number(env?.GROQ_FAILOVER_ATTEMPTS || 3),
         });
 
-        if (!response.ok) {
-            const details = await response.text();
-            console.error("Manager insights LLM error:", response.status, details);
-            return { unavailable: true, status: response.status, details };
+        if (!completion.ok) {
+            console.error("Manager insights LLM error:", completion.status, completion.details);
+            return { unavailable: true, status: completion.status, details: completion.details };
         }
 
-        const data = await response.json();
+        const data = completion.data;
         const content = data.choices?.[0]?.message?.content || "";
         return {
             unavailable: false,
-            model,
-            provider,
+            model: completion.model,
+            provider: completion.provider,
             content: JSON.parse(content)
         };
     } catch (error) {
         console.error("Manager insights LLM invoke error:", error);
         return { unavailable: true, details: error.message };
-    } finally {
-        clearTimeout(timeout);
     }
 }
 
@@ -875,7 +1055,7 @@ async function handleLlmInvoke(request, env) {
     }
 
     const requestedProvider = body?.provider;
-    const { provider, openaiApiKey, groqApiKey } = getLlmProvider(env, requestedProvider);
+    const { provider, openaiApiKey, groqApiKeys, groqModels } = getLlmProvider(env, requestedProvider);
 
     if (!provider) {
         console.warn("No LLM API key configured, returning mock response");
@@ -900,57 +1080,37 @@ Always respond with actionable, behavior-specific feedback.${response_json_schem
                 { role: "user", content: prompt }
             ];
 
-        const model = body?.model || (provider === "groq" ? "llama-3.3-70b-versatile" : "gpt-4-turbo");
-
-        const openaiRequest = {
-            model,
+        const requestedModel = body?.model;
+        const completion = await executeChatCompletion({
+            provider,
+            openaiApiKey,
+            groqApiKeys,
+            groqModels,
+            requestedModel,
             messages,
             temperature,
             max_tokens,
-            response_format: response_json_schema ? { type: "json_object" } : undefined
-        };
+            responseFormat: response_json_schema ? { type: "json_object" } : undefined,
+            timeoutMs: Number(env?.LLM_TIMEOUT_MS || 25000),
+            seed: `${prompt.slice(0, 160)}:${max_tokens}:${temperature}:${roleplay ? "roleplay" : "default"}`,
+            groqAttemptLimit: Number(env?.GROQ_FAILOVER_ATTEMPTS || 3),
+        });
 
-        // Remove undefined fields
-        Object.keys(openaiRequest).forEach(key =>
-            openaiRequest[key] === undefined && delete openaiRequest[key]
-        );
-
-        const llmUrl = provider === "groq"
-            ? "https://api.groq.com/openai/v1/chat/completions"
-            : "https://api.openai.com/v1/chat/completions";
-
-        const apiKey = provider === "groq" ? groqApiKey : openaiApiKey;
-
-        // Add 25 second timeout for LLM API calls
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 25000);
-
-        const openaiResponse = await fetch(llmUrl, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(openaiRequest),
-            signal: controller.signal
-        }).finally(() => clearTimeout(timeout));
-
-        if (!openaiResponse.ok) {
-            const error = await openaiResponse.text();
-            console.error("LLM API error:", openaiResponse.status, error);
+        if (!completion.ok) {
+            console.error("LLM API error:", completion.status, completion.details);
 
             // Return detailed error for debugging
             return Response.json({
                 response: "Unable to reach LLM service. Please try again.",
                 error: "LLM_SERVICE_UNAVAILABLE",
-                details: error,
-                status: openaiResponse.status,
-                provider,
-                model
+                details: completion.details,
+                status: completion.status,
+                provider: completion.provider,
+                model: completion.model
             }, { status: 503 });
         }
 
-        const openaiData = await openaiResponse.json();
+        const openaiData = completion.data;
         const content = openaiData.choices?.[0]?.message?.content || "";
 
         // Parse JSON if schema was requested
@@ -965,7 +1125,7 @@ Always respond with actionable, behavior-specific feedback.${response_json_schem
 
         return Response.json({
             response: parsedResponse,
-            model,
+            model: completion.model,
             usage: openaiData.usage || { prompt_tokens: 0, completion_tokens: 0 }
         });
 
