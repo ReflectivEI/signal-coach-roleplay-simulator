@@ -5,8 +5,8 @@ import { X, MapPin, Send, Loader2, Brain, Zap, ChevronRight } from "lucide-react
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { initializeConversation } from "@/lib/conversationInit";
-import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
+import { buildPredictiveGroundingBlock, buildScenarioPredictiveLens } from "@/lib/predictiveGrounding";
 import {
   CHALLENGE_CONTEXT_OPTIONS,
   CONVERSATION_STAGE_OPTIONS,
@@ -40,28 +40,14 @@ function deriveContractTemperature(scenario) {
 
 function buildPredictiveContract(scenario) {
   const selection = buildPredictiveSeedFromScenario(scenario || {});
-  const profile = buildPredictiveProfile(selection);
-  const predictiveProfile = {
-    type: String(selection?.behaviorArchetype || scenario?.persona || "").trim(),
-    source: "deterministic",
+  const predictiveProfile = buildScenarioPredictiveLens(selection, {
     specialistTitle: scenario?.stakeholder || "Clinical Specialist",
-  };
-  const sections = /** @type {any} */ (profile?.sections || {});
-  const predictivePromptContext = [
-    "PREDICTIVE HCP LENS (runtime, scenario-derived):",
-    "- Source: deterministic",
-    `- Specialist frame: ${predictiveProfile.specialistTitle}`,
-    `- Seed disease state: ${selection?.diseaseState || ""}`,
-    `- Seed HCP role: ${selection?.hcpType || ""}`,
-    `- Seed conversation moment: ${selection?.journeyStage || ""}`,
-    `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
-    `- Seed influence driver: ${selection?.influenceDriver || ""}`,
-    `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
-    `- Mindset headline: ${sections?.mindset?.headline || ""}`,
-    `- Objection headline: ${sections?.objections?.headline || ""}`,
-    `- Response style headline: ${sections?.responseStyle?.headline || ""}`,
-    `- Rep approach headline: ${sections?.repApproach?.headline || ""}`,
-  ].join("\n");
+  });
+  predictiveProfile.type = String(selection?.behaviorArchetype || scenario?.persona || "").trim();
+  const predictivePromptContext = buildPredictiveGroundingBlock(predictiveProfile, scenario, {
+    heading: "PREDICTIVE HCP LENS (runtime, scenario-derived):",
+    appendixHeading: "Reference appendix (directional realism grounding only):",
+  });
 
   return {
     predictiveProfile: predictiveProfile.type ? predictiveProfile : null,

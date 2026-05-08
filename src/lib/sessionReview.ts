@@ -16,6 +16,7 @@ import { runCapabilityEvaluationEngine } from "./capabilityEvaluation";
 import { predictHcpBehavior } from "./hcpBehaviorPrediction";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "./signalIntelligence";
 import { getScenarioCapabilityProfile } from "./scenarioFamilyRegistry";
+import { buildPredictiveGroundingBlock } from "./predictiveGrounding";
 
 // Compact capability reference with full definition slice
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
@@ -292,7 +293,8 @@ export async function generateSessionReview(
   transcript: ConversationTurn[],
   allSignals: BehaviorSignals[],
   stateHistory: { turn: number; score: number; openness: string }[] = [],
-  volatilityEvents: VolatilityEvent[] = []
+  volatilityEvents: VolatilityEvent[] = [],
+  predictiveLens: any = null,
 ): Promise<SessionReview> {
   const repTurns = transcript.filter(t => t.speaker === "rep");
   const hcpTurns = transcript.filter(t => t.speaker === "hcp");
@@ -375,6 +377,8 @@ export async function generateSessionReview(
     return transitions.length ? transitions.join(", ") : "No categorical state transitions — stable trajectory throughout.";
   })() : "Not enough data.";
 
+  const predictiveGroundingBlock = buildPredictiveGroundingBlock(predictiveLens, scenario);
+
   const prompt = `You are generating a rigorous, structured coaching debrief for a Signal Intelligence pharma rep training simulator.
 
 Write like a real manager giving a high-quality coaching session — specific, behavior-grounded, causally consistent. Every observation must reference what actually happened in this conversation. Zero generic feedback.
@@ -397,6 +401,8 @@ Key Challenges: ${(scenario.keyChallenges || []).join(", ")}
 ${focusCapsFormatted}
 
 ${capabilityProfileBlock}
+
+${predictiveGroundingBlock}
 
 === DETERMINISTIC CAPABILITY PRE-ASSESSMENT (DO NOT CONTRADICT) ===
 ${assessmentSummary}
@@ -459,6 +465,12 @@ If no trajectory-changing strength exists, explicitly state that no meaningful s
 When realism/temperature is high (>= 7), use decisive language.
 Disallow hedging forms such as: "could have", "might help", "consider", "try to".
 Use direct causal framing: "This failed because..." and "This caused...".
+
+── PREDICTIVE GROUNDING ENFORCEMENT ──
+- Use the supplied predictive-builder grounding to calibrate the realism of the HCP's decision logic, objections, and workflow constraints.
+- When the transcript is ambiguous, prefer the supplied HCP mindset, objection, pressure, and response-style cues over generic sales coaching language.
+- Use the evidence highlights and reference appendix to explain why certain concerns are credible in this specialty, but never fabricate trial names, statistics, or publication details beyond the supplied grounding block.
+- If you mention a publication or source, use only the organization/title that appears in the supplied grounding block.
 
 ─── BLOCK A: BRIEF RATIONALE ───
 Field: briefRationale (single string)
@@ -656,7 +668,7 @@ Return ONLY valid JSON with this exact structure:
 
   const result = await invokeWorkerJson({
     prompt,
-    max_tokens: 1600,
+    max_tokens: 3200,
     temperature: 0.2,
     timeout_ms: 45000,
     response_json_schema: {

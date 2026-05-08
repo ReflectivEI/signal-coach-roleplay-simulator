@@ -30,6 +30,7 @@ import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntime
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
+import { buildPredictiveGroundingBlock } from "./predictiveGrounding";
 import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
 
@@ -1541,7 +1542,9 @@ export async function generateHcpResponse(
   turnCount: number = 0,
   previousVolatilityProfile: VolatilityProfile = "stable",
   responseTokenCap?: number,
-  ..._legacyCompatibilityArgs: any[]
+  predictiveProfile: any = null,
+  predictivePromptContext: string = "",
+  runtimeContext: any = null,
 ): Promise<SimulatorResponse> {
   scenario = buildDerivedScenarioContext(scenario);
   const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
@@ -1654,6 +1657,18 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
   const continuityBlock = `
 ${summarizeConcernContinuity(transcript, scenario, repMessage)}
 `;
+  const predictiveGroundingBlock = buildPredictiveGroundingBlock(predictiveProfile, scenario, {
+    heading: "=== PREDICTIVE HCP GROUNDING (MANDATORY USE) ===",
+    appendixHeading: "Reference appendix (allowed realism grounding only):",
+  });
+  const runtimeAdaptiveBlock = runtimeContext ? [
+    "=== ADAPTIVE RUNTIME LAYER ===",
+    `Temperature band: ${runtimeContext.temperature ?? scenario?.runtimeTemperature ?? "not supplied"}`,
+    `HCP persona key: ${runtimeContext.hcpPersona?.type || predictiveProfile?.type || "not supplied"}`,
+    `Predictive source: ${predictiveProfile?.synthesisSource || predictiveProfile?.source || "not supplied"}`,
+    `Continuous learning signals: ${Array.isArray(runtimeContext.profileMemory?.recurringSignals) && runtimeContext.profileMemory.recurringSignals.length ? runtimeContext.profileMemory.recurringSignals.join(" | ") : "none"}`,
+    `Recent HCP phrasing memory: ${Array.isArray(runtimeContext.profileMemory?.recentInteractions) && runtimeContext.profileMemory.recentInteractions.length ? runtimeContext.profileMemory.recentInteractions.slice(0, 2).map((item: any) => item?.hcpReply || "").filter(Boolean).join(" | ") : "none"}`,
+  ].join("\n") : "";
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -1678,6 +1693,12 @@ ${repMessage}
 ${predictionBlock}
 
 ${runtimeProfileBlock}
+
+${predictivePromptContext || ""}
+
+${predictiveGroundingBlock}
+
+${runtimeAdaptiveBlock}
 
 ${realismBackboneBlock}
 
@@ -1747,6 +1768,8 @@ INSTRUCTIONS:
 31. Obey the TURN-LEVEL HCP CONSTRAINTS exactly. Do not output blocked intents.
 32. If blocked intent includes Advance, avoid agreement language and avoid commitment-forward phrases.
 33. If engagement is Selectively Engaged, keep the response conditional/probing and do not leap to full cooperation.
+34. Use the predictive grounding above to keep objections, workflow logic, trust tests, and credibility thresholds specialty-specific rather than generic.
+35. If the transcript is ambiguous, prefer the supplied predictive mindset, response style, and equality-test cues over default clinician filler.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.

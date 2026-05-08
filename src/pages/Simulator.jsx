@@ -400,6 +400,15 @@ export default function Simulator() {
           hcpCue: activeCues?.[0]?.label || "",
           hcpBehavior: session?.currentBehaviorState,
           journeyState: session?.currentJourneyState,
+          predictiveLens: predictiveRuntimeData ? {
+            selection: predictiveRuntimeData.selection,
+            synthesisSource: predictiveRuntimeData.synthesisSource,
+            specialistTitle: predictiveRuntimeData.specialistTitle,
+            evidenceRecords: predictiveRuntimeData.evidenceRecords || [],
+            sections: predictiveRuntimeData.lens?.sections || null,
+            hcpPerspective: predictiveRuntimeData.lens?.hcpPerspective || null,
+            repPreparation: predictiveRuntimeData.lens?.repPreparation || null,
+          } : null,
           prediction: hcpPrediction ? {
             predictedBehaviorState: hcpPrediction.predictedBehaviorState,
             concernFamily: hcpPrediction.concernFamily,
@@ -453,6 +462,7 @@ export default function Simulator() {
         {
           hcpPersona: session?.hcpPersona || predictiveProfile,
           temperature,
+          profileMemory: predictiveRuntimeData?.profileMemory || null,
           previousInteraction: repText,
           interactionHistory: session?.interactionHistory || [],
           previousConcernFamily: session?.lastConcernFamily || "",
@@ -579,9 +589,20 @@ export default function Simulator() {
     setReviewStage("Generating coaching feedback (15–30 s)…");
 
     try {
+      const reviewPredictiveLens = predictiveLens?.data ? {
+        selection: predictiveLens.data.selection,
+        synthesisSource: predictiveLens.data.synthesisSource,
+        synthesisError: predictiveLens.data.synthesisError,
+        specialistTitle: predictiveLens.data.specialistTitle,
+        evidenceRecords: predictiveLens.data.evidenceRecords || [],
+        sections: predictiveLens.data.lens?.sections || null,
+        hcpPerspective: predictiveLens.data.lens?.hcpPerspective || null,
+        repPreparation: predictiveLens.data.lens?.repPreparation || null,
+      } : session?.predictiveLens || null;
+
       let reviewData;
       try {
-        reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+        reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents, reviewPredictiveLens);
       } catch (error) {
         logReviewError("generate", error, {
           scenarioId: scenario?.id || null,
@@ -665,7 +686,23 @@ export default function Simulator() {
     const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
 
     try {
-      const regenerated = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      const regenerated = await generateSessionReview(
+        scenario,
+        turns,
+        allSignals,
+        stateHistory,
+        volEvents,
+        session?.predictiveLens || (predictiveLens?.data ? {
+          selection: predictiveLens.data.selection,
+          synthesisSource: predictiveLens.data.synthesisSource,
+          synthesisError: predictiveLens.data.synthesisError,
+          specialistTitle: predictiveLens.data.specialistTitle,
+          evidenceRecords: predictiveLens.data.evidenceRecords || [],
+          sections: predictiveLens.data.lens?.sections || null,
+          hcpPerspective: predictiveLens.data.lens?.hcpPerspective || null,
+          repPreparation: predictiveLens.data.lens?.repPreparation || null,
+        } : null)
+      );
       const nextReview = !review ? regenerated : {
         ...regenerated,
         // Keep section 1 stable when user regenerates coaching sections.

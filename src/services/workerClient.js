@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import { buildPredictiveGroundingBlock } from "@/lib/predictiveGrounding";
+
 /**
  * @typedef {Object} WorkerRequestJsonOptions
  * @property {string} [method]
@@ -198,6 +200,10 @@ async function parseWorkerResponse(response) {
 }
 
 export async function generateRealtimeFeedback(payload) {
+  const predictiveGroundingBlock = buildPredictiveGroundingBlock(payload.predictiveLens || null, payload.scenario || null, {
+    heading: "=== PREDICTIVE COACHING GROUNDING ===",
+    appendixHeading: "Reference appendix (use only if directly relevant):",
+  });
   const prompt = [
     `You are a sales coaching expert analyzing a pharmaceutical rep's response during a role-play simulation.`,
     ``,
@@ -213,10 +219,13 @@ export async function generateRealtimeFeedback(payload) {
     `- Predicted risk: ${payload.prediction?.riskLevel || "Unknown"}`,
     `- Predicted next move: ${payload.prediction?.nextLikelyBehavior || "Unknown"}`,
     ``,
+    predictiveGroundingBlock,
+    predictiveGroundingBlock ? `` : "",
     `SCORING / COACHING BOUNDARY:`,
     `- Evaluate rep behavior only.`,
     `- Use the HCP cue, behavior, and dialogue only as context for what the rep should do next.`,
     `- Do not infer psychology or score the HCP.`,
+    `- Use the predictive grounding to keep the coaching specialty-specific, workflow-specific, and objection-specific rather than generic.`,
     ``,
     `SIGNAL INTELLIGENCE CAPABILITIES to evaluate against:`,
     `1. Question Quality — timely, relevant questions that move the conversation forward.`,

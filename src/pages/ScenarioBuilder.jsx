@@ -7,6 +7,7 @@ import AppHeader from "@/components/layout/AppHeader";
 import EnterpriseBanner from "@/components/layout/EnterpriseBanner";
 import { createCustomScenario } from "@/lib/scenarioStorage";
 import { invokeWorkerJson } from "@/services/workerClient";
+import { buildPredictiveGroundingBlock, buildScenarioPredictiveLens } from "@/lib/predictiveGrounding";
 import {
   CHALLENGE_CONTEXT_OPTIONS,
   CONVERSATION_STAGE_OPTIONS,
@@ -187,6 +188,18 @@ export default function ScenarioBuilder() {
 
     try {
       const capabilityIds = SIGNAL_INTELLIGENCE_CAPABILITIES.map((c) => c.id).join(", ");
+      const predictiveSelection = mapUIToBrain({
+        hcpRoleType: form.hcpRoleType,
+        journeyStage: form.journeyStage,
+        challengeContext: form.challengeContext,
+      });
+      const predictiveLens = buildScenarioPredictiveLens(predictiveSelection, {
+        specialistTitle: form.stakeholder || "Clinical Specialist",
+      });
+      const predictiveGroundingBlock = buildPredictiveGroundingBlock(predictiveLens, { diseaseState: predictiveSelection?.diseaseState }, {
+        heading: "=== PREDICTIVE SCENARIO ARCHITECTURE ===",
+        appendixHeading: "Reference appendix (directional grounding only):",
+      });
 
       const prompt = `You are building a canonical Signal Intelligence Coaching Simulator scenario for pharma rep training.
 
@@ -202,6 +215,8 @@ Scenario Stage: ${form.journeyStage || "not specified"}
 HCP Profile: ${form.hcpRoleType || "not specified"}
 Challenge Context: ${form.challengeContext || "not specified"}
 
+${predictiveGroundingBlock}
+
 SCHEMA RULES:
 - coreTension: The fundamental conversational challenge. One sentence. What makes this hard.
 - description: 2 sentences max. What the HCP is like and what the rep must navigate.
@@ -213,6 +228,8 @@ SCHEMA RULES:
 - suggestedFocusCapabilities: Pick 2-3 from this exact list: ${capabilityIds}
 - journeyStage: one of: initial_access, discovery, clinical_value, objection_handling, access_formulary, adoption_implementation, commitment_close
 - hcpRoleType: one of: treating_clinician, influencer, thought_leader
+- Use the predictive architecture above to keep the HCP opening logic, objection style, workflow friction, and credibility thresholds specialty-specific.
+- If the authored inputs are sparse, derive the missing realism from the predictive lens instead of defaulting to generic training language.
 
 Return ONLY valid JSON:
 {

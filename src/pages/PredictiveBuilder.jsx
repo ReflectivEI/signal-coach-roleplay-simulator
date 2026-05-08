@@ -14,6 +14,7 @@ import {
   buildSynthesisUserPrompt,
   resolveSpecialistPersona,
 } from "@/lib/specialistSynthesisPrompts";
+import { buildPredictiveGroundingBlock } from "@/lib/predictiveGrounding";
 import { PREDICTIVE_SYNTHESIS_RESPONSE_SCHEMA } from "@/lib/predictiveSynthesisSchema";
 import { normalizeHcpSpokenText } from "@/lib/hcpResponseText";
 import { CHALLENGE_CONTEXT_OPTIONS, CONVERSATION_STAGE_OPTIONS, HCP_ROLE_OPTIONS, RPS_UI_LABELS } from "@/lib/rpsUserInputOptions";
@@ -412,30 +413,31 @@ export default function PredictiveBuilder() {
         throw new Error("Worker is offline. Start it with `npm run worker:dev` and keep `npm run dev` running.");
       }
 
-      // Build HCP context — use AI synthesis if available for richer realism
-      const hcpInternalMonologue = aiSynthesis?.hcpPerspective?.internalMonologue || "";
-      const clinicianVoiceCue = aiSynthesis?.sections?.responseStyle?.hcpLens || "";
-      const trustBreakers = (aiSynthesis?.hcpPerspective?.trustBreakers || []).slice(0, 3).join(" | ");
-      const equalityTestQ = aiSynthesis?.hcpPerspective?.equalityTestQuestion || "";
-
-      const synthesisContext = aiSynthesis
-        ? `
-AI-synthesized specialist context (use this as the ground truth for this clinician's voice):
-- Internal monologue: ${hcpInternalMonologue}
-- Voice cue: ${clinicianVoiceCue}
-- Trust breakers this rep must avoid: ${trustBreakers}
-- The question this clinician is internally testing: ${equalityTestQ}
-- Mindset headline: ${aiSynthesis.sections?.mindset?.headline || ""}
-- Objections headline: ${aiSynthesis.sections?.objections?.headline || ""}
-- Response style headline: ${aiSynthesis.sections?.responseStyle?.headline || ""}
-`
-        : `
-Deterministic profile context:
-- Mindset: ${profile.mindset}
-- Likely objections: ${profile.likelyObjections}
-- Predicted response style: ${profile.predictedResponseStyle}
-- Profile intelligence: ${(profile.sections?.mindset?.keyFactors || []).join(" | ")}
-`;
+      const specialistTitle = resolveSpecialistPersona(selection).title;
+      const predictiveLens = {
+        selection,
+        synthesisSource: aiSynthesis ? "ai" : "deterministic",
+        source: aiSynthesis ? "ai" : "deterministic",
+        specialistTitle,
+        evidenceRecords,
+        sections: activeCard?.sections || profile.sections,
+        hcpPerspective: aiSynthesis?.hcpPerspective || null,
+        repPreparation: aiSynthesis?.repPreparation || null,
+      };
+      const predictiveGroundingBlock = buildPredictiveGroundingBlock(
+        predictiveLens,
+        { diseaseState: selection.diseaseState },
+        {
+          heading: "=== PREDICTIVE HCP PREVIEW GROUNDING ===",
+          appendixHeading: "Reference appendix (directional realism grounding only):",
+        },
+      );
+      const adaptiveMemoryBlock = [
+        "=== ADAPTIVE MEMORY ===",
+        `Prior interaction count: ${profileMemory?.interactionCount || 0}`,
+        `Recurring signals: ${(profileMemory?.recurringSignals || []).join(" | ") || "none yet"}`,
+        `Recent HCP phrasing: ${(profileMemory?.recentInteractions || []).slice(0, 2).map((item) => item.hcpReply).join(" | ") || "none yet"}`,
+      ].join("\n");
 
       const prompt = `You are simulating one realistic HCP reply in a pharma role-play training session.
 
@@ -446,11 +448,10 @@ HCP profile:
 - Interaction pressure: ${getOptionLabel("interactionPressure", selection.interactionPressure)}
 - Influence driver: ${getOptionLabel("influenceDriver", selection.influenceDriver)}
 - Behavior archetype: ${getOptionLabel("behaviorArchetype", selection.behaviorArchetype)}
-${synthesisContext}
-Continuous learning memory:
-- Prior interaction count: ${profileMemory?.interactionCount || 0}
-- Recurring signals: ${(profileMemory?.recurringSignals || []).join(" | ") || "none yet"}
-- Recent HCP phrasing: ${(profileMemory?.recentInteractions || []).slice(0, 2).map((item) => item.hcpReply).join(" | ") || "none yet"}
+
+${predictiveGroundingBlock}
+
+${adaptiveMemoryBlock}
 
 Rep message:
 ${repQuestion.trim()}
@@ -459,8 +460,11 @@ Rules:
 - Respond as the HCP only, in first-person clinician voice.
 - Keep it 1-3 short spoken sentences.
 - Sound like a real clinician under time pressure — not polished writing.
-- Use concrete practice language specific to this specialty.
+- Use the predictive grounding above as the source of truth for the clinician's mindset, objections, response style, and credibility thresholds.
+- Use concrete practice language specific to this specialty and workflow reality.
 - Reflect the behavior archetype and pressure level naturally.
+- If the rep asks a direct operational, evidence, workflow, adoption, or credibility question, answer that exact issue first instead of broadening into generic discovery.
+- If the rep message is vague, reply with a realistic clinician boundary, trust test, or workflow-specific pushback rather than filler.
 - Use standard written English punctuation for readability (avoid run-on sentences; split distinct thoughts into separate sentences).
 - Avoid stiff/formal constructions; prefer natural spoken clinician phrasing with normal contractions when appropriate.
 - Do not start with filler setups like "So I want to make sure..." or other meta framing that sounds like narrated reasoning instead of direct clinician speech.
