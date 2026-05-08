@@ -5,6 +5,7 @@ import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerI
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
 import { useManagerInsights } from "./useManagerInsights";
+import { describeConfidenceBand } from "@/lib/siEvaluationLanguage";
 
 type ManagerInsightsPanelProps = {
   analyticsData: ManagerInsightsRequest;
@@ -34,6 +35,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
   );
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
+  const confidenceNarrative = useMemo(() => (data ? describeConfidenceBand(data.predictiveOutlook.confidence) : null), [data]);
 
   if (!ENABLE_MANAGER_INSIGHTS) {
     return null;
@@ -58,7 +60,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         {data && (
           <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
             <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {Math.round(data.predictiveOutlook.confidence * 100)}/100 {PREDICTIVE_CONFIDENCE_LABEL.toLowerCase()}
+            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {confidenceNarrative?.label ?? "Moderate reliability"}
           </div>
         )}
       </div>
@@ -95,8 +97,8 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
                     <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                     {outlookTone[data.predictiveOutlook.performanceTrend].label}
                   </div>
-                  <p className="text-xs font-semibold text-slate-700">Predictive Confidence {Math.round(data.predictiveOutlook.confidence * 100)}/100 scale</p>
-                  <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
+                  <p className="text-xs font-semibold text-slate-700">{confidenceNarrative?.label ?? "Moderate reliability"}</p>
+                  <p className="text-[11px] text-slate-700">{confidenceNarrative?.coaching ?? PREDICTIVE_CONFIDENCE_LABEL}</p>
                 </div>
               </div>
 

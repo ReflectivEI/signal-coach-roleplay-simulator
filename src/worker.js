@@ -671,14 +671,16 @@ function getLlmProvider(env, requestedProvider) {
     const openaiApiKey = env?.OPENAI_API_KEY;
     const groqApiKey = env?.GROQ_API_KEY;
 
+    // Default precedence: OpenAI first when both keys present (restores pre-2026-05-07 behavior).
+    // Client may still force Groq via { provider: "groq" } (used by roleplay paths).
     const provider = requestedProvider === "openai"
         ? "openai"
         : requestedProvider === "groq"
             ? "groq"
-            : groqApiKey
-                ? "groq"
-                : openaiApiKey
-                    ? "openai"
+            : openaiApiKey
+                ? "openai"
+                : groqApiKey
+                    ? "groq"
                     : null;
 
     return {

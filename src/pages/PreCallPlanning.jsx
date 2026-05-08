@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ClipboardList, Plus, FileText, Trash2, Info, Loader2, Wand2, ChevronDown, ChevronUp, Download, Sparkles, CheckCircle2 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES } from "@/lib/enablementHub";
+import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 
 const REQUIRED_AI_FIELDS = ["hcp_name", "specialty", "disease_state"];
 const LOCAL_STORAGE_KEY = "reflectivai-precall-plans";
@@ -566,10 +567,23 @@ export default function PreCallPlanning() {
     ].join(", ");
 
     try {
+      const groundedPrompt = `${buildFieldCoachingGrounding({
+        surface: `pre_call_planning_${field}`,
+        hcpType: form.hcp_name || "",
+        specialty: form.specialty || "",
+        diseaseState: form.disease_state || "",
+        challenge: field,
+        customNotes: [
+          "Preserve client-specific product, company, and selling-model customization in the generated plan.",
+          "Keep the output field-usable, compliant, and grounded in Signal Intelligence behaviors.",
+        ],
+      })}
+
+${section.aiPrompt(context)}`;
       const res = await fetch("/api/llm/invoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: section.aiPrompt(context) }),
+        body: JSON.stringify({ prompt: groundedPrompt }),
       });
       const data = await res.json();
       let responseText = data.response || data.text || data.content || "";

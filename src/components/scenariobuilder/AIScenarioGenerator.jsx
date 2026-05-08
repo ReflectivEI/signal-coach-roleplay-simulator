@@ -8,6 +8,7 @@ import { Sparkles, Loader2, X, ChevronDown, ChevronUp } from "lucide-react";
 import CapabilityTagger from "@/components/roleplay/CapabilityTagger";
 import EnterpriseScenarioCard from "@/components/roleplay/EnterpriseScenarioCard";
 import { buildSimulatorScenarioFromNormalized, normalizeGeneratedScenario } from "@/lib/scenarioNormalization";
+import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 
 const diseaseStates = ["HIV", "PrEP (HIV Prevention)", "Oncology", "Cardiology", "Neurology", "Vaccines / Immunization"];
 const specialties = ["Family Medicine", "Internal Medicine", "Infectious Diseases", "Hem/Onc", "Medical Oncology", "Cardiology", "Neurology"];
@@ -97,12 +98,28 @@ export default function AIScenarioGenerator({ onGenerated, onCancel, onAddToSimu
     const challenge = params.challenge === "__custom__" ? params.custom_challenge : params.challenge;
 
     try {
-      const prompt = `Generate a realistic pharmaceutical sales roleplay scenario for training. Use these parameters:
+      const prompt = `Generate a realistic pharmaceutical sales roleplay scenario for training.
+
+${buildFieldCoachingGrounding({
+        surface: "ai_scenario_generator",
+        hcpType: params.hcp_category,
+        specialty: params.specialty,
+        diseaseState: params.disease_state,
+        challenge,
+        weakestAreas: params.focus_capabilities,
+        customNotes: [
+          "Keep the scenario customizable for client-specific messaging, product context, and selling model without violating the Signal Intelligence foundation.",
+          "Success criteria and resistance points should be grounded in observable SI behaviors rather than generic selling advice.",
+        ],
+      })}
+
+Use these parameters:
       - HCP Type: ${params.hcp_category || 'Any'}
       - Specialty: ${params.specialty || 'Any'}
       - Disease State: ${params.disease_state}
       - Rep Challenge: ${challenge}
       - Difficulty: ${params.difficulty}
+      - Focus capabilities: ${params.focus_capabilities.length ? params.focus_capabilities.join(', ') : 'No explicit focus provided'}
 
       Create a detailed scenario that includes these exact section headers:
       HCP Background and Context:
@@ -111,7 +128,8 @@ export default function AIScenarioGenerator({ onGenerated, onCancel, onAddToSimu
       Success Criteria:
 
       Initial Greeting from the HCP should start warm and empathetic, then pivot professionally to business talk.
-      Keep the content practical for pharmaceutical sales training.`;
+      Keep the content practical for pharmaceutical sales training.
+      Make the scenario specific enough for coaching, but leave room for client-specific messaging customization.`;
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

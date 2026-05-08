@@ -55,7 +55,9 @@ import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
 import TodaysTipCard from "@/components/shared/TodaysTipCard";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
+import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 import { normalizeInvokeResponseText } from "@/lib/roleplayUiFormatting";
+import { describeSiScoreBand } from "@/lib/siEvaluationLanguage";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -128,6 +130,16 @@ export default function AICoach() {
   const [chatResetKey, setChatResetKey] = useState(0);
 
   function buildEnterpriseCoachPrompt({ conversationHistory, sessionCtxBlock = "", currentTab }) {
+    const groundingBlock = buildFieldCoachingGrounding({
+      surface: "ai_coach",
+      hcpType: sessionContext?.hcpCategory || "",
+      specialty: sessionContext?.specialty || "",
+      challenge: currentTab,
+      weakestAreas: sessionContext?.misalignments || [],
+      strongestAreas: sessionContext?.positives || [],
+      customNotes: Object.entries(sessionContext?.capabilityScores || {}).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}/5`),
+    });
+
     return `You are ReflectivAI's enterprise AI Coach for pharmaceutical sales enablement.
 
 Your job is to produce executive-ready coaching that is concrete, concise, and behavior-specific.
@@ -160,6 +172,9 @@ ENTERPRISE RULES:
 - Only discuss this current conversation. Never mention previous sessions, prior conversations, or other unseen history.
 - Never offer to roleplay in chat. If practice is appropriate, say to use the Role Play Simulator.
 - If you recommend a platform action, only mention features already present in the current context. Otherwise recommend a next HCP action, a coaching step, or the Role Play Simulator.
+- Anchor every coaching point in Signal Intelligence capabilities and the 8 behavioral metrics when possible.
+
+${groundingBlock}
 
 ${sessionCtxBlock}
 
@@ -174,14 +189,17 @@ ${conversationHistory}`;
     const { scenarioTitle, hcpCategory, specialty, misalignments = [], positives = [], capabilityScores = {}, overallScore, situation } = ctx;
     const misStr = misalignments.length > 0 ? misalignments.map(m => `• ${m}`).join("\n") : "None detected";
     const posStr = positives.length > 0 ? positives.map(p => `• ${p}`).join("\n") : "None noted";
-    const capStr = Object.entries(capabilityScores).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}/5`).join(" | ");
+    const capStr = Object.entries(capabilityScores)
+      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${describeSiScoreBand(v).label}`)
+      .join(" | ");
+    const overallNarrative = overallScore ? describeSiScoreBand(overallScore).label : "Signal still forming";
 
     return `I just completed a roleplay session and need context-aware feedback.
 
 **Scenario:** ${scenarioTitle || "Unknown"}
 **HCP:** ${hcpCategory || "HCP"} — ${specialty || "General"}
-**Overall Alignment Score:** ${overallScore || "?"}/5
-${capStr ? `**Capability Scores:** ${capStr}` : ""}
+**Overall Session Evaluation:** ${overallNarrative}
+${capStr ? `**Capability Evaluation Summary:** ${capStr}` : ""}
 
 **What I Did Well:**
 ${posStr}
@@ -216,7 +234,18 @@ Please give me specific, actionable feedback that directly addresses these misal
     setIsLoading(true);
     try {
       const contextMessage = buildSessionContextMessage(ctx);
+      const groundingBlock = buildFieldCoachingGrounding({
+        surface: "ai_coach_session_synopsis",
+        hcpType: ctx?.hcpCategory || "",
+        specialty: ctx?.specialty || "",
+        challenge: ctx?.scenarioTitle || "",
+        weakestAreas: ctx?.misalignments || [],
+        strongestAreas: ctx?.positives || [],
+        customNotes: Object.entries(ctx?.capabilityScores || {}).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}/5`),
+      });
       const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
+
+${groundingBlock}
 
 Session context:
 ${contextMessage}
@@ -287,15 +316,19 @@ Rules:
       .map((m) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
       .join("\n");
 
+    const capabilitySummary = Object.entries(sessionContext?.capabilityScores || {})
+      .map(([key, value]) => `${key.replace(/_/g, ' ')}=${describeSiScoreBand(value).label}`)
+      .join(", ");
+
     // Build session context injection for the system prompt
     const sessionCtxBlock = sessionContext ? `
 ACTIVE ROLEPLAY SESSION CONTEXT (inject as primary coaching lens):
 - Scenario: "${sessionContext.scenarioTitle}"
 - HCP: ${sessionContext.hcpCategory}, ${sessionContext.specialty}
-- Overall Alignment Score: ${sessionContext.overallScore}/5
+- Overall Session Evaluation: ${sessionContext.overallScore ? describeSiScoreBand(sessionContext.overallScore).label : "Signal still forming"}
 - Detected Misalignments: ${(sessionContext.misalignments || []).join(" | ") || "None"}
 - Positives: ${(sessionContext.positives || []).join(" | ") || "None"}
-- Capability Scores: ${Object.entries(sessionContext.capabilityScores || {}).map(([k, v]) => `${k.replace(/_/g, ' ')}=${v}/5`).join(", ")}
+- Capability Evaluation Summary: ${capabilitySummary || "None"}
 
 COACHING MANDATE: When the user asks for feedback, directly reference these specific misalignments and positives. Quote behaviors, not traits. Provide concrete alternative language or actions for each misalignment.
 ` : "";

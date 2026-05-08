@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import { createPageUrl } from "./utils";
 import { useAuth } from "@/lib/AuthContext";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
+import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Target, LayoutDashboard, Play, Bot, ClipboardList, Dumbbell, GraduationCap,
@@ -197,7 +198,18 @@ export default function Layout({ children, currentPageName }) {
     setAssistantLoading(true);
 
     try {
-      const prompt = `You are Alora, the ReflectivAI Assistant. Answer platform navigation and usage questions in concise, polished, enterprise-grade guidance.\n\nConversation:\n${newMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}`;
+      const prompt = `You are Alora, the ReflectivAI Assistant. Answer platform navigation and usage questions in concise, polished, enterprise-grade guidance.
+
+${buildFieldCoachingGrounding({
+        surface: "platform_assistant",
+        customNotes: [
+          "When questions touch coaching, scenarios, or practice design, keep answers aligned to Signal Intelligence capabilities and the 8 behavioral metrics.",
+          "Preserve client customization for selling model, product messaging, and company language where the platform already supports it.",
+        ],
+      })}
+
+Conversation:
+${newMessages.map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`).join("\n")}`;
       const res = await fetch("/api/llm/invoke", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

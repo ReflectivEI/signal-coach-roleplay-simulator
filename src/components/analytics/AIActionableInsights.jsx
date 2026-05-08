@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { Sparkles, Loader2, ArrowRight, Play, BookOpen, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
+import { describeSiScoreBand } from "@/lib/siEvaluationLanguage";
 
 const priorityColor = {
   high: "border-amber-300 bg-amber-50 text-amber-800",
@@ -28,7 +30,41 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
     try {
       const weakCapString = weakCapabilities.map(c => `${c.label}: ${c.score}/5`).join(", ");
       const strongCapString = topCapabilities.map(c => `${c.label}: ${c.score}/5`).join(", ");
-      const prompt = `Sales coaching insights for ${totalSessions} sessions (avg score: ${overallAvg}/5):\nWeakest areas: ${weakCapString || "none"}\nStrongest areas: ${strongCapString || "none"}\n\nProvide 3 specific, actionable coaching recommendations (1-2 sentences each).`;
+      const prompt = `Generate structured coaching insights from Signal Intelligence performance data.
+
+${buildFieldCoachingGrounding({
+        surface: "ai_actionable_insights",
+        weakestAreas: weakCapabilities.map((capability) => capability.label || capability.capability),
+        strongestAreas: topCapabilities.map((capability) => capability.label || capability.capability),
+        customNotes: [`Total sessions: ${totalSessions}`, `Overall average: ${overallAvg}/5`],
+      })}
+
+DATA SNAPSHOT:
+- Sessions analyzed: ${totalSessions}
+- Overall average: ${overallAvg}/5
+- Weakest areas: ${weakCapString || "none"}
+- Strongest areas: ${strongCapString || "none"}
+
+Return ONLY valid JSON with this schema:
+{
+  "overall_coaching_note": "1-2 sentence summary tied to the highest-priority SI pattern",
+  "insights": [
+    {
+      "title": "Short title",
+      "priority": "high" | "medium" | "low",
+      "capability": "One or two canonical Signal Intelligence behavioral metrics",
+      "behavior_change": "Specific behavior to change next",
+      "practice": "Specific role-play or live-call practice move",
+      "module": "Relevant module recommendation grounded in the observed metric"
+    }
+  ]
+}
+
+Rules:
+- Keep all recommendations anchored in the canonical 8 behavioral metrics.
+- Use the weakest areas as the primary coaching priorities unless strong-area leverage is strategically useful.
+- No generic advice, filler, or invented data.
+- Each insight must be directly usable in the next session or HCP interaction.`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -40,7 +76,11 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
       const data = await res.json();
       let insightText = data.response || data.text || data.content || 'Unable to generate insights at this time.';
       insightText = insightText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
-      setInsights(insightText);
+      try {
+        setInsights(JSON.parse(insightText));
+      } catch {
+        setInsights(insightText);
+      }
     } catch (err) {
       console.error('Insights generation error:', err);
       setInsights('Unable to generate insights at this time.');
@@ -82,7 +122,7 @@ export default function AIActionableInsights({ avgScores = [], totalSessions = 0
                 {weakCapabilities.map(c => (
                   <div key={c.key} className="ui-pill px-3 py-1.5">
                     <span>{c.capability}</span>
-                    <span className="font-bold text-amber-700">{c.score}/5</span>
+                    <span className="font-bold text-amber-700">{describeSiScoreBand(c.score).label}</span>
                   </div>
                 ))}
               </div>
