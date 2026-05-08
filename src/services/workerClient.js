@@ -25,8 +25,9 @@
  */
 
 const isBrowserRuntime = typeof window !== "undefined";
-const isViteDevRuntime = Boolean(import.meta?.env?.DEV);
-const BASE_URL = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim();
+const isViteDevRuntime = Boolean(import.meta.env.DEV);
+const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
+const BASE_URL = (import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || PRODUCTION_WORKER_URL).replace(/\/$/, "");
 
 if (!BASE_URL) {
   throw new Error("Missing required env var VITE_ROLEPLAY_WORKER_URL for runtime worker routing");
