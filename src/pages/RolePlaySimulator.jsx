@@ -1,7 +1,5 @@
-// This file is intentionally left blank. The old RolePlaySimulator page is fully disabled and replaced by an external redirect at the route level.
-// Any accidental import or route to this file will not render any UI.
+// This file is intentionally left blank. The old RolePlaySimulator page is permanently disabled. Do not import or route to this file.
 export default function DisabledRolePlaySimulator() {
-  window.location.replace('https://rps.reflectiv-ai.com/');
   return null;
 }
           style={{

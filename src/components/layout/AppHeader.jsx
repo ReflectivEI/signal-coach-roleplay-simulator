@@ -4,7 +4,7 @@ import { BookOpen, Brain, FlaskConical, Menu, Plus, Settings, X, Zap } from "luc
 
 const NAV_ITEMS = [
   { to: "/library", label: "Library", Icon: BookOpen },
-  { to: "https://rps.reflectiv-ai.com", label: "Role Play Simulator", Icon: Zap, external: true },
+  { to: "https://rps.reflectiv-ai.com/", label: "Role Play Simulator", Icon: Zap, external: true },
   { to: "/predictive-builder", label: "Predictive Builder", Icon: Brain },
   { to: "/capabilities", label: "Capabilities", Icon: Brain },
   { to: "/qa", label: "QA Twin", Icon: FlaskConical },

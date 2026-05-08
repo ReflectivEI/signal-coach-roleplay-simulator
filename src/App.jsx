@@ -16,9 +16,7 @@ import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway'
 // import RolePlaySimulator from './pages/RolePlaySimulator';
 
 function ExternalRpsRedirect() {
-  window.location.replace('https://rps.reflectiv-ai.com/');
-  return null;
-}
+
 
 const AppRoutes = () => {
   return (
@@ -32,10 +30,8 @@ const AppRoutes = () => {
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
       {/* <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} /> */}
-      {/* Redirect all RPS routes to the standalone RPS site */}
-      <Route path="/rps" element={<ExternalRpsRedirect />} />
-      <Route path="/RolePlaySimulator" element={<ExternalRpsRedirect />} />
-      <Route path="/simulator" element={<ExternalRpsRedirect />} />
+      {/* Remove all internal RPS routes. No fallback, no redirect. Only external links allowed. */}
+      <Route path="*" element={<PageNotFound />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
