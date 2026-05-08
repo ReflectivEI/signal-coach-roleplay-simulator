@@ -1,0 +1,35 @@
+version: 1
+owner: Governance Council
+severity:
+  sev1:
+    definition:
+      - deterministic_corruption_risk
+      - ontology_corruption_risk
+      - explainability_discontinuity_risk
+      - protected_path_uncertainty
+    actions:
+      - governance_freeze
+      - rollback_preparation
+      - constitutional_incident_review
+  sev2:
+    definition:
+      - manager_semantic_drift
+      - language_compliance_failure
+      - non-catastrophic ontology tension
+    actions:
+      - gated_freeze
+      - corrective_review
+  sev3:
+    definition:
+      - minor_non_critical_drift
+    actions:
+      - remediation_cycle
+authority:
+  required_quorum:
+    - governance_council
+    - domain_owner
+  veto_holders:
+    - ontology_governance_owner
+    - deterministic_systems_owner
+    - explainability_lead
+    - governance_council_chair

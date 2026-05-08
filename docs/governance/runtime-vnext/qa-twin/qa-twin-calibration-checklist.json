@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "owner": "AI Behavior Governance Lead",
+  "domains": [
+    "deterministic_parity",
+    "ontology_continuity",
+    "explainability_continuity",
+    "protected_path_integrity",
+    "behavioral_continuity",
+    "manager_interpretation_stability",
+    "ai_coach_downstream_role_fidelity",
+    "score_first_regression_absence",
+    "transition_continuity_preservation"
+  ],
+  "fail_on_uncertainty": true,
+  "freeze_on_fail": true,
+  "escalate_on_fail": true
+}

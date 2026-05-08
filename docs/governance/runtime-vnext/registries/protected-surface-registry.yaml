@@ -1,0 +1,18 @@
+version: 1
+owner: Product Governance Authority
+surfaces:
+  - id: feedback_panel
+    classification: PROTECTED_SURFACE
+    status: DEFERRED_MIGRATION
+    policy:
+      read_only: true
+      observe_only: true
+      implementation_blocked: true
+    protected_dimensions:
+      - deterministic_guidance_generation
+      - explainability_chain
+      - manager_interpretation
+      - ai_coach_coupling
+      - state_transition_semantics
+      - ontology_mapping
+    advancement_gate: G6

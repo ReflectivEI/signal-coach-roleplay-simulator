@@ -1,0 +1,12 @@
+version: 1
+owner: Explainability Lead
+continuity_chain:
+  - evidence_provenance
+  - rationale_lineage
+  - deterministic_attribution
+  - guidance_causality
+  - manager_traceability
+failure_conditions:
+  - evidence_rationale_disconnect
+  - opaque_guidance_without_attribution
+  - broken_traceability

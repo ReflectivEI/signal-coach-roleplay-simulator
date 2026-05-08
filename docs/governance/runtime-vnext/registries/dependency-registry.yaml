@@ -1,0 +1,14 @@
+version: 1
+owner: Migration Governance Authority
+critical_upstream_authority:
+  - hcp_predictive_builder
+  - adaptive_rps_orchestration
+  - deterministic_evaluation
+  - cbio_ccsim_ontology
+  - explainability_coordination
+downstream_layers:
+  - ai_coach_expression
+  - ui_presentation
+dependency_policy:
+  shared_service_drift_counts_as_direct_drift: true
+  protected_path_uncertainty_is_fail: true

@@ -1,0 +1,19 @@
+version: 1
+owner: Ontology Governance Owner
+canonical_ontologies:
+  - name: CBIO
+    status: protected
+    continuity_requirements:
+      - state_specificity
+      - transition_fidelity
+      - recovery_regression_distinction
+  - name: CCSIM
+    status: protected
+    continuity_requirements:
+      - transition_preservation
+      - trust_state_fidelity
+      - pressure_state_fidelity
+forbidden_changes:
+  - state_flattening
+  - transition_collapse
+  - generic_semantic_substitution
