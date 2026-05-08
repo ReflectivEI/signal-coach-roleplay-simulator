@@ -1,11 +1,17 @@
 #env
 .env
 .env.*
+<<<<<<< HEAD
 .dev.vars
 .wrangler/
 
 # Logs
 /logs
+=======
+
+# Logs
+logs
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -29,5 +35,9 @@ dist-ssr
 *.sln
 *.sw?
 
+<<<<<<< HEAD
 .env
 .vite
+=======
+.env
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966

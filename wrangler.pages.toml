@@ -1,3 +1,9 @@
+<<<<<<< HEAD
 name = "signal-coach-roleplay-simulator"
 pages_build_output_dir = "dist"
 compatibility_date = "2024-01-01"
+=======
+name = "reflect-ai-now"
+compatibility_date = "2024-02-27"
+pages_build_output_dir = "dist/client"
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966

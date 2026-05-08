@@ -63,15 +63,13 @@ export default function ScenarioLibrary() {
                   <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary">
                     {scenario.journeyStage || 'N/A'}
                   </span>
-                    <a
-                      href="https://rps.reflectiv-ai.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                    >
-                      <Play className="w-3 h-3" />
-                      Start
-                    </a>
+                  {/* <button
+                    onClick={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <Play className="w-3 h-3" />
+                    Start
+                  </button> */}
                 </div>
               </motion.div>
             ))}

@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+// @ts-nocheck
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966
 "use client"
 
 import * as React from "react"

@@ -1,7 +1,4 @@
-// This file is intentionally left blank. The old RolePlaySimulator page is permanently disabled. Do not import or route to this file.
-export default function DisabledRolePlaySimulator() {
-  return null;
-}
+// This file is intentionally left blank. The old RolePlaySimulator page is fully disabled and replaced by an external redirect at the route level.
           style={{
             background: "linear-gradient(135deg, hsl(222, 52%, 17%) 0%, hsl(174, 28%, 16%) 60%, hsl(174, 35%, 19%) 100%)",
             border: "1px solid hsl(174 60% 52% / 0.3)"

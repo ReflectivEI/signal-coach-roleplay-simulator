@@ -1,0 +1,23 @@
+[
+  {
+    "id": "workflow-resistant",
+    "openingScene": "The HCP is concerned about staffing workflow bottlenecks and is skeptical about adding burden.",
+    "firstHcpTurn": "I am still skeptical because our workflow and staff capacity are already stretched.",
+    "expectedConcern": "workflow",
+    "expectedTone": "resistant"
+  },
+  {
+    "id": "evidence-neutral",
+    "openingScene": "The HCP requests trial evidence and endpoint clarity before deciding next steps.",
+    "firstHcpTurn": "Walk me through the study endpoint data so I can evaluate the evidence clearly.",
+    "expectedConcern": "evidence",
+    "expectedTone": "neutral"
+  },
+  {
+    "id": "access-resistant",
+    "openingScene": "The HCP is skeptical due to prior auth and reimbursement access barriers.",
+    "firstHcpTurn": "I am not convinced until prior auth and reimbursement access are handled operationally.",
+    "expectedConcern": "access",
+    "expectedTone": "resistant"
+  }
+]

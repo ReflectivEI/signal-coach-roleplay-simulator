@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+// @ts-nocheck
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva } from "class-variance-authority";
@@ -14,7 +18,11 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline:
+<<<<<<< HEAD
           "border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground",
+=======
+          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+>>>>>>> f9564108d7fe619378852cbd8085e729086b6966
         secondary:
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
