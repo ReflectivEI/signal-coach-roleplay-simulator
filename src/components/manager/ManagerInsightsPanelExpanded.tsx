@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsResponseSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
-import { useManagerInsights } from "./useManagerInsights";
-import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
-import { buildMetricNarrative, describeConfidenceBand, describeSiScoreBand, describeTrendLanguage } from "@/lib/siEvaluationLanguage";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
 const CONTEXT_CHIPS = [
@@ -118,17 +115,17 @@ function buildRepContext(
     return [
       `Rep: ${repData.name}`,
       `Specialty/Territory: ${repData.specialty} in ${repData.territory}`,
-      `Strongest capability: ${buildMetricNarrative(normalizeManagerText(repData.strongestCapability), strongestMetric?.score, strongestMetric?.trend)}`,
-      `Priority capability: ${buildMetricNarrative(normalizeManagerText(repData.improvementPriority), weakestMetric?.score, weakestMetric?.trend)}`,
-      `Learning engagement is ${describeSiScoreBand((derivedMetrics.engagementScore || 0) / 20).label.toLowerCase()} for consistent coaching follow-through.`,
-      `Readiness is ${describeSiScoreBand((derivedMetrics.readinessScore || 0) / 20).label.toLowerCase()} for live execution.`,
-      `Conversion readiness is ${describeSiScoreBand((derivedMetrics.conversionProxyScore || 0) / 20).label.toLowerCase()} in recent performance signals.`,
-      `Sales risk is ${derivedMetrics.salesRiskScore >= 62 ? "elevated and needs active coaching attention" : derivedMetrics.salesRiskScore >= 48 ? "present and should be monitored" : "contained for now"}.`,
-      `Prediction reliability is ${describeConfidenceBand(derivedMetrics.confidenceScore).label.toLowerCase()}.`,
+      `Strongest capability: ${normalizeManagerText(repData.strongestCapability)} at ${strongestMetric?.score ?? "N/A"}/5 with ${strongestMetric?.trend ?? "flat"} directionality`,
+      `Priority capability: ${normalizeManagerText(repData.improvementPriority)} at ${weakestMetric?.score ?? "N/A"}/5 with ${weakestMetric?.trend ?? "flat"} directionality`,
+      `Learning Engagement Score: ${derivedMetrics.engagementScore}/100`,
+      `Readiness Score: ${derivedMetrics.readinessScore}/100`,
+      `Conversion Proxy: ${derivedMetrics.conversionProxyScore}/100`,
+      `Sales Risk: ${derivedMetrics.salesRiskScore}/100`,
+      `Predictive Confidence: ${Math.round(derivedMetrics.confidenceScore * 100)}/100`,
       structuredInsight ? `Current structured recommendation: ${structuredInsight.primaryFinding} | ${structuredInsight.whyItMatters} | ${structuredInsight.action}` : "",
       insights?.keyDrivers?.length ? `Supporting drivers: ${insights.keyDrivers.slice(0, 3).join(" | ")}` : "",
       insights?.risks?.length ? `Active risks: ${insights.risks.slice(0, 3).join(" | ")}` : "",
-      `Territory benchmark: ${territoryData.territory} is ${describeSiScoreBand(territoryData.avgPerformance).label.toLowerCase()} overall and ${describeSiScoreBand(territoryData.avgEngagement / 20).label.toLowerCase()} in engagement signals.`,
+      `Territory benchmark: ${territoryData.territory}, avg engagement ${territoryData.avgEngagement}/100, avg performance ${territoryData.avgPerformance}/5`,
       chipContext,
     ].filter(Boolean).join("\n");
   }
@@ -136,11 +133,11 @@ function buildRepContext(
   const territory = requestBody.territoryData;
   return [
     `Territory: ${territory.territory}`,
-    `Average performance is ${describeSiScoreBand(territory.avgPerformance).label.toLowerCase()} across the territory.`,
-    `Average engagement is ${describeSiScoreBand(territory.avgEngagement / 20).label.toLowerCase()} across recent participation signals.`,
+    `Average performance: ${territory.avgPerformance}/5`,
+    `Average engagement: ${territory.avgEngagement}/100`,
     `Most common capability gap: ${normalizeManagerText(territory.mostCommonCapabilityGap ?? "Not specified")}`,
-    `Territory volatility is ${territory.territoryVolatility > 0.6 ? "high enough to justify a coordinated coaching reset" : territory.territoryVolatility > 0.4 ? "notable and should be monitored" : "contained for now"}.`,
-    `At-risk rep concentration is ${territory.atRiskRepCount > 1 ? "material enough to affect territory consistency" : territory.atRiskRepCount === 1 ? "present in one clear coaching case" : "not yet concentrated"}.`,
+    `Territory volatility: ${territory.territoryVolatility}`,
+    `At-risk reps: ${territory.atRiskRepCount}`,
     structuredInsight ? `Current structured recommendation: ${structuredInsight.primaryFinding} | ${structuredInsight.whyItMatters} | ${structuredInsight.action}` : "",
     insights?.keyDrivers?.length ? `Supporting drivers: ${insights.keyDrivers.slice(0, 3).join(" | ")}` : "",
     insights?.risks?.length ? `Active risks: ${insights.risks.slice(0, 3).join(" | ")}` : "",
@@ -148,20 +145,11 @@ function buildRepContext(
   ].filter(Boolean).join("\n");
 }
 
-function buildFreeFormMessages(userInput: string, repContext: string, requestBody: ManagerInsightsRequest) {
-  const groundingBlock = buildFieldCoachingGrounding({
-    surface: "manager_ai_follow_up",
-    specialty: requestBody.repData?.specialty ?? "",
-    challenge: requestBody.repData ? requestBody.repData.improvementPriority : requestBody.territoryData.mostCommonCapabilityGap ?? "",
-    weakestAreas: requestBody.repData ? [requestBody.repData.improvementPriority] : [requestBody.territoryData.mostCommonCapabilityGap ?? ""],
-    strongestAreas: requestBody.repData ? [requestBody.repData.strongestCapability] : requestBody.territoryData.topPerformingBehaviorPattern,
-    customNotes: [requestBody.repData ? `Rep: ${requestBody.repData.name}` : `Territory: ${requestBody.territoryData.territory}`],
-  });
-
+function buildFreeFormMessages(userInput: string, repContext: string) {
   return [
     {
       role: "system",
-      content: `You are an AI coaching assistant. Answer immediately using the provided rep context. Do NOT restate or quote the user's question. Start with the answer, use concise executive-friendly language, avoid unnecessary repetition of metrics, lead with a clear estimate or recommendation when possible, and do NOT repeat structured coaching templates unless explicitly asked.\n\n${groundingBlock}`,
+      content: "You are an AI coaching assistant. Answer immediately using the provided rep context. Do NOT restate or quote the user's question. Start with the answer, use concise executive-friendly language, avoid unnecessary repetition of metrics, lead with a clear estimate or recommendation when possible, and do NOT repeat structured coaching templates unless explicitly asked.",
     },
     {
       role: "user",
@@ -206,6 +194,9 @@ function ensureDirectAnswer(answer: string, _question: string) {
 }
 
 export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null }: ManagerInsightsPanelExpandedProps) {
+  const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [insightsUnavailable, setInsightsUnavailable] = useState(false);
   const [input, setInput] = useState("");
   const [response, setResponse] = useState<StructuredResponse | null>(null);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
@@ -215,20 +206,59 @@ export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const coachingSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const {
-    data: insights,
-    loading: loadingInsights,
-    unavailable: insightsUnavailable,
-    requestBody,
-  } = useManagerInsights<ManagerInsightsResponse>(data, normalizeInsightsPayload);
+  const requestBody = useMemo(() => {
+    const parsed = managerInsightsRequestSchema.safeParse(data);
+    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
+  }, [data]);
+
+  const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
+
+  useEffect(() => {
+    if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
+      setInsights(null);
+      setInsightsUnavailable(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoadingInsights(true);
+    setInsightsUnavailable(false);
+
+    fetch("/manager-insights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestSignature,
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`manager_insights_${res.status}`);
+        return res.json();
+      })
+      .then((payload: ManagerInsightsResponse) => {
+        const normalizedPayload = normalizeInsightsPayload(payload);
+        if (!normalizedPayload) throw new Error("manager_insights_invalid_payload");
+        setInsights(normalizedPayload);
+      })
+      .catch((error: Error) => {
+        if (error.name !== "AbortError") {
+          console.error("Expanded manager insights unavailable:", error);
+          setInsights(null);
+          setInsightsUnavailable(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingInsights(false);
+      });
+
+    return () => controller.abort();
+  }, [requestBody, requestSignature]);
 
   const filteredKeyDrivers = useMemo(() => (insights?.keyDrivers ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.keyDrivers]);
   const filteredRisks = useMemo(() => (insights?.risks ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.risks]);
   const insightFilterSeed = useMemo(() => structuredInsight ? `${structuredInsight.primaryFinding} ${structuredInsight.whyItMatters} ${structuredInsight.action} ${structuredInsight.monitor.join(" ")}` : "", [structuredInsight]);
   const showStructuredInsight = useMemo(() => Boolean(structuredInsight && matchesFilter(insightFilterSeed, activeFilter)), [activeFilter, insightFilterSeed, structuredInsight]);
-  const confidenceNarrative = useMemo(() => (insights?.predictiveOutlook ? describeConfidenceBand(insights.predictiveOutlook.confidence) : null), [insights?.predictiveOutlook]);
 
   const toggleChip = (chip: string) => {
     setSelectedChips((current) => current.includes(chip) ? current.filter((item) => item !== chip) : [...current, chip]);
@@ -260,7 +290,7 @@ export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null
 
       if (responseMode === "free_form") {
         const repContext = buildRepContext(requestBody, structuredInsight, selectedChips, insights);
-        const messages = buildFreeFormMessages(input.trim(), repContext, requestBody);
+        const messages = buildFreeFormMessages(input.trim(), repContext);
         const prompt = messages.map((message) => `${message.role.toUpperCase()}:\n${message.content}`).join("\n\n");
         const res = await fetch("/api/llm/invoke", {
           method: "POST",
@@ -349,8 +379,8 @@ export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null
               <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
               {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
             </div>
-            <p className="text-sm font-semibold text-slate-800">{confidenceNarrative?.label ?? "Moderate reliability"}</p>
-            <p className="text-[11px] text-slate-700">{confidenceNarrative?.coaching ?? PREDICTIVE_CONFIDENCE_LABEL}</p>
+            <p className="text-sm font-semibold text-slate-800">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100</p>
+            <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
           </div>
         ) : null}
       </div>
@@ -428,8 +458,8 @@ export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null
                       <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                       {getOutlookTone(insights.predictiveOutlook.performanceTrend).label}
                     </div>
-                    <p className="text-xs font-semibold text-slate-700">{confidenceNarrative?.label ?? "Moderate reliability"}</p>
-                    <p className="text-[11px] text-slate-700">{confidenceNarrative?.coaching ?? PREDICTIVE_CONFIDENCE_LABEL}</p>
+                    <p className="text-xs font-semibold text-slate-700">Predictive Confidence {Math.round(insights.predictiveOutlook.confidence * 100)}/100 scale</p>
+                    <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                   </div>
                 ) : null}
                 </div>

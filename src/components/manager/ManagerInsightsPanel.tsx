@@ -1,11 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
-import { useManagerInsights } from "./useManagerInsights";
-import { describeConfidenceBand } from "@/lib/siEvaluationLanguage";
 
 type ManagerInsightsPanelProps = {
   analyticsData: ManagerInsightsRequest;
@@ -29,13 +27,59 @@ const outlookTone = {
 };
 
 export default function ManagerInsightsPanel({ analyticsData, title, subtitle }: ManagerInsightsPanelProps) {
-  const { data, loading, unavailable, requestBody } = useManagerInsights<ManagerInsightsResponse>(
-    analyticsData,
-    (payload) => normalizeManagerInsightsResponse(payload as ManagerInsightsResponse) as ManagerInsightsResponse,
-  );
+  const [data, setData] = useState<ManagerInsightsResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+
+  const requestBody = useMemo(() => {
+    const parsed = managerInsightsRequestSchema.safeParse(analyticsData);
+    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
+  }, [analyticsData]);
+
+  const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
-  const confidenceNarrative = useMemo(() => (data ? describeConfidenceBand(data.predictiveOutlook.confidence) : null), [data]);
+
+  useEffect(() => {
+    if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
+      setData(null);
+      setUnavailable(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setLoading(true);
+    setUnavailable(false);
+
+    fetch("/manager-insights", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: requestSignature,
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`manager_insights_${response.status}`);
+        }
+        return response.json();
+      })
+      .then((payload: ManagerInsightsResponse) => {
+        setData(normalizeManagerInsightsResponse(payload));
+      })
+      .catch((error: Error) => {
+        if (error.name !== "AbortError") {
+          console.error("Manager insights unavailable:", error);
+          setUnavailable(true);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [requestBody, requestSignature]);
 
   if (!ENABLE_MANAGER_INSIGHTS) {
     return null;
@@ -60,7 +104,7 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
         {data && (
           <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${outlookTone[data.predictiveOutlook.performanceTrend].badge}`}>
             <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
-            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {confidenceNarrative?.label ?? "Moderate reliability"}
+            {outlookTone[data.predictiveOutlook.performanceTrend].label} · {Math.round(data.predictiveOutlook.confidence * 100)}/100 {PREDICTIVE_CONFIDENCE_LABEL.toLowerCase()}
           </div>
         )}
       </div>
@@ -97,8 +141,8 @@ export default function ManagerInsightsPanel({ analyticsData, title, subtitle }:
                     <ArrowUpRight className="mr-1 h-3.5 w-3.5" />
                     {outlookTone[data.predictiveOutlook.performanceTrend].label}
                   </div>
-                  <p className="text-xs font-semibold text-slate-700">{confidenceNarrative?.label ?? "Moderate reliability"}</p>
-                  <p className="text-[11px] text-slate-700">{confidenceNarrative?.coaching ?? PREDICTIVE_CONFIDENCE_LABEL}</p>
+                  <p className="text-xs font-semibold text-slate-700">Predictive Confidence {Math.round(data.predictiveOutlook.confidence * 100)}/100 scale</p>
+                  <p className="text-[11px] text-slate-700">{PREDICTIVE_CONFIDENCE_LABEL}</p>
                 </div>
               </div>
 

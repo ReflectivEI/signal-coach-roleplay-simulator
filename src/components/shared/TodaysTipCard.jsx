@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 
 const DEFAULT_TIP = "When engaging with healthcare professionals, prioritize building trust by actively listening to their concerns and responding thoughtfully.";
 
@@ -40,22 +39,12 @@ export default function TodaysTipCard({ className = "" }) {
       ];
 
       const theme = themes[Math.floor(Math.random() * themes.length)];
-      const prompt = `You are a top pharmaceutical sales coach. Generate ONE practical, specific "Today's Tip" for a pharma sales rep.
-
-    ${buildFieldCoachingGrounding({
-        surface: "todays_tip",
-        challenge: theme,
-        customNotes: ["Keep the tip anchored in one or two Signal Intelligence behavioral metrics."],
-      })}
-
-    Focus theme: ${theme}
-
+      const prompt = `You are a top pharmaceutical sales coach. Generate ONE practical, specific "Today's Tip" for a pharma sales rep focused on ${theme}.
 Constraints:
 - 1-2 sentences max
 - Actionable and concrete
 - No fluff, no hashtags, no bullet points
 - No quotation marks around the whole tip
-    - The tip must name or clearly imply at least one Signal Intelligence behavioral metric
 - Vary wording/style each time (seed: ${seed}, session: ${sessionId})`;
 
       const res = await fetch('/api/llm/invoke', {

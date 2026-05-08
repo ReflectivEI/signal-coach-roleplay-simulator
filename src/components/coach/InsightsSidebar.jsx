@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 // ...existing code...
 import { Sparkles, TrendingUp, Loader2, ChevronDown, ChevronUp } from "lucide-react";
-import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 
 /**
  * @typedef {{ hidden?: boolean, role?: string, content?: string }} InsightMessage
@@ -14,9 +13,6 @@ import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
  * @typedef {{ topic?: string, reason?: string }} InsightExercise
  * @typedef {{
  *   proactive_tip?: string,
- *   predictive_hcp_mindset?: string,
- *   likely_decision_barrier?: string,
- *   next_best_adjustment?: string,
  *   patterns?: InsightPattern[],
  *   strengths?: InsightStrength[],
  *   improvement_areas?: InsightImprovement[],
@@ -46,15 +42,8 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
     setIsLoading(true);
     try {
       const visibleMessages = messages.filter(m => !m.hidden);
-      const callData = visibleMessages
-        .slice(0, 24)
-        .map(m => `${m.role === 'user' ? 'Rep' : 'Coach'}: ${m.content}`)
-        .join('\n---\n');
-      const prompt = `Analyze this coaching conversation for behavioral patterns and return only valid JSON.\n\n${buildFieldCoachingGrounding({
-        surface: "personal_insights_pattern_analysis",
-        skillLevel,
-        scenarioDescriptor,
-      })}\n\nTRANSCRIPT:\n${callData}\n\nOUTPUT SCHEMA:\n{\n  "proactive_tip": "One immediate coaching move the rep should use next, grounded in an observed behavior.",\n  "predictive_hcp_mindset": "One sentence on the most likely HCP mindset or pressure pattern, inferred only from observable cues.",\n  "likely_decision_barrier": "One sentence on the most likely barrier blocking momentum right now.",\n  "next_best_adjustment": "One sentence describing the next conversational adjustment the rep should make.",\n  "patterns": [\n    { "name": "Short pattern label", "description": "What you observed and why it matters in this conversation" }\n  ],\n  "strengths": [\n    { "strength": "Behavior the rep is demonstrating well", "example": "Short quote or observed example from the transcript" }\n  ],\n  "improvement_areas": [\n    { "area": "Specific behavior gap", "suggestion": "How to improve it in the next HCP exchange" }\n  ],\n  "recommended_modules": [\n    { "module": "Module name", "reason": "Why it maps to the observed gap" }\n  ],\n  "recommended_exercises": [\n    { "topic": "Exercise topic", "reason": "Why it will improve the next live interaction" }\n  ]\n}\n\nJSON RULES:\n- Use only observable language from the transcript and provided context.\n- Do not give personality labels or vague praise.\n- Every strength or improvement area must point to a specific behavior, quote fragment, or decision pattern.\n- If the transcript lacks enough evidence, say \"insufficient signal\" rather than inventing detail.\n- Keep every string concise and field-usable.`;
+      const callData = visibleMessages.slice(0, 20).map(m => `${m.role === 'user' ? 'User' : 'Coach'}: ${m.content}`).join('\n---\n');
+      const prompt = `Analyze this coaching conversation for behavioral patterns and provide as JSON:\n\n${callData}\n\nReturn ONLY valid JSON (no markdown) with these fields:\n{\n  "proactive_tip": "One actionable coaching tip based on their communication",\n  "patterns": [\n    { "name": "Pattern name", "description": "What you observed" }\n  ],\n  "strengths": [\n    { "strength": "What they do well", "example": "Specific example from the conversation" }\n  ],\n  "improvement_areas": [\n    { "area": "Area to improve", "suggestion": "How to improve it" }\n  ],\n  "recommended_modules": [\n    { "module": "Module name", "reason": "Why relevant" }\n  ],\n  "recommended_exercises": [\n    { "topic": "Exercise topic", "reason": "Why helpful" }\n  ]\n}`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -127,28 +116,6 @@ export default function InsightsSidebar({ messages = [], skillLevel = "", scenar
             <div className="space-y-3">
               {insights.proactive_tip && (
                 <div className="bg-blue-50 border border-blue-100 rounded p-2 text-xs text-blue-900 font-semibold">{insights.proactive_tip}</div>
-              )}
-              {(insights.predictive_hcp_mindset || insights.likely_decision_barrier || insights.next_best_adjustment) && (
-                <div className="grid gap-2">
-                  {insights.predictive_hcp_mindset && (
-                    <div className="rounded border border-amber-100 bg-amber-50 p-2 text-xs text-amber-900">
-                      <div className="mb-1 font-bold uppercase tracking-wide text-[11px] text-amber-700">Likely HCP Mindset</div>
-                      <div>{insights.predictive_hcp_mindset}</div>
-                    </div>
-                  )}
-                  {insights.likely_decision_barrier && (
-                    <div className="rounded border border-rose-100 bg-rose-50 p-2 text-xs text-rose-900">
-                      <div className="mb-1 font-bold uppercase tracking-wide text-[11px] text-rose-700">Likely Barrier</div>
-                      <div>{insights.likely_decision_barrier}</div>
-                    </div>
-                  )}
-                  {insights.next_best_adjustment && (
-                    <div className="rounded border border-teal-100 bg-teal-50 p-2 text-xs text-teal-900">
-                      <div className="mb-1 font-bold uppercase tracking-wide text-[11px] text-teal-700">Next Best Adjustment</div>
-                      <div>{insights.next_best_adjustment}</div>
-                    </div>
-                  )}
-                </div>
               )}
               {Array.isArray(insights.patterns) && insights.patterns.length > 0 && (
                 <div>

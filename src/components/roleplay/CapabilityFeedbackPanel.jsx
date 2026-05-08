@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Loader2, ChevronDown, ChevronUp, Zap } from "lucide-react";
 import { SIGNAL_CAPABILITIES } from "./signalIntelligenceSOT";
 import { computeSessionOverallScoreFromTurns } from "./sessionScoreAggregation";
-import { describeSiScoreBand } from "@/lib/siEvaluationLanguage";
 
 const CAPABILITIES = SIGNAL_CAPABILITIES.map(c => ({
   id: c.id,
@@ -197,9 +196,9 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       const clipTrans = transcript.substring(0, 2000);
       const deterministicScore = getCapabilityAverage(cap.id);
       const scoreLine = deterministicScore !== null
-        ? `Fixed evaluative signal (locked, do not rescore): ${describeSiScoreBand(deterministicScore).label} — ${describeSiScoreBand(deterministicScore).coaching}`
-        : `Fixed evaluative signal: not available yet`;
-      const prompt = `As a sales coach, analyze this capability using the fixed evaluative signal below (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\n${scoreLine}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale that explains this fixed evaluation using observable behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed evaluative signal above.`;
+        ? `Deterministic Score (locked, do not change): ${deterministicScore}/5`
+        : `Deterministic Score: not available yet`;
+      const prompt = `As a sales coach, analyze this capability using the fixed deterministic score below (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\n${scoreLine}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale that explains this fixed score using observable behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed score above.`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -229,15 +228,15 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
     try {
       const clipTrans = transcript.substring(0, 3000);
       const scoreLine = overallScore !== null
-        ? `Overall evaluative signal (locked, do not change): ${describeSiScoreBand(overallScore).label} — ${describeSiScoreBand(overallScore).coaching}`
-        : "Overall evaluative signal: not available yet";
+        ? `Overall deterministic score (locked, do not change): ${overallScore}/5`
+        : "Overall deterministic score: not available yet";
       const capabilityScoreLines = CAPABILITIES
         .map((cap) => {
           const score = getCapabilityAverage(cap.id);
-          return `${cap.label}: ${score !== null ? `${describeSiScoreBand(score).label} — ${describeSiScoreBand(score).coaching}` : "Signal still forming"}`;
+          return `${cap.label}: ${score !== null ? `${score}/5` : "N/A"}`;
         })
         .join("\n");
-      const prompt = `As a sales coach, provide an overall session analysis using the fixed evaluative summary below (do NOT rescore).\n${scoreLine}\n\nCapability evaluation summary:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall evaluation using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed evaluative signals above.`;
+      const prompt = `As a sales coach, provide an overall session analysis using the fixed deterministic scoring summary below (do NOT rescore).\n${scoreLine}\n\nCapability score breakdown:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall score using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed deterministic scores above.`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -277,10 +276,10 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       <div className="mb-1 rounded-xl border border-slate-300 bg-gradient-to-r from-slate-100 to-slate-50 px-3 py-2 shadow-sm">
         <div className="flex items-center gap-1.5 mb-0.5">
           <Zap className="w-3.5 h-3.5 text-teal-500" />
-          <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? describeSiScoreBand(overallScore).label : "Signal still forming"}</span>
+          <span className="font-bold text-sm text-gray-900">Overall: {overallScore !== null ? `${overallScore}/5` : "N/A"}</span>
         </div>
         <div className="grid grid-cols-[minmax(0,1fr)_110px] items-center gap-x-2 mt-1">
-          <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric, translated into coaching language instead of raw scores.</p>
+          <p className="text-xs text-gray-700">Capability feedback analysis by behavioral metric — click any metric below to analyze.</p>
           <div className="flex items-center justify-center gap-1">
             {overallFeedback.length === 0 && !overallLoading && (
               <Button
@@ -328,7 +327,7 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${colors.badge}`}>{cap.label}</span>
                 {focusCaps.includes(cap.id) && <span className="text-yellow-500 text-xs">⭐</span>}
                 {getCapabilityAverage(cap.id) !== null && (
-                  <span className="text-xs font-semibold text-gray-500">{describeSiScoreBand(getCapabilityAverage(cap.id)).label}</span>
+                  <span className="text-xs font-semibold text-gray-500">Score {getCapabilityAverage(cap.id)}/5</span>
                 )}
                 {hasFeedback && (
                   <span className="text-xs text-gray-600">{cap.question}</span>

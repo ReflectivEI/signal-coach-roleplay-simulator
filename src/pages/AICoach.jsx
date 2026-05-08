@@ -55,9 +55,7 @@ import InsightsSidebar from "@/components/coach/InsightsSidebar";
 import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
 import TodaysTipCard from "@/components/shared/TodaysTipCard";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
-import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 import { normalizeInvokeResponseText } from "@/lib/roleplayUiFormatting";
-import { describeSiScoreBand } from "@/lib/siEvaluationLanguage";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -129,77 +127,19 @@ export default function AICoach() {
   const [reactions, setReactions] = useState({});
   const [chatResetKey, setChatResetKey] = useState(0);
 
-  function buildEnterpriseCoachPrompt({ conversationHistory, sessionCtxBlock = "", currentTab }) {
-    const groundingBlock = buildFieldCoachingGrounding({
-      surface: "ai_coach",
-      hcpType: sessionContext?.hcpCategory || "",
-      specialty: sessionContext?.specialty || "",
-      challenge: currentTab,
-      weakestAreas: sessionContext?.misalignments || [],
-      strongestAreas: sessionContext?.positives || [],
-      customNotes: Object.entries(sessionContext?.capabilityScores || {}).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}/5`),
-    });
-
-    return `You are ReflectivAI's enterprise AI Coach for pharmaceutical sales enablement.
-
-Your job is to produce executive-ready coaching that is concrete, concise, and behavior-specific.
-
-RESPONSE DECISION RULE:
-- If the user is asking for information or guidance, answer directly in the enterprise coaching format below.
-- If the user is asking for feedback on wording, approach, or call execution, respond as a coach using the same format but with sharper behavior-level recommendations.
-
-MANDATORY FORMAT:
-## Direct Answer
-2-4 sentences. State the answer plainly with no preamble.
-
-## Signal Intelligence Lens
-2-4 bullets tied to observable rep behaviors, HCP signals, or practical field dynamics.
-
-## Recommended Move
-2-4 bullets with specific next actions, phrasing, or coaching moves.
-
-## Next Best Action
-One short paragraph or 2 bullets describing what the rep should do next in ReflectivAI or in the next HCP interaction.
-
-ENTERPRISE RULES:
-- Sound like an enterprise sales coach, not a general chatbot.
-- No fabricated citations, journals, studies, percentages, survey results, or references unless they were explicitly provided in the conversation context.
-- Do not invent clinical claims, product facts, or market statistics.
-- Do not invent ReflectivAI modules, pages, datasets, content libraries, or internal tools that were not explicitly mentioned in the conversation or visible context.
-- Do not give generic pharma boilerplate or motivational filler.
-- Prefer short bullets, clear business language, and field-usable phrasing.
-- When useful, include one example phrase the rep can say next.
-- Only discuss this current conversation. Never mention previous sessions, prior conversations, or other unseen history.
-- Never offer to roleplay in chat. If practice is appropriate, say to use the Role Play Simulator.
-- If you recommend a platform action, only mention features already present in the current context. Otherwise recommend a next HCP action, a coaching step, or the Role Play Simulator.
-- Anchor every coaching point in Signal Intelligence capabilities and the 8 behavioral metrics when possible.
-
-${groundingBlock}
-
-${sessionCtxBlock}
-
-CURRENT SECTION: ${currentTab}
-
-Conversation so far:
-${conversationHistory}`;
-  }
-
   // Build a rich context message from roleplay alignment data
   function buildSessionContextMessage(ctx) {
     const { scenarioTitle, hcpCategory, specialty, misalignments = [], positives = [], capabilityScores = {}, overallScore, situation } = ctx;
     const misStr = misalignments.length > 0 ? misalignments.map(m => `• ${m}`).join("\n") : "None detected";
     const posStr = positives.length > 0 ? positives.map(p => `• ${p}`).join("\n") : "None noted";
-    const capStr = Object.entries(capabilityScores)
-      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${describeSiScoreBand(v).label}`)
-      .join(" | ");
-    const overallNarrative = overallScore ? describeSiScoreBand(overallScore).label : "Signal still forming";
+    const capStr = Object.entries(capabilityScores).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}/5`).join(" | ");
 
     return `I just completed a roleplay session and need context-aware feedback.
 
 **Scenario:** ${scenarioTitle || "Unknown"}
 **HCP:** ${hcpCategory || "HCP"} — ${specialty || "General"}
-**Overall Session Evaluation:** ${overallNarrative}
-${capStr ? `**Capability Evaluation Summary:** ${capStr}` : ""}
+**Overall Alignment Score:** ${overallScore || "?"}/5
+${capStr ? `**Capability Scores:** ${capStr}` : ""}
 
 **What I Did Well:**
 ${posStr}
@@ -234,18 +174,7 @@ Please give me specific, actionable feedback that directly addresses these misal
     setIsLoading(true);
     try {
       const contextMessage = buildSessionContextMessage(ctx);
-      const groundingBlock = buildFieldCoachingGrounding({
-        surface: "ai_coach_session_synopsis",
-        hcpType: ctx?.hcpCategory || "",
-        specialty: ctx?.specialty || "",
-        challenge: ctx?.scenarioTitle || "",
-        weakestAreas: ctx?.misalignments || [],
-        strongestAreas: ctx?.positives || [],
-        customNotes: Object.entries(ctx?.capabilityScores || {}).map(([key, value]) => `${key.replace(/_/g, " ")}: ${value}/5`),
-      });
       const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
-
-${groundingBlock}
 
 Session context:
 ${contextMessage}
@@ -316,30 +245,41 @@ Rules:
       .map((m) => `${m.role === "user" ? "User" : "AI Coach"}: ${m.content}`)
       .join("\n");
 
-    const capabilitySummary = Object.entries(sessionContext?.capabilityScores || {})
-      .map(([key, value]) => `${key.replace(/_/g, ' ')}=${describeSiScoreBand(value).label}`)
-      .join(", ");
-
     // Build session context injection for the system prompt
     const sessionCtxBlock = sessionContext ? `
 ACTIVE ROLEPLAY SESSION CONTEXT (inject as primary coaching lens):
 - Scenario: "${sessionContext.scenarioTitle}"
 - HCP: ${sessionContext.hcpCategory}, ${sessionContext.specialty}
-- Overall Session Evaluation: ${sessionContext.overallScore ? describeSiScoreBand(sessionContext.overallScore).label : "Signal still forming"}
+- Overall Alignment Score: ${sessionContext.overallScore}/5
 - Detected Misalignments: ${(sessionContext.misalignments || []).join(" | ") || "None"}
 - Positives: ${(sessionContext.positives || []).join(" | ") || "None"}
-- Capability Evaluation Summary: ${capabilitySummary || "None"}
+- Capability Scores: ${Object.entries(sessionContext.capabilityScores || {}).map(([k, v]) => `${k.replace(/_/g, ' ')}=${v}/5`).join(", ")}
 
 COACHING MANDATE: When the user asks for feedback, directly reference these specific misalignments and positives. Quote behaviors, not traits. Provide concrete alternative language or actions for each misalignment.
 ` : "";
 
     // Call LLM endpoint with conversation and context
     try {
-      const systemPrompt = buildEnterpriseCoachPrompt({
-        conversationHistory,
-        sessionCtxBlock,
-        currentTab,
-      });
+      const systemPrompt = `You are an expert sales coach and pharmaceutical industry knowledge expert specializing in Sales Intelligence behaviors. You help reps in two ways:
+
+1. ANSWER KNOWLEDGE QUESTIONS: When the user asks for information, knowledge, or insights about pharmaceutical sales, HCP considerations, frameworks, strategies, cultural factors, clinical evidence, or industry topics—provide comprehensive, factual answers with relevant statistics and examples.
+
+2. PROVIDE COACHING FEEDBACK: When the user explicitly asks for feedback on their approach, their questions, or shares a message/approach they'd like reviewed—provide personalized coaching feedback grounded in Signal Intelligence™ principles.
+
+IMPORTANT GUIDELINES:
+- ONLY discuss this current conversation. DO NOT reference "previous sessions", "former conversations", or "past roleplays"
+- Distinguish between info questions and coaching requests. Answer info questions directly without treating them as sales practice.
+- NEVER offer to do roleplay practice with the user. Instead, if relevant, recommend "I recommend practicing this in the Role Play Simulator to test it out with an HCP"
+- When providing coaching, keep feedback specific and actionable
+- Ground all advice in Signal Intelligence™ principles
+- Be encouraging but honest
+
+${sessionCtxBlock}
+
+Conversation so far:
+${conversationHistory}
+
+Respond as the AI Coach. If this is a knowledge/info question, provide a comprehensive answer. If this is a coaching request, provide helpful feedback grounded in observable patterns and behaviors.`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',

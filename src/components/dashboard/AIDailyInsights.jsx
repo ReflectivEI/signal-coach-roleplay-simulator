@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Sparkles, RefreshCw, Brain, Target, MessageSquare, TrendingUp } from "lucide-react";
-import { buildFieldCoachingGrounding } from "@/lib/fieldCoachingGuidance";
 
 const DEFAULT = {
   focus_tip: "In your next call, pause for 2 seconds after the HCP finishes speaking. That silence often reveals what they're really thinking.",
@@ -8,61 +7,6 @@ const DEFAULT = {
   strength: "You excel at building rapport quickly and making HCPs feel heard, even in brief interactions.",
   affirmation: "Every conversation you have today could be the one that connects a patient to the treatment that changes their life.",
 };
-
-const INSIGHT_PACKS = [
-  {
-    focus_tip: "If an HCP challenges the practicality of your message, do not widen the conversation. Ask which patient type or workflow moment makes the message feel least usable, then stay on that pressure point.",
-    challenge: "You may get a polite response from an HCP who has already decided not to revisit treatment choices this month. Identify the locked variable before you try to reopen the conversation.",
-    strength: "You are likely already better at staying composed after pushback than most reps realize, which keeps difficult conversations recoverable.",
-    affirmation: "Discipline in how you read resistance matters more than volume of information in a short clinical conversation.",
-  },
-  {
-    focus_tip: "When the HCP gives a broad objection, narrow it before you respond. Ask whether the barrier is patient fit, workflow friction, confidence in expected outcomes, or simple timing.",
-    challenge: "Expect at least one interaction where the HCP sounds interested but refuses a clear next step. Treat that as hesitation to diagnose, not a cue to repeat your pitch.",
-    strength: "You are likely already using questions to slow the conversation down before it turns adversarial, which gives you room to coach the moment instead of chase it.",
-    affirmation: "Strong field coaching usually comes from clean judgment in one difficult moment, not a flawless conversation from start to finish.",
-  },
-  {
-    focus_tip: "If the HCP starts compressing their answers or checking the clock, shift from explanation to relevance. Earn one more minute by naming the pressure you think they are managing and checking whether you are right.",
-    challenge: "A rushed interaction can tempt you to over-talk to preserve value. The better move is to shorten deliberately and leave with one usable signal you can act on later.",
-    strength: "You are likely already adapting your tone faster than you give yourself credit for, especially when the conversation tightens unexpectedly.",
-    affirmation: "Precision under time pressure is one of the clearest markers of professional selling maturity.",
-  },
-];
-
-const WEAK_INSIGHT_PATTERNS = [
-  /build rapport/i,
-  /be confident/i,
-  /listen more/i,
-  /patient testimonials?/i,
-  /case studies?/i,
-  /real-world evidence/i,
-  /critical skill that directly impacts your success/i,
-  /changes their life/i,
-];
-
-function isWeakInsightText(value = "") {
-  const normalized = String(value || "").trim();
-  if (!normalized || normalized.length < 50) return true;
-  return WEAK_INSIGHT_PATTERNS.some((pattern) => pattern.test(normalized));
-}
-
-function pickInsightPack() {
-  return INSIGHT_PACKS[Math.floor(Math.random() * INSIGHT_PACKS.length)] || DEFAULT;
-}
-
-function normalizeInsightPayload(parsed) {
-  const fallback = pickInsightPack();
-  const candidate = {
-    focus_tip: parsed?.focus_tip || fallback.focus_tip,
-    challenge: parsed?.challenge || fallback.challenge,
-    strength: parsed?.strength || fallback.strength,
-    affirmation: parsed?.affirmation || fallback.affirmation,
-  };
-
-  const hasWeakField = Object.values(candidate).some(isWeakInsightText);
-  return hasWeakField ? fallback : candidate;
-}
 
 export default function AIDailyInsights() {
   const [insights, setInsights] = useState(null);
@@ -89,41 +33,18 @@ export default function AIDailyInsights() {
       ];
       const randomTopic = topics[Math.floor(Math.random() * topics.length)];
 
-      const prompt = `You are ReflectivAI's enterprise coaching brief generator.
+      const prompt = `You are a pharmaceutical sales coach. Generate UNIQUE daily insights focused on: "${randomTopic}" (seed: ${seed}).
 
-    ${buildFieldCoachingGrounding({
-        surface: "ai_daily_insights",
-        challenge: randomTopic,
-        customNotes: ["Keep each field grounded in one or more Signal Intelligence behavioral metrics."],
-      })}
-
-Generate daily insights focused on: "${randomTopic}".
-
-Return ONLY valid JSON with these exact 4 fields and no markdown:
+Return ONLY valid JSON with these 4 fields (no markdown, no code blocks):
 {
-  "focus_tip": "1-2 sentences. One concrete behavior to practice today in a live HCP interaction.",
-  "challenge": "1-2 sentences. One realistic HCP or workflow situation the rep may face today.",
-  "strength": "1 sentence. A specific behavior the rep is likely already demonstrating effectively.",
-  "affirmation": "1 sentence. A grounded professional reminder with no sentimentality or clichés."
+  "focus_tip": "ONE specific, tactical behavior to practice today related to ${randomTopic}. Be concrete and actionable (1-2 sentences).",
+  "challenge": "ONE realistic scenario they might face today related to ${randomTopic}. Acknowledge it's difficult (1-2 sentences).",
+  "strength": "ONE thing they're likely already doing well in their conversations. Be specific and encouraging (1 sentence).",
+  "affirmation": "A genuine reminder about patient impact. No clichés or corporate speak (1 sentence)."
 }
 
-Enterprise rules:
-- Be specific, field-usable, and behavior-based
-- Use observable HCP cues, rep behaviors, workflow constraints, or decision moments
-- No generic advice like "listen more", "be confident", or "build rapport"
-- No fabricated statistics, studies, references, or product claims
-- No inspirational slogans, patient-life clichés, or corporate motivational language
-- No invented platform features or internal tools
-- Write like a strong enablement leader coaching a high-performing rep
-- Use Signal Intelligence capability language where it improves clarity
-
-Quality bar by field:
-- focus_tip: should tell the rep exactly what to do when a specific signal appears
-- challenge: should feel like a realistic field moment, not a vague obstacle
-- strength: should reinforce a real conversational behavior, not a personality trait
-- affirmation: should sound grounded, disciplined, and professional
-
-Variation seed: ${seed}`;
+IMPORTANT: Make each insight UNIQUE and SPECIFIC. Vary your examples and phrasing. No generic advice like "listen more" or "ask better questions" - be tactical and memorable.
+Tone: Like a seasoned rep coaching a peer over coffee. Warm, direct, practical.`;
 
       const timeoutWarning = setTimeout(() => {
         if (loading) setLoadingMessage("⏳ Still processing... this may take a moment");
@@ -145,18 +66,23 @@ Variation seed: ${seed}`;
           jsonStr = jsonStr.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
           const parsed = JSON.parse(jsonStr);
 
-          setInsights(normalizeInsightPayload(parsed));
+          setInsights({
+            focus_tip: parsed.focus_tip || DEFAULT.focus_tip,
+            challenge: parsed.challenge || DEFAULT.challenge,
+            strength: parsed.strength || DEFAULT.strength,
+            affirmation: parsed.affirmation || DEFAULT.affirmation,
+          });
         } catch (err) {
           console.error('JSON parse error:', err, data.response);
-          setInsights(pickInsightPack());
+          setInsights(DEFAULT);
         }
       } else {
         console.error("API error:", res.status);
-        setInsights(pickInsightPack());
+        setInsights(DEFAULT);
       }
     } catch (err) {
       console.error('Daily insights generation error:', err);
-      setInsights(pickInsightPack());
+      setInsights(DEFAULT);
     } finally {
       setLoading(false);
       setLoadingMessage("");

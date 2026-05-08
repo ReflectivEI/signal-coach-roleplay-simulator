@@ -671,17 +671,19 @@ function getLlmProvider(env, requestedProvider) {
     const openaiApiKey = env?.OPENAI_API_KEY;
     const groqApiKey = env?.GROQ_API_KEY;
 
-    // Default precedence: OpenAI first when both keys present (restores pre-2026-05-07 behavior).
-    // Client may still force Groq via { provider: "groq" } (used by roleplay paths).
-    const provider = requestedProvider === "openai"
-        ? "openai"
-        : requestedProvider === "groq"
-            ? "groq"
-            : openaiApiKey
-                ? "openai"
-                : groqApiKey
-                    ? "groq"
-                    : null;
+    const preferredProvider = String(env?.PRIMARY_LLM_PROVIDER || "openai").toLowerCase() === "groq"
+        ? "groq"
+        : "openai";
+
+    const providerOrder = requestedProvider === "openai" || requestedProvider === "groq"
+        ? [requestedProvider, requestedProvider === "openai" ? "groq" : "openai"]
+        : [preferredProvider, preferredProvider === "openai" ? "groq" : "openai"];
+
+    const provider = providerOrder.find((candidate) => {
+        if (candidate === "openai") return Boolean(openaiApiKey);
+        if (candidate === "groq") return Boolean(groqApiKey);
+        return false;
+    }) || null;
 
     return {
         provider,
@@ -896,16 +898,9 @@ async function handleLlmInvoke(request, env) {
         const messages = roleplay
             ? [{ role: "system", content: prompt }]
             : [
-                { role: "system", content: `You are ReflectivAI's enterprise coaching and enablement model.
-Provide concise, behavior-specific, enterprise-grade output for pharmaceutical sales enablement use cases.
-
-Global response rules:
-- Do not fabricate citations, studies, percentages, survey data, references, product claims, or external facts that were not explicitly provided in the prompt.
-- Do not invent platform features, modules, reports, datasets, pages, or internal tools that were not explicitly provided in the prompt.
-- Prefer structured, practical answers over generic prose.
-- Use clear business language and observable behaviors.
-- Avoid filler, hype, and motivational padding.
-- If the prompt asks for JSON, return valid JSON matching the requested schema only.${response_json_schema ? "\nReturn valid JSON only." : ""}` },
+                { role: "system", content: `You are an expert sales coach helping healthcare professionals improve their sales skills. 
+You provide behavioral feedback, coaching insights, scenario generation, and performance analysis.
+Always respond with actionable, behavior-specific feedback.${response_json_schema ? "\nFormat your response as valid JSON matching the provided schema." : ""}` },
                 { role: "user", content: prompt }
             ];
 
