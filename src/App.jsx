@@ -4,29 +4,34 @@ import PageNotFound from './lib/PageNotFound';
 import { ThemeProvider } from '@/lib/ThemeContext';
 // Add page imports here
 import Home from './pages/Home';
-import Simulator from './pages/Simulator';
-import ScenarioBuilder from './pages/ScenarioBuilder';
+// import Simulator from './pages/Simulator';
+// import ScenarioBuilder from './pages/ScenarioBuilder';
 import Capabilities from './pages/Capabilities';
 import QATwin from './pages/QATwin';
 import AdminDashboard from './pages/AdminDashboard';
 import ScenarioLibrary from './pages/ScenarioLibrary';
 import PredictiveBuilder from './pages/PredictiveBuilder';
 import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
-import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
+// import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
+import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway';
+import RolePlaySimulator from './pages/RolePlaySimulator';
 
 const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
-      <Route path="/builder" element={<ScenarioBuilder />} />
+      {/* Legacy simulator and builder routes removed for isolation */}
+      {/* <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} /> */}
+      {/* <Route path="/builder" element={<ScenarioBuilder />} /> */}
       <Route path="/capabilities" element={<Capabilities />} />
       <Route path="/qa" element={<QATwin />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/library" element={<ScenarioLibrary />} />
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
-      <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} />
+      {/* <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} /> */}
+      <Route path="/rps" element={<EnterpriseRpsGateway />} />
+      <Route path="/RolePlaySimulator" element={<RolePlaySimulator />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

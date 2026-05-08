@@ -77,17 +77,7 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <Link to="/builder"
-                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-white"
-                style={{
-                  background: "linear-gradient(135deg, hsl(163 53% 42%), hsl(174 58% 34%))",
-                  boxShadow: "0 12px 24px rgba(14, 135, 122, 0.22)",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "hsl(162 55% 32%)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "hsl(162 55% 38%)"; }}
-              >
-                + New Scenario
-              </Link>
+                      {/* Scenario builder link removed for isolation */}
               <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
                 <div className="text-xl font-bold text-white">{scenarios.length || 19}</div>
                 <div className="text-xs text-slate-300 uppercase tracking-wider">Scenarios</div>
@@ -114,9 +104,7 @@ export default function Home() {
               <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 62% 74%)" }} />
               <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 62% 82%)" }}>Training Scenarios</h2>
             </div>
-            <Link to="/builder" className="text-xs font-medium flex items-center gap-1 transition-colors" style={{ color: "hsl(174 70% 86%)" }}>
-              Create custom <ChevronRight className="w-3 h-3" />
-            </Link>
+                    {/* Build Your Own link removed for isolation */}
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
           <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>

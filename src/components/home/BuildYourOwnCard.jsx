@@ -43,8 +43,7 @@ export default function BuildYourOwnCard() {
   const descDone = desc.length >= TYPED_TEXT.length;
 
   return (
-    <Link
-      to="/builder"
+    <div
       className="flex flex-col gap-[0.62rem] rounded-2xl h-full"
       style={{
         padding: "1rem 1rem 0.95rem",
@@ -107,6 +106,6 @@ export default function BuildYourOwnCard() {
           + Create
         </span>
       </div>
-    </Link>
+    </div>
   );
 }

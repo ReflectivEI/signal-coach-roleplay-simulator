@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+
 import AppHeader from "@/components/layout/AppHeader";
-import { Trash2, Eye, EyeOff, Plus } from "lucide-react";
+import { Trash2, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/lib/scenarioStorage";
 
@@ -19,7 +19,7 @@ import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/
 export default function AdminDashboard() {
   const [scenarios, setScenarios] = useState(/** @type {AdminScenario[]} */([]));
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -57,10 +57,7 @@ export default function AdminDashboard() {
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="mb-6 flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-foreground">Scenario Management</h1>
-          <button onClick={() => navigate("/builder")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-            <Plus className="w-4 h-4" />
-            Create Scenario
-          </button>
+          {/* Create Scenario button removed for isolation */}
         </div>
         <div className="space-y-3">
           {scenarios.length === 0 ? (

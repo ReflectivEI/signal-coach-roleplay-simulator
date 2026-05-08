@@ -95,19 +95,7 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete, se
           >
             Preview Brief
           </button>
-          <button
-            onClick={() => navigate(launchUrl)}
-            className="py-1 px-4 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
-            style={{
-              background: hovered
-                ? "linear-gradient(135deg, hsl(222 46% 19%), hsl(176 45% 30%))"
-                : "white",
-              color: hovered ? "white" : "hsl(222 40% 20%)",
-              border: "1.5px solid hsl(222 40% 20%)"
-            }}
-          >
-            Start Scenario →
-          </button>
+          {/* Start Scenario button removed for isolation */}
           {!scenario.isBuiltIn && onDelete && (
             <button
               onClick={handleDelete}
@@ -136,7 +124,6 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete, se
             scenario={scenario}
             difficulty={difficulty}
             onClose={() => setShowDetail(false)}
-            onStart={() => navigate(launchUrl)}
           />
         )}
       </AnimatePresence>
