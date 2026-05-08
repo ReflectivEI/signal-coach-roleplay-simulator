@@ -1,4 +1,4 @@
-name: Build and Deploy to Cloudflare Pages
+name: Build and Deploy Main Site Worker
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   deployments: write
 
 concurrency:
-  group: deploy-pages-production
+  group: deploy-main-site-production
   cancel-in-progress: true
 
 jobs:
@@ -37,13 +37,12 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    name: Deploy to Cloudflare Pages
+    name: Deploy Main Site Worker
     needs: build
 
     env:
       CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
-      CLOUDFLARE_PAGES_PROJECT: reflect-ai-now
-      CLOUDFLARE_PAGES_OUTPUT_DIR: dist/client
+      CLOUDFLARE_WORKER_NAME: reflect-ai-now
 
     steps:
       - name: Check deploy secret availability
@@ -74,13 +73,13 @@ jobs:
       - name: Build application
         run: npm run ci:build
 
-      - name: Deploy to Cloudflare Pages
+      - name: Deploy main-site Worker
         id: deploy_pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: deploy
+          command: deploy --config wrangler.toml
 
       - name: Create GitHub Deployment
         if: steps.deploy_pages.outcome == 'success'
@@ -94,7 +93,7 @@ jobs:
               environment: 'production',
               auto_merge: false,
               required_contexts: [],
-              description: 'Deployment to Cloudflare Pages'
+              description: 'Deployment to main-site Cloudflare Worker'
             });
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
