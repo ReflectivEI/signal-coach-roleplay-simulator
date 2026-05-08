@@ -671,13 +671,9 @@ function getLlmProvider(env, requestedProvider) {
     const openaiApiKey = env?.OPENAI_API_KEY;
     const groqApiKey = env?.GROQ_API_KEY;
 
-    const preferredProvider = String(env?.PRIMARY_LLM_PROVIDER || "openai").toLowerCase() === "groq"
-        ? "groq"
-        : "openai";
-
     const providerOrder = requestedProvider === "openai" || requestedProvider === "groq"
         ? [requestedProvider, requestedProvider === "openai" ? "groq" : "openai"]
-        : [preferredProvider, preferredProvider === "openai" ? "groq" : "openai"];
+        : ["groq", "openai"];
 
     const provider = providerOrder.find((candidate) => {
         if (candidate === "openai") return Boolean(openaiApiKey);
