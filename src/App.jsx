@@ -4,8 +4,7 @@ import PageNotFound from './lib/PageNotFound';
 import { ThemeProvider } from '@/lib/ThemeContext';
 // Add page imports here
 import Home from './pages/Home';
-// import Simulator from './pages/Simulator';
-// import ScenarioBuilder from './pages/ScenarioBuilder';
+// Simulator and ScenarioBuilder fully removed; legacy code deleted for safety.
 import Capabilities from './pages/Capabilities';
 import QATwin from './pages/QATwin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -25,9 +24,7 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      {/* Legacy simulator and builder routes removed for isolation */}
-      {/* <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} /> */}
-      {/* <Route path="/builder" element={<ScenarioBuilder />} /> */}
+      {/* Legacy simulator and builder routes permanently removed. */}
       <Route path="/capabilities" element={<Capabilities />} />
       <Route path="/qa" element={<QATwin />} />
       <Route path="/admin" element={<AdminDashboard />} />
@@ -38,6 +35,7 @@ const AppRoutes = () => {
       {/* Redirect all RPS routes to the standalone RPS site */}
       <Route path="/rps" element={<ExternalRpsRedirect />} />
       <Route path="/RolePlaySimulator" element={<ExternalRpsRedirect />} />
+      <Route path="/simulator" element={<ExternalRpsRedirect />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
