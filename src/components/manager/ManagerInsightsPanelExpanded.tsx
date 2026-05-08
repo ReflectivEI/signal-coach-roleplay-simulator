@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema, managerInsightsResponseSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildInteractiveCoachingResponse, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsResponseSchema } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
+import { useManagerInsights } from "./useManagerInsights";
 
 const FILTERS = ["All", "Performance", "Behavior", "Engagement", "Territory"] as const;
 const CONTEXT_CHIPS = [
@@ -194,9 +195,6 @@ function ensureDirectAnswer(answer: string, _question: string) {
 }
 
 export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null }: ManagerInsightsPanelExpandedProps) {
-  const [insights, setInsights] = useState<ManagerInsightsResponse | null>(null);
-  const [loadingInsights, setLoadingInsights] = useState(false);
-  const [insightsUnavailable, setInsightsUnavailable] = useState(false);
   const [input, setInput] = useState("");
   const [response, setResponse] = useState<StructuredResponse | null>(null);
   const [selectedChips, setSelectedChips] = useState<string[]>([]);
@@ -206,54 +204,14 @@ export default function ManagerInsightsPanelExpanded({ data, queuedPrompt = null
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const coachingSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const requestBody = useMemo(() => {
-    const parsed = managerInsightsRequestSchema.safeParse(data);
-    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
-  }, [data]);
-
-  const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
+  const {
+    data: insights,
+    loading: loadingInsights,
+    unavailable: insightsUnavailable,
+    requestBody,
+  } = useManagerInsights<ManagerInsightsResponse>(data, normalizeInsightsPayload);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
-
-  useEffect(() => {
-    if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
-      setInsights(null);
-      setInsightsUnavailable(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoadingInsights(true);
-    setInsightsUnavailable(false);
-
-    fetch("/manager-insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestSignature,
-      signal: controller.signal,
-    })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`manager_insights_${res.status}`);
-        return res.json();
-      })
-      .then((payload: ManagerInsightsResponse) => {
-        const normalizedPayload = normalizeInsightsPayload(payload);
-        if (!normalizedPayload) throw new Error("manager_insights_invalid_payload");
-        setInsights(normalizedPayload);
-      })
-      .catch((error: Error) => {
-        if (error.name !== "AbortError") {
-          console.error("Expanded manager insights unavailable:", error);
-          setInsights(null);
-          setInsightsUnavailable(true);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingInsights(false);
-      });
-
-    return () => controller.abort();
-  }, [requestBody, requestSignature]);
 
   const filteredKeyDrivers = useMemo(() => (insights?.keyDrivers ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.keyDrivers]);
   const filteredRisks = useMemo(() => (insights?.risks ?? []).filter((item) => matchesFilter(item, activeFilter)), [activeFilter, insights?.risks]);

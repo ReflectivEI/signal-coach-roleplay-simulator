@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { ArrowUpRight, BrainCircuit, Loader2 } from "lucide-react";
-import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView, managerInsightsRequestSchema } from "./managerInsightsShared";
+import { ENABLE_MANAGER_INSIGHTS, PREDICTIVE_CONFIDENCE_LABEL, buildBehavioralProfileContext, buildManagerExplainabilityNote, buildStructuredInsightView } from "./managerInsightsShared";
 import type { ManagerInsightsRequest, ManagerInsightsResponse } from "./managerInsightsTypes";
 import { normalizeManagerInsightsResponse, normalizeManagerText } from "./managerMetricFormatting.js";
 import BehavioralProfileGrid from "./BehavioralProfileGrid.jsx";
+import { useManagerInsights } from "./useManagerInsights";
 
 type ManagerInsightsPanelProps = {
   analyticsData: ManagerInsightsRequest;
@@ -27,59 +28,12 @@ const outlookTone = {
 };
 
 export default function ManagerInsightsPanel({ analyticsData, title, subtitle }: ManagerInsightsPanelProps) {
-  const [data, setData] = useState<ManagerInsightsResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [unavailable, setUnavailable] = useState(false);
-
-  const requestBody = useMemo(() => {
-    const parsed = managerInsightsRequestSchema.safeParse(analyticsData);
-    return parsed.success ? (parsed.data as ManagerInsightsRequest) : null;
-  }, [analyticsData]);
-
-  const requestSignature = useMemo(() => (requestBody ? JSON.stringify(requestBody) : ""), [requestBody]);
+  const { data, loading, unavailable, requestBody } = useManagerInsights<ManagerInsightsResponse>(
+    analyticsData,
+    (payload) => normalizeManagerInsightsResponse(payload as ManagerInsightsResponse) as ManagerInsightsResponse,
+  );
   const structuredInsight = useMemo(() => (requestBody ? buildStructuredInsightView(requestBody) : null), [requestBody]);
   const profileContext = useMemo(() => (requestBody ? buildBehavioralProfileContext(requestBody) : null), [requestBody]);
-
-  useEffect(() => {
-    if (!ENABLE_MANAGER_INSIGHTS || !requestBody || !requestSignature) {
-      setData(null);
-      setUnavailable(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    setLoading(true);
-    setUnavailable(false);
-
-    fetch("/manager-insights", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestSignature,
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`manager_insights_${response.status}`);
-        }
-        return response.json();
-      })
-      .then((payload: ManagerInsightsResponse) => {
-        setData(normalizeManagerInsightsResponse(payload));
-      })
-      .catch((error: Error) => {
-        if (error.name !== "AbortError") {
-          console.error("Manager insights unavailable:", error);
-          setUnavailable(true);
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
-      });
-
-    return () => controller.abort();
-  }, [requestBody, requestSignature]);
 
   if (!ENABLE_MANAGER_INSIGHTS) {
     return null;

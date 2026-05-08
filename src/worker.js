@@ -19,19 +19,31 @@ const assetManifest = JSON.parse(manifestJSON);
 // CORS (UPDATED FOR reflectiv-ai.com)
 // ────────────────────────────────────────────────────────────────────────────
 
-const ALLOWED_ORIGIN = "https://reflectiv-ai.com";
+const PRIMARY_ORIGIN = "https://reflectiv-ai.com";
 
-function setCorsHeaders(response) {
-    response.headers.set("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+function resolveAllowedOrigin(request) {
+    const origin = request.headers.get("Origin");
+
+    if (!origin) return PRIMARY_ORIGIN;
+    if (origin === PRIMARY_ORIGIN) return origin;
+    if (/^https:\/\/([a-z0-9-]+\.)?reflect-ai-now\.pages\.dev$/i.test(origin)) return origin;
+    if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return origin;
+
+    return PRIMARY_ORIGIN;
+}
+
+function setCorsHeaders(request, response) {
+    response.headers.set("Access-Control-Allow-Origin", resolveAllowedOrigin(request));
     response.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     response.headers.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
     response.headers.set("Access-Control-Allow-Credentials", "true");
+    response.headers.set("Vary", "Origin");
     response.headers.set("Cache-Control", "no-cache, must-revalidate");
     return response;
 }
 
-function handlePreflight() {
-    return setCorsHeaders(new Response(null, { status: 204 }));
+function handlePreflight(request) {
+    return setCorsHeaders(request, new Response(null, { status: 204 }));
 }
 
 // ─── ASSET SERVING ──────────────────────────────────────────────────────
@@ -882,9 +894,16 @@ async function handleLlmInvoke(request, env) {
         const messages = roleplay
             ? [{ role: "system", content: prompt }]
             : [
-                { role: "system", content: `You are an expert sales coach helping healthcare professionals improve their sales skills. 
-You provide behavioral feedback, coaching insights, scenario generation, and performance analysis.
-Always respond with actionable, behavior-specific feedback.${response_json_schema ? "\nFormat your response as valid JSON matching the provided schema." : ""}` },
+                { role: "system", content: `You are ReflectivAI's enterprise coaching and enablement model.
+Provide concise, behavior-specific, enterprise-grade output for pharmaceutical sales enablement use cases.
+
+Global response rules:
+- Do not fabricate citations, studies, percentages, survey data, references, product claims, or external facts that were not explicitly provided in the prompt.
+- Do not invent platform features, modules, reports, datasets, pages, or internal tools that were not explicitly provided in the prompt.
+- Prefer structured, practical answers over generic prose.
+- Use clear business language and observable behaviors.
+- Avoid filler, hype, and motivational padding.
+- If the prompt asks for JSON, return valid JSON matching the requested schema only.${response_json_schema ? "\nReturn valid JSON only." : ""}` },
                 { role: "user", content: prompt }
             ];
 
@@ -1338,89 +1357,89 @@ export default {
         const { pathname } = url;
 
         if (request.method === "OPTIONS") {
-            return handlePreflight();
+            return handlePreflight(request);
         }
 
         try {
             // ============ API ROUTES ============
 
             if (pathname === "/health") {
-                return setCorsHeaders(await handleHealth());
+                return setCorsHeaders(request, await handleHealth());
             }
 
             if (pathname === "/api/auth/me" && request.method === "GET") {
-                return setCorsHeaders(await handleAuthMe(request));
+                return setCorsHeaders(request, await handleAuthMe(request));
             }
 
             if (pathname === "/api/auth/login" && request.method === "POST") {
-                return setCorsHeaders(await handleAuthLogin(request));
+                return setCorsHeaders(request, await handleAuthLogin(request));
             }
 
             if (pathname === "/api/auth/logout" && request.method === "POST") {
-                return setCorsHeaders(await handleAuthLogout(request));
+                return setCorsHeaders(request, await handleAuthLogout(request));
             }
 
             if (pathname.startsWith("/api/apps/public/prod/public-settings/by-id/") && request.method === "GET") {
-                return setCorsHeaders(await handleAppSettings(pathname));
+                return setCorsHeaders(request, await handleAppSettings(pathname));
             }
 
             if (pathname === "/api/llm/invoke" && request.method === "POST") {
-                return setCorsHeaders(await handleLlmInvoke(request, env));
+                return setCorsHeaders(request, await handleLlmInvoke(request, env));
             }
 
             if (pathname === "/api/logs/user" && request.method === "POST") {
-                return setCorsHeaders(await handleUserLogs(request));
+                return setCorsHeaders(request, await handleUserLogs(request));
             }
 
             if (pathname === "/api/snippets" && request.method === "GET") {
-                return setCorsHeaders(await handleSnippets(request));
+                return setCorsHeaders(request, await handleSnippets(request));
             }
 
             if (pathname === "/api/assignments" && (request.method === "GET" || request.method === "PATCH")) {
-                return setCorsHeaders(await handleAssignments(request));
+                return setCorsHeaders(request, await handleAssignments(request));
             }
 
             if (pathname === "/api/learning-paths" && request.method === "GET") {
-                return setCorsHeaders(await handleLearningPaths(request));
+                return setCorsHeaders(request, await handleLearningPaths(request));
             }
 
             if (pathname === "/api/learning-paths/analyze" && request.method === "POST") {
-                return setCorsHeaders(await handleLearningPaths(request));
+                return setCorsHeaders(request, await handleLearningPaths(request));
             }
 
             if (pathname === "/api/learning-paths/complete" && request.method === "PATCH") {
-                return setCorsHeaders(await handleLearningPaths(request));
+                return setCorsHeaders(request, await handleLearningPaths(request));
             }
 
             if (pathname === "/api/roleplay/sessions" && (request.method === "GET" || request.method === "POST")) {
-                return setCorsHeaders(await handleRolePlaySessions(request));
+                return setCorsHeaders(request, await handleRolePlaySessions(request));
             }
 
             if (pathname === "/api/scenarios" && (request.method === "GET" || request.method === "POST" || request.method === "PUT" || request.method === "DELETE")) {
-                return setCorsHeaders(await handleCustomScenarios(request));
+                return setCorsHeaders(request, await handleCustomScenarios(request));
             }
 
             if (pathname === "/manager-insights" && request.method === "POST") {
-                return setCorsHeaders(await handleManagerInsights(request, env));
+                return setCorsHeaders(request, await handleManagerInsights(request, env));
             }
 
             if (pathname === "/api/manager/validation/start" && request.method === "POST") {
-                return setCorsHeaders(await handleManagerValidationStart(request));
+                return setCorsHeaders(request, await handleManagerValidationStart(request));
             }
 
             if (pathname === "/api/manager/validation/summary" && request.method === "GET") {
-                return setCorsHeaders(await handleManagerValidationSummary(request));
+                return setCorsHeaders(request, await handleManagerValidationSummary(request));
             }
 
             if (pathname.startsWith("/api/manager/validation/rep/") && request.method === "GET") {
                 const repId = pathname.split("/").pop();
-                return setCorsHeaders(await handleManagerValidationRep(request, decodeURIComponent(repId || "")));
+                return setCorsHeaders(request, await handleManagerValidationRep(request, decodeURIComponent(repId || "")));
             }
 
             if (pathname.startsWith("/api/manager/validation/") && pathname.endsWith("/follow-up") && request.method === "POST") {
                 const parts = pathname.split("/").filter(Boolean);
                 const recordId = parts[3];
-                return setCorsHeaders(await handleManagerValidationFollowUp(request, decodeURIComponent(recordId || "")));
+                return setCorsHeaders(request, await handleManagerValidationFollowUp(request, decodeURIComponent(recordId || "")));
             }
 
             // ============ STATIC FILES ============
@@ -1432,14 +1451,14 @@ export default {
             }
 
             // 404 for unknown routes
-            return setCorsHeaders(new Response(
+            return setCorsHeaders(request, new Response(
                 JSON.stringify({ error: "Not Found" }),
                 { status: 404, headers: { "Content-Type": "application/json" } }
             ));
 
         } catch (error) {
             console.error("Worker error:", error);
-            return setCorsHeaders(new Response(
+            return setCorsHeaders(request, new Response(
                 JSON.stringify({ error: "Internal server error", message: error.message }),
                 { status: 500, headers: { "Content-Type": "application/json" } }
             ));
