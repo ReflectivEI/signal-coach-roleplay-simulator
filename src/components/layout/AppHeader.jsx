@@ -4,7 +4,7 @@ import { BookOpen, Brain, FlaskConical, Menu, Plus, Settings, X, Zap } from "luc
 
 const NAV_ITEMS = [
   { to: "/library", label: "Library", Icon: BookOpen },
-  { to: "/rps", label: "RPS Gateway", Icon: Zap },
+  { to: "https://rps.reflectiv-ai.com", label: "Role Play Simulator", Icon: Zap, external: true },
   { to: "/predictive-builder", label: "Predictive Builder", Icon: Brain },
   { to: "/capabilities", label: "Capabilities", Icon: Brain },
   { to: "/qa", label: "QA Twin", Icon: FlaskConical },
@@ -13,7 +13,20 @@ const NAV_ITEMS = [
 
 function DesktopNavLink({ item }) {
   const { Icon } = item;
-
+  if (item.external) {
+    return (
+      <a
+        href={item.to}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-sm transition-colors flex items-center gap-1.5"
+        style={{ color: "hsl(222 52% 24%)" }}
+      >
+        <Icon className="w-3.5 h-3.5" />
+        {item.label}
+      </a>
+    );
+  }
   return (
     <NavLink
       to={item.to}
@@ -30,7 +43,25 @@ function DesktopNavLink({ item }) {
 
 function MobileNavLink({ item, onClick }) {
   const { Icon } = item;
-
+  if (item.external) {
+    return (
+      <a
+        href={item.to}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClick}
+        className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-colors bg-white/55 hover:bg-white/80"
+        style={{
+          color: "hsl(222 40% 26%)",
+          border: "1px solid rgba(92, 135, 165, 0.22)",
+          boxShadow: "none",
+        }}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        {item.label}
+      </a>
+    );
+  }
   return (
     <NavLink
       to={item.to}

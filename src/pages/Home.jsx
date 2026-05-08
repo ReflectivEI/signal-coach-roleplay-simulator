@@ -78,14 +78,25 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
                       {/* Scenario builder link removed for isolation */}
-              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
-                <div className="text-xl font-bold text-white">{scenarios.length || 19}</div>
-                <div className="text-xs text-slate-300 uppercase tracking-wider">Scenarios</div>
-              </div>
-              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
-                <div className="text-xl font-bold text-white">8</div>
-                <div className="text-xs text-slate-300 uppercase tracking-wider">Capabilities</div>
-              </div>
+              <a
+                href="https://rps.reflectiv-ai.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
+                style={{
+                  background: "rgba(116, 227, 206, 0.16)",
+                  border: "1px solid rgba(116, 227, 206, 0.36)",
+                  color: "#1a3a3a",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                  fontSize: "1.1rem",
+                  letterSpacing: "0.01em",
+                  boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
+                  marginLeft: "0.5rem"
+                }}
+              >
+                ▶ Role Play Simulator
+              </a>
             </div>
           </div>
         </motion.div>

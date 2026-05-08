@@ -14,7 +14,12 @@ import PredictiveBuilder from './pages/PredictiveBuilder';
 import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
 // import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
 import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway';
-import RolePlaySimulator from './pages/RolePlaySimulator';
+// import RolePlaySimulator from './pages/RolePlaySimulator';
+
+function ExternalRpsRedirect() {
+  window.location.replace('https://rps.reflectiv-ai.com/');
+  return null;
+}
 
 const AppRoutes = () => {
   return (
@@ -30,8 +35,9 @@ const AppRoutes = () => {
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
       {/* <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} /> */}
-      <Route path="/rps" element={<EnterpriseRpsGateway />} />
-      <Route path="/RolePlaySimulator" element={<RolePlaySimulator />} />
+      {/* Redirect all RPS routes to the standalone RPS site */}
+      <Route path="/rps" element={<ExternalRpsRedirect />} />
+      <Route path="/RolePlaySimulator" element={<ExternalRpsRedirect />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
