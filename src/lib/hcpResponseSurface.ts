@@ -25,6 +25,18 @@ function ensureTerminalPunctuation(text = ""): string {
   return /[.?!]$/.test(value) ? value : `${value}.`;
 }
 
+function enforceSentenceBoundaries(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
+    .replace(/([.?!])\s*([a-z])/g, (_, boundary, letter) => `${boundary} ${letter.toUpperCase()}`)
+    .replace(/\s{2,}/g, " ");
+
+  return normalizeText(output);
+}
+
 function enforceSentenceCase(text = ""): string {
   let output = normalizeText(text);
   if (!output) return "";
