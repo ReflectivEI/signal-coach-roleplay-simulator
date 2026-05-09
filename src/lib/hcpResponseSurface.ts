@@ -788,6 +788,20 @@ function applyContinuityPressure(
   return normalizeText(output);
 }
 
+
+
+function sanitizeNarrationLeak(text: string): string {
+  let output = normalizeText(text);
+  if (!output) return output;
+  output = output
+    .replace(/\bthe hcp\b[^.?!]*[.?!]?/gi, "")
+    .replace(/\b(?:keeps?|looks?|glances?|checks?|leans?|nods?|eyes narrowing|attention tightening|posture closed down)\b[^.?!]*[.?!]?/gi, "")
+    .replace(/\bwith very little space left in the exchange\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  return normalizeText(output);
+}
+
 export function applyHcpResponseSurface({
   hcpReply,
   scenario,
@@ -819,6 +833,7 @@ export function applyHcpResponseSurface({
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
   output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
+  output = sanitizeNarrationLeak(output);
 
   if (
     hcpTurnCount > 0 &&

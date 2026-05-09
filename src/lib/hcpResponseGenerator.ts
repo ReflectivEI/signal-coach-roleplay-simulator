@@ -573,6 +573,55 @@ function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: an
   return summaryLines.join("\n");
 }
 
+
+
+function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): string[] {
+  return transcript
+    .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
+    .map((turn) => String(turn.text || "").trim())
+    .filter(Boolean)
+    .slice(-Math.max(3, Math.min(5, limit)));
+}
+
+function inferSkeletonSignature(text = ""): string {
+  const lower = String(text || "").toLowerCase();
+  if (/\bwhat in that study\b/.test(lower)) return "what_in_study";
+  if (/\bwhat specifically\b/.test(lower)) return "what_specifically";
+  if (/\bwhat changes for my staff\b/.test(lower)) return "staff_change";
+  if (/\bwhich endpoint\b/.test(lower)) return "which_endpoint";
+  if (/\bwhich patients\b/.test(lower)) return "which_patients";
+  if (/\bkeep it specific\b/.test(lower)) return "keep_specific";
+  if (/\bwhat changes clinically\b/.test(lower)) return "clinical_change";
+  if (/^(what|which|how)\b/.test(lower)) return "question_open";
+  return "";
+}
+
+function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[], scenario: any): string {
+  const recent = getRecentVisibleHcpReplies(transcript, 5);
+  const current = String(hcpReply || "").trim();
+  if (!current || !recent.length) return hcpReply;
+  const normalizedCurrent = normalizeLineForContinuity(current);
+  const normalizedRecent = recent.map((line) => normalizeLineForContinuity(line));
+  const exactRepeat = normalizedRecent.includes(normalizedCurrent);
+
+  const skeleton = inferSkeletonSignature(current);
+  const repeatedSkeleton = skeleton && recent.slice(-3).some((line) => inferSkeletonSignature(line) === skeleton);
+
+  const currentTags = inferConcernTags(current);
+  const repeatedIntent = recent.slice(-3).filter((line) => {
+    const tags = inferConcernTags(line);
+    return currentTags.some((tag) => tags.includes(tag));
+  }).length >= 2;
+
+  if (!exactRepeat && !repeatedSkeleton && !repeatedIntent) return hcpReply;
+
+  return deterministicContinuityVariation({
+    hcpReply: current,
+    transcript,
+    scenario,
+  });
+}
+
 function detectQuestionType(repMessage: string): BehaviorSignals["question_type"] {
   const text = String(repMessage || "").trim().toLowerCase();
   if (!text) return "none";
@@ -1219,6 +1268,7 @@ Return ONLY valid JSON:
     profile: runtimeProfile,
     hcpTurnCount,
   });
+  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
     transcript,
@@ -1239,9 +1289,10 @@ Return ONLY valid JSON:
         profile: runtimeProfile,
         hcpTurnCount,
       });
+      hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
     } catch {
       continuityAdjusted = true;
-      hcpReply = applyHcpResponseSurface({
+      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
         hcpReply: deterministicContinuityVariation({
           hcpReply,
           transcript,
@@ -1251,7 +1302,7 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
-      });
+      }), transcript, scenario);
     }
   }
 
