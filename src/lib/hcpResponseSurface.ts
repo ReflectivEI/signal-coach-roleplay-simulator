@@ -4,6 +4,7 @@ import { detectOpeningAnchorType, enforceSourceBackedRealismSurface } from "./hc
 
 function normalizeText(value = ""): string {
   return String(value || "").replace(/\s+/g, " ").trim();
+}
 
 function splitSentences(text = ""): string[] {
   return normalizeText(text)
@@ -837,4 +838,3 @@ function repairNarrationToNaturalLine(text: string, { scenario, turn, profile, h
   return "What’s the actual concern?";
 }
 // === END PILOT PATCH ===
-}

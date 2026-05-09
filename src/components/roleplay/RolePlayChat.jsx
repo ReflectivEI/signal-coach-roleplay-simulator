@@ -1219,6 +1219,100 @@ function stripSimulatorMetaDialogue(text = "") {
   return hardenTextSurface(value);
 }
 
+const NARRATED_HCP_SURFACE_PATTERNS = [
+  /^\s*the hcp\b/i,
+  /^\s*(keeps|looks|glances|leans|checks|turns|steps|stands|pauses|nods|scans|reviews|shifts|gestures|rereads|folds|gathers|taps|closes)\b/i,
+  /\blooks back\b/i,
+  /\bglances at\b/i,
+  /\bkeeps the\b/i,
+  /\bposture\b/i,
+  /\bexpression\b/i,
+  /\bwith very little space\b/i,
+  /\bunder one hand\b/i,
+  /\beyes narrowing\b/i,
+  /\battention tightening\b/i,
+  /\bbody language\b/i,
+];
+
+function looksLikeNarratedHcpSurface(text = "") {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  return NARRATED_HCP_SURFACE_PATTERNS.some((pattern) => pattern.test(value));
+}
+
+function buildNaturalHcpRepairLine({
+  text = "",
+  concern = "workflow",
+  repMessage = "",
+  activeAsk = "",
+  hcpState = "",
+  timePressure = false,
+} = {}) {
+  const rep = String(repMessage || "").trim();
+  const repLower = rep.toLowerCase();
+  const ask = hardenTextSurface(String(activeAsk || "").trim());
+  const concernKey = String(concern || "workflow").toLowerCase();
+  const pressured = Boolean(timePressure) || /\b(time|disengaged|irritated|boundary|resistant)\b/i.test(String(hcpState || ""));
+
+  if (/^(hi|hello|hey)\b/.test(repLower) || /\bhow are you\b|\bcan we speak\b|\bdo you have a minute\b/.test(repLower)) {
+    return pressured ? "I'm fine. What's your question?" : "Doing well. What did you want to discuss?";
+  }
+
+  if (ask && !looksLikeNarratedHcpSurface(ask) && /\?/.test(ask)) {
+    return enforceNaturalStandaloneUtterance(ask, concernKey);
+  }
+
+  if (concernKey === "safety") {
+    return /\bhepatic|liver\b/.test(repLower)
+      ? "What have you seen on the hepatic signal in your own data?"
+      : "What have you seen on the safety side in your own data?";
+  }
+
+  if (concernKey === "evidence") {
+    if (/\bmortality\b/.test(repLower)) return "Mortality in which patients, exactly?";
+    if (/\bendpoint|data|study|trial\b/.test(repLower)) return "What data are you referring to exactly?";
+    return pressured ? "Be specific. What data changes my decision?" : "What data changes a treatment decision for me?";
+  }
+
+  if (concernKey === "access") {
+    return pressured
+      ? "If this still needs prior auth, what changes for my staff?"
+      : "What changes on access or prior auth for my team?";
+  }
+
+  if (concernKey === "time") {
+    return "Keep it brief. What's the point?";
+  }
+
+  if (concernKey === "workflow") {
+    return pressured
+      ? "What's the first practical step?"
+      : "What changes in workflow for the clinic?";
+  }
+
+  return pressured ? "Be specific. What's your point?" : "What are you asking me to do differently?";
+}
+
+function enforceSpokenOnlyHcpDialogue({
+  text = "",
+  concern = "workflow",
+  repMessage = "",
+  activeAsk = "",
+  hcpState = "",
+  timePressure = false,
+} = {}) {
+  const value = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(text));
+  if (!value) {
+    return buildNaturalHcpRepairLine({ text, concern, repMessage, activeAsk, hcpState, timePressure });
+  }
+
+  if (!looksLikeNarratedHcpSurface(value)) {
+    return enforceNaturalStandaloneUtterance(value, concern);
+  }
+
+  return buildNaturalHcpRepairLine({ text: value, concern, repMessage, activeAsk, hcpState, timePressure });
+}
+
 function isRepeatedFinalDialogue(candidate = "", recentDialogues = []) {
   const normalizedCandidate = normalizeDialogueSignature(candidate);
   if (!normalizedCandidate) return false;
@@ -5441,7 +5535,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         cueStateAlignmentConcernFamily: hcpCueStateAlignment.concernFamily,
       },
     };
-    nextHcpDialogue = enforceNaturalStandaloneUtterance(nextHcpDialogue, primaryConcern);
+    nextHcpDialogue = enforceSpokenOnlyHcpDialogue({
+      text: enforceNaturalStandaloneUtterance(nextHcpDialogue, primaryConcern),
+      concern: primaryConcern,
+      repMessage,
+      activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || "",
+      hcpState: nextHcpState,
+      timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
+    });
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.hcpReactionContract = finalHcpReactionContract;

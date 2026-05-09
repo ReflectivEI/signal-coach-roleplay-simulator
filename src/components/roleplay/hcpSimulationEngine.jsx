@@ -1877,6 +1877,31 @@ export function buildHCPDialoguePrompt({
     return String(str).replace(/[^\x00-\x7F]/g, '')
   }
 
+  function summarizeLockedCueForPrompt(cueText = '') {
+    const cue = String(cueText || '').toLowerCase()
+    const signals = []
+
+    if (/\b(clock|schedule|hallway|door|next patient|time|calendar|moving on|wrap|leaving|exit)\b/.test(cue)) {
+      signals.push('time_pressure_high')
+      signals.push('attention_limited')
+    }
+    if (/\b(glance|checks|looks back|chart|study|printout|notes|handout|report|data)\b/.test(cue)) {
+      signals.push('detail_scrutiny')
+    }
+    if (/\b(prior auth|coverage|payer|access|staff|workflow|forms|paperwork|clinic flow|implementation)\b/.test(cue)) {
+      signals.push('operational_burden_foregrounded')
+    }
+    if (/\b(narrow|skeptic|resistant|impatient|hardens|tighter|frustration|warning|finality|closed)\b/.test(cue)) {
+      signals.push('skepticism_elevated')
+      signals.push('openness_reduced')
+    }
+    if (/\b(nod|open|receptive|thoughtful|listens|curious)\b/.test(cue)) {
+      signals.push('receptive_but_guarded')
+    }
+
+    return [...new Set(signals)]
+  }
+
   const severityLabel = ['mild', 'moderate', 'strong'][severity]
 
   const stateDescriptions = {
@@ -2059,7 +2084,15 @@ export function buildHCPDialoguePrompt({
     ' intensity)'
   prompt += '\nSeverity Level: ' + sanitize(severityLabel)
 
-  prompt += '\n\nPHYSICAL CONTEXT:\n"' + sanitize(lockedCue) + '"'
+  const hiddenCueSignals = summarizeLockedCueForPrompt(lockedCue)
+  if (hiddenCueSignals.length > 0) {
+    prompt += '\n\nHIDDEN BEHAVIORAL CUE SIGNALS (NON-SPEAKABLE):'
+    prompt += '\n- These signals shape patience, skepticism, specificity, and pacing.'
+    prompt += '\n- Never quote, paraphrase, or narrate these signals.'
+    hiddenCueSignals.forEach((signal) => {
+      prompt += '\n- ' + sanitize(signal)
+    })
+  }
 
   prompt += '\n\nTONE DIRECTIVE: ' + sanitize(toneDirectives.instruction)
   prompt += '\nMAX SENTENCES: ' + sanitize(toneDirectives.maxSentences)
@@ -2068,7 +2101,7 @@ export function buildHCPDialoguePrompt({
   prompt += '\n\nOUTPUT RULES:\n'
   prompt += '- Output only your spoken dialogue as the HCP.\n'
   prompt += '- No stage directions, action lines, or parentheticals.\n'
-  prompt += '- Your words must be congruent with the physical context.\n'
+  prompt += '- Your words must reflect the hidden behavioral signals without naming or describing them.\n'
   prompt += '- Stay in character completely.\n'
   prompt += '- Avoid repetitive lead-ins across turns (for example, avoid reusing the same opening phrase turn after turn).\n'
   prompt += '- Keep responses specific and practice-worthy, grounded in scenario details and dialogue context.\n'
