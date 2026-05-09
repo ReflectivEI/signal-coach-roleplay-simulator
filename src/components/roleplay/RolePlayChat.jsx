@@ -1,55 +1,3 @@
-    // Voice session evaluation state
-    const [voiceSessionEvaluation, setVoiceSessionEvaluation] = useState(null);
-
-    // When the voice session ends, produce a robust evaluation
-    useEffect(() => {
-      if (voiceSessionEnded && voiceSessionAnalysis.length > 0) {
-        // Example: summarize adaptive criteria and session quality
-        const totalTurns = voiceSessionAnalysis.length;
-        const states = voiceSessionAnalysis.map(a => a.state).filter(Boolean);
-        const uniqueStates = Array.from(new Set(states));
-        const cues = voiceSessionAnalysis.map(a => a.cue).filter(Boolean);
-        const repMessages = voiceSessionAnalysis.map(a => a.repMessage).filter(Boolean);
-        const hcpDialogues = voiceSessionAnalysis.map(a => a.hcpDialogue).filter(Boolean);
-        // Simple scoring: count state transitions and cue diversity
-        const stateTransitions = uniqueStates.length - 1;
-        const cueDiversity = Array.from(new Set(cues)).length;
-        // Example summary
-        setVoiceSessionEvaluation({
-          totalTurns,
-          stateTransitions,
-          cueDiversity,
-          repMessages,
-          hcpDialogues,
-          summary: `Voice session covered ${totalTurns} turns, ${stateTransitions} state transitions, and ${cueDiversity} unique cues. Adaptive analysis and dialogue diversity tracked throughout.`
-        });
-      }
-    }, [voiceSessionEnded, voiceSessionAnalysis]);
-  // Voice session adaptive analysis state
-  const [voiceSessionAnalysis, setVoiceSessionAnalysis] = useState([]);
-
-  // Collect adaptive analysis per turn if voice session is active
-  useEffect(() => {
-    if (!voiceSessionActive) return;
-    if (!turns || turns.length === 0) return;
-    // Collect analysis for the latest turn
-    const lastTurn = turns[turns.length - 1];
-    if (!lastTurn) return;
-    setVoiceSessionAnalysis(prev => ([...prev, {
-      turn: turns.length,
-      state: lastTurn.state,
-      temperature: lastTurn.temperature,
-      cue: lastTurn.cueBefore,
-      hcpDialogue: lastTurn.hcpDialogueBefore,
-      repMessage: lastTurn.repMessage,
-      timestamp: Date.now(),
-    }]));
-  }, [turns, voiceSessionActive]);
-
-  // Reset analysis when session restarts
-  useEffect(() => {
-    if (!voiceSessionActive) setVoiceSessionAnalysis([]);
-  }, [voiceSessionActive]);
 // @ts-nocheck
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -559,6 +507,41 @@ function hardenTextSurface(text) {
 
   return value;
 }
+
+function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow") {
+  const value = hardenTextSurface(text);
+  if (!value) return value;
+
+  const concern = String(activeConcern || "workflow").toLowerCase();
+
+  const danglingTopicMatch = value.match(/^if we're talking about\s+([^.!?]+)[.!?]$/i);
+  if (danglingTopicMatch) {
+    const topic = String(danglingTopicMatch[1] || "").trim();
+    if (topic) {
+      if (concern === "evidence" || /\bstudy|trial|data|endpoint|mortality|outcome\b/i.test(topic)) {
+        return `If we're talking about ${topic}, what data are you pointing to exactly?`;
+      }
+      if (concern === "access") {
+        return `If we're talking about ${topic}, what changes in access for my team?`;
+      }
+      if (concern === "workflow" || concern === "time") {
+        return `If we're talking about ${topic}, be specific about the first practical step.`;
+      }
+      return `If we're talking about ${topic}, be specific.`;
+    }
+  }
+
+  if (/\b(of|for|to|about|with|in|on|at|from|than|that|which)\.?$/i.test(value)) {
+    if (concern === "evidence") {
+      return `${value.replace(/[.?!]$/, "")} exactly?`;
+    }
+    return `${value.replace(/[.?!]$/, "")} specifically?`;
+  }
+
+  return value;
+}
+
+const SHOW_VISIBLE_HCP_CUES = false;
 
 function applyDeterministicPunctuationContract(text) {
   return normalizeHcpDialoguePunctuation(String(text || "").trim()).trim();
@@ -5458,6 +5441,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         cueStateAlignmentConcernFamily: hcpCueStateAlignment.concernFamily,
       },
     };
+    nextHcpDialogue = enforceNaturalStandaloneUtterance(nextHcpDialogue, primaryConcern);
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.hcpReactionContract = finalHcpReactionContract;
@@ -5811,8 +5795,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
           {/* CHAT TAB */}
           {activeTab === "chat" && (
-            <>
-              <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 flex flex-col gap-4">
+            <div className="relative flex-1 min-h-0 flex flex-col">
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 md:px-5 py-4 pb-28 flex flex-col gap-4">
 
                 {turns.length === 0 && isLoading && (
                   <div className="flex justify-center py-8">
@@ -5888,7 +5872,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
-                      {turn.cueBefore && (
+                      {SHOW_VISIBLE_HCP_CUES && turn.cueBefore && (
                         <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
                           <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
                             {sanitizeRenderedMessage(personalizeCueText(turn.cueBefore, hcpDisplayName), "behavioral-cue")}
@@ -5930,7 +5914,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
               />
 
               {/* Input */}
-              <div className="px-3 md:px-5 py-3 border-t flex-shrink-0 bg-white pb-[max(12px,env(safe-area-inset-bottom))]">
+              <div className="absolute bottom-0 left-0 right-0 px-3 md:px-5 py-3 border-t flex-shrink-0 z-10 bg-white pb-[max(12px,env(safe-area-inset-bottom))]">
                 <form
                   onSubmit={e => {
                     e.preventDefault();
@@ -6008,7 +5992,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                   Signal–Response Alignment evaluates observable behavioral adaptation to HCP signals — not empathy, intent, or personality.
                 </p>
               </div>
-            </>
+            </div>
           )}
 
           {activeTab === "annotate" && (

@@ -553,6 +553,60 @@ function needsContextConsistencyRewrite({
   return overlyLongHighPressureReply || casualDrift;
 }
 
+function enforceAdaptiveNaturalCompression({
+  hcpReply,
+  scenario,
+  behaviorState,
+  prediction,
+}: {
+  hcpReply: string;
+  scenario: any;
+  behaviorState: string;
+  prediction: any;
+}): string {
+  const line = String(hcpReply || "").trim();
+  if (!line) return line;
+
+  const pressures = new Set(
+    (Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [])
+      .map((value: unknown) => String(value || "").toLowerCase())
+  );
+  const currentState = String(behaviorState || "").toLowerCase();
+  const predictedState = String(prediction?.predictedBehaviorState || "").toLowerCase();
+  const highPressure =
+    pressures.has("time_constrained")
+    || pressures.has("skeptical_resistant")
+    || pressures.has("operationally_constrained")
+    || pressures.has("safety_concern")
+    || currentState === "closed"
+    || currentState === "resistance"
+    || currentState === "time_pressure"
+    || predictedState === "closed"
+    || predictedState === "resistance"
+    || predictedState === "time_pressure";
+
+  if (!highPressure) return line;
+
+  let compressed = line
+    .replace(/^If you can show me\b/i, "Show me")
+    .replace(/\bthat would justify trying this again\b/gi, "for trying this again")
+    .replace(/\bI would need\b/gi, "I need")
+    .replace(/\bwhat I need is\b/gi, "I need")
+    .replace(/,\s*(keep|be)\b/gi, ". $1")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const words = compressed.split(/\s+/).filter(Boolean);
+  if (words.length > 20) {
+    const parts = compressed.split(/[.?!]/).map((part) => part.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      compressed = `${parts[0]}. ${parts[1]}.`.replace(/\s{2,}/g, " ").trim();
+    }
+  }
+
+  return compressed;
+}
+
 async function rewriteForSpokenNaturalness({
   hcpReply,
   scenario,
@@ -1806,8 +1860,7 @@ Return ONLY valid JSON:
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
-  }
-  if (needsSpokenStyleRewrite({ hcpReply, scenario })) {
+  } else if (needsSpokenStyleRewrite({ hcpReply, scenario })) {
     try {
       hcpReply = await rewriteForSpokenStyle({
         hcpReply,
@@ -1817,8 +1870,7 @@ Return ONLY valid JSON:
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
-  }
-  if (needsContextConsistencyRewrite({
+  } else if (needsContextConsistencyRewrite({
     hcpReply,
     scenario,
     behaviorState: result.nextBehaviorState || currentBehaviorState,
@@ -1892,6 +1944,13 @@ Return ONLY valid JSON:
     }
   }
 
+  hcpReply = enforceAdaptiveNaturalCompression({
+    hcpReply,
+    scenario,
+    behaviorState: result.nextBehaviorState || currentBehaviorState,
+    prediction,
+  });
+
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
@@ -1900,43 +1959,6 @@ Return ONLY valid JSON:
     hcpTurnCount,
     liveRepAlignmentActive: firstTurnAlignment.applied,
   });
-  if (!continuityAdjusted && needsContinuityVariationRewrite({
-    hcpReply,
-    transcript,
-  })) {
-    try {
-      hcpReply = await rewriteForContinuityVariation({
-        hcpReply,
-        transcript,
-        scenario,
-        behaviorState: result.nextBehaviorState || currentBehaviorState,
-        currentJourneyState: result.nextJourneyState || currentJourneyState,
-      });
-      continuityAdjusted = true;
-      hcpReply = applyHcpResponseSurface({
-        hcpReply,
-        scenario,
-        turn: turnDirectives,
-        profile: runtimeProfile,
-        hcpTurnCount,
-        liveRepAlignmentActive: firstTurnAlignment.applied,
-      });
-    } catch {
-      continuityAdjusted = true;
-      hcpReply = applyHcpResponseSurface({
-        hcpReply: deterministicContinuityVariation({
-          hcpReply,
-          transcript,
-          scenario,
-        }),
-        scenario,
-        turn: turnDirectives,
-        profile: runtimeProfile,
-        hcpTurnCount,
-        liveRepAlignmentActive: firstTurnAlignment.applied,
-      });
-    }
-  }
 
   const finalLiveAlignment = enforceFirstTurnRepAdaptation({
     hcpReply,

@@ -8,7 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, BookOpen, Play, GraduationCap, ArrowRight, BrainCircuit, Building2, Users, FileBarChart, ShieldCheck } from "lucide-react";
+import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, Calendar, Lightbulb, CheckCircle2, ArrowRight, BrainCircuit, Building2, Users, FileBarChart, ShieldCheck } from "lucide-react";
 import { subDays, isAfter, parseISO, format } from "date-fns";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -31,12 +31,15 @@ const GamificationPanelField = GamificationPanel;
 const AIActionableInsightsField = AIActionableInsights;
 
 
+// All UI option arrays must be imported from rpsUserInputOptions.ts ONLY
 import {
   LEARNING_PATH_MAP,
   CAPABILITY_LABELS,
   CAPABILITY_COLORS,
   BENCHMARK_SCORES
 } from "@/lib/rpsUserInputOptions";
+
+// DO NOT define or use any parallel public option arrays here. All dropdowns, filters, and UI logic must use canonical options from rpsUserInputOptions.ts.
 
 function LearningPath({ weakCapability }) {
   const path = LEARNING_PATH_MAP[weakCapability.key];
@@ -48,7 +51,8 @@ function LearningPath({ weakCapability }) {
 function extractScores(feedback) {
   if (!feedback) return null;
   const scores = {};
-  const patterns = [
+  // Local regex patterns for feedback parsing (not for UI options)
+  const _feedbackPatterns = [
     [/signal awareness[^\d]*(\d)/i,        "signal_awareness"],
     [/signal interpretation[^\d]*(\d)/i,   "signal_interpretation"],
     [/value connection[^\d]*(\d)/i,        "value_connection"],
@@ -58,7 +62,7 @@ function extractScores(feedback) {
     [/conversation management[^\d]*(\d)/i, "conversation_management"],
     [/adaptive response[^\d]*(\d)/i,       "adaptive_response"],
   ];
-  patterns.forEach(([regex, key]) => {
+  _feedbackPatterns.forEach(([regex, key]) => {
     const m = feedback.match(regex);
     if (m) scores[key] = parseInt(m[1]);
   });
@@ -168,8 +172,8 @@ export default function SessionAnalytics() {
     URL.revokeObjectURL(url);
   }
 
-  // Demo sessions so analytics always render meaningfully
-  const DEMO_SESSIONS = [
+  // Local demo data for analytics rendering only (not for UI options)
+  const _demoSessions = [
     { id: "d1", scenario_title: "PrEP Access Barriers Despite Strong Adoption", created_date: new Date(Date.now() - 2 * 86400000).toISOString(), feedback: "Signal Awareness 4\nSignal Interpretation 3\nValue Connection 4\nCustomer Engagement 3\nObjection Navigation 2\nCommitment Generation 3\nConversation Management 4\nAdaptive Response 3\n\n## Successful Strategies\n- Opened with specific patient data point\n- Used reflective listening after objection\n\n## Misalignment / Signal-Response\n- Jumped to solution before fully acknowledging concern\n- Missed cue to pause after HCP mentioned workload" },
     { id: "d2", scenario_title: "Heart Failure GDMT Optimization Challenge", created_date: new Date(Date.now() - 5 * 86400000).toISOString(), feedback: "Signal Awareness 3\nSignal Interpretation 4\nValue Connection 5\nCustomer Engagement 4\nObjection Navigation 3\nCommitment Generation 4\nConversation Management 3\nAdaptive Response 4\n\n## Successful Strategies\n- Connected clinical evidence directly to HCP's stated priorities\n- Secured specific next-step with date\n\n## Misalignment / Signal-Response\n- Rushed past formulary concern\n- Did not adapt pace when HCP shifted tone" },
     { id: "d3", scenario_title: "HIV Prevention Gap in High-Risk Population", created_date: new Date(Date.now() - 9 * 86400000).toISOString(), feedback: "Signal Awareness 4\nSignal Interpretation 3\nValue Connection 3\nCustomer Engagement 3\nObjection Navigation 4\nCommitment Generation 3\nConversation Management 4\nAdaptive Response 3\n\n## Successful Strategies\n- Paused effectively after HCP expressed frustration\n- Bridged objection with real-world evidence\n\n## Misalignment / Signal-Response\n- Closing question was too vague\n- Missed opportunity to confirm understanding" },
@@ -177,7 +181,7 @@ export default function SessionAnalytics() {
     { id: "d5", scenario_title: "PrEP Access Barriers Despite Strong Adoption", created_date: new Date(Date.now() - 20 * 86400000).toISOString(), feedback: "Signal Awareness 5\nSignal Interpretation 4\nValue Connection 4\nCustomer Engagement 4\nObjection Navigation 3\nCommitment Generation 4\nConversation Management 5\nAdaptive Response 4\n\n## Successful Strategies\n- Excellent structure throughout\n- Navigated objection without becoming defensive\n\n## Misalignment / Signal-Response\n- Brief momentum loss mid-conversation\n- Could have amplified HCP engagement signal earlier" },
     { id: "d6", scenario_title: "Cardiology Formulary Review", created_date: new Date(Date.now() - 25 * 86400000).toISOString(), feedback: "Signal Awareness 3\nSignal Interpretation 3\nValue Connection 4\nCustomer Engagement 3\nObjection Navigation 4\nCommitment Generation 3\nConversation Management 3\nAdaptive Response 3\n\n## Successful Strategies\n- Framed cost conversation around total cost of care\n- Used committee language effectively\n\n## Misalignment / Signal-Response\n- Missed cost-containment cue from pharmacy director\n- Jumped to solution before all objections were surfaced" },
   ];
-  const sessions = DEMO_SESSIONS;
+  const sessions = _demoSessions;
   const isLoading = false;
 
   const filtered = useMemo(() => {

@@ -23,11 +23,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-<<<<<<< HEAD
             <ToastClose onClick={() => props.onOpenChange?.(false)} />
-=======
-            <ToastClose />
->>>>>>> f9564108d7fe619378852cbd8085e729086b6966
           </Toast>
         );
       })}

@@ -1,13 +1,13 @@
 // Canonical scenario catalog + filter dimensions for Role Play Simulator
-export const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
-export const DIFFICULTIES = ["All Levels", "beginner", "intermediate", "advanced"];
+import { CATEGORIES, DIFFICULTIES } from "@/lib/rpsUserInputOptions";
 
 // Deprecated: Use canonical options from rpsUserInputOptions.ts for all UI and new logic.
 // These arrays are retained ONLY for legacy scenario data compatibility and must NOT be used for any UI, dropdown, or selection logic.
+// DO NOT use _legacyJourneyStages or _legacyInteractionPressures in any UI or logic. Use only canonical options from rpsUserInputOptions.ts.
 // import { DISEASE_STATES, SPECIALTIES, HCP_ROLE_OPTIONS, HCP_MINDSET_OPTIONS } from "@/lib/rpsUserInputOptions";
 // Legacy scenario data arrays (not for UI, not exported)
-const LEGACY_JOURNEY_STAGES = ["All Journey Stages", "initial_access_prospecting", "discovery_needs_assessment", "clinical_value_detailing", "objection_handling", "adoption_implementation", "commitment_next_step_close"];
-const LEGACY_INTERACTION_PRESSURES = ["All Interaction Pressures", "time_pressured", "resistant_skeptical", "curious_uncertain", "operationally_blocked", "competitive_threat", "safety_concern", "access_prior_auth_barrier"];
+const _legacyJourneyStages = ["All Journey Stages", "initial_access_prospecting", "discovery_needs_assessment", "clinical_value_detailing", "objection_handling", "adoption_implementation", "commitment_next_step_close"];
+const _legacyInteractionPressures = ["All Interaction Pressures", "time_pressured", "resistant_skeptical", "curious_uncertain", "operationally_blocked", "competitive_threat", "safety_concern", "access_prior_auth_barrier"];
 
 // ...existing code...
 

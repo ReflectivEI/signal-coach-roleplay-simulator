@@ -7,7 +7,7 @@ import {
 
 export const CONVERSATIONAL_REALISM_ENGINE_VERSION = 'conversational_realism_engine_v1';
 
-const HCP_DIALOGUE_MIN_WORDS = 20;
+const HCP_DIALOGUE_MIN_WORDS = 8;
 const HCP_REALISM_MEMORY_TURN_LIMIT = 80;
 const HCP_PHRASE_EXHAUSTION_THRESHOLD = 2;
 
@@ -1299,7 +1299,7 @@ export function enforceWordBand({
 } = {}) {
   let text = normalizeHcpSpokenRealism(reply);
   if (countWords(text) < min) {
-    text = enforceStateDrivenDialogueRichness({ text, concernFamily: activeAskState?.concernFamily || concernFamily, stateName, scenarioExecutionContract });
+    return text;
   }
   if (countWords(text) <= max) return text;
 
@@ -1310,13 +1310,11 @@ export function enforceWordBand({
     .replace(/\bnot a broad (?:overview|discussion|review or summary),?\s*/gi, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  if (countWords(compressed) >= min && countWords(compressed) <= max) return normalizeHcpSpokenRealism(compressed);
-  return normalizeHcpSpokenRealism(reviseForStateBoundRealism({
-    reply: text,
-    scenarioExecutionContract,
-    activeAskState,
-    concernFamily,
-    stateName,
+  if (countWords(compressed) <= max) return normalizeHcpSpokenRealism(compressed);
+  return normalizeHcpSpokenRealism(compressByState({
+    text: compressed,
+    concernFamily: activeAskState?.concernFamily || concernFamily,
+    cueCategory: 'focused_narrowing',
   }));
 }
 
@@ -1343,32 +1341,16 @@ export function enforcePostGenerationHcpRealism({
     semanticStage,
     recentHcpTurns,
   });
-  const needsRevision = audit.issues.some((issue) => issue !== 'outside_word_band');
-  const operationalConcern = (activeAskState?.concernFamily || concernFamily) === 'workflow';
-  const weakWorkflowShape = operationalConcern && audit.shapeScore?.score < 2;
-  const revised = operationalConcern && (audit.operationalCrutch.crutch || audit.shortHorizon.synthetic || audit.operationalAskSkeleton.repeated || audit.symmetry.symmetrical || audit.syntheticBurden.synthetic || weakWorkflowShape)
-    ? reviseForBurdenRealism({
-      scenarioExecutionContract,
-      activeAskState,
-      recentHcpTurns,
-    })
-    : audit.terminalAskShape.repeated || audit.lateCollapse.collapsed
-    ? buildLateStageDecisionLine({
-      concernFamily: activeAskState?.concernFamily || concernFamily,
-      scenarioExecutionContract,
-      recentHcpTurns,
-    })
-    : needsRevision
-      ? reviseForStateBoundRealism({
-      reply,
-      scenarioExecutionContract,
-      activeAskState,
-      concernFamily,
-      stateName,
-      repeated: audit.repetition.repeated || audit.stockTransition.reused || audit.terminalAskShape.repeated,
-      recentHcpTurns,
-      })
-      : normalizeHcpSpokenRealism(reply);
+  const revised = splitOrCompressSentence({
+    text: enforceSpokenLanguage({
+      text: normalizeHcpSpokenRealism(reply),
+      interactionMode,
+      engagementTier,
+    }),
+    interactionMode,
+    cueCategory,
+    concernFamily: activeAskState?.concernFamily || concernFamily,
+  });
   const finalText = enforceWordBand({
     reply: reviseForSentenceIntegrity(revised),
     scenarioExecutionContract,
@@ -1455,7 +1437,7 @@ export function applyConversationalRealism({
       });
     }
     const postGenerated = enforcePostGenerationHcpRealism({
-      reply: stateDriven.text,
+      reply: normalizeHcpSpokenRealism(String(text || stateDriven.text || '')),
       scenarioExecutionContract,
       activeAskState,
       concernFamily: stateDriven.metadata.concernFamily,

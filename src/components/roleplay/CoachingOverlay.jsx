@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Lightbulb, X, TrendingDown, AlertTriangle } from "lucide-react";
-import { shouldTriggerCoaching } from "./inlineCoachingDecision";
 
 export { shouldTriggerCoaching } from "./inlineCoachingDecision";
 

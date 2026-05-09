@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 name = "reflectivai-rps-api"
 main = "worker/index.ts"
 compatibility_date = "2024-01-01"
@@ -10,27 +9,3 @@ LLM_TIMEOUT_MS = "25000"
 [[kv_namespaces]]
 binding = "APP_DATA_KV"
 id = "6795e3581b984a7eb581f1f37b0bcfaf"
-=======
-name = "reflect-ai-now"
-main = "src/worker.js"
-compatibility_date = "2024-02-27"
-
-# Do NOT rely on local login in CI
-# Account ID should match GitHub secret
-account_id = "59fea97fab54fbd4d4168ccaa1fa3410"
-
-workers_dev = true
-
-# Route ALL requests to this worker
-routes = [
-  { pattern = "reflectiv-ai.com/*", zone_name = "reflectiv-ai.com" }
-]
-
-[vars]
-DEBUG = "true"
-LLM_TIMEOUT_MS = "25000"
-
-# Upload static files - this creates the __STATIC_CONTENT binding
-[site]
-bucket = "dist/client"
->>>>>>> f9564108d7fe619378852cbd8085e729086b6966

@@ -12,11 +12,20 @@ import AdminDashboard from './pages/AdminDashboard';
 import ScenarioLibrary from './pages/ScenarioLibrary';
 import PredictiveBuilder from './pages/PredictiveBuilder';
 import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
-// import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
+import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
 import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway';
 // import RolePlaySimulator from './pages/RolePlaySimulator';
+import Simulator from './pages/Simulator';
 
 function ExternalRpsRedirect() {
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const isLocal = host === "localhost" || host === "127.0.0.1";
+    if (isLocal) {
+      window.location.replace('/simulator');
+      return null;
+    }
+  }
   window.location.replace('https://rps.reflectiv-ai.com/');
   return null;
 }
@@ -25,8 +34,8 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      {/* Legacy simulator and builder routes removed for isolation */}
-      {/* <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} /> */}
+      <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
+      <Route path="/simulator/*" element={<ThemeProvider><Simulator /></ThemeProvider>} />
       {/* <Route path="/builder" element={<ScenarioBuilder />} /> */}
       <Route path="/capabilities" element={<Capabilities />} />
       <Route path="/qa" element={<QATwin />} />
@@ -34,10 +43,11 @@ const AppRoutes = () => {
       <Route path="/library" element={<ScenarioLibrary />} />
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
-      {/* <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} /> */}
+      <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} />
       {/* Redirect all RPS routes to the standalone RPS site */}
       <Route path="/rps" element={<ExternalRpsRedirect />} />
-      <Route path="/RolePlaySimulator" element={<ExternalRpsRedirect />} />
+      <Route path="/RolePlaySimulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
+      <Route path="/RolePlaySimulator/*" element={<ThemeProvider><Simulator /></ThemeProvider>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

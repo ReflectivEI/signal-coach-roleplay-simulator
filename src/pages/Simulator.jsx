@@ -760,7 +760,7 @@ export default function Simulator() {
   const showActivePressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
 
   return (
-    <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+    <div className="h-screen overflow-hidden flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
       <AppHeader maxWidthClassName="max-w-none" />
 
       <div
@@ -844,9 +844,9 @@ export default function Simulator() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+      <div className="flex-1 min-h-0 flex overflow-hidden p-4 gap-4">
         <div
-          className="flex-1 flex flex-col overflow-hidden rounded-[28px]"
+          className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[28px]"
           style={{
             background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
             border: "1px solid rgba(152, 160, 171, 0.68)",

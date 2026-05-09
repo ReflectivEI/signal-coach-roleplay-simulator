@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import AppHeader from '@/components/layout/AppHeader';
 import ScenarioFilters, { applyScenarioFilters, DEFAULT_FILTERS } from '@/components/home/ScenarioFilters';

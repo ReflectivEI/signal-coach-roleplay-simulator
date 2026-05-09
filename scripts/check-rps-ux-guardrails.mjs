@@ -65,7 +65,7 @@ const advancedControlLabels = [
     "Specialty",
 ];
 
-const optionArrayDefinitionPattern = /const\s+[A-Z0-9_]+(?:_OPTIONS|_LABELS)?\s*=\s*\[/g;
+const optionArrayDefinitionPattern = /export\s+const\s+([A-Z0-9_]+(?:_OPTIONS|_LABELS|CATEGORIES|DIFFICULTIES)?)\s*=\s*\[([\s\S]*?)\];/g;
 const canonicalOptionValueMarkers = [
     "Treating Clinician",
     "Thought Leader",
@@ -212,12 +212,20 @@ for (const filePath of sourceFiles) {
     if (filePath === sourceOfTruthFile) continue;
 
     const content = fs.readFileSync(filePath, "utf8");
-    const hasOptionDefinition = optionArrayDefinitionPattern.test(content);
-    optionArrayDefinitionPattern.lastIndex = 0;
-    const looksCanonical = canonicalOptionValueMarkers.some((marker) => content.includes(marker));
-
-    if (hasOptionDefinition && looksCanonical) {
-        addIssue(issues, filePath, "possible parallel public option array defined outside src/lib/rpsUserInputOptions.ts");
+    // Only flag exported arrays whose direct elements are canonical option values
+    let match;
+    while ((match = optionArrayDefinitionPattern.exec(content)) !== null) {
+        const arrayBody = match[2];
+        // Check if the array is a flat array of strings (not array of objects)
+        const isFlatStringArray = arrayBody.split(',').every(item => item.trim().startsWith('"') || item.trim().startsWith("'"));
+        if (isFlatStringArray) {
+            for (const marker of canonicalOptionValueMarkers) {
+                if (arrayBody.includes(marker)) {
+                    addIssue(issues, filePath, "possible parallel public option array defined outside src/lib/rpsUserInputOptions.ts");
+                    break;
+                }
+            }
+        }
     }
 }
 

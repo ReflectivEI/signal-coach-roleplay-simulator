@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
 
 const TYPED_TEXT = "Create one, and take it for a spin.";
 const PILL_TEXT = "Customize";

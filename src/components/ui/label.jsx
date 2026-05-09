@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-=======
-// @ts-nocheck
->>>>>>> f9564108d7fe619378852cbd8085e729086b6966
 import * as React from "react"
 import * as LabelPrimitive from "@radix-ui/react-label"
 import { cva } from "class-variance-authority";

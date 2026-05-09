@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { BookOpen, Brain, FlaskConical, Menu, Plus, Settings, X, Zap } from "lucide-react";
+import { BookOpen, Brain, FlaskConical, GitBranch, Menu, Settings, X, Zap } from "lucide-react";
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { to: "/library", label: "Library", Icon: BookOpen },
-  { to: "https://rps.reflectiv-ai.com", label: "Role Play Simulator", Icon: Zap, external: true },
   { to: "/predictive-builder", label: "Predictive Builder", Icon: Brain },
+  { to: "/rps-adaptive", label: "Adaptive RPS", Icon: GitBranch },
   { to: "/capabilities", label: "Capabilities", Icon: Brain },
   { to: "/qa", label: "QA Twin", Icon: FlaskConical },
   { to: "/admin", label: "Admin", Icon: Settings },
@@ -86,6 +86,14 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuId = useId();
+  const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+  const navItems = [
+    BASE_NAV_ITEMS[0],
+    isLocalHost
+      ? { to: "/simulator", label: "Role Play Simulator", Icon: Zap }
+      : { to: "https://rps.reflectiv-ai.com", label: "Role Play Simulator", Icon: Zap, external: true },
+    ...BASE_NAV_ITEMS.slice(1),
+  ];
 
   useEffect(() => {
     setMenuOpen(false);
@@ -131,7 +139,7 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
           </Link>
 
           <nav className="hidden xl:flex items-center gap-4" aria-label="Primary">
-            {NAV_ITEMS.map((item) => <DesktopNavLink key={item.to} item={item} />)}
+            {navItems.map((item) => <DesktopNavLink key={item.to} item={item} />)}
           </nav>
 
           <button
@@ -161,7 +169,7 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
                 boxShadow: "0 16px 32px rgba(14, 24, 43, 0.08)",
               }}
             >
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <MobileNavLink key={item.to} item={item} onClick={() => setMenuOpen(false)} />
               ))}
             </div>

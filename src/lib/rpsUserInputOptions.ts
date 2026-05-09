@@ -1,3 +1,6 @@
+// Canonical scenario categories and difficulties for RPS UI (moved from scenarioCatalog.js)
+export const CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
+export const DIFFICULTIES = ["All Levels", "beginner", "intermediate", "advanced"];
 // Canonical analytics option arrays for RPS UX and reporting
 export const LEARNING_PATH_MAP = {
     signal_awareness: {

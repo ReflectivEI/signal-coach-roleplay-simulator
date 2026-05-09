@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronRight, Zap, MapPin } from "lucide-react";
+import { BookOpen, MapPin } from "lucide-react";
 import AppHeader from "@/components/layout/AppHeader";
 import ScenarioCard from "@/components/home/ScenarioCard";
 import BuildYourOwnCard from "@/components/home/BuildYourOwnCard";
@@ -29,6 +29,7 @@ export default function Home() {
   };
 
   const filtered = applyScenarioFilters(scenarios, filters);
+  const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
   // Group scenarios by journey stage for display
   const STAGE_ORDER = ["initial_access", "discovery", "clinical_value", "objection_handling", "adoption_implementation", "access_formulary", "commitment_close"];
@@ -78,25 +79,45 @@ export default function Home() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
                       {/* Scenario builder link removed for isolation */}
-              <a
-                href="https://rps.reflectiv-ai.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
-                style={{
-                  background: "rgba(116, 227, 206, 0.16)",
-                  border: "1px solid rgba(116, 227, 206, 0.36)",
-                  color: "#1a3a3a",
-                  textDecoration: "none",
-                  fontWeight: 600,
-                  fontSize: "1.1rem",
-                  letterSpacing: "0.01em",
-                  boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
-                  marginLeft: "0.5rem"
-                }}
-              >
-                ▶ Role Play Simulator
-              </a>
+              {isLocalHost ? (
+                <Link
+                  to="/simulator"
+                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
+                  style={{
+                    background: "rgba(116, 227, 206, 0.16)",
+                    border: "1px solid rgba(116, 227, 206, 0.36)",
+                    color: "#1a3a3a",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    letterSpacing: "0.01em",
+                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
+                    marginLeft: "0.5rem"
+                  }}
+                >
+                  ▶ Role Play Simulator
+                </Link>
+              ) : (
+                <a
+                  href="https://rps.reflectiv-ai.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
+                  style={{
+                    background: "rgba(116, 227, 206, 0.16)",
+                    border: "1px solid rgba(116, 227, 206, 0.36)",
+                    color: "#1a3a3a",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    letterSpacing: "0.01em",
+                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
+                    marginLeft: "0.5rem"
+                  }}
+                >
+                  ▶ Role Play Simulator
+                </a>
+              )}
             </div>
           </div>
         </motion.div>
