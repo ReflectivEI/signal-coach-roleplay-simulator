@@ -73,6 +73,72 @@ function repairDanglingTail(text = ""): string {
   return normalizeText(output);
 }
 
+function repairCommaSplices(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1")
+    .replace(/,\s+(Keep|Stay|Show|Tell|Give)\b/g, ". $1");
+
+  return normalizeText(output);
+}
+
+function repairQuestionPunctuation(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/\.\s*(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, "? $1")
+    .replace(/\?\s*\?/g, "?")
+    .replace(/\.\?$/g, "?");
+
+  return normalizeText(output);
+}
+
+function repairIncompleteOperationalAsks(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/\bwho owns that step\.$/i, "Who owns that step?")
+    .replace(/\bwhat happens next\.$/i, "What happens next?")
+    .replace(/\bwhat changes for staff\.$/i, "What changes for staff?")
+    .replace(/\bwhat changes in the access step\.$/i, "What changes in the access step?")
+    .replace(/\bwhat's the point\.$/i, "What's the point?");
+
+  return normalizeText(output);
+}
+
+function dedupeLateStageQuestions(text = ""): string {
+  const sentences = splitSentences(text);
+  if (!sentences.length) return normalizeText(text);
+
+  const seen = new Set<string>();
+  const kept = sentences.filter((sentence) => {
+    const normalized = sentence.toLowerCase().replace(/[.?!]+$/g, "").trim();
+    if (!normalized) return false;
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+
+  return normalizeText(kept.join(" "));
+}
+
+function hasNaturalTimePressureDirective(text = ""): boolean {
+  return /\b(keep it short|give me the short version|keep it quick|briefly|one quick point|one practical point|short version)\b/i.test(String(text || ""));
+}
+
+function pickDeterministicTimeTail(seed = ""): string {
+  return deterministicPick([
+    "Keep it short.",
+    "Give me the short version.",
+    "One quick point.",
+    "One practical point.",
+  ], seed || "time-tail");
+}
+
 function applyGlobalSpokenRewrites(text = ""): string {
   let output = normalizeText(text);
   const rewrites: Array<[RegExp, string]> = [
