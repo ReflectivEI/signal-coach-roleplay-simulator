@@ -1293,6 +1293,62 @@ function buildNaturalHcpRepairLine({
   return pressured ? "Be specific. What's your point?" : "What are you asking me to do differently?";
 }
 
+function buildLiveTurnAuthorityDialogue({
+  repMessage = "",
+  previousHcpLine = "",
+  activeConcern = "workflow",
+  isFirstRepTurn = false,
+  repAskedWellbeing = false,
+  inPleasantryGracePeriod = false,
+} = {}) {
+  const rep = String(repMessage || "").trim();
+  const repLower = rep.toLowerCase();
+  const previous = hardenTextSurface(String(previousHcpLine || "").trim());
+
+  if (isFirstRepTurn && (inPleasantryGracePeriod || /^(hi|hello|hey)\b/.test(repLower))) {
+    if (repAskedWellbeing || /\bhow are you\b|\bhow's it going\b|\bhow have you been\b/.test(repLower)) {
+      return /(?:study|trial|data|publication|results)\b/.test(repLower)
+        ? "I'm doing well, thanks. What did you want to discuss about the study?"
+        : "I'm doing well, thanks. What did you want to discuss?";
+    }
+    return "Hi. What did you want to discuss?";
+  }
+
+  if (/\b(what question|which question|what do you mean|can you clarify|clarify|rephrase|not following|don't understand|do not understand)\b/.test(repLower)) {
+    if (previous) {
+      const questionOnly = previous.split(/(?<=[?!])\s+/)[0].trim();
+      const cleaned = questionOnly.replace(/[.?!]+$/, "").trim();
+      if (cleaned) {
+        if (/^(what|how|why|who|when|where|which)\b/i.test(cleaned)) {
+          return `I'm asking ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}.`;
+        }
+        return `I'm asking about ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}.`;
+      }
+    }
+    return buildScenarioFactSafeClarification({
+      previousHcpLine: previous,
+      activeConcern,
+    });
+  }
+
+  return "";
+}
+
+function shouldBypassLatestAskAuthority({
+  repMessage = "",
+  latestAskProgression = {},
+  isFirstRepTurn = false,
+  inPleasantryGracePeriod = false,
+  repClarificationRequest = false,
+} = {}) {
+  const status = String(latestAskProgression?.status || "");
+  if (repClarificationRequest) return true;
+  if (status === "clarification_request" || status === "social_opening") return true;
+  if (isFirstRepTurn && inPleasantryGracePeriod) return true;
+  const rep = String(repMessage || "").trim().toLowerCase();
+  return isFirstRepTurn && /^(hi|hello|hey)\b/.test(rep);
+}
+
 function enforceSpokenOnlyHcpDialogue({
   text = "",
   concern = "workflow",
@@ -3585,6 +3641,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       repMessage,
       previousRepMessages: previousRepMessagesForProgression,
     });
+    const liveTurnAuthorityBypass = shouldBypassLatestAskAuthority({
+      repMessage,
+      latestAskProgression,
+      isFirstRepTurn,
+      inPleasantryGracePeriod,
+      repClarificationRequest,
+    });
     const plannerStateSnapshot = {
       activeConcern,
       effectiveActiveConcern,
@@ -4303,7 +4366,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
 
-    const latestAskBoundDialogue = buildLatestAskProgressionDialogue(latestAskProgression);
+    const latestAskBoundDialogue = liveTurnAuthorityBypass
+      ? ""
+      : buildLatestAskProgressionDialogue(latestAskProgression);
     if (!overrideExit && nextHcpState !== "disengaged" && latestAskBoundDialogue) {
       usedDeterministicFallback = true;
       draftResponseSource = `${draftResponseSource}_latest_ask_progression_gate`;
@@ -4312,6 +4377,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         nextHcpState = "disengaged";
       } else if (["repeated_missed", "repeated_owner_progress", "repeated_missing_owner", "repeated_workflow_progress"].includes(latestAskProgression.status)) {
         nextHcpState = nextHcpState === "engaged" ? "resistant" : nextHcpState;
+      }
+    }
+
+    if (!overrideExit && nextHcpState !== "disengaged" && liveTurnAuthorityBypass) {
+      const liveTurnAuthorityDialogue = buildLiveTurnAuthorityDialogue({
+        repMessage,
+        previousHcpLine: respondingToTurn?.hcpDialogueBefore || "",
+        activeConcern,
+        isFirstRepTurn,
+        repAskedWellbeing,
+        inPleasantryGracePeriod,
+      });
+      if (liveTurnAuthorityDialogue) {
+        usedDeterministicFallback = true;
+        draftResponseSource = `${draftResponseSource}_live_turn_authority`;
+        nextHcpDialogue = liveTurnAuthorityDialogue;
       }
     }
 

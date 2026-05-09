@@ -121,7 +121,16 @@ function hasRepConversationLoopChallenge(repMessage = "") {
 }
 
 function hasRepClarificationRequest(repMessage = "") {
-  return /\b(what decision|what do you mean|i don'?t understand|i do not understand|rephrase|clarify|say that another way|can you explain|not following|i'?m not following|hello\??)\b/i.test(String(repMessage || ""));
+  return /\b(what decision|what question|which question|what do you mean|i don'?t understand|i do not understand|rephrase|clarify|say that another way|can you explain|not following|i'?m not following|hello\??)\b/i.test(String(repMessage || ""));
+}
+
+function hasRepSocialOpening(repMessage = "") {
+  const value = String(repMessage || "").trim().toLowerCase();
+  if (!value) return false;
+  const greeting = /\b(hi|hello|hey|good morning|good afternoon|good evening|how are you|how's it going|hows it going|nice to meet you|good to see you|thanks for your time)\b/.test(value);
+  const businessPayload = /\b(study|trial|data|results|publication|workflow|access|payer|prior[-\s]?auth|screening|patient|patients|efficacy|safety|monitoring|protocol|therapy)\b/.test(value);
+  const shortOpen = value.split(/\s+/).filter(Boolean).length <= 8;
+  return greeting && shortOpen && !businessPayload;
 }
 
 function hasRelevantCheckBack(repMessage = "", latestHcpAsk = "", family = "general") {
@@ -185,6 +194,10 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
   const rep = String(repMessage || "").trim();
   if (!latestAsk || !rep) return { status: "none", needsProgression: false };
 
+  if (hasRepSocialOpening(rep)) {
+    return { status: "social_opening", needsProgression: false, family: "general" };
+  }
+
   const requiresOwner = latestHcpAskRequiresOwner(latestAsk);
   const requiresWorkflowStep = latestHcpAskRequiresWorkflowStep(latestAsk);
   const requiresScreening = latestHcpAskRequiresScreening(latestAsk);
@@ -215,6 +228,17 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
         : requiresAccess
           ? "access"
           : "general";
+
+  if (clarificationRequest) {
+    return {
+      status: "clarification_request",
+      needsProgression: false,
+      family: requiredFamily,
+      clarificationRequest: true,
+      loopChallenge,
+    };
+  }
+
   const missedStatus = repeatedRepCount >= 3
     ? "repeated_missed_close"
     : repeatedRep || loopChallenge
@@ -278,6 +302,9 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
 
 export function buildLatestAskProgressionDialogue(latestAskProgression = {}) {
   const family = latestAskProgression.family || "general";
+  if (latestAskProgression.status === "social_opening" || latestAskProgression.status === "clarification_request") {
+    return "";
+  }
   if (latestAskProgression.status === "repeated_missed_close") {
     const closeByFamily = {
       workflow: "I am hearing the same opener, but it still does not answer the workflow question. I need to pause here and get back to clinic.",
