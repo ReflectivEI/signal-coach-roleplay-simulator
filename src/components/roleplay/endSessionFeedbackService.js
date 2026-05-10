@@ -16,7 +16,7 @@ export function buildEndSessionFeedbackRequest({
   hcpType = "",
   difficulty = "",
   historyText = "",
-  maxTokens = 900,
+  maxTokens = 1500,
   temperature = 0.2,
 } = {}) {
   return {

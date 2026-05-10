@@ -1033,7 +1033,7 @@ export default function SessionSummaryModal({
                   }}
                 >
                   <RefreshCw className="w-3 h-3" />
-                  Regenerate Sections 2-5
+                  Regenerate Sections 1-8
                 </button>
               </div>
             )}
