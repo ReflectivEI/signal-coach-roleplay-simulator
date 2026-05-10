@@ -543,60 +543,34 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
 
 const SHOW_VISIBLE_HCP_CUES = true;
 
-function formatCueValue(value = "") {
-  return String(value || "")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase())
-    .trim();
-}
+function resolveVisibleHcpCueText(turn = {}, hcpDisplayName = "HCP") {
+  const cueText = String(
+    turn?.cueBefore
+    || turn?.hcpReactionContract?.selectedCueText
+    || ""
+  ).trim();
+  if (!cueText) return "";
 
-function deriveVisibleCuePredictedState(turn = {}) {
-  const source = turn?.hcpStateBefore || turn?.plannerStateSnapshot?.activeConcern || "neutral";
-  return formatCueValue(source);
-}
+  const personalizedCue = sanitizeRenderedMessage(
+    personalizeCueText(cueText, hcpDisplayName),
+    "behavioral-cue"
+  );
 
-function deriveVisibleCueOpenness(turn = {}) {
-  const state = String(turn?.hcpStateBefore || "").toLowerCase();
-  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
-  if (/\b(openness|open|curiosity)\b/.test(state) || tier === "engaged") return "Open";
-  if (/\b(resistance|closed|frustration|disengaged)\b/.test(state) || ["impatient", "disengaging"].includes(tier)) return "Closed";
-  if (tier === "constrained") return "Guarded";
-  return "Neutral";
-}
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    const hcpCueState = {
+      cueText: personalizedCue,
+      predictedState: String(turn?.hcpStateBefore || ""),
+      openness: String(turn?.plannerStateSnapshot?.engagementTier || ""),
+      trajectory: String(turn?.plannerStateSnapshot?.latestAskProgression?.status || ""),
+      risk: String(turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || ""),
+      turnNumber: turn?.turnNumber ?? null,
+    };
+    window.hcpCueState = hcpCueState;
+    globalThis.hcpCueState = hcpCueState;
+    console.debug("hcpCueState", hcpCueState);
+  }
 
-function deriveVisibleCueTrajectory(turn = {}) {
-  const status = String(turn?.plannerStateSnapshot?.latestAskProgression?.status || "").toLowerCase();
-  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
-  const state = String(turn?.hcpStateBefore || "").toLowerCase();
-  if (status.includes("progress")) return "Improving";
-  if (status.includes("missed") || status.includes("close")) return "Declining";
-  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged)\b/.test(state)) return "Declining";
-  if (tier === "constrained") return "Stalled";
-  return "Stable";
-}
-
-function deriveVisibleCueRisk(turn = {}) {
-  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
-  const concern = String(turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || "").toLowerCase();
-  const state = String(turn?.hcpStateBefore || "").toLowerCase();
-  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged)\b/.test(state)) return "High";
-  if (/\b(safety|time|access)\b/.test(concern) || tier === "constrained") return "Moderate";
-  if (/\b(openness|open|curiosity)\b/.test(state)) return "Low";
-  return "Moderate";
-}
-
-function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
-  const behavioralNotes = turn?.cueBefore
-    ? sanitizeRenderedMessage(personalizeCueText(turn.cueBefore, hcpDisplayName), "behavioral-cue")
-    : "";
-
-  return {
-    predictedState: deriveVisibleCuePredictedState(turn),
-    openness: deriveVisibleCueOpenness(turn),
-    trajectory: deriveVisibleCueTrajectory(turn),
-    risk: deriveVisibleCueRisk(turn),
-    behavioralNotes,
-  };
+  return personalizedCue;
 }
 
 function applyDeterministicPunctuationContract(text) {
@@ -6159,18 +6133,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
-                      {SHOW_VISIBLE_HCP_CUES && turn.hcpDialogueBefore && (() => {
-                        const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+                      {SHOW_VISIBLE_HCP_CUES && (() => {
+                        const visibleCueText = resolveVisibleHcpCueText(turn, hcpDisplayName);
+                        if (!visibleCueText) return null;
                         return (
-                          <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
-                            <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
-                              <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-                              <div>- Predicted State: {cueSummary.predictedState}</div>
-                              <div>- Openness: {cueSummary.openness}</div>
-                              <div>- Trajectory: {cueSummary.trajectory}</div>
-                              <div>- Risk: {cueSummary.risk}</div>
-                              {cueSummary.behavioralNotes && <div>- Behavioral Notes: {cueSummary.behavioralNotes}</div>}
-                            </div>
+                          <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
+                            <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#7B1F1F", background: "#F9F5F5" }}>
+                              {visibleCueText}
+                            </p>
                           </div>
                         );
                       })()}
