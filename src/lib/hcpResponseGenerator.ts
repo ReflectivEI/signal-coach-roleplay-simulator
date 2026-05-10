@@ -1034,8 +1034,8 @@ function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): strin
   }
 
   return timeConstrained
-    ? "I can give you a minute, but keep it specific and practical."
-    : "I can listen, but keep it specific and practical.";
+    ? `I can give you a minute, but skip the pleasantries. ${practicalAsk}`
+    : `I can listen, but make it specific. ${practicalAsk}`;
 }
 
 function deriveLiveConversationConcern(transcript: ConversationTurn[], scenario: any, repMessage: string): string {
@@ -1123,8 +1123,15 @@ function firstTurnReplyIgnoresRep(hcpReply: string, repMessage: string, transcri
   const replyTags = inferConcernTags(replyText);
   const sharedTags = repTags.filter((tag) => replyTags.includes(tag));
   const focusTokens = tokenizeFocusPhrase(extractRepFocusPhrase(repMessage));
+  const isOpeningHcpReply = !hasPriorHcpTurns(transcript);
+  const hasRepInput = repText.trim().length > 0;
+  const genericRepOpener = /\b(hi|hello|hey|good morning|good afternoon|good to see you|how are you|how's it going|thanks for seeing me)\b/.test(repText);
 
   if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(repText) && !/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(replyText)) {
+    return true;
+  }
+
+  if (isOpeningHcpReply && hasRepInput && genericRepOpener) {
     return true;
   }
 
