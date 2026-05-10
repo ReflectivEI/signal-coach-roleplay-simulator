@@ -1383,6 +1383,79 @@ export function enforcePostGenerationHcpRealism({
   };
 }
 
+const STATE_DRIVEN_RECONSTRUCTION_ISSUES = new Set([
+  'portable_generic_workflow_ask',
+  'portable_generic_evidence_ask',
+  'weak_concern_binding',
+  'recent_pattern_reuse',
+  'stock_transition_reuse',
+  'repeated_terminal_ask_shape',
+  'generic_operational_crutch',
+  'unsupported_next_week',
+  'unsupported_day_one',
+  'repeated_operational_ask_skeleton',
+  'weak_actor_friction_shape',
+  'portable_professional_polish',
+  'outside_word_band',
+]);
+
+function selectStateDrivenRealismBase({
+  incomingText = '',
+  stateDrivenText = '',
+  scenarioExecutionContract = null,
+  activeAskState = null,
+  concernFamily = 'general',
+  cueCategory = 'neutral_attentive',
+  interactionMode = '',
+  engagementTier = '',
+  semanticStage = '',
+  recentHcpTurns = [],
+} = {}) {
+  const incoming = normalizeHcpSpokenRealism(incomingText);
+  const stateDriven = normalizeHcpSpokenRealism(stateDrivenText);
+  if (!stateDriven) return { text: incoming, source: 'upstream', incomingAudit: null, stateDrivenAudit: null };
+  if (!incoming) return { text: stateDriven, source: 'state_driven_empty_upstream', incomingAudit: null, stateDrivenAudit: null };
+
+  const auditInputs = {
+    scenarioExecutionContract,
+    activeAskState,
+    concernFamily,
+    cueCategory,
+    interactionMode,
+    engagementTier,
+    semanticStage,
+    recentHcpTurns,
+  };
+  const incomingAudit = spokenBelievabilityAudit({ reply: incoming, ...auditInputs });
+  const stateDrivenAudit = spokenBelievabilityAudit({ reply: stateDriven, ...auditInputs });
+  const incomingStructuralIssue = incomingAudit.issues.some((issue) => STATE_DRIVEN_RECONSTRUCTION_ISSUES.has(issue));
+  const stateDrivenBlockingIssue = stateDrivenAudit.issues.some((issue) => (
+    issue === 'state_label_language'
+    || issue === 'rubric_language'
+    || issue === 'sentence_integrity'
+  ));
+  const incomingScore = Number(incomingAudit.shapeScore?.score ?? 0);
+  const stateDrivenScore = Number(stateDrivenAudit.shapeScore?.score ?? 0);
+  const stateDrivenRicher = stateDrivenScore >= incomingScore
+    && countWords(stateDriven) >= Math.max(HCP_DIALOGUE_MIN_WORDS, countWords(incoming));
+
+  if (incomingStructuralIssue && !stateDrivenBlockingIssue && stateDrivenRicher) {
+    return {
+      text: stateDriven,
+      source: 'state_driven_reconstructed',
+      incomingAudit,
+      stateDrivenAudit,
+    };
+  }
+
+  return {
+    text: incoming,
+    source: 'upstream_preserved',
+    incomingAudit,
+    stateDrivenAudit,
+  };
+}
+
 export function validateCueDialogueLockstep({ cueCategory = 'neutral_attentive', interactionMode = '', engagementTier = '', semanticStage = '', finalText = '' } = {}) {
   const text = String(finalText || '').trim();
   const mismatchReasons = [];
@@ -1436,8 +1509,20 @@ export function applyConversationalRealism({
         stateDrivenResult: stateDriven,
       });
     }
+    const selectedRealismBase = selectStateDrivenRealismBase({
+      incomingText: text,
+      stateDrivenText: stateDriven.text,
+      scenarioExecutionContract,
+      activeAskState,
+      concernFamily: stateDriven.metadata.concernFamily,
+      cueCategory: resolvedCueCategory,
+      interactionMode,
+      engagementTier,
+      semanticStage,
+      recentHcpTurns,
+    });
     const postGenerated = enforcePostGenerationHcpRealism({
-      reply: normalizeHcpSpokenRealism(String(text || stateDriven.text || '')),
+      reply: selectedRealismBase.text,
       scenarioExecutionContract,
       activeAskState,
       concernFamily: stateDriven.metadata.concernFamily,
@@ -1473,6 +1558,9 @@ export function applyConversationalRealism({
         conversationIntelligenceProgression: conversationIntelligence?.turnInterpretation?.progression || null,
         renderingSource: stateDriven.metadata.source,
         repeatedStateDrivenLine: stateDriven.metadata.repeatedStateDrivenLine,
+        stateDrivenSelection: selectedRealismBase.source,
+        upstreamPreserved: selectedRealismBase.source === 'upstream_preserved',
+        stateDrivenReconstructed: selectedRealismBase.source.startsWith('state_driven'),
         postGenerationRealism: postGenerated.metadata,
       },
     };

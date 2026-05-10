@@ -367,3 +367,14 @@ test("live RolePlayChat resets scenario-bound realism memory on scenario changes
   assert.match(source, /loggedTurnKeysRef\.current\s*=\s*new Set\(\)/);
   assert.match(source, /processedTurnKeysRef\.current\s*=\s*new Set\(\)/);
 });
+
+test("live RolePlayChat renders HCP cues even when the opening turn has no dialogue", () => {
+  const source = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /function hasVisibleHcpCue\(turn = \{\}\)/);
+  assert.match(source, /if \(turn\.hcpDialogueBefore \|\| hasVisibleHcpCue\(turn\)\)/);
+  assert.match(source, /SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue\(turn\)/);
+});

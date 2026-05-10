@@ -648,6 +648,14 @@ function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
   };
 }
 
+function hasVisibleHcpCue(turn = {}) {
+  return Boolean(String(
+    turn?.cueBefore
+    || turn?.hcpReactionContract?.selectedCueText
+    || ""
+  ).trim());
+}
+
 function applyDeterministicPunctuationContract(text) {
   return normalizeHcpDialoguePunctuation(String(text || "").trim()).trim();
 }
@@ -5942,7 +5950,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const displayItems = displayTurns.flatMap((turn, index) => {
     const items = [];
 
-    if (turn.hcpDialogueBefore) {
+    if (turn.hcpDialogueBefore || hasVisibleHcpCue(turn)) {
       items.push({ kind: 'hcp', key: `hcp-${turn.turnNumber}-${index}`, turn });
     }
 
@@ -6212,9 +6220,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
-                      {SHOW_VISIBLE_HCP_CUES && turn.hcpDialogueBefore && (() => {
+                      {SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && (() => {
                         const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
-                        if (!cueSummary.behavioralNotes) return null;
                         return (
                           <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
                             <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
@@ -6223,7 +6230,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                               <div>- Openness: {cueSummary.openness}</div>
                               <div>- Trajectory: {cueSummary.trajectory}</div>
                               <div>- Risk: {cueSummary.risk}</div>
-                              <div>- Behavioral Notes: {cueSummary.behavioralNotes}</div>
+                              <div>- Behavioral Notes: {cueSummary.behavioralNotes || "Listening for the rep's opening move."}</div>
                             </div>
                           </div>
                         );

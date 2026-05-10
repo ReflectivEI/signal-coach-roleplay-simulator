@@ -379,6 +379,50 @@ test('state-driven realism changes output when state changes within the same sce
   assert.equal(resistant.metadata.stateName, 'SOFT_RESISTANCE');
 });
 
+test('contract-bound realism reconstructs flattened upstream dialogue from state profile', () => {
+  const contract = scenarioContractById('covid_pulm_np_postcovid_adherence');
+  const result = applyConversationalRealism({
+    text: 'What is the first practical workflow step here?',
+    activeAskState: {
+      ...contract.activeAsk,
+      askText: 'What would this look like in practice before patients miss the antiviral window?',
+      concernFamily: 'workflow',
+    },
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.match(result.text, /patients|callback|day four|staff/i);
+  assert.doesNotMatch(result.text, /^What is the first practical workflow step here\??$/i);
+  assert.equal(result.metadata.stateDrivenReconstructed, true);
+  assert.equal(result.metadata.upstreamPreserved, false);
+});
+
+test('contract-bound realism preserves already-specific upstream HCP dialogue', () => {
+  const contract = scenarioContractById('covid_pulm_np_postcovid_adherence');
+  const upstream = 'Patients are already close to missing the antiviral window, so who owns the callback handoff before day four?';
+  const result = applyConversationalRealism({
+    text: upstream,
+    activeAskState: {
+      ...contract.activeAsk,
+      askText: 'What would this look like in practice before patients miss the antiviral window?',
+      concernFamily: 'workflow',
+    },
+    concernFamily: 'workflow',
+    cueCategory: 'time_constrained',
+    timePressure: true,
+    scenarioExecutionContract: contract,
+    requireContractBound: true,
+  });
+
+  assert.equal(result.text, upstream);
+  assert.equal(result.metadata.upstreamPreserved, true);
+  assert.equal(result.metadata.stateDrivenReconstructed, false);
+});
+
 test('contract-derived realism sanitizes unprofiled clinic stakeholder phrasing', () => {
   const contract = buildRoleplayScenarioExecutionContract({
     id: 'unprofiled-clinic-provider-test',
