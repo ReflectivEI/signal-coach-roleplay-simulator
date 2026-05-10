@@ -26,7 +26,7 @@ function hasVisibleDialogueQuality(text) {
   return hasSubtleResistance(normalized) && hasClinicalContext(normalized);
 }
 
-test("visible HCP cues align with realistic HCP dialogue", async ({ page }) => {
+test("HCP cues stay hidden while realistic HCP dialogue renders", async ({ page }) => {
   const runtimeErrors = [];
   page.on("console", (message) => {
     if (message.type() === "error") {
@@ -49,13 +49,6 @@ test("visible HCP cues align with realistic HCP dialogue", async ({ page }) => {
   );
   await repInput.press("Enter");
 
-  for (const selector of cueSelectors) {
-    const cue = page.locator(selector).first();
-    await expect(cue).toBeVisible({ timeout: 45000 });
-    const cueText = (await cue.innerText()).trim();
-    expect(cueText.replace(/^-\s*[^:]+:\s*/, "").trim().length).toBeGreaterThan(0);
-  }
-
   const dialogue = page.locator(".hcp-dialogue").last();
   await expect(dialogue).toBeVisible({ timeout: 45000 });
   const dialogueText = (await dialogue.innerText()).trim();
@@ -63,12 +56,9 @@ test("visible HCP cues align with realistic HCP dialogue", async ({ page }) => {
   expect(dialogueText.length).toBeGreaterThan(0);
   expect(hasVisibleDialogueQuality(dialogueText), dialogueText).toBe(true);
 
-  const cueBlockText = await page.locator(".hcp-cue-predicted-state").last().locator("xpath=ancestor::div[contains(@class, 'text-xs')][1]").innerText();
-  expect(cueBlockText).toMatch(/Predicted State:/);
-  expect(cueBlockText).toMatch(/Openness:/);
-  expect(cueBlockText).toMatch(/Trajectory:/);
-  expect(cueBlockText).toMatch(/Risk:/);
-  expect(cueBlockText).toMatch(/Behavioral Notes:/);
+  for (const selector of cueSelectors) {
+    await expect(page.locator(selector)).toHaveCount(0);
+  }
 
   const relevantErrors = runtimeErrors.filter((entry) => !/favicon|ResizeObserver/i.test(entry));
   expect(relevantErrors, relevantErrors.join("\n")).toEqual([]);

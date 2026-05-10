@@ -4,7 +4,7 @@ import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
 
 const SHOW_DEBUG_UI = Boolean(import.meta.env.DEV);
-const SHOW_VISIBLE_HCP_CUES = true;
+const SHOW_VISIBLE_HCP_CUES = false;
 
 function formatCueValue(value, fallback = "Not yet established") {
   const text = String(value || "").replace(/_/g, " ").trim();
@@ -165,7 +165,7 @@ function MessageBubble({ turn }) {
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
           {isHcp && SHOW_VISIBLE_HCP_CUES && <HcpCueSummary cue={cue} prediction={prediction} />}
-          {isHcp && cue && SHOW_DEBUG_UI && <HcpCueStrip cue={cue} />}
+          {isHcp && cue && SHOW_DEBUG_UI && SHOW_VISIBLE_HCP_CUES && <HcpCueStrip cue={cue} />}
           {isHcp && predictiveDebug && <PredictiveDebugChip debugInfo={predictiveDebug} />}
           <div className={`${isHcp ? "hcp-dialogue " : ""}px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit`} style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
