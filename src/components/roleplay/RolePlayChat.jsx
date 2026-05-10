@@ -543,6 +543,13 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
 
 const SHOW_VISIBLE_HCP_CUES = true;
 
+function formatCueValue(value = "") {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
 function resolveVisibleHcpCueText(turn = {}, hcpDisplayName = "HCP") {
   let cueText = String(
     turn?.cueBefore
@@ -592,6 +599,53 @@ function resolveVisibleHcpCueText(turn = {}, hcpDisplayName = "HCP") {
   }
 
   return personalizedCue;
+}
+
+function deriveVisibleCuePredictedState(turn = {}) {
+  const cueState = turn?.hcpReactionContract?.cueStateAlignment;
+  const source = cueState?.concernFamily || turn?.hcpStateBefore || turn?.plannerStateSnapshot?.activeConcern || "neutral";
+  return formatCueValue(source) || "Neutral";
+}
+
+function deriveVisibleCueOpenness(turn = {}) {
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  if (/\b(openness|open|curiosity|engaged)\b/.test(state) || tier === "engaged") return "Open";
+  if (/\b(resistance|closed|frustration|disengaged|boundary)\b/.test(state) || ["impatient", "disengaging"].includes(tier)) return "Closed";
+  if (tier === "constrained") return "Guarded";
+  return "Neutral";
+}
+
+function deriveVisibleCueTrajectory(turn = {}) {
+  const cueState = turn?.hcpReactionContract?.cueStateAlignment;
+  const status = String(turn?.plannerStateSnapshot?.latestAskProgression?.status || cueState?.stateSignals?.progression || "").toLowerCase();
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  if (status.includes("progress")) return "Improving";
+  if (status.includes("missed") || status.includes("close")) return "Declining";
+  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged|boundary)\b/.test(state)) return "Declining";
+  if (tier === "constrained") return "Stalled";
+  return "Stable";
+}
+
+function deriveVisibleCueRisk(turn = {}) {
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  const concern = String(turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || turn?.hcpReactionContract?.cueStateAlignment?.concernFamily || "").toLowerCase();
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged|boundary)\b/.test(state)) return "High";
+  if (/\b(safety|time|access)\b/.test(concern) || tier === "constrained") return "Moderate";
+  if (/\b(openness|open|curiosity|engaged)\b/.test(state)) return "Low";
+  return "Moderate";
+}
+
+function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
+  return {
+    predictedState: deriveVisibleCuePredictedState(turn),
+    openness: deriveVisibleCueOpenness(turn),
+    trajectory: deriveVisibleCueTrajectory(turn),
+    risk: deriveVisibleCueRisk(turn),
+    behavioralNotes: resolveVisibleHcpCueText(turn, hcpDisplayName),
+  };
 }
 
 function applyDeterministicPunctuationContract(text) {
@@ -1463,7 +1517,7 @@ function enforceSpokenOnlyHcpDialogue({
   }
 
   if (!looksLikeNarratedHcpSurface(value)) {
-    return enforceNaturalStandaloneUtterance(value, concern);
+    return value;
   }
 
   return buildNaturalHcpRepairLine({ text: value, concern, repMessage, activeAsk, hcpState, timePressure });
@@ -5717,13 +5771,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       },
     };
     nextHcpDialogue = enforceSpokenOnlyHcpDialogue({
-      text: enforceNaturalStandaloneUtterance(nextHcpDialogue, primaryConcern),
+      text: nextHcpDialogue,
       concern: primaryConcern,
       repMessage,
       activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || "",
       hcpState: nextHcpState,
       timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
     });
+    finalHcpReactionContract = {
+      ...finalHcpReactionContract,
+      selectedDialogueText: nextHcpDialogue,
+    };
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
     nextTurn.hcpReactionContract = finalHcpReactionContract;
@@ -6154,14 +6212,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
-                      {SHOW_VISIBLE_HCP_CUES && (() => {
-                        const visibleCueText = resolveVisibleHcpCueText(turn, hcpDisplayName);
-                        if (!visibleCueText) return null;
+                      {SHOW_VISIBLE_HCP_CUES && turn.hcpDialogueBefore && (() => {
+                        const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+                        if (!cueSummary.behavioralNotes) return null;
                         return (
-                          <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
-                            <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#7B1F1F", background: "#F9F5F5" }}>
-                              {visibleCueText}
-                            </p>
+                          <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
+                            <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
+                              <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
+                              <div>- Predicted State: {cueSummary.predictedState}</div>
+                              <div>- Openness: {cueSummary.openness}</div>
+                              <div>- Trajectory: {cueSummary.trajectory}</div>
+                              <div>- Risk: {cueSummary.risk}</div>
+                              <div>- Behavioral Notes: {cueSummary.behavioralNotes}</div>
+                            </div>
                           </div>
                         );
                       })()}
