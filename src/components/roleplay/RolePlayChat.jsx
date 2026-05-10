@@ -5786,9 +5786,24 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpState: nextHcpState,
       timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
     });
+    const finalSpokenOnlyRepeatRepair = !latestAskBoundDialogue
+      && !isTerminalClosureDialogue(nextHcpDialogue)
+      && (
+        isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
+        || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
+      );
+    if (finalSpokenOnlyRepeatRepair) {
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: primaryConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:spoken-only-repeat-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+    }
     finalHcpReactionContract = {
       ...finalHcpReactionContract,
       selectedDialogueText: nextHcpDialogue,
+      finalSpokenOnlyRepeatRepair,
     };
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;

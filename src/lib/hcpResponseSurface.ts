@@ -115,11 +115,32 @@ function dedupeLateStageQuestions(text = ""): string {
   if (!sentences.length) return normalizeText(text);
 
   const seen = new Set<string>();
+  const retained: string[] = [];
+  const tokenSet = (value = "") => new Set(
+    value
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 3)
+  );
+  const overlapRatio = (a = "", b = "") => {
+    const aTokens = tokenSet(a);
+    const bTokens = tokenSet(b);
+    if (!aTokens.size || !bTokens.size) return 0;
+    let shared = 0;
+    aTokens.forEach((token) => {
+      if (bTokens.has(token)) shared += 1;
+    });
+    return shared / Math.min(aTokens.size, bTokens.size);
+  };
+
   const kept = sentences.filter((sentence) => {
     const normalized = sentence.toLowerCase().replace(/[.?!]+$/g, "").trim();
     if (!normalized) return false;
     if (seen.has(normalized)) return false;
+    if (retained.some((prior) => overlapRatio(prior, sentence) >= 0.84)) return false;
     seen.add(normalized);
+    retained.push(sentence);
     return true;
   });
 

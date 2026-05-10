@@ -870,6 +870,17 @@ function continuityOverlapScore(a = "", b = ""): number {
   return shared / Math.max(aTokens.size, bTokens.size);
 }
 
+function continuityContainmentScore(a = "", b = ""): number {
+  const aTokens = new Set(meaningfulContinuityTokens(a));
+  const bTokens = new Set(meaningfulContinuityTokens(b));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let shared = 0;
+  aTokens.forEach((token) => {
+    if (bTokens.has(token)) shared += 1;
+  });
+  return shared / Math.min(aTokens.size, bTokens.size);
+}
+
 function startsWithSameFrame(a = "", b = ""): boolean {
   const aHead = meaningfulContinuityTokens(a).slice(0, 4).join(" ");
   const bHead = meaningfulContinuityTokens(b).slice(0, 4).join(" ");
@@ -1300,6 +1311,11 @@ function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[
 
   const skeleton = inferSkeletonSignature(current);
   const repeatedSkeleton = skeleton && recent.slice(-3).some((line) => inferSkeletonSignature(line) === skeleton);
+  const highOverlapRepeat = recent.slice(-4).some((line) =>
+    continuityOverlapScore(current, line) >= 0.68
+    || continuityContainmentScore(current, line) >= 0.82
+    || startsWithSameFrame(current, line)
+  );
 
   const currentTags = inferConcernTags(current);
   const repeatedIntent = recent.slice(-3).filter((line) => {
@@ -1307,7 +1323,7 @@ function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[
     return currentTags.some((tag) => tags.includes(tag));
   }).length >= 2;
 
-  if (!exactRepeat && !repeatedSkeleton && !repeatedIntent) return hcpReply;
+  if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat && !repeatedIntent) return hcpReply;
 
   return deterministicContinuityVariation({
     hcpReply: current,
