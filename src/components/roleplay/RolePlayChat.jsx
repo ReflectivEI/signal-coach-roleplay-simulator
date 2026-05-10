@@ -544,11 +544,32 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
 const SHOW_VISIBLE_HCP_CUES = true;
 
 function resolveVisibleHcpCueText(turn = {}, hcpDisplayName = "HCP") {
-  const cueText = String(
+  let cueText = String(
     turn?.cueBefore
     || turn?.hcpReactionContract?.selectedCueText
     || ""
   ).trim();
+
+  if (!cueText && turn?.hcpDialogueBefore) {
+    const alignedCue = selectStateAlignedHcpCue({
+      existingCueText: "",
+      preferStateDerived: true,
+      activeHcpAsk: turn?.plannerStateSnapshot?.latestAskProgression?.family || turn?.activeConcern || "",
+      concernFamily: turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || "",
+      escalationStage: turn?.plannerStateSnapshot?.latestAskProgression?.status || "",
+      hcpState: turn?.hcpStateBefore || "",
+      decayTier: turn?.plannerStateSnapshot?.engagementTier || "",
+      timePressure: /time/i.test(String(turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || "")),
+      terminal: false,
+      conversationIntelligenceState: {},
+      validationOutput: {},
+      dialogueText: turn?.hcpDialogueBefore || "",
+      scenarioId: turn?.scenarioId || "scenario",
+      turnNumber: Number.isFinite(turn?.turnNumber) ? turn.turnNumber : 0,
+    });
+    cueText = String(alignedCue?.cueText || "").trim();
+  }
+
   if (!cueText) return "";
 
   const personalizedCue = sanitizeRenderedMessage(
