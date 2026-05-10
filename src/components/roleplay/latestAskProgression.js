@@ -133,6 +133,27 @@ function hasRepSocialOpening(repMessage = "") {
   return greeting && shortOpen && !businessPayload;
 }
 
+function hasGoodFaithClarificationIntent(repMessage = "", latestHcpAsk = "", family = "general") {
+  const rep = String(repMessage || "").toLowerCase().trim();
+  const ask = String(latestHcpAsk || "").toLowerCase().trim();
+  if (!rep) return false;
+
+  const clarificationFrame = /\b(what exactly|what specifically|can you provide more context|more context|help me understand|i want to understand|so i can understand|tailor my approach|clarify|what do you mean)\b/.test(rep);
+  if (!clarificationFrame) return false;
+
+  const familySignals = {
+    workflow: /\b(workflow|staff|team|burden|process|step|handoff|implementation)\b/,
+    screening: /\b(screen|screening|candidate|candidacy|criteria|eligibility|resistance|adherence)\b/,
+    evidence: /\b(study|trial|data|signal|endpoint|outcome|evidence|publication|result)\b/,
+    access: /\b(access|coverage|payer|prior[-\s]?auth|authorization|bottleneck)\b/,
+    safety: /\b(safety|signal|hepatic|adverse|toxicity|risk)\b/,
+    general: /\b(question|concern|issue|point)\b/,
+  };
+
+  const relevantPattern = familySignals[family] || familySignals.general;
+  return relevantPattern.test(rep) || computeSimilarity(rep, ask) >= 0.18;
+}
+
 function hasRelevantCheckBack(repMessage = "", latestHcpAsk = "", family = "general") {
   const rep = String(repMessage || "").trim();
   const ask = String(latestHcpAsk || "").trim();
@@ -236,6 +257,16 @@ export function classifyLatestAskProgression({ latestHcpAsk = "", repMessage = "
       family: requiredFamily,
       clarificationRequest: true,
       loopChallenge,
+    };
+  }
+
+  if (hasGoodFaithClarificationIntent(rep, latestAsk, requiredFamily)) {
+    return {
+      status: "clarification_request",
+      needsProgression: false,
+      family: requiredFamily,
+      clarificationRequest: true,
+      loopChallenge: false,
     };
   }
 

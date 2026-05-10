@@ -541,7 +541,63 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
   return value;
 }
 
-const SHOW_VISIBLE_HCP_CUES = false;
+const SHOW_VISIBLE_HCP_CUES = true;
+
+function formatCueValue(value = "") {
+  return String(value || "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase())
+    .trim();
+}
+
+function deriveVisibleCuePredictedState(turn = {}) {
+  const source = turn?.hcpStateBefore || turn?.plannerStateSnapshot?.activeConcern || "neutral";
+  return formatCueValue(source);
+}
+
+function deriveVisibleCueOpenness(turn = {}) {
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  if (/\b(openness|open|curiosity)\b/.test(state) || tier === "engaged") return "Open";
+  if (/\b(resistance|closed|frustration|disengaged)\b/.test(state) || ["impatient", "disengaging"].includes(tier)) return "Closed";
+  if (tier === "constrained") return "Guarded";
+  return "Neutral";
+}
+
+function deriveVisibleCueTrajectory(turn = {}) {
+  const status = String(turn?.plannerStateSnapshot?.latestAskProgression?.status || "").toLowerCase();
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  if (status.includes("progress")) return "Improving";
+  if (status.includes("missed") || status.includes("close")) return "Declining";
+  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged)\b/.test(state)) return "Declining";
+  if (tier === "constrained") return "Stalled";
+  return "Stable";
+}
+
+function deriveVisibleCueRisk(turn = {}) {
+  const tier = String(turn?.plannerStateSnapshot?.engagementTier || "").toLowerCase();
+  const concern = String(turn?.plannerStateSnapshot?.activeConcern || turn?.activeConcern || "").toLowerCase();
+  const state = String(turn?.hcpStateBefore || "").toLowerCase();
+  if (["impatient", "disengaging"].includes(tier) || /\b(resistance|frustration|disengaged)\b/.test(state)) return "High";
+  if (/\b(safety|time|access)\b/.test(concern) || tier === "constrained") return "Moderate";
+  if (/\b(openness|open|curiosity)\b/.test(state)) return "Low";
+  return "Moderate";
+}
+
+function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
+  const behavioralNotes = turn?.cueBefore
+    ? sanitizeRenderedMessage(personalizeCueText(turn.cueBefore, hcpDisplayName), "behavioral-cue")
+    : "";
+
+  return {
+    predictedState: deriveVisibleCuePredictedState(turn),
+    openness: deriveVisibleCueOpenness(turn),
+    trajectory: deriveVisibleCueTrajectory(turn),
+    risk: deriveVisibleCueRisk(turn),
+    behavioralNotes,
+  };
+}
 
 function applyDeterministicPunctuationContract(text) {
   return normalizeHcpDialoguePunctuation(String(text || "").trim()).trim();
@@ -1304,8 +1360,39 @@ function buildLiveTurnAuthorityDialogue({
   const rep = String(repMessage || "").trim();
   const repLower = rep.toLowerCase();
   const previous = hardenTextSurface(String(previousHcpLine || "").trim());
+  const hasBusinessPayload = /\b(study|trial|data|publication|results|signal|hepatic|safety|patient|patients|tolerat|therapy|treatment|access|coverage|prior auth|workflow|staff|screening|evidence)\b/.test(repLower);
+  const extractClarificationTopic = () => {
+    const lower = previous.toLowerCase();
+    const directMatch = lower.match(/\b(hepatic signal|safety signal|access barrier|prior auth|workflow issue|workflow burden|screening checkpoint|patient selection|evidence point|monitoring plan)\b/);
+    if (directMatch?.[1]) return directMatch[1];
+    if (/\bhepatic\b/.test(lower)) return "hepatic signal";
+    if (/\bsafety\b/.test(lower)) return "safety signal";
+    if (/\bprior auth|access|coverage\b/.test(lower)) return "access barrier";
+    if (/\bworkflow|staff|handoff|process\b/.test(lower)) return "workflow issue";
+    if (/\bscreen|criteria|candidate|selection\b/.test(lower)) return "patient-selection issue";
+    if (/\bstudy|trial|data|evidence|endpoint\b/.test(lower)) return "evidence concern";
+    return "";
+  };
 
   if (isFirstRepTurn && (inPleasantryGracePeriod || /^(hi|hello|hey)\b/.test(repLower))) {
+    if (hasBusinessPayload) {
+      if (/\bhepatic|safety|signal\b/.test(repLower)) {
+        return "All right. What have you seen on that safety signal?";
+      }
+      if (/\btolerat|can't stay on therapy|cannot stay on therapy|stopped treatment|treatment option\b/.test(repLower)) {
+        return "All right. What part of tolerability is driving the issue?";
+      }
+      if (/\bstudy|trial|publication|results|data|cdc\b/.test(repLower)) {
+        return "All right. What about the study do you want to discuss?";
+      }
+      if (/\baccess|coverage|prior auth\b/.test(repLower)) {
+        return "All right. What access issue are you trying to solve?";
+      }
+      if (/\bworkflow|staff|screening\b/.test(repLower)) {
+        return "All right. What's the practical issue you're seeing?";
+      }
+      return "All right. What's the issue you're seeing?";
+    }
     if (repAskedWellbeing || /\bhow are you\b|\bhow's it going\b|\bhow have you been\b/.test(repLower)) {
       return /(?:study|trial|data|publication|results)\b/.test(repLower)
         ? "I'm doing well, thanks. What did you want to discuss about the study?"
@@ -1315,15 +1402,33 @@ function buildLiveTurnAuthorityDialogue({
   }
 
   if (/\b(what question|which question|what do you mean|can you clarify|clarify|rephrase|not following|don't understand|do not understand)\b/.test(repLower)) {
+    const topic = extractClarificationTopic();
     if (previous) {
       const questionOnly = previous.split(/(?<=[?!])\s+/)[0].trim();
       const cleaned = questionOnly.replace(/[.?!]+$/, "").trim();
       if (cleaned) {
+        if (topic) {
+          return `I'm asking about ${topic} and why it matters for the patients I treat.`;
+        }
         if (/^(what|how|why|who|when|where|which)\b/i.test(cleaned)) {
           return `I'm asking ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}.`;
         }
         return `I'm asking about ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}.`;
       }
+    }
+    return buildScenarioFactSafeClarification({
+      previousHcpLine: previous,
+      activeConcern,
+    });
+  }
+
+  if (/\b(what exactly|what specifically|more context|provide more context|help me understand|i want to understand|so i can understand|tailor my approach)\b/.test(repLower)) {
+    const topic = extractClarificationTopic();
+    if (topic === "hepatic signal") {
+      return "I'm talking about a hepatic signal that came up in a case discussion, and I need to know how you'd think about that risk in real patients.";
+    }
+    if (topic) {
+      return `I'm talking about ${topic}, and whether it changes what I should do for my patients.`;
     }
     return buildScenarioFactSafeClarification({
       previousHcpLine: previous,
@@ -6054,13 +6159,21 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
-                      {SHOW_VISIBLE_HCP_CUES && turn.cueBefore && (
-                        <div className="pl-1 w-fit max-w-[90%] md:max-w-[80%]">
-                          <p className="w-fit max-w-full text-xs italic leading-snug px-3 py-1.5 rounded-lg border whitespace-normal break-words" style={{ color: '#7B1F1F', borderColor: '#7B1F1F', background: '#F9F5F5' }}>
-                            {sanitizeRenderedMessage(personalizeCueText(turn.cueBefore, hcpDisplayName), "behavioral-cue")}
-                          </p>
-                        </div>
-                      )}
+                      {SHOW_VISIBLE_HCP_CUES && turn.hcpDialogueBefore && (() => {
+                        const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+                        return (
+                          <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
+                            <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
+                              <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
+                              <div>- Predicted State: {cueSummary.predictedState}</div>
+                              <div>- Openness: {cueSummary.openness}</div>
+                              <div>- Trajectory: {cueSummary.trajectory}</div>
+                              <div>- Risk: {cueSummary.risk}</div>
+                              {cueSummary.behavioralNotes && <div>- Behavioral Notes: {cueSummary.behavioralNotes}</div>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>
