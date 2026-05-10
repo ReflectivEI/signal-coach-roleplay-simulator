@@ -6235,6 +6235,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                           </div>
                         );
                       })()}
+                      {!SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && turn.cueBefore && (
+                        <div className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug" style={{ background: "rgba(244, 232, 236, 0.92)", borderColor: "rgba(191, 132, 145, 0.46)", color: "hsl(356 32% 43%)" }}>
+                          {turn.cueBefore}
+                        </div>
+                      )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>

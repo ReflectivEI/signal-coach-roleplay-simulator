@@ -66,8 +66,12 @@ test("HCP cues stay hidden while realistic HCP dialogue renders", async ({ page 
   const dialogue = page.locator(".hcp-dialogue").last();
   await expect(dialogue).toBeVisible({ timeout: 45000 });
   const dialogueText = (await dialogue.innerText()).trim();
+  const descriptor = page.locator(".hcp-cue-descriptor").last();
+  await expect(descriptor).toBeVisible({ timeout: 45000 });
+  const descriptorText = (await descriptor.innerText()).trim();
 
   expect(dialogueText.length).toBeGreaterThan(0);
+  expect(descriptorText.length).toBeGreaterThan(0);
   expect(hasVisibleDialogueQuality(dialogueText), dialogueText).toBe(true);
 
   for (const selector of cueSelectors) {
@@ -98,6 +102,8 @@ test("first HCP response adapts to different rep openers", async ({ browser }) =
     await expect(genericPage.locator(selector)).toHaveCount(0);
     await expect(evidencePage.locator(selector)).toHaveCount(0);
   }
+  await expect(genericPage.locator(".hcp-cue-descriptor").last()).toBeVisible();
+  await expect(evidencePage.locator(".hcp-cue-descriptor").last()).toBeVisible();
 
   await genericPage.close();
   await evidencePage.close();

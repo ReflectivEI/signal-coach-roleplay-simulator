@@ -63,7 +63,7 @@ function HcpCueStrip({ cue }) {
     : `The HCP ${normalizedLabel.charAt(0).toLowerCase()}${normalizedLabel.slice(1)}.`;
   return (
     <div
-      className="inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug"
+      className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug"
       style={{
         background: "rgba(244, 232, 236, 0.92)",
         borderColor: "rgba(191, 132, 145, 0.46)",
@@ -165,7 +165,7 @@ function MessageBubble({ turn }) {
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
           {isHcp && SHOW_VISIBLE_HCP_CUES && <HcpCueSummary cue={cue} prediction={prediction} />}
-          {isHcp && cue && SHOW_DEBUG_UI && SHOW_VISIBLE_HCP_CUES && <HcpCueStrip cue={cue} />}
+          {isHcp && cue && <HcpCueStrip cue={cue} />}
           {isHcp && predictiveDebug && <PredictiveDebugChip debugInfo={predictiveDebug} />}
           <div className={`${isHcp ? "hcp-dialogue " : ""}px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit`} style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
