@@ -1,0 +1,428 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://reflectiv.ai/schemas/roleplay-scenario.schema.json",
+  "title": "Canonical Roleplay Scenario",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "routing",
+    "identity",
+    "trainingIntent",
+    "hcpProfile",
+    "sceneSetup",
+    "hcpStateModel",
+    "deterministicCueLibrary",
+    "dialogueResponseRules",
+    "metricEvidenceMap",
+    "feedbackContract",
+    "testFixtures"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "persona", "pressureType", "difficulty", "complianceMode"],
+      "properties": {
+        "stage": { "$ref": "#/$defs/stage" },
+        "persona": { "$ref": "#/$defs/persona" },
+        "pressureType": { "$ref": "#/$defs/pressureType" },
+        "difficulty": { "$ref": "#/$defs/difficulty" },
+        "complianceMode": { "$ref": "#/$defs/complianceMode" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenarioId", "version", "title", "therapeuticArea", "difficulty", "status"],
+      "properties": {
+        "scenarioId": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "title": { "type": "string", "minLength": 1 },
+        "therapeuticArea": { "type": "string", "minLength": 1 },
+        "difficulty": { "$ref": "#/$defs/difficulty" },
+        "status": { "enum": ["draft", "active", "deprecated"] }
+      }
+    },
+    "trainingIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primaryCapabilityFocus",
+        "secondaryCapabilityFocus",
+        "allowedEvaluatedMetrics",
+        "excludedMetrics",
+        "metricApplicability"
+      ],
+      "properties": {
+        "primaryCapabilityFocus": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "secondaryCapabilityFocus": { "type": "array", "items": { "type": "string" } },
+        "allowedEvaluatedMetrics": { "type": "array", "items": { "$ref": "#/$defs/metricId" }, "minItems": 1 },
+        "excludedMetrics": { "type": "array", "items": { "$ref": "#/$defs/metricId" } },
+        "passFailNotes": { "type": "string" },
+        "metricApplicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "question_quality",
+            "listening_responsiveness",
+            "making_it_matter",
+            "customer_engagement_signals",
+            "objection_navigation",
+            "conversation_control_structure",
+            "adaptability",
+            "commitment_gaining"
+          ],
+          "properties": {
+            "question_quality": { "$ref": "#/$defs/metricApplicability" },
+            "listening_responsiveness": { "$ref": "#/$defs/metricApplicability" },
+            "making_it_matter": { "$ref": "#/$defs/metricApplicability" },
+            "customer_engagement_signals": { "$ref": "#/$defs/metricApplicability" },
+            "objection_navigation": { "$ref": "#/$defs/metricApplicability" },
+            "conversation_control_structure": { "$ref": "#/$defs/metricApplicability" },
+            "adaptability": { "$ref": "#/$defs/metricApplicability" },
+            "commitment_gaining": { "$ref": "#/$defs/metricApplicability" }
+          }
+        }
+      }
+    },
+    "hcpProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "specialty",
+        "careSetting",
+        "baselineCommunicationStyle",
+        "baselineOpennessResistance",
+        "knownConstraints"
+      ],
+      "properties": {
+        "role": { "type": "string" },
+        "specialty": { "type": "string" },
+        "careSetting": { "type": "string" },
+        "baselineCommunicationStyle": { "type": "string" },
+        "baselineOpennessResistance": { "$ref": "#/$defs/hcpState" },
+        "knownConstraints": { "type": "array", "items": { "type": "string" } },
+        "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+        "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" }
+      }
+    },
+    "sceneSetup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "openingEnvironment",
+        "timePressure",
+        "currentContext",
+        "visitObjective",
+        "repKnowsAtStart",
+        "repDoesNotKnowAtStart",
+        "openingLine"
+      ],
+      "properties": {
+        "openingEnvironment": { "type": "string" },
+        "timePressure": { "enum": ["low", "medium", "high"] },
+        "currentContext": { "type": "string" },
+        "visitObjective": { "type": "string" },
+        "repKnowsAtStart": { "type": "array", "items": { "type": "string" } },
+        "repDoesNotKnowAtStart": { "type": "array", "items": { "type": "string" } },
+        "openingLine": { "type": "string" },
+        "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+        "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" }
+      }
+    },
+    "hcpStateModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startingState", "allowedTransitions", "prohibitedTransitions"],
+      "properties": {
+        "startingState": { "$ref": "#/$defs/hcpState" },
+        "allowedTransitions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/stateTransition" }
+          }
+        },
+        "prohibitedTransitions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "from": { "$ref": "#/$defs/hcpState" },
+              "to": { "$ref": "#/$defs/hcpState" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "deterministicCueLibrary": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cueId", "cueType", "visibleCue", "meaning", "triggerCondition", "allowedDialoguePatterns"],
+        "properties": {
+          "cueId": { "type": "string", "minLength": 1 },
+          "cueType": { "$ref": "#/$defs/cueType" },
+          "visibleCue": { "type": "string" },
+          "meaning": { "type": "string" },
+          "triggerCondition": { "type": "string" },
+          "allowedDialoguePatterns": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "dialogueResponseRules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowedByState",
+        "prohibitedPatterns",
+        "escalationRules",
+        "deEscalationRules",
+        "repetitionHandling",
+        "contradictionGuardrails"
+      ],
+      "properties": {
+        "allowedByState": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } },
+        "prohibitedPatterns": { "type": "array", "items": { "type": "string" } },
+        "escalationRules": { "type": "array", "items": { "type": "string" } },
+        "deEscalationRules": { "type": "array", "items": { "type": "string" } },
+        "repetitionHandling": { "type": "string" },
+        "contradictionGuardrails": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "metricEvidenceMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_quality",
+        "listening_responsiveness",
+        "making_it_matter",
+        "customer_engagement_signals",
+        "objection_navigation",
+        "conversation_control_structure",
+        "adaptability",
+        "commitment_gaining"
+      ],
+      "properties": {
+        "question_quality": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "listening_responsiveness": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "making_it_matter": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "customer_engagement_signals": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "objection_navigation": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "conversation_control_structure": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "adaptability": { "$ref": "#/$defs/metricEvidenceDefinition" },
+        "commitment_gaining": { "$ref": "#/$defs/metricEvidenceDefinition" }
+      }
+    },
+    "feedbackContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canReference", "cannotInfer", "requiredEvidenceLanguage", "prohibitedLanguage"],
+      "properties": {
+        "canReference": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "explicit_hcp_statement",
+              "visible_hcp_cue",
+              "rep_language_pattern",
+              "missing_expected_behavior"
+            ]
+          }
+        },
+        "cannotInfer": {
+          "type": "array",
+          "items": { "enum": ["intent", "emotion_without_signal", "personality"] }
+        },
+        "requiredEvidenceLanguage": { "type": "array", "items": { "type": "string" } },
+        "prohibitedLanguage": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "enforcementCriteria": { "$ref": "#/$defs/enforcementCriteria" },
+    "domainIntegrity": { "$ref": "#/$defs/domainIntegrity" },
+    "testFixtures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strong", "weak"],
+      "properties": {
+        "strong": { "$ref": "#/$defs/fixedThreeFixtures" },
+        "weak": { "$ref": "#/$defs/fixedThreeFixtures" }
+      }
+    }
+  },
+  "$defs": {
+    "enforcementCriteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "baselineForgiveness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselinePrecisionDemand": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineEvidenceStrictness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineWorkflowStrictness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baselineEscalationSensitivity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "timePressureEscalationModifier": { "type": "number", "minimum": -1, "maximum": 1 },
+        "engagementSlackModifier": { "type": "number", "minimum": -1, "maximum": 1 },
+        "skepticismEscalationModifier": { "type": "number", "minimum": -1, "maximum": 1 }
+      }
+    },
+    "domainIntegrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "primaryScenarioDomain": { "type": "string", "minLength": 1 },
+        "allowedDomains": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "allowedContextFamilies": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "disallowedCrossDomainFamilies": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "stage": {
+      "enum": [
+        "initial_access",
+        "discovery",
+        "clinical_value_detailing",
+        "objection_handling",
+        "adoption_implementation",
+        "commitment_close"
+      ]
+    },
+    "persona": {
+      "enum": [
+        "skeptical_specialist",
+        "busy_prescriber",
+        "administrator",
+        "nurse_clinical_user",
+        "formulary_stakeholder",
+        "existing_adopter"
+      ]
+    },
+    "pressureType": {
+      "enum": [
+        "time_pressure",
+        "safety_concern",
+        "access_barrier",
+        "operational_block",
+        "competitive_threat",
+        "uncertainty"
+      ]
+    },
+    "difficulty": {
+      "enum": ["foundational", "intermediate", "advanced", "adverse_stress_test"]
+    },
+    "complianceMode": {
+      "enum": ["on_label_only", "safety_clarification", "access_discussion", "virtual_hybrid_constraints"]
+    },
+    "hcpState": {
+      "enum": ["neutral", "time_pressed", "skeptical", "engaged", "impatient", "resistant", "receptive"]
+    },
+    "cueType": {
+      "enum": [
+        "body_language",
+        "verbal_signal",
+        "conversational_signal",
+        "pacing_signal",
+        "resistance_signal",
+        "openness_signal"
+      ]
+    },
+    "metricId": {
+      "enum": [
+        "question_quality",
+        "listening_responsiveness",
+        "making_it_matter",
+        "customer_engagement_signals",
+        "objection_navigation",
+        "conversation_control_structure",
+        "adaptability",
+        "commitment_gaining"
+      ]
+    },
+    "metricApplicability": {
+      "enum": [
+        "always_applicable",
+        "conditional_on_objection",
+        "conditional_on_commitment_attempt",
+        "conditional_on_new_information",
+        "not_applicable"
+      ]
+    },
+    "evidenceTag": {
+      "enum": [
+        "acknowledged_time_constraint",
+        "asked_purposeful_question",
+        "reflected_stated_concern",
+        "linked_to_stakeholder_priority",
+        "responded_to_engagement_shift",
+        "structured_next_step",
+        "adapted_approach",
+        "pushed_without_evidence"
+      ]
+    },
+    "stateTransition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["to", "whenAll"],
+      "properties": {
+        "to": { "$ref": "#/$defs/hcpState" },
+        "whenAll": { "type": "array", "items": { "$ref": "#/$defs/evidenceTag" }, "minItems": 1 },
+        "whenNot": { "type": "array", "items": { "$ref": "#/$defs/evidenceTag" } }
+      }
+    },
+    "metricEvidenceDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observableEvidenceRequired", "disqualifyingEvidence", "minimumThreshold", "examples"],
+      "properties": {
+        "observableEvidenceRequired": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceTag" },
+          "minItems": 1
+        },
+        "disqualifyingEvidence": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceTag" }
+        },
+        "minimumThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+        "examples": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repResponse",
+        "expectedHcpReaction",
+        "expectedMetricActivation",
+        "expectedEvidenceTags",
+        "expectedScoreBand"
+      ],
+      "properties": {
+        "repResponse": { "type": "string" },
+        "expectedHcpReaction": { "type": "string" },
+        "expectedMetricActivation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/metricId" },
+          "minItems": 1
+        },
+        "expectedEvidenceTags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/evidenceTag" }
+        },
+        "expectedScoreBand": { "enum": ["low", "medium", "high"] }
+      }
+    },
+    "fixedThreeFixtures": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/fixture" },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

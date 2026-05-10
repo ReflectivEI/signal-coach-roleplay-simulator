@@ -25,6 +25,15 @@ function deterministicPick<T>(items: T[], seed = ""): T {
   return items[(hash >>> 0) % items.length];
 }
 
+function pickTimePressureCloser(seed = ""): string {
+  return deterministicPick([
+    "Give me the short version.",
+    "Keep it brief and practical.",
+    "I've only got a minute.",
+    "Give me one practical point.",
+  ], seed);
+}
+
 function buildExplicitFollowUpForAnchor(anchorType: OpeningAnchorType, concernFamily = "general"): string {
   const family = String(concernFamily || "").toLowerCase();
 
@@ -103,13 +112,13 @@ function applyGlobalOpeningSpeechCadence(
   const anchorType = detectOpeningAnchorType(text);
 
   output = output
-      .replace(/\bWhat type of patient are you seeing the best results in\b/i, "Which patients are you seeing the best results in")
-      .replace(/\bI don't have the staff infrastructure that a bigger practice would have\b/i, "I don't have the staff support a bigger practice would have")
-      .replace(/\bI don't know what I can do about that, is there even a process\b/i, "I don't know what I can actually do about that. Is there even a process")
-      .replace(/\bWhat are others in my area doing\b/i, "What are others around here doing")
-      .replace(/\bI just haven't had one come through that fits perfectly yet\b/i, "I just haven't had the right patient come through yet")
-      .replace(/\bMy question is always the same\.\s+For the\b/i, "For the")
-      .replace(/\bI keep coming back to the same question\.\s+For the\b/i, "For the");
+    .replace(/\bWhat type of patient are you seeing the best results in\b/i, "Which patients are you seeing the best results in")
+    .replace(/\bI don't have the staff infrastructure that a bigger practice would have\b/i, "I don't have the staff support a bigger practice would have")
+    .replace(/\bI don't know what I can do about that, is there even a process\b/i, "I don't know what I can actually do about that. Is there even a process")
+    .replace(/\bWhat are others in my area doing\b/i, "What are others around here doing")
+    .replace(/\bI just haven't had one come through that fits perfectly yet\b/i, "I just haven't had the right patient come through yet")
+    .replace(/\bMy question is always the same\.\s+For the\b/i, "For the")
+    .replace(/\bI keep coming back to the same question\.\s+For the\b/i, "For the");
 
   output = replaceVagueFollowUpClosers(output, anchorType, turn.concernFamily);
 
@@ -672,7 +681,8 @@ export function enforceSourceBackedRealismSurface({
     profile.directness === "high" &&
     !/\bget to the point|short version|give me the short version|30 seconds|one practical point\b/i.test(output)
   ) {
-    output = `${output.replace(/[.?!]+$/, "")}. Give me the short version.`;
+    const closer = pickTimePressureCloser(`${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${hcpTurnCount}|${output}`);
+    output = `${output.replace(/[.?!]+$/, "")}. ${closer}`;
   }
 
   output = replaceVagueFollowUpClosers(output, anchorType, turn.concernFamily);

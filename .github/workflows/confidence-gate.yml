@@ -1,0 +1,38 @@
+name: Confidence Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  confidence-gate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run confidence gate
+        run: npm run confidence:gate
+
+      - name: Upload confidence artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: confidence-gate-artifacts
+          path: |
+            artifacts/confidence-gate/latest.json
+            artifacts/confidence-gate/trend.ndjson
+          if-no-files-found: warn

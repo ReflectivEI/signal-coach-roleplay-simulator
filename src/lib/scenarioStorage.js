@@ -8,6 +8,20 @@ import {
 
 const CUSTOM_SCENARIOS_KEY = "signal-coach-custom-scenarios";
 
+function normalizeRuntimeTemperature(scenario) {
+  const explicit = Number(scenario?.runtimeTemperature);
+  if (Number.isInteger(explicit) && explicit >= 1 && explicit <= 10) {
+    return explicit;
+  }
+
+  const persona = String(scenario?.persona || "").toLowerCase();
+  if (persona.includes("skeptical")) return 7;
+  if (persona.includes("time_constrained")) return 6;
+  if (persona.includes("cost_focused")) return 6;
+  if (persona.includes("curious_uncertain")) return 4;
+  return 5;
+}
+
 function slugify(value) {
   return String(value || "")
     .toLowerCase()
@@ -18,6 +32,7 @@ function slugify(value) {
 function normalizeBuiltInScenario(scenario, index) {
   return {
     ...scenario,
+    runtimeTemperature: normalizeRuntimeTemperature(scenario),
     id: scenario.id || `builtin-${slugify(scenario.title || `scenario-${index + 1}`)}`,
     isBuiltIn: true,
     isPublished: true,

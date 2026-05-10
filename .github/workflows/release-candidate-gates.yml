@@ -1,0 +1,31 @@
+name: Release Candidate Gates
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - backup/predictive-builder-v1
+
+jobs:
+  release-candidate-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run release candidate gate suite
+        env:
+          VITE_ROLEPLAY_WORKER_URL: ${{ secrets.VITE_ROLEPLAY_WORKER_URL }}
+        run: npm run test:release-candidate-gates

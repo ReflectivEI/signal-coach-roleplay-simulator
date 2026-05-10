@@ -1,0 +1,16 @@
+version: 1
+owner: Deterministic Systems Owner
+paths:
+  - id: predictive_builder_to_adaptive_rps
+    guarantees:
+      - deterministic_continuity
+      - ontology_continuity
+      - explainability_continuity
+      - behavioral_continuity
+      - manager_interpretation_continuity
+  - id: adaptive_rps_to_ai_coach_expression
+    guarantees:
+      - downstream_governed_role
+      - no_semantic_reinterpretation
+      - no_orchestration_override
+certainty_rule: any_uncertainty_is_constitutional_fail

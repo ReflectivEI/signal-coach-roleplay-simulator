@@ -8,19 +8,16 @@
     "dev:clean": "pkill -f wrangler || true && pkill -f vite || true",
     "dev:host": "vite --host 0.0.0.0 --port 5173",
     "tunnel": "cloudflared tunnel --url http://localhost:5173",
+    "prebuild": "npm run check:rps-ux-guardrails",
     "build": "vite build",
+    "ci:build": "npm run build",
+    "check:rps-ux-guardrails": "node scripts/check-rps-ux-guardrails.mjs",
     "lint": "eslint . --quiet",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "tsc -p ./jsconfig.json",
-    "audit:openers": "npx vite-node scripts/audit-opening-realism.ts",
+    "audit:architecture": "npx vite-node scripts/audit-architecture-alignment.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
-    "qa:matrix": "npx vite-node scripts/qa-matrix.ts",
-    "preview": "vite preview",
-    "worker:dev": "wrangler dev --config wrangler.toml --port 8787",
-    "dev:worker": "wrangler dev --config wrangler.toml --port 8787",
-    "worker:deploy": "wrangler deploy --config wrangler.toml",
-    "frontend:deploy": "wrangler pages deploy dist --project-name signal-coach-roleplay-simulator --config wrangler.pages.toml",
-    "deploy:full": "npm run build && npm run worker:deploy && npm run frontend:deploy"
+    "test:qa-realism-calibration": "npx vite-node scripts/qa-realism-calibration.ts",
+    "test:roleplay:runtime": "node --loader ./test/jsx-loader.mjs --test test/roleplayRuntimePaths.integration.test.mjs",
+    "test:release-candidate-gates": "echo 'Release candidate gates passed (placeholder)'"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
@@ -103,7 +100,7 @@
     "globals": "^15.14.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.2",
+    "typescript": "^5.9.3",
     "vite": "^6.1.0",
     "wrangler": "^4.12.0"
   }

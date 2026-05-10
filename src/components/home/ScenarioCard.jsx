@@ -24,12 +24,14 @@ function getDifficulty(scenario) {
   return { label: "Foundational", cls: "text-emerald-600 border-emerald-200 bg-emerald-50" };
 }
 
-export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) {
+export default function ScenarioCard({ scenario, index, isFeatured, onDelete, selectedRealism = 5 }) {
   const [showDetail, setShowDetail] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
   const difficulty = getDifficulty(scenario);
+  const normalizedRealism = Math.max(1, Math.min(10, Number(selectedRealism) || 5));
+  const launchUrl = `/simulator?scenarioId=${encodeURIComponent(scenario.id)}&realism=${normalizedRealism}`;
   const displayTitle = scenario.title === "The Warm Intro That Turns Cold"
     ? "Warm Intro Turns Cold"
     : scenario.title.replace(/^The\s+/, "");
@@ -58,11 +60,11 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             : "0 2px 6px rgba(0,0,0,0.04)",
           transform: hovered ? "translateY(-4px) scale(1.01)" : "translateY(0)",
           transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease",
-          padding: "1rem 1rem 0.95rem",
+          padding: "0.9rem 1rem 0.85rem",
           display: "flex",
           flexDirection: "column",
-          gap: "0.62rem",
-          minHeight: "118px",
+          gap: "0.5rem",
+          minHeight: "94px",
           justifyContent: "space-between",
           position: "relative",
         }}
@@ -91,17 +93,15 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
               background: hovered ? "rgba(170, 231, 223, 0.32)" : "rgba(255,255,255,0.42)",
             }}
           >
-            Expand for Details
+            Preview Brief
           </button>
           <button
-            onClick={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
-            className="py-1 px-4 rounded-full text-xs font-bold transition-colors whitespace-nowrap"
+            onClick={() => navigate(launchUrl)}
+            className="py-1 px-4 rounded-full text-xs font-semibold transition-colors border whitespace-nowrap"
             style={{
-              background: hovered
-                ? "linear-gradient(135deg, hsl(222 46% 19%), hsl(176 45% 30%))"
-                : "white",
-              color: hovered ? "white" : "hsl(222 40% 20%)",
-              border: "1.5px solid hsl(222 40% 20%)"
+              border: "1.5px solid hsl(223 32% 34%)",
+              color: "hsl(223 32% 28%)",
+              background: hovered ? "rgba(233, 243, 252, 0.95)" : "rgba(255,255,255,0.75)",
             }}
           >
             Start Scenario →
@@ -134,7 +134,6 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete }) 
             scenario={scenario}
             difficulty={difficulty}
             onClose={() => setShowDetail(false)}
-            onStart={() => navigate(`/simulator?scenarioId=${scenario.id}`)}
           />
         )}
       </AnimatePresence>

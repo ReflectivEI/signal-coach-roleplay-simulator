@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion } from "framer-motion";
-import { BookOpen, ChevronRight, Plus, Brain, FlaskConical, Zap, MapPin, Settings } from "lucide-react";
+import { BookOpen, MapPin } from "lucide-react";
+import AppHeader from "@/components/layout/AppHeader";
 import ScenarioCard from "@/components/home/ScenarioCard";
 import BuildYourOwnCard from "@/components/home/BuildYourOwnCard";
 import ScenarioFilters, { applyScenarioFilters, DEFAULT_FILTERS } from "@/components/home/ScenarioFilters";
@@ -28,6 +29,7 @@ export default function Home() {
   };
 
   const filtered = applyScenarioFilters(scenarios, filters);
+  const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
   // Group scenarios by journey stage for display
   const STAGE_ORDER = ["initial_access", "discovery", "clinical_value", "objection_handling", "adoption_implementation", "access_formulary", "commitment_close"];
@@ -48,71 +50,7 @@ export default function Home() {
         background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)",
       }}
     >
-
-      {/* Top nav — clean white */}
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-[1420px] mx-auto px-5 xl:px-6 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-              style={{
-                background: "linear-gradient(145deg, hsl(223 56% 18%), hsl(182 48% 23%))",
-                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.14)",
-              }}
-            >
-              <Zap className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
-            </div>
-            <div>
-              <span className="font-semibold text-[1.02rem]" style={{ color: "hsl(222 48% 22%)" }}>Signal Intelligence</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/library" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <BookOpen className="w-3.5 h-3.5" />
-              Library
-            </Link>
-            <Link to="/builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Plus className="w-3.5 h-3.5" />
-              Build Scenario
-            </Link>
-            <Link to="/predictive-builder" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Brain className="w-3.5 h-3.5" />
-              Predictive Builder
-            </Link>
-            <Link to="/capabilities" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Brain className="w-3.5 h-3.5" />
-              Capabilities
-            </Link>
-            <Link to="/qa" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <FlaskConical className="w-3.5 h-3.5" />
-              QA Twin
-            </Link>
-            <Link to="/admin" className="text-sm transition-colors flex items-center gap-1.5" style={{ color: "hsl(222 52% 24%)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}>
-              <Settings className="w-3.5 h-3.5" />
-              Admin
-            </Link>
-          </div>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-[1420px]" />
 
       <div className="w-full max-w-[1480px] mx-auto px-5 xl:px-6 py-8 space-y-8">
 
@@ -140,25 +78,46 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              <Link to="/builder"
-                className="px-4 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap text-white"
-                style={{
-                  background: "linear-gradient(135deg, hsl(163 53% 42%), hsl(174 58% 34%))",
-                  boxShadow: "0 12px 24px rgba(14, 135, 122, 0.22)",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "hsl(162 55% 32%)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "hsl(162 55% 38%)"; }}
-              >
-                + New Scenario
-              </Link>
-              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
-                <div className="text-xl font-bold text-white">{scenarios.length || 19}</div>
-                <div className="text-xs text-slate-300 uppercase tracking-wider">Scenarios</div>
-              </div>
-              <div className="px-4 py-2 rounded-xl text-center" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(116, 227, 206, 0.16)" }}>
-                <div className="text-xl font-bold text-white">8</div>
-                <div className="text-xs text-slate-300 uppercase tracking-wider">Capabilities</div>
-              </div>
+                      {/* Scenario builder link removed for isolation */}
+              {isLocalHost ? (
+                <Link
+                  to="/simulator"
+                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
+                  style={{
+                    background: "rgba(116, 227, 206, 0.16)",
+                    border: "1px solid rgba(116, 227, 206, 0.36)",
+                    color: "#1a3a3a",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    letterSpacing: "0.01em",
+                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
+                    marginLeft: "0.5rem"
+                  }}
+                >
+                  ▶ Role Play Simulator
+                </Link>
+              ) : (
+                <a
+                  href="https://rps.reflectiv-ai.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
+                  style={{
+                    background: "rgba(116, 227, 206, 0.16)",
+                    border: "1px solid rgba(116, 227, 206, 0.36)",
+                    color: "#1a3a3a",
+                    textDecoration: "none",
+                    fontWeight: 600,
+                    fontSize: "1.1rem",
+                    letterSpacing: "0.01em",
+                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
+                    marginLeft: "0.5rem"
+                  }}
+                >
+                  ▶ Role Play Simulator
+                </a>
+              )}
             </div>
           </div>
         </motion.div>
@@ -177,13 +136,11 @@ export default function Home() {
               <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 62% 74%)" }} />
               <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 62% 82%)" }}>Training Scenarios</h2>
             </div>
-            <Link to="/builder" className="text-xs font-medium flex items-center gap-1 transition-colors" style={{ color: "hsl(174 70% 86%)" }}>
-              Create custom <ChevronRight className="w-3 h-3" />
-            </Link>
+                    {/* Build Your Own link removed for isolation */}
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
           <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>
-            Filter the grid by scenario family, HCP role, journey stage, or interaction pressure without changing the simulator logic underneath.
+            Use Preview Brief on any card to review context, then start the roleplay. Predictive Builder remains available as an optional deep-dive workspace.
           </p>
         </div>
 
@@ -216,6 +173,7 @@ export default function Home() {
                   scenario={scenario}
                   index={i}
                   isFeatured={i === 0}
+                  selectedRealism={filters.realism}
                   onDelete={handleDeleteScenario}
                 />
               ))}

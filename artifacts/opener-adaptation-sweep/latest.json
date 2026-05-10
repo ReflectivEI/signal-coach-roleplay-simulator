@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-05-07T21:54:36.541Z",
+  "workerUrl": "https://reflectivai-rps-api-staging.tonyabdelmalak.workers.dev",
+  "scenariosEvaluated": 12,
+  "openersEvaluated": 4,
+  "casesEvaluated": 48,
+  "passCount": 48,
+  "failCount": 0,
+  "passRate": 1,
+  "threshold": 0.92,
+  "pass": true,
+  "failures": []
+}

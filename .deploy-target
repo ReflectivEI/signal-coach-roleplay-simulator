@@ -1,0 +1,4 @@
+production
+# This file identifies the deployment target for this repository.
+# The deploy-guard.js script reads this file to verify environment identity.
+# To deploy: DEPLOY_TO_PRODUCTION=true npm run deploy:full

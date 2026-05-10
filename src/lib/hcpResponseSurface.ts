@@ -25,6 +25,18 @@ function ensureTerminalPunctuation(text = ""): string {
   return /[.?!]$/.test(value) ? value : `${value}.`;
 }
 
+function enforceSentenceBoundaries(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
+    .replace(/([.?!])\s*([a-z])/g, (_, boundary, letter) => `${boundary} ${letter.toUpperCase()}`)
+    .replace(/\s{2,}/g, " ");
+
+  return normalizeText(output);
+}
+
 function enforceSentenceCase(text = ""): string {
   let output = normalizeText(text);
   if (!output) return "";
@@ -44,160 +56,7 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+(what|how|why|who|when|where)\?$/i, ".")
     .replace(/\s+\byou\.$/i, ".")
     .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|they|them|we|i)\.$/i, ".")
-    .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.")
-    .replace(/\s+\b(what [^.?!]*?)\s+\bfor\./i, " $1?")
-    .replace(/\s+\b(what [^.?!]*?)\s+\bto\./i, " $1?")
-    .replace(/\bkeep it to\.$/i, "keep it to one point.");
-
-  output = output.replace(/\.\./g, ".");
-  return normalizeText(output);
-}
-
-function repairQuestionPunctuation(text = ""): string {
-  const parts = normalizeText(text)
-    .split(/(?<=[.!?])\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return parts.map((part) => {
-    const cleaned = part.replace(/\s+([.?!])$/, "$1");
-    if (/^(what|how|why|who|when|where|can|would|should|do|does|did|is|are|am|will|could)\b/i.test(cleaned) && /\.$/.test(cleaned)) {
-      return cleaned.replace(/\.$/, "?");
-    }
-    if (/,\s*(what|how|why|who|when|where|can|would|should|do|does|did|is|are|am|will|could)\b/i.test(cleaned) && /\.$/.test(cleaned)) {
-      return cleaned.replace(/\.$/, "?");
-    }
-    return cleaned;
-  }).join(" ");
-}
-
-function repairCommaSplices(text = ""): string {
-  let output = normalizeText(text);
-  if (!output) return "";
-
-  output = output
-    .replace(/(\bqueue to get through),\s+(what's|what is)\b/gi, "$1. $2")
-    .replace(/(\bpaperwork to get through),\s+(what's|what is)\b/gi, "$1. $2")
-    .replace(/(\bstaff already buried),\s+(what's|what is)\b/gi, "$1. $2")
-    .replace(/(\bI've got [^,.?!]+),\s+(what's|what is|tell me|show me|give me)\b/gi, "$1. $2");
-
-  return normalizeText(output);
-}
-
-function inferMissingObject(text = ""): string {
-  const value = normalizeText(text).toLowerCase();
-  if (/prior auth queue|approval queue/.test(value)) return "it";
-  if (/prior auth/.test(value)) return "that";
-  if (/queue/.test(value)) return "it";
-  if (/workflow|staff step|handoff|monitoring/.test(value)) return "that";
-  if (/cost|spend|testing|monitoring/.test(value)) return "that";
-  return "that";
-}
-
-function repairIncompleteOperationalAsks(text = ""): string {
-  let output = normalizeText(text);
-  if (!output) return "";
-
-  const object = inferMissingObject(output);
-
-  output = output
-    .replace(/\b(help me reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(help reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what's the one thing you can do to help me reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what is the one thing you can do to help me reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what's the one thing you can do to help reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what is the one thing you can do to help reduce)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what's the one thing you can do to change)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what is the one thing you can do to change)\?$/i, `$1 ${object}?`)
-    .replace(/\b(what specific action can you take to address)\.$/i, `$1 ${object}?`)
-    .replace(/\b(what specific step can you take to address)\.$/i, `$1 ${object}?`)
-    .replace(/\b(what can you do to address)\.$/i, `$1 ${object}?`);
-
-  output = output
-    .replace(/\bhelp me reduce that\?$/i, "help me reduce that burden on my staff?")
-    .replace(/\bhelp me reduce it\?$/i, /prior auth queue|approval queue/i.test(output) ? "help me reduce it?" : "help me reduce that?")
-    .replace(/\bwhat's the one thing you can do to help me reduce that\?$/i, "What's the one thing you can do to help reduce that?")
-    .replace(/\bwhat is the one thing you can do to help me reduce that\?$/i, "What is the one thing you can do to help reduce that?");
-
-  if (/prior auth queue/i.test(output)) {
-    output = output
-      .replace(/\bwhat's the one thing you can do to help reduce it\?$/i, "What's the one thing you can do to help reduce it?")
-      .replace(/\bwhat's the one thing you can do to help reduce that\?$/i, "What's the one thing you can do to help reduce that queue?")
-      .replace(/\bwhat is the one thing you can do to help reduce that\?$/i, "What is the one thing you can do to help reduce that queue?");
-  }
-
-  return normalizeText(output);
-}
-
-function dedupeLateStageQuestions(text = ""): string {
-  let output = normalizeText(text);
-  if (!output) return "";
-
-  output = output
-    .replace(
-      /\b(What's the first step to get past prior auth\?)\s+(What first step would actually make this workable\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What specific patient subgroup would I use this for to justify a formulary change\?)\s+(What next step would make this real\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What one proof point would actually change the decision\?)\s+(What one data point would actually change treatment choice\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What one data point would actually change treatment choice\?)\s+(What evidence would actually move this from discussion to decision\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What's the smallest change I can make to test this without fully changing our protocol\?)\s+(What one low-risk step would make this feel safe enough to try\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What's the smallest step I can take to test this without changing our entire workflow\?)\s+(What one low-risk step would make this feel safe enough to try\?)/i,
-      "$1"
-    )
-    .replace(
-      /\b(What one next step would make this real enough to actually do\?)\s+(What next step would make this real\?)/i,
-      "$1"
-    );
-
-  return normalizeText(output);
-}
-
-function hasNaturalTimePressureDirective(text = ""): boolean {
-  const value = normalizeText(text);
-  return /\b(get to the point|short version|bottom line|one thing|only got a minute|only have a minute|few minutes|give me the short version|brief version|quick version)\b/i.test(value);
-}
-
-function pickDeterministicTimeTail(seed = ""): string {
-  const options = [
-    "Give me the short version.",
-    "Get to the point.",
-    "Just give me the short version.",
-  ];
-  const key = normalizeText(seed);
-  const score = Array.from(key).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return options[score % options.length];
-}
-
-function enforceSentenceBoundaries(text = ""): string {
-  let output = normalizeText(text);
-  if (!output) return "";
-
-  output = output.replace(
-    /\b(I can look at it|I can stay with it|I can keep looking at it|I can keep looking)\s+(What|How|Why|Who|When|Where)\b/g,
-    "$1. $2"
-  );
-  output = output.replace(
-    /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(Keep it brief|Keep this brief|Keep it tight|Give me the short version|Get to the point|Make it quick)\b/gi,
-    "$1. $2"
-  );
-  output = output.replace(
-    /\b(point|version|now|room|practice|patients|staff|workflow|today)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
-    "$1. $2"
-  );
+    .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.");
   output = output.replace(
     /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
     "$1. $2"
@@ -212,6 +71,72 @@ function enforceSentenceBoundaries(text = ""): string {
   );
 
   return normalizeText(output);
+}
+
+function repairCommaSplices(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1")
+    .replace(/,\s+(Keep|Stay|Show|Tell|Give)\b/g, ". $1");
+
+  return normalizeText(output);
+}
+
+function repairQuestionPunctuation(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/\.\s*(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, "? $1")
+    .replace(/\?\s*\?/g, "?")
+    .replace(/\.\?$/g, "?");
+
+  return normalizeText(output);
+}
+
+function repairIncompleteOperationalAsks(text = ""): string {
+  let output = normalizeText(text);
+  if (!output) return "";
+
+  output = output
+    .replace(/\bwho owns that step\.$/i, "Who owns that step?")
+    .replace(/\bwhat happens next\.$/i, "What happens next?")
+    .replace(/\bwhat changes for staff\.$/i, "What changes for staff?")
+    .replace(/\bwhat changes in the access step\.$/i, "What changes in the access step?")
+    .replace(/\bwhat's the point\.$/i, "What's the point?");
+
+  return normalizeText(output);
+}
+
+function dedupeLateStageQuestions(text = ""): string {
+  const sentences = splitSentences(text);
+  if (!sentences.length) return normalizeText(text);
+
+  const seen = new Set<string>();
+  const kept = sentences.filter((sentence) => {
+    const normalized = sentence.toLowerCase().replace(/[.?!]+$/g, "").trim();
+    if (!normalized) return false;
+    if (seen.has(normalized)) return false;
+    seen.add(normalized);
+    return true;
+  });
+
+  return normalizeText(kept.join(" "));
+}
+
+function hasNaturalTimePressureDirective(text = ""): boolean {
+  return /\b(keep it short|give me the short version|keep it quick|briefly|one quick point|one practical point|short version)\b/i.test(String(text || ""));
+}
+
+function pickDeterministicTimeTail(seed = ""): string {
+  return deterministicPick([
+    "Keep it short.",
+    "Give me the short version.",
+    "One quick point.",
+    "One practical point.",
+  ], seed || "time-tail");
 }
 
 function applyGlobalSpokenRewrites(text = ""): string {
@@ -626,6 +551,7 @@ function applyShapeCompression(
   profile: HcpRuntimeProfile,
   scenario: any,
   hcpTurnCount = 0,
+  liveRepAlignmentActive = false,
 ): string {
   let output = normalizeText(text);
   const firstHcpTurn = hcpTurnCount === 0;
@@ -638,7 +564,7 @@ function applyShapeCompression(
       .filter(Boolean)
       .length;
   const preserveOpeningSentenceCount =
-    firstHcpTurn
+    firstHcpTurn && !liveRepAlignmentActive
       ? Math.min(
           3,
           Math.max(
@@ -837,7 +763,6 @@ function applyProfessionalBoundaryBalance(
     ], wrapSeed);
     output = trimToSentences(`${output.replace(/[.?!]+$/, "")}. ${wrapLine}`, 2);
   }
-
   return normalizeText(output);
 }
 
@@ -847,15 +772,20 @@ export function applyHcpResponseSurface({
   turn,
   profile,
   hcpTurnCount = 0,
+  liveRepAlignmentActive = false,
 }: {
   hcpReply: string;
   scenario: any;
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
   hcpTurnCount?: number;
+  liveRepAlignmentActive?: boolean;
 }): string {
   let output = normalizeText(hcpReply);
   if (!output) return "";
+  // === BEGIN PILOT PATCH: Narration/Cue Leakage Guard ===
+  output = guardAndRepairNarrationLeakage(output, { scenario, turn, profile, hcpTurnCount });
+  // === END PILOT PATCH ===
   output = enforceSourceBackedRealismSurface({
     hcpReply: output,
     scenario,
@@ -872,7 +802,7 @@ export function applyHcpResponseSurface({
   output = applyLateStageNarrowing(output, turn, scenario, hcpTurnCount);
   output = applyContinuityPressure(output, turn, profile, hcpTurnCount);
   output = applyProfessionalBoundaryBalance(output, turn, profile, scenario, hcpTurnCount);
-  output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount);
+  output = applyShapeCompression(output, turn, profile, scenario, hcpTurnCount, liveRepAlignmentActive);
 
   if (
     hcpTurnCount > 0 &&
@@ -920,3 +850,69 @@ export function applyHcpResponseSurface({
     )
   );
 }
+
+// === BEGIN PILOT PATCH: Narration/Cue Leakage Guard ===
+const NARRATION_PATTERNS = [
+  /^The HCP\b/i,
+  /^Keeps\b/i,
+  /^Looks\b/i,
+  /^Glances\b/i,
+  /^Leans\b/i,
+  /^Checks\b/i,
+  /looks back/i,
+  /glances at/i,
+  /keeps the/i,
+  /posture/i,
+  /expression/i,
+  /with very little space/i,
+  /under one hand/i,
+  /eyes narrowing/i,
+  /attention tightening/i,
+];
+
+function guardAndRepairNarrationLeakage(text: string, context: { scenario: any, turn: any, profile: any, hcpTurnCount: number }): string {
+  const isNarration = NARRATION_PATTERNS.some((pat) => pat.test(text));
+  if (!isNarration) return text;
+  // If the text is only narration, replace with a natural HCP line based on context
+  return repairNarrationToNaturalLine(text, context);
+}
+
+function repairNarrationToNaturalLine(text: string, { scenario, turn, profile, hcpTurnCount }: { scenario: any, turn: any, profile: any, hcpTurnCount: number }): string {
+  // Use concernFamily, pressure, and phase to select a natural line
+  const concern = (turn && turn.concernFamily) || "general";
+  const phase = (turn && turn.phase) || "general";
+  const pressure = (turn && turn.escalationStage) || "baseline";
+  // Map some common narration to natural lines
+  const narrationMap: Array<{ pat: RegExp, line: string }> = [
+    [/Keeps the study page in view/i, "I remember the study. What changes my decision?"],
+    [/Looks at the schedule/i, "Keep it quick. What’s the point?"],
+    [/Glances at the patient summary/i, "Which patient does this actually apply to?"],
+    [/Keeps the coverage notes in view/i, "If this still needs prior auth, what changes for my staff?"],
+    [/Glances at watch/i, "Be specific."],
+    [/Keeps the formulary sheet/i, "That still doesn’t answer the access issue."],
+    [/posture closed/i, "What’s the actual concern?"],
+    [/very little space left/i, "Let’s keep this focused."],
+  ];
+  for (const { pat, line } of narrationMap) {
+    if (pat.test(text)) return line;
+  }
+  // Fallback: use concern/pressure/phase to generate a short, natural line
+  if (concern === "access") {
+    return "If this still needs prior auth, what changes for my staff?";
+  }
+  if (concern === "evidence") {
+    return "What’s the endpoint or proof?";
+  }
+  if (concern === "safety") {
+    return "What’s the safety signal?";
+  }
+  if (pressure === "high_pressure" || pressure === "disengaging") {
+    return "Keep it quick. What’s the point?";
+  }
+  if (phase === "implementation_commitment") {
+    return "Who actually owns the next step?";
+  }
+  // Default fallback
+  return "What’s the actual concern?";
+}
+// === END PILOT PATCH ===

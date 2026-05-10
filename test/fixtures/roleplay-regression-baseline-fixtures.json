@@ -1,0 +1,103 @@
+{
+  "scenarios": [
+    {
+      "scenarioId": "oncology_access_operational_constraint",
+      "label": "Oncology Access / Operational Constraint",
+      "initial": {
+        "prevState": "time-pressured",
+        "prevTemp": "stressed",
+        "prevSeverity": 1,
+        "prevHcpState": "time-pressured",
+        "activeConstraint": "staffing",
+        "activeRequirement": "workflow"
+      },
+      "hcpUtterance": "We are already short on chair time and staffing, so feasibility matters.",
+      "repResponses": [
+        "I hear chair time is tight and staffing is stretched. We can start with one 10-minute infusion-slot checklist this week.",
+        "To keep workflow light, we can pilot with two patients and track turnaround impact only.",
+        "If this still adds burden today, we can pause and revisit when your team has capacity."
+      ],
+      "expected": {
+        "nextStates": ["time-pressured", "time-pressured", "time-pressured"],
+        "nextTemperatures": ["stressed", "stressed", "stressed"],
+        "nextSeverities": [1, 1, 1],
+        "cueSnippets": [
+          "already moving toward a patient room",
+          "checks the time",
+          "already moving toward a patient room"
+        ],
+        "alignmentScores": [3, 3, 3],
+        "overallScore": 3.8,
+        "lateTurnModes": ["restate_once", "boundary", "close"],
+        "activeConstraintEvolution": ["staffing", "staffing", "staffing"],
+        "activeRequirementEvolution": ["workflow", "workflow", "workflow"]
+      }
+    },
+    {
+      "scenarioId": "clinical_evidence_threshold",
+      "label": "Clinical Evidence Threshold",
+      "initial": {
+        "prevState": "resistant",
+        "prevTemp": "neutral",
+        "prevSeverity": 1,
+        "prevHcpState": "resistant",
+        "activeConstraint": "evidence",
+        "activeRequirement": "evidence"
+      },
+      "hcpUtterance": "I need stronger evidence quality before changing practice.",
+      "repResponses": [
+        "Understood. A randomized phase 3 subgroup showed a 14% absolute response lift with similar grade 3 adverse events.",
+        "If useful, I can share the endpoint definition and confidence interval so your team can validate applicability.",
+        "Given your threshold, one practical next step is reviewing that dataset in tumor board this week."
+      ],
+      "expected": {
+        "nextStates": ["resistant", "resistant", "resistant"],
+        "nextTemperatures": ["neutral", "neutral", "neutral"],
+        "nextSeverities": [1, 1, 1],
+        "cueSnippets": [
+          "beat of silence",
+          "reclaiming the space",
+          "less welcome"
+        ],
+        "alignmentScores": [3, 3, 3],
+        "overallScore": 3.3,
+        "lateTurnModes": ["restate_once", "boundary", "close"],
+        "activeConstraintEvolution": ["evidence", "evidence", "evidence"],
+        "activeRequirementEvolution": ["evidence", "evidence", "evidence"]
+      }
+    },
+    {
+      "scenarioId": "time_pressured_high_volume",
+      "label": "Time-Pressured / High-Volume Clinic",
+      "initial": {
+        "prevState": "time-pressured",
+        "prevTemp": "stressed",
+        "prevSeverity": 1,
+        "prevHcpState": "time-pressured",
+        "activeConstraint": "time",
+        "activeRequirement": "time"
+      },
+      "hcpUtterance": "I have two minutes. Keep this concise.",
+      "repResponses": [
+        "I will keep this to one point: same-day ordering reduced treatment-start delays by four days in a similar clinic.",
+        "No extra deck—just one workflow change and one metric to monitor this week.",
+        "If that is not useful right now, we can stop here and I will follow your preferred timing."
+      ],
+      "expected": {
+        "nextStates": ["time-pressured", "time-pressured", "time-pressured"],
+        "nextTemperatures": ["stressed", "stressed", "stressed"],
+        "nextSeverities": [1, 1, 1],
+        "cueSnippets": [
+          "checks the time",
+          "patient room",
+          "preparing to transition"
+        ],
+        "alignmentScores": [3, 3, 3],
+        "overallScore": 3.8,
+        "lateTurnModes": ["restate_once", "boundary", "close"],
+        "activeConstraintEvolution": ["time", "time", "time"],
+        "activeRequirementEvolution": ["time", "time", "time"]
+      }
+    }
+  ]
+}

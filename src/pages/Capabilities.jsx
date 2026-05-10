@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import AppHeader from "@/components/layout/AppHeader";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronDown, ChevronUp, MessageSquare, Ear, Heart, Users, Shield, BarChart2, RefreshCw, Target } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageSquare, Ear, Heart, Users, Shield, BarChart2, RefreshCw, Target } from "lucide-react";
+
+/** @typedef {typeof SIGNAL_INTELLIGENCE_CAPABILITIES[number]} Capability */
 
 // Icon map per capability
 const CAP_ICONS = {
@@ -16,9 +18,11 @@ const CAP_ICONS = {
   commitment_gaining: Target,
 };
 
+/** @param {{ cap: Capability; index: number }} props */
 function CapabilityCard({ cap, index }) {
   const [expanded, setExpanded] = useState(false);
-  const Icon = CAP_ICONS[cap.id] || MessageSquare;
+  const iconKey = /** @type {keyof typeof CAP_ICONS} */ (cap.id);
+  const Icon = CAP_ICONS[iconKey] || MessageSquare;
 
   return (
     <motion.div
@@ -86,7 +90,7 @@ function CapabilityCard({ cap, index }) {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest mb-2 text-slate-600">Effective Signals</p>
                   <ul className="space-y-1.5">
-                    {cap.whatGoodLooksLike.map((item, j) => (
+                    {cap.whatGoodLooksLike.map((/** @type {string} */ item, /** @type {number} */ j) => (
                       <li key={j} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "hsl(174 55% 42%)" }} />
                         {item}
@@ -97,7 +101,7 @@ function CapabilityCard({ cap, index }) {
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-widest mb-2 text-amber-700">Signals to Watch</p>
                   <ul className="space-y-1.5">
-                    {cap.whatToAvoid.map((item, j) => (
+                    {cap.whatToAvoid.map((/** @type {string} */ item, /** @type {number} */ j) => (
                       <li key={j} className="flex items-start gap-2 text-sm text-slate-700 leading-relaxed">
                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                         {item}
@@ -106,7 +110,7 @@ function CapabilityCard({ cap, index }) {
                   </ul>
                 </div>
               </div>
-              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -117,34 +121,7 @@ function CapabilityCard({ cap, index }) {
 export default function Capabilities() {
   return (
     <div className="min-h-screen font-inter" style={{ background: "#f8fafb" }}>
-
-      {/* Top nav — clean white bar */}
-      <div
-        className="sticky top-0 z-10 backdrop-blur-xl"
-        style={{
-          background: "rgba(255,255,255,0.84)",
-          borderBottom: "1px solid rgba(38, 67, 117, 0.18)",
-          boxShadow: "0 10px 24px rgba(14, 24, 43, 0.06)",
-        }}
-      >
-        <div className="max-w-5xl mx-auto px-6 py-3.5 flex items-center gap-3">
-          <Link
-            to="/"
-            className="transition-colors"
-            style={{ color: "hsl(222 52% 24%)" }}
-            onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 40%)"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "hsl(222 52% 24%)"; }}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div className="w-px h-4" style={{ background: "rgba(38, 67, 117, 0.14)" }} />
-          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 55% 38%)" }}>
-            Signal Intelligence
-          </span>
-          <span className="text-xs mx-1" style={{ color: "rgba(38, 67, 117, 0.28)" }}>/</span>
-          <span className="text-sm font-medium" style={{ color: "hsl(222 38% 31%)" }}>Behavioral Metrics</span>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-5xl" />
 
       <div className="max-w-5xl mx-auto px-6 py-10">
 

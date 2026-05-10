@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import AppHeader from "@/components/layout/AppHeader";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { generateSessionReview } from "@/lib/sessionReview";
@@ -10,13 +11,16 @@ import MessageInput from "@/components/simulator/MessageInput";
 import SimulatorRightPanel from "@/components/simulator/SimulatorRightPanel";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
-import { ArrowLeft, Square, Lightbulb, LightbulbOff, ChevronDown, Target } from "lucide-react";
-import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PERSONA_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
+import { Square, ChevronDown } from "lucide-react";
+import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
 import { getScenarioById, listAllScenarios } from "@/lib/scenarioStorage";
 import { generateRealtimeFeedback, createWorkerSession } from "@/services/workerClient";
 import { resolveObservedCue } from "@/lib/hcpCueGenerator";
+import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
+import { buildPredictivePromptContext, buildPredictiveRuntimeLens } from "@/lib/predictiveRuntimeService";
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
 import { toast } from "@/components/ui/use-toast";
 
 function createSafeId() {
@@ -28,6 +32,7 @@ function createSafeId() {
 }
 
 function createLocalSession(scData, convInit) {
+  const initialRealism = requireRealismContract(scData?.runtimeTemperature, "scenario.runtimeTemperature");
   return {
     id: createSafeId(),
     scenarioId: scData.id,
@@ -35,8 +40,152 @@ function createLocalSession(scData, convInit) {
     currentJourneyState: scData.journeyState,
     currentBehaviorState: convInit.initialBehaviorState,
     turnCount: 0,
+    realism: initialRealism,
+    temperature: initialRealism,
+    predictiveProfile: null,
+    hcpPersona: null,
+    hcpState: {
+      resistance: 5,
+      skepticism: 5,
+      openness: 5,
+      emotion: "guarded",
+      behaviorState: convInit.initialBehaviorState,
+      concernFamily: "",
+      realism: initialRealism,
+      temperature: initialRealism,
+      temperaturePersonaTraits: temperatureTraits(initialRealism),
+      updatedAt: new Date().toISOString(),
+    },
+    sessionMemory: [],
+    previousInteraction: "",
+    interactionHistory: [],
+    lastConcernFamily: "",
+    escalationLevel: 0,
     coachingNudgesEnabled: true,
     isComplete: false,
+  };
+}
+
+function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
+  const selection = runtimeLens?.selection;
+  const type = String(selection?.behaviorArchetype || scenario?.persona || "").trim();
+  if (!type) return null;
+  return {
+    type,
+    source: runtimeLens?.synthesisSource || "deterministic",
+    specialistTitle: runtimeLens?.specialistTitle || scenario?.stakeholder || "Clinical Specialist",
+  };
+}
+
+function getTemperatureBandLabel(value) {
+  const temperature = Number(value);
+  if (!Number.isFinite(temperature)) return "unknown";
+  if (temperature <= 3) return "low";
+  if (temperature <= 7) return "medium";
+  return "high";
+}
+
+function logReviewError(stage, error, extras = {}) {
+  const message = error instanceof Error ? error.message : String(error || "unknown_error");
+  console.error("[Simulator] review_error", {
+    stage,
+    message,
+    stack: error instanceof Error ? error.stack : undefined,
+    ...extras,
+  });
+}
+
+function temperatureTraits(temperature) {
+  const temp = Math.max(1, Math.min(10, Number(temperature) || 5));
+  if (temp <= 4) {
+    return {
+      challengeStyle: "collaborative",
+      patience: 8,
+      directness: 4,
+      interruptionLikelihood: 2,
+    };
+  }
+  if (temp <= 7) {
+    return {
+      challengeStyle: "proof-seeking",
+      patience: 6,
+      directness: 6,
+      interruptionLikelihood: 4,
+    };
+  }
+  return {
+    challengeStyle: "challenging",
+    patience: 3,
+    directness: 8,
+    interruptionLikelihood: 8,
+  };
+}
+
+function deriveHcpStateSnapshot({
+  priorState,
+  behaviorState,
+  prediction,
+  behaviorSignals,
+  temperature,
+}) {
+  const prior = priorState || {
+    resistance: 5,
+    skepticism: 5,
+    openness: 5,
+    emotion: "guarded",
+  };
+
+  const nextBehavior = String(behaviorState || "neutral").toLowerCase();
+  const risk = String(prediction?.riskLevel || "").toLowerCase();
+  const alignment = String(behaviorSignals?.response_alignment || "weak").toLowerCase();
+  const listening = String(behaviorSignals?.listening_pattern || "missed").toLowerCase();
+  const concernFamily = String(prediction?.concernFamily || "").toLowerCase();
+  const traits = temperatureTraits(temperature);
+
+  const ignoredOrDismissed = alignment === "weak" || listening === "missed";
+  const matchedConcern = ["strong", "partial"].includes(alignment);
+
+  const resistanceBump =
+    (ignoredOrDismissed ? 2 : 0) +
+    (["resistance", "closed", "frustration", "time_pressure"].includes(nextBehavior) ? 1 : 0) +
+    (risk === "high" ? 1 : 0) +
+    (traits.challengeStyle === "challenging" ? 1 : 0);
+  const resistanceDrop = matchedConcern ? 1 : 0;
+
+  const skepticismBump =
+    (traits.challengeStyle === "challenging" ? 2 : traits.challengeStyle === "proof-seeking" ? 1 : 0) +
+    (concernFamily === "evidence" || concernFamily === "patient_fit" ? 1 : 0) +
+    (ignoredOrDismissed ? 1 : 0);
+  const skepticismDrop = matchedConcern ? 1 : 0;
+
+  const opennessDrop = ignoredOrDismissed ? 2 : 0;
+  const opennessBump =
+    (matchedConcern ? 1 : 0) +
+    (traits.challengeStyle === "collaborative" ? 2 : 0) +
+    (nextBehavior === "open" ? 1 : 0);
+
+  const resistance = Math.max(1, Math.min(10, Number(prior.resistance || 5) + resistanceBump - resistanceDrop));
+  const skepticism = Math.max(1, Math.min(10, Number(prior.skepticism || 5) + skepticismBump - skepticismDrop));
+  const openness = Math.max(1, Math.min(10, Number(prior.openness || 5) + opennessBump - opennessDrop));
+
+  const emotion = resistance >= 8
+    ? "frustrated"
+    : skepticism >= 7
+      ? "skeptical"
+      : openness >= 7
+        ? "engaged"
+        : "guarded";
+
+  return {
+    resistance,
+    skepticism,
+    openness,
+    emotion,
+    behaviorState: nextBehavior,
+    concernFamily,
+    temperature,
+    temperaturePersonaTraits: traits,
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -44,6 +193,9 @@ export default function Simulator() {
   const navigate = useNavigate();
   const urlParams = new URLSearchParams(window.location.search);
   const scenarioId = urlParams.get("scenarioId");
+  const realismOverrideRaw = urlParams.get("realism") ?? urlParams.get("runtimeTemperature");
+  const realismOverride = Number(realismOverrideRaw);
+  const hasRealismOverride = Number.isInteger(realismOverride) && realismOverride >= 1 && realismOverride <= 10;
 
   const [scenario, setScenario] = useState(null);
   const [session, setSession] = useState(null);
@@ -53,7 +205,6 @@ export default function Simulator() {
   const [lastNudge, setLastNudge] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [coachingEnabled, setCoachingEnabled] = useState(true);
   const [review, setReview] = useState(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -61,62 +212,121 @@ export default function Simulator() {
   const [allSignals, setAllSignals] = useState([]);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
-  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */ ("stable"));
+  const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
   const [repTurnIds, setRepTurnIds] = useState([]);
   const [conversationInit, setConversationInit] = useState(null);
   const [hasRepSpoken, setHasRepSpoken] = useState(false);
   const [realtimeFeedback, setRealtimeFeedback] = useState(null);
   const [reviewStage, setReviewStage] = useState("");
+  const regenerateToastRef = useRef(null);
   const [lastRuntimeError, setLastRuntimeError] = useState("");
+  const [predictiveLens, setPredictiveLens] = useState({ isLoading: false, data: null });
+  const predictiveLensRef = useRef({ isLoading: false, data: null });
+  const predictiveLensReadyPromiseRef = useRef(Promise.resolve(null));
+  const coachingEnabled = true;
+
+  const setPredictiveLensState = useCallback((nextLens) => {
+    predictiveLensRef.current = nextLens;
+    setPredictiveLens(nextLens);
+  }, []);
 
   useEffect(() => {
     if (scenarioId) void initSession();
     else navigate("/");
-  }, [scenarioId]);
+  }, [navigate, scenarioId, realismOverrideRaw]);
 
   const initSession = async () => {
     setIsInitializing(true);
-    const allScenarios = await listAllScenarios();
-    let scData = await getScenarioById(scenarioId) || allScenarios[0];
+    try {
+      const allScenarios = await listAllScenarios();
+      let scData = await getScenarioById(scenarioId) || allScenarios[0];
 
-    if (!scData) {
-      navigate("/");
-      return;
-    }
+      if (!scData) {
+        navigate("/");
+        return;
+      }
 
-    if (!scData.visualScene) {
-      scData = {
+      if (!scData.visualScene) {
+        scData = {
+          ...scData,
+          visualScene: generateOpeningScene({
+            title: scData.title,
+            journeyStage: scData.journeyStage || "initial_access",
+            startingBehaviorState: scData.startingBehaviorState || "neutral",
+            decisionOrientation: scData.decisionOrientation,
+            interactionPressure: scData.interactionPressure || [],
+          }),
+        };
+      }
+      const resolvedSeed = buildPredictiveSeedFromScenario(scData);
+      const scenarioWithSeed = {
         ...scData,
-        visualScene: generateOpeningScene({
-          title: scData.title,
-          journeyStage: scData.journeyStage || "initial_access",
-          startingBehaviorState: scData.startingBehaviorState || "neutral",
-          decisionOrientation: scData.decisionOrientation,
-          interactionPressure: scData.interactionPressure || [],
-        }),
+        runtimeTemperature: hasRealismOverride ? realismOverride : scData.runtimeTemperature,
+        predictiveSeed: {
+          ...resolvedSeed,
+          ...(scData.predictiveSeed || {}),
+        },
       };
+      setScenario(scenarioWithSeed);
+      setPredictiveLensState({ isLoading: true, data: null });
+
+      const runtimeLensPromise = buildPredictiveRuntimeLens({
+        selection: scenarioWithSeed.predictiveSeed,
+        scenarioTitle: scenarioWithSeed.title,
+      });
+      predictiveLensReadyPromiseRef.current = runtimeLensPromise;
+
+      void runtimeLensPromise.then((runtimeData) => {
+        const predictiveProfile = buildPredictiveProfileFromRuntime(runtimeData, scenarioWithSeed);
+        setPredictiveLensState({ isLoading: false, data: runtimeData });
+        setSession((current) => current ? { ...current, predictiveProfile, hcpPersona: predictiveProfile } : current);
+      }).catch(() => {
+        setPredictiveLensState({ isLoading: false, data: null });
+        setSession((current) => current ? { ...current, predictiveProfile: null, hcpPersona: null } : current);
+      });
+
+      const convInit = await initializeConversation(scenarioWithSeed);
+      setConversationInit(convInit);
+
+      let newSession;
+      try {
+        newSession = createLocalSession(scenarioWithSeed, convInit);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Missing temperature";
+        setLastRuntimeError(message);
+        toast({
+          title: "Simulator initialization failed",
+          description: message,
+          variant: "destructive",
+        });
+        return;
+      }
+      setSession(newSession);
+
+      setTurns([]);
+      setHasRepSpoken(false);
+
+      const initCues = [];
+      const openingCue = resolveObservedCue("", {
+        hcpReply: scenarioWithSeed.openingScene || scenarioWithSeed.visualScene || scenarioWithSeed.description || "",
+        behaviorState: scenarioWithSeed.startingBehaviorState || "neutral",
+        interactionPressures: scenarioWithSeed.interactionPressure || [],
+        scenario: scenarioWithSeed,
+      });
+      initCues.push({ id: "cue_init_1", ...openingCue });
+      setActiveCues(initCues);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to initialize scenario";
+      setLastRuntimeError(message);
+      toast({
+        title: "Simulator initialization failed",
+        description: message,
+        variant: "destructive",
+      });
+      navigate("/");
+    } finally {
+      setIsInitializing(false);
     }
-    setScenario(scData);
-
-    const convInit = await initializeConversation(scData);
-    setConversationInit(convInit);
-
-    const newSession = createLocalSession(scData, convInit);
-    setSession(newSession);
-
-    setTurns([]);
-    setHasRepSpoken(false);
-
-    const initCues = [];
-    const openingCue = resolveObservedCue("", {
-      hcpReply: scData.openingScene || scData.visualScene || scData.description || "",
-      behaviorState: scData.startingBehaviorState || "neutral",
-      interactionPressures: scData.interactionPressure || [],
-      scenario: scData,
-    });
-    initCues.push({ id: "cue_init_1", ...openingCue });
-    setActiveCues(initCues);
-    setIsInitializing(false);
   };
 
   const handleRepMessage = useCallback(async (repText) => {
@@ -124,6 +334,51 @@ export default function Simulator() {
     setIsLoading(true);
     setLastNudge(null);
     setLastRuntimeError("");
+
+    const isFirstRepTurn = !hasRepSpoken;
+    if (isFirstRepTurn && predictiveLensRef.current.isLoading) {
+      await predictiveLensReadyPromiseRef.current.catch(() => null);
+    }
+
+    const predictiveRuntimeData = predictiveLensRef.current.data;
+    const predictiveProfile = session?.predictiveProfile || buildPredictiveProfileFromRuntime(predictiveRuntimeData, scenario);
+    if (!predictiveProfile) {
+      const message = "Error: HCP context not initialized";
+      setLastRuntimeError(message);
+      toast({
+        title: "HCP context missing",
+        description: message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    let temperature;
+    try {
+      temperature = requireRealismContract(session?.realism, "session.realism");
+    } catch {
+      const message = "Missing temperature";
+      setLastRuntimeError(message);
+      toast({
+        title: "Temperature missing",
+        description: message,
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("predictive_profile_attached", {
+      hasProfile: !!predictiveProfile,
+      personaType: predictiveProfile?.type,
+    });
+
+    console.log("temperature_applied", {
+      value: temperature,
+      band: temperature <= 3 ? "low" : temperature <= 7 ? "medium" : "high",
+    });
+
     setHasRepSpoken(true);
 
     const repTurnObj = {
@@ -172,8 +427,18 @@ export default function Simulator() {
     }));
 
     try {
+      const scenarioWithTemperature = {
+        ...scenario,
+        runtimeTemperature: temperature,
+      };
+
+      const predictiveContext = buildPredictivePromptContext(predictiveRuntimeData);
+      if (!predictiveContext.trim()) {
+        throw new Error("Error: HCP context not initialized");
+      }
+
       const response = await generateHcpResponse(
-        scenario,
+        scenarioWithTemperature,
         conversationHistory,
         session.currentBehaviorState,
         session.currentJourneyState,
@@ -182,6 +447,17 @@ export default function Simulator() {
         allSignals,
         session.turnCount,
         currentVolatilityProfile,
+        undefined,
+        predictiveProfile,
+        predictiveContext,
+        {
+          hcpPersona: session?.hcpPersona || predictiveProfile,
+          temperature,
+          previousInteraction: repText,
+          interactionHistory: session?.interactionHistory || [],
+          previousConcernFamily: session?.lastConcernFamily || "",
+          escalationLevel: Number(session?.escalationLevel || 0),
+        },
       );
 
       setTurns((prev) => {
@@ -197,6 +473,7 @@ export default function Simulator() {
           timestamp: new Date().toISOString(),
           cues: response.activeCues || [],
           nudge: null,
+          predictiveDebug: response.predictiveDebug || null,
         }];
       });
 
@@ -221,9 +498,56 @@ export default function Simulator() {
 
       const updatedSession = {
         ...session,
+        realism: temperature,
+        predictiveProfile,
+        hcpPersona: predictiveProfile,
+        previousInteraction: repText,
+        interactionHistory: [
+          ...(session?.interactionHistory || []),
+          {
+            rep: repText,
+            hcp: response.hcpReply,
+            concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+            behaviorState: response.nextBehaviorState,
+          },
+        ].slice(-8),
+        lastConcernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+        escalationLevel: (() => {
+          const prior = Number(session?.escalationLevel || 0);
+          const escalates = ["closed", "resistance", "frustration", "time_pressure"].includes(String(response.nextBehaviorState || "").toLowerCase())
+            || String(response?.prediction?.riskLevel || "").toLowerCase() === "high";
+          if (escalates) return Math.min(3, prior + 1);
+          return Math.max(0, prior - 1);
+        })(),
         currentJourneyState: response.nextJourneyState,
         currentBehaviorState: response.nextBehaviorState,
         turnCount: session.turnCount + 2,
+        hcpState: deriveHcpStateSnapshot({
+          priorState: session?.hcpState,
+          behaviorState: response.nextBehaviorState,
+          prediction: response?.prediction,
+          behaviorSignals: response?.behaviorSignals,
+          temperature,
+        }),
+        sessionMemory: [
+          ...(session?.sessionMemory || []),
+          {
+            hcpResponse: response.hcpReply,
+            hcpState: deriveHcpStateSnapshot({
+              priorState: session?.hcpState,
+              behaviorState: response.nextBehaviorState,
+              prediction: response?.prediction,
+              behaviorSignals: response?.behaviorSignals,
+              temperature,
+            }),
+            realism: temperature,
+            temperature,
+            concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
+            repMessage: repText,
+            behaviorSignals: response?.behaviorSignals || {},
+            timestamp: new Date().toISOString(),
+          },
+        ].slice(-10),
       };
       setSession(updatedSession);
     } catch (error) {
@@ -237,7 +561,7 @@ export default function Simulator() {
     } finally {
       setIsLoading(false);
     }
-  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile]);
+  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile, hasRepSpoken]);
 
   const handleEndSession = async () => {
     if (!session || isReviewing) return;
@@ -254,31 +578,134 @@ export default function Simulator() {
 
     setReviewStage("Generating coaching feedback (15–30 s)…");
 
-    const reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+    try {
+      let reviewData;
+      try {
+        reviewData = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      } catch (error) {
+        logReviewError("generate", error, {
+          scenarioId: scenario?.id || null,
+          turnCount: turns.length,
+          signalCount: allSignals.length,
+        });
+        throw error;
+      }
+      console.debug("[Simulator] Session review payload:", reviewData);
 
-    setReviewStage("Saving session…");
-    const completedSession = {
-      ...session,
-      scenarioId: scenario?.id,
-      scenarioTitle: scenario?.title,
-      endedAt: new Date().toISOString(),
-      turnCount: turns.filter((turn) => turn.speaker === "rep").length,
-      transcript: turns,
-      review: reviewData,
-      signals: allSignals,
-    };
-    await createWorkerSession(completedSession).catch(() => null);
-    setSession((current) => current ? ({
-      ...current,
-      isComplete: true,
-      endedAt: new Date().toISOString(),
-      reviewData: JSON.stringify(reviewData),
-    }) : current);
+      setReviewStage("Saving session…");
+      const completedSession = {
+        ...session,
+        scenarioId: scenario?.id,
+        scenarioTitle: scenario?.title,
+        endedAt: new Date().toISOString(),
+        turnCount: turns.filter((turn) => turn.speaker === "rep").length,
+        transcript: turns,
+        review: reviewData,
+        signals: allSignals,
+        predictiveLens: predictiveLens?.data ? {
+          selection: predictiveLens.data.selection,
+          synthesisSource: predictiveLens.data.synthesisSource,
+          synthesisError: predictiveLens.data.synthesisError,
+          specialistTitle: predictiveLens.data.specialistTitle,
+          evidenceRecords: predictiveLens.data.evidenceRecords || [],
+          sections: predictiveLens.data.lens?.sections || null,
+          hcpPerspective: predictiveLens.data.lens?.hcpPerspective || null,
+          repPreparation: predictiveLens.data.lens?.repPreparation || null,
+          runtimeSignals: {
+            predictive_profile_attached: {
+              hasProfile: Boolean(session?.predictiveProfile),
+              personaType: session?.predictiveProfile?.type || null,
+            },
+            temperature_applied: {
+              value: session?.realism ?? session?.temperature ?? null,
+              band: getTemperatureBandLabel(session?.realism ?? session?.temperature),
+            },
+          },
+        } : null,
+      };
+      console.debug("[Simulator] Save session payload:", completedSession);
+      await createWorkerSession(completedSession).catch(() => null);
+      setSession({
+        ...completedSession,
+        isComplete: true,
+        reviewData: JSON.stringify(reviewData),
+      });
 
-    setReview(reviewData);
-    setShowSummary(true);
-    setIsReviewing(false);
-    setReviewStage("");
+      setReview(reviewData);
+      setShowSummary(true);
+    } catch (error) {
+      logReviewError("end_session", error, {
+        scenarioId: scenario?.id || null,
+        turnCount: turns.length,
+        signalCount: allSignals.length,
+      });
+      toast({
+        title: "Session review failed",
+        description: error instanceof Error ? error.message : "Unable to generate feedback. Check console for details.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReviewing(false);
+      setReviewStage("");
+    }
+  };
+
+  const handleRegenerateReview = async () => {
+    if (!session || !scenario || isReviewing) return;
+
+    setIsReviewing(true);
+    setReviewStage("Regenerating feedback sections…");
+
+    const stateHistory = computeHcpStateHistory(
+      allSignals,
+      scenario.persona,
+      scenario.interactionPressure || [],
+      scenario.startingBehaviorState,
+    );
+    const volEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
+
+    try {
+      const regenerated = await generateSessionReview(scenario, turns, allSignals, stateHistory, volEvents);
+      const nextReview = !review ? regenerated : {
+        ...regenerated,
+        // Keep section 1 stable when user regenerates coaching sections.
+        briefRationale: review.briefRationale || regenerated.briefRationale,
+        overallSummary: Array.isArray(review.overallSummary) && review.overallSummary.length
+          ? review.overallSummary
+          : regenerated.overallSummary,
+        signalResponseAlignment: Array.isArray(review.signalResponseAlignment) && review.signalResponseAlignment.length
+          ? review.signalResponseAlignment
+          : regenerated.signalResponseAlignment,
+      };
+
+      setReview(nextReview);
+      setSession((current) => current ? {
+        ...current,
+        review: nextReview,
+        reviewData: JSON.stringify(nextReview),
+      } : current);
+
+      regenerateToastRef.current?.dismiss?.();
+      regenerateToastRef.current = toast({
+        title: "Feedback regenerated",
+        description: "Updated coaching sections are ready.",
+      });
+    } catch (error) {
+      regenerateToastRef.current?.dismiss?.();
+      logReviewError("regenerate", error, {
+        scenarioId: scenario?.id || null,
+        turnCount: turns.length,
+        signalCount: allSignals.length,
+      });
+      toast({
+        title: "Regeneration failed",
+        description: error instanceof Error ? error.message : "Unable to regenerate coaching feedback.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReviewing(false);
+      setReviewStage("");
+    }
   };
 
   const handleExport = () => {
@@ -329,10 +756,13 @@ export default function Simulator() {
     );
   }
 
-  const currentPressures = scenario?.interactionPressure || [];
+  const showCurrentJourneyState = session?.currentJourneyState;
+  const showActivePressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
 
   return (
-    <div className="min-h-screen flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+    <div className="h-screen overflow-hidden flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+      <AppHeader maxWidthClassName="max-w-none" />
+
       <div
         className="shrink-0 z-10 backdrop-blur-xl"
         style={{
@@ -340,91 +770,59 @@ export default function Simulator() {
           borderBottom: "1px solid rgba(89, 125, 175, 0.24)",
         }}
       >
-        <div className="flex items-center justify-between px-5 py-3.5 gap-4">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <button
-              onClick={() => navigate("/")}
-              className="transition-colors shrink-0 p-1"
-              style={{ color: "rgba(244,249,249,0.92)" }}
-              onMouseEnter={e => { e.currentTarget.style.color = "hsl(177 49% 62%)"; }}
-              onMouseLeave={e => { e.currentTarget.style.color = "rgba(244,249,249,0.92)"; }}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="w-px h-5 shrink-0" style={{ background: "rgba(255,255,255,0.18)" }} />
-            <div className="min-w-0">
-              <h1 className="font-semibold text-sm truncate leading-snug" style={{ color: "rgba(255,255,255,0.96)" }}>{scenario?.title}</h1>
-              <div className="flex items-center gap-1.5 mt-1">
-                <Target className="w-3 h-3 shrink-0" style={{ color: "rgba(220, 236, 236, 0.72)" }} />
-                <span className="text-xs truncate" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{PERSONA_LABELS[scenario?.persona] || scenario?.persona}</span>
-                <span className="text-xs" style={{ color: "rgba(255,255,255,0.24)" }}>·</span>
-                <span className="text-xs" style={{ color: "rgba(220, 236, 236, 0.72)" }}>{JOURNEY_STATE_LABELS[session?.currentJourneyState]}</span>
-              </div>
-            </div>
+        <div className="grid grid-cols-[minmax(240px,auto)_1fr_auto] items-center px-5 py-3.5 gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="font-semibold text-base leading-none truncate max-w-[320px]" style={{ color: "rgba(255,255,255,0.96)" }}>
+              {scenario?.title}
+            </h1>
+          </div>
 
-            <div className="hidden xl:flex items-center gap-3 ml-6 pl-6 min-w-0" style={{ borderLeft: "1px solid rgba(255,255,255,0.16)" }}>
-              <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
-                HCP State
-              </span>
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Journey
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {JOURNEY_STATE_LABELS[session?.currentJourneyState] || session?.currentJourneyState}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                    Behavior
-                  </span>
-                  <span className="px-2.5 py-1 text-[11px] font-semibold rounded-md border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(244,249,249,0.96)", borderColor: "rgba(125, 173, 190, 0.24)" }}>
-                    {BEHAVIOR_STATE_LABELS[session?.currentBehaviorState] || session?.currentBehaviorState}
-                  </span>
-                </div>
-                {currentPressures.length > 0 && (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(220,236,236,0.64)" }}>
-                      Pressures
-                    </span>
-                    <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
-                      {currentPressures.map((pressure) => (
-                        <span
-                          key={pressure}
-                          className="px-2 py-1 text-[11px] font-medium rounded-md border whitespace-nowrap"
-                          style={{
-                            background: "rgba(37, 124, 123, 0.12)",
-                            borderColor: "rgba(37, 124, 123, 0.24)",
-                            color: "rgba(244,249,249,0.96)",
-                          }}
-                        >
-                          {PRESSURE_LABELS[pressure] || pressure}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+          <div className="hidden lg:flex items-center gap-3 min-w-0 justify-center">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] whitespace-nowrap" style={{ color: "rgba(255,255,255,0.96)" }}>
+              HCP State
+            </span>
+            <div className="flex items-center gap-3 min-w-0 justify-center">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Journey
+                </span>
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.96)", borderColor: "rgba(37, 124, 123, 0.55)" }}>
+                  {JOURNEY_STATE_LABELS[showCurrentJourneyState] || showCurrentJourneyState}
+                </span>
               </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                  Behavior
+                </span>
+                <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap" style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.96)", borderColor: "rgba(37, 124, 123, 0.55)" }}>
+                  {BEHAVIOR_STATE_LABELS[session?.currentBehaviorState] || session?.currentBehaviorState}
+                </span>
+              </div>
+              {showActivePressures.length > 0 && (
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "rgba(173, 240, 231, 0.88)" }}>
+                    Pressures
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5 max-w-[320px]">
+                    {showActivePressures.map((pressure) => (
+                      <span
+                        key={pressure}
+                        className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border whitespace-nowrap"
+                        style={{
+                          background: "rgba(255,255,255,0.08)",
+                          borderColor: "rgba(37, 124, 123, 0.55)",
+                          color: "rgba(255,255,255,0.96)",
+                        }}
+                      >
+                        {PRESSURE_LABELS[pressure] || pressure}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setCoachingEnabled(!coachingEnabled)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all"
-              style={coachingEnabled ? {
-                background: "hsl(174 30% 18%)",
-                border: "1px solid hsl(174 60% 52% / 0.5)",
-                color: "hsl(174 60% 72%)",
-              } : {
-                background: "hsl(222 30% 18%)",
-                border: "1px solid hsl(222 30% 28%)",
-                color: "hsl(215 20% 55%)",
-              }}
-            >
-              {coachingEnabled ? <Lightbulb className="w-3 h-3" /> : <LightbulbOff className="w-3 h-3" />}
-              <span className="hidden sm:inline">Coaching</span>
-            </button>
+          <div className="flex items-center gap-2 shrink-0 justify-end">
             <button
               onClick={handleEndSession}
               disabled={isReviewing || turns.filter((t) => t.speaker === "rep").length === 0}
@@ -446,9 +844,9 @@ export default function Simulator() {
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden p-4 gap-4">
+      <div className="flex-1 min-h-0 flex overflow-hidden p-4 gap-4">
         <div
-          className="flex-1 flex flex-col overflow-hidden rounded-[28px]"
+          className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[28px]"
           style={{
             background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
             border: "1px solid rgba(152, 160, 171, 0.68)",
@@ -494,6 +892,8 @@ export default function Simulator() {
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              predictiveLens={predictiveLens}
+              realism={session?.realism}
             />
           </div>
         </div>
@@ -521,6 +921,8 @@ export default function Simulator() {
               scenario={scenario}
               conversationInit={conversationInit}
               hasRepSpoken={hasRepSpoken}
+              predictiveLens={predictiveLens}
+              realism={session?.realism}
             />
           </motion.div>
         )}
@@ -544,10 +946,12 @@ export default function Simulator() {
         <SessionSummaryModal
           review={review}
           scenario={scenario}
+          session={session}
           sessionTurnCount={turns.filter((t) => t.speaker === "rep").length}
           onClose={() => setShowSummary(false)}
           onExport={handleExport}
           onNewSession={() => navigate("/")}
+          onRegenerate={handleRegenerateReview}
         />
       )}
     </div>

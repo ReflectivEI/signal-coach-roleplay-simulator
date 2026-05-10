@@ -4,7 +4,7 @@ import {
   INFLUENCE_DRIVERS,
   INTERACTION_PRESSURES,
   JOURNEY_STAGES,
-} from "@/components/home/ScenarioFilters";
+} from "@/lib/rpsUserInputOptions";
 
 export const PREDICTIVE_SELECTOR_OPTIONS = {
   diseaseState: DISEASE_STATES.filter((opt) => opt.value !== "all"),
@@ -21,437 +21,470 @@ export const PREDICTIVE_SELECTOR_OPTIONS = {
 };
 
 export const scenarioPredictivePresets = {
-  "Gatekeeper Filter": {
-    diseaseState: "primary_care",
-    hcpType: "treating_clinician",
-    journeyStage: "initial_access",
-    interactionPressure: "operationally_constrained",
-    influenceDriver: "patient_centric",
-    behaviorArchetype: "time_constrained_community_doctor",
+  "The Gatekeeper Filter": {
+    journeyStage: "Initial Access",
+    interactionPressure: ["Time Constrained", "Operationally Constrained"],
+    influenceDriver: "Practical / Workflow-Oriented",
+    behaviorArchetype: "Guarded Gatekeeper",
+    coreFriction: "Access + workflow burden",
+    canonical: {
+      journeyStage: "initial_access",
+      interactionPressure: ["time_constrained", "operationally_constrained"],
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
+  },
+  "The Guideline Anchor": {
+    journeyStage: "Clinical Value",
+    interactionPressure: ["Skeptical / Resistant", "Competitive Bias"],
+    influenceDriver: "Guideline-Anchored",
+    behaviorArchetype: "Skeptical Specialist",
+    coreFriction: "Guideline lock vs real-world variability",
+    canonical: {
+      journeyStage: "clinical_value",
+      interactionPressure: ["skeptical_resistant", "competitive_bias"],
+      influenceDriver: "guideline_anchored",
+      behaviorArchetype: "skeptical_specialist",
+    },
+  },
+  "The Workflow Bottleneck": {
+    journeyStage: "Adoption & Implementation",
+    interactionPressure: ["Operationally Constrained"],
+    influenceDriver: "Patient-Centric",
+    behaviorArchetype: "Guarded Gatekeeper",
+    coreFriction: "Workflow capacity vs clinical intent",
+    canonical: {
+      journeyStage: "adoption_implementation",
+      interactionPressure: ["operationally_constrained"],
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
   },
 };
 
-const LABEL_LOOKUP = {
-  diseaseState: Object.fromEntries(DISEASE_STATES.map((opt) => [opt.value, opt.label])),
-  hcpType: Object.fromEntries(HCP_TYPES.map((opt) => [opt.value, opt.label])),
-  journeyStage: Object.fromEntries(JOURNEY_STAGES.map((opt) => [opt.value, opt.label])),
-  interactionPressure: Object.fromEntries(INTERACTION_PRESSURES.map((opt) => [opt.value, opt.label])),
-  influenceDriver: Object.fromEntries(INFLUENCE_DRIVERS.map((opt) => [opt.value, opt.label])),
-  behaviorArchetype: Object.fromEntries(PREDICTIVE_SELECTOR_OPTIONS.behaviorArchetype.map((opt) => [opt.value, opt.label])),
+const DISEASE_INTELLIGENCE = {
+  pulmonology: {
+    decisionRealities: [
+      "Escalation choices are often constrained by prior exacerbation history, inhaler technique, and adherence uncertainty.",
+      "Clinical confidence increases when real-world outcomes align with symptom control and exacerbation reduction in similar populations.",
+      "Workflow burden rises quickly when therapy changes require extra coaching, follow-up calls, or payer documentation.",
+    ],
+    publicationThemes: [
+      "GOLD strategy updates and practical implementation discussions in respiratory societies.",
+      "Real-world outcome publications around exacerbation control, persistence, and healthcare utilization.",
+      "Safety and tolerability narratives in long-term respiratory cohorts.",
+    ],
+    sourceSignals: [
+      { name: "GOLD Reports", url: "https://goldcopd.org/" },
+      { name: "American Thoracic Society", url: "https://www.thoracic.org/" },
+      { name: "European Respiratory Society", url: "https://www.ersnet.org/" },
+      { name: "NEJM", url: "https://www.nejm.org/" },
+    ],
+  },
+  cardiology: {
+    decisionRealities: [
+      "Risk stratification and sequence-of-therapy logic dominate cardiology decisions.",
+      "Guideline alignment and endpoint relevance are key to changing established prescribing habits.",
+      "Coverage and affordability frequently determine whether intended therapy is clinically actionable.",
+    ],
+    publicationThemes: [
+      "AHA/ACC updates and implementation commentary in major journals.",
+      "Comparative effectiveness and outcomes in real-world cardiovascular populations.",
+      "Safety and persistence trends across high-risk cohorts.",
+    ],
+    sourceSignals: [
+      { name: "American Heart Association", url: "https://www.heart.org/" },
+      { name: "American College of Cardiology", url: "https://www.acc.org/" },
+      { name: "JACC", url: "https://www.jacc.org/" },
+      { name: "Circulation", url: "https://www.ahajournals.org/journal/circ" },
+    ],
+  },
+  oncology: {
+    decisionRealities: [
+      "Treatment choices are heavily protocol-driven with high sensitivity to biomarker fit and line-of-therapy context.",
+      "Evidence credibility depends on subgroup relevance, durability, and tolerability in complex patients.",
+      "Competitive alternatives are usually top-of-mind and can anchor initial resistance.",
+    ],
+    publicationThemes: [
+      "NCCN and ASCO practice updates that shape sequencing and treatment standards.",
+      "Real-world evidence and observational outcomes by tumor subtype.",
+      "Safety and quality-of-life narratives that influence adoption confidence.",
+    ],
+    sourceSignals: [
+      { name: "NCCN", url: "https://www.nccn.org/" },
+      { name: "ASCO", url: "https://www.asco.org/" },
+      { name: "ESMO", url: "https://www.esmo.org/" },
+      { name: "Journal of Clinical Oncology", url: "https://ascopubs.org/journal/jco" },
+    ],
+  },
+  primary_care: {
+    decisionRealities: [
+      "Primary care choices balance broad population fit, practical workflow, and follow-up feasibility.",
+      "Simple initiation criteria and low implementation friction increase prescribing confidence.",
+      "Payer and pharmacy realities can outweigh theoretical clinical preference.",
+    ],
+    publicationThemes: [
+      "Implementation-focused guidance from primary care associations.",
+      "Real-world adherence and persistence insights in broad patient populations.",
+      "Practice workflow and care-path optimization commentary.",
+    ],
+    sourceSignals: [
+      { name: "American Academy of Family Physicians", url: "https://www.aafp.org/" },
+      { name: "ACP", url: "https://www.acponline.org/" },
+      { name: "JAMA", url: "https://jamanetwork.com/journals/jama" },
+    ],
+  },
 };
 
-const DISEASE_SIGNAL = {
-  pulmonology: "Respiratory management usually increases the need for tight protocol fit and clear next-step planning.",
-  cardiology: "Cardiovascular decisions often demand measurable outcomes and crisp risk framing.",
-  rheumatology: "Autoimmune care tends to raise questions about long-horizon control and office workflow.",
-  neurology: "Neurologic care usually pushes for careful sequencing, patient selection, and follow-up clarity.",
-  oncology: "Oncology care brings high cognitive load, coordination burden, and careful patient-by-patient evaluation.",
-  nephrology: "Renal care often adds monitoring complexity and tighter safety boundaries.",
-  dermatology: "Dermatology decisions usually focus on straightforward workflow fit and visible patient benefit.",
-  hematology: "Hematology often needs precision, monitoring discipline, and a clearly defensible path forward.",
-  gastroenterology: "GI care can bring administrative friction, multi-step workups, and practical access questions.",
-  endocrinology: "Endocrine care often balances chronic follow-up, patient adherence, and efficient office routines.",
-  primary_care: "Primary care tends to amplify time pressure, broad patient panels, and the need for low-friction action.",
+const HCP_TYPE_INTELLIGENCE = {
+  treating_clinician: {
+    topDrivers: [
+      "Immediate patient-fit clarity.",
+      "Low-friction implementation path in current clinic workflow.",
+      "Clear confidence boundaries for safety, access, and follow-up.",
+    ],
+  },
+  influencer: {
+    topDrivers: [
+      "Cross-team relevance and transferability of outcomes.",
+      "Decision logic that can be defended in peer conversations.",
+      "Evidence and value framing usable beyond a single case.",
+    ],
+  },
+  thought_leader: {
+    topDrivers: [
+      "Methodological rigor and subgroup validity.",
+      "Consistency with evolving standards and expert discourse.",
+      "Nuanced interpretation over simplified positioning claims.",
+    ],
+  },
 };
 
-function normalizeSelection(selection = {}) {
+const JOURNEY_STAGE_INTELLIGENCE = {
+  initial_access: {
+    predictivePriority: "Earn relevance in under one minute before discussing data depth.",
+    failureMode: "Opening with broad positioning before clarifying what this HCP actually prioritizes.",
+  },
+  discovery: {
+    predictivePriority: "Surface practical decision criteria before introducing treatment claims.",
+    failureMode: "Assuming priorities instead of discovering clinical and workflow constraints.",
+  },
+  clinical_value: {
+    predictivePriority: "Link outcomes to this HCP's exact patient segments and decision thresholds.",
+    failureMode: "Presenting generalized efficacy without subgroup relevance.",
+  },
+  objection_handling: {
+    predictivePriority: "De-escalate defensiveness by naming the concern and testing understanding first.",
+    failureMode: "Counter-arguing before exploring the underlying risk or access blocker.",
+  },
+  adoption_implementation: {
+    predictivePriority: "Translate value into a low-risk first-use plan the team can actually run.",
+    failureMode: "High-level enthusiasm without practical execution steps.",
+  },
+  access_formulary: {
+    predictivePriority: "Isolate the exact gate and provide process-ready support language.",
+    failureMode: "Treating access as generic rather than gate-specific.",
+  },
+  commitment_close: {
+    predictivePriority: "Secure one concrete owned next step with clear patient criteria.",
+    failureMode: "Asking for broad commitment without practical ownership.",
+  },
+};
+
+const PROFILE_BY_ARCHETYPE = {
+  time_constrained_community_doctor: {
+    mindset: "Focused on patient flow and practical feasibility before clinical nuance.",
+    likelyObjections: "This will add friction to already constrained office operations.",
+    responseStyle: "Brief, direct, quickly redirects to workflow realities.",
+    repApproach: "Lead with one workflow-reducing step and ask for a narrow next action.",
+    resistanceTriggers: "Long data monologues, vague promises, or abstract positioning.",
+  },
+  skeptical_specialist: {
+    mindset: "Evaluates claims through evidence quality and fit to real patient populations.",
+    likelyObjections: "Data relevance, edge cases, and over-generalized value claims.",
+    responseStyle: "Analytical, challenging, and selective about what is credible.",
+    repApproach: "Acknowledge concern, ask precision questions, then tie evidence to this panel.",
+    resistanceTriggers: "Defensive rebuttals and unsupported comparisons.",
+  },
+  curious_uncertain_adopter: {
+    mindset: "Open to change but cautious about implementation risk.",
+    likelyObjections: "Unclear first-step criteria and uncertainty about execution.",
+    responseStyle: "Collaborative but non-committal without clear activation path.",
+    repApproach: "Co-create explicit patient criteria and secure a time-bound micro-commitment.",
+    resistanceTriggers: "Hard close before alignment on practical next steps.",
+  },
+  cost_focused_decision_maker: {
+    mindset: "Looks for measurable patient benefit relative to financial and access burden.",
+    likelyObjections: "Budget impact, payer friction, and implementation tradeoffs.",
+    responseStyle: "Outcome-and-value oriented, asks for practical proof points.",
+    repApproach: "Connect one outcome delta to a concrete value metric this HCP tracks.",
+    resistanceTriggers: "High-level efficacy talk without cost or access context.",
+  },
+};
+
+const PRESSURE_SIGNALS = {
+  time_constrained: "Compressed replies, interrupting for prioritization, asks for immediate relevance.",
+  operationally_constrained: "References staffing limits, process burden, and implementation fatigue.",
+  skeptical_resistant: "Pushback language, challenges framing, tests credibility before engagement.",
+  competitive_bias: "Compares against incumbent choice and discounts incremental differences.",
+  safety_concern: "Risk-first questioning, seeks confidence boundaries and escalation paths.",
+  access_barrier: "Coverage/formulary concerns dominate willingness to discuss clinical fit.",
+  curious_uncertain: "Engaged questions with hesitation around execution confidence.",
+};
+
+const INFLUENCE_LENS = {
+  patient_centric: "patient impact and day-to-day care practicality",
+  evidence_driven: "strength of evidence and real-world applicability",
+  risk_averse: "downside control and confidence in safe adoption",
+  guideline_anchored: "guideline alignment and defensible decision logic",
+};
+
+function dedupe(values = []) {
+  const seen = new Set();
+  return values.filter((value) => {
+    const text = String(value || "").trim();
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  });
+}
+
+function take(values = [], count = 4) {
+  return dedupe(values).slice(0, count);
+}
+
+function buildSection(headline, factors, predictiveSignals, repMoves) {
   return {
-    diseaseState: selection.diseaseState || "primary_care",
-    hcpType: selection.hcpType || "treating_clinician",
-    journeyStage: selection.journeyStage || "initial_access",
-    interactionPressure: selection.interactionPressure || "time_constrained",
-    influenceDriver: selection.influenceDriver || "patient_centric",
-    behaviorArchetype: selection.behaviorArchetype || "time_constrained_community_doctor",
+    headline,
+    keyFactors: take(factors, 5),
+    predictiveSignals: take(predictiveSignals, 4),
+    repMoves: take(repMoves, 4),
   };
 }
 
-function labelFor(type, value) {
-  return LABEL_LOOKUP[type]?.[value] || value;
-}
-
-function joinBullets(items = []) {
-  return items.filter(Boolean);
-}
-
-function diseaseSignal(selection) {
-  return DISEASE_SIGNAL[selection.diseaseState] || "This setting rewards practical, role-fit, and scenario-specific reasoning.";
-}
-
-function stageSignal(selection) {
-  const stage = selection.journeyStage;
-  if (stage === "access_formulary") {
-    return "The conversation is likely to surface payer friction, pathway questions, and approval hurdles early.";
-  }
-  if (stage === "adoption_implementation") {
-    return "The conversation will likely hinge on who owns the next workflow step and how that fits the office.";
-  }
-  if (stage === "commitment_close") {
-    return "The HCP is likely deciding whether the rep has earned a clear next action.";
-  }
-  if (stage === "objection_handling") {
-    return "The HCP is likely to narrow in on a specific objection and expect a direct response.";
-  }
-  return "The HCP will likely test whether the rep can make the issue concrete quickly.";
-}
-
-function pressureTone(selection) {
-  const pressure = selection.interactionPressure;
-  if (pressure === "time_constrained") return "High";
-  if (pressure === "operationally_constrained") return "High";
-  if (pressure === "access_barrier") return "High";
-  if (pressure === "skeptical_resistant") return "High";
-  if (pressure === "safety_concern") return "Moderate to high";
-  if (pressure === "competitive_bias") return "Moderate";
-  return "Moderate";
-}
-
-function mapTimePressure(selection) {
-  const archetype = selection.behaviorArchetype;
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  if (pressure === "time_constrained" || archetype === "time_constrained_community_doctor") {
-    return `High: the HCP wants one concrete point, not a long build. ${stage === "commitment_close" ? "They are especially impatient for a decision." : "They will prune anything that sounds optional."}`;
-  }
-  if (pressure === "operationally_constrained") {
-    return `High: the HCP is measuring every minute against staff load and task switching. ${stageSignal(selection)}`;
-  }
-  if (pressure === "access_barrier") {
-    return `Moderate to high: the HCP is willing to listen only if the access path is explicit and realistic.`;
-  }
-  return `Moderate: the HCP can engage, but only if the rep stays concrete and relevant.`;
-}
-
-function mapWorkflowBurden(selection) {
-  const stage = selection.journeyStage;
-  const pressure = selection.interactionPressure;
-  const hcpType = selection.hcpType;
-  if (pressure === "operationally_constrained") {
-    return `High: ${labelFor("hcpType", hcpType).toLowerCase()}s in ${labelFor("journeyStage", stage).toLowerCase()} mode will challenge any added step that is not obviously light.`;
-  }
-  if (stage === "adoption_implementation") {
-    return "Moderate to high: the HCP will ask who owns the step, what gets added, and what disappears.";
-  }
-  if (hcpType === "thought_leader") {
-    return "Moderate: the HCP still wants practicality, but will tolerate more structure if the end-state is defensible.";
-  }
-  return "Moderate: workflow burden matters, but it may not be the only thing they ask about.";
-}
-
-function mapCognitiveLoad(selection) {
-  const disease = selection.diseaseState;
-  const pressure = selection.interactionPressure;
-  if (disease === "oncology" || disease === "hematology" || disease === "neurology") {
-    return `High: the disease state itself creates more moving parts, so the HCP will prefer sharper, more organized answers.`;
-  }
-  if (pressure === "skeptical_resistant" || pressure === "safety_concern") {
-    return "High: the HCP is likely to filter every claim through more than one lens before moving forward.";
-  }
-  if (disease === "primary_care" || disease === "gastroenterology") {
-    return "Moderate to high: the HCP is balancing multiple priorities, so generic framing will get dropped fast.";
-  }
-  return "Moderate: the HCP is attentive, but only if the rep keeps the structure simple and specific.";
-}
-
-function generateMindset(selection) {
-  const archetype = labelFor("behaviorArchetype", selection.behaviorArchetype);
-  const driver = labelFor("influenceDriver", selection.influenceDriver);
-  const stage = labelFor("journeyStage", selection.journeyStage);
-  const pressure = selection.interactionPressure;
-
-  if (pressure === "operationally_constrained" && driver === "Patient-Centric") {
-    return `${archetype} that wants the plan to improve patient care without creating visible office friction.`;
-  }
-  if (pressure === "skeptical_resistant" && driver === "Evidence-Driven") {
-    return `${archetype} that wants one clinically relevant reason to listen before it spends more attention.`;
-  }
-  if (pressure === "access_barrier" || stage === "access_formulary") {
-    return `${archetype} that is weighing whether the access path is real enough to justify further discussion.`;
-  }
-  if (selection.diseaseState === "oncology" || selection.diseaseState === "hematology") {
-    return `${archetype} that is cautious because the care path is complex and the margin for vague advice is low.`;
-  }
-  return `${archetype} that is willing to engage if the rep can make the next step practical, relevant, and easy to evaluate.`;
-}
-
-function generateDecisionStyle(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  const driver = selection.influenceDriver;
-  if (pressure === "time_constrained" || stage === "commitment_close") {
-    return "Fast, narrow, and threshold-based: one clear answer, then a decision about whether to keep going.";
-  }
-  if (pressure === "skeptical_resistant" || driver === "evidence_driven") {
-    return "Evidence-gated: the HCP decides only after the rep proves relevance to this setting.";
-  }
-  if (pressure === "operationally_constrained") {
-    return "Workflow-gated: the HCP decides after the rep shows what gets easier for staff.";
-  }
-  return "Conditional: the HCP will keep moving only if every step stays concrete and earned.";
-}
-
-function generateRisk(selection) {
-  const pressure = selection.interactionPressure;
-  const driver = selection.influenceDriver;
-  const stage = selection.journeyStage;
-  if (pressure === "safety_concern" || driver === "risk_averse") {
-    return "Low tolerance for uncertainty; the HCP will want guardrails and boundaries before moving.";
-  }
-  if (pressure === "access_barrier" || stage === "access_formulary") {
-    return "Moderate to low tolerance for change unless the access burden is clearly reduced.";
-  }
-  if (selection.behaviorArchetype === "curious_uncertain_adopter") {
-    return "Moderate tolerance: willing to consider the idea, but easy to lose if the next step is vague.";
-  }
-  return "Moderate: the HCP will move, but only if the rep earns trust with concrete detail.";
-}
-
-function deriveOpenness(selection) {
-  const pressure = selection.interactionPressure;
-  const archetype = selection.behaviorArchetype;
-  const stage = selection.journeyStage;
-  if (pressure === "time_constrained" || pressure === "operationally_constrained") return "Guarded but open to one practical point.";
-  if (pressure === "skeptical_resistant") return "Selective openness; the HCP opens only when the rep stays clinically tight.";
-  if (archetype === "curious_uncertain_adopter") return "Moderately open, but only with a clear implementation path.";
-  if (stage === "commitment_close") return "Narrowly open; the HCP wants a last convincing reason.";
-  return "Open enough to continue, but not enough to carry the rep.";
-}
-
-function deriveSkepticism(selection) {
-  const driver = selection.influenceDriver;
-  const pressure = selection.interactionPressure;
-  const archetype = selection.behaviorArchetype;
-  if (driver === "evidence_driven" && pressure === "skeptical_resistant") {
-    return "Very high — requires clinically relevant proof, not generic value claims.";
-  }
-  if (driver === "guideline_anchored" && selection.journeyStage === "access_formulary") {
-    return "High — wants the rep to show defensible fit to current practice standards.";
-  }
-  if (archetype === "time_constrained_community_doctor") {
-    return "Moderate to high — skeptical of anything that does not clearly save time.";
-  }
-  return "Moderate — the HCP is asking questions, not granting trust.";
-}
-
-function deriveEngagement(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  const archetype = selection.behaviorArchetype;
-  if (pressure === "time_constrained" || stage === "initial_access") return "Clipped but attentive; one good move can hold attention.";
-  if (pressure === "operationally_constrained") return "Measured and constrained; the HCP rewards brevity and practical relevance.";
-  if (pressure === "skeptical_resistant") return "Engaged only when the rep earns it; otherwise the HCP narrows quickly.";
-  if (archetype === "cost_focused_decision_maker") return "Decision-focused; engagement rises only when value is concrete.";
-  return "Stable but selective; the HCP stays in the conversation while it remains useful.";
-}
-
-function derivePrimaryObjection(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  if (pressure === "operationally_constrained") {
-    return "This looks like another step that could slow the office down.";
-  }
-  if (pressure === "access_barrier" || stage === "access_formulary") {
-    return "I need to know what happens on the access side before this matters.";
-  }
-  if (pressure === "skeptical_resistant") {
-    return "I’m not hearing a strong enough reason to change what we already do.";
-  }
-  if (selection.behaviorArchetype === "curious_uncertain_adopter") {
-    return "I need a clearer starting point before I can say yes.";
-  }
-  return "I need a concrete reason this is worth my time.";
-}
-
-function deriveSecondaryObjections(selection) {
-  const secondary = [];
-  if (selection.diseaseState === "oncology" || selection.diseaseState === "hematology") {
-    secondary.push("This feels complex enough that any extra step could multiply quickly.");
-  } else if (selection.diseaseState === "primary_care") {
-    secondary.push("My panel is already busy, so this has to be very easy to own.");
-  } else {
-    secondary.push("I’m not sure the current workflow has room for extra noise.");
-  }
-
-  if (selection.influenceDriver === "evidence_driven") {
-    secondary.push("I want to see that this is relevant to the patients in front of me.");
-  } else if (selection.influenceDriver === "risk_averse") {
-    secondary.push("I need to know the risk boundaries before I lean in.");
-  } else {
-    secondary.push("I want the next step to be practical, not theoretical.");
-  }
-
-  return joinBullets(secondary);
-}
-
-function deriveTriggers(selection) {
-  const triggers = [];
-  if (selection.interactionPressure === "time_constrained") triggers.push("Long explanations.");
-  if (selection.interactionPressure === "operationally_constrained") triggers.push("Any hint of extra staff burden.");
-  if (selection.interactionPressure === "skeptical_resistant") triggers.push("Generic claims without proof.");
-  if (selection.interactionPressure === "access_barrier") triggers.push("Ignoring coverage or approval steps.");
-  if (selection.behaviorArchetype === "cost_focused_decision_maker") triggers.push("Value claims without measurable impact.");
-  if (selection.journeyStage === "commitment_close") triggers.push("A soft close without one concrete next action.");
-  if (!triggers.length) triggers.push("Anything that stays abstract for too long.");
-  return joinBullets(triggers);
-}
-
-function generatePreferredLanguage(selection) {
-  const driver = selection.influenceDriver;
-  const stage = selection.journeyStage;
-  const disease = labelFor("diseaseState", selection.diseaseState);
-  const pressure = selection.interactionPressure;
-
-  const preferred = [];
-  if (driver === "evidence_driven") preferred.push("Clinical proof tied to this patient group.");
-  if (driver === "patient_centric") preferred.push("Patient impact that stays rooted in daily care.");
-  if (driver === "guideline_anchored") preferred.push("Language that maps cleanly to accepted practice.");
-  if (pressure === "operationally_constrained") preferred.push("One-step workflow language.");
-  if (stage === "access_formulary") preferred.push("Access and pathway clarity.");
-  preferred.push(`Concrete ${disease} examples.`);
-  return joinBullets(preferred);
-}
-
-function generateRejectedLanguage(selection) {
-  const rejected = [];
-  if (selection.interactionPressure === "time_constrained") rejected.push("Long pitch language.");
-  if (selection.interactionPressure === "skeptical_resistant") rejected.push("Polished but unsupported claims.");
-  if (selection.interactionPressure === "operationally_constrained") rejected.push("Abstract burden talk without a workflow change.");
-  if (selection.influenceDriver === "risk_averse") rejected.push("Overconfident language with no boundary setting.");
-  rejected.push("Anything that sounds generic across scenarios.");
-  return joinBullets(rejected);
-}
-
-function generateQuestionStyle(selection) {
-  const stage = selection.journeyStage;
-  const pressure = selection.interactionPressure;
-  const archetype = selection.behaviorArchetype;
-  if (pressure === "time_constrained" || archetype === "time_constrained_community_doctor") return "Short, single-point questions that cut to the operational step.";
-  if (pressure === "skeptical_resistant") return "Narrow challenge questions that ask for evidence fit and practical relevance.";
-  if (stage === "commitment_close") return "Decision-threshold questions that ask for one last concrete reason to move forward.";
-  if (pressure === "operationally_constrained") return "Workflow questions that ask what changes for staff, not just why the idea is good.";
-  return "Selective questions that stay on the current barrier instead of drifting.";
-}
-
-function generateTurnBehavior(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  if (pressure === "time_constrained") return "Short reply, one question at most, then a direct redirect.";
-  if (pressure === "skeptical_resistant") return "Push back once, then narrow toward a concrete proof point.";
-  if (pressure === "operationally_constrained") return "Redirect to workflow fit and keep the conversation bounded.";
-  if (stage === "commitment_close") return "Force the rep to make the next move concrete or risk losing momentum.";
-  return "Keep the exchange practical, bounded, and anchored to the scenario.";
-}
-
-function generateEscalation(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  if (pressure === "skeptical_resistant" || stage === "objection_handling") {
-    return "Escalates from clarification to direct challenge if the rep stays vague.";
-  }
-  if (pressure === "time_constrained" || stage === "commitment_close") {
-    return "Escalates by narrowing the question and trimming away nonessential detail.";
-  }
-  if (pressure === "access_barrier") {
-    return "Escalates by pressing on access path and practical feasibility.";
-  }
-  return "Escalates gradually: open, then narrow, then decide whether the rep earned more time.";
-}
-
-function generateDisengagement(selection) {
-  const pressure = selection.interactionPressure;
-  const stage = selection.journeyStage;
-  const signals = [];
-  if (pressure === "time_constrained") signals.push("shorter answers");
-  if (pressure === "operationally_constrained") signals.push("checking the clock");
-  if (pressure === "skeptical_resistant") signals.push("less patience for generic framing");
-  if (stage === "commitment_close") signals.push("final threshold language");
-  if (selection.behaviorArchetype === "curious_uncertain_adopter") signals.push("quietly withdrawing if the next step stays vague");
-  if (!signals.length) signals.push("reduced willingness to continue if the rep stays abstract");
-  return joinBullets(signals);
-}
-
-function generateRepStrategy(selection) {
-  const stage = selection.journeyStage;
-  const pressure = selection.interactionPressure;
-  const driver = selection.influenceDriver;
-  const strategy = [];
-  if (pressure === "operationally_constrained") strategy.push("Lead with one workflow-reducing action.");
-  if (pressure === "time_constrained") strategy.push("Answer fast, then narrow to the next step.");
-  if (driver === "evidence_driven") strategy.push("Tie the point to a clinically relevant example.");
-  if (driver === "guideline_anchored") strategy.push("Anchor the answer in defensible, familiar practice logic.");
-  if (stage === "access_formulary") strategy.push("Address the approval path before expanding the pitch.");
-  if (!strategy.length) strategy.push("Stay concrete, short, and tied to the HCP’s stated barrier.");
-  return joinBullets(strategy);
-}
-
-function generateMistakes(selection) {
-  const mistakes = [];
-  if (selection.interactionPressure === "time_constrained") mistakes.push("Too much setup before the first concrete answer.");
-  if (selection.interactionPressure === "operationally_constrained") mistakes.push("Talking benefits without reducing staff load.");
-  if (selection.interactionPressure === "skeptical_resistant") mistakes.push("Generic evidence language that does not fit this setting.");
-  if (selection.interactionPressure === "access_barrier") mistakes.push("Skipping the approval / coverage path.");
-  if (selection.behaviorArchetype === "cost_focused_decision_maker") mistakes.push("Failing to show measurable value.");
-  mistakes.push("Forcing a smooth close before the HCP has earned trust.");
-  return joinBullets(mistakes);
-}
-
-export function buildPredictiveModel(selection) {
-  const normalized = normalizeSelection(selection);
-
-  return {
-    persona: {
-      archetype: labelFor("behaviorArchetype", normalized.behaviorArchetype),
-      mindset: generateMindset(normalized),
-      decisionStyle: generateDecisionStyle(normalized),
-      riskTolerance: generateRisk(normalized),
-    },
-
-    pressures: {
-      time: mapTimePressure(normalized),
-      workflow: mapWorkflowBurden(normalized),
-      cognitiveLoad: mapCognitiveLoad(normalized),
-    },
-
-    behavior: {
-      openness: deriveOpenness(normalized),
-      skepticism: deriveSkepticism(normalized),
-      engagementPattern: deriveEngagement(normalized),
-    },
-
-    objections: {
-      primary: derivePrimaryObjection(normalized),
-      secondary: deriveSecondaryObjections(normalized),
-      triggers: deriveTriggers(normalized),
-    },
-
-    language: {
-      prefers: generatePreferredLanguage(normalized),
-      rejects: generateRejectedLanguage(normalized),
-      questionStyle: generateQuestionStyle(normalized),
-    },
-
-    conversationDynamics: {
-      turnBehavior: generateTurnBehavior(normalized),
-      escalationPattern: generateEscalation(normalized),
-      disengagementSignals: generateDisengagement(normalized),
-    },
-
-    coaching: {
-      repStrategy: generateRepStrategy(normalized),
-      mistakesToAvoid: generateMistakes(normalized),
-    },
+function getDomainIntel(selection) {
+  const diseaseIntel = DISEASE_INTELLIGENCE[selection.diseaseState] || {
+    decisionRealities: [
+      "Clinical adoption depends on role-fit evidence, implementation feasibility, and confidence boundaries.",
+    ],
+    publicationThemes: [
+      "Guideline updates, real-world outcomes, and safety trend monitoring in specialty publications.",
+    ],
+    sourceSignals: [
+      { name: "FDA Drug Safety Communications", url: "https://www.fda.gov/drugs/drug-safety-and-availability/drug-safety-communications" },
+      { name: "PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/" },
+    ],
   };
+
+  const hcpIntel = HCP_TYPE_INTELLIGENCE[selection.hcpType] || {
+    topDrivers: [
+      "Relevant outcomes and practical implementation confidence.",
+      "Clarity on risk, access, and patient-fit boundaries.",
+    ],
+  };
+
+  const stageIntel = JOURNEY_STAGE_INTELLIGENCE[selection.journeyStage] || {
+    predictivePriority: "Keep the conversation decision-relevant and practically actionable.",
+    failureMode: "Staying generic when the HCP needs specific application guidance.",
+  };
+
+  return { diseaseIntel, hcpIntel, stageIntel };
 }
 
 export function buildPredictiveProfile(selection) {
-  const model = buildPredictiveModel(selection);
+  const archetypeProfile = PROFILE_BY_ARCHETYPE[selection.behaviorArchetype] || PROFILE_BY_ARCHETYPE.skeptical_specialist;
+  const pressureSignal = PRESSURE_SIGNALS[selection.interactionPressure] || "Signals are mixed and context-dependent.";
+  const influenceLens = INFLUENCE_LENS[selection.influenceDriver] || "practical decision logic";
+  const { diseaseIntel, hcpIntel, stageIntel } = getDomainIntel(selection);
+
+  const mindsetSection = buildSection(
+    "How this HCP is most likely framing decisions",
+    [
+      archetypeProfile.mindset,
+      ...hcpIntel.topDrivers,
+      ...diseaseIntel.decisionRealities,
+    ],
+    [
+      `Primary lens is ${influenceLens}.`,
+      `At ${selection.journeyStage.replaceAll("_", " ")} stage, this HCP prioritizes ${stageIntel.predictivePriority.toLowerCase()}`,
+      "Expect skepticism to increase when claims are not tied to patient-selection logic.",
+    ],
+    [
+      "Lead with one role-specific patient profile before broad clinical framing.",
+      "Anchor to what this HCP already tracks in daily decisions.",
+      "Confirm practical constraints before introducing additional data.",
+    ],
+  );
+
+  const objectionsSection = buildSection(
+    "Most probable objections you should anticipate",
+    [
+      archetypeProfile.likelyObjections,
+      "Requests for subgroup relevance instead of average population claims.",
+      "Pushback if implementation burden is unclear.",
+      "Questions about comparative fit versus incumbent options.",
+    ],
+    [
+      "Objections will usually sharpen after any generic efficacy statement.",
+      "If access or workflow is implied but not addressed, resistance rises quickly.",
+      "HCP is likely to test your precision before agreeing to next steps.",
+    ],
+    [
+      "Acknowledge concern and ask one precision question before responding.",
+      "Respond with patient-fit and workflow-fit in the same answer.",
+      "Close each objection loop with a concrete, low-risk next step.",
+    ],
+  );
+
+  const pressureSection = buildSection(
+    "Behavioral pressure pattern to read in real time",
+    [
+      pressureSignal,
+      "Time pressure often appears as shorter turns, not always explicit rejection.",
+      "Engagement drops when the rep does not mirror the HCP's decision pace.",
+      "Operational friction concerns can mask clinical openness.",
+    ],
+    [
+      "Likely response style: " + archetypeProfile.responseStyle,
+      "When pressured, this HCP favors bottom-line utility over full narrative detail.",
+      "Sustained relevance improves probability of specific follow-up questions.",
+    ],
+    [
+      "Use shorter turns with explicit 'why this matters now' framing.",
+      "Offer one optional deeper-data path instead of forcing full detail.",
+      "Check for agreement on one decision variable at a time.",
+    ],
+  );
+
+  const redFlagsSection = buildSection(
+    "Conversation red flags that predict outcome risk",
+    [
+      `Conversation drifts from ${selection.journeyStage.replaceAll("_", " ")} realities into generic framing that ignores ${selection.interactionPressure.replaceAll("_", " ")} pressure.`,
+      stageIntel.failureMode,
+      "Defensive tone after objections predicts reduced next-step ownership.",
+      "Product-first monologues increase disengagement and competitive fallback.",
+    ],
+    [
+      "Risk of stalled conversation rises when no patient-selection criteria are discussed.",
+      "Risk escalates if access and workflow blockers are acknowledged but not operationalized.",
+      "Low specificity often leads to polite but non-committal closure.",
+    ],
+    [
+      "If red flags appear, reset with one clarifying question tied to current patient mix.",
+      "Reframe using concrete next-step ownership instead of broader claims.",
+      "Prioritize accuracy and relevance over completeness.",
+    ],
+  );
+
+  const languageWorksSection = buildSection(
+    "Language patterns that usually increase receptivity",
+    [
+      `Use specific, role-fit language tied to ${selection.diseaseState.replaceAll("_", " ")} decisions for ${selection.hcpType.replaceAll("_", " ")} contexts.`,
+      "Patient-segment phrasing with clear inclusion boundaries.",
+      "Workflow-specific wording that identifies who does what next.",
+      "Evidence phrasing that links trial signal to local clinical reality.",
+    ],
+    [
+      "Receptivity improves when value is translated into one practical decision consequence.",
+      "Credibility rises when uncertainty boundaries are named directly.",
+      "This HCP responds best to concise, decision-ready language.",
+    ],
+    [
+      "Use: 'For the patients you described, the practical difference is ...'",
+      "Use: 'The first step most teams try is ...'",
+      "Use: 'The evidence is strongest in ... and less certain in ...'",
+    ],
+  );
+
+  const languageResistanceSection = buildSection(
+    "Language patterns that usually trigger resistance",
+    [
+      archetypeProfile.resistanceTriggers,
+      "Unqualified superlatives without context.",
+      "Abstract value claims disconnected from this clinic's workflow.",
+      "Comparative claims without clear patient-fit qualifiers.",
+    ],
+    [
+      "Resistance signals often appear as requests for narrowing scope.",
+      "HCP may pivot to access or safety as a control response if messaging feels broad.",
+      "Tone hardens when rep language sounds scripted or defensive.",
+    ],
+    [
+      "Avoid over-claiming; use bounded language with clear qualifiers.",
+      "Replace generic value statements with one specific care-path implication.",
+      "If challenged, restate concern before offering data.",
+    ],
+  );
+
+  const responseStyleSection = buildSection(
+    "Predicted conversational behavior in the next interaction",
+    [
+      archetypeProfile.responseStyle,
+      "Will test practical relevance before allowing deeper conversation.",
+      "Will likely narrow to one concern family if messaging is too broad.",
+      "Decision momentum increases after role-specific evidence translation.",
+    ],
+    [
+      "Most likely next move is probing for fit, risk boundary, or implementation burden.",
+      "If you stay specific, expected trajectory shifts from resistance to cautious curiosity.",
+      "If you stay generic, expected trajectory shifts to polite deferral.",
+    ],
+    [
+      "Prepare one concise objection-ready response for the dominant pressure signal.",
+      "Offer a micro-commitment rather than a broad adoption ask.",
+      "Confirm interpretation before moving to your next claim.",
+    ],
+  );
+
+  const repApproachSection = buildSection(
+    "Recommended REP strategy for this exact profile",
+    [
+      archetypeProfile.repApproach,
+      stageIntel.predictivePriority,
+      "Balance clinical confidence with operational feasibility in every key answer.",
+      "Sequence responses as: acknowledge -> clarify -> apply -> next step.",
+    ],
+    [
+      "High-probability win condition is one owned, low-risk next action.",
+      "Best predictor of success is role-fit relevance delivered early.",
+      "Sustained precision lowers competitive and access-based deferral behavior.",
+    ],
+    [
+      "Use a two-part answer: patient-fit evidence + implementation step.",
+      "Close with a specific trial condition the HCP can evaluate.",
+      "Document objection pattern for next territory touchpoint.",
+    ],
+  );
+
+  const sourceSignals = take(diseaseIntel.sourceSignals, 5);
+
   return {
-    mindset: model.persona.mindset,
-    likelyObjections: [model.objections.primary, ...model.objections.secondary].join(" "),
-    pressureSignals: [model.pressures.time, model.pressures.workflow].join(" "),
-    redFlags: `The HCP will disengage if the rep ignores ${labelFor("journeyStage", normalizeSelection(selection).journeyStage)} pressure or keeps the answer generic.`,
-    languageThatWorks: model.language.prefers.join(" "),
-    languageThatTriggersResistance: model.language.rejects.join(" "),
-    predictedResponseStyle: `${model.behavior.engagementPattern} ${model.conversationDynamics.turnBehavior}`,
-    recommendedRepApproach: model.coaching.repStrategy.join(" "),
+    mindset: `${archetypeProfile.mindset} Primary lens: ${influenceLens}.`,
+    likelyObjections: archetypeProfile.likelyObjections,
+    pressureSignals: pressureSignal,
+    redFlags: `Conversation drifts from ${selection.journeyStage.replaceAll("_", " ")} realities into generic framing that ignores ${selection.interactionPressure.replaceAll("_", " ")} pressure.`,
+    languageThatWorks: `Use specific, role-fit language tied to ${selection.diseaseState.replaceAll("_", " ")} decisions for ${selection.hcpType.replaceAll("_", " ")} contexts.`,
+    languageThatTriggersResistance: archetypeProfile.resistanceTriggers,
+    predictedResponseStyle: archetypeProfile.responseStyle,
+    recommendedRepApproach: archetypeProfile.repApproach,
+    sections: {
+      mindset: mindsetSection,
+      objections: objectionsSection,
+      pressure: pressureSection,
+      redFlags: redFlagsSection,
+      languageWorks: languageWorksSection,
+      languageResistance: languageResistanceSection,
+      responseStyle: responseStyleSection,
+      repApproach: repApproachSection,
+    },
+    evidenceIntel: {
+      publicationThemes: take(diseaseIntel.publicationThemes, 4),
+      sourceSignals,
+      strategicNotes: [
+        "Use publication signals to validate conversation framing, not to overwhelm the HCP with volume.",
+        "Prioritize the 1-2 sources most aligned to this HCP's decision orientation.",
+        "Translate evidence into actionable patient-selection and implementation implications.",
+      ],
+    },
   };
 }

@@ -25,45 +25,55 @@
  */
 
 const isBrowserRuntime = typeof window !== "undefined";
-const isViteDevRuntime = Boolean(import.meta?.env?.DEV);
-const WORKER_URL = "http://127.0.0.1:8787";
+const isViteDevRuntime = Boolean(import.meta.env.DEV);
+const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
+const BASE_URL = (import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || PRODUCTION_WORKER_URL).replace(/\/$/, "");
+
+if (!BASE_URL) {
+  throw new Error("Missing required env var VITE_ROLEPLAY_WORKER_URL for runtime worker routing");
+}
 const workerInvokePath = "/api/llm/invoke";
 const workerHealthPath = "/health";
 const workerScenariosPath = "/api/scenarios";
 const workerSessionsPath = "/api/roleplay/sessions";
 const roleplayStartPath = "/api/roleplay/start";
 const roleplayRespondPath = "/api/roleplay/respond";
+const evidenceSourcesPath = "/api/evidence/sources";
+const evidenceRecordsPath = "/api/evidence/records";
+const evidenceIngestPath = "/api/evidence/ingest";
 
-const useBrowserProxyPaths = isViteDevRuntime && isBrowserRuntime;
-
-const workerInvokeUrl = useBrowserProxyPaths ? workerInvokePath : `${WORKER_URL}${workerInvokePath}`;
-const workerHealthUrl = useBrowserProxyPaths ? workerHealthPath : `${WORKER_URL}${workerHealthPath}`;
-const workerScenariosUrl = useBrowserProxyPaths ? workerScenariosPath : `${WORKER_URL}${workerScenariosPath}`;
-const workerSessionsUrl = useBrowserProxyPaths ? workerSessionsPath : `${WORKER_URL}${workerSessionsPath}`;
-const roleplayStartUrl = useBrowserProxyPaths ? roleplayStartPath : `${WORKER_URL}${roleplayStartPath}`;
-const roleplayRespondUrl = useBrowserProxyPaths ? roleplayRespondPath : `${WORKER_URL}${roleplayRespondPath}`;
+const workerInvokeUrl = `${BASE_URL}${workerInvokePath}`;
+const workerHealthUrl = `${BASE_URL}${workerHealthPath}`;
+const workerScenariosUrl = `${BASE_URL}${workerScenariosPath}`;
+const workerSessionsUrl = `${BASE_URL}${workerSessionsPath}`;
+const roleplayStartUrl = `${BASE_URL}${roleplayStartPath}`;
+const roleplayRespondUrl = `${BASE_URL}${roleplayRespondPath}`;
+const evidenceSourcesUrl = `${BASE_URL}${evidenceSourcesPath}`;
+const evidenceRecordsUrl = `${BASE_URL}${evidenceRecordsPath}`;
+const evidenceIngestUrl = `${BASE_URL}${evidenceIngestPath}`;
 const DEFAULT_WORKER_TIMEOUT_MS = 35000;
 const HEALTH_TIMEOUT_MS = 8000;
 const TRANSIENT_RETRY_DELAYS_MS = [400, 1200];
 
 export function getWorkerRuntimeDescriptor() {
   const frontendMode = isViteDevRuntime ? "local-dev" : "production-build";
-  const inferenceMode = useBrowserProxyPaths
-    ? "browser-proxy -> local worker"
-    : "direct local worker";
+  const inferenceMode = "direct env worker";
 
   return {
     frontendMode,
     isBrowserRuntime,
-    workerBaseUrl: WORKER_URL,
+    workerBaseUrl: BASE_URL,
     workerInvokeUrl,
     workerScenariosUrl,
     workerSessionsUrl,
     roleplayStartUrl,
     roleplayRespondUrl,
-    useBrowserProxyPaths,
+    evidenceSourcesUrl,
+    evidenceRecordsUrl,
+    evidenceIngestUrl,
+    useBrowserProxyPaths: false,
     inferenceMode,
-    hcpGenerationPath: "local directives/prompt + local worker inference + local cleanup",
+    hcpGenerationPath: "local directives/prompt + env worker inference + local cleanup",
   };
 }
 
@@ -85,6 +95,70 @@ function isTransientWorkerError(error) {
     code === "ECONNRESET" ||
     code === "ETIMEDOUT"
   );
+}
+
+function stripJsonCodeFence(text = "") {
+  const line = String(text || "").trim();
+  const match = line.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1].trim() : line;
+}
+
+function extractFirstBalancedJson(text = "") {
+  const input = String(text || "");
+  const starts = ["{", "["].map((char) => input.indexOf(char)).filter((idx) => idx >= 0);
+  if (!starts.length) return null;
+
+  const start = Math.min(...starts);
+  const open = input[start];
+  const close = open === "{" ? "}" : "]";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < input.length; i += 1) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === open) depth += 1;
+    if (ch === close) depth -= 1;
+
+    if (depth === 0) {
+      return input.slice(start, i + 1).trim();
+    }
+  }
+
+  return null;
+}
+
+function parseStructuredPayload(payload) {
+  const line = stripJsonCodeFence(String(payload || ""));
+
+  try {
+    return JSON.parse(line);
+  } catch {
+    const extracted = extractFirstBalancedJson(line);
+    if (extracted) {
+      return JSON.parse(extracted);
+    }
+
+    const preview = line.slice(0, 120).replace(/\s+/g, " ");
+    console.warn("[workerClient] Structured payload parse failed", { preview });
+    throw new Error("Worker returned non-JSON structured payload");
+  }
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TIMEOUT_MS, label = "Worker request", maxRetries = TRANSIENT_RETRY_DELAYS_MS.length) {
@@ -115,7 +189,10 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_WORKER_TI
 
 async function parseWorkerResponse(response) {
   if (!response.ok) {
-    throw new Error(await response.text().catch(() => `Worker request failed with ${response.status}`));
+    const message = await response.text().catch(() => `Worker request failed with ${response.status}`);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
 }
@@ -200,6 +277,38 @@ export async function invokeWorkerText({ prompt, max_tokens = 900, temperature =
 }
 
 /**
+ * Invoke worker and return RAW string payload (no parsing).
+ * Used by invokeWorkerJsonWithRetry to apply custom extraction logic.
+ * @param {WorkerJsonRequest} [options]
+ * @returns {Promise<string>} Raw response payload as string
+ */
+export async function invokeWorkerJsonRawPayload({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model, timeout_ms, retry_count } = {}) {
+  const response = await fetchWithTimeout(workerInvokeUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, response_json_schema, max_tokens, temperature, roleplay, provider, model }),
+  }, timeout_ms || DEFAULT_WORKER_TIMEOUT_MS, "Worker JSON invoke", typeof retry_count === "number" ? retry_count : TRANSIENT_RETRY_DELAYS_MS.length);
+
+  const data = await parseWorkerResponse(response);
+  const payload = data?.response;
+
+  if (!payload) {
+    throw new Error("Worker returned no response payload");
+  }
+
+  // Return as string (may have formatting issues, which retry handler will fix)
+  if (typeof payload === "string") {
+    return payload;
+  }
+
+  if (typeof payload === "object") {
+    return JSON.stringify(payload);
+  }
+
+  return String(payload || "");
+}
+
+/**
  * @param {WorkerJsonRequest} [options]
  */
 export async function invokeWorkerJson({ prompt, response_json_schema, max_tokens = 1200, temperature = 0.2, roleplay = false, provider, model, timeout_ms, retry_count } = {}) {
@@ -217,7 +326,7 @@ export async function invokeWorkerJson({ prompt, response_json_schema, max_token
   }
 
   if (typeof payload === "string") {
-    return JSON.parse(payload);
+    return parseStructuredPayload(payload);
   }
 
   throw new Error("Worker returned no structured response");
@@ -340,4 +449,45 @@ export async function updateWorkerSession(id, patch) {
 
 export async function deleteWorkerSession(id) {
   await requestWorkerJson(workerSessionsUrl, { method: "DELETE", body: { id } });
+}
+
+export async function listEvidenceSources() {
+  const data = await requestWorkerJson(evidenceSourcesUrl);
+  return Array.isArray(data?.sources) ? data.sources : [];
+}
+
+export async function listEvidenceRecords(filters = {}) {
+  const params = new URLSearchParams();
+  const domain = String(filters.domain || filters.diseaseState || "").trim();
+  const diseaseState = String(filters.diseaseState || "").trim();
+  if (domain) params.set("domain", domain);
+  if (diseaseState) params.set("diseaseState", diseaseState);
+  if (filters.limit) params.set("limit", String(filters.limit));
+  const url = params.toString() ? `${evidenceRecordsUrl}?${params.toString()}` : evidenceRecordsUrl;
+  try {
+    const data = await requestWorkerJson(url);
+    return Array.isArray(data?.records) ? data.records : [];
+  } catch (error) {
+    if (error?.status === 404) {
+      console.warn("[workerClient] Evidence endpoint unavailable; continuing without evidence.", {
+        url,
+        domain: domain || null,
+        diseaseState: diseaseState || null,
+      });
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function ingestEvidenceRecords(payload = {}) {
+  const data = await requestWorkerJson(evidenceIngestUrl, {
+    method: "POST",
+    body: payload,
+  });
+  return {
+    ingestedCount: Number(data?.ingestedCount || 0),
+    records: Array.isArray(data?.records) ? data.records : [],
+    rejected: Array.isArray(data?.rejected) ? data.rejected : [],
+  };
 }

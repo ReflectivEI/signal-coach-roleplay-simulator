@@ -24,6 +24,8 @@ export interface HcpCueInputs {
   hcpTurnCount?: number;
   interactionPressures?: string[];
   recentCueLabels?: string[];
+  repMessage?: string;
+  allowFirstTurnCandidateCue?: boolean;
   scenario?: {
     id?: string;
     title?: string;
@@ -789,6 +791,14 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     description: normalizeText(inputs.scenario?.openingScene, inputs.scenario?.visualScene),
   });
   if ((inputs.hcpTurnCount || 0) === 0 && inputs.scenario?.title) {
+    if (inputs.allowFirstTurnCandidateCue && isValidObservedCue(candidateCue)) {
+      return {
+        cueCategory,
+        concernFamily,
+        label: normalizeCueSentence(candidateCue),
+      };
+    }
+
     const runtimeProfile = deriveHcpRuntimeProfile({
       scenario: {
         title: inputs.scenario?.title,

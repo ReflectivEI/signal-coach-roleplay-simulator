@@ -1,13 +1,25 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { Trash2, Eye, EyeOff, Plus, ArrowLeft } from "lucide-react";
+
+import AppHeader from "@/components/layout/AppHeader";
+import { Trash2, Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { listAllScenarios, updateCustomScenario, deleteCustomScenario } from "@/lib/scenarioStorage";
 
+/**
+ * @typedef {{
+ *   id: string,
+ *   title?: string,
+ *   description?: string,
+ *   journeyStage?: string,
+ *   isBuiltIn?: boolean,
+ *   isPublished?: boolean
+ * }} AdminScenario
+ */
+
 export default function AdminDashboard() {
-  const [scenarios, setScenarios] = useState([]);
+  const [scenarios, setScenarios] = useState(/** @type {AdminScenario[]} */([]));
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -17,11 +29,13 @@ export default function AdminDashboard() {
     void load();
   }, []);
 
+  /** @param {string} id @param {boolean} isPublished */
   const handleToggleVisibility = async (id, isPublished) => {
     await updateCustomScenario(id, { isPublished: !isPublished });
     setScenarios((current) => current.map((s) => s.id === id ? { ...s, isPublished: !isPublished } : s));
   };
 
+  /** @param {string} id @param {string | undefined} title */
   const handleDelete = async (id, title) => {
     if (!confirm(`Delete "${title}"?`)) return;
     await deleteCustomScenario(id);
@@ -38,22 +52,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b border-border/40 bg-surface/80 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <h1 className="text-2xl font-bold text-foreground">Scenario Management</h1>
-          </div>
-          <button onClick={() => navigate("/builder")} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-            <Plus className="w-4 h-4" />
-            Create Scenario
-          </button>
-        </div>
-      </div>
+      <AppHeader maxWidthClassName="max-w-6xl" />
 
       <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Scenario Management</h1>
+          {/* Create Scenario button removed for isolation */}
+        </div>
         <div className="space-y-3">
           {scenarios.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
@@ -79,7 +84,7 @@ export default function AdminDashboard() {
                 {!scenario.isBuiltIn && (
                   <div className="flex items-center gap-2 ml-4 shrink-0">
                     <button
-                      onClick={() => handleToggleVisibility(scenario.id, scenario.isPublished)}
+                      onClick={() => handleToggleVisibility(scenario.id, Boolean(scenario.isPublished))}
                       className="p-1.5 rounded hover:bg-surface/80 transition-colors text-muted-foreground hover:text-foreground"
                       title={scenario.isPublished ? "Unpublish" : "Publish"}
                     >

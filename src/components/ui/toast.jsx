@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** @typedef {React.HTMLAttributes<HTMLDivElement>} DivProps */
-/** @typedef {DivProps & { variant?: "default" | "destructive" }} ToastProps */
+/** @typedef {DivProps & { variant?: "default" | "destructive"; onOpenChange?: (open: boolean) => void }} ToastProps */
 /** @typedef {React.ButtonHTMLAttributes<HTMLButtonElement>} ButtonProps */
 
 /** @type {React.ForwardRefRenderFunction<HTMLDivElement, DivProps>} */
@@ -46,7 +46,7 @@ const toastVariants = cva(
 );
 
 /** @type {React.ForwardRefRenderFunction<HTMLDivElement, ToastProps>} */
-const ToastImpl = ({ className, variant, ...props }, ref) => {
+const ToastImpl = ({ className, variant, onOpenChange, ...props }, ref) => {
   return (
     <div
       ref={ref}

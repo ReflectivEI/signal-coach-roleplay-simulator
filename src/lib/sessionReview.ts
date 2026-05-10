@@ -77,15 +77,47 @@ CAPABILITY EVALUATION RULES (deterministic — apply strictly using canonical me
 
 const DEFAULT_OVERALL_GUIDANCE = "This analysis is based on observable behaviors during the interaction and is intended to support development, not scoring.";
 
+const TRAILING_SENTENCE_REPAIRS: Array<[RegExp, string]> = [
+  [/\bbreakdown in\.$/i, "breakdown in the conversation."],
+  [/\black of progress in\.$/i, "lack of progress in the conversation."],
+  [/\bmove forward in a\.$/i, "move forward in a meaningful way."],
+  [/\bconversation did not\.$/i, "conversation did not progress."],
+  [/\bthe conversation did not\.$/i, "the conversation did not progress."],
+  [/\bwith a\.$/i, "with a response that acknowledged the concern."],
+  [/\bunderstanding of the\.$/i, "understanding of the HCP's concern."],
+  [/\bthe hcp stayed\.$/i, "the HCP stayed unengaged."],
+  [/\badjust their approach to\.$/i, "adjust their approach to re-engage the HCP."],
+  [/\bbecause the rep's questions\.$/i, "Because the rep's questions were not specific enough to move the conversation forward."],
+  [/\bbecause the rep\.$/i, "Because the rep did not respond specifically enough to the HCP's concern."],
+];
+
+function repairGeneratedText(value: unknown, fallback = ""): string {
+  let text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return fallback;
+
+  for (const [pattern, replacement] of TRAILING_SENTENCE_REPAIRS) {
+    text = text.replace(pattern, replacement);
+  }
+
+  const repaired = text
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/([.!?])(?=[A-Za-z])/g, "$1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!repaired) return fallback;
+  return /[.!?"]$/.test(repaired) ? repaired : `${repaired}.`;
+}
+
 function asNonEmptyString(value: unknown, fallback = ""): string {
-  const text = String(value ?? "").trim();
+  const text = repairGeneratedText(value, fallback);
   return text || fallback;
 }
 
 function asStringArray(value: unknown, fallback: string[] = []): string[] {
   if (!Array.isArray(value)) return fallback;
   return value
-    .map((item) => String(item ?? "").trim())
+    .map((item) => repairGeneratedText(item))
     .filter(Boolean);
 }
 
@@ -392,6 +424,41 @@ ${CAPABILITY_RULES}
 === FORENSIC FEEDBACK CONTRACT ===
 
 You MUST produce ALL of the following. Do not omit any field. Do not summarize generically.
+
+── REQUIRED FAILURE HIERARCHY (GLOBAL) ──
+You MUST derive exactly:
+1) one Primary Failure Driver
+2) up to two Secondary Effects
+3) one Downstream Consequence chain
+
+Represent this hierarchy consistently across briefRationale, biggestGap, nextAdjustment, signalResponseAlignment, and overallSummary.
+Do not restate the same idea in different sections with different wording.
+
+Hierarchy format to enforce in prose:
+- Primary Failure Driver: [single dominant behavior failure]
+- Secondary Effects: [up to two concrete effects]
+- Downstream Consequences: [HCP reaction and conversation outcome]
+
+If multiple failures are present, pick the dominant one by causal impact, not frequency.
+
+── EVIDENCE ANCHOR FORMAT (MANDATORY) ──
+Every meaningful insight must include transcript anchoring in this structure:
+Rep: "..."
+HCP: "..."
+→ Impact: ...
+
+If an insight cannot be anchored to transcript evidence, do not include it.
+
+At least 2 anchored evidence moments are required in capabilityInsights + signalResponseAlignment.
+
+── POSITIVITY GUARDRAIL ──
+Do not include filler strengths.
+If no trajectory-changing strength exists, explicitly state that no meaningful strength changed the interaction trajectory.
+
+── REALISM TONE ENFORCEMENT ──
+When realism/temperature is high (>= 7), use decisive language.
+Disallow hedging forms such as: "could have", "might help", "consider", "try to".
+Use direct causal framing: "This failed because..." and "This caused...".
 
 ─── BLOCK A: BRIEF RATIONALE ───
 Field: briefRationale (single string)

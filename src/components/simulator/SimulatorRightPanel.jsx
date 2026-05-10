@@ -1,5 +1,8 @@
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
   return (
@@ -62,6 +65,25 @@ const trajectoryConfig = {
   declining: { Icon: TrendingDown, color: "rgba(255,207,214,0.94)", label: "Declining" },
 };
 
+function formatSpecialistTitle(title = "") {
+  const normalized = String(title || "").trim();
+  if (!normalized) return "N/A";
+
+  const compactMap = [
+    { pattern: /Primary Care\s*\/\s*Internal Medicine Specialist/i, replacement: "PCP / INTERNAL MEDICINE" },
+    { pattern: /Primary Care Physician/i, replacement: "PCP" },
+    { pattern: /Internal Medicine Specialist/i, replacement: "INTERNAL MEDICINE" },
+    { pattern: /Specialist$/i, replacement: "" },
+  ];
+
+  let compact = normalized;
+  for (const rule of compactMap) {
+    compact = compact.replace(rule.pattern, rule.replacement).trim();
+  }
+
+  return compact.replace(/\s{2,}/g, " ").trim() || normalized;
+}
+
 export default function SimulatorRightPanel({
   hcpPrediction = null,
   lastSignals = {},
@@ -71,7 +93,12 @@ export default function SimulatorRightPanel({
   scenario = null,
   conversationInit = null,
   hasRepSpoken = false,
+  predictiveLens = null,
+  realism,
 }) {
+  const displayRealism = requireRealismContract(realism, "session.realism display");
+  const navigate = useNavigate();
+  const [showPredictiveLens, setShowPredictiveLens] = useState(false);
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
   const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
     title: "Live coaching",
@@ -81,40 +108,111 @@ export default function SimulatorRightPanel({
   const sceneDescription = scenario?.visualScene || scenario?.description || "";
   const openingGuidance = !hasRepSpoken ? (conversationInit?.openingGuidance || []) : [];
 
+  const openPredictiveBuilder = () => {
+    const selection = predictiveLens?.data?.selection;
+    if (!selection) {
+      navigate("/predictive-builder");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    const stage = selection.stage || selection.conversationStage || selection.journeyStage;
+    const challenge = selection.challenge || selection.challengeContext;
+
+    if (selection.hcpType) params.set("hcpType", String(selection.hcpType));
+    if (stage) params.set("stage", String(stage));
+    if (challenge) params.set("challenge", String(challenge));
+
+    Object.entries(selection).forEach(([key, value]) => {
+      if (!value || params.has(key)) return;
+      params.set(key, String(value));
+    });
+    const suffix = params.toString();
+    navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
+  };
+
+  const showPredictiveLensPanel = Boolean(predictiveLens?.isLoading || predictiveLens?.data);
+
   return (
     <div className="space-y-4">
-      {scenario && sceneDescription && (
-        <DarkSection icon={MapPin} title="Scene">
-          <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
-            {sceneDescription}
-          </p>
-          {openingGuidance.length > 0 && (
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
-                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
-                  Opening Tips
+      {showPredictiveLensPanel && (
+        <DarkSection
+          icon={BrainCircuit}
+          title="Predictive HCP Lens"
+          headerRight={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold"
+              style={{ color: "hsl(174 60% 68%)" }}
+              onClick={() => setShowPredictiveLens((prev) => !prev)}
+            >
+              {showPredictiveLens ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {showPredictiveLens ? "Hide" : "View"}
+            </button>
+          }
+        >
+          {predictiveLens?.isLoading && (
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
+              Building predictive lens from scenario metadata...
+            </p>
+          )}
+
+          {predictiveLens?.data && (
+            <>
+              <Row label="Source">
+                <Pill>{predictiveLens.data.synthesisSource === "ai" ? "AI-synthesized" : "Deterministic"}</Pill>
+              </Row>
+              <Row label="Specialist">
+                <span className="text-[11px] font-semibold uppercase whitespace-nowrap" style={{ color: "rgba(244,249,249,0.96)" }}>
+                  {formatSpecialistTitle(predictiveLens.data.specialistTitle)}
                 </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {openingGuidance.map((hint, i) => (
-                  <span
-                    key={i}
-                    className="text-[11px] px-2 py-0.5 rounded-md"
-                    style={{
-                      background: "rgba(37,124,123,0.12)",
-                      border: "1px solid rgba(37,124,123,0.24)",
-                      color: "rgba(244,249,249,0.96)",
-                    }}
+              </Row>
+              {predictiveLens.data.synthesisError ? (
+                <p className="text-xs" style={{ color: "rgba(255, 220, 173, 0.92)" }}>
+                  {predictiveLens.data.synthesisError}
+                </p>
+              ) : null}
+
+              {showPredictiveLens && (
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={openPredictiveBuilder}
+                    className="text-[11px] font-semibold underline"
+                    style={{ color: "hsl(174 60% 68%)" }}
                   >
-                    {hint}
-                  </span>
-                ))}
-              </div>
-            </div>
+                    Open in Predictive Builder
+                  </button>
+                  <div className="grid grid-cols-1 gap-2">
+                    <p className="text-[11px] uppercase tracking-wider" style={{ color: "rgba(220,236,236,0.72)" }}>
+                      Runtime headlines
+                    </p>
+                    <div className="space-y-1.5 text-xs" style={{ color: "rgba(244,249,249,0.94)" }}>
+                      <p>Mindset: {predictiveLens.data.lens?.sections?.mindset?.headline || "n/a"}</p>
+                      <p>Objections: {predictiveLens.data.lens?.sections?.objections?.headline || "n/a"}</p>
+                      <p>Response style: {predictiveLens.data.lens?.sections?.responseStyle?.headline || "n/a"}</p>
+                      <p>Rep approach: {predictiveLens.data.lens?.sections?.repApproach?.headline || "n/a"}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </DarkSection>
       )}
+
+      <DarkSection icon={Activity} title="Realism">
+        <div className="space-y-2">
+          <Row label="Level">
+            <Pill>{displayRealism}/10</Pill>
+          </Row>
+          <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
+            <span>1 (Open)</span>
+            <span>5 (Balanced)</span>
+            <span>10 (High Resistance)</span>
+          </div>
+        </div>
+      </DarkSection>
 
       {liveCoaching && (
         <LightSection
@@ -224,6 +322,39 @@ export default function SimulatorRightPanel({
               </Row>
             );
           })}
+        </DarkSection>
+      )}
+
+      {scenario && sceneDescription && (
+        <DarkSection icon={MapPin} title="Scene">
+          <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
+            {sceneDescription}
+          </p>
+          {openingGuidance.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
+                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
+                  Opening Tips
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {openingGuidance.map((hint, i) => (
+                  <span
+                    key={i}
+                    className="text-[11px] px-2 py-0.5 rounded-md"
+                    style={{
+                      background: "rgba(37,124,123,0.12)",
+                      border: "1px solid rgba(37,124,123,0.24)",
+                      color: "rgba(244,249,249,0.96)",
+                    }}
+                  >
+                    {hint}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </DarkSection>
       )}
 

@@ -1,5 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -95,19 +94,83 @@
   }
 
   @keyframes glow-red {
-  0%, 100% { box-shadow: 0 0 6px 1px hsl(0 70% 70% / 0.4); }
-  50% { box-shadow: 0 0 14px 4px hsl(0 70% 65% / 0.7); }
-}
 
-::-webkit-scrollbar {
+    0%,
+    100% {
+      box-shadow: 0 0 6px 1px hsl(0 70% 70% / 0.4);
+    }
+
+    50% {
+      box-shadow: 0 0 14px 4px hsl(0 70% 65% / 0.7);
+    }
+  }
+
+  ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
   }
+
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+
   ::-webkit-scrollbar-thumb {
     background: hsl(var(--border));
     border-radius: 2px;
+  }
+}
+
+@layer components {
+  .si-shell {
+    background: linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%);
+    color: hsl(222 38% 20%);
+  }
+
+  .si-glass-header {
+    background: rgba(255, 255, 255, 0.84);
+    border-bottom: 1px solid rgba(38, 67, 117, 0.18);
+    box-shadow: 0 10px 24px rgba(14, 24, 43, 0.06);
+  }
+
+  .si-dark-shell {
+    background: radial-gradient(circle at 15% 10%, rgba(12, 74, 110, 0.3), transparent 38%),
+      radial-gradient(circle at 88% 8%, rgba(20, 184, 166, 0.18), transparent 36%),
+      #07111f;
+    color: #edf6ff;
+  }
+
+  .si-dark-panel {
+    background: linear-gradient(180deg, rgba(7, 18, 33, 0.9) 0%, rgba(6, 15, 28, 0.9) 100%);
+    border: 1px solid rgba(104, 173, 205, 0.34);
+    box-shadow: 0 16px 36px rgba(1, 8, 20, 0.35);
+  }
+
+  .si-dark-title {
+    color: #8de5d6;
+  }
+
+  .si-dark-label {
+    color: #c2dced;
+  }
+
+  .si-dark-muted {
+    color: #9fbfd3;
+  }
+
+  .si-dark-field {
+    background: #091c32;
+    border: 1px solid #44708c;
+    color: #eff7ff;
+  }
+
+  .si-dark-field::placeholder {
+    color: #93b4c8;
+    opacity: 1;
+  }
+
+  .si-dark-field:focus {
+    outline: none;
+    border-color: #59c8bf;
+    box-shadow: 0 0 0 2px rgba(89, 200, 191, 0.18);
   }
 }

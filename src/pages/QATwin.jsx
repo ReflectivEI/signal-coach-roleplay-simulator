@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import AppHeader from "@/components/layout/AppHeader";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "@/lib/capabilityEvaluation";
@@ -6,7 +6,7 @@ import { initializeConversation } from "@/lib/conversationInit";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { buildDeterministicSessionReview, generateSessionReview } from "@/lib/sessionReview";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
-import { ArrowLeft, Play, Square, Zap, CheckCircle2, AlertCircle, Download } from "lucide-react";
+import { Play, Square, Zap, CheckCircle2, AlertCircle, Download } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
@@ -668,11 +668,10 @@ function MatrixRow({ result, index }) {
                   {(result.review?.capabilityInsights || []).map((ci) => (
                     <span
                       key={ci.capabilityId}
-                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${
-                        ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                      className={`text-xs px-2 py-0.5 rounded-full border font-medium ${ci.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
                           : ci.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
                             : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                      }`}
+                        }`}
                     >
                       {(ci.capabilityName || capabilityLabelMap[ci.capabilityId] || ci.capabilityId.replace(/_/g, " "))}: {ci.observationLevel}
                     </span>
@@ -769,7 +768,6 @@ function CapabilityHeatmap({ results }) {
 }
 
 export default function QATwin() {
-  const navigate = useNavigate();
   const capabilityLabelMap = {
     question_quality: "Question Quality",
     listening_responsiveness: "Listening & Responsiveness",
@@ -880,13 +878,11 @@ export default function QATwin() {
 
   return (
     <div className="min-h-screen bg-background font-inter">
-      <div className="border-b border-border/50 bg-surface/90 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
+      <AppHeader maxWidthClassName="max-w-6xl" />
+
+      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
+        <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate("/")} className="text-muted-foreground hover:text-foreground transition-colors p-1">
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="w-px h-5 bg-border/50" />
             <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: "hsl(174 30% 18%)", border: "1px solid hsl(174 60% 52% / 0.4)" }}>
               <Zap className="w-3.5 h-3.5" style={{ color: "hsl(174 60% 65%)" }} />
             </div>
@@ -897,9 +893,7 @@ export default function QATwin() {
           </div>
           <StatusPill status={status} />
         </div>
-      </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
         <div className="rounded-xl px-5 py-3.5 text-xs text-foreground/70 leading-relaxed" style={{ background: "hsl(174 25% 14%)", border: "1px solid hsl(174 60% 52% / 0.25)" }}>
           <span style={{ color: "hsl(174 60% 65%)" }} className="font-semibold">QA Mode — </span>
           The AI plays both sides end-to-end. Capability evaluation is <strong>deterministic</strong> so runs complete in ~30–60s per scenario depending on turn count.
@@ -1075,11 +1069,10 @@ export default function QATwin() {
                 {(singleResult.review?.capabilityInsights || []).map((q) => (
                   <span
                     key={q.capabilityId}
-                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${
-                      q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
+                    className={`text-xs px-2.5 py-1 rounded-full border font-medium ${q.observationLevel === "effective" ? "text-signal-positive border-signal-positive/40 bg-signal-positive/10"
                         : q.observationLevel === "missed" ? "text-destructive border-destructive/40 bg-destructive/10"
                           : "text-signal-watch border-signal-watch/40 bg-signal-watch/10"
-                    }`}
+                      }`}
                   >
                     {(q.capabilityName || capabilityLabelMap[q.capabilityId] || q.capabilityId.replace(/_/g, " "))}: {q.observationLevel}
                   </span>

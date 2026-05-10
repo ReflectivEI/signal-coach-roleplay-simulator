@@ -1,3 +1,5 @@
+import { requireRealismContract } from "@/lib/scenarioInputResolver";
+
 function normalizeText(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
@@ -453,6 +455,18 @@ function buildCompositeExamples({
   return unique(composites);
 }
 
+/**
+ * @param {{
+ *   scenario?: Record<string, any>,
+ *   journeyStage?: string,
+ *   interactionPressures?: string[],
+ *   behaviorState?: string,
+ *   scenarioTopic?: string,
+ *   repIntentType?: string,
+ *   hcpTurnCount?: number,
+ *   repMessage?: string
+ * }} [params]
+ */
 export function pickHcpRealismExamples({
   scenario = {},
   journeyStage = "",
@@ -547,6 +561,144 @@ export function buildHcpRealismNotes({
   return notes;
 }
 
+function resolveRealismLevel(context = {}) {
+  const scenario = context?.scenario || {};
+  const level = requireRealismContract(
+    context?.realismLevel ?? scenario?.runtimeTemperature,
+    "hcp realism context",
+  );
+  if (level <= 3) return { level, tier: "low" };
+  if (level >= 8) return { level, tier: "high" };
+  return { level, tier: "mid" };
+}
+
+/**
+ * Enforce HARD DISCRETE tier-based behavioral branching.
+ * Each tier has distinct response structure, not just wording swaps.
+ * This ensures clear behavioral differentiation between 2/5/9.
+ */
+function enforceRealismTierTone(sentences = [], { tier = "mid", interactionPressures = [] } = {}) {
+  const list = [...(sentences || [])].filter(Boolean);
+  if (!list.length) return list;
+
+  let first = list[0];
+  const constrained = (interactionPressures || []).includes("time_constrained");
+
+  // ─── LOW TIER (1–3): Cooperative, direct, minimal friction ─────────────────────
+  if (tier === "low") {
+    // LOW tier: Accept framing, answer directly, minimal pushback
+    // Strip all resistance language completely
+    first = normalizeText(first)
+      .replace(/\bI'?m not convinced\b|\bnot convinced\b/gi, "I can work with this")
+      .replace(/\bwon't move\b/gi, "could move")
+      .replace(/\bdoesn'?t move\b/gi, "could move")
+      .replace(/\bprove\b/gi, "show")
+      .replace(/\bI need you to\b/gi, "Help me")
+      .replace(/\bThat still\b/gi, "That's")
+      .replace(/\bI'm skeptical\b|\bI'm guarded\b/gi, "I'm open");
+
+    // LOW: Always start with open/cooperative signal
+    if (!/\bI'?m open|I can work with|I can listen|I'm willing|practically|let me test|let me see/i.test(first)) {
+      first = `I'm open to this if it stays practical. ${first.replace(/^I'?m open to this if it stays practical[.,]? ?/i, "").replace(/[.?!]+$/g, "")}.`;
+    }
+
+    // LOW: Make second sentence even more cooperative if exists
+    if (list[1]) {
+      list[1] = normalizeText(list[1])
+        .replace(/\bneed something more specific\b/gi, "need one concrete example")
+        .replace(/\bnot convinced\b/gi, "willing to look")
+        .replace(/\bprove\b/gi, "show")
+        .replace(/\bI'd need\b/gi, "Give me")
+        .replace(/\breject\b/gi, "question");
+
+      // LOW: Ensure second sentence expresses willingness to test/try
+      if (!/\btest|try|see|look|willing|work/i.test(list[1])) {
+        list[1] = `Give me one concrete example and I can test it in practice.`;
+      }
+    }
+
+    // LOW: Add positive closing if response is short
+    if (list.length === 1 && first.length < 100) {
+      first = `${first} Let me see how this works in practice.`;
+    }
+  }
+
+  // ─── MID TIER (4–6): Selective skepticism, requires clarity ──────────────────────
+  else if (tier === "mid") {
+    // MID: Balanced skepticism, not automatic rejection
+    // Replace extreme resistance with qualified interest
+    first = normalizeText(first)
+      .replace(/\bI'?m open to this if it stays practical\b/gi, "I can listen, but this needs to be specific")
+      .replace(/\bI'm not convinced yet\b/gi, "I'm skeptical, but I'm listening")
+      .replace(/\bwon't move\b/gi, "could move if")
+      .replace(/\bcompletely reject\b/gi, "push back on")
+      .replace(/\bprove it\b/gi, "make the case")
+      .replace(/\byou need to convince me\b/gi, "I need specificity");
+
+    // MID: Require evidence but not harshly
+    if (!/\bI can listen|I can work with|skeptical but|specific|concrete|evidence|data/i.test(first)) {
+      first = `I can listen, but this needs to be specific for my practice. ${first.replace(/^I can listen[.,]? ?/i, "").replace(/[.?!]+$/g, "")}.`;
+    }
+
+    // MID: Second sentence should challenge assumptions, not accept
+    if (list[1]) {
+      list[1] = normalizeText(list[1])
+        .replace(/\bI'm open\b/gi, "I'm questioning")
+        .replace(/\bI can work with this\b/gi, "I need specificity")
+        .replace(/\bGive me one concrete example\b/gi, "But what about...")
+        .replace(/\bI'm willing\b/gi, "I need evidence that");
+
+      // MID: Ensure second sentence introduces a challenge or condition
+      if (!/\bbut|require|evidence|specific|condition|assume|depend/i.test(list[1])) {
+        list[1] = `But I need to understand how this changes what I'm already doing.`;
+      }
+    }
+  }
+
+  // ─── HIGH TIER (7–10): Strong resistance, demands specificity ────────────────────
+  else if (tier === "high") {
+    // HIGH: Strong resistance, interrupt weak logic, demand specificity
+    // Replace all softening language with sharp pushback
+    first = normalizeText(first)
+      .replace(/\bI'?m open\b/gi, "I'm not convinced")
+      .replace(/\bI can listen\b/gi, "I'm not convinced")
+      .replace(/\bcould move\b/gi, "won't move")
+      .replace(/\bI'm skeptical but listening\b/gi, "I'm skeptical and doubt this works")
+      .replace(/\bI need specificity\b/gi, "You need to prove this")
+      .replace(/\bI'm questioning\b/gi, "I'm rejecting the premise");
+
+    // HIGH: Always start with clear resistance signal
+    if (!/\bI'?m not convinced|won't move|prove|reject|demand|direct answer|specific|interrupt/i.test(first)) {
+      first = `I'm not convinced yet. ${first.replace(/^I'?m not convinced[.,]? ?/i, "").replace(/[.?!]+$/g, "")}.`;
+    }
+
+    // HIGH: Time pressure adds urgency/interruption
+    if (constrained && !/\bminute|time|brief|short|now|immediately/i.test(first)) {
+      first = `${first} I don't have time for the long version.`;
+    }
+
+    // HIGH: Force second sentence as strong demand or deflection
+    if (!list[1]) {
+      list[1] = constrained
+        ? "Give me the direct answer or I'm done here."
+        : "You need to make a compelling case, and I don't see it yet.";
+    } else {
+      list[1] = normalizeText(list[1])
+        .replace(/\bI can\b/gi, "You need to")
+        .replace(/\bGive me\b/gi, "Prove to me")
+        .replace(/\bI'm willing\b/gi, "I will not");
+
+      // Ensure second sentence sounds like escalating demand
+      if (!/\bprove|demand|reject|won't|not|direct answer|specific/i.test(list[1])) {
+        list[1] = `Without specificity, this conversation is done.`;
+      }
+    }
+  }
+
+  list[0] = normalizeText(first);
+  return list;
+}
+
 function buildTopicAcknowledgment({
   topic = "general",
   interactionPressures = [],
@@ -615,6 +767,7 @@ export function validateHcpHumanRealism(text = "", context = {}) {
     turnCount = 0,
     hasPriorContextSignal = false,
   } = context;
+  const realism = resolveRealismLevel(context);
 
   const topic = inferHcpScenarioTopic(scenario, repMessage);
   const repMentionedTopic = Boolean(repMessage && inferTopicFromText(repMessage) === topic);
@@ -656,6 +809,15 @@ export function validateHcpHumanRealism(text = "", context = {}) {
       .replace(/\bI would want to discuss this in detail\b/gi, "Keep it focused for me")
       .trim();
     issues.push("overwritten");
+  }
+
+  const tiered = enforceRealismTierTone(sentences, {
+    tier: realism.tier,
+    interactionPressures,
+  });
+  if (joinSentences(tiered) !== joinSentences(sentences)) {
+    issues.push(`realism_tier_${realism.tier}`);
+    sentences = tiered;
   }
 
   output = joinSentences(sentences);

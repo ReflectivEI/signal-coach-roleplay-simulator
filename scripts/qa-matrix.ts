@@ -3,21 +3,33 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { initializeConversation } from "../src/lib/conversationInit";
-import { generateHcpResponse } from "../src/lib/hcpResponseGenerator";
+import { generateHcpResponse, HCP_GENERATOR_VERSION } from "../src/lib/hcpResponseGenerator";
 import { computeVolatilityEvents } from "../src/lib/simulatorEngine";
 import { runCapabilityEvaluationEngine } from "../src/lib/capabilityEvaluation";
 import { buildDeterministicSessionReview, generateSessionReview } from "../src/lib/sessionReview";
 import { computeHcpStateHistory } from "../src/lib/hcpStateEngine";
 import { predictHcpBehavior } from "../src/lib/hcpBehaviorPrediction";
 import { invokeWorkerText } from "../src/services/workerClient.js";
-import { buildDeterministicQaRepReply, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
+import { buildDeterministicQaRepReply, buildQaRepTurnTrace, enforceRepAnswerFirstContract } from "../src/lib/qaRepProxy.js";
 import { getScenarioConcernFamily } from "../src/lib/scenarioFamilyRegistry";
+import { buildPredictiveSeedFromScenario } from "../src/lib/predictiveSeedResolver";
+import { buildPredictiveProfile } from "../src/lib/predictiveBuilderModel";
 
 type PersonaKey = "strong_rep" | "mediocre_rep" | "weak_rep";
 const QA_STEP_TIMEOUT_MS = 45000;
 const QA_REVIEW_TIMEOUT_MS = 20000;
 const QA_HCP_TOKEN_CAP = 260;
 const QA_CACHE_PATH = path.resolve(".qa-matrix-cache.json");
+const QA_RUN_HISTORY_PATH = path.resolve("artifacts/qa-matrix/run-history.json");
+const QA_RUNTIME_SOURCE_PATH = "src/lib/hcpResponseGenerator.ts";
+const QA_BANNED_PHRASE_PATTERNS = [
+  /\bi hear that a lot\b/i,
+  /\bkeep this brief\b/i,
+  /\bi['’]m not convinced yet\b/i,
+  /\bwhat['’]s concretely different for me after this\b/i,
+  /\bwhat changes in practice if this is worth continuing\b/i,
+  /\bthe practical answer has to stay tied\b/i,
+];
 const QA_FINGERPRINT_FILES = [
   "src/lib/qaRepProxy.js",
   "src/lib/hcpResponseGenerator.ts",
@@ -61,6 +73,71 @@ async function readQaCache() {
 
 async function writeQaCache(cache) {
   await fs.writeFile(QA_CACHE_PATH, JSON.stringify(cache, null, 2));
+}
+
+type QaRunHistoryEntry = {
+  timestamp: string;
+  personaKey: PersonaKey;
+  maxTurns: number;
+  scenarioKey: string;
+  title: string;
+  riskLevel: string;
+  opennessScore: number;
+};
+
+function detectBannedPhrases(text = "") {
+  const value = String(text || "");
+  return QA_BANNED_PHRASE_PATTERNS
+    .filter((pattern) => pattern.test(value))
+    .map((pattern) => pattern.source);
+}
+
+function evaluateRuntimePath(turns: any[]) {
+  const hcpTurns = (Array.isArray(turns) ? turns : []).filter((turn) => turn?.speaker === "hcp");
+  const bannedPhraseFindings = hcpTurns
+    .map((turn, index) => ({
+      turn: index + 1,
+      text: String(turn?.text || ""),
+      matches: detectBannedPhrases(String(turn?.text || "")),
+      runtimeTrace: turn?.runtimeTrace || null,
+    }))
+    .filter((entry) => entry.matches.length > 0);
+
+  const lastRuntimeTrace = [...hcpTurns].reverse().find((turn) => turn?.runtimeTrace)?.runtimeTrace || null;
+  const generatorVersion = String(lastRuntimeTrace?.generator_version || HCP_GENERATOR_VERSION);
+  const systemRuntimeStatus = bannedPhraseFindings.length > 0 ? "FAIL" : "PASS";
+
+  return {
+    system_runtime_status: systemRuntimeStatus,
+    generator_version: generatorVersion,
+    source_path: QA_RUNTIME_SOURCE_PATH,
+    scenario_grounding_applied: Boolean(lastRuntimeTrace?.scenario_grounding_applied),
+    banned_phrase_filter_applied: lastRuntimeTrace?.banned_phrase_filter_applied !== false,
+    scenario_anchors_used: Array.isArray(lastRuntimeTrace?.scenario_anchors_used) ? lastRuntimeTrace.scenario_anchors_used : [],
+    banned_phrase_findings: bannedPhraseFindings,
+  };
+}
+
+async function readQaRunHistory(): Promise<QaRunHistoryEntry[]> {
+  try {
+    const raw = await fs.readFile(QA_RUN_HISTORY_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeQaRunHistory(entries: QaRunHistoryEntry[]) {
+  await fs.mkdir(path.dirname(QA_RUN_HISTORY_PATH), { recursive: true });
+  await fs.writeFile(QA_RUN_HISTORY_PATH, JSON.stringify(entries, null, 2));
+}
+
+function isHighRiskLowOpenness(prediction: any) {
+  return (
+    String(prediction?.riskLevel || "").toLowerCase() === "high" &&
+    Number(prediction?.opennessScore || 0) <= 2
+  );
 }
 
 async function withTimeout<T>(promise: Promise<T>, label: string, timeoutMs = QA_STEP_TIMEOUT_MS): Promise<T> {
@@ -229,7 +306,7 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
             ? Math.ceil(Number(cooldownMatch[1]) * 1000) + 1500
             : coolingDown
               ? 25000
-          : Math.pow(2, attempt) * 1000;
+              : Math.pow(2, attempt) * 1000;
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -240,18 +317,28 @@ async function retry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
 function buildSafeRepFallback({
   scenario,
   turns,
+  personaKey,
   isQAMode = true,
 }: {
   scenario: any;
   turns: any[];
+  personaKey?: PersonaKey;
   isQAMode?: boolean;
 }) {
-  const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: "", scenario });
-  const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+  const resolvedPersonaKey = isQAMode ? (personaKey || "strong_rep") : personaKey;
+  const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "", personaKey: resolvedPersonaKey });
+  const finalRepReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey: resolvedPersonaKey, turnIndex: turns.filter((t: any) => t?.speaker === "rep").length });
   if (isQAMode) {
     console.log("REP_FALLBACK_USED", finalRepReply.concept || repProxyOutput.concept || "unknown");
   }
   return finalRepReply;
+}
+
+function isMockRepDraft(text: string) {
+  const value = String(text || "").trim();
+  if (!value) return false;
+  return /mock ai response - configure openai_api_key or groq_api_key/i.test(value)
+    || /i need something more specific before i can react to that\.?/i.test(value);
 }
 
 async function generateQaRepReply({
@@ -259,20 +346,75 @@ async function generateQaRepReply({
   turns,
   currentBehaviorState,
   currentJourneyState,
+  personaKey,
   persona,
   turnIndex,
+  maxTurns,
   isQAMode = true,
 }: {
   scenario: any;
   turns: any[];
   currentBehaviorState: string;
   currentJourneyState: string;
+  personaKey: PersonaKey;
   persona: {
     buildPrompt: (scenario: any, turns: any[], currentBehaviorState: string, currentJourneyState: string) => string;
   };
   turnIndex: number;
+  maxTurns: number;
   isQAMode?: boolean;
 }) {
+  const enforceCommitmentCloseSafeguard = (rawText: string) => {
+    const text = String(rawText || "").trim();
+    if (!text) return text;
+
+    const closeStages = new Set(["adoption_implementation", "commitment_close", "access_formulary"]);
+    const stage = String(scenario?.journeyStage || "").toLowerCase();
+    const isCloseStage = closeStages.has(stage);
+    if (!isCloseStage) return text;
+
+    const lateTurnThreshold = Math.max(3, maxTurns - 4);
+    if (turnIndex < lateTurnThreshold) return text;
+
+    const lastHcpText = [...turns].reverse().find((t) => t?.speaker === "hcp" && typeof t?.text === "string")?.text || "";
+    const hcp = String(lastHcpText || "").toLowerCase();
+    const draft = text.toLowerCase();
+
+    const readinessSignal = /safe enough|low-risk step|one low-risk|i can look at it|i'?d consider|would consider|show me (that )?case|one concrete|one proof point|one data point|what one step|next step/.test(hcp);
+    if (!readinessSignal) return text;
+
+    const hasCommitmentAsk = /would you be open|can we|let'?s|next step|schedule|pilot|start with|review one|take one/.test(draft);
+    const overDiscoveryLoop = /can you (tell|walk|elaborate)|what specific|what would need|what would be|what aspect|help me understand/.test(draft);
+
+    if (hasCommitmentAsk && !overDiscoveryLoop) return text;
+
+    const lowRiskStep = /case|proof point|data point|evidence/.test(hcp)
+      ? "A low-risk first step is to review one comparable patient case together and agree on one safety-check criterion before any broader use."
+      : "A low-risk first step is to trial this in one clearly defined patient profile with one agreed safety checkpoint and staff owner.";
+
+    return `${lowRiskStep} Would you be open to setting that one-patient step now so your team can test it without broad workflow disruption?`;
+  };
+
+  const finalizeQaRepReply = (
+    finalReply: { text?: string; concept?: string | null },
+    repGenerationSource: string,
+  ) => {
+    const text = enforceCommitmentCloseSafeguard(finalReply.text || "");
+    return {
+      ...finalReply,
+      text,
+      qaTrace: isQAMode
+        ? buildQaRepTurnTrace({
+          scenario,
+          turns,
+          personaKey,
+          repGenerationSource,
+          generatedRepText: text,
+        })
+        : null,
+    };
+  };
+
   const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
 
   try {
@@ -285,16 +427,55 @@ async function generateQaRepReply({
     }), `${scenario.title} rep turn ${turnIndex + 1}`);
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    const repProxyOutput = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
-    return enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput });
+    if (repDraft && !isMockRepDraft(repDraft)) {
+      const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: { text: repDraft, concept: null }, personaKey, turnIndex });
+      return finalizeQaRepReply(finalReply, "worker");
+    }
+
+    const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "", personaKey });
+    const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey, turnIndex });
+    return finalizeQaRepReply(finalReply, repDraft ? "worker_mock_placeholder" : "worker_empty_fallback");
   } catch {
-    return buildSafeRepFallback({ scenario, turns, isQAMode });
+    const fallbackReply = buildSafeRepFallback({ scenario, turns, personaKey, isQAMode });
+    return finalizeQaRepReply(fallbackReply, "worker_error_fallback");
   }
 }
 
 async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: number) {
   const persona = QA_PERSONAS[personaKey];
   const convInit = await initializeConversation(scenario);
+  const derivedTemperature = Number.isFinite(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))
+    ? Math.max(1, Math.min(10, Math.round(Number(scenario?.runtimeTemperature ?? scenario?.defaultTemperature))))
+    : personaKey === "strong_rep" ? 3 : personaKey === "weak_rep" ? 9 : 6;
+
+  const selection = buildPredictiveSeedFromScenario(scenario || {});
+  const deterministicProfile = buildPredictiveProfile(selection);
+  const predictiveProfile = {
+    type: String(selection?.behaviorArchetype || scenario?.persona || "").trim(),
+    source: "deterministic",
+    specialistTitle: scenario?.stakeholder || "Clinical Specialist",
+  };
+  const sections = deterministicProfile?.sections as any || {};
+  const predictivePromptContext = [
+    "PREDICTIVE HCP LENS (runtime, scenario-derived):",
+    "- Source: deterministic",
+    `- Specialist frame: ${predictiveProfile.specialistTitle}`,
+    `- Seed disease state: ${selection?.diseaseState || ""}`,
+    `- Seed HCP type: ${selection?.hcpType || ""}`,
+    `- Seed journey stage: ${selection?.journeyStage || ""}`,
+    `- Seed interaction pressure: ${selection?.interactionPressure || ""}`,
+    `- Seed influence driver: ${selection?.influenceDriver || ""}`,
+    `- Seed behavior archetype: ${selection?.behaviorArchetype || ""}`,
+    `- Mindset headline: ${sections?.mindset?.headline || ""}`,
+    `- Objection headline: ${sections?.objections?.headline || ""}`,
+    `- Response style headline: ${sections?.responseStyle?.headline || ""}`,
+    `- Rep approach headline: ${sections?.repApproach?.headline || ""}`,
+  ].join("\n");
+
+  const scenarioWithRuntime = {
+    ...scenario,
+    runtimeTemperature: derivedTemperature,
+  };
 
   let turns: any[] = [];
   let allSignals: any[] = [];
@@ -305,14 +486,17 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
   let currentVolatilityProfile = "stable";
 
   for (let i = 0; i < maxTurns; i++) {
-    console.log(`[${scenario.title}] Turn ${i + 1}/${maxTurns} — generating rep`);
+    const turnBadge = `Turn ${i + 1}`;
+    console.log(`[${scenario.title}] ${turnBadge}`);
     const finalRepReply = await generateQaRepReply({
       scenario,
       turns,
       currentBehaviorState,
       currentJourneyState,
+      personaKey,
       persona,
       turnIndex: i,
+      maxTurns,
       isQAMode: true,
     });
 
@@ -321,6 +505,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       speaker: "rep",
       text: finalRepReply.text || "",
       concept: finalRepReply.concept || null,
+      qaTrace: finalRepReply.qaTrace || null,
       timestamp: new Date().toISOString(),
       cues: [],
       nudge: null,
@@ -336,9 +521,8 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       cues: turn.cues || [],
     }));
 
-    console.log(`[${scenario.title}] Turn ${i + 1}/${maxTurns} — generating HCP`);
     const response = await retry(() => withTimeout(generateHcpResponse(
-      scenario,
+      scenarioWithRuntime,
       conversationHistory,
       currentBehaviorState,
       currentJourneyState,
@@ -348,6 +532,24 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       i,
       currentVolatilityProfile as any,
       QA_HCP_TOKEN_CAP,
+      predictiveProfile,
+      predictivePromptContext,
+      {
+        hcpPersona: predictiveProfile,
+        temperature: derivedTemperature,
+        previousInteraction: finalRepReply.text || "",
+        previousConcernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
+        escalationLevel: 0,
+        interactionHistory: turns
+          .filter((turn) => turn?.speaker === "rep" || turn?.speaker === "hcp")
+          .slice(-6)
+          .map((turn) => ({
+            rep: turn?.speaker === "rep" ? turn?.text : "",
+            hcp: turn?.speaker === "hcp" ? turn?.text : "",
+            concernFamily: predictionTrace[predictionTrace.length - 1]?.prediction?.concernFamily || "",
+            behaviorState: currentBehaviorState,
+          })),
+      },
     ), `${scenario.title} hcp turn ${i + 1}`));
 
     if (response.coachingNudge) {
@@ -363,6 +565,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
       timestamp: new Date().toISOString(),
       cues: response.activeCues || [],
       nudge: null,
+      runtimeTrace: response.runtimeTrace || null,
     }];
 
     allSignals = [...allSignals, response.behaviorSignals || {}];
@@ -385,7 +588,7 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     scenario.startingBehaviorState,
   );
   const volatilityEvents = computeVolatilityEvents(scenario, allSignals, repTurnIds);
-  const capabilityLevels = runCapabilityEvaluationEngine(allSignals, scenario.suggestedFocusCapabilities || []);
+  const capabilityLevels = runCapabilityEvaluationEngine(allSignals, scenario.suggestedFocusCapabilities || [], scenario);
   const capabilityInsights = Object.entries(capabilityLevels).map(([id, level]) => ({
     capabilityId: id,
     capabilityName: id.replace(/_/g, " "),
@@ -429,11 +632,17 @@ async function runSession(scenario: any, personaKey: PersonaKey, maxTurns: numbe
     capabilityLevels,
     review,
     assertions: summarizeAssertions(scenario, turns, allSignals, review),
+    runtimeValidation: evaluateRuntimePath(turns),
   };
 }
 
 async function main() {
-  const scenarioFilter = process.argv.slice(4).join(" ").trim().toLowerCase();
+  const argv = process.argv.slice(2);
+  const flags = new Set(argv.filter((arg) => arg.startsWith("--")));
+  const positionalArgs = argv.filter((arg) => !arg.startsWith("--"));
+  const disableCache = flags.has("--fresh") || flags.has("--no-cache") || process.env.QA_DISABLE_CACHE === "1";
+  const disableHistory = disableCache || flags.has("--no-history") || process.env.QA_DISABLE_HISTORY === "1";
+  const scenarioFilter = positionalArgs.slice(2).join(" ").trim().toLowerCase();
   const familyAliasMap: Record<string, string[]> = {
     "cost/value": ["evidence"],
     cost: ["evidence"],
@@ -452,29 +661,36 @@ async function main() {
   const requestedFamilies = familyAliasMap[scenarioFilter] || [];
   const scenarios = scenarioFilter
     ? ALL_SCENARIOS.filter((scenario) => {
-        const concernFamily = getScenarioConcernFamily(scenario) || "";
-        return scenario.title.toLowerCase().includes(scenarioFilter) ||
-          scenario.journeyStage.toLowerCase().includes(scenarioFilter) ||
-          concernFamily.includes(scenarioFilter) ||
-          requestedFamilies.includes(concernFamily);
-      })
+      const concernFamily = getScenarioConcernFamily(scenario) || "";
+      return scenario.title.toLowerCase().includes(scenarioFilter) ||
+        scenario.journeyStage.toLowerCase().includes(scenarioFilter) ||
+        concernFamily.includes(scenarioFilter) ||
+        requestedFamilies.includes(concernFamily);
+    })
     : ALL_SCENARIOS;
-  const personaKey = parsePersonaKey(process.argv[2]);
-  const maxTurns = Number(process.argv[3] || 4);
+  const personaKey = parsePersonaKey(positionalArgs[0]);
+  const maxTurns = Number(positionalArgs[1] || 4);
   const results = [];
   const fingerprint = await computeQaFingerprint();
-  const cache = await readQaCache();
+  const cache = disableCache ? {} : await readQaCache();
+  const priorRunHistory = disableHistory ? [] : await readQaRunHistory();
 
   if (scenarios.length === 0) {
-    console.error(`No scenarios matched filter: "${process.argv.slice(4).join(" ")}"`);
+    console.error(`No scenarios matched filter: "${positionalArgs.slice(2).join(" ")}"`);
     process.exit(1);
   }
 
   console.log(`Running QA matrix for ${scenarios.length} scenario(s) as ${personaKey} with ${maxTurns} rep turn(s) each...`);
+  if (disableCache) {
+    console.log("CACHE BYPASS ENABLED :: ignoring .qa-matrix-cache.json");
+  }
+  if (disableHistory) {
+    console.log("HISTORY BYPASS ENABLED :: ignoring artifacts/qa-matrix/run-history.json");
+  }
 
   for (const scenario of scenarios) {
     const cacheKey = `${fingerprint}::${personaKey}::${maxTurns}::${scenario.id || scenario.title}`;
-    const cachedResult = cache[cacheKey];
+    const cachedResult = disableCache ? null : cache[cacheKey];
     if (cachedResult) {
       console.log(`Running scenario: ${scenario.title}`);
       console.log(`CACHE HIT :: ${scenario.title}`);
@@ -488,22 +704,131 @@ async function main() {
     console.log(`Running scenario: ${scenario.title}`);
     const result = await runSession(scenario, personaKey, maxTurns);
     results.push(result);
-    cache[cacheKey] = result;
-    await writeQaCache(cache);
+    if (!disableCache) {
+      cache[cacheKey] = result;
+      await writeQaCache(cache);
+    }
     const failed = Object.entries(result.assertions).filter(([key, value]) => key.endsWith("Pass") && !value);
-    const summary = failed.length ? `FAIL ${failed.map(([key]) => key).join(", ")}` : "PASS";
+    const runtimeFailure = result.runtimeValidation?.system_runtime_status === "FAIL";
+    const summaryParts = [];
+    if (failed.length) summaryParts.push(failed.map(([key]) => key).join(", "));
+    if (runtimeFailure) summaryParts.push("runtime_banned_phrase");
+    const summary = summaryParts.length ? `FAIL ${summaryParts.join(", ")}` : "PASS";
     console.log(`${summary} :: ${scenario.title}`);
   }
+
+  const coreCapabilities = [
+    "listening_responsiveness",
+    "customer_engagement_signals",
+    "adaptability",
+    "commitment_gaining",
+  ];
+  const repeatedMissThreshold = Math.max(7, maxTurns - 1);
+  const releaseBlockers = results
+    .map((result) => {
+      const finalPrediction = result.finalPrediction || {};
+      const missedRunCounts = finalPrediction.missedRunCounts || {};
+      const repeatedCoreMisses = coreCapabilities.filter(
+        (capabilityId) => Number(missedRunCounts[capabilityId] || 0) >= repeatedMissThreshold,
+      );
+      const trigger =
+        String(finalPrediction.riskLevel || "").toLowerCase() === "high" &&
+        Number(finalPrediction.opennessScore || 0) === 0 &&
+        repeatedCoreMisses.length >= 2;
+
+      if (!trigger) return null;
+      return {
+        title: result.scenario.title,
+        journeyStage: result.scenario.journeyStage,
+        concernFamily: getScenarioConcernFamily(result.scenario) || "general",
+        opennessScore: Number(finalPrediction.opennessScore || 0),
+        riskLevel: String(finalPrediction.riskLevel || ""),
+        repeatedMissThreshold,
+        repeatedCoreMisses,
+      };
+    })
+    .filter(Boolean);
+
+  const releaseBlockerRule = {
+    enabled: maxTurns >= 10,
+    description: "zero scenarios with high-risk + openness 0 + repeated missed core capabilities over long runs",
+    repeatedMissThreshold,
+    coreCapabilities,
+    blockersDetected: releaseBlockers.length,
+    pass: releaseBlockers.length === 0,
+  };
+
+  const previousByScenarioKey = new Map<string, QaRunHistoryEntry>();
+  for (let i = priorRunHistory.length - 1; i >= 0; i -= 1) {
+    const entry = priorRunHistory[i];
+    if (!entry) continue;
+    if (entry.personaKey !== personaKey || Number(entry.maxTurns) !== maxTurns) continue;
+    if (!previousByScenarioKey.has(entry.scenarioKey)) {
+      previousByScenarioKey.set(entry.scenarioKey, entry);
+    }
+  }
+
+  const softWarnings = results
+    .map((result) => {
+      const scenarioKey = String(result.scenario.id || result.scenario.title);
+      const currentPrediction = result.finalPrediction || {};
+      const previous = previousByScenarioKey.get(scenarioKey);
+      const previousTriggered = previous
+        ? String(previous.riskLevel || "").toLowerCase() === "high" && Number(previous.opennessScore || 0) <= 2
+        : false;
+      const currentTriggered = isHighRiskLowOpenness(currentPrediction);
+
+      if (!previousTriggered || !currentTriggered) return null;
+
+      return {
+        title: result.scenario.title,
+        scenarioKey,
+        journeyStage: result.scenario.journeyStage,
+        concernFamily: getScenarioConcernFamily(result.scenario) || "general",
+        current: {
+          riskLevel: String(currentPrediction.riskLevel || ""),
+          opennessScore: Number(currentPrediction.opennessScore || 0),
+        },
+        previous: {
+          timestamp: previous?.timestamp || "",
+          riskLevel: String(previous?.riskLevel || ""),
+          opennessScore: Number(previous?.opennessScore || 0),
+        },
+      };
+    })
+    .filter(Boolean);
+
+  const softWarningRule = {
+    enabled: true,
+    description: "flag scenarios with riskLevel=high and opennessScore<=2 for 2 consecutive runs",
+    riskLevel: "high",
+    opennessScoreThreshold: 2,
+    consecutiveRunsRequired: 2,
+    nonBlocking: true,
+    warningsDetected: softWarnings.length,
+    pass: true,
+  };
 
   const out = {
     generatedAt: new Date().toISOString(),
     personaKey,
     maxTurns,
     scenarioCount: results.length,
+    releaseBlockerRule,
+    releaseBlockers,
+    softWarningRule,
+    softWarnings,
     results: results.map((result) => ({
       title: result.scenario.title,
       journeyStage: result.scenario.journeyStage,
       concernFamily: getScenarioConcernFamily(result.scenario) || "general",
+      system_runtime_status: result.runtimeValidation?.system_runtime_status || "PASS",
+      generator_version: result.runtimeValidation?.generator_version || HCP_GENERATOR_VERSION,
+      runtime_source_path: result.runtimeValidation?.source_path || QA_RUNTIME_SOURCE_PATH,
+      runtime_banned_phrase_findings: result.runtimeValidation?.banned_phrase_findings || [],
+      scenario_grounding_applied: Boolean(result.runtimeValidation?.scenario_grounding_applied),
+      banned_phrase_filter_applied: result.runtimeValidation?.banned_phrase_filter_applied !== false,
+      scenario_anchors_used: result.runtimeValidation?.scenario_anchors_used || [],
       assertions: result.assertions,
       capabilityLevels: result.capabilityLevels,
       finalPrediction: result.finalPrediction,
@@ -514,29 +839,59 @@ async function main() {
       lastHcpReply: [...result.turns].reverse().find((turn) => turn.speaker === "hcp")?.text || "",
       transcript: results.length === 1
         ? result.turns.map((turn) => ({
-            speaker: turn.speaker,
-            text: turn.text,
-            concept: turn.concept || null,
-            cue: turn.cues?.[0]?.label || "",
-            cueDescription: turn.cues?.[0]?.description || "",
-            nudge: turn.nudge?.guidance || "",
-          }))
+          speaker: turn.speaker,
+          text: turn.text,
+          concept: turn.concept || null,
+          qaTrace: turn.qaTrace || null,
+          cue: turn.cues?.[0]?.label || "",
+          cueDescription: turn.cues?.[0]?.description || "",
+          nudge: turn.nudge?.guidance || "",
+          runtimeTrace: turn.runtimeTrace || null,
+        }))
         : undefined,
       predictionTrace: results.length === 1
         ? result.predictionTrace?.map((entry) => ({
-            turn: entry.turn,
-            predictedBehaviorState: entry.prediction?.predictedBehaviorState || "",
-            riskLevel: entry.prediction?.riskLevel || "",
-            trajectory: entry.prediction?.trajectory || "",
-            concernFamily: entry.prediction?.concernFamily || "",
-            predictedDrivers: entry.prediction?.predictedDrivers || [],
-            predictedObjections: entry.prediction?.predictedObjections || [],
-          }))
+          turn: entry.turn,
+          predictedBehaviorState: entry.prediction?.predictedBehaviorState || "",
+          riskLevel: entry.prediction?.riskLevel || "",
+          trajectory: entry.prediction?.trajectory || "",
+          concernFamily: entry.prediction?.concernFamily || "",
+          predictedDrivers: entry.prediction?.predictedDrivers || [],
+          predictedObjections: entry.prediction?.predictedObjections || [],
+        }))
         : undefined,
     })),
   };
 
-  console.log(`\nJSON_SUMMARY_START\n${JSON.stringify(out, null, 2)}\nJSON_SUMMARY_END`);
+  const historyToAppend: QaRunHistoryEntry[] = results.map((result) => {
+    const scenarioKey = String(result.scenario.id || result.scenario.title);
+    const prediction = result.finalPrediction || {};
+    return {
+      timestamp: out.generatedAt,
+      personaKey,
+      maxTurns,
+      scenarioKey,
+      title: result.scenario.title,
+      riskLevel: String(prediction.riskLevel || ""),
+      opennessScore: Number(prediction.opennessScore || 0),
+    };
+  });
+
+  if (!disableHistory) {
+    const updatedHistory = [...priorRunHistory, ...historyToAppend].slice(-5000);
+    await writeQaRunHistory(updatedHistory);
+  }
+
+  const finalExitCode = releaseBlockerRule.enabled && !releaseBlockerRule.pass ? 2 : 0;
+  console.log(`\nJSON_SUMMARY_START\n${JSON.stringify(out, null, 2)}\nJSON_SUMMARY_END | SOFT_WARNINGS: ${softWarnings.length} | EXIT: ${finalExitCode}`);
+
+  if (releaseBlockerRule.enabled && !releaseBlockerRule.pass) {
+    console.error(
+      `\nRELEASE_BLOCKER_FAIL: ${releaseBlockers.length} scenario(s) matched the blocker rule. ` +
+      `Blockers: ${releaseBlockers.map((blocker) => blocker.title).join(", ")}`,
+    );
+    process.exitCode = 2;
+  }
 }
 
 main().catch((error) => {

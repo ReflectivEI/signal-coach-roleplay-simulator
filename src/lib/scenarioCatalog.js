@@ -15,6 +15,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "treating_clinician", decisionOrientation: "patient_centric",
     persona: "time_constrained_community_doctor", startingBehaviorState: "closed",
     interactionPressure: ["time_constrained", "operationally_constrained"],
+    predictiveSeed: {
+      diseaseState: "primary_care",
+      hcpType: "treating_clinician",
+      journeyStage: "initial_access",
+      interactionPressure: "time_constrained",
+      influenceDriver: "patient_centric",
+      behaviorArchetype: "time_constrained_community_doctor",
+    },
     keyChallenges: ["No trust established yet", "Time pressure used as a shield", "Rep must earn the conversation before delivering any content"],
     suggestedFocusCapabilities: ["question_quality", "customer_engagement_signals", "adaptability"],
     isBuiltIn: true
@@ -62,8 +70,8 @@ export const ALL_SCENARIOS = [
     objective: "Use question quality to help the HCP build their own decision criteria.",
     context: "Hospitalist / Early Career Physician — Community hospital, newer attending still building prescribing patterns, genuinely curious and open to guidance.",
     openingScene: "Honestly, I haven't thought much about it. What type of patient are you seeing the best results in?",
-    visualScene: generateOpeningScene({ title: "The Undefined Patient Profile", journeyStage: "discovery", startingBehaviorState: "open", decisionOrientation: "patient_centric", interactionPressure: ["curious_uncertain"] }),
-    journeyStage: "discovery", journeyState: "early_discovery",
+    visualScene: generateOpeningScene({ title: "The Undefined Patient Profile", journeyStage: "early_discovery", startingBehaviorState: "open", decisionOrientation: "patient_centric", interactionPressure: ["curious_uncertain"] }),
+    journeyStage: "early_discovery", journeyState: "early_discovery",
     hcpRoleType: "treating_clinician", decisionOrientation: "patient_centric",
     persona: "curious_uncertain_adopter", startingBehaviorState: "open",
     interactionPressure: ["curious_uncertain"],
@@ -79,8 +87,8 @@ export const ALL_SCENARIOS = [
     objective: "Abandon the assumed agenda and discover what actually matters to this HCP.",
     context: "Endocrinologist — Academic medical center, specialist with strong clinical opinions and a busy referral-based practice, well-read on current data.",
     openingScene: "I've heard the efficacy story. That's not the question for me. The question is what happens to patients who can't stay on therapy.",
-    visualScene: generateOpeningScene({ title: "The Assumed Priority", journeyStage: "discovery", startingBehaviorState: "neutral", decisionOrientation: "patient_centric", interactionPressure: ["skeptical_resistant"] }),
-    journeyStage: "discovery", journeyState: "early_discovery",
+    visualScene: generateOpeningScene({ title: "The Assumed Priority", journeyStage: "early_discovery", startingBehaviorState: "neutral", decisionOrientation: "patient_centric", interactionPressure: ["skeptical_resistant"] }),
+    journeyStage: "early_discovery", journeyState: "early_discovery",
     hcpRoleType: "treating_clinician", decisionOrientation: "patient_centric",
     persona: "skeptical_specialist", startingBehaviorState: "neutral",
     interactionPressure: ["skeptical_resistant"],
@@ -96,8 +104,8 @@ export const ALL_SCENARIOS = [
     objective: "Surface a real gap in the HCP's current approach without projecting one onto them.",
     context: "Pulmonologist — Community pulmonology practice, stable patient population, limited exposure to newer therapies, comfortable with current protocol.",
     openingScene: "Honestly, my patients do pretty well. I haven't had a reason to change anything in a while. What would make you think I need something different?",
-    visualScene: generateOpeningScene({ title: "The Protocol Lock", journeyStage: "discovery", startingBehaviorState: "neutral", decisionOrientation: "guideline_anchored", interactionPressure: ["skeptical_resistant"] }),
-    journeyStage: "discovery", journeyState: "early_discovery",
+    visualScene: generateOpeningScene({ title: "The Protocol Lock", journeyStage: "early_discovery", startingBehaviorState: "neutral", decisionOrientation: "guideline_anchored", interactionPressure: ["skeptical_resistant"] }),
+    journeyStage: "early_discovery", journeyState: "early_discovery",
     hcpRoleType: "treating_clinician", decisionOrientation: "guideline_anchored",
     persona: "skeptical_specialist", startingBehaviorState: "neutral",
     interactionPressure: ["skeptical_resistant"],
@@ -119,6 +127,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "thought_leader", decisionOrientation: "evidence_driven",
     persona: "skeptical_specialist", startingBehaviorState: "neutral",
     interactionPressure: ["skeptical_resistant"],
+    predictiveSeed: {
+      diseaseState: "pulmonology",
+      hcpType: "thought_leader",
+      journeyStage: "clinical_value",
+      interactionPressure: "skeptical_resistant",
+      influenceDriver: "evidence_driven",
+      behaviorArchetype: "skeptical_specialist",
+    },
     keyChallenges: ["Rep cannot win a clinical debate with a KOL", "Exploring the concern is more credible than defending the data", "Making it matter requires connecting to what the HCP does trust"],
     suggestedFocusCapabilities: ["objection_navigation", "listening_responsiveness", "making_it_matter"],
     isBuiltIn: true
@@ -136,6 +152,14 @@ export const ALL_SCENARIOS = [
     hcpRoleType: "treating_clinician", decisionOrientation: "guideline_anchored",
     persona: "skeptical_specialist", startingBehaviorState: "closed",
     interactionPressure: ["skeptical_resistant", "competitive_bias"],
+    predictiveSeed: {
+      diseaseState: "cardiology",
+      hcpType: "treating_clinician",
+      journeyStage: "clinical_value",
+      interactionPressure: "skeptical_resistant",
+      influenceDriver: "guideline_anchored",
+      behaviorArchetype: "skeptical_specialist",
+    },
     keyChallenges: ["Rep cannot argue against guidelines", "Value must be connected to the HCP's own clinical experience", "Discovery about real patient gaps is the only productive path"],
     suggestedFocusCapabilities: ["question_quality", "making_it_matter", "adaptability"],
     isBuiltIn: true
@@ -332,3 +356,37 @@ export const ALL_SCENARIOS = [
     isBuiltIn: true
   }
 ];
+
+const GRID_FILTER_MAP_BY_TITLE = {
+  "The Gatekeeper Filter": { diseaseState: "primary_care", specialty: "primary_care", interactionPressure: "time_constrained" },
+  "The Warm Intro That Turns Cold": { diseaseState: "cardiology", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+  "The No-Show Follow-Up": { diseaseState: "primary_care", specialty: "specialist", interactionPressure: "time_constrained" },
+  "The Undefined Patient Profile": { diseaseState: "primary_care", specialty: "hospital_medicine", interactionPressure: "curious_uncertain" },
+  "The Assumed Priority": { diseaseState: "endocrinology", specialty: "academic", interactionPressure: "skeptical_resistant" },
+  "The Protocol Lock": { diseaseState: "pulmonology", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+  "The Data That Doesn't Land": { diseaseState: "pulmonology", specialty: "academic", interactionPressure: "skeptical_resistant" },
+  "The Guideline Anchor": { diseaseState: "cardiology", specialty: "primary_care", interactionPressure: "skeptical_resistant" },
+  "The Cost-Effectiveness Filter": { diseaseState: "primary_care", specialty: "hospital_medicine", interactionPressure: "operationally_constrained" },
+  "The Prior Auth Reflex": { diseaseState: "rheumatology", specialty: "specialist", interactionPressure: "access_barrier" },
+  "The Unexpected Safety Flag": { diseaseState: "neurology", specialty: "academic", interactionPressure: "safety_concern" },
+  "The Competitive Defender": { diseaseState: "oncology", specialty: "specialist", interactionPressure: "competitive_bias" },
+  "The Reluctant Early Adopter": { diseaseState: "nephrology", specialty: "academic", interactionPressure: "curious_uncertain" },
+  "The Workflow Bottleneck": { diseaseState: "dermatology", specialty: "specialist", interactionPressure: "operationally_constrained" },
+  "The Reversal After First Patient": { diseaseState: "hematology", specialty: "academic", interactionPressure: "safety_concern" },
+  "The Formulary Firewall": { diseaseState: "primary_care", specialty: "academic", interactionPressure: "access_barrier" },
+  "The Perpetual Maybe": { diseaseState: "gastroenterology", specialty: "specialist", interactionPressure: "curious_uncertain" },
+  "The Handoff Risk": { diseaseState: "primary_care", specialty: "academic", interactionPressure: "access_barrier" },
+  "The Split Decision": { diseaseState: "primary_care", specialty: "specialist", interactionPressure: "skeptical_resistant" },
+};
+
+for (const scenario of ALL_SCENARIOS) {
+  const mapped = GRID_FILTER_MAP_BY_TITLE[scenario.title] || {};
+  scenario.gridMapping = {
+    diseaseState: mapped.diseaseState || scenario.predictiveSeed?.diseaseState || "",
+    specialty: mapped.specialty || "",
+    hcpType: scenario.hcpRoleType || "",
+    influenceDriver: scenario.decisionOrientation || "",
+    journeyStage: scenario.journeyStage || "",
+    interactionPressure: mapped.interactionPressure || scenario.interactionPressure?.[0] || "",
+  };
+}
