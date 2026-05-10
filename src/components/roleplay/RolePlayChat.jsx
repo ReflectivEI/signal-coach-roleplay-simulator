@@ -6226,11 +6226,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                           <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
                             <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
                               <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-                              <div>- Predicted State: {cueSummary.predictedState}</div>
-                              <div>- Openness: {cueSummary.openness}</div>
-                              <div>- Trajectory: {cueSummary.trajectory}</div>
-                              <div>- Risk: {cueSummary.risk}</div>
-                              <div>- Behavioral Notes: {cueSummary.behavioralNotes || "Listening for the rep's opening move."}</div>
+                              <div className="hcp-cue-predicted-state">- Predicted State: {cueSummary.predictedState}</div>
+                              <div className="hcp-cue-openness">- Openness: {cueSummary.openness}</div>
+                              <div className="hcp-cue-trajectory">- Trajectory: {cueSummary.trajectory}</div>
+                              <div className="hcp-cue-risk">- Risk: {cueSummary.risk}</div>
+                              <div className="hcp-cue-behavioral-notes">- Behavioral Notes: {cueSummary.behavioralNotes || "Listening for the rep's opening move."}</div>
                             </div>
                           </div>
                         );
@@ -6238,7 +6238,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>
-                          <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="hcp-dialogue max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>

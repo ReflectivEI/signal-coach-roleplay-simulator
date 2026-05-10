@@ -473,6 +473,7 @@ export default function Simulator() {
           timestamp: new Date().toISOString(),
           cues: response.activeCues || [],
           nudge: null,
+          prediction: response.prediction || null,
           predictiveDebug: response.predictiveDebug || null,
         }];
       });
