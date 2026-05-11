@@ -1101,6 +1101,26 @@ function classifyDialogueAngle(text = "") {
   return "general";
 }
 
+function resolveVariantConcernForTurn({ concern = "workflow", repMessage = "", dialogue = "" } = {}) {
+  const sample = `${repMessage} ${dialogue}`.toLowerCase();
+  if (/\b(system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr|owner|owns|handoff)\b/.test(sample)) {
+    return "implementation";
+  }
+  return concern;
+}
+
+function needsImplementationTurnRepair({ repMessage = "", dialogue = "" } = {}) {
+  const rep = String(repMessage || "").toLowerCase();
+  if (!/\b(system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr)\b/.test(rep)) {
+    return false;
+  }
+  const line = String(dialogue || "").toLowerCase();
+  const acknowledgesImplementation = /\b(implementation|implement|system|workflow|owner|owns|handoff|deploy|rollout|approval workflow)\b/.test(line);
+  const stuckOnAccessOnly = /\b(access step|prior auth|prior authorization|access process)\b/.test(line)
+    && !acknowledgesImplementation;
+  return !acknowledgesImplementation || stuckOnAccessOnly;
+}
+
 function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
   return (Array.isArray(turns) ? turns : [])
     .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
@@ -1123,6 +1143,13 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
       "For this to matter here, it has to move approvals faster. What is the first access action you would recommend?",
       "I need this tied to the admin load we actually feel. What process change would cut access delays without adding work?",
       "I can work with one specific access tactic if my team can run it this week. What would that be?",
+    ],
+    implementation: [
+      "A system change only helps if the handoff is clear. Who owns the first implementation step, and what work comes off my staff?",
+      "Implementation is where these ideas usually stall. What changes first for my team, and who is accountable for it?",
+      "If this is a new system, I need the operating detail. Where does it fit in the workflow without adding another handoff?",
+      "That could be relevant, but implementation has to be concrete. What is the first step my staff would actually see?",
+      "I can evaluate an implementation path, but not as a vague promise. What changes in the approval workflow on day one?",
     ],
     evidence: [
       "I hear you, but I still need the evidence tied to a real decision. Which proof point should change what I do now?",
@@ -1534,10 +1561,15 @@ function enforceSpokenOnlyHcpDialogue({
 function isRepeatedFinalDialogue(candidate = "", recentDialogues = []) {
   const normalizedCandidate = normalizeDialogueSignature(candidate);
   if (!normalizedCandidate) return false;
+  const openingFrame = normalizedCandidate.split(" ").slice(0, 9).join(" ");
+  const hasRepeatedConditionalFrame = /\b(if you can make|if this gets|if there is a real|if you can keep|if this is about access|if this reduces|if there s a real)\b/.test(normalizedCandidate);
   return (Array.isArray(recentDialogues) ? recentDialogues : []).some((prior) => {
     const normalizedPrior = normalizeDialogueSignature(prior);
     if (!normalizedPrior) return false;
+    const priorOpeningFrame = normalizedPrior.split(" ").slice(0, 9).join(" ");
     return normalizedPrior === normalizedCandidate
+      || (openingFrame && openingFrame === priorOpeningFrame)
+      || (hasRepeatedConditionalFrame && /\b(if you can make|if this gets|if there is a real|if you can keep|if this is about access|if this reduces|if there s a real)\b/.test(normalizedPrior))
       || calculateTokenOverlapRatio(candidate, prior) >= 0.82
       || calculateSemanticSimilarity(candidate, prior) >= 0.78;
   });
@@ -5668,16 +5700,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const finalDialogueBeforeRepeatRepair = nextHcpDialogue;
-    const finalDialogueNeededRepair = !latestAskBoundDialogue
-      && !isTerminalClosureDialogue(nextHcpDialogue)
+    const finalDialogueNeededRepair = !isTerminalClosureDialogue(nextHcpDialogue)
       && (
         isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
         || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
       );
     if (finalDialogueNeededRepair) {
-      nextHcpDialogue = chooseConcernSpecificVariant({
+      const repairConcern = resolveVariantConcernForTurn({
         concern: primaryConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:final-repeat-repair`,
+        repMessage,
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: repairConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${repairConcern}:final-repeat-repair`,
         recentDialogues: recentHcpDialogues,
       });
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
@@ -5786,16 +5822,30 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpState: nextHcpState,
       timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
     });
-    const finalSpokenOnlyRepeatRepair = !latestAskBoundDialogue
-      && !isTerminalClosureDialogue(nextHcpDialogue)
+    const finalImplementationTurnRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && needsImplementationTurnRepair({ repMessage, dialogue: nextHcpDialogue });
+    if (finalImplementationTurnRepair) {
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: "implementation",
+        seed: `${generationKey}:${nextTurnNumber}:implementation:final-turn-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+    }
+    const finalSpokenOnlyRepeatRepair = !isTerminalClosureDialogue(nextHcpDialogue)
       && (
         isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
         || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
       );
     if (finalSpokenOnlyRepeatRepair) {
-      nextHcpDialogue = chooseConcernSpecificVariant({
+      const repairConcern = resolveVariantConcernForTurn({
         concern: primaryConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:spoken-only-repeat-repair`,
+        repMessage,
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: repairConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${repairConcern}:spoken-only-repeat-repair`,
         recentDialogues: recentHcpDialogues,
       });
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
@@ -5803,6 +5853,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     finalHcpReactionContract = {
       ...finalHcpReactionContract,
       selectedDialogueText: nextHcpDialogue,
+      finalImplementationTurnRepair,
       finalSpokenOnlyRepeatRepair,
     };
     nextTurn.cueBefore = contextualCue;

@@ -50,6 +50,7 @@ function repairDanglingTail(text = ""): string {
   if (!output) return "";
 
   output = output
+    .replace(/,\s*what specific (?:change|adjustment|step) would\s+(?=(That|This|I|We|What|How|Who)\b)/gi, ". ")
     .replace(/,\s*what'?s\.$/i, ".")
     .replace(/\s+what'?s\.$/i, ".")
     .replace(/\s+(what|how|why|who|when|where)\.$/i, ".")
@@ -145,6 +146,36 @@ function dedupeLateStageQuestions(text = ""): string {
   });
 
   return normalizeText(kept.join(" "));
+}
+
+function hasConcreteOperationalAsk(text = ""): boolean {
+  return /\b(what|which|who|how)\b.{0,44}\b(access step|next step|first step|staff|team|owner|owns|workflow|implementation|process change|specific change|specific adjustment|practical)\b/i.test(text)
+    || /\b(access step|next step|first step|staff|team|owner|owns|workflow|implementation|process change|specific change|specific adjustment|practical)\b.{0,44}\b(what|which|who|how)\b/i.test(text);
+}
+
+function buildConditionalBridge(turn: HcpTurnDirectiveSet, scenario: any, hcpTurnCount = 0, mode = "partial_agreement"): string {
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${mode}|${hcpTurnCount}`;
+  if (turn.concernFamily === "access") {
+    return deterministicPick([
+      "If this reduces rework in the access step, I can look at it.",
+      "If there is a practical path through access, I can stay with it.",
+      "If this changes the access work my staff actually does, I can look at it.",
+      "If that makes the approval path cleaner for the team, I can keep going.",
+    ], seed);
+  }
+  if (turn.concernFamily === "hesitation") {
+    return deterministicPick([
+      "If you can make the next step concrete enough to act on, I can look at it.",
+      "If this becomes operationally clear, I can stay with it.",
+      "If the implementation step is specific, I can keep looking at it.",
+      "If this gives my team one practical move, I can stay with it.",
+    ], seed);
+  }
+  return deterministicPick([
+    "If you can keep this practical, I can stay with it.",
+    "If this gets specific enough to act on, I can stay with it.",
+    "If there is one concrete next step, I can keep looking at it.",
+  ], seed);
 }
 
 function hasNaturalTimePressureDirective(text = ""): boolean {
@@ -636,7 +667,9 @@ function applyLateStageNarrowing(
         hcpTurnCount,
       })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
-      output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "partial_agreement")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `${deterministicPick([
         "If this does not add another staff step, I can look at it.",
@@ -645,7 +678,9 @@ function applyLateStageNarrowing(
         "If this does not create another handoff for the team, I can keep looking at it.",
       ], `${turn.phase}|${turn.concernFamily}|partial_agreement|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
-      output = `If you can make the next step concrete enough to actually do, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "partial_agreement")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
       output = `If this feels safe enough not to be first, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else {
@@ -662,7 +697,9 @@ function applyLateStageNarrowing(
         hcpTurnCount,
       })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
-      output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "close_mode")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `${deterministicPick([
         "If this stays workable for staff, I can stay with it.",
@@ -671,7 +708,9 @@ function applyLateStageNarrowing(
         "If the team does not inherit another handoff, I can stay with it.",
       ], `${turn.phase}|${turn.concernFamily}|close_mode|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
-      output = `If this gets concrete enough to act on, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "close_mode")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
       output = `If this feels safe enough to trial without being first, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }

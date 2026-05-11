@@ -887,6 +887,62 @@ function startsWithSameFrame(a = "", b = ""): boolean {
   return Boolean(aHead && bHead && aHead === bHead);
 }
 
+function deterministicIndex(seed = "", length = 1): number {
+  if (length <= 1) return 0;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash) % length;
+}
+
+function buildImplementationAdaptiveReply({
+  repMessage,
+  hcpReply,
+  transcript,
+  scenario,
+}: {
+  repMessage: string;
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  scenario: any;
+}): string {
+  const variants = [
+    "A system change only helps if the handoff is clear. Who owns the first implementation step, and what work comes off my staff?",
+    "Implementation is where these ideas usually stall. What changes first for my team, and who is accountable for it?",
+    "If this is a new system, I need the operating detail. Where does it fit in the workflow without adding another handoff?",
+    "That could be relevant, but implementation has to be concrete. What is the first step my staff would actually see?",
+    "I can evaluate an implementation path, but not as a vague promise. What changes in the approval workflow on day one?",
+  ];
+  const recent = getRecentVisibleHcpReplies(transcript, 6).map((line) => normalizeLineForContinuity(line));
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${hcpReply}|${transcript.length}`;
+  const start = deterministicIndex(seed, variants.length);
+  for (let offset = 0; offset < variants.length; offset += 1) {
+    const candidate = variants[(start + offset) % variants.length];
+    const normalizedCandidate = normalizeLineForContinuity(candidate);
+    if (!recent.includes(normalizedCandidate)) return candidate;
+  }
+  return variants[start];
+}
+
+function needsImplementationTurnRepair({
+  repMessage,
+  hcpReply,
+}: {
+  repMessage: string;
+  hcpReply: string;
+}): boolean {
+  const rep = String(repMessage || "").toLowerCase();
+  if (!/\b(system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr)\b/.test(rep)) {
+    return false;
+  }
+  const reply = String(hcpReply || "").toLowerCase();
+  const acknowledgesImplementation = /\b(implementation|implement|system|workflow|owner|owns|handoff|deploy|rollout|approval workflow)\b/.test(reply);
+  const stuckOnAccessOnly = /\b(access step|prior auth|prior authorization|access process)\b/.test(reply)
+    && !acknowledgesImplementation;
+  return !acknowledgesImplementation || stuckOnAccessOnly;
+}
+
 function deterministicContinuityVariation({
   hcpReply,
   transcript,
@@ -904,6 +960,15 @@ function deterministicContinuityVariation({
   if (!text) return hcpReply;
   if (/that still does not change the decision threshold/i.test(text)) {
     return `${text}.`;
+  }
+
+  if (concernTags.includes("implementation")) {
+    return buildImplementationAdaptiveReply({
+      repMessage: text,
+      hcpReply,
+      transcript,
+      scenario,
+    });
   }
 
   if (concernTags.includes("workflow")) {
@@ -1356,6 +1421,7 @@ function inferConcernTags(text: string): string[] {
   if (/not ready to be first|first one|first in my group|what are others doing|others in my area|peer adoption|waiting for others|someone else does first|what are others in my area doing|what are others doing first/.test(normalized)) tags.push("adoption_caution");
   if (/cost|spend|readmissions|hospitalizations|metrics|outcomes|value/.test(normalized)) tags.push("cost_value");
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
+  if (/system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr|owner|handoff/.test(normalized)) tags.push("implementation");
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
   if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
   return tags;
@@ -2081,6 +2147,15 @@ Return ONLY valid JSON:
   if (finalLiveAlignment.applied) {
     hcpReply = finalLiveAlignment.hcpReply;
     cueOverride = finalLiveAlignment.cueOverride;
+  }
+
+  if (needsImplementationTurnRepair({ repMessage, hcpReply })) {
+    hcpReply = buildImplementationAdaptiveReply({
+      repMessage,
+      hcpReply,
+      transcript,
+      scenario,
+    });
   }
 
   const recentCueLabels = transcript

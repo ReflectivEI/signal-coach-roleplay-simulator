@@ -17,7 +17,7 @@ function hasSubtleResistance(text) {
 }
 
 function hasClinicalContext(text) {
-  return /\b(patient|patients|clinical|clinic|workflow|practice|data|evidence|safety|risk|access|coverage|staff|implementation|prescribe|therapy|treatment|screen|monitor|discharge|readmission|formulary|case)\b/i.test(text);
+  return /\b(patient|patients|clinical|clinic|workflow|practice|data|evidence|safety|risk|access|coverage|staff|implementation|prescribe|therapy|treatment|screen|monitor|discharge|readmission|formulary|case|prior auth|prior authorization|approval|burden|payer)\b/i.test(text);
 }
 
 function hasVisibleDialogueQuality(text) {
@@ -26,6 +26,24 @@ function hasVisibleDialogueQuality(text) {
   if (/\b(as an ai|language model|chatbot|system prompt|i cannot|i'm here to help)\b/i.test(normalized)) return false;
   if (/\b(the hcp|hcp (looks|glances|leans|nods|crosses|pauses)|stage direction|cue:|predicted state:)\b/i.test(normalized)) return false;
   return hasSubtleResistance(normalized) && hasClinicalContext(normalized);
+}
+
+function normalizedDialogue(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function openingFrame(text) {
+  return normalizedDialogue(text).split(" ").slice(0, 8).join(" ");
+}
+
+function hasMalformedTail(text) {
+  return /\bwould\s+(that|this|what|how|who)\b/i.test(text)
+    || /,\s*what specific (change|adjustment|step) would\b/i.test(text);
+}
+
+function hasRepeatedFrames(dialogues) {
+  const frames = dialogues.map(openingFrame).filter((frame) => frame.split(" ").length >= 5);
+  return new Set(frames).size !== frames.length;
 }
 
 async function submitRepMessageAndReadHcp(page, repMessage) {
@@ -107,4 +125,40 @@ test("first HCP response adapts to different rep openers", async ({ browser }) =
 
   await genericPage.close();
   await evidencePage.close();
+});
+
+test("access workflow exchange does not repeat or collapse implementation answer", async ({ page }) => {
+  await page.goto(simulatorUrl, { waitUntil: "domcontentloaded" });
+  const repInput = page.getByRole("textbox").first();
+  await expect(repInput).toBeVisible({ timeout: 30000 });
+
+  const sendAndReadLatestHcp = async (message) => {
+    const before = await page.locator(".hcp-dialogue").count();
+    await repInput.fill(message);
+    await repInput.press("Enter");
+    await expect(page.locator(".hcp-dialogue")).toHaveCount(before + 1, { timeout: 45000 });
+    const dialogue = page.locator(".hcp-dialogue").last();
+    await expect(dialogue).toBeVisible({ timeout: 45000 });
+    return (await dialogue.innerText()).trim();
+  };
+
+  const turns = [];
+  turns.push(await sendAndReadLatestHcp("hi dr, can we discuss your prior auth burden and workflow?"));
+  turns.push(await sendAndReadLatestHcp("streamline the process"));
+  turns.push(await sendAndReadLatestHcp("a new system implementation."));
+
+  for (const text of turns) {
+    expect(hasVisibleDialogueQuality(text), text).toBe(true);
+    expect(hasMalformedTail(text), text).toBe(false);
+  }
+
+  expect(new Set(turns.map(normalizedDialogue)).size).toBe(turns.length);
+  expect(hasRepeatedFrames(turns), turns.join("\n---\n")).toBe(false);
+  expect(turns[2], turns[2]).toMatch(/\b(implementation|system|workflow|owner|handoff|deploy|rollout)\b/i);
+  expect(turns[2], turns[2]).not.toMatch(/what specific (change|adjustment) in the access step/i);
+
+  await expect(page.locator(".hcp-cue-descriptor").last()).toBeVisible();
+  for (const selector of cueSelectors) {
+    await expect(page.locator(selector)).toHaveCount(0);
+  }
 });
