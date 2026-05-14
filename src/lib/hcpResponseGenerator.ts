@@ -138,7 +138,7 @@ type TurnConstraintResolution = {
   reasoning: string[];
 };
 
-type FirstTurnRepTopic = "study_follow_up" | "access" | "workflow" | "screening" | "evidence" | "general";
+type FirstTurnRepTopic = "study_follow_up" | "access" | "workflow" | "screening" | "evidence" | "clinical_value" | "general";
 
 type FirstTurnAlignmentResult = {
   applied: boolean;
@@ -1073,12 +1073,30 @@ function hasPriorHcpTurns(transcript: ConversationTurn[]): boolean {
   return transcript.some((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string" && turn.text.trim().length > 0);
 }
 
-function deriveFirstTurnRepTopic(repMessage: string): FirstTurnRepTopic {
+function deriveFirstTurnRepTopic(repMessage: string, scenario?: any): FirstTurnRepTopic {
   const text = String(repMessage || "").toLowerCase();
+  const stageText = String(scenario?.journeyStage || "").toLowerCase();
+  const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
+  const accessPressured = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()).includes("access_barrier")
+    : false;
+
+  if (/clinical_value/.test(stageText)) {
+    if (/\bvalue\b|\bcost\b|\bspend\b|\boutcome\b|\btreatment decision\b|\bpatients you would actually put on it\b/.test(text)) {
+      return "clinical_value";
+    }
+    if (accessPressured && /\bapproval\b|\bprior auth\b|\bcoverage\b|\bformulary\b|\bpayer\b/.test(`${text} ${scenarioText}`)) {
+      return "access";
+    }
+    if (/\bevidence\b|\bguideline\b|\boutcome\b|\bsafety\b|\btrial\b|\bstudy\b|\bdata\b/.test(text)) {
+      return "evidence";
+    }
+    return "clinical_value";
+  }
   if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bjournal\b|\bpaper\b/.test(text)) return "study_follow_up";
   if (/\bpatient profile\b|\bright patient\b|\bwhich patients\b|\bwho fits\b|\bpatient type\b|\bsubgroup\b/.test(text)) return "screening";
   if (/\bprior auth\b|\bprior authorization\b|\bcoverage\b|\bformulary\b|\bpayer\b|\bapproval\b|\baccess\b/.test(text)) return "access";
-  if (/\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b|\brework\b/.test(text)) return "workflow";
+  if (/\bstaff\b|\bworkflow\b|\bprocess\b|\bcallback\b|\brework\b/.test(text)) return "workflow";
   if (/\bevidence\b|\bguideline\b|\boutcome\b|\bsafety\b/.test(text)) return "evidence";
   return "general";
 }
@@ -1123,7 +1141,7 @@ function tokenizeFocusPhrase(text: string): string[] {
 
 function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): string {
   const focusPhrase = extractRepFocusPhrase(repMessage);
-  const practicalAsk = deriveFirstTurnPracticalAsk(deriveFirstTurnRepTopic(repMessage), scenario);
+  const practicalAsk = deriveFirstTurnPracticalAsk(deriveFirstTurnRepTopic(repMessage, scenario), scenario);
   const pressures = Array.isArray(scenario?.interactionPressure)
     ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
     : [];
@@ -1168,6 +1186,15 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
   const workflowTagged = /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b/.test(scenarioText);
   const screeningTagged = /\bpatient\b|\bsubgroup\b|\bfit\b|\bselection\b/.test(scenarioText);
 
+  if (topic === "clinical_value") {
+    if (accessTagged) {
+      return "What changes in the approval path enough to justify treating a real patient?";
+    }
+    if (workflowTagged) {
+      return "What outcome or office change is strong enough to justify the full cost per patient?";
+    }
+    return "What outcome actually changes a treatment decision enough to justify the spend?";
+  }
   if (topic === "study_follow_up") {
     return "What in that study do you think should change a real treatment decision for me?";
   }
@@ -1187,7 +1214,7 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
 }
 
 function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
-  const topic = deriveFirstTurnRepTopic(repMessage);
+  const topic = deriveFirstTurnRepTopic(repMessage, scenario);
   const text = String(repMessage || "").toLowerCase();
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
   const timeConstrained = pressures.includes("time_constrained");
@@ -1259,7 +1286,7 @@ function firstTurnReplyIgnoresRep(hcpReply: string, repMessage: string, transcri
 }
 
 function buildFirstTurnCueOverride(repMessage: string, scenario: any): string {
-  const topic = deriveFirstTurnRepTopic(repMessage);
+  const topic = deriveFirstTurnRepTopic(repMessage, scenario);
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
   const timeConstrained = pressures.includes("time_constrained");
 

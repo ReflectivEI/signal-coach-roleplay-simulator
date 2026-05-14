@@ -11,7 +11,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
+import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpDirectAsk, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
 import { buildMatrixAuditSummary, buildTranscriptAudit } from "@/lib/qaTwinAudit";
 
 function createSafeId() {
@@ -244,6 +244,19 @@ async function generateQaRepReply({
   lastHcpMessage,
 }) {
   const lastHcpQuestionType = detectHcpQuestionType(lastHcpMessage);
+  const directAsk = detectHcpDirectAsk(lastHcpMessage);
+  if (lastHcpQuestionType === "solution_seeking" || directAsk.hasDirectAsk) {
+    return enforceRepAnswerFirstContract({
+      scenario,
+      turns,
+      draft: "",
+      personaKey: persona?.label?.toLowerCase().includes("weak")
+        ? "weak_rep"
+        : persona?.label?.toLowerCase().includes("mediocre")
+          ? "mediocre_rep"
+          : "strong_rep",
+    });
+  }
   const deterministicReply = buildDeterministicQaRepReply({
     scenario,
     turns,
