@@ -243,8 +243,9 @@ async function generateQaRepReply({
   currentJourneyState,
   lastHcpMessage,
 }) {
-  const lastHcpQuestionType = detectHcpQuestionType(lastHcpMessage);
-  const directAsk = detectHcpDirectAsk(lastHcpMessage);
+  const activeHcpPrompt = String(lastHcpMessage || scenario?.openingScene || "").trim();
+  const lastHcpQuestionType = detectHcpQuestionType(activeHcpPrompt);
+  const directAsk = detectHcpDirectAsk(activeHcpPrompt);
   if (lastHcpQuestionType === "solution_seeking" || directAsk.hasDirectAsk) {
     return enforceRepAnswerFirstContract({
       scenario,
@@ -273,8 +274,8 @@ async function generateQaRepReply({
       : deterministicReply;
   }
 
-  try {
-    const repPrompt = `${persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState)}${buildRepAnswerFirstPromptConstraint(lastHcpMessage)}`;
+    try {
+    const repPrompt = `${persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState)}${buildRepAnswerFirstPromptConstraint(activeHcpPrompt)}`;
     const repTextRaw = await retryWithBackoff(() => withTimeout(
       invokeWorkerText({
         prompt: repPrompt,
