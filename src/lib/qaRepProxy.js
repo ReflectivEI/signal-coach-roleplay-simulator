@@ -1390,6 +1390,14 @@ function hasEvidenceProofSignal(text = "") {
   return /proof point|data point|single metric|one metric|one number|subgroup|analysis|patient-level|patient level|treatment choice|change treatment|hospitalization|readmission|outcome/i.test(value);
 }
 
+function hasEvidenceRelevanceDirectAnswer(text = "") {
+  const value = normalizeForMatch(text);
+  const hasEvidenceAnchor = /evidence|data|subgroup|patient-level|patient level|outcome|analysis/.test(value);
+  const hasDecisionAnchor = /change treatment|treatment choice|justify changing|switch|strong enough to justify|decision/.test(value);
+  const hasPatientFitAnchor = /patients? still not controlled|patients? not controlled|your patients?|patient subgroup|patient mix/.test(value);
+  return hasEvidenceAnchor && hasDecisionAnchor && hasPatientFitAnchor;
+}
+
 function hasSemanticDomainSignal(text = "") {
   return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
 }
@@ -1443,6 +1451,7 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   const response = normalizeForMatch(repResponse);
   const hcpText = normalizeForMatch(hcpTurn);
+  const detectedAsk = detectHcpDirectAsk(hcpTurn);
   const evidenceAsk = EVIDENCE_PROOF_ASK_PATTERN.test(hcpText);
 
   if (!response) {
@@ -1455,6 +1464,10 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   if (isBroadVagueNonAnswer(response)) {
     return false;
+  }
+
+  if (detectedAsk?.askType === "asks_for_evidence_relevance") {
+    return hasEvidenceRelevanceDirectAnswer(response) || hasEvidenceProofSignal(response);
   }
 
   if (evidenceAsk) {
@@ -1656,7 +1669,7 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
       if (/doing pretty well|no reason to change|need something different/.test(normalizeForMatch(lastHcpMessage))) {
         return "You would need evidence in the patients still not controlled on current care, with a concrete outcome gain that is strong enough to justify changing treatment.";
       }
-      return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
+      return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The core gap in practice is ${extractIssueLabel(activeConcern)} in the patients you actually treat.`;
     case "asks_for_guideline_fit":
       return "For guideline fit, the answer has to show where this sits in pathway placement versus current standard of care for your actual patient mix.";
     case "asks_for_safety_clarity":
