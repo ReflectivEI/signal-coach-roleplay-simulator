@@ -533,7 +533,65 @@ Always respond with actionable, behavior-specific feedback.${response_json_schem
   ];
 }
 
-function buildMockResponse({ response_json_schema }) {
+function isLocalDevelopmentRequest(request) {
+  try {
+    const url = new URL(request.url);
+    const host = String(url.hostname || "").toLowerCase();
+    const origin = String(request.headers.get("Origin") || "").toLowerCase();
+    return (
+      host === "127.0.0.1"
+      || host === "localhost"
+      || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isRecoverableProviderFailure({ status = 0, details = "" } = {}) {
+  const message = String(details || "").toLowerCase();
+  return (
+    [401, 403, 429, 500, 502, 503, 504].includes(Number(status))
+    || message.includes("invalid_api_key")
+    || message.includes("invalid api key")
+    || message.includes("incorrect api key")
+    || message.includes("authentication")
+    || message.includes("rate limit")
+    || message.includes("request timed out")
+    || message.includes("fetch_failed")
+  );
+}
+
+function extractPromptField(prompt = "", label = "") {
+  const escaped = String(label || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = String(prompt || "").match(new RegExp(`^${escaped}:\\s*(.+)$`, "im"));
+  return match?.[1]?.trim() || "";
+}
+
+function buildLocalRoleplayMock(prompt = "") {
+  const repReply = extractPromptField(prompt, "Rep reply to react to").toLowerCase();
+  const activeConcern = (
+    extractPromptField(prompt, "Active concern to protect")
+    || extractPromptField(prompt, "Active concern")
+  ).toLowerCase();
+
+  if (/\bhow are you|can we speak|do you have a minute\b/.test(repReply)) {
+    return "I'm fine. What did you want to discuss?";
+  }
+  if (/\bwhat question|which question|what do you mean|clarify|more context|help me understand\b/.test(repReply)) {
+    if (activeConcern.includes("safety")) return "I'm asking what you've seen on the safety side and why it matters for the patients I treat.";
+    if (activeConcern.includes("evidence")) return "I'm asking what data actually changes a treatment decision for me.";
+    if (activeConcern.includes("access")) return "I'm asking what changes on access or prior auth for my staff.";
+    return "I'm asking what changes in practice for me or my team.";
+  }
+  if (activeConcern.includes("safety")) return "What have you seen on the safety side in your own data?";
+  if (activeConcern.includes("evidence")) return "What data changes a treatment decision for me?";
+  if (activeConcern.includes("access")) return "What changes on access or prior auth for my staff?";
+  if (activeConcern.includes("time")) return "Keep it brief. What's the point?";
+  return "What changes in practice for me or my team?";
+}
+
+function buildMockResponse({ response_json_schema, roleplay = false, prompt = "", fallbackReason = "missing_provider" }) {
   if (response_json_schema) {
     return {
       response: {
@@ -559,14 +617,20 @@ function buildMockResponse({ response_json_schema }) {
       model: "mock",
       usage: { prompt_tokens: 0, completion_tokens: 0 },
       isDevelopment: true,
+      degraded: true,
+      fallbackReason,
     };
   }
 
   return {
-    response: "Mock AI response - configure OPENAI_API_KEY or GROQ_API_KEY in worker secrets for live model output.",
-    model: "mock",
+    response: roleplay
+      ? buildLocalRoleplayMock(prompt)
+      : "Mock AI response - configure OPENAI_API_KEY or GROQ_API_KEY in worker secrets for live model output.",
+    model: roleplay ? "deterministic_local_roleplay_fallback" : "mock",
     usage: { prompt_tokens: 0, completion_tokens: 0 },
     isDevelopment: true,
+    degraded: true,
+    fallbackReason,
   };
 }
 
@@ -1385,7 +1449,7 @@ async function handleLlmInvoke(request, env) {
 
   const providerKeys = getLlmProvider(env, requestedProvider);
   if (!providerKeys.provider) {
-    return json(buildMockResponse({ response_json_schema }), {}, request);
+    return json(buildMockResponse({ response_json_schema, roleplay, prompt, fallbackReason: "missing_provider" }), {}, request);
   }
 
   const provider = providerKeys.provider;
@@ -1415,6 +1479,18 @@ async function handleLlmInvoke(request, env) {
       });
 
       if (failoverResult?.terminalError) {
+        if (isLocalDevelopmentRequest(request) && isRecoverableProviderFailure(failoverResult.terminalError)) {
+          return json(
+            buildMockResponse({
+              response_json_schema,
+              roleplay,
+              prompt,
+              fallbackReason: "provider_failure_local_dev",
+            }),
+            {},
+            request,
+          );
+        }
         return json({
           error: "LLM_SERVICE_UNAVAILABLE",
           details: failoverResult.terminalError.details,
@@ -1427,6 +1503,21 @@ async function handleLlmInvoke(request, env) {
 
       if (failoverResult?.exhausted) {
         const lastError = failoverResult.errors[failoverResult.errors.length - 1];
+        if (isLocalDevelopmentRequest(request) && isRecoverableProviderFailure({
+          status: lastError?.status || 429,
+          details: lastError?.details || "",
+        })) {
+          return json(
+            buildMockResponse({
+              response_json_schema,
+              roleplay,
+              prompt,
+              fallbackReason: "provider_exhausted_local_dev",
+            }),
+            {},
+            request,
+          );
+        }
         return json({
           error: "LLM_SERVICE_UNAVAILABLE",
           details: lastError?.details || "All Groq keys exhausted by rate limits.",
@@ -1459,6 +1550,18 @@ async function handleLlmInvoke(request, env) {
 
       if (!response.ok) {
         const errorText = await response.text();
+        if (isLocalDevelopmentRequest(request) && isRecoverableProviderFailure({ status: response.status, details: errorText })) {
+          return json(
+            buildMockResponse({
+              response_json_schema,
+              roleplay,
+              prompt,
+              fallbackReason: "provider_failure_local_dev",
+            }),
+            {},
+            request,
+          );
+        }
         return json({
           error: "LLM_SERVICE_UNAVAILABLE",
           details: errorText,
@@ -1493,6 +1596,18 @@ async function handleLlmInvoke(request, env) {
     }, {}, request);
   } catch (error) {
     const details = error?.name === "AbortError" ? "Request timed out." : safeString(error?.message, "fetch_failed");
+    if (isLocalDevelopmentRequest(request) && isRecoverableProviderFailure({ status: 503, details })) {
+      return json(
+        buildMockResponse({
+          response_json_schema,
+          roleplay,
+          prompt,
+          fallbackReason: "provider_exception_local_dev",
+        }),
+        {},
+        request,
+      );
+    }
     return json({
       error: "LLM_SERVICE_UNAVAILABLE",
       details,
