@@ -371,19 +371,27 @@ function scoreFromObservationLevel(level = "developing") {
 function buildAnchoredEvidenceMoments(session = null, insights = [], max = 3) {
   const moments = [];
   const transcriptTurns = Array.isArray(session?.transcript) ? session.transcript : [];
+  const cleanEvidenceQuote = (value = "", words = 22) => {
+    const stripped = String(value || "")
+      .replace(/\bREP\s*:\s*/gi, "")
+      .replace(/\bHCP\s*:\s*/gi, "")
+      .replace(/^["']|["']$/g, "")
+      .trim();
+    return cleanTranscriptQuote(stripped, words);
+  };
 
   for (const insight of insights) {
-    const repQuote = cleanTranscriptQuote(insight?.transcriptEvidence || "", 22);
+    const repQuote = cleanEvidenceQuote(insight?.transcriptEvidence || "", 22);
     if (!repQuote) continue;
     const repTurn = transcriptTurns.find((turn) => turn?.speaker === "rep" && String(turn?.text || "").includes(repQuote.slice(0, 18)));
     const repIndex = repTurn ? transcriptTurns.findIndex((turn) => turn?.id === repTurn.id) : -1;
     const hcpTurn = repIndex >= 0
       ? transcriptTurns.slice(repIndex + 1).find((turn) => turn?.speaker === "hcp")
       : null;
-    const hcpQuote = cleanTranscriptQuote(hcpTurn?.text || "", 20) || "HCP response stayed resistant and did not concede a next step.";
+    const hcpQuote = cleanTranscriptQuote(hcpTurn?.text || "", 20) || "";
     const impact = cleanCoachingCopyExpanded(insight?.whyItMattered || insight?.nextTimeAction || "", 28);
     if (!impact) continue;
-    moments.push(`Rep: "${repQuote}"\nHCP: "${hcpQuote}"\n→ Impact: ${impact}`);
+    moments.push(`Rep: "${repQuote}"${hcpQuote ? `\nHCP: "${hcpQuote}"` : ""}\n→ Impact: ${impact}`);
     if (moments.length >= max) break;
   }
 
@@ -807,13 +815,29 @@ export default function SessionSummaryModal({
   const whatItCausedLine = applyDecisiveTone(primaryFailure?.pattern || review.nextAdjustment || "This caused resistance to persist and blocked commitment.", isHighRealismTone);
 
   const signalAlignmentParagraphs = [primaryFailureLine];
+  const structuredPrimaryDiagnosis = splitParagraphs(review.primaryDiagnosisText);
+  if (structuredPrimaryDiagnosis.length > 0) {
+    signalAlignmentParagraphs.splice(0, signalAlignmentParagraphs.length, ...structuredPrimaryDiagnosis);
+  } else if (whyItHappenedLine) {
+    signalAlignmentParagraphs.push(whyItHappenedLine);
+  }
   const outcomeText = [whatItCausedLine];
+  const structuredInteractionConsequence = splitParagraphs(review.interactionConsequenceText);
+  if (structuredInteractionConsequence.length > 0) {
+    outcomeText.splice(0, outcomeText.length, ...structuredInteractionConsequence);
+  }
 
-  const limitationsList = secondaryEffects.length > 0
+  const structuredLimitations = splitParagraphs(review.limitsText);
+  const limitationsList = structuredLimitations.length > 0
+    ? structuredLimitations
+    : secondaryEffects.length > 0
     ? secondaryEffects.map((item) => applyDecisiveTone(`${item.capabilityName}: ${item.whyItMattered || item.whatHappened || "This amplified the primary failure."}`, isHighRealismTone))
     : [applyDecisiveTone("No secondary effect was stronger than the primary failure driver.", isHighRealismTone)];
 
-  const strengthsList = effectiveInsights
+  const structuredStrengths = splitParagraphs(review.whatWentWellText);
+  const strengthsList = structuredStrengths.length > 0
+    ? structuredStrengths
+    : effectiveInsights
     .map((insight) => applyDecisiveTone(buildSpecificStrengthParagraph(insight), isHighRealismTone))
     .filter((line) => /moved|shifted|opened|advanced|commitment|trajectory|reduced resistance/i.test(String(line || "")))
     .slice(0, 2);
@@ -821,7 +845,10 @@ export default function SessionSummaryModal({
     strengthsList.push("No meaningful strength changed interaction trajectory in this exchange.");
   }
 
-  const improvementText = uniqCoachingPoints([
+  const structuredCoachingDirection = splitParagraphs(review.coachingDirectionText);
+  const improvementText = structuredCoachingDirection.length > 0
+    ? structuredCoachingDirection
+    : uniqCoachingPoints([
     applyDecisiveTone(review.nextAdjustment || "Respond to the HCP's exact barrier first, then ask one narrow follow-up tied to workflow, access, or evidence.", isHighRealismTone),
     ...(review.improvementAreas || []).map((item) => applyDecisiveTone(buildGuidanceParagraph(item, insightByCapability), isHighRealismTone)),
   ]).filter(Boolean).slice(0, 3);
@@ -833,7 +860,8 @@ export default function SessionSummaryModal({
     || "";
   const cleanedBestRewrite = cleanCoachingCopy(bestRewrite);
 
-  const hcpWasTesting = [
+  const structuredHcpTesting = splitParagraphs(review.hcpTestingText);
+  const hcpWasTesting = structuredHcpTesting.length > 0 ? structuredHcpTesting : [
     scenario?.persona ? `This HCP was testing whether your response fit a ${scenario.persona.toLowerCase()} decision style.` : "",
     scenario?.coreTension ? `Core tension in this interaction: ${scenario.coreTension}` : "",
     Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length > 0
@@ -872,7 +900,8 @@ export default function SessionSummaryModal({
   ]).slice(0, 4);
   const transcriptEvidenceItems = buildAnchoredEvidenceMoments(session, review.capabilityInsights || [], 3)
     .map((item) => applyDecisiveTone(item, isHighRealismTone));
-  const failureHierarchyItems = [
+  const structuredFailureHierarchy = splitParagraphs(review.failureHierarchyText);
+  const failureHierarchyItems = structuredFailureHierarchy.length > 0 ? structuredFailureHierarchy : [
     `Primary Failure Driver: ${primaryFailureLine}`,
     `Capability State: ${primaryFailureState}`,
     `Behavioral Diagnosis: ${primaryFailure?.whatHappened || review.biggestGap || "The rep did not resolve the HCP's active barrier."}`,
@@ -890,6 +919,13 @@ export default function SessionSummaryModal({
     }))
     .filter((item) => item.title || item.detail)
     .slice(0, 4);
+  const structuredEvidence = splitParagraphs(review.evidenceReferencesText);
+  if (structuredEvidence.length > 0 && !transcriptEvidenceItems.length) {
+    structuredEvidence.forEach((item, index) => {
+      transcriptEvidenceItems.push(applyDecisiveTone(item, isHighRealismTone));
+      if (index >= 2) return;
+    });
+  }
   const showEvidenceSection = transcriptEvidenceItems.length > 0 || evidenceReferenceItems.length > 0 || Boolean(session?.predictiveLens?.synthesisError);
 
   return (

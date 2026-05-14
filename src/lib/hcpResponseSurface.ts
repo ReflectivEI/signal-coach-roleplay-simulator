@@ -931,6 +931,14 @@ const NARRATION_PATTERNS = [
 ];
 
 function guardAndRepairNarrationLeakage(text: string, context: { scenario: any, turn: any, profile: any, hcpTurnCount: number }): string {
+  const sentences = splitSentences(text);
+  if (sentences.length > 1 && NARRATION_PATTERNS.some((pat) => pat.test(sentences[0] || ""))) {
+    const spokenTail = sentences.slice(1).join(" ").trim();
+    if (spokenTail && !NARRATION_PATTERNS.some((pat) => pat.test(spokenTail))) {
+      return spokenTail;
+    }
+  }
+
   const isNarration = NARRATION_PATTERNS.some((pat) => pat.test(text));
   if (!isNarration) return text;
   // If the text is only narration, replace with a natural HCP line based on context

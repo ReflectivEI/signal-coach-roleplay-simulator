@@ -962,6 +962,24 @@ function deterministicContinuityVariation({
     return `${text}.`;
   }
 
+  const concernFollowUp = (family: string): string => {
+    switch (family) {
+      case "workflow":
+        return "What actually changes for staff first?";
+      case "access":
+        return "What changes in the access step first?";
+      case "guideline":
+      case "patient_fit":
+        return "Which patients does that actually change for?";
+      case "cost_value":
+        return "What changes in the value equation?";
+      case "evidence":
+        return "What proof changes the decision?";
+      default:
+        return "What changes in practice?";
+    }
+  };
+
   if (concernTags.includes("implementation")) {
     return buildImplementationAdaptiveReply({
       repMessage: text,
@@ -976,21 +994,21 @@ function deterministicContinuityVariation({
       return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")} now falls back on staff.`;
     }
     if (/staff|team|workflow|handoff|callback/i.test(text)) {
-      return `${text} That's still landing on the team.`;
+      return `${text}. ${concernFollowUp("workflow")}`;
     }
-    return `${text} That's still the workflow problem.`;
+    return `${text}. ${concernFollowUp("workflow")}`;
   }
 
   if (concernTags.includes("access")) {
-    return `${text} That still leaves the access step unresolved.`;
+    return `${text}. ${concernFollowUp("access")}`;
   }
 
   if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
-    return `${text} That still does not change the decision threshold.`;
+    return `${text}. ${concernFollowUp("patient_fit")}`;
   }
 
   if (concernTags.includes("cost_value")) {
-    return `${text} I still need the part that changes the value equation.`;
+    return `${text}. ${concernFollowUp("cost_value")}`;
   }
 
   if (concernTags.includes("renal")) {
@@ -1006,7 +1024,7 @@ function deterministicContinuityVariation({
     return `${text} I still do not know what that means in the renal patients I manage.`;
   }
 
-  return `${text} That still does not answer the blocker I'm holding on.`;
+  return `${text}. ${concernFollowUp(concernTags[0] || "general")}`;
 }
 
 function needsContinuityVariationRewrite({
