@@ -860,10 +860,24 @@ export function enforceRepScenarioAlignment({
   };
 
   const family = String(scenario_routing?.concern_family || "general");
-  const expectedLanes = concernLaneMap[family] || [];
-  if (expectedLanes.length) {
-    const aligned = detectTopicLanes(response).some((lane) => expectedLanes.includes(lane));
-    if (!aligned) {
+  const allowedLanes = Array.isArray(scenario_routing?.allowed_topic_lanes)
+    ? scenario_routing.allowed_topic_lanes
+    : [];
+  const familyExpected = concernLaneMap[family] || [];
+  const expectedLanes = familyExpected.filter((lane) => allowedLanes.includes(lane));
+  const matchedAfterScrub = detectTopicLanes(response);
+  const matchedAllowed = allowedLanes.length
+    ? matchedAfterScrub.filter((lane) => allowedLanes.includes(lane))
+    : matchedAfterScrub;
+
+  // Preserve valid hybrid clinical/access/workflow answers when they are stage-allowed.
+  if (!matchedAllowed.length) {
+    if (expectedLanes.length) {
+      const aligned = matchedAfterScrub.some((lane) => expectedLanes.includes(lane));
+      if (!aligned) {
+        response = concernFamilyRepAnchor(scenario_routing, personaKey);
+      }
+    } else if (!matchedAfterScrub.length) {
       response = concernFamilyRepAnchor(scenario_routing, personaKey);
     }
   }
@@ -1737,6 +1751,28 @@ function buildOperationalLoopAlternatives(context = {}) {
   ];
 }
 
+function buildCrossLaneCostAccessAlternatives(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+  const wantsWorkflow = /staff|workflow|ma\b|office|operational|callback|handoff/.test(ask);
+  const wantsAccess = /access|approval|prior auth|prior authorization|coverage|payer|formulary/.test(ask);
+
+  if (wantsWorkflow && wantsAccess) {
+    return [
+      "The deciding point is whether outcome is strong enough to justify spend once approval friction and MA rework are included.",
+      "What matters is outcome versus total burden: spend, approval path, and whether staff still has to reopen the case.",
+      "The value case only holds if patient benefit is clear and the approval path does not create another repair cycle for your MA.",
+      "The practical test is outcome plus access reality: if approval still loops back, the value case stays weak.",
+    ];
+  }
+
+  return [
+    "The decision point is whether patient outcome justifies spend in real practice, not just in a broad value statement.",
+    "What matters is whether the outcome is strong enough to justify cost once this reaches everyday clinic decisions.",
+    "The practical test is whether this changes treatment for real patients enough to justify the full spend.",
+    "The value case only holds if the outcome is concrete enough to change care in your own patient mix.",
+  ];
+}
+
 function rotateRepeatedRepLine(text = "", context = {}) {
   const candidate = String(text || "").trim();
   if (!candidate) return candidate;
@@ -1760,9 +1796,23 @@ function rotateRepeatedRepLine(text = "", context = {}) {
   if (repeatedCount === 0) return candidate;
 
   const key = `${prefix(context?.hcpTurn || "")}:${repeatedCount}:${normalizedCandidate}`;
+  const lanes = detectTopicLanes(candidate);
+  const looksLikeCrossLaneCostAccess =
+    (lanes.includes("clinical_value") || lanes.includes("cost_value"))
+    && (lanes.includes("prior_auth") || lanes.includes("access_formulary") || lanes.includes("workflow_implementation"));
+
+  if (looksLikeCrossLaneCostAccess) {
+    return pickVariant(buildCrossLaneCostAccessAlternatives(context), candidate, `${key}:cross-lane`);
+  }
 
   if (/^after that,/.test(normalizedCandidate)) {
     return candidate.replace(/^After that,/i, repeatedCount % 2 === 0 ? "Then," : "From there,");
+  }
+
+  const genericAlternatives = buildOperationalLoopAlternatives(context);
+  const varied = pickVariant(genericAlternatives, candidate, `${key}:generic`);
+  if (normalizeForMatch(varied) !== normalizedCandidate) {
+    return varied;
   }
 
   return candidate;
