@@ -34,6 +34,8 @@ import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
 
 export const HCP_GENERATOR_VERSION = "runtime-contract-v2";
+const HCP_PRIMARY_TIMEOUT_MS = 18000;
+const HCP_REWRITE_TIMEOUT_MS = 6000;
 
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
@@ -662,6 +664,8 @@ Return ONLY the rewritten spoken line.`;
     prompt,
     max_tokens: 120,
     temperature: 0.1,
+    timeout_ms: HCP_REWRITE_TIMEOUT_MS,
+    retry_count: 1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -725,6 +729,8 @@ Return ONLY the rewritten HCP line.`;
     prompt,
     max_tokens: 120,
     temperature: 0.1,
+    timeout_ms: HCP_REWRITE_TIMEOUT_MS,
+    retry_count: 1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -783,6 +789,8 @@ Return ONLY the recalibrated HCP line.`;
     prompt,
     max_tokens: 120,
     temperature: 0.1,
+    timeout_ms: HCP_REWRITE_TIMEOUT_MS,
+    retry_count: 1,
   });
 
   return String(rewritten || hcpReply).trim();
@@ -1276,6 +1284,62 @@ function buildFirstTurnCueOverride(repMessage: string, scenario: any): string {
   return timeConstrained
     ? "Checks the clock, then looks back for the point."
     : "Looks back with professional reserve, waiting for you to get specific.";
+}
+
+function buildDeterministicHcpFallbackReply({
+  scenario,
+  transcript,
+  repMessage,
+  currentBehaviorState,
+  prediction,
+}: {
+  scenario: any;
+  transcript: ConversationTurn[];
+  repMessage: string;
+  currentBehaviorState: string;
+  prediction: any;
+}): string {
+  const repText = String(repMessage || "").trim();
+  const latestConcern = getLatestHcpConcern(transcript, scenario);
+  const concernTags = inferConcernTags(`${repText} ${latestConcern}`);
+
+  if (!hasPriorHcpTurns(transcript)) {
+    return buildFirstTurnAlignedReply(repMessage, scenario);
+  }
+
+  if (concernTags.includes("implementation")) {
+    return buildImplementationAdaptiveReply({
+      repMessage,
+      hcpReply: repText,
+      transcript,
+      scenario,
+    });
+  }
+
+  if (concernTags.includes("workflow")) {
+    return "Keep this practical. What staff step actually gets easier first?";
+  }
+  if (concernTags.includes("access")) {
+    return "Be specific. What changes in the approval path first?";
+  }
+  if (concernTags.includes("cost_value")) {
+    return "Keep this on value. What outcome justifies the full cost per patient?";
+  }
+  if (concernTags.includes("patient_fit") || concernTags.includes("guideline")) {
+    return "Which patients does that actually change for in practice?";
+  }
+  if (concernTags.includes("renal") || concernTags.includes("safety")) {
+    return "What lowers the risk enough to change treatment for the patients I actually manage?";
+  }
+  if (prediction?.concernFamily === "evidence" || concernTags.includes("evidence")) {
+    return "Keep this on the evidence. What proof actually changes the decision for a real patient?";
+  }
+
+  if (currentBehaviorState === "closed" || currentBehaviorState === "resistance") {
+    return "I can listen, but keep it specific. What changes for me or for my patients?";
+  }
+
+  return "Be specific. What actually changes in practice?";
 }
 
 function enforceFirstTurnRepAdaptation({
@@ -1987,22 +2051,42 @@ Return ONLY valid JSON:
   }` : ""}
 }`;
 
-  const result = await invokeWorkerJson({
-    prompt,
-    max_tokens: finalResponseTokenBudget,
-    temperature: generationTemperature,
-    response_json_schema: {
-      type: "object",
-      properties: {
-        hcpReply: { type: "string" },
-        hcpCue: { type: "string" },
-        nextBehaviorState: { type: "string" },
-        nextJourneyState: { type: "string" },
-        behaviorSignals: { type: "object" },
-        coachingNudge: { type: "object" }
+  let result;
+  try {
+    result = await invokeWorkerJson({
+      prompt,
+      max_tokens: finalResponseTokenBudget,
+      temperature: generationTemperature,
+      timeout_ms: HCP_PRIMARY_TIMEOUT_MS,
+      retry_count: 1,
+      response_json_schema: {
+        type: "object",
+        properties: {
+          hcpReply: { type: "string" },
+          hcpCue: { type: "string" },
+          nextBehaviorState: { type: "string" },
+          nextJourneyState: { type: "string" },
+          behaviorSignals: { type: "object" },
+          coachingNudge: { type: "object" }
+        }
       }
-    }
-  });
+    });
+  } catch {
+    result = {
+      hcpReply: buildDeterministicHcpFallbackReply({
+        scenario,
+        transcript,
+        repMessage,
+        currentBehaviorState,
+        prediction,
+      }),
+      hcpCue: buildFirstTurnCueOverride(repMessage, scenario),
+      nextBehaviorState: currentBehaviorState,
+      nextJourneyState: currentJourneyState,
+      behaviorSignals: {},
+      coachingNudge: null,
+    };
+  }
 
   let hcpReply = result.hcpReply || "";
   if (needsNaturalnessRewrite(hcpReply)) {
