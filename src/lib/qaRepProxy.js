@@ -26,7 +26,7 @@ const DIRECT_ASK_TYPES = {
   asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
   asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
   asks_for_cost_value: /cost savings|justify the cost|what we'd spend|worth the spend|cost per patient|total cost per patient|what's included|what is included|what does that include|break down|added testing|monitoring|justify the spend|value discussion|does the outcome justify/i,
-  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis/i,
+  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis|what would make you think i need something different|why would i need something different|what would make this relevant/i,
   asks_for_guideline_fit: /guideline|pathway|standard of care|protocol|fits in guideline/i,
   asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
   asks_for_next_step: /what happens next|next step|who owns|would you be open|what do i do next|what should we do now/i,
@@ -812,10 +812,10 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
           : "The guideline question is what evidence or patient-fit signal would matter before you would move without explicit society language.";
     default:
       return tier === "weak"
-        ? "The point is the broader blocker in this scenario."
+        ? "The point is the blocker that would actually change care for one of your patients."
         : tier === "mediocre"
-          ? "The main question is the blocker that still feels relevant in this scenario."
-          : "The blocker is the specific decision you still cannot make in this scenario.";
+          ? "The main question is which patient-level decision still does not change in practice."
+          : "The blocker is the specific patient decision that still does not change in practice.";
   }
 }
 
@@ -1609,7 +1609,10 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
   }
 
   if (/clinical_value|early_discovery|discovery|initial_access/.test(stageText)) {
-    return "The practical answer is whether this changes a real patient decision in your setting.";
+    if (/doing pretty well|doing well|no reason to change|need something different|why would i need/i.test(response)) {
+      return "It only changes practice if we can identify the subgroup still not controlled on current care and show a concrete outcome gain that changes your treatment choice.";
+    }
+    return "The practical answer is which specific patient subgroup changes and what concrete outcome would justify a treatment change in your clinic.";
   }
 
   if (/access_formulary/.test(stageText)) {
@@ -1650,6 +1653,9 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
       }
       return deriveCostValueConcreteAnswer(activeConcern, scenario);
     case "asks_for_evidence_relevance":
+      if (/doing pretty well|no reason to change|need something different/.test(normalizeForMatch(lastHcpMessage))) {
+        return "You would need evidence in the patients still not controlled on current care, with a concrete outcome gain that is strong enough to justify changing treatment.";
+      }
       return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
     case "asks_for_guideline_fit":
       return "For guideline fit, the answer has to show where this sits in pathway placement versus current standard of care for your actual patient mix.";

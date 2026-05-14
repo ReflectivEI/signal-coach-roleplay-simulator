@@ -1383,10 +1383,10 @@ function buildDeterministicHcpFallbackReply({
   }
 
   if (currentBehaviorState === "closed" || currentBehaviorState === "resistance") {
-    return "I can listen, but keep it specific. What changes for me or for my patients?";
+    return "I can listen, but keep it specific: which patients in my clinic actually change, and what outcome changes first?";
   }
 
-  return "Be specific. What actually changes in practice?";
+  return "Be specific. Which patient in practice changes first, and why?";
 }
 
 function enforceFirstTurnRepAdaptation({
