@@ -127,6 +127,14 @@ export interface SessionReview {
   missedOpportunities: any[];
   suggestedReframes: any[];
   overallGuidance: string[];
+  primaryDiagnosisText?: string;
+  failureHierarchyText?: string;
+  interactionConsequenceText?: string;
+  whatWentWellText?: string;
+  limitsText?: string;
+  hcpTestingText?: string;
+  coachingDirectionText?: string;
+  evidenceReferencesText?: string;
 }
 
 // ─── VOLATILITY ENGINE ────────────────────────────────────────────────────

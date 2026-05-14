@@ -167,6 +167,7 @@ function softenSpecificityLexicon(line = "") {
 const INTENT_BUCKET_ORDER = [
     "workflow",
     "evidence",
+    "cost",
     "access",
     "implementation",
     "time",
@@ -180,18 +181,23 @@ function inferIntentBucketFromLine(line = "", hcpState = {}, hcpBrain = {}) {
 
     if (/\bworkflow\b|\bstaff\b|\bhandoff\b|\bcallback\b|\bprocess\b|\boperational\b/.test(combined)) return "workflow";
     if (/\bevidence\b|\btrial\b|\bdata\b|\bsubgroup\b|\boutcome\b|\breal world\b/.test(combined)) return "evidence";
+    if (/\bcost\b|\bspend\b|\bvalue\b|\bmonitoring\b|\btesting\b|\bbudget\b/.test(combined)) return "cost";
     if (/\baccess\b|\bprior auth\b|\bapproval\b|\bformulary\b|\bpayer\b|\bcoverage\b/.test(combined)) return "access";
     if (/\bimplementation\b|\brollout\b|\badopt\b|\bexecution\b|\bowner\b|\bstep\b/.test(combined)) return "implementation";
     if (/\btime\b|\bminute\b|\bbrief\b|\bquick\b|\bout of time\b/.test(combined)) return "time";
     if (/\brisk\b|\bsafety\b|\buncertain\b|\bconfidence\b|\bunknown\b/.test(combined)) return "risk";
     if (/\bpatient\b|\bprofile\b|\bfit\b|\bcriteria\b|\bcandidate\b/.test(combined)) return "patient_fit";
+    if (/\bclinic\b|\bpractice\b|\bdecision\b/.test(combined)) return "evidence";
     return "workflow";
 }
 
-function nextIntentBucket(bucket = "workflow") {
-    const idx = INTENT_BUCKET_ORDER.indexOf(bucket);
-    if (idx < 0) return INTENT_BUCKET_ORDER[0];
-    return INTENT_BUCKET_ORDER[(idx + 1) % INTENT_BUCKET_ORDER.length];
+function nextIntentBucket(bucket = "workflow", allowedBuckets = INTENT_BUCKET_ORDER) {
+    const options = Array.isArray(allowedBuckets) && allowedBuckets.length
+        ? allowedBuckets
+        : INTENT_BUCKET_ORDER;
+    const idx = options.indexOf(bucket);
+    if (idx < 0) return options[0];
+    return options[(idx + 1) % options.length];
 }
 
 function countTrailingSameBucket(bucketHistory = [], bucket) {
@@ -203,6 +209,109 @@ function countTrailingSameBucket(bucketHistory = [], bucket) {
     return count;
 }
 
+function normalizeStage(value = "") {
+    return str(value).toLowerCase().replace(/\s+/g, "_");
+}
+
+function buildScenarioLanePolicy({
+    hcpState = {},
+    conversationMemory = {},
+    scenarioContext = {},
+} = {}) {
+    const memoryContext = conversationMemory?.scenario_context || {};
+    const stage = normalizeStage(
+        scenarioContext?.journeyStage
+        || scenarioContext?.journey_stage
+        || memoryContext?.journeyStage
+        || memoryContext?.journey_stage
+        || hcpState?.journey_stage
+        || "",
+    );
+    const pressures = [
+        ...(Array.isArray(scenarioContext?.interactionPressure) ? scenarioContext.interactionPressure : []),
+        ...(Array.isArray(scenarioContext?.interaction_pressure) ? scenarioContext.interaction_pressure : []),
+        ...(Array.isArray(memoryContext?.interactionPressure) ? memoryContext.interactionPressure : []),
+        ...(Array.isArray(memoryContext?.interaction_pressure) ? memoryContext.interaction_pressure : []),
+    ].map((item) => str(item).toLowerCase()).filter(Boolean);
+    const combinedBarrierText = [
+        hcpState?.current_primary_barrier,
+        hcpState?.current_secondary_barrier,
+        ...(arr(hcpState?.unresolved_concerns || [])),
+        ...(arr(hcpState?.revealed_concerns || [])),
+        scenarioContext?.concernFamily,
+        memoryContext?.concernFamily,
+    ].join(" ").toLowerCase();
+
+    const hasAccessPressure = pressures.includes("access_barrier")
+        || /\bprior auth\b|\baccess\b|\bpayer\b|\bformulary\b|\bapproval\b|\bcoverage\b/.test(combinedBarrierText);
+    const hasWorkflowPressure = pressures.includes("operationally_constrained")
+        || /\bworkflow\b|\bstaff\b|\bcallback\b|\bhandoff\b|\boperational\b/.test(combinedBarrierText);
+    const hasCostPressure = /\bcost\b|\bvalue\b|\bspend\b|\bbudget\b|\bmonitoring\b|\btesting\b/.test(combinedBarrierText);
+    const hasRiskPressure = /\bsafety\b|\brisk\b|\bhepatic\b|\badverse\b/.test(combinedBarrierText);
+
+    let allowedBuckets = ["workflow", "evidence", "patient_fit"];
+    let primaryBucket = "workflow";
+
+    switch (stage) {
+        case "clinical_value":
+            allowedBuckets = ["evidence", "patient_fit", "cost", "risk"];
+            if (hasCostPressure) primaryBucket = "cost";
+            else if (hasRiskPressure) primaryBucket = "risk";
+            else primaryBucket = "evidence";
+            if (hasAccessPressure) allowedBuckets.push("access");
+            if (hasWorkflowPressure) allowedBuckets.push("workflow");
+            break;
+        case "access_formulary":
+            allowedBuckets = ["access", "workflow", "implementation", "cost"];
+            primaryBucket = hasWorkflowPressure ? "workflow" : "access";
+            break;
+        case "adoption_implementation":
+            allowedBuckets = ["workflow", "implementation", "access", "time"];
+            primaryBucket = hasAccessPressure ? "access" : "workflow";
+            break;
+        case "commitment_close":
+            allowedBuckets = ["patient_fit", "evidence", "cost", "workflow"];
+            primaryBucket = hasCostPressure ? "cost" : "patient_fit";
+            break;
+        case "objection_handling":
+            allowedBuckets = ["evidence", "patient_fit", "cost", "risk"];
+            if (hasAccessPressure) allowedBuckets.push("access");
+            if (hasWorkflowPressure) allowedBuckets.push("workflow");
+            primaryBucket = hasCostPressure ? "cost" : hasRiskPressure ? "risk" : "evidence";
+            break;
+        case "discovery":
+        case "early_discovery":
+        case "initial_access":
+            allowedBuckets = ["patient_fit", "evidence", "workflow", "access", "time"];
+            primaryBucket = hasAccessPressure ? "access" : hasWorkflowPressure ? "workflow" : "patient_fit";
+            break;
+        default:
+            if (hasCostPressure) {
+                allowedBuckets = ["cost", "evidence", "patient_fit", "access", "workflow"];
+                primaryBucket = "cost";
+            } else if (hasAccessPressure) {
+                allowedBuckets = ["access", "workflow", "implementation", "cost"];
+                primaryBucket = hasWorkflowPressure ? "workflow" : "access";
+            } else if (hasRiskPressure) {
+                allowedBuckets = ["risk", "evidence", "patient_fit"];
+                primaryBucket = "risk";
+            }
+            break;
+    }
+
+    const ordered = [...new Set(allowedBuckets.filter(Boolean))];
+    return {
+        stage,
+        pressures,
+        allowedBuckets: ordered,
+        primaryBucket: ordered.includes(primaryBucket) ? primaryBucket : ordered[0] || "workflow",
+        hasAccessPressure,
+        hasWorkflowPressure,
+        hasCostPressure,
+        hasRiskPressure,
+    };
+}
+
 function getRepTopicSignals(textValue = "") {
     const lower = str(textValue).toLowerCase();
     return {
@@ -211,6 +320,7 @@ function getRepTopicSignals(textValue = "") {
         access: /\b(prior auth|prior authorization|approval|payer|coverage|formulary|access)\b/.test(lower),
         workflow: /\b(workflow|staff|handoff|process|callback|operational)\b/.test(lower),
         safety: /\b(safety|risk|adverse|side effect|hepatic|liver)\b/.test(lower),
+        cost: /\b(cost|spend|value|budget|monitoring|testing|readmission)\b/.test(lower),
     };
 }
 
@@ -222,6 +332,7 @@ function inferRepTopic(textValue = "") {
     if (signals.access) return "access";
     if (signals.workflow) return "workflow";
     if (signals.safety) return "safety";
+    if (signals.cost) return "cost";
     // Prefer patient-fit when subgroup language is explicit, even if trial/data is also present.
     if (signals.patient_fit) return "patient_fit";
     if (signals.study) return "study";
@@ -252,13 +363,13 @@ function hasConflictingTopicSignal(sentence = "", topic = "none") {
     return false;
 }
 
-function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) {
+function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}, conversationMemory = {}, scenarioContext = {}) {
     const pressureTight = Number(hcpState?.patience_level || 5) <= 4;
     const repLower = str(repTranscript).toLowerCase();
     const hasFollowupSignal = /\b(last week|follow up|following up|dropped off|earlier|as we discussed|you asked)\b/.test(repLower);
     const recentHistory = dedupeTail(arr(hcpState?.hcp_response_history), 4);
-
-    const bucketForTopic = topic === "study"
+    const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
+    const requestedBucket = topic === "study"
         ? "evidence"
         : topic === "patient_fit"
             ? "patient_fit"
@@ -268,7 +379,13 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) 
                     ? "workflow"
                     : topic === "safety"
                         ? "risk"
-                        : "workflow";
+                        : topic === "cost"
+                            ? "cost"
+                            : lanePolicy.primaryBucket;
+    const bucketForTopic = lanePolicy.allowedBuckets.includes(requestedBucket)
+        ? requestedBucket
+        : lanePolicy.primaryBucket;
+
     const trailingTopicRun = countConsecutiveFromEnd(arr(hcpState?.intent_bucket_history), bucketForTopic);
 
     const pickLead = (options = []) => {
@@ -292,7 +409,7 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) 
         return fresh || viable[0];
     };
 
-    if (topic === "study") {
+    if (bucketForTopic === "evidence") {
         if (hasFollowupSignal) {
             return pickLead([
                 pressureTight
@@ -308,38 +425,64 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) 
             "If this is the data discussion, tell me which treatment decision actually changes.",
         ]);
     }
-    if (topic === "patient_fit") {
+    if (bucketForTopic === "patient_fit") {
         return pickLead([
             "If we're discussing patient fit, tell me exactly which patients you mean and who should be excluded.",
             "Keep this on patient selection. Who fits first, and who clearly does not?",
             "Which patients are you actually talking about, and who should I leave out?",
         ]);
     }
-    if (topic === "access") {
+    if (bucketForTopic === "cost") {
+        return pickLead([
+            "If we're discussing value, tell me which patient outcome actually justifies the total spend.",
+            "Keep this on value. What outcome changes enough to justify the full cost per patient?",
+            "If this is the cost discussion, what clinical result makes the spend worth it in practice?",
+        ]);
+    }
+    if (bucketForTopic === "access") {
+        if (lanePolicy.stage === "clinical_value") {
+            return pickLead([
+                "If access is still part of the value story, tell me which approval step changes for the patients you'd actually put on it.",
+                "Keep this on access tied to value. What changes in prior auth before the patient can actually start?",
+                "If this is still worth the spend, where does the approval path get simpler for a real patient?",
+            ]);
+        }
         return pickLead([
             "If this is about access, I need to know which approval step changes for my team.",
             "Keep this on access. What changes in the approval path for my staff first?",
             "If we're talking access, tell me where the prior-auth burden actually drops.",
         ]);
     }
-    if (topic === "workflow") {
+    if (bucketForTopic === "workflow") {
+        if (lanePolicy.stage === "clinical_value") {
+            return pickLead([
+                "Before this becomes a value decision, tell me what staff step actually gets easier first.",
+                "Keep this on workflow tied to value. Which task comes off my team's plate if this matters?",
+                "If this changes practice, where does the callback or handoff burden drop for staff first?",
+            ]);
+        }
         return pickLead([
             "If this is about workflow, tell me what staff step gets easier first.",
             "Keep this on workflow. Which task actually comes off my team's plate first?",
             "If we're talking workflow, where does the callback burden drop first for staff?",
         ]);
     }
-    if (topic === "safety") {
+    if (bucketForTopic === "risk") {
         return pickLead([
             "If this is about safety, I need to know what signal lowers risk for the patients I actually treat.",
             "Keep this on safety. What lowers risk in the patients I'd actually see?",
             "If we're talking safety, give me the signal that changes risk in practice.",
         ]);
     }
-    return "I need a direct answer tied to what I just asked.";
+    return pickLead([
+        "I need a direct answer tied to what I just asked.",
+        "Keep this on the point I raised and tell me what actually changes.",
+    ]);
 }
 
-function buildTopicRepeatBreaker(topic = "none", repTranscript = "", hcpState = {}) {
+function buildTopicRepeatBreaker(topic = "none", repTranscript = "", hcpState = {}, conversationMemory = {}, scenarioContext = {}) {
+    const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
+    const topicKey = topic === "study" ? "study" : topic;
     const optionsByTopic = {
         study: [
             "Stay on the study for a second. Which result changes how I'd treat a real patient?",
@@ -361,16 +504,20 @@ function buildTopicRepeatBreaker(topic = "none", repTranscript = "", hcpState = 
             "Keep this on safety. What lowers risk in the patients I'd actually see?",
             "If we're talking safety, give me the signal that changes risk in practice.",
         ],
+        cost: [
+            "Keep this on value. What outcome changes enough to justify the total spend?",
+            "If this is still worth it, what result justifies the full cost per patient?",
+        ],
     };
 
     const recentHistory = dedupeTail(arr(hcpState?.hcp_response_history), 3);
     const previousLine = str(recentHistory[recentHistory.length - 1], "");
-    const options = arr(optionsByTopic[topic] || []);
+    const options = arr(optionsByTopic[topicKey] || []);
     const fresh = options.find((option) => !previousLine || !isNearDuplicateResponse(option, previousLine));
-    return fresh || buildRepAlignedLead(topic, repTranscript, hcpState);
+    return fresh || buildRepAlignedLead(topicKey, repTranscript, hcpState, conversationMemory, scenarioContext);
 }
 
-function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState = {}) {
+function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState = {}, conversationMemory = {}, scenarioContext = {}) {
     const current = str(line);
     if (!current) return current;
     const topic = inferRepTopic(repTranscript);
@@ -391,14 +538,14 @@ function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState =
     if (acknowledgesAnywhere && acknowledgesLead) {
         const stabilized = filteredTail ? `${firstSentence} ${filteredTail}` : firstSentence;
         if (previousHcpLine && isNearDuplicateResponse(stabilized, previousHcpLine)) {
-            const rotatedLead = buildRepAlignedLead(topic, repTranscript, hcpState);
+            const rotatedLead = buildRepAlignedLead(topic, repTranscript, hcpState, conversationMemory, scenarioContext);
             const rotated = filteredTail ? `${rotatedLead} ${filteredTail}` : rotatedLead;
             return clipToSentenceCount(rotated, 2);
         }
         return clipToSentenceCount(stabilized, 2);
     }
 
-    const lead = buildRepAlignedLead(topic, repTranscript, hcpState);
+    const lead = buildRepAlignedLead(topic, repTranscript, hcpState, conversationMemory, scenarioContext);
     const merged = filteredTail ? `${lead} ${filteredTail}` : lead;
     return clipToSentenceCount(merged, 2);
 }
@@ -428,6 +575,11 @@ function buildForcedBucketLine({
             `Payer path first: which approval step moves and where does denial risk fall?`,
             `Give me the payer sequence: what shifts in approval timing or denial risk?`,
             `Keep this on payer access: which approval gate moves first?`,
+        ],
+        cost: [
+            `Value first: which patient outcome actually justifies the full cost per patient?`,
+            `Keep this on value: what result makes the spend defensible in practice?`,
+            `I need the cost answer tied to one patient-level outcome, not a broad value claim.`,
         ],
         implementation: [
             `Keep this usable: who owns the first implementation step and what do they do?`,
@@ -465,6 +617,7 @@ function enforceDeterministicAntiLoop({
     hcpBrain,
     liveTemperature = 5,
     conversationMemory = {},
+    scenarioContext = {},
 } = {}) {
     const recentHistory = dedupeTail([
         ...arr(conversationMemory?.hcp_response_history || []),
@@ -479,7 +632,11 @@ function enforceDeterministicAntiLoop({
     const barrier = pickBarrierText(hcpState, hcpBrain);
     const revealedBarrier = pickRevealedBarrier(hcpState, hcpBrain);
     const candidateBucket = inferIntentBucketFromLine(hcpStatement, hcpState, hcpBrain);
-    const trailingBucketRun = countTrailingSameBucket(intentHistory, candidateBucket);
+    const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
+    const normalizedCandidateBucket = lanePolicy.allowedBuckets.includes(candidateBucket)
+        ? candidateBucket
+        : lanePolicy.primaryBucket;
+    const trailingBucketRun = countTrailingSameBucket(intentHistory, normalizedCandidateBucket);
 
     let maxSimilarity = 0;
     for (const historicalLine of recentHistory) {
@@ -495,14 +652,16 @@ function enforceDeterministicAntiLoop({
             line: hcpStatement,
             anti_loop_intervention_triggered: false,
             anti_loop_intervention_reason: "none",
-            intent_bucket: candidateBucket,
+            intent_bucket: normalizedCandidateBucket,
             semantic_similarity_max: Number(maxSimilarity.toFixed(3)),
             trailing_bucket_run: trailingBucketRun,
         };
     }
 
     const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
-    const targetBucket = bucketBlocked ? nextIntentBucket(candidateBucket) : candidateBucket;
+    const targetBucket = bucketBlocked
+        ? nextIntentBucket(normalizedCandidateBucket, lanePolicy.allowedBuckets)
+        : normalizedCandidateBucket;
     let forcedLine = hcpStatement;
     let reason = similarityBlocked ? `semantic_similarity>${maxSimilarity.toFixed(3)}` : "intent_bucket_repeat_run>2";
     const variationSeed = Number(hcpState?.anti_loop_intervention_count || 0) + trailingBucketRun + recentHistory.length;
@@ -524,7 +683,7 @@ function enforceDeterministicAntiLoop({
             variationSeed,
             liveTemperature,
         });
-        reason = `${reason}|shift_dimension:${candidateBucket}->${targetBucket}`;
+        reason = `${reason}|shift_dimension:${normalizedCandidateBucket}->${targetBucket}`;
     } else {
         const constraintPool = [
             `What changes for staff ownership on ${barrier}?`,
@@ -544,7 +703,7 @@ function enforceDeterministicAntiLoop({
     const normalizedRecent = new Set(recentHistory.map((line) => normalizeSimilarityText(line)).filter(Boolean));
     let uniquenessAttempts = 0;
     while (forcedNorm && normalizedRecent.has(forcedNorm) && uniquenessAttempts < INTENT_BUCKET_ORDER.length) {
-        uniquenessBucket = nextIntentBucket(uniquenessBucket);
+        uniquenessBucket = nextIntentBucket(uniquenessBucket, lanePolicy.allowedBuckets);
         forcedLine = clipToSentenceCount(
             buildForcedBucketLine({
                 targetBucket: uniquenessBucket,
@@ -564,7 +723,7 @@ function enforceDeterministicAntiLoop({
     }, 0);
     let finalBucket = uniquenessBucket;
     if (postInterventionSimilarity > 0.75) {
-        finalBucket = nextIntentBucket(targetBucket);
+        finalBucket = nextIntentBucket(targetBucket, lanePolicy.allowedBuckets);
         forcedLine = clipToSentenceCount(
             buildForcedBucketLine({
                 targetBucket: finalBucket,
@@ -581,7 +740,7 @@ function enforceDeterministicAntiLoop({
     let finalNorm = normalizeSimilarityText(forcedLine);
     let finalAttempts = 0;
     while (finalNorm && normalizedRecent.has(finalNorm) && finalAttempts < INTENT_BUCKET_ORDER.length) {
-        finalBucket = nextIntentBucket(finalBucket);
+        finalBucket = nextIntentBucket(finalBucket, lanePolicy.allowedBuckets);
         forcedLine = clipToSentenceCount(
             buildForcedBucketLine({
                 targetBucket: finalBucket,
@@ -1579,6 +1738,7 @@ export function generateHcpResponse({
     liveTemperature = 5,
     conversationMemory = {},
     repResponseTranscript = "",
+    scenarioContext = {},
 } = {}) {
     const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
     const band = temp <= 3 ? "low" : temp <= 7 ? "mid" : "high";
@@ -1758,14 +1918,15 @@ export function generateHcpResponse({
         hcpBrain,
         liveTemperature,
         conversationMemory,
+        scenarioContext,
     });
     hcp_statement = clipToSentenceCount(str(antiLoopEnforcement.line, hcp_statement), liveTemperature >= 8 ? 2 : 2);
 
     // Final global guard: never allow generated HCP line to drift away from the rep's latest topic.
-    hcp_statement = enforceRepTranscriptAlignment(hcp_statement, repResponseTranscript, hcpState);
+    hcp_statement = enforceRepTranscriptAlignment(hcp_statement, repResponseTranscript, hcpState, conversationMemory, scenarioContext);
     if (isNearDuplicateResponse(hcp_statement, previousHcpLine)) {
         const topic = inferRepTopic(repResponseTranscript);
-        hcp_statement = clipToSentenceCount(buildTopicRepeatBreaker(topic, repResponseTranscript, hcpState), 2);
+        hcp_statement = clipToSentenceCount(buildTopicRepeatBreaker(topic, repResponseTranscript, hcpState, conversationMemory, scenarioContext), 2);
         hcp_progression_explanation = `${hcp_progression_explanation} Final topic-preserving duplicate breaker applied.`.trim();
     }
 
@@ -1803,6 +1964,7 @@ export function computeHcpStateProgression({
     voiceBehaviorAdaptation = {},
     liveTemperature = 5,
     conversationMemory = {},
+    scenarioContext = {},
 } = {}) {
     const previous = previousHcpState || buildInitialHcpState(hcpBrain, liveTemperature);
 
@@ -1850,6 +2012,7 @@ export function computeHcpStateProgression({
         liveTemperature,
         conversationMemory,
         repResponseTranscript,
+        scenarioContext,
     });
 
     // 4. Stamp response type into state

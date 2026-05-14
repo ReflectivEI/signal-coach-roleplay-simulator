@@ -1021,11 +1021,29 @@ export function evaluateRepResponse({
         voiceBehaviorAdaptation: voiceAdaptation,
         liveTemperature: repSelectedTemperature,
         conversationMemory,
+        scenarioContext: {
+            journeyStage: payload.journey_stage || payload.journeyStage || "",
+            interactionPressure: Array.isArray(payload.interaction_pressure)
+                ? payload.interaction_pressure
+                : Array.isArray(payload.interactionPressure)
+                    ? payload.interactionPressure
+                    : [],
+            concernFamily: payload.concern_family || "",
+        },
     }));
 
     const updatedMemory = updateConversationMemory(conversationMemory, signals, commitment, temp.band, voiceAdaptation);
     // Persist hcp_state into conversation memory
     updatedMemory.hcp_state = stateProgression.hcp_state;
+    updatedMemory.scenario_context = {
+        journeyStage: payload.journey_stage || payload.journeyStage || "",
+        interactionPressure: Array.isArray(payload.interaction_pressure)
+            ? payload.interaction_pressure
+            : Array.isArray(payload.interactionPressure)
+                ? payload.interactionPressure
+                : [],
+        concernFamily: payload.concern_family || "",
+    };
     updatedMemory.response_type_history = [
         ...(Array.isArray(safeConversationMemory.response_type_history) ? safeConversationMemory.response_type_history : []),
         stateProgression.hcp_response_type,

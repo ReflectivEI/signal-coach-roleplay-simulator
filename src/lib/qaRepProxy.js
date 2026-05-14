@@ -749,6 +749,14 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
         : "In one sentence, this matters because prior-auth rework can delay patient start before the physician ever sees a clean path forward.";
   }
 
+  if (journeyStage === "clinical_value") {
+    return tier === "weak"
+      ? "The point is whether this changes a real patient decision enough to justify the full cost and effort."
+      : tier === "mediocre"
+        ? "The main question is whether the evidence and value story actually change treatment for the patients you treat, not whether the product sounds broadly positive."
+        : "The real issue is whether this changes a treatment decision for the patients you would actually put on it, and whether that outcome is strong enough to justify the spend and the office work.";
+  }
+
   switch (family) {
     case "evidence":
       return tier === "weak"
@@ -3294,7 +3302,7 @@ export function maybeEnforceFamilyAnswerReply({
     /clinical_value|clinical_value/.test(stageText) &&
     /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)
   ) {
-    return buildDeterministicEvidenceFitReply({ scenario, turns });
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
   }
 
   if (
@@ -3397,7 +3405,7 @@ export function maybeApplyHardFamilyAnswerReply({
       return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
     }
     if (/total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)) {
-      return buildDeterministicEvidenceFitReply({ scenario, turns });
+      return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
     }
     if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(activeConcernText)) {
       return buildDeterministicEvidenceFitReply({ scenario, turns });
