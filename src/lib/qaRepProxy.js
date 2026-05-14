@@ -23,7 +23,6 @@ const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track
 const DISCOVERY_LOOP_PATTERN = /^(can i ask|tell me more|how are you thinking about|what would you need to see|help me understand|walk me through|can you share|how do you currently|where do you think)/i;
 
 const DIRECT_ASK_TYPES = {
-  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
   asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
   asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
   asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis/i,
@@ -31,6 +30,7 @@ const DIRECT_ASK_TYPES = {
   asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
   asks_for_next_step: /what happens next|next step|who owns|would you be open|what do i do next|what should we do now/i,
   disengagement_boundary: /stop here|pause here|not discussing this now|leave it there|send (?:the|it) over|no further|not moving this forward/i,
+  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
 };
 
 function mapAskToAnswerMode(askType = "") {
@@ -1592,11 +1592,24 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
 function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
   const lastHcpMessage = getLastHcpText(turns);
   const activeConcern = getActiveConcernText(turns, scenario);
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value) => String(value).toLowerCase()) : [];
+  const clinicalValueStage = /clinical_value/.test(stageText);
+  const accessPressured = pressures.includes("access_barrier");
+  const workflowPressured = pressures.includes("operationally_constrained");
 
   switch (askType) {
     case "asks_for_workflow_impact":
+      if (clinicalValueStage) {
+        return accessPressured
+          ? "The practical change has to be a cleaner approval path, so staff is not reopening the case and you still have a value reason to treat the patient."
+          : "The practical change has to be one office step that gets easier without losing sight of whether the outcome is strong enough to justify treatment.";
+      }
       return "The main change for your staff is one cleaner submission step, so they stop reopening the same case for callbacks or resubmissions.";
     case "asks_for_access_step":
+      if (clinicalValueStage) {
+        return "The concrete access step is a cleaner approval path up front, so the case clears review without a second repair cycle and the value discussion stays tied to a real patient start.";
+      }
       return "The concrete access step is a complete prior-auth packet up front, so the case clears coverage review without a second repair cycle.";
     case "asks_for_evidence_relevance":
       return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
@@ -1605,6 +1618,9 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
     case "asks_for_safety_clarity":
       return "For safety clarity, the useful answer is which risk signal would make you pause and how that changes monitoring in the first weeks.";
     case "asks_for_next_step":
+      if (clinicalValueStage && (accessPressured || workflowPressured)) {
+        return "The next step is deciding whether the outcome is strong enough to justify treatment and whether the approval path is clean enough for staff to act on it.";
+      }
       return "The next step is defining one low-risk patient profile and one decision threshold before any broader change.";
     case "disengagement_boundary":
       return "Understood. We can pause here and only continue if we can stay on your specific blocker.";

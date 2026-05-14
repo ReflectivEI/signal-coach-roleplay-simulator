@@ -1302,9 +1302,24 @@ function buildDeterministicHcpFallbackReply({
   const repText = String(repMessage || "").trim();
   const latestConcern = getLatestHcpConcern(transcript, scenario);
   const concernTags = inferConcernTags(`${repText} ${latestConcern}`);
+  const stageText = String(scenario?.journeyStage || "").toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
+  const clinicalValueStage = /clinical_value/.test(stageText);
+  const accessPressured = pressures.includes("access_barrier");
+  const workflowPressured = pressures.includes("operationally_constrained");
 
   if (!hasPriorHcpTurns(transcript)) {
     return buildFirstTurnAlignedReply(repMessage, scenario);
+  }
+
+  if (clinicalValueStage) {
+    if (accessPressured) {
+      return "Before this becomes a value discussion, what changes in the approval path enough to justify the spend for a real patient?";
+    }
+    if (workflowPressured || concernTags.includes("cost_value")) {
+      return "Before this becomes a value discussion, what outcome or office change is strong enough to justify the full cost per patient?";
+    }
+    return "Before this becomes a value discussion, what outcome actually changes a treatment decision enough to justify the spend?";
   }
 
   if (concernTags.includes("implementation")) {
