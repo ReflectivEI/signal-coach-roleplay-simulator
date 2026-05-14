@@ -746,6 +746,9 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
   const tier = resolvePersonaTier(personaKey);
   const family = String(scenarioRouting?.concern_family || "general");
   const journeyStage = String(scenarioRouting?.journey_stage || "").toLowerCase();
+  const pressures = Array.isArray(scenarioRouting?.interaction_pressure)
+    ? scenarioRouting.interaction_pressure.map((value) => String(value).toLowerCase())
+    : [];
 
   if (journeyStage === "initial_access") {
     return tier === "weak"
@@ -756,6 +759,13 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
   }
 
   if (journeyStage === "clinical_value") {
+    if (pressures.includes("access_barrier") && pressures.includes("operationally_constrained")) {
+      return tier === "weak"
+        ? "The point is whether the outcome is worth the spend if the same approval work still falls back on the office."
+        : tier === "mediocre"
+          ? "The main question is whether the patient outcome is strong enough to justify the spend once you include the approval friction and office rework."
+          : "The real issue is whether the patient outcome is strong enough to justify the spend once you factor in the approval path and the work that still falls back on your MA.";
+    }
     return tier === "weak"
       ? "The point is whether this changes a real patient decision enough to justify the full cost and effort."
       : tier === "mediocre"

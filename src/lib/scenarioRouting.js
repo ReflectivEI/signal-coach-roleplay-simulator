@@ -183,6 +183,15 @@ export function buildScenarioRouting(scenario = {}) {
     const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
 
     let mergedAllowed = [...new Set([...stageAllowed, ...familyAllowed])];
+    if (journeyStage === "clinical_value") {
+        if (pressures.includes("access_barrier")) {
+            mergedAllowed.push("access_formulary", "prior_auth");
+        }
+        if (pressures.includes("operationally_constrained")) {
+            mergedAllowed.push("workflow_implementation");
+        }
+        mergedAllowed = [...new Set(mergedAllowed)];
+    }
     if (journeyStage === "initial_access") {
         const explicitWorkflowLane = pressures.includes("operationally_constrained") && /\bworkflow bottleneck\b/i.test(String(scenario?.title || ""));
         mergedAllowed = [...stageAllowed];
