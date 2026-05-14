@@ -1188,10 +1188,10 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
 
   if (topic === "clinical_value") {
     if (accessTagged) {
-      return "What changes in the approval path enough to justify treating a real patient?";
+      return "What changes in the approval path enough that my MA is not reopening the same case, and the outcome still justifies treating a real patient?";
     }
     if (workflowTagged) {
-      return "What outcome or office change is strong enough to justify the full cost per patient?";
+      return "What outcome or office change is strong enough to justify the full cost per patient without adding another staff step?";
     }
     return "What outcome actually changes a treatment decision enough to justify the spend?";
   }
@@ -1235,6 +1235,11 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
     return timeConstrained
       ? `If this is about workflow, keep it tight. ${practicalAsk}`
       : `If this is about workflow, be specific. ${practicalAsk}`;
+  }
+  if (topic === "clinical_value") {
+    return timeConstrained
+      ? `The efficacy data is fine, but keep this tight. ${practicalAsk}`
+      : `The efficacy data is fine, but ${practicalAsk.charAt(0).toLowerCase()}${practicalAsk.slice(1)}`;
   }
   if (topic === "screening") {
     return `If you're talking patient fit, be specific. ${practicalAsk}`;
@@ -1341,10 +1346,10 @@ function buildDeterministicHcpFallbackReply({
 
   if (clinicalValueStage) {
     if (accessPressured) {
-      return "Before this becomes a value discussion, what changes in the approval path enough to justify the spend for a real patient?";
+      return "Before this becomes a value discussion, what changes in the approval path so my MA is not reopening the same case, and the spend is still justified for a real patient?";
     }
     if (workflowPressured || concernTags.includes("cost_value")) {
-      return "Before this becomes a value discussion, what outcome or office change is strong enough to justify the full cost per patient?";
+      return "Before this becomes a value discussion, what outcome or office change is strong enough to justify the full cost per patient without adding another staff step?";
     }
     return "Before this becomes a value discussion, what outcome actually changes a treatment decision enough to justify the spend?";
   }

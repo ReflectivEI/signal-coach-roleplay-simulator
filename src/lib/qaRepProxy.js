@@ -25,6 +25,7 @@ const DISCOVERY_LOOP_PATTERN = /^(can i ask|tell me more|how are you thinking ab
 const DIRECT_ASK_TYPES = {
   asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
   asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
+  asks_for_cost_value: /cost savings|justify the cost|what we'd spend|worth the spend|cost per patient|total cost per patient|what's included|what is included|what does that include|break down|added testing|monitoring|justify the spend|value discussion|does the outcome justify/i,
   asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis/i,
   asks_for_guideline_fit: /guideline|pathway|standard of care|protocol|fits in guideline/i,
   asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
@@ -39,6 +40,8 @@ function mapAskToAnswerMode(askType = "") {
       return "workflow_specific_answer";
     case "asks_for_access_step":
       return "access_step_answer";
+    case "asks_for_cost_value":
+      return "cost_value_answer";
     case "asks_for_evidence_relevance":
       return "evidence_fit_answer";
     case "asks_for_guideline_fit":
@@ -60,6 +63,8 @@ function mapAskToAnchor(askType = "") {
       return "workflow";
     case "asks_for_access_step":
       return "access";
+    case "asks_for_cost_value":
+      return "cost_value";
     case "asks_for_evidence_relevance":
       return "evidence";
     case "asks_for_guideline_fit":
@@ -187,6 +192,7 @@ export function evaluateRepAnswerToHcpAsk({
   const concernPatterns = {
     workflow: /workflow|staff|ma\b|handoff|callback|step|process|team|office/i,
     access: /access|coverage|prior auth|prior authorization|formulary|approval|payer|committee|pathway/i,
+    cost_value: /cost|value|spend|budget|monitoring|testing|cost per patient|total cost per patient/i,
     evidence: /evidence|data|subgroup|analysis|population|real-?world|outcome/i,
     guideline: /guideline|pathway|standard of care|protocol/i,
     safety: /safety|risk|adverse|hepatic|monitoring|tolerability/i,
@@ -1611,6 +1617,14 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
         return "The concrete access step is a cleaner approval path up front, so the case clears review without a second repair cycle and the value discussion stays tied to a real patient start.";
       }
       return "The concrete access step is a complete prior-auth packet up front, so the case clears coverage review without a second repair cycle.";
+    case "asks_for_cost_value":
+      if (clinicalValueStage && accessPressured) {
+        return "The value case only works if the outcome is strong enough to justify the spend and the approval path is clean enough that your MA is not reopening the same case after the first submission.";
+      }
+      if (clinicalValueStage && workflowPressured) {
+        return "The value case only works if the outcome justifies the spend and your staff is not adding another callback or repair step after the visit.";
+      }
+      return deriveCostValueConcreteAnswer(activeConcern, scenario);
     case "asks_for_evidence_relevance":
       return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
     case "asks_for_guideline_fit":
@@ -1632,6 +1646,8 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
 function buildDirectAskMediocreAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
   const baseline = buildDirectAskStrongAnswer({ askType, scenario, turns });
   switch (askType) {
+    case "asks_for_cost_value":
+      return "The value case likely depends on showing the total cost clearly enough that it still feels worth it in practice.";
     case "asks_for_evidence_relevance":
       return "The evidence may be directionally useful, but it still depends on how your patient mix maps to the subgroup discussion.";
     case "asks_for_guideline_fit":
