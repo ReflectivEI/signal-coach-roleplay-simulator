@@ -48,6 +48,24 @@ function countConsecutiveFromEnd(list = [], target) {
     return count;
 }
 
+function humanizeBarrierFragment(value = "") {
+    const lower = str(value).toLowerCase();
+    if (!lower) return "";
+    if (/overstating efficacy|generalizing from trial populations/.test(lower)) {
+        return "patient-fit evidence instead of a broad efficacy claim";
+    }
+    if (/defensive response to pushback/.test(lower)) {
+        return "a direct answer to the concern instead of pushback";
+    }
+    if (/comparative claims without patient-fit qualification/.test(lower)) {
+        return "clear patient-fit reasoning before any comparison";
+    }
+    if (/signals are mixed and context-dependent/.test(lower)) {
+        return "a clearer practical signal for this clinic";
+    }
+    return str(value).replace(/\.$/, "");
+}
+
 function normalizeSimilarityText(value = "") {
     return str(value)
         .toLowerCase()
@@ -129,8 +147,9 @@ function forceNonRepeatingVariation({
             ? " I'm open if you keep it practical."
             : " Keep it focused for my practice.";
 
-    const clarified = revealed && !base.toLowerCase().includes("access")
-        ? `${base.replace(/\.$/, "")} The unresolved part is still ${revealed}.`
+    const clarifiedBarrier = humanizeBarrierFragment(revealed);
+    const clarified = clarifiedBarrier && !base.toLowerCase().includes("access")
+        ? `${base.replace(/\.$/, "")}. What I still do not have is ${clarifiedBarrier}.`
         : base;
 
     return clipToSentenceCount(`${clarified}${realismTail}`, temp >= 8 ? 1 : 2);
@@ -237,28 +256,118 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}) 
     const pressureTight = Number(hcpState?.patience_level || 5) <= 4;
     const repLower = str(repTranscript).toLowerCase();
     const hasFollowupSignal = /\b(last week|follow up|following up|dropped off|earlier|as we discussed|you asked)\b/.test(repLower);
+    const recentHistory = dedupeTail(arr(hcpState?.hcp_response_history), 4);
+
+    const bucketForTopic = topic === "study"
+        ? "evidence"
+        : topic === "patient_fit"
+            ? "patient_fit"
+            : topic === "access"
+                ? "access"
+                : topic === "workflow"
+                    ? "workflow"
+                    : topic === "safety"
+                        ? "risk"
+                        : "workflow";
+    const trailingTopicRun = countConsecutiveFromEnd(arr(hcpState?.intent_bucket_history), bucketForTopic);
+
+    const pickLead = (options = []) => {
+        const viable = options.filter(Boolean);
+        if (!viable.length) return "I need a direct answer tied to what I just asked.";
+        const previousLine = str(recentHistory[recentHistory.length - 1], "");
+        const previousMatchIndex = previousLine
+            ? viable.findIndex((option) => semanticSimilarityScore(option, previousLine) >= 0.72)
+            : -1;
+        if (previousMatchIndex >= 0) {
+            return viable[(previousMatchIndex + 1) % viable.length];
+        }
+        if (trailingTopicRun > 0) {
+            return viable[trailingTopicRun % viable.length];
+        }
+        const recentNorm = recentHistory.map((line) => normalizeSimilarityText(line)).filter(Boolean);
+        const fresh = viable.find((option) => {
+            const optionNorm = normalizeSimilarityText(option);
+            return !recentNorm.some((historical) => semanticSimilarityScore(optionNorm, historical) >= 0.72);
+        });
+        return fresh || viable[0];
+    };
 
     if (topic === "study") {
         if (hasFollowupSignal) {
-            return pressureTight
-                ? "I remember the study you dropped off last week. What in that data changes a real treatment decision for my patients?"
-                : "I remember that study from last week. What in the data changes a real treatment decision for my patients?";
+            return pickLead([
+                pressureTight
+                    ? "I remember the study you dropped off last week. What in that data changes a real treatment decision for my patients?"
+                    : "I remember that study from last week. What in the data changes a real treatment decision for my patients?",
+                "I remember the paper. Which finding changes who you would actually treat?",
+                "I remember that study. What patient-level decision does it change in real practice?",
+            ]);
         }
-        return "If we're talking about that study, what exactly changes for the patients I actually treat?";
+        return pickLead([
+            "If we're talking about that study, what exactly changes for the patients I actually treat?",
+            "Stay on the study for a second. Which result changes how I'd treat a real patient?",
+            "If this is the data discussion, tell me which treatment decision actually changes.",
+        ]);
     }
     if (topic === "patient_fit") {
-        return "If we're discussing patient fit, tell me exactly which patients you mean and who should be excluded.";
+        return pickLead([
+            "If we're discussing patient fit, tell me exactly which patients you mean and who should be excluded.",
+            "Keep this on patient selection. Who fits first, and who clearly does not?",
+            "Which patients are you actually talking about, and who should I leave out?",
+        ]);
     }
     if (topic === "access") {
-        return "If this is about access, I need to know which approval step changes for my team.";
+        return pickLead([
+            "If this is about access, I need to know which approval step changes for my team.",
+            "Keep this on access. What changes in the approval path for my staff first?",
+            "If we're talking access, tell me where the prior-auth burden actually drops.",
+        ]);
     }
     if (topic === "workflow") {
-        return "If this is about workflow, tell me what concrete staff step gets easier first.";
+        return pickLead([
+            "If this is about workflow, tell me what staff step gets easier first.",
+            "Keep this on workflow. Which task actually comes off my team's plate first?",
+            "If we're talking workflow, where does the callback burden drop first for staff?",
+        ]);
     }
     if (topic === "safety") {
-        return "If this is about safety, I need to know what signal lowers risk for the patients I actually treat.";
+        return pickLead([
+            "If this is about safety, I need to know what signal lowers risk for the patients I actually treat.",
+            "Keep this on safety. What lowers risk in the patients I'd actually see?",
+            "If we're talking safety, give me the signal that changes risk in practice.",
+        ]);
     }
     return "I need a direct answer tied to what I just asked.";
+}
+
+function buildTopicRepeatBreaker(topic = "none", repTranscript = "", hcpState = {}) {
+    const optionsByTopic = {
+        study: [
+            "Stay on the study for a second. Which result changes how I'd treat a real patient?",
+            "I remember the paper. Which finding changes who you would actually treat?",
+        ],
+        patient_fit: [
+            "Keep this on patient selection. Who fits first, and who clearly does not?",
+            "Which patients are you actually talking about, and who should I leave out?",
+        ],
+        access: [
+            "Keep this on access. What changes in the approval path for my staff first?",
+            "If we're talking access, tell me where the prior-auth burden actually drops.",
+        ],
+        workflow: [
+            "Keep this on workflow. Which task actually comes off my team's plate first?",
+            "If we're talking workflow, where does the callback burden drop first for staff?",
+        ],
+        safety: [
+            "Keep this on safety. What lowers risk in the patients I'd actually see?",
+            "If we're talking safety, give me the signal that changes risk in practice.",
+        ],
+    };
+
+    const recentHistory = dedupeTail(arr(hcpState?.hcp_response_history), 3);
+    const previousLine = str(recentHistory[recentHistory.length - 1], "");
+    const options = arr(optionsByTopic[topic] || []);
+    const fresh = options.find((option) => !previousLine || !isNearDuplicateResponse(option, previousLine));
+    return fresh || buildRepAlignedLead(topic, repTranscript, hcpState);
 }
 
 function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState = {}) {
@@ -266,6 +375,8 @@ function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState =
     if (!current) return current;
     const topic = inferRepTopic(repTranscript);
     if (topic === "none") return current;
+    const recentHistory = dedupeTail(arr(hcpState?.hcp_response_history), 3);
+    const previousHcpLine = str(recentHistory[recentHistory.length - 1], "");
     const sentences = current.split(/(?<=[.!?])\s+/).filter(Boolean);
     const firstSentence = str(sentences[0]);
     const acknowledgesAnywhere = topicAcknowledged(current, topic);
@@ -279,6 +390,11 @@ function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState =
 
     if (acknowledgesAnywhere && acknowledgesLead) {
         const stabilized = filteredTail ? `${firstSentence} ${filteredTail}` : firstSentence;
+        if (previousHcpLine && isNearDuplicateResponse(stabilized, previousHcpLine)) {
+            const rotatedLead = buildRepAlignedLead(topic, repTranscript, hcpState);
+            const rotated = filteredTail ? `${rotatedLead} ${filteredTail}` : rotatedLead;
+            return clipToSentenceCount(rotated, 2);
+        }
         return clipToSentenceCount(stabilized, 2);
     }
 
@@ -1647,6 +1763,11 @@ export function generateHcpResponse({
 
     // Final global guard: never allow generated HCP line to drift away from the rep's latest topic.
     hcp_statement = enforceRepTranscriptAlignment(hcp_statement, repResponseTranscript, hcpState);
+    if (isNearDuplicateResponse(hcp_statement, previousHcpLine)) {
+        const topic = inferRepTopic(repResponseTranscript);
+        hcp_statement = clipToSentenceCount(buildTopicRepeatBreaker(topic, repResponseTranscript, hcpState), 2);
+        hcp_progression_explanation = `${hcp_progression_explanation} Final topic-preserving duplicate breaker applied.`.trim();
+    }
 
     if (antiLoopEnforcement.anti_loop_intervention_triggered) {
         hcp_progression_explanation = `${hcp_progression_explanation} Deterministic anti-loop intervention applied (${antiLoopEnforcement.anti_loop_intervention_reason}).`.trim();
