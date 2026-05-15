@@ -55,7 +55,7 @@ test("Initial Access routing blocks prior-auth drift", () => {
     const lanes = detectTopicLanes(repaired.text);
     assert(!lanes.includes("prior_auth"), "prior-auth lane should be removed after repair");
     assert(!/prior auth|prior authorization|workflow|staff|callback/i.test(repaired.text), "initial access reply must not leak workflow/prior-auth language");
-    assert(/minute|relevan|why/i.test(repaired.text), "initial access reply should keep relevance or time-gating language");
+    assert(!/what's concretely different|keep this brief|i hear that a lot|i'm not convinced yet/i.test(repaired.text), "repair must avoid stale canned fallback language");
 });
 
 test("Clinical Value routing stays clinical/evidence and blocks workflow drift", () => {
@@ -113,7 +113,7 @@ test("Safety scenario keeps safety language", () => {
     assert(!stage.changed, "safety-aligned line should pass without repair");
 });
 
-test("Time constrained pressure enforces concise expression", () => {
+test("Time constrained pressure enforces concise expression without inventing stock phrasing", () => {
     const routing = buildScenarioRouting(gatekeeper);
     const constrained = enforcePressureFit({
         draft_hcp_response: "Can you walk me through every operational element here and also explain what happens after authorization and then how the committee thinks about this and what the full workflow looks like?",
@@ -123,7 +123,8 @@ test("Time constrained pressure enforces concise expression", () => {
 
     const questionCount = (constrained.text.match(/\?/g) || []).length;
     assert(questionCount <= 1, "time constrained output must have max one question");
-    assert(/minute|short version|quick/i.test(constrained.text), "time constrained output should carry time pressure signal");
+    assert(constrained.changed, "time constrained validator should tighten an overlong prompt");
+    assert(!/keep this brief|what's concretely different|i hear that a lot/i.test(constrained.text), "time pressure sanitization must avoid canned fallback lines");
 });
 
 test("Persona anchor is added when line lacks any practical anchor", () => {
