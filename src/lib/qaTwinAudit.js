@@ -396,6 +396,7 @@ export function detectDialogueContinuityBreak({
     currentTurn?.speaker === "hcp" &&
     /you(?:'ve| have)? already|you mentioned|as you explained|like you told me/i.test(currentText) &&
     (!previousTurn || previousTurn.speaker !== "rep" || !/\befficacy\b|\bstudy\b|\bdata\b|\btrial\b/i.test(previousText)) &&
+    !(previousTurn?.speaker === "rep" && /^i hear you\b/i.test(currentText)) &&
     !(/\bi hear you on the study\b/i.test(currentText) && /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(`${scenario?.title || ""} ${scenario?.description || ""} ${scenario?.objective || ""} ${scenario?.openingScene || ""}`))
   ) {
     failures.push({ type: "continuity_break", confidence: "high" });
