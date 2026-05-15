@@ -4,7 +4,7 @@ import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
 
 const SHOW_DEBUG_UI = Boolean(import.meta.env.DEV);
-const SHOW_VISIBLE_HCP_CUES = false;
+const SHOW_VISIBLE_HCP_CUES = true;
 
 function formatCueValue(value, fallback = "Not yet established") {
   const text = String(value || "").replace(/_/g, " ").trim();
