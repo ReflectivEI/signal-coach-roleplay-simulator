@@ -585,6 +585,172 @@ function buildBrainGroundedScenarioFallback({
   return `${prefix} ${concern}`;
 }
 
+function deriveRealismConcernFamily(scenario: any, hcpReply = ""): "evidence" | "workflow" | "access" | "time" | "screening" | "general" {
+  const text = [
+    scenario?.title,
+    scenario?.journeyStage,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.openingScene,
+    hcpReply,
+    ...(Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : []),
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/\bprior auth|coverage|formulary|payer|approval|access\b/.test(text)) return "access";
+  if (/\bstaff|workflow|handoff|callback|process|clinic|ma\b/.test(text)) return "workflow";
+  if (/\btime|minute|schedule|waiting|brief|quick\b/.test(text)) return "time";
+  if (/\bpatient fit|which patient|screen|selection|candidate|profile\b/.test(text)) return "screening";
+  if (/\btrial|study|data|evidence|guideline|subgroup|endpoint|outcome|hazard ratio|renal\b/.test(text)) return "evidence";
+  return "general";
+}
+
+function buildRealismSpecificAsk(scenario: any, hcpReply = ""): string {
+  const family = deriveRealismConcernFamily(scenario, hcpReply);
+  const scenarioText = `${scenario?.openingScene || ""} ${scenario?.description || ""}`.toLowerCase();
+  const renal = /\brenal|kidney|ckd|impairment\b/.test(scenarioText);
+  if (family === "access") return "the exact approval path and what changes for staff";
+  if (family === "workflow") return "the staff step that changes and who owns it";
+  if (family === "time") return "the one point that matters before I get back to patients";
+  if (family === "screening") return "the patient profile that changes the decision";
+  if (family === "evidence") {
+    return renal
+      ? "the renal subgroup, endpoint, and treatment-decision threshold"
+      : "the trial subgroup, endpoint, and treatment-decision threshold";
+  }
+  return "the specific decision you want me to reconsider";
+}
+
+function lineAlreadyShowsRealism({ hcpReply, temperatureBand, escalationMemory }: {
+  hcpReply: string;
+  temperatureBand: RuntimeTemperatureBand;
+  escalationMemory: EscalationMemory;
+}): boolean {
+  const text = String(hcpReply || "").toLowerCase();
+  if (temperatureBand === "low") {
+    return !/\byou'?re not answering|we can stop|not worth continuing|same point again|stop here\b/i.test(text);
+  }
+  if (temperatureBand === "medium") {
+    if (escalationMemory.escalationLevel === 0) return true;
+    return /\btoo broad|specific|still need|doesn'?t answer|threshold|subgroup|endpoint|step|staff|approval\b/i.test(text);
+  }
+  if (escalationMemory.escalationLevel === 0) {
+    return /\bnot convinced|broad|threshold|subgroup|endpoint|specific|approval|staff\b/i.test(text);
+  }
+  return /\byou'?re not answering|too broad|already|stop|not worth continuing|same point|specific|threshold|subgroup|endpoint|approval|staff\b/i.test(text);
+}
+
+function enforceRealismLeverDialogue({
+  hcpReply,
+  scenario,
+  temperatureBand,
+  escalationMemory,
+}: {
+  hcpReply: string;
+  scenario: any;
+  temperatureBand: RuntimeTemperatureBand;
+  escalationMemory: EscalationMemory;
+}): string {
+  const line = String(hcpReply || "").trim();
+  if (!line) return line;
+
+  if (lineAlreadyShowsRealism({ hcpReply: line, temperatureBand, escalationMemory })) {
+    if (temperatureBand !== "low") return line;
+    return line
+      .replace(/\bYou'?re not answering\b/gi, "I still need you to answer")
+      .replace(/\bwe can stop here\b/gi, "we may need to pause here")
+      .replace(/\bnot worth continuing\b/gi, "hard to continue");
+  }
+
+  const ask = buildRealismSpecificAsk(scenario, line);
+  if (temperatureBand === "low") {
+    return `I can stay with you on this, but I still need ${ask}.`;
+  }
+  if (temperatureBand === "medium") {
+    return escalationMemory.escalationLevel >= 2
+      ? `That still does not answer the issue. I need ${ask}.`
+      : `You are staying too broad. I need ${ask}.`;
+  }
+  if (escalationMemory.escalationLevel >= 3) {
+    return `We have already covered the broad case. If you cannot give me ${ask}, we should stop here.`;
+  }
+  return escalationMemory.escalationLevel >= 1
+    ? `You are still not answering the point. Give me ${ask}.`
+    : `I am not moving on a broad answer. Give me ${ask}.`;
+}
+
+function deriveRealismCueCandidate({
+  scenario,
+  temperatureBand,
+  escalationMemory,
+  hcpReply,
+}: {
+  scenario: any;
+  temperatureBand: RuntimeTemperatureBand;
+  escalationMemory: EscalationMemory;
+  hcpReply: string;
+}): string {
+  const family = deriveRealismConcernFamily(scenario, hcpReply);
+  if (temperatureBand === "low") {
+    if (family === "access") return "Keeps the coverage notes open and gives a measured nod.";
+    if (family === "workflow") return "Keeps the workflow notes open and looks back with measured attention.";
+    if (family === "time") return "Checks the schedule once, then gives a small opening to continue.";
+    if (family === "screening") return "Keeps the patient list open and looks back with measured attention.";
+    if (family === "evidence") return "Keeps the study page open and gives a measured nod.";
+    return "Maintains a steady posture and gives the conversation a little room.";
+  }
+  if (temperatureBand === "medium") {
+    if (family === "access") return "Keeps the coverage notes under one hand, expression tightening around the approval step.";
+    if (family === "workflow") return "Keeps one hand on the workflow notes, posture tightening around the staff step.";
+    if (family === "time") return "Checks the clock, then looks back with very little room for a detour.";
+    if (family === "screening") return "Keeps the patient list open, eyes narrowing at the selection boundary.";
+    if (family === "evidence") return "Keeps one finger on the study page, expression tightening around the endpoint.";
+    return "Holds steady eye contact, expression narrowing around the ask.";
+  }
+  if (escalationMemory.escalationLevel >= 3) {
+    if (family === "access") return "Gathers the coverage notes and turns back toward the next task.";
+    if (family === "workflow") return "Gathers the workflow notes and turns back toward clinic flow.";
+    if (family === "time") return "Turns back toward the next patient slot, conversation space closing.";
+    if (family === "screening") return "Closes the patient list and steps back toward the desk.";
+    if (family === "evidence") return "Closes the journal page and shifts back toward the door.";
+    return "Steps back toward the door, conversation space clearly closing.";
+  }
+  if (family === "access") return "Sets the formulary sheet down with a clipped expression.";
+  if (family === "workflow") return "Sets the workflow notes flat on the desk, expression clipped.";
+  if (family === "time") return "Looks back with a clipped expression, one hand still on the schedule.";
+  if (family === "screening") return "Sets the chart flat and looks back without softening.";
+  if (family === "evidence") return "Sets the study page flat, jaw set, and holds the question there.";
+  return "Goes still for a beat, jaw set.";
+}
+
+function adjustBehaviorStateForRealism({
+  behaviorState,
+  temperatureBand,
+  escalationMemory,
+  scenario,
+}: {
+  behaviorState: string;
+  temperatureBand: RuntimeTemperatureBand;
+  escalationMemory: EscalationMemory;
+  scenario: any;
+}): string {
+  const base = String(behaviorState || "neutral").toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  if (temperatureBand === "high") {
+    if (escalationMemory.escalationLevel >= 3) return "closed";
+    if (escalationMemory.escalationLevel >= 1 || pressures.includes("skeptical_resistant")) return "frustration";
+    return ["openness", "curiosity"].includes(base) ? "neutral" : (base || "resistance");
+  }
+  if (temperatureBand === "medium") {
+    if (escalationMemory.escalationLevel >= 2) return "resistance";
+    if (escalationMemory.escalationLevel >= 1 && base === "openness") return "curiosity";
+    return base || "neutral";
+  }
+  if (escalationMemory.escalationLevel >= 3) return "resistance";
+  if (["closed", "frustration", "time_pressure"].includes(base)) return "neutral";
+  return base || "neutral";
+}
+
 function mapEngagementStateToBehaviorState(state: HcpEngagementState, currentBehaviorState: string): string {
   if (state === "Resistant") {
     return ["time_pressure", "frustration", "closed"].includes(String(currentBehaviorState || ""))
@@ -3141,6 +3307,13 @@ Return ONLY valid JSON:
     transcript,
   });
 
+  hcpReply = enforceRealismLeverDialogue({
+    hcpReply,
+    scenario,
+    temperatureBand,
+    escalationMemory,
+  });
+
   if (!hasPriorHcpTurns(transcript)) {
     hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
   }
@@ -3181,20 +3354,46 @@ Return ONLY valid JSON:
     }), transcript, scenario);
   }
 
+  hcpReply = enforceRealismLeverDialogue({
+    hcpReply,
+    scenario,
+    temperatureBand,
+    escalationMemory,
+  });
+
+  const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
+    turnConstraint.engagementState,
+    result.nextBehaviorState || currentBehaviorState,
+  );
+  const realismAdjustedBehaviorState = adjustBehaviorStateForRealism({
+    behaviorState: constrainedNextBehaviorState,
+    temperatureBand,
+    escalationMemory,
+    scenario,
+  });
+  const realismCueCandidate = deriveRealismCueCandidate({
+    scenario,
+    temperatureBand,
+    escalationMemory,
+    hcpReply,
+  });
+
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
     .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])
     .map((cue: any) => cue?.label)
     .filter(Boolean)
     .slice(-8);
-  const cue = resolveObservedCue(cueOverride || result.hcpCue || "", {
+  const cue = resolveObservedCue(realismCueCandidate || cueOverride || result.hcpCue || "", {
     hcpReply,
-    behaviorState: result.nextBehaviorState || currentBehaviorState,
+    behaviorState: realismAdjustedBehaviorState,
     hcpTurnCount,
     interactionPressures: scenario.interactionPressure || [],
     recentCueLabels,
     repMessage,
-    allowFirstTurnCandidateCue: firstTurnAlignment.applied || finalLiveAlignment.applied,
+    allowFirstTurnCandidateCue: true,
+    runtimeTemperature: contractRealism,
+    escalationLevel: escalationMemory.escalationLevel,
     scenario: {
       id: scenario.id,
       title: scenario.title,
@@ -3212,14 +3411,9 @@ Return ONLY valid JSON:
     ...cue,
   }] : [];
 
-  const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
-    turnConstraint.engagementState,
-    result.nextBehaviorState || currentBehaviorState,
-  );
-
   return {
     hcpReply,
-    nextBehaviorState: constrainedNextBehaviorState,
+    nextBehaviorState: realismAdjustedBehaviorState,
     nextJourneyState: result.nextJourneyState || currentJourneyState,
     activeCues,
     behaviorSignals: normalizeBehaviorSignals(
@@ -3253,6 +3447,13 @@ Return ONLY valid JSON:
         temperatureBand,
         action: escalationMemory.action,
         reasons: escalationMemory.reasons,
+      },
+      realism_lever_alignment: {
+        temperatureBand,
+        final_behavior_state: realismAdjustedBehaviorState,
+        cue_candidate: realismCueCandidate,
+        final_cue: cue.label,
+        dialogue_enforced: true,
       },
       predictive_brain_authority: {
         predictive_context_received: Boolean(predictivePromptContext.trim()),
