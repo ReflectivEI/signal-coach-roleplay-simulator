@@ -199,12 +199,48 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
       const scoreLine = deterministicScore !== null
         ? `Deterministic Score (locked, do not change): ${deterministicScore}/5`
         : `Deterministic Score: not available yet`;
-      const prompt = `As a sales coach, analyze this capability using the fixed deterministic score below (do NOT rescore).\nCapability: ${cap.label}\nMetric: ${cap.question}\n${scoreLine}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale that explains this fixed score using observable behavior\n2) Specific evidence from the transcript\n3) One concrete behavior to adjust\n4) Coaching cue for next call\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed score above.`;
+      const prompt = `You are writing a rigorous Signal Intelligence coaching note for one behavioral metric.
+
+Capability: ${cap.label}
+Metric question: ${cap.question}
+${scoreLine}
+
+Transcript excerpt:
+${clipTrans}
+
+Write with the specificity and depth of a real manager review. Every section must be grounded in observable behavior from this exact exchange. Do not give generic advice.
+
+Provide exactly these 4 sections:
+1) Brief rationale
+- 3-5 sentences
+- Explain why this fixed score is warranted using observable rep behavior
+- Name the HCP reaction that followed and the downstream conversation effect
+
+2) Specific evidence from the transcript
+- 2-4 sentences
+- Quote or precisely paraphrase the most important exchange
+- Explain why that moment is the clearest evidence for this metric
+
+3) One concrete behavior to adjust
+- 2-4 sentences
+- State what the rep should do instead the next time this exact signal appears
+- Tie the adjustment to the HCP's actual concern, not generic best practice
+
+4) Coaching cue for next call
+- 2-4 sentences
+- Give a practical next-call instruction plus one natural example phrase
+- The phrase must sound like real rep language, not a training script
+
+IMPORTANT:
+- Do NOT output a new numeric score
+- Do NOT use bullet points
+- Do NOT give generic coaching that could apply to any session
+- Use the fixed score above`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 500 })
+        body: JSON.stringify({ prompt, max_tokens: 900 })
       });
 
       if (!res.ok) throw new Error('Failed to get feedback');
@@ -237,12 +273,47 @@ export default function CapabilityFeedbackPanel({ messages, turns = [], scenario
           return `${cap.label}: ${score !== null ? `${score}/5` : "N/A"}`;
         })
         .join("\n");
-      const prompt = `As a sales coach, provide an overall session analysis using the fixed deterministic scoring summary below (do NOT rescore).\n${scoreLine}\n\nCapability score breakdown:\n${capabilityScoreLines}\n\nTranscript excerpt:\n${clipTrans}\n\nProvide:\n1) Brief rationale for the overall score using observable behavior\n2) What the rep did well across capabilities\n3) Biggest cross-capability gap to improve next\n4) One concrete adjustment for the next role-play\n\nIMPORTANT: Do NOT output a new numeric score. Use the fixed deterministic scores above.`;
+      const prompt = `You are writing a rigorous overall Signal Intelligence coaching debrief for one completed roleplay.
+
+${scoreLine}
+
+Capability score breakdown:
+${capabilityScoreLines}
+
+Transcript excerpt:
+${clipTrans}
+
+Provide exactly these 4 sections:
+1) Brief rationale
+- 4-6 sentences
+- Diagnose the dominant behavioral pattern that drove the interaction
+- Explain the causal link between rep behavior, HCP reaction, and conversation trajectory
+
+2) What the rep did well across capabilities
+- 3-5 sentences
+- Only include strengths that materially helped the exchange
+- Anchor each point to an observed behavior or transcript moment
+
+3) Biggest cross-capability gap to improve next
+- 3-5 sentences
+- Describe the main failure chain, not a list of weaknesses
+- Name how one missed behavior degraded another part of the exchange
+
+4) One concrete adjustment for the next role-play
+- 3-5 sentences
+- Give the single highest-leverage adjustment for the next run
+- Include one natural example phrase the rep could say
+
+IMPORTANT:
+- Do NOT output a new numeric score
+- Do NOT use bullet points
+- Do NOT give generic feedback
+- Use the fixed deterministic scores above`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, max_tokens: 650 })
+        body: JSON.stringify({ prompt, max_tokens: 1100 })
       });
 
       if (!res.ok) throw new Error('Failed to get overall feedback');

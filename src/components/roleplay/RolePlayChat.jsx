@@ -33,16 +33,8 @@ import {
   shouldForceTerminalDisengagement,
   shouldReplaceWithTerminalDisengagement,
 } from "./hcpSimulationEngine";
-import { SIGNAL_CAPABILITIES, GOVERNANCE } from "./signalIntelligenceSOT";
 
-// Compact SOT block injected into end-session LLM feedback prompt
-const FEEDBACK_SOT = `SIGNAL INTELLIGENCE™ — SOURCE OF TRUTH (AUTHORITATIVE):
-${GOVERNANCE.scoringRule}
-Capabilities (use canonical labels only):
-${SIGNAL_CAPABILITIES.map(c => `• ${c.label} [${c.id}]: ${c.canonicalQuestion} — ${c.definition}`).join("\n")}
-Overlap rules: ${GOVERNANCE.overlapRules.join(" | ")}
-GUARDRAIL: Never invent capabilities, sub-metrics, or scores not listed above. Observable behavior only — no intent inference.`;
-import { computeAlignment, END_SESSION_EVALUATION_BASELINE } from "./alignmentEngine";
+import { computeAlignment } from "./alignmentEngine";
 import { getBaselineAlignedInlineGuidance } from "./inlineCoachingCalibration";
 import CoachingOverlay, { shouldTriggerCoaching } from "./CoachingOverlay";
 import LiveMetricsPanel from "./LiveMetricsPanel";
@@ -102,7 +94,7 @@ import {
   buildScenarioFactSafeClarification,
 } from "./operationalConstraintGuardrails";
 import { buildDeterministicGenerationKey } from "./generationKey";
-import { buildCoachingFeedbackMarkdown, buildEndSessionFeedbackPrompt, parseStructuredFeedback } from "./sessionFeedbackFormatter";
+import { generateSessionReview } from "@/lib/sessionReview";
 import {
   createInitialInterventionSessionState,
   buildDemandHoldDirective,
@@ -6015,6 +6007,135 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     return msgs;
   }
 
+  function buildSessionReviewTranscript(turnList) {
+    const transcript = [];
+    turnList.forEach((turn, index) => {
+      if (turn.hcpDialogueBefore) {
+        transcript.push({
+          id: `hcp-${turn.turnNumber || index + 1}`,
+          speaker: "hcp",
+          text: String(turn.hcpDialogueBefore || "").trim(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+      if (turn.repMessage) {
+        transcript.push({
+          id: `rep-${turn.turnNumber || index + 1}`,
+          speaker: "rep",
+          text: String(turn.repMessage || "").trim(),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    });
+    return transcript;
+  }
+
+  function inferBehaviorSignalsFromTurn(turn = {}) {
+    const metrics = turn?.alignment?.metrics || {};
+    const questionScore = Number(metrics?.question_quality?.score || 0);
+    const listeningScore = Number(metrics?.listening_responsiveness?.score || 0);
+    const engagementScore = Number(metrics?.customer_engagement_signals?.score || 0);
+    const controlScore = Number(metrics?.conversation_control_structure?.score || 0);
+    const commitmentScore = Number(metrics?.commitment_gaining?.score || 0);
+    const repMessage = String(turn?.repMessage || "");
+    const hcpText = `${turn?.hcpDialogueBefore || ""} ${turn?.cueBefore || ""} ${turn?.activeConcern || ""}`.toLowerCase();
+
+    let questionType = "none";
+    if (/\?/.test(repMessage)) {
+      if (questionScore >= 4) questionType = "open_ended";
+      else if (/\b(isn'?t it|don'?t you|wouldn'?t you|aren'?t you|can we just|so you agree)\b/i.test(repMessage)) questionType = "leading";
+      else questionType = "closed_ended";
+    }
+
+    let objectionType = "none";
+    if (/\b(prior auth|authorization|coverage|payer|formulary|access)\b/.test(hcpText)) objectionType = "access";
+    else if (/\b(workflow|staff|team|handoff|implementation|burden|process|approval)\b/.test(hcpText)) objectionType = "workflow";
+    else if (/\b(cost|budget|spend|value|economic)\b/.test(hcpText)) objectionType = "budget";
+    else if (/\b(safety|efficacy|evidence|trial|data|patients|subgroup|clinical)\b/.test(hcpText)) objectionType = "clinical";
+
+    return {
+      question_type: questionType,
+      response_alignment: listeningScore >= 4 ? "strong" : listeningScore <= 2 ? "weak" : "partial",
+      objection_type: objectionType,
+      engagement_level: engagementScore >= 4 ? "high" : engagementScore <= 2 ? "low" : "moderate",
+      control_pattern: controlScore >= 4 ? "balanced" : controlScore <= 2 ? "rep_dominant" : "hcp_dominant",
+      listening_pattern: listeningScore >= 4 ? "responsive" : listeningScore <= 2 ? "missed" : "partially_responsive",
+      commitment_attempt: commitmentScore >= 4
+        ? "clear"
+        : commitmentScore <= 2
+          ? "none"
+          : /\b(next step|follow up|meet|review|send|share|pilot|start|move forward)\b/i.test(repMessage)
+            ? "weak"
+            : "none",
+    };
+  }
+
+  function buildSessionReviewStateHistory(turnList) {
+    return turnList
+      .filter((turn) => turn?.repMessage)
+      .map((turn, index) => ({
+        turn: index + 1,
+        score: Number(turn?.engagementScore || 0),
+        openness: String(turn?.hcpStateBefore || "neutral"),
+      }));
+  }
+
+  function buildSessionReviewMarkdown(review = {}) {
+    const safeParagraph = (value = "") => String(value || "").trim();
+    const safeList = (value) => Array.isArray(value) ? value.map((item) => safeParagraph(item)).filter(Boolean) : [];
+    const transcriptEvidence = Array.isArray(review?.capabilityInsights)
+      ? review.capabilityInsights
+        .filter((item) => item?.transcriptEvidence || item?.whyItMattered)
+        .slice(0, 3)
+        .map((item) => {
+          const capability = safeParagraph(item?.capabilityName || item?.capabilityId);
+          const evidence = safeParagraph(item?.transcriptEvidence);
+          const impact = safeParagraph(item?.whyItMattered);
+          return `- ${capability}${evidence ? `: "${evidence}"` : ""}${impact ? ` → ${impact}` : ""}`.trim();
+        })
+      : [];
+
+    const evidenceReferences = safeParagraph(review?.evidenceReferencesText);
+    const evidenceBlock = [
+      evidenceReferences,
+      ...transcriptEvidence,
+    ].filter(Boolean).join("\n\n");
+
+    return [
+      "## 1) Primary Diagnosis",
+      "",
+      safeParagraph(review?.primaryDiagnosisText || review?.briefRationale),
+      "",
+      "## 2) Failure Hierarchy",
+      "",
+      safeParagraph(review?.failureHierarchyText || review?.biggestGap),
+      "",
+      "## 3) Interaction Consequence",
+      "",
+      safeParagraph(review?.interactionConsequenceText || safeList(review?.overallSummary).join(" ")),
+      "",
+      "## 4) What You Did Well",
+      "",
+      safeParagraph(review?.whatWentWellText || review?.didWell || safeList(review?.strengthsProse).join(" ")),
+      "",
+      "## 5) What Limited the Interaction",
+      "",
+      safeParagraph(review?.limitsText || safeList(review?.developProse).join(" ")),
+      "",
+      "## 6) What the HCP Was Testing",
+      "",
+      safeParagraph(review?.hcpTestingText || safeList(review?.signalResponseAlignment).join(" ")),
+      "",
+      "## 7) Coaching Direction",
+      "",
+      safeParagraph(review?.coachingDirectionText || review?.nextAdjustment || safeList(review?.actionPlanProse).join(" ")),
+      "",
+      "## 8) Evidence / References",
+      "",
+      evidenceBlock || "Conversation evidence was available in the transcript; no external evidence references were provided for this feedback pass.",
+    ].join("\n");
+  }
+
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
 
   const displayTurns = turns.filter((turn, index) => {
@@ -6085,63 +6206,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const endSession = async () => {
     setIsEnding(true);
     try {
-      // Build conversation transcript
-      const historyText = flattenTurns(turns)
-        .map((m) => `${m.role === "user" ? "Sales Rep" : "HCP"}: ${m.content}`)
-        .join("\n");
+      const transcript = buildSessionReviewTranscript(turns);
+      const allSignals = turns
+        .filter((turn) => turn?.repMessage && turn?.alignment?.metrics)
+        .map((turn) => inferBehaviorSignalsFromTurn(turn));
+      const stateHistory = buildSessionReviewStateHistory(turns);
 
-      const scoredTurns = turns.filter(t => t.alignment?.metrics);
-      const latestScoredTurn = scoredTurns.length > 0 ? scoredTurns[scoredTurns.length - 1] : null;
-      const capSummary = Object.entries(latestScoredTurn?.alignment?.metrics || {})
-        .map(([cap, metric]) => {
-          const subLine = Object.entries(metric.subScores || {})
-            .map(([s, score]) => `  ↳ ${s.replace(/_/g, ' ')}: ${score}`)
-            .join('\n');
-          return `• ${cap.replace(/_/g, ' ')}${subLine ? '\n' + subLine : ''}`;
-        })
-        .join('\n');
+      const review = await generateSessionReview(
+        scenario,
+        transcript,
+        allSignals,
+        stateHistory,
+        []
+      );
 
-      // Collect all rubric alignment flags (Signal–Response Alignment derived checks)
-      const allRubricFlags = [...new Set(scoredTurns.flatMap(t => t.alignment?.rubricAlignmentFlags || []))];
-      const allMisalignments = [...new Set(scoredTurns.flatMap(t => t.alignment?.misalignments || []))];
-      const allPositives = [...new Set(scoredTurns.flatMap(t => t.alignment?.positives || []))];
-
-      const rubricSection = allRubricFlags.length > 0
-        ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
-        : '';
-
-      const structuredPrompt = buildEndSessionFeedbackPrompt({
-        feedbackSot: FEEDBACK_SOT,
-        baselineId: END_SESSION_EVALUATION_BASELINE.id,
-        baselinePath: END_SESSION_EVALUATION_BASELINE.path,
-        capabilitySummary: capSummary,
-        positives: allPositives,
-        misalignments: allMisalignments,
-        rubricFlags: allRubricFlags,
-        scenarioTitle: scenario.title,
-        hcpType: scenario.hcp_category,
-        difficulty: scenario.difficulty,
-        historyText,
-      });
-      const res = await fetch('/api/llm/invoke', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: structuredPrompt,
-          max_tokens: 1500,
-          temperature: 0.2,
-        })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const rawContent = normalizeLlmInvokeText(data);
-        const parsed = parseStructuredFeedback(rawContent);
-        const coachingFeedback = buildCoachingFeedbackMarkdown(parsed);
-        setFeedback(enforceFeedbackEvidenceRules(coachingFeedback, runtimeScenarioContractRef.current));
-      } else {
-        setFeedback("Unable to generate session feedback. Please try again.");
-      }
+      const coachingFeedback = buildSessionReviewMarkdown(review);
+      setFeedback(enforceFeedbackEvidenceRules(coachingFeedback, runtimeScenarioContractRef.current));
     } catch (err) {
       console.error('Session feedback generation error:', err);
       setFeedback("Unable to generate session feedback. Please try again.");
