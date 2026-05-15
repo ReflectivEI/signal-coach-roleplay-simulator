@@ -1188,12 +1188,12 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
 
   if (topic === "clinical_value") {
     if (accessTagged) {
-      return "What changes in the approval path enough that my MA is not reopening the same case, and the outcome still justifies treating a real patient?";
+      return "What outcome still justifies treatment after total cost per patient, and what changes in the approval path so my MA is not reopening the case?";
     }
     if (workflowTagged) {
-      return "What outcome or office change is strong enough to justify the full cost per patient without adding another staff step?";
+      return "What patient-level outcome is strong enough to justify total cost, and which concrete staff step actually comes off the workflow?";
     }
-    return "What outcome actually changes a treatment decision enough to justify the spend?";
+    return "What patient-level outcome actually changes a treatment decision enough to justify the spend in real practice?";
   }
   if (topic === "study_follow_up") {
     return "What in that study do you think should change a real treatment decision for me?";
@@ -1213,11 +1213,86 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
   return "What do you think this changes for me or for my patients?";
 }
 
+function selectNonRepeatingFallbackVariant({
+  variants,
+  transcript,
+  seed,
+}: {
+  variants: string[];
+  transcript: ConversationTurn[];
+  seed: string;
+}): string {
+  if (!Array.isArray(variants) || variants.length === 0) return "";
+  const recent = getRecentVisibleHcpReplies(transcript, 6);
+  const start = deterministicIndex(seed, variants.length);
+
+  for (let offset = 0; offset < variants.length; offset += 1) {
+    const candidate = variants[(start + offset) % variants.length];
+    const nearDuplicate = recent.some((line) => {
+      const overlap = continuityOverlapScore(candidate, line);
+      const containment = continuityContainmentScore(candidate, line);
+      return startsWithSameFrame(candidate, line) || overlap >= 0.72 || containment >= 0.8;
+    });
+    if (!nearDuplicate) return candidate;
+  }
+
+  return variants[start];
+}
+
+function buildClinicalValueReplyVariants({
+  practicalAsk,
+  timeConstrained,
+  accessTagged,
+  workflowTagged,
+}: {
+  practicalAsk: string;
+  timeConstrained: boolean;
+  accessTagged: boolean;
+  workflowTagged: boolean;
+}): string[] {
+  const variants: string[] = [];
+
+  if (accessTagged || workflowTagged) {
+    variants.push(
+      timeConstrained
+        ? `Keep it tight. ${practicalAsk}`
+        : `Before we talk broad value, ${practicalAsk.charAt(0).toLowerCase()}${practicalAsk.slice(1)}`
+    );
+  }
+
+  variants.push(
+    timeConstrained
+      ? `We can keep this brief, but I need the practical threshold. ${practicalAsk}`
+      : `Value only matters if it changes a real patient decision. ${practicalAsk}`
+  );
+
+  if (accessTagged) {
+    variants.push(
+      timeConstrained
+        ? "I need the short version: what changes in prior auth for staff, and what outcome still justifies cost per patient?"
+        : "I need the operational answer: what changes in prior auth for my staff, and what outcome still justifies cost per patient?"
+    );
+  }
+
+  if (workflowTagged) {
+    variants.push(
+      timeConstrained
+        ? "Keep this practical: what staff step comes off first, and what outcome still justifies the total spend?"
+        : "Keep this practical: which staff step comes off first, and what patient outcome still justifies the total spend?"
+    );
+  }
+
+  return variants.filter(Boolean);
+}
+
 function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   const topic = deriveFirstTurnRepTopic(repMessage, scenario);
   const text = String(repMessage || "").toLowerCase();
+  const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
   const timeConstrained = pressures.includes("time_constrained");
+  const accessTagged = /\bprior auth\b|\bcoverage\b|\bformulary\b|\bapproval\b|\baccess\b/.test(scenarioText) || pressures.includes("access_barrier");
+  const workflowTagged = /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b/.test(scenarioText) || pressures.includes("operationally_constrained");
   const practicalAsk = deriveFirstTurnPracticalAsk(topic, scenario);
   const hasFollowUpSignal = /\bfollow(?:ing)? up\b|\blast week\b|\byou asked\b|\bdropped off\b|\bwe discussed\b|\bearlier\b/.test(text);
 
@@ -1237,9 +1312,14 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
       : `If this is about workflow, be specific. ${practicalAsk}`;
   }
   if (topic === "clinical_value") {
-    return timeConstrained
-      ? `The efficacy data is fine, but keep this tight. ${practicalAsk}`
-      : `The efficacy data is fine, but ${practicalAsk.charAt(0).toLowerCase()}${practicalAsk.slice(1)}`;
+    const variants = buildClinicalValueReplyVariants({
+      practicalAsk,
+      timeConstrained,
+      accessTagged,
+      workflowTagged,
+    });
+    const index = deterministicIndex(`${scenario?.id || scenario?.title || "scenario"}|${repMessage}|clinical_value`, variants.length);
+    return variants[index] || `Value only matters if it changes a real patient decision. ${practicalAsk}`;
   }
   if (topic === "screening") {
     return `If you're talking patient fit, be specific. ${practicalAsk}`;
@@ -1345,13 +1425,42 @@ function buildDeterministicHcpFallbackReply({
   }
 
   if (clinicalValueStage) {
+    const stageSeed = `${scenario?.id || scenario?.title || "scenario"}|${repText}|${latestConcern}|${transcript.length}|clinical_value_fallback`;
+    const accessWorkflowVariants = [
+      "Before we continue, what changes in the approval path so my MA is not reopening the same case, and what outcome still justifies total cost per patient?",
+      "If this is a value conversation, I need both parts: what access step gets cleaner for staff, and what endpoint still justifies the spend for a real patient?",
+      "Keep this practical: what prior-auth step gets easier for my team, and what patient-level outcome is strong enough to justify total spend?",
+    ];
+    const workflowVariants = [
+      "Before this becomes a value discussion, what office step actually comes off my staff, and what patient-level outcome still justifies full cost per patient?",
+      "If we are talking value, be concrete: what workflow burden drops first, and what outcome changes treatment in real practice?",
+      "For value to matter here, I need one staff step that gets easier and one patient outcome that justifies the spend.",
+    ];
+    const clinicalValueVariants = [
+      "Before this becomes a value discussion, what patient-level outcome actually changes treatment enough to justify total cost?",
+      "If this is about value, be specific: what endpoint changes a real decision for the patients I would actually treat?",
+      "Value only matters if the outcome changes a real treatment choice. What is that change for my patient mix?",
+    ];
+
     if (accessPressured) {
-      return "Before this becomes a value discussion, what changes in the approval path so my MA is not reopening the same case, and the spend is still justified for a real patient?";
+      return selectNonRepeatingFallbackVariant({
+        variants: accessWorkflowVariants,
+        transcript,
+        seed: `${stageSeed}|access`,
+      });
     }
     if (workflowPressured || concernTags.includes("cost_value")) {
-      return "Before this becomes a value discussion, what outcome or office change is strong enough to justify the full cost per patient without adding another staff step?";
+      return selectNonRepeatingFallbackVariant({
+        variants: workflowVariants,
+        transcript,
+        seed: `${stageSeed}|workflow`,
+      });
     }
-    return "Before this becomes a value discussion, what outcome actually changes a treatment decision enough to justify the spend?";
+    return selectNonRepeatingFallbackVariant({
+      variants: clinicalValueVariants,
+      transcript,
+      seed: `${stageSeed}|general`,
+    });
   }
 
   if (concernTags.includes("implementation")) {
