@@ -607,6 +607,20 @@ function buildRealismSpecificAsk(scenario: any, hcpReply = ""): string {
   const family = deriveRealismConcernFamily(scenario, hcpReply);
   const scenarioText = `${scenario?.openingScene || ""} ${scenario?.description || ""}`.toLowerCase();
   const renal = /\brenal|kidney|ckd|impairment\b/.test(scenarioText);
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  if (isInitialAccessStage(scenario)) {
+    if (pressures.includes("time_constrained") && pressures.includes("operationally_constrained")) {
+      return "the short version before my next patient and what changes for my staff";
+    }
+    if (pressures.includes("time_constrained")) return "the short version before my next patient";
+    if (pressures.includes("operationally_constrained")) return "what changes for my staff in practical terms";
+    return "why this is worth opening a conversation";
+  }
+  if (isEarlyDiscoveryStage(scenario)) {
+    return "the patient profile you actually want me to think about";
+  }
   if (family === "access") return "the exact approval path and what changes for staff";
   if (family === "workflow") return "the staff step that changes and who owns it";
   if (family === "time") return "the one point that matters before I get back to patients";
@@ -638,6 +652,66 @@ function lineAlreadyShowsRealism({ hcpReply, temperatureBand, escalationMemory }
   return /\byou'?re not answering|too broad|already|stop|not worth continuing|same point|specific|threshold|subgroup|endpoint|approval|staff\b/i.test(text);
 }
 
+function buildStageBoundRealismReply({
+  scenario,
+  temperatureBand,
+  escalationMemory,
+  ask,
+}: {
+  scenario: any;
+  temperatureBand: RuntimeTemperatureBand;
+  escalationMemory: EscalationMemory;
+  ask: string;
+}): string {
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  const timeConstrained = pressures.includes("time_constrained");
+  const operational = pressures.includes("operationally_constrained");
+
+  if (isInitialAccessStage(scenario)) {
+    if (temperatureBand === "low") {
+      if (timeConstrained && operational) return "I have a few minutes. Give me the short version before my next patient, including what changes for my staff.";
+      if (timeConstrained) return "I have a few minutes. Give me the short version before my next patient.";
+      if (operational) return "I can listen, but keep this practical for the office.";
+      return "I can listen briefly. What's this about for my patients?";
+    }
+    if (temperatureBand === "medium") {
+      if (escalationMemory.escalationLevel >= 2) {
+        return timeConstrained
+          ? "You're getting too broad. I have a patient waiting, so give me the short version now."
+          : `You're getting too broad. I need ${ask}.`;
+      }
+      return timeConstrained
+        ? "Keep it tight. What's the short version before my next patient?"
+        : `Keep this practical. I need ${ask}.`;
+    }
+    if (escalationMemory.escalationLevel >= 3) {
+      return timeConstrained
+        ? "I have to get back to patients. If there isn't a short practical point, send it over."
+        : "If there isn't a practical reason to continue, send the details over.";
+    }
+    return timeConstrained
+      ? "I have a patient waiting. Give me the short version or let's stop here."
+      : `You're still not making this practical. Give me ${ask}.`;
+  }
+
+  if (isEarlyDiscoveryStage(scenario)) {
+    if (temperatureBand === "low") return `I can stay with you, but I need ${ask}.`;
+    if (temperatureBand === "medium") {
+      return escalationMemory.escalationLevel >= 2
+        ? "That is still too broad. Which patient profile are you actually talking about?"
+        : `You are staying too broad. I need ${ask}.`;
+    }
+    if (escalationMemory.escalationLevel >= 3) {
+      return "We have circled the same broad point. If you cannot narrow the patient profile, we should stop here.";
+    }
+    return "You are still not narrowing this. Which patients are we actually talking about?";
+  }
+
+  return "";
+}
+
 function enforceRealismLeverDialogue({
   hcpReply,
   scenario,
@@ -652,6 +726,20 @@ function enforceRealismLeverDialogue({
   const line = String(hcpReply || "").trim();
   if (!line) return line;
 
+  const ask = buildRealismSpecificAsk(scenario, line);
+  const stageBoundReply = buildStageBoundRealismReply({
+    scenario,
+    temperatureBand,
+    escalationMemory,
+    ask,
+  });
+  const stageDrift =
+    (isInitialAccessStage(scenario) && /\bworkflow\b|\baccess step\b|\bapproval path\b|\bapproval workflow\b|\bimplementation\b|\bwho owns\b|\bformulary\b|\bpayer\b/i.test(line)) ||
+    (isEarlyDiscoveryStage(scenario) && /\bapproval\b|\baccess step\b|\bformulary\b|\bpayer\b|\bdecision threshold\b|\bendpoint\b|\bhazard ratio\b/i.test(line));
+  if (stageBoundReply && stageDrift) {
+    return stageBoundReply;
+  }
+
   if (lineAlreadyShowsRealism({ hcpReply: line, temperatureBand, escalationMemory })) {
     if (temperatureBand !== "low") return line;
     return line
@@ -660,7 +748,7 @@ function enforceRealismLeverDialogue({
       .replace(/\bnot worth continuing\b/gi, "hard to continue");
   }
 
-  const ask = buildRealismSpecificAsk(scenario, line);
+  if (stageBoundReply) return stageBoundReply;
   if (temperatureBand === "low") {
     return `I can stay with you on this, but I still need ${ask}.`;
   }
@@ -1463,7 +1551,28 @@ function deterministicContinuityVariation({
 
   if (!text) return hcpReply;
   if (/that still does not change the decision threshold/i.test(text)) {
+    if (isEarlyDiscoveryStage(scenario)) {
+      return "I still need the specific patient profile before this goes any further.";
+    }
     return `${text}.`;
+  }
+
+  if (isInitialAccessStage(scenario)) {
+    const pressures = Array.isArray(scenario?.interactionPressure)
+      ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+      : [];
+    if (pressures.includes("time_constrained")) {
+      return pressures.includes("operationally_constrained")
+        ? "I have a few minutes. Give me the short version before my next patient, including what changes for my staff."
+        : "I have a few minutes. Give me the short version before my next patient.";
+    }
+    return "Keep this practical. What's the reason to open the conversation?";
+  }
+
+  if (isEarlyDiscoveryStage(scenario)) {
+    return concernTags.includes("screening") || concernTags.includes("patient_fit")
+      ? "Which patient profile are you actually trying to help me identify?"
+      : "I need the patient profile first, not a broader value claim.";
   }
 
   const concernFollowUp = (family: string): string => {
@@ -1495,7 +1604,7 @@ function deterministicContinuityVariation({
 
   if (concernTags.includes("workflow")) {
     if (/prior auth|prior authorization/i.test(text)) {
-      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")} now falls back on staff.`;
+      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")}. Name the first staff step that changes.`;
     }
     if (/staff|team|workflow|handoff|callback/i.test(text)) {
       return `${text}. ${concernFollowUp("workflow")}`;
@@ -1737,7 +1846,24 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
   const workflowTagged = /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b/.test(scenarioText);
   const screeningTagged = /\bpatient\b|\bsubgroup\b|\bfit\b|\bselection\b/.test(scenarioText);
   const clinicalValueStage = String(scenario?.journeyStage || "").toLowerCase() === "clinical_value";
+  const initialAccessStage = isInitialAccessStage(scenario);
   const renalTagged = /\brenal\b|\bkidney\b|\bckd\b|\bimpairment\b/.test(scenarioText);
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+
+  if (initialAccessStage) {
+    if (pressures.includes("time_constrained") && pressures.includes("operationally_constrained")) {
+      return "Give me the short version before my next patient: what changes for my staff?";
+    }
+    if (pressures.includes("time_constrained")) {
+      return "Give me the short version before my next patient.";
+    }
+    if (pressures.includes("operationally_constrained")) {
+      return "Keep it practical for the office.";
+    }
+    return "What's this about for my patients?";
+  }
 
   const clinicalValueEvidenceAsk = () => (
     renalTagged
@@ -1764,7 +1890,7 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     return "What changes in the access step or for my staff if this actually matters?";
   }
   if (topic === "workflow" || workflowTagged) {
-    return "What changes in the workflow for my staff if this is worth discussing?";
+    return "Which staff step changes first if this is worth discussing?";
   }
   if (clinicalValueStage && (topic === "screening" || topic === "evidence" || screeningTagged)) {
     return clinicalValueEvidenceAsk();
@@ -1852,6 +1978,10 @@ function buildClinicalValueReplyVariants({
 
 function isClinicalValueStage(scenario: any): boolean {
   return String(scenario?.journeyStage || "").toLowerCase() === "clinical_value";
+}
+
+function isEarlyDiscoveryStage(scenario: any): boolean {
+  return ["early_discovery", "discovery"].includes(String(scenario?.journeyStage || "").toLowerCase());
 }
 
 function buildClinicalValueAccessWorkflowReply(repMessage: string, scenario: any, transcript: ConversationTurn[] = []): string {
@@ -1990,7 +2120,7 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
   const variants = operational
     ? [
       "I have a few minutes. Give me the short version: what does my staff have to do differently?",
-      "Keep it brief. What changes for the office before this is worth a real conversation?",
+      "Keep it quick. What changes for the office before this is worth a real conversation?",
       "I'm between patients. What is the practical reason my staff should pay attention?",
     ]
     : skeptical
@@ -2048,7 +2178,7 @@ function enforceInitialAccessSurface({
     /^(look,|be specific\.?$|keep this practical\.?(?: one practical point\.?)?)$/i.test(value);
 
   const lostOpeningPressure =
-    !/\bfew minutes|short version|briefly|between patients|worth the time|what'?s this about\b/i.test(value);
+    !/\bfew minutes|short version|briefly|between patients|worth the time|what'?s this about|\bquick\b/i.test(value);
 
   if (!repeatsOpeningScene && !driftedIntoDownstreamLane && !lostOpeningPressure) {
     return hcpReply;

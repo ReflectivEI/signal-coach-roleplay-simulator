@@ -54,8 +54,8 @@ const CLINICAL_PATTERNS = [/\btrial\b/i, /\bguideline\b/i, /\brenal\b/i, /\beffi
 const ACCESS_PATTERNS = [/\bformulary\b/i, /\bnon-preferred\b/i, /\bprior auth\b/i, /\bcommittee\b/i, /\baccess\b/i, /\bpayer\b/i];
 const WORKFLOW_PATTERNS = [/\bstaff\b/i, /\bworkflow\b/i, /\bhandoff\b/i, /\bcallback\b/i, /\bextra steps?\b/i, /\bprocess\b/i];
 const JOURNEY_SIGNAL_PATTERNS = {
-  initial_access: [/\bwhat'?s this about\b/i, /\bwhy are you here\b/i, /\bfew minutes\b/i, /\bshort version\b/i],
-  early_discovery: [/\bwhich patients?\b/i, /\bwhat are you seeing\b/i, /\bgo over today\b/i, /\bstay on therapy\b/i],
+  initial_access: [/\bwhat'?s this about\b/i, /\bwhy are you here\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
+  early_discovery: [/\bwhich patients?\b/i, /\bpatient profile\b/i, /\bwhat are you seeing\b/i, /\bgo over today\b/i, /\bstay on therapy\b/i],
   clinical_value: [/\befficacy\b/i, /\bguideline\b/i, /\bsubgroup\b/i, /\bcost per patient\b/i, /\boutcome\b/i],
   objection_handling: [/\bnot interested\b/i, /\bswitching\b/i, /\bwhat would change\b/i, /\bwhat specifically would change\b/i],
   adoption_implementation: [/\bworkflow\b/i, /\bmonitoring\b/i, /\bwho owns\b/i, /\bwhat happens next\b/i],
@@ -64,7 +64,7 @@ const JOURNEY_SIGNAL_PATTERNS = {
 };
 
 const PRESSURE_PATTERNS = {
-  time_constrained: [/\bminute\b/i, /\bnext patient\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bquick\b/i],
+  time_constrained: [/\bminute\b/i, /\bnext patient\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bquick\b/i, /\bbriefly\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
   operationally_constrained: WORKFLOW_PATTERNS,
   skeptical_resistant: [/\bnot interested\b/i, /\bnot convinced\b/i, /\bwhat makes you think\b/i, /\bwhy should i\b/i],
   curious_uncertain: [/\bnot sure\b/i, /\bhelp me think through\b/i, /\bwhich patients?\b/i],
@@ -286,6 +286,20 @@ export function validatePersonaFit({
 
 export function detectJourneyStageSignal(text = "", scenario = {}) {
   const value = normalize(text);
+  const expectedStage = String(scenario?.journeyStage || "").toLowerCase();
+  const initialAccessMarker = JOURNEY_SIGNAL_PATTERNS.initial_access.some((pattern) => pattern.test(value));
+  const patientProfileMarker = /\bwhich patients?\b|\bpatient profile\b|\bpatient subgroup\b|\bpatient population\b|\bright patient\b/i.test(value);
+  const lateClinicalMarker = /\btrial\b|\bguideline\b|\bendpoint\b|\bhazard ratio\b|\bcost per patient\b|\befficacy\b/i.test(value);
+  const accessLaneMarker = /\bformulary\b|\bcommittee\b|\bpayer\b|\bcoverage decision\b|\bnon-preferred\b/i.test(value);
+  const implementationLaneMarker = /\bimplementation\b|\bwho owns\b|\bmonitoring\b|\bwhat happens next\b|\brollout\b/i.test(value);
+
+  if (expectedStage === "initial_access" && initialAccessMarker && !implementationLaneMarker && !accessLaneMarker) {
+    return "initial_access";
+  }
+  if (expectedStage === "early_discovery" && patientProfileMarker && !lateClinicalMarker && !accessLaneMarker) {
+    return "early_discovery";
+  }
+
   const entries = Object.entries(JOURNEY_SIGNAL_PATTERNS);
   let best = null;
   let bestScore = 0;

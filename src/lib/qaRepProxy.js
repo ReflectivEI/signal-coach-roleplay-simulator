@@ -1660,6 +1660,7 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
   const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value) => String(value).toLowerCase()) : [];
   const clinicalValueStage = /clinical_value/.test(stageText);
+  const initialAccessStage = /initial_access/.test(stageText);
   const accessPressured = pressures.includes("access_barrier");
   const workflowPressured = pressures.includes("operationally_constrained");
   const repTurnCount = turns.filter((turn) => turn?.speaker === "rep").length;
@@ -1679,6 +1680,15 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
 
   const asksForPatientFitSubgroup =
     /\bwhich patients|what specific subgroup|particular patient population|patient population|still isn'?t controlled|current care|standard of care|treatment goals|specific patient decision|clinical decision|treatment protocol|what changes in practice|what would change in practice\b/i.test(lastHcpMessage);
+
+  if (initialAccessStage) {
+    return pickStrongClinicalValueAnswer([
+      "The short version is a cleaner first submission, so your MA is not chasing missing information or reopening the same authorization after the patient leaves.",
+      "The practical change is fewer payer callbacks on the first request, which means less staff rework before the patient can move forward.",
+      "For your office, the immediate point is reducing the resubmission loop by getting the documentation right before staff has to fix and send it again.",
+      "It matters only if the first request goes through cleaner, with fewer kicked-back forms and fewer follow-up calls for your team.",
+    ]);
+  }
 
   if (asksForPatientFitSubgroup && /early_discovery|discovery|clinical_value/.test(stageText)) {
     return pickStrongClinicalValueAnswer([
