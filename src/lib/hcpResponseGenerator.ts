@@ -2472,7 +2472,7 @@ function enforceClinicalValueAccessWorkflowSurface({
   if (!requiresAccess && !requiresWorkflow) return hcpReply;
 
   const value = String(hcpReply || "").trim();
-  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup\b/i.test(value);
+  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup|endpoint|outcome|treatment decision|decision threshold|patient-level|hazard ratio\b/i.test(value);
   const hasAccessAnchor = /\bformulary|non-preferred|prior auth|prior authorization|committee|access|payer|coverage\b/i.test(value);
   const hasWorkflowAnchor = /\bstaff|workflow|handoff|callback|extra step|extra steps|process|MA\b/i.test(value);
   const costOnlyLoop = /\btotal cost per patient\b|\badded cost per patient\b|\bcost side is unclear\b/i.test(value)
@@ -3018,6 +3018,24 @@ function buildSameConcernProgressionReply({
   const scenarioText = `${scenario?.title || ""} ${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
   const renal = /\brenal|kidney|ckd|impairment\b/.test(scenarioText);
   const seed = `${scenario?.id || scenario?.title || "scenario"}|${stage}|${family}|${transcript.length}|${previousHcp}|${current}`;
+  const compoundClinicalValue = stage === "clinical_value" && (accessPressure || operational);
+
+  if (compoundClinicalValue) {
+    const compoundVariants = [
+      "For value to matter here, give me the patient-level outcome, the coverage path, and what work still lands on my MA.",
+      "Bring the three pieces together: subgroup and endpoint, prior-auth path, and the staff step that changes.",
+      "If the efficacy holds, tell me which patient subgroup benefits, how coverage clears, and what callback work comes off my team.",
+      "I need the value equation in one answer: outcome threshold, payer step, and what my staff does differently.",
+      "Do not split this apart. Show me the endpoint that changes treatment, the access path, and whether my staff avoids another repair cycle.",
+      "Before I call this value, I need the treated subgroup, the prior-auth requirement, and the workflow impact in the same answer.",
+    ];
+
+    return selectNonRepeatingFallbackVariant({
+      variants: compoundVariants,
+      transcript,
+      seed: `${seed}|compound-clinical-value`,
+    }) || compoundVariants[deterministicIndex(seed, compoundVariants.length)];
+  }
 
   const variantsByFamily: Record<string, string[]> = {
     time: [
@@ -4070,6 +4088,19 @@ Return ONLY valid JSON:
     scenario,
     temperatureBand,
     escalationMemory,
+    transcript,
+  });
+  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
+  hcpReply = enforceClinicalValueAccessWorkflowSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+  hcpReply = enforceClinicalValueEvidenceSurface({
+    hcpReply,
+    repMessage,
+    scenario,
     transcript,
   });
   hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
