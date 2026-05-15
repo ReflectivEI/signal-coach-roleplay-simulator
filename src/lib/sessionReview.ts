@@ -169,12 +169,155 @@ function normalizeGuidanceItems(rawItems: any[], normalizedInsights: any[], targ
     });
 }
 
+function takeNonEmpty(values: Array<unknown>, fallback = ""): string {
+  for (const value of values) {
+    const normalized = asNonEmptyString(value);
+    if (normalized) return normalized;
+  }
+  return fallback;
+}
+
+function inferReviewConcernFamily(scenario: any, transcript: ConversationTurn[] = []): string {
+  const joined = [
+    scenario?.title,
+    scenario?.objective,
+    scenario?.description,
+    scenario?.context,
+    ...transcript.filter((turn) => turn.speaker === "hcp").map((turn) => turn.text),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (/prior auth|authorization|formulary|payer|coverage|access/.test(joined)) return "access / formulary";
+  if (/workflow|staff|callback|handoff|office|operational/.test(joined)) return "workflow / staff burden";
+  if (/cost|value|spend|budget|monitoring|testing/.test(joined)) return "cost / value";
+  if (/safety|hepatic|adverse|risk/.test(joined)) return "safety";
+  if (/guideline/.test(joined)) return "guideline fit";
+  if (/subgroup|patient fit|patient population|who fits|which patients/.test(joined)) return "patient fit";
+  return "evidence fit";
+}
+
+function buildStructuredSectionTexts({
+  result,
+  normalizedInsights,
+  scenario,
+  transcript,
+}: {
+  result: any;
+  normalizedInsights: any[];
+  scenario: any;
+  transcript: ConversationTurn[];
+}) {
+  const missedInsights = normalizedInsights.filter((item) => item.observationLevel === "missed");
+  const developingInsights = normalizedInsights.filter((item) => item.observationLevel === "developing");
+  const effectiveInsights = normalizedInsights.filter((item) => item.observationLevel === "effective");
+  const primaryMiss = missedInsights[0] || developingInsights[0] || normalizedInsights[0] || null;
+  const secondaryNames = [...missedInsights.slice(1), ...developingInsights.slice(0, 2)]
+    .map((item) => item.capabilityName)
+    .filter(Boolean)
+    .slice(0, 2);
+  const concernFamily = inferReviewConcernFamily(scenario, transcript);
+  const pressures = Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length
+    ? scenario.interactionPressure.join(", ")
+    : "none";
+  const persona = String(scenario?.persona || "unspecified");
+
+  const primaryDiagnosisText = takeNonEmpty([
+    result?.primaryDiagnosisText,
+    primaryMiss
+      ? `${primaryMiss.capabilityName}: ${takeNonEmpty([primaryMiss.whatHappened, result?.briefRationale, result?.biggestGap])}`
+      : result?.briefRationale,
+  ], "No primary diagnosis was generated.");
+
+  const failureHierarchyText = takeNonEmpty([
+    result?.failureHierarchyText,
+    primaryMiss
+      ? [
+        `Primary Failure Driver: ${primaryMiss.capabilityName}.`,
+        `Capability State: ${primaryMiss.observationLevel}.`,
+        secondaryNames.length ? `Secondary Effects: ${secondaryNames.join(", ")}.` : "",
+        takeNonEmpty([primaryMiss.whyItMattered, result?.biggestGap]),
+      ].filter(Boolean).join(" ")
+      : result?.biggestGap,
+  ], "No failure hierarchy was generated.");
+
+  const interactionConsequenceText = takeNonEmpty([
+    result?.interactionConsequenceText,
+    primaryMiss?.whyItMattered,
+    Array.isArray(result?.signalResponseAlignment) ? result.signalResponseAlignment[1] : "",
+    result?.briefRationale,
+  ], "No interaction consequence was generated.");
+
+  const whatWentWellText = takeNonEmpty([
+    result?.whatWentWellText,
+    effectiveInsights.length
+      ? effectiveInsights.map((item) => takeNonEmpty([item.whatHappened, item.whatGoodLooksLike])).filter(Boolean).join(" ")
+      : result?.didWell,
+  ], "No meaningful strength changed interaction trajectory in this exchange.");
+
+  const limitsText = takeNonEmpty([
+    result?.limitsText,
+    [...missedInsights, ...developingInsights]
+      .slice(0, 3)
+      .map((item) => takeNonEmpty([item.whatHappened, item.pattern, item.whyItMattered]))
+      .filter(Boolean)
+      .join(" "),
+    result?.biggestGap,
+  ], "No limitation detail was generated.");
+
+  const hcpTestingText = takeNonEmpty([
+    result?.hcpTestingText,
+    `This HCP was testing ${concernFamily} under a ${persona} persona with ${pressures} pressure.`,
+  ], "No HCP test was generated.");
+
+  const coachingDirectionText = takeNonEmpty([
+    result?.coachingDirectionText,
+    [
+      takeNonEmpty([result?.nextAdjustment]),
+      primaryMiss?.nextTimeAction ? `Next move: ${primaryMiss.nextTimeAction}` : "",
+      primaryMiss?.exampleRewrite ? `Better way to say it: "${primaryMiss.exampleRewrite}"` : "",
+    ].filter(Boolean).join(" "),
+  ], "No coaching direction was generated.");
+
+  const evidenceReferencesText = takeNonEmpty([
+    result?.evidenceReferencesText,
+    normalizedInsights
+      .filter((item) => item.transcriptEvidence || (Array.isArray(item.relatedTurnIds) && item.relatedTurnIds.length))
+      .slice(0, 3)
+      .map((item) => {
+        const turnRefs = Array.isArray(item.relatedTurnIds) && item.relatedTurnIds.length ? ` (${item.relatedTurnIds.join(", ")})` : "";
+        return `${item.capabilityName}: ${takeNonEmpty([item.transcriptEvidence, item.whatHappened])}${turnRefs}`;
+      })
+      .join(" "),
+  ], "Conversation evidence was available in the transcript; no external evidence references were provided for this feedback pass.");
+
+  return {
+    primaryDiagnosisText,
+    failureHierarchyText,
+    interactionConsequenceText,
+    whatWentWellText,
+    limitsText,
+    hcpTestingText,
+    coachingDirectionText,
+    evidenceReferencesText,
+  };
+}
+
 function normalizeSessionReviewShape(
   result: any,
   deterministicAssessment: Record<string, string>,
-  volatilityEvents: VolatilityEvent[]
+  volatilityEvents: VolatilityEvent[],
+  scenario: any,
+  transcript: ConversationTurn[],
 ): SessionReview {
   const normalizedInsights = normalizeCapabilityInsights(result?.capabilityInsights || [], deterministicAssessment);
+  const structuredSections = buildStructuredSectionTexts({
+    result,
+    normalizedInsights,
+    scenario,
+    transcript,
+  });
 
   return {
     briefRationale: asNonEmptyString(result?.briefRationale),
@@ -195,6 +338,7 @@ function normalizeSessionReviewShape(
     overallGuidance: asStringArray(result?.overallGuidance, [DEFAULT_OVERALL_GUIDANCE]).length
       ? asStringArray(result?.overallGuidance, [DEFAULT_OVERALL_GUIDANCE])
       : [DEFAULT_OVERALL_GUIDANCE],
+    ...structuredSections,
   };
 }
 
@@ -284,6 +428,14 @@ export function buildDeterministicSessionReview(
       "developing",
     ),
     overallGuidance: [DEFAULT_OVERALL_GUIDANCE],
+    primaryDiagnosisText: biggestGap,
+    failureHierarchyText: briefRationale,
+    interactionConsequenceText: biggestGap,
+    whatWentWellText: didWell,
+    limitsText: biggestGap,
+    hcpTestingText: "Deterministic fallback review only. HCP testing details require the full generated session review path.",
+    coachingDirectionText: nextAdjustment,
+    evidenceReferencesText: "Deterministic fallback review only. Transcript-grounded evidence references require the full generated session review path.",
   };
 }
 
@@ -681,5 +833,5 @@ Return ONLY valid JSON with this exact structure:
     }
   });
 
-  return normalizeSessionReviewShape(result, deterministicAssessment, volatilityEvents);
+  return normalizeSessionReviewShape(result, deterministicAssessment, volatilityEvents, scenario, transcript);
 }

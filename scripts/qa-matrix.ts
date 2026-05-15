@@ -415,6 +415,19 @@ async function generateQaRepReply({
     };
   };
 
+  const shouldRejectWorkerRepDraft = (repDraft: string) => {
+    const normalized = String(repDraft || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!normalized) return true;
+    if (/^in one sentence,\s*this matters because\b/i.test(repDraft)) return true;
+    if (/prior-auth rework can delay patient start before the physician ever sees a clean path forward/i.test(repDraft)) return true;
+
+    const recentRepTurns = turns
+      .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+      .slice(-3)
+      .map((turn) => String(turn.text || "").replace(/\s+/g, " ").trim().toLowerCase());
+    return recentRepTurns.some((prior) => prior === normalized);
+  };
+
   const repPrompt = persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState);
 
   try {
@@ -427,14 +440,14 @@ async function generateQaRepReply({
     }), `${scenario.title} rep turn ${turnIndex + 1}`);
 
     const repDraft = String(repTextRaw).trim().replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-    if (repDraft && !isMockRepDraft(repDraft)) {
+    if (repDraft && !isMockRepDraft(repDraft) && !shouldRejectWorkerRepDraft(repDraft)) {
       const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: { text: repDraft, concept: null }, personaKey, turnIndex });
       return finalizeQaRepReply(finalReply, "worker");
     }
 
     const repProxyOutput = buildDeterministicQaRepReply({ scenario, turns, draft: "", personaKey });
     const finalReply = enforceRepAnswerFirstContract({ scenario, turns, draft: repProxyOutput, personaKey, turnIndex });
-    return finalizeQaRepReply(finalReply, repDraft ? "worker_mock_placeholder" : "worker_empty_fallback");
+    return finalizeQaRepReply(finalReply, repDraft ? "worker_rejected_fallback" : "worker_empty_fallback");
   } catch {
     const fallbackReply = buildSafeRepFallback({ scenario, turns, personaKey, isQAMode });
     return finalizeQaRepReply(fallbackReply, "worker_error_fallback");

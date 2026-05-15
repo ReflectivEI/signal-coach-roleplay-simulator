@@ -11,7 +11,7 @@ import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { invokeWorkerText } from "@/services/workerClient";
 import { listAllScenarios } from "@/lib/scenarioStorage";
-import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
+import { buildDeterministicQaRepReply, buildRepAnswerFirstPromptConstraint, detectHcpDirectAsk, detectHcpQuestionType, enforceRepAnswerFirstContract } from "@/lib/qaRepProxy";
 import { buildMatrixAuditSummary, buildTranscriptAudit } from "@/lib/qaTwinAudit";
 
 function createSafeId() {
@@ -119,6 +119,9 @@ Return ONLY the rep's reply as plain text.`,
 const QA_STEP_TIMEOUT_MS = 45000;
 const QA_REVIEW_TIMEOUT_MS = 20000;
 const QA_HCP_TOKEN_CAP = 260;
+const QA_REP_LLM_TIMEOUT_MS = 8000;
+const QA_REP_LLM_RETRIES = 1;
+const QA_ENABLE_LLM_REP = import.meta.env.VITE_QA_LLM_REP === "1";
 
 async function withTimeout(promise, label, timeoutMs = QA_STEP_TIMEOUT_MS) {
   let timeoutId;
@@ -232,6 +235,83 @@ async function retryWithBackoff(fn, maxRetries = 3) {
   throw lastError;
 }
 
+async function generateQaRepReply({
+  scenario,
+  turns,
+  persona,
+  currentBehaviorState,
+  currentJourneyState,
+  lastHcpMessage,
+}) {
+  const activeHcpPrompt = String(lastHcpMessage || scenario?.openingScene || "").trim();
+  const lastHcpQuestionType = detectHcpQuestionType(activeHcpPrompt);
+  const directAsk = detectHcpDirectAsk(activeHcpPrompt);
+  if (lastHcpQuestionType === "solution_seeking" || directAsk.hasDirectAsk) {
+    return enforceRepAnswerFirstContract({
+      scenario,
+      turns,
+      draft: "",
+      personaKey: persona?.label?.toLowerCase().includes("weak")
+        ? "weak_rep"
+        : persona?.label?.toLowerCase().includes("mediocre")
+          ? "mediocre_rep"
+          : "strong_rep",
+    });
+  }
+  const deterministicReply = buildDeterministicQaRepReply({
+    scenario,
+    turns,
+    draft: "",
+  });
+
+  if (!QA_ENABLE_LLM_REP) {
+    return lastHcpQuestionType === "solution_seeking"
+      ? enforceRepAnswerFirstContract({
+        scenario,
+        turns,
+        draft: deterministicReply,
+      })
+      : deterministicReply;
+  }
+
+    try {
+    const repPrompt = `${persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState)}${buildRepAnswerFirstPromptConstraint(activeHcpPrompt)}`;
+    const repTextRaw = await retryWithBackoff(() => withTimeout(
+      invokeWorkerText({
+        prompt: repPrompt,
+        max_tokens: 180,
+        temperature: 0.1,
+        timeout_ms: QA_REP_LLM_TIMEOUT_MS,
+        retry_count: QA_REP_LLM_RETRIES,
+      }),
+      `${scenario.title} rep turn`,
+      QA_REP_LLM_TIMEOUT_MS,
+    ), QA_REP_LLM_RETRIES);
+    const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
+    const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
+    const candidateReply = buildDeterministicQaRepReply({
+      scenario,
+      turns,
+      draft: repDraft,
+    });
+    return lastHcpQuestionType === "solution_seeking"
+      ? enforceRepAnswerFirstContract({
+        scenario,
+        turns,
+        draft: candidateReply,
+      })
+      : candidateReply;
+  } catch {
+    return lastHcpQuestionType === "solution_seeking"
+      ? enforceRepAnswerFirstContract({
+        scenario,
+        turns,
+        draft: deterministicReply,
+      })
+      : deterministicReply;
+  }
+}
+
 async function runQASession(scenario, personaKey, maxTurns, onProgress) {
   const persona = QA_PERSONAS[personaKey];
   const convInit = await initializeConversation(scenario);
@@ -260,22 +340,14 @@ async function runQASession(scenario, personaKey, maxTurns, onProgress) {
     try {
       onProgress(`Turn ${i + 1}/${maxTurns} — generating rep message…`);
       const lastHcpMessage = [...turns].reverse().find((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")?.text || "";
-      const lastHcpQuestionType = detectHcpQuestionType(lastHcpMessage);
-      const repPrompt = `${persona.buildPrompt(scenario, turns, currentBehaviorState, currentJourneyState)}${buildRepAnswerFirstPromptConstraint(lastHcpMessage)}`;
-      const repTextRaw = await retryWithBackoff(() => withTimeout(
-        invokeWorkerText({ prompt: repPrompt, max_tokens: 180, temperature: 0.1, timeout_ms: 15000 }),
-        `${scenario.title} rep turn ${i + 1}`,
-      ));
-      const rawText = typeof repTextRaw === "string" ? repTextRaw.trim() : String(repTextRaw).trim();
-      const repDraft = rawText.replace(/^(REP|Rep|rep)\s*:\s*/i, "").trim();
-      let repReply = buildDeterministicQaRepReply({ turns, draft: repDraft, scenario });
-      if (lastHcpQuestionType === "solution_seeking") {
-        repReply = enforceRepAnswerFirstContract({
-          scenario,
-          turns,
-          draft: repReply,
-        });
-      }
+      const repReply = await generateQaRepReply({
+        scenario,
+        turns,
+        persona,
+        currentBehaviorState,
+        currentJourneyState,
+        lastHcpMessage,
+      });
 
       const repTurnObj = {
         id: createSafeId(),

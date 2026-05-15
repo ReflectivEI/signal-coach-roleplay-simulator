@@ -7,6 +7,7 @@ import {
 } from "@/services/workerClient";
 
 const CUSTOM_SCENARIOS_KEY = "signal-coach-custom-scenarios";
+const WORKER_SCENARIO_LIST_TIMEOUT_MS = 1200;
 
 function normalizeRuntimeTemperature(scenario) {
   const explicit = Number(scenario?.runtimeTemperature);
@@ -88,19 +89,31 @@ function dedupeById(scenarios) {
   });
 }
 
+function withTimeout(promise, timeoutMs, fallbackValue) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs)),
+  ]);
+}
+
 async function loadWorkerCustomScenarios() {
+  const cached = dedupeById(sortScenariosByRecency(readCustomScenarios().map(normalizeCustomScenario)));
   try {
-    const scenarios = await listWorkerScenarios();
+    const scenarios = await withTimeout(
+      listWorkerScenarios(),
+      WORKER_SCENARIO_LIST_TIMEOUT_MS,
+      cached,
+    );
     if (Array.isArray(scenarios) && scenarios.length >= 0) {
       const normalized = dedupeById(sortScenariosByRecency(scenarios.map(normalizeCustomScenario)));
       writeCustomScenarios(normalized);
       return normalized;
     }
   } catch {
-    return dedupeById(sortScenariosByRecency(readCustomScenarios().map(normalizeCustomScenario)));
+    return cached;
   }
 
-  return dedupeById(sortScenariosByRecency(readCustomScenarios().map(normalizeCustomScenario)));
+  return cached;
 }
 
 export function listBuiltInScenarios() {

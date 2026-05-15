@@ -18,9 +18,15 @@ export default function Home() {
 
   const loadScenarios = async () => {
     setLoading(true);
-    const allScenarios = await listAllScenarios();
-    setScenarios(allScenarios.filter((scenario) => scenario.journeyStage));
-    setLoading(false);
+    try {
+      const allScenarios = await listAllScenarios();
+      setScenarios((Array.isArray(allScenarios) ? allScenarios : []).filter((scenario) => scenario?.journeyStage));
+    } catch (error) {
+      console.error("Failed to load scenarios", error);
+      setScenarios([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteScenario = async (scenarioId) => {

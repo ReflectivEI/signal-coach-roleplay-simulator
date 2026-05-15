@@ -102,7 +102,7 @@ import {
   buildScenarioFactSafeClarification,
 } from "./operationalConstraintGuardrails";
 import { buildDeterministicGenerationKey } from "./generationKey";
-import { buildCoachingFeedbackMarkdown, parseStructuredFeedback } from "./sessionFeedbackFormatter";
+import { buildCoachingFeedbackMarkdown, buildEndSessionFeedbackPrompt, parseStructuredFeedback } from "./sessionFeedbackFormatter";
 import {
   createInitialInterventionSessionState,
   buildDemandHoldDirective,
@@ -648,6 +648,21 @@ function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
   };
 }
 
+function buildVisibleHcpCueDescriptor(turn = {}, hcpDisplayName = "HCP") {
+  const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+  if (cueSummary.behavioralNotes) return cueSummary.behavioralNotes;
+
+  const state = String(cueSummary.predictedState || "").toLowerCase();
+  const risk = String(cueSummary.risk || "").toLowerCase();
+  if (/frustration|resistance|closed/.test(state) || risk === "high") {
+    return `${hcpDisplayName} stays guarded, waiting for one specific point that fits their concern.`;
+  }
+  if (/open|curiosity|engaged/.test(state)) {
+    return `${hcpDisplayName} stays engaged, leaving room for a more specific answer.`;
+  }
+  return `${hcpDisplayName} watches for a clear, relevant reason to continue.`;
+}
+
 function hasVisibleHcpCue(turn = {}) {
   return Boolean(String(
     turn?.cueBefore
@@ -1101,6 +1116,26 @@ function classifyDialogueAngle(text = "") {
   return "general";
 }
 
+function resolveVariantConcernForTurn({ concern = "workflow", repMessage = "", dialogue = "" } = {}) {
+  const sample = `${repMessage} ${dialogue}`.toLowerCase();
+  if (/\b(system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr|owner|owns|handoff)\b/.test(sample)) {
+    return "implementation";
+  }
+  return concern;
+}
+
+function needsImplementationTurnRepair({ repMessage = "", dialogue = "" } = {}) {
+  const rep = String(repMessage || "").toLowerCase();
+  if (!/\b(system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr)\b/.test(rep)) {
+    return false;
+  }
+  const line = String(dialogue || "").toLowerCase();
+  const acknowledgesImplementation = /\b(implementation|implement|system|workflow|owner|owns|handoff|deploy|rollout|approval workflow)\b/.test(line);
+  const stuckOnAccessOnly = /\b(access step|prior auth|prior authorization|access process)\b/.test(line)
+    && !acknowledgesImplementation;
+  return !acknowledgesImplementation || stuckOnAccessOnly;
+}
+
 function collectRecentHcpDialogues(turns = [], limit = NO_REPEAT_WINDOW_TURNS) {
   return (Array.isArray(turns) ? turns : [])
     .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
@@ -1123,6 +1158,13 @@ function chooseConcernSpecificVariant({ concern = "workflow", seed = "", recentD
       "For this to matter here, it has to move approvals faster. What is the first access action you would recommend?",
       "I need this tied to the admin load we actually feel. What process change would cut access delays without adding work?",
       "I can work with one specific access tactic if my team can run it this week. What would that be?",
+    ],
+    implementation: [
+      "A system change only helps if the handoff is clear. Who owns the first implementation step, and what work comes off my staff?",
+      "Implementation is where these ideas usually stall. What changes first for my team, and who is accountable for it?",
+      "If this is a new system, I need the operating detail. Where does it fit in the workflow without adding another handoff?",
+      "That could be relevant, but implementation has to be concrete. What is the first step my staff would actually see?",
+      "I can evaluate an implementation path, but not as a vague promise. What changes in the approval workflow on day one?",
     ],
     evidence: [
       "I hear you, but I still need the evidence tied to a real decision. Which proof point should change what I do now?",
@@ -1534,10 +1576,15 @@ function enforceSpokenOnlyHcpDialogue({
 function isRepeatedFinalDialogue(candidate = "", recentDialogues = []) {
   const normalizedCandidate = normalizeDialogueSignature(candidate);
   if (!normalizedCandidate) return false;
+  const openingFrame = normalizedCandidate.split(" ").slice(0, 9).join(" ");
+  const hasRepeatedConditionalFrame = /\b(if you can make|if this gets|if there is a real|if you can keep|if this is about access|if this reduces|if there s a real)\b/.test(normalizedCandidate);
   return (Array.isArray(recentDialogues) ? recentDialogues : []).some((prior) => {
     const normalizedPrior = normalizeDialogueSignature(prior);
     if (!normalizedPrior) return false;
+    const priorOpeningFrame = normalizedPrior.split(" ").slice(0, 9).join(" ");
     return normalizedPrior === normalizedCandidate
+      || (openingFrame && openingFrame === priorOpeningFrame)
+      || (hasRepeatedConditionalFrame && /\b(if you can make|if this gets|if there is a real|if you can keep|if this is about access|if this reduces|if there s a real)\b/.test(normalizedPrior))
       || calculateTokenOverlapRatio(candidate, prior) >= 0.82
       || calculateSemanticSimilarity(candidate, prior) >= 0.78;
   });
@@ -5668,16 +5715,20 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     }
 
     const finalDialogueBeforeRepeatRepair = nextHcpDialogue;
-    const finalDialogueNeededRepair = !latestAskBoundDialogue
-      && !isTerminalClosureDialogue(nextHcpDialogue)
+    const finalDialogueNeededRepair = !isTerminalClosureDialogue(nextHcpDialogue)
       && (
         isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
         || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
       );
     if (finalDialogueNeededRepair) {
-      nextHcpDialogue = chooseConcernSpecificVariant({
+      const repairConcern = resolveVariantConcernForTurn({
         concern: primaryConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${primaryConcern}:final-repeat-repair`,
+        repMessage,
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: repairConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${repairConcern}:final-repeat-repair`,
         recentDialogues: recentHcpDialogues,
       });
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
@@ -5786,9 +5837,39 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       hcpState: nextHcpState,
       timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
     });
+    const finalImplementationTurnRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && needsImplementationTurnRepair({ repMessage, dialogue: nextHcpDialogue });
+    if (finalImplementationTurnRepair) {
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: "implementation",
+        seed: `${generationKey}:${nextTurnNumber}:implementation:final-turn-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+    }
+    const finalSpokenOnlyRepeatRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && (
+        isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
+        || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
+      );
+    if (finalSpokenOnlyRepeatRepair) {
+      const repairConcern = resolveVariantConcernForTurn({
+        concern: primaryConcern,
+        repMessage,
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: repairConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${repairConcern}:spoken-only-repeat-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
+    }
     finalHcpReactionContract = {
       ...finalHcpReactionContract,
       selectedDialogueText: nextHcpDialogue,
+      finalImplementationTurnRepair,
+      finalSpokenOnlyRepeatRepair,
     };
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
@@ -6029,13 +6110,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         ? `\nSIGNAL–RESPONSE ALIGNMENT ISSUES (canonical feedback language — use these verbatim or closely paraphrase):\n${allRubricFlags.map(f => `• ${f}`).join('\n')}`
         : '';
 
-      const structuredPrompt = `You are a skilled sales coach analyzing a roleplay simulation session. Ground ALL feedback in observable behavior only — never infer intent, emotion, or personality traits.\n${FEEDBACK_SOT}\n\nBASELINE EVALUATION CONTRACT:\n- Baseline ID: ${END_SESSION_EVALUATION_BASELINE.id}\n- Baseline Path: ${END_SESSION_EVALUATION_BASELINE.path}\n- Treat this end-of-session path as the canonical reference for final evaluation behavior.\n\nSESSION SCORING DATA (deterministic, turn-by-turn):\nDeterministic session alignment summary (non-numeric): use only the qualitative findings below\n${capSummary}\n\nPOSITIVES OBSERVED (turn-by-turn):\n${allPositives.length > 0 ? allPositives.slice(0, 10).map(p => `• ${p}`).join('\n') : '• None detected'}\nMISALIGNMENTS OBSERVED (turn-by-turn):\n${allMisalignments.length > 0 ? allMisalignments.slice(0, 10).map(m => `• ${m}`).join('\n') : '• None detected'}\n${rubricSection}\n\nSession Context:\nScenario: ${scenario.title}\nHCP Type: ${scenario.hcp_category}\nDifficulty: ${scenario.difficulty}\n\nConversation Transcript:\n${historyText}\n\nRespond with PLAIN TEXT (no markdown, no special formatting). Provide exactly 4 sections separated by the exact delimiter "[SECTION_END]":\nSECTION 1: STRENGTHS (observable behaviors showing strong capability performance)\n[SECTION_END]\nSECTION 2: IMPROVEMENTS (specific capability gaps and areas to develop)\n[SECTION_END]\nSECTION 3: PATTERNS (notable signal-response alignment patterns and behaviors)\n[SECTION_END]\nSECTION 4: ACTION ITEMS (2-3 specific behavioral changes for next session)\n[SECTION_END]\nCRITICAL RULES:\n- Do NOT include numeric scores\n- Each section is plain text (no markdown, no bullet points in the response text)\n- Separate sections with EXACTLY "[SECTION_END]"\n- All feedback must be observable and specific`;
+      const structuredPrompt = buildEndSessionFeedbackPrompt({
+        feedbackSot: FEEDBACK_SOT,
+        baselineId: END_SESSION_EVALUATION_BASELINE.id,
+        baselinePath: END_SESSION_EVALUATION_BASELINE.path,
+        capabilitySummary: capSummary,
+        positives: allPositives,
+        misalignments: allMisalignments,
+        rubricFlags: allRubricFlags,
+        scenarioTitle: scenario.title,
+        hcpType: scenario.hcp_category,
+        difficulty: scenario.difficulty,
+        historyText,
+      });
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: structuredPrompt,
-          max_tokens: 900,
+          max_tokens: 1500,
           temperature: 0.2,
         })
       });
@@ -6221,24 +6314,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
                       {SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && (() => {
-                        const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+                        const cueDescriptor = buildVisibleHcpCueDescriptor(turn, hcpDisplayName);
                         return (
-                          <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
-                            <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
-                              <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-                              <div>- Predicted State: {cueSummary.predictedState}</div>
-                              <div>- Openness: {cueSummary.openness}</div>
-                              <div>- Trajectory: {cueSummary.trajectory}</div>
-                              <div>- Risk: {cueSummary.risk}</div>
-                              <div>- Behavioral Notes: {cueSummary.behavioralNotes || "Listening for the rep's opening move."}</div>
-                            </div>
+                          <div className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug" style={{ background: "rgba(244, 232, 236, 0.92)", borderColor: "rgba(191, 132, 145, 0.46)", color: "hsl(356 32% 43%)" }}>
+                            {cueDescriptor}
                           </div>
                         );
                       })()}
+                      {!SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && turn.cueBefore && (
+                        <div className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug" style={{ background: "rgba(244, 232, 236, 0.92)", borderColor: "rgba(191, 132, 145, 0.46)", color: "hsl(356 32% 43%)" }}>
+                          {turn.cueBefore}
+                        </div>
+                      )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>
-                          <div className="max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
+                          <div className="hcp-dialogue max-w-[98%] rounded-2xl px-3 md:px-4 py-2.5 text-sm leading-relaxed bg-slate-200/90 text-slate-800 whitespace-normal break-words">
                             {sanitizeRenderedMessage(turn.hcpDialogueBefore, "hcp-message")}
                           </div>
                         </div>
@@ -6363,7 +6454,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                   disabled={isEnding || repTurnsCount < 2}
                   className="inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1.5 border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 2-5" : "Generate Sections 2-5"}
+                  {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 1-8" : "Generate Sections 1-8"}
                 </button>
               </div>
               {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}

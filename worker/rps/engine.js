@@ -830,20 +830,35 @@ function updateConversationMemory(memory = {}, signals = {}, commitment = {}, te
 
 function buildCoaching({ line, signals, layeredCue, temperatureBand }) {
     const quoted = quoteRepPhrase(line);
-    const cueText = text(layeredCue?.what_the_rep_must_detect, "The HCP is asking for practical decision impact, not features.");
-    const likelyHeard = signals.cueMatched
-        ? "You connected part of my practical concern, but I still need tighter specificity tied to workflow constraints."
-        : "I heard a broad product statement, not a response to my practical barrier.";
+    const cueText = text(layeredCue?.what_the_rep_must_detect, "The HCP is asking for practical decision impact, not features.").replace(/[.]+$/, "");
+    const strongDiagnosticMove = signals.cueMatched && signals.contextual && hasQuestion(line);
+    const acknowledgedContext = signals.acknowledged && signals.contextual;
+    const likelyHeard = strongDiagnosticMove
+        ? "You stayed on the active barrier and asked a question that could move the decision logic forward."
+        : signals.cueMatched
+            ? "You connected part of the practical concern, but the answer still needs tighter specificity tied to the active barrier."
+            : "I heard a broad product statement, not a response to the practical barrier in front of me.";
 
-    const missedCue = signals.cueMatched
-        ? "Secondary or hidden resistance was only partially addressed."
-        : `Missed cue: ${text(layeredCue?.primary_cue, "practical barrier")} with hidden resistance around prior unsuccessful claims.`;
+    const missedCue = strongDiagnosticMove
+        ? `You are closer to the real barrier now: ${cueText}.`
+        : signals.cueMatched
+            ? "Secondary or hidden resistance was only partially addressed."
+            : `Missed cue: ${text(layeredCue?.primary_cue, "practical barrier")} with hidden resistance around prior unsuccessful claims.`;
 
-    const consequence = signals.cueMatched
-        ? "The conversation can move, but trust may plateau if you stay broad."
-        : "Behaviorally, this increases guardedness and forces the HCP to repeat constraints.";
+    const consequence = strongDiagnosticMove
+        ? "That gives the HCP a reason to stay in the exchange, but the next turn still needs one concrete operational answer."
+        : signals.cueMatched
+            ? "The conversation can move, but trust may plateau if you stay broad."
+            : "Behaviorally, this increases guardedness and forces the HCP to repeat constraints.";
 
-    const betterPhrasing = "When you say this may not change your day-to-day decisions, is the bigger blocker access friction, patient-fit confidence, or staff workflow load?";
+    const primaryCue = text(layeredCue?.primary_cue, "").toLowerCase();
+    const betterPhrasing = /prior auth|access|approval|payer|coverage/.test(primaryCue)
+        ? "Which approval step is still creating the most staff rework right now?"
+        : /workflow|staff|callback|handoff|operational/.test(primaryCue)
+            ? "Which staff step is still creating the callback burden first?"
+            : /patient|fit|criteria|subgroup/.test(primaryCue)
+                ? "Which patient profile are you still not comfortable treating from this data?"
+                : "When you say this may not change your day-to-day decisions, is the bigger blocker access friction, patient-fit confidence, or staff workflow load?";
     const nextQuestion = temperatureBand === "high"
         ? "If we focus on one operational bottleneck only, which step would you want solved first to keep this worth discussing?"
         : "Which specific patient or workflow scenario would make this discussion most relevant for your decision?";
@@ -851,7 +866,9 @@ function buildCoaching({ line, signals, layeredCue, temperatureBand }) {
     const coaching_feedback = [
         `When you said \"${quoted}\", the HCP likely heard: ${likelyHeard}`,
         `${missedCue} ${consequence}`,
-        `A stronger move is to narrow the barrier before advancing: \"${betterPhrasing}\"`,
+        strongDiagnosticMove
+            ? `Next move: answer the barrier you just surfaced with one concrete operational detail, for example: \"${betterPhrasing}\"`
+            : `A stronger move is to narrow the barrier before advancing: \"${betterPhrasing}\"`,
     ];
 
     return {
@@ -859,7 +876,9 @@ function buildCoaching({ line, signals, layeredCue, temperatureBand }) {
         better_phrasing: betterPhrasing,
         next_best_question: nextQuestion,
         what_hcp_likely_heard: likelyHeard,
-        improved_response_example: `I hear your practical concern. If we stay focused on one barrier, which step is actually slowing decisions today - access, workflow, or patient selection?`,
+        improved_response_example: acknowledgedContext
+            ? `I hear the practical concern. If we stay on one barrier only, ${betterPhrasing.toLowerCase()}`
+            : `I hear your practical concern. If we stay focused on one barrier, which step is actually slowing decisions today - access, workflow, or patient selection?`,
     };
 }
 
@@ -1002,11 +1021,29 @@ export function evaluateRepResponse({
         voiceBehaviorAdaptation: voiceAdaptation,
         liveTemperature: repSelectedTemperature,
         conversationMemory,
+        scenarioContext: {
+            journeyStage: safeScenarioContext.journey_stage || safeScenarioContext.journeyStage || "",
+            interactionPressure: Array.isArray(safeScenarioContext.interaction_pressure)
+                ? safeScenarioContext.interaction_pressure
+                : Array.isArray(safeScenarioContext.interactionPressure)
+                    ? safeScenarioContext.interactionPressure
+                    : [],
+            concernFamily: safeScenarioContext.concern_family || "",
+        },
     }));
 
     const updatedMemory = updateConversationMemory(conversationMemory, signals, commitment, temp.band, voiceAdaptation);
     // Persist hcp_state into conversation memory
     updatedMemory.hcp_state = stateProgression.hcp_state;
+    updatedMemory.scenario_context = {
+        journeyStage: safeScenarioContext.journey_stage || safeScenarioContext.journeyStage || "",
+        interactionPressure: Array.isArray(safeScenarioContext.interaction_pressure)
+            ? safeScenarioContext.interaction_pressure
+            : Array.isArray(safeScenarioContext.interactionPressure)
+                ? safeScenarioContext.interactionPressure
+                : [],
+        concernFamily: safeScenarioContext.concern_family || "",
+    };
     updatedMemory.response_type_history = [
         ...(Array.isArray(safeConversationMemory.response_type_history) ? safeConversationMemory.response_type_history : []),
         stateProgression.hcp_response_type,

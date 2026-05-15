@@ -23,14 +23,16 @@ const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track
 const DISCOVERY_LOOP_PATTERN = /^(can i ask|tell me more|how are you thinking about|what would you need to see|help me understand|walk me through|can you share|how do you currently|where do you think)/i;
 
 const DIRECT_ASK_TYPES = {
-  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
   asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
   asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
-  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis/i,
+  asks_for_cost_value: /cost savings|justify the cost|what we'd spend|worth the spend|cost per patient|total cost per patient|what's included|what is included|what does that include|break down|added testing|monitoring|justify the spend|value discussion|does the outcome justify/i,
+  asks_for_patient_fit: /be specific|which patients|what specific subgroup|particular patient population|patient population|still isn'?t controlled|current care|standard of care|treatment goals|specific patient decision|clinical decision|treatment protocol|what changes in practice|what would change in practice/i,
+  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis|what would make you think i need something different|why would i need something different|what would make this relevant/i,
   asks_for_guideline_fit: /guideline|pathway|standard of care|protocol|fits in guideline/i,
   asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
   asks_for_next_step: /what happens next|next step|who owns|would you be open|what do i do next|what should we do now/i,
   disengagement_boundary: /stop here|pause here|not discussing this now|leave it there|send (?:the|it) over|no further|not moving this forward/i,
+  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
 };
 
 function mapAskToAnswerMode(askType = "") {
@@ -39,6 +41,10 @@ function mapAskToAnswerMode(askType = "") {
       return "workflow_specific_answer";
     case "asks_for_access_step":
       return "access_step_answer";
+    case "asks_for_cost_value":
+      return "cost_value_answer";
+    case "asks_for_patient_fit":
+      return "patient_fit_answer";
     case "asks_for_evidence_relevance":
       return "evidence_fit_answer";
     case "asks_for_guideline_fit":
@@ -60,6 +66,10 @@ function mapAskToAnchor(askType = "") {
       return "workflow";
     case "asks_for_access_step":
       return "access";
+    case "asks_for_cost_value":
+      return "cost_value";
+    case "asks_for_patient_fit":
+      return "patient_fit";
     case "asks_for_evidence_relevance":
       return "evidence";
     case "asks_for_guideline_fit":
@@ -106,7 +116,7 @@ export function detectHcpQuestionType(lastHcpMessage = "") {
   if (!text || !text.includes("?")) return "none";
 
   if (
-    /what would|what specifically|what'?s the one thing|how would|what can you do|give me|what does your product|what changes|what gets added|what step|what would actually|what does that actually|what does this actually|what is the actual process|what's the actual process/.test(text)
+    /be specific|which patients|what specific subgroup|what would|what specifically|what'?s the one thing|how would|what can you do|give me|what does your product|what changes|what gets added|what step|what would actually|what does that actually|what does this actually|what is the actual process|what's the actual process/.test(text)
   ) {
     return "solution_seeking";
   }
@@ -139,7 +149,7 @@ export function detectHcpDirectAsk(hcpText = "") {
 
   const hasQuestionSignal = text.includes("?")
     || /(?:^|[.!?]\s+)(show|tell|name|give|walk me through|explain|be specific)\b/.test(text)
-    || /\b(need to know|need to understand|need the|need a)\b/.test(text);
+    || /\b(be specific|need to know|need to understand|need the|need a)\b/.test(text);
   let askType = "none";
   for (const [type, pattern] of Object.entries(DIRECT_ASK_TYPES)) {
     if (pattern.test(text)) {
@@ -187,11 +197,13 @@ export function evaluateRepAnswerToHcpAsk({
   const concernPatterns = {
     workflow: /workflow|staff|ma\b|handoff|callback|step|process|team|office/i,
     access: /access|coverage|prior auth|prior authorization|formulary|approval|payer|committee|pathway/i,
+    cost_value: /cost|value|spend|budget|monitoring|testing|cost per patient|total cost per patient/i,
     evidence: /evidence|data|subgroup|analysis|population|real-?world|outcome/i,
     guideline: /guideline|pathway|standard of care|protocol/i,
     safety: /safety|risk|adverse|hepatic|monitoring|tolerability/i,
     next_step: /next step|would you be open|who owns|move forward|pilot|review one/i,
     boundary: /understood|we can pause|we can stop|send over|revisit later/i,
+    patient_fit: /which patients?|patient subgroup|subgroup|uncontrolled|current care|treatment goals|clinical decision|treatment decision|protocol/i,
     concrete_difference: /changes|different|instead of|main change|practical change|specific difference/i,
   };
   const requiredPattern = concernPatterns[ask.requiredAnchor] || concernPatterns.concrete_difference;
@@ -397,6 +409,8 @@ function classifySpecificAsk(hcpTurn = "") {
 
 function responseModeForAsk(askType = "") {
   switch (askType) {
+    case "asks_for_patient_fit":
+      return "patient_fit_answer";
     case "removed_work":
       return "removal_explanation";
     case "staff_change":
@@ -709,8 +723,19 @@ function getNextConcept(used = []) {
 
 function asRepReplyPayload(reply = "", concept = null, context = {}) {
   const replyRecord = /** @type {{ text?: string } | null} */ (reply && typeof reply === "object" ? reply : null);
-  const rawText = typeof reply === "string" ? reply : String(replyRecord?.text || "");
+  let rawText = typeof reply === "string" ? reply : String(replyRecord?.text || "");
   const scenarioRouting = context?.scenario ? buildScenarioRouting(context.scenario) : null;
+  const hcpTurnText = normalizeForMatch(context?.hcpTurn || "");
+  if (
+    /be specific|which patients|patient subgroup|uncontrolled|current care|clinical decision|treatment protocol|what changes in practice|what changes first/.test(hcpTurnText) &&
+    /specific patient decision that still does not change|patient-level decision still does not change|blocker is the specific patient decision/.test(normalizeForMatch(rawText))
+  ) {
+    rawText = pickVariant(
+      buildPatientFitAlternatives(context),
+      rawText,
+      `${prefix(context?.hcpTurn || "")}:${getRecentRepReplies(context, 3).length}:patient-fit-direct`,
+    );
+  }
   const finalized = finalizeRepReply(rawText, context);
   const aligned = scenarioRouting
     ? enforceRepScenarioAlignment({
@@ -729,9 +754,10 @@ function asRepReplyPayload(reply = "", concept = null, context = {}) {
       scenarioRouting,
     )
     : scrubStaleFallbackPhrases(aligned, scenarioRouting || {});
+  const repeatedSafe = rotateRepeatedRepLine(repaired, context);
 
   return {
-    text: repaired,
+    text: normalizeDialoguePunctuation(repeatedSafe).trim(),
     concept,
   };
 }
@@ -740,13 +766,31 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
   const tier = resolvePersonaTier(personaKey);
   const family = String(scenarioRouting?.concern_family || "general");
   const journeyStage = String(scenarioRouting?.journey_stage || "").toLowerCase();
+  const pressures = Array.isArray(scenarioRouting?.interaction_pressure)
+    ? scenarioRouting.interaction_pressure.map((value) => String(value).toLowerCase())
+    : [];
 
   if (journeyStage === "initial_access") {
     return tier === "weak"
-      ? "The point is that this could make access feel easier overall."
+      ? "The point is one office step could get easier before the patient moves forward."
       : tier === "mediocre"
-        ? "The reason this matters is that access friction may be creating more delay than it needs to for the office."
-        : "In one sentence, this matters because prior-auth rework can delay patient start before the physician ever sees a clean path forward.";
+        ? "The reason this matters is that one staff step may be slowing the office before the patient can move forward."
+        : "The direct answer is one staff step gets removed, so the visit does not create another office task before the patient can move forward.";
+  }
+
+  if (journeyStage === "clinical_value") {
+    if (pressures.includes("access_barrier") && pressures.includes("operationally_constrained")) {
+      return tier === "weak"
+        ? "The point is whether the outcome is worth the spend if the same approval work still falls back on the office."
+        : tier === "mediocre"
+          ? "The main question is whether the patient outcome is strong enough to justify the spend once you include the approval friction and office rework."
+          : "The real issue is whether the patient outcome is strong enough to justify the spend once you factor in the approval path and the work that still falls back on your MA.";
+    }
+    return tier === "weak"
+      ? "The point is whether this changes a real patient decision enough to justify the full cost and effort."
+      : tier === "mediocre"
+        ? "The main question is whether the evidence and value story actually change treatment for the patients you treat, not whether the product sounds broadly positive."
+        : "The real issue is whether this changes a treatment decision for the patients you would actually put on it, and whether that outcome is strong enough to justify the spend and the office work.";
   }
 
   switch (family) {
@@ -785,13 +829,13 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
         ? "The point is whether the broader story feels relevant even without explicit guideline language."
         : tier === "mediocre"
           ? "The main question is whether this feels close enough to current guideline practice to matter."
-          : "The guideline question is what evidence or patient-fit signal would matter before you would move without explicit society language.";
+          : "The clinical bridge is where the trial subgroup, endpoint, and current pathway threshold line up closely enough to matter before explicit society language changes.";
     default:
       return tier === "weak"
-        ? "The point is the broader blocker in this scenario."
+        ? "The point is the blocker that would actually change care for one of your patients."
         : tier === "mediocre"
-          ? "The main question is the blocker that still feels relevant in this scenario."
-          : "The blocker is the specific decision you still cannot make in this scenario.";
+          ? "The main question is which patient subgroup is still uncontrolled enough to reconsider the current protocol."
+          : "The practical answer is the uncontrolled subgroup: patients still missing goals on current care where a measurable outcome gain would change the treatment decision.";
   }
 }
 
@@ -836,10 +880,24 @@ export function enforceRepScenarioAlignment({
   };
 
   const family = String(scenario_routing?.concern_family || "general");
-  const expectedLanes = concernLaneMap[family] || [];
-  if (expectedLanes.length) {
-    const aligned = detectTopicLanes(response).some((lane) => expectedLanes.includes(lane));
-    if (!aligned) {
+  const allowedLanes = Array.isArray(scenario_routing?.allowed_topic_lanes)
+    ? scenario_routing.allowed_topic_lanes
+    : [];
+  const familyExpected = concernLaneMap[family] || [];
+  const expectedLanes = familyExpected.filter((lane) => allowedLanes.includes(lane));
+  const matchedAfterScrub = detectTopicLanes(response);
+  const matchedAllowed = allowedLanes.length
+    ? matchedAfterScrub.filter((lane) => allowedLanes.includes(lane))
+    : matchedAfterScrub;
+
+  // Preserve valid hybrid clinical/access/workflow answers when they are stage-allowed.
+  if (!matchedAllowed.length) {
+    if (expectedLanes.length) {
+      const aligned = matchedAfterScrub.some((lane) => expectedLanes.includes(lane));
+      if (!aligned) {
+        response = concernFamilyRepAnchor(scenario_routing, personaKey);
+      }
+    } else if (!matchedAfterScrub.length) {
       response = concernFamilyRepAnchor(scenario_routing, personaKey);
     }
   }
@@ -1352,20 +1410,28 @@ function hasEvidenceProofSignal(text = "") {
   return /proof point|data point|single metric|one metric|one number|subgroup|analysis|patient-level|patient level|treatment choice|change treatment|hospitalization|readmission|outcome/i.test(value);
 }
 
+function hasEvidenceRelevanceDirectAnswer(text = "") {
+  const value = normalizeForMatch(text);
+  const hasEvidenceAnchor = /evidence|data|subgroup|patient-level|patient level|outcome|analysis/.test(value);
+  const hasDecisionAnchor = /change treatment|treatment choice|justify changing|switch|strong enough to justify|decision/.test(value);
+  const hasPatientFitAnchor = /patients? still not controlled|patients? not controlled|your patients?|patient subgroup|patient mix/.test(value);
+  return hasEvidenceAnchor && hasDecisionAnchor && hasPatientFitAnchor;
+}
+
 function hasSemanticDomainSignal(text = "") {
-  return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
+  return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|team|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
 }
 
 function hasSemanticChangeSignal(text = "") {
-  return /fix|complete|submit|send|reduce|remove|avoid|stop|less|fewer|no more|not have to|doesn't have to|goes through|move forward|cleaner|right first time|cuts out|drops off|isn't reopening|not doing|doesn't bounce back|isn't fixing/.test(normalizeForMatch(text));
+  return /fix|complete|submit|send|reduce|remove|removed|removes|avoid|stop|less|fewer|no more|not have to|doesn't have to|goes through|move forward|move to the next action|without repeating|cleaner|right first time|cuts out|drops off|isn't reopening|not doing|doesn't bounce back|isn't fixing/.test(normalizeForMatch(text));
 }
 
 function hasSemanticSpecificitySignal(text = "") {
-  return /resubmission|missing info|missing information|callback|kicked back|kicked-back|denied|reopened|payer|documentation|icd|step therapy|chart notes|form|front desk|ma\b|medical assistant|office staff|approval|clean first time|authorization|same authorization|same pa|same prior auth|bounced back|send it again|fix and send it again/.test(normalizeForMatch(text));
+  return /resubmission|repeat correction|repeating the same fix|fix step|staff step|office task|missing info|missing information|callback|kicked back|kicked-back|denied|reopened|payer|documentation|icd|step therapy|chart notes|form|front desk|ma\b|medical assistant|office staff|approval|clean first time|authorization|same authorization|same pa|same prior auth|bounced back|send it again|fix and send it again/.test(normalizeForMatch(text));
 }
 
 function hasOperationalAnchor(text = "") {
-  return /resubmit|resubmission|missing info|missing information|fix|fixing|correcting|reopen|reopening|send again|second time|same pa|same prior auth|same authorization|kicked back|kicked-back|denied|payer bounce|bounce it back|bounced back|form complete|form completion|form is complete|documentation gap|ma chasing|calling back|callback|callbacks|back and forth/.test(normalizeForMatch(text));
+  return /resubmit|resubmission|repeat correction|repeating the same fix|fix step|staff step|office task|missing info|missing information|fix|fixing|correcting|reopen|reopening|send again|second time|same pa|same prior auth|same authorization|kicked back|kicked-back|denied|payer bounce|bounce it back|bounced back|form complete|form completion|form is complete|documentation gap|ma chasing|calling back|callback|callbacks|back and forth/.test(normalizeForMatch(text));
 }
 
 function hasShortDirectOperationalResolution(text = "") {
@@ -1405,6 +1471,7 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   const response = normalizeForMatch(repResponse);
   const hcpText = normalizeForMatch(hcpTurn);
+  const detectedAsk = detectHcpDirectAsk(hcpTurn);
   const evidenceAsk = EVIDENCE_PROOF_ASK_PATTERN.test(hcpText);
 
   if (!response) {
@@ -1417,6 +1484,10 @@ export function semanticallyAnswersHcpAsk(hcpTurn = "", repResponse = "") {
 
   if (isBroadVagueNonAnswer(response)) {
     return false;
+  }
+
+  if (detectedAsk?.askType === "asks_for_evidence_relevance") {
+    return hasEvidenceRelevanceDirectAnswer(response) || hasEvidenceProofSignal(response);
   }
 
   if (evidenceAsk) {
@@ -1571,7 +1642,10 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
   }
 
   if (/clinical_value|early_discovery|discovery|initial_access/.test(stageText)) {
-    return "The practical answer is whether this changes a real patient decision in your setting.";
+    if (/doing pretty well|doing well|no reason to change|need something different|why would i need/i.test(response)) {
+      return "It only changes practice if we can identify the subgroup still not controlled on current care and show a concrete outcome gain that changes your treatment choice.";
+    }
+    return "The practical answer is which specific patient subgroup changes and what concrete outcome would justify a treatment change in your clinic.";
   }
 
   if (/access_formulary/.test(stageText)) {
@@ -1584,19 +1658,119 @@ function buildSolutionSeekingFallback({ scenario, turns }) {
 function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
   const lastHcpMessage = getLastHcpText(turns);
   const activeConcern = getActiveConcernText(turns, scenario);
+  const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value) => String(value).toLowerCase()) : [];
+  const clinicalValueStage = /clinical_value/.test(stageText);
+  const initialAccessStage = /initial_access/.test(stageText);
+  const accessPressured = pressures.includes("access_barrier");
+  const workflowPressured = pressures.includes("operationally_constrained");
+  const repTurnCount = turns.filter((turn) => turn?.speaker === "rep").length;
+
+  const pickStrongClinicalValueAnswer = (variants) => {
+    const recent = turns
+      .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+      .slice(-4)
+      .map((turn) => normalizeForMatch(turn.text));
+    const start = stableIndex(`${normalizeForMatch(lastHcpMessage)}:${repTurnCount}:${askType}`, variants.length);
+    for (let offset = 0; offset < variants.length; offset += 1) {
+      const candidate = variants[(start + offset) % variants.length];
+      if (!recent.includes(normalizeForMatch(candidate))) return candidate;
+    }
+    return variants[start] || variants[0];
+  };
+
+  const asksForPatientFitSubgroup =
+    /\bwhich patients|what specific subgroup|particular patient population|patient population|still isn'?t controlled|current care|standard of care|treatment goals|specific patient decision|clinical decision|treatment protocol|what changes in practice|what would change in practice\b/i.test(lastHcpMessage);
+
+  if (initialAccessStage) {
+    return pickStrongClinicalValueAnswer([
+      "The short version is a cleaner first submission, so your MA is not chasing missing information or reopening the same authorization after the patient leaves.",
+      "The practical change is fewer payer callbacks on the first request, which means less staff rework before the patient can move forward.",
+      "For your office, the immediate point is reducing the resubmission loop by getting the documentation right before staff has to fix and send it again.",
+      "It matters only if the first request goes through cleaner, with fewer kicked-back forms and fewer follow-up calls for your team.",
+    ]);
+  }
+
+  if (asksForPatientFitSubgroup && /early_discovery|discovery|clinical_value/.test(stageText)) {
+    return pickStrongClinicalValueAnswer([
+      "The patients I mean are the ones still uncontrolled on the current protocol, not stable patients already doing well.",
+      "The patient subgroup is patients still missing treatment goals despite current care; stable responders are not the starting point.",
+      "The relevant patients are the ones still falling short on standard care, where a concrete outcome gain would justify reconsidering the protocol.",
+      "I would not frame this for every patient. I would start with the uncontrolled patient subgroup where current care is not getting them to goal.",
+      "The clinical decision changes for an uncontrolled patient who may need a different option tied to a measurable outcome gain.",
+      "The practice change is identifying patients still uncontrolled enough on the current protocol to justify a different treatment decision.",
+    ]);
+  }
 
   switch (askType) {
+    case "asks_for_patient_fit":
+      return pickStrongClinicalValueAnswer([
+        "The subgroup to test first is patients still uncontrolled on the current protocol, not stable patients already doing well.",
+        "This would only change practice for patients who are still missing treatment goals despite current care; stable responders are not the starting point.",
+        "The relevant group is the patients still falling short on standard care, where a concrete outcome gain would justify reconsidering the protocol.",
+        "I would not frame this for every patient. I would start with the uncontrolled subgroup where current care is not getting them to goal.",
+        "The clinical decision that changes is whether an uncontrolled patient stays on the existing protocol or deserves a different option tied to a measurable outcome gain.",
+        "What changes in practice is not your stable-patient protocol; it is how you identify the patients still uncontrolled enough to justify a different treatment decision.",
+      ]);
     case "asks_for_workflow_impact":
+      if (clinicalValueStage) {
+        return accessPressured
+          ? pickStrongClinicalValueAnswer([
+            "The practical change is a cleaner prior-auth path, so staff is not reopening the case while the efficacy question stays tied to the patients you would actually treat.",
+            "The workflow answer is fewer coverage callbacks for your MA, but that only matters if the subgroup outcome is strong enough to justify treatment.",
+            "It changes staff work only if the access packet clears without a second repair cycle and the clinical endpoint still supports a real treatment decision.",
+          ])
+          : pickStrongClinicalValueAnswer([
+            "The practical change has to be one office step that gets easier while the outcome still justifies treating the right patient.",
+            "The workflow answer is one fewer staff handoff, but the clinical threshold is still whether the endpoint changes a real decision.",
+            "It only helps workflow if it removes repeat office work without weakening the patient-level value case.",
+          ]);
+      }
       return "The main change for your staff is one cleaner submission step, so they stop reopening the same case for callbacks or resubmissions.";
     case "asks_for_access_step":
+      if (clinicalValueStage) {
+        return pickStrongClinicalValueAnswer([
+          "The concrete access step is a cleaner prior-auth packet up front, so the case clears review without a second repair cycle and the value case stays tied to a real patient start.",
+          "The access answer is fewer coverage back-and-forth steps for staff, paired with a patient-level efficacy result strong enough to justify treatment.",
+          "It has to clear payer review with less office rework; otherwise the clinical value does not translate into a patient actually starting therapy.",
+        ]);
+      }
       return "The concrete access step is a complete prior-auth packet up front, so the case clears coverage review without a second repair cycle.";
+    case "asks_for_cost_value":
+      if (clinicalValueStage && accessPressured) {
+        return pickStrongClinicalValueAnswer([
+          "The direct answer is yes only if the efficacy gain holds for the right subgroup and the prior-auth path does not send another callback to your MA.",
+          "For value, I would separate two tests: the patient-level outcome has to justify the cost, and the coverage packet has to keep staff out of a second repair cycle.",
+          "It is not just price; it is efficacy in the patients you would treat plus whether approval can clear without another office handoff.",
+          "The value case holds only if the clinical outcome survives real patient selection and the payer process does not create repeat work for your staff.",
+        ]);
+      }
+      if (clinicalValueStage && workflowPressured) {
+        return pickStrongClinicalValueAnswer([
+          "The value case only works if the outcome justifies the spend and your staff is not adding another callback or repair step after the visit.",
+          "I would define value as a patient-level efficacy gain plus one fewer workflow loop for the office.",
+          "If the clinical endpoint is meaningful but the process adds staff rework, the value case is still incomplete.",
+        ]);
+      }
+      return deriveCostValueConcreteAnswer(activeConcern, scenario);
     case "asks_for_evidence_relevance":
-      return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The unresolved issue is ${extractIssueLabel(activeConcern)}.`;
+      if (/doing pretty well|no reason to change|need something different/.test(normalizeForMatch(lastHcpMessage))) {
+        return "You would need evidence in the patients still not controlled on current care, with a concrete outcome gain that is strong enough to justify changing treatment.";
+      }
+      return pickStrongClinicalValueAnswer([
+        `The evidence has to map to the fit gap you raised: ${extractIssueLabel(activeConcern)} in the patients you actually treat, not a broad average result.`,
+        "The useful proof point is the subgroup result that matches your real patient mix and shows an outcome strong enough to change the treatment choice.",
+        "I would answer that by separating the trial average from the subgroup that resembles your clinic population, then tying the endpoint to a real decision threshold.",
+        "The data only becomes relevant if the subgroup, comparator, and endpoint match the patient you are deciding about today.",
+      ]);
     case "asks_for_guideline_fit":
       return "For guideline fit, the answer has to show where this sits in pathway placement versus current standard of care for your actual patient mix.";
     case "asks_for_safety_clarity":
       return "For safety clarity, the useful answer is which risk signal would make you pause and how that changes monitoring in the first weeks.";
     case "asks_for_next_step":
+      if (clinicalValueStage && (accessPressured || workflowPressured)) {
+        return "The next step is deciding whether the outcome is strong enough to justify treatment and whether the approval path is clean enough for staff to act on it.";
+      }
       return "The next step is defining one low-risk patient profile and one decision threshold before any broader change.";
     case "disengagement_boundary":
       return "Understood. We can pause here and only continue if we can stay on your specific blocker.";
@@ -1608,6 +1782,8 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
 function buildDirectAskMediocreAnswer({ askType = "asks_for_concrete_difference", scenario = {}, turns = [] }) {
   const baseline = buildDirectAskStrongAnswer({ askType, scenario, turns });
   switch (askType) {
+    case "asks_for_cost_value":
+      return "The value case likely depends on showing the total cost clearly enough that it still feels worth it in practice.";
     case "asks_for_evidence_relevance":
       return "The evidence may be directionally useful, but it still depends on how your patient mix maps to the subgroup discussion.";
     case "asks_for_guideline_fit":
@@ -1687,12 +1863,71 @@ function buildOperationalLoopAlternatives(context = {}) {
   ];
 }
 
+function buildCrossLaneCostAccessAlternatives(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+  const wantsWorkflow = /staff|workflow|ma\b|office|operational|callback|handoff/.test(ask);
+  const wantsAccess = /access|approval|prior auth|prior authorization|coverage|payer|formulary/.test(ask);
+
+  if (wantsWorkflow && wantsAccess) {
+    return [
+      "The deciding point is whether outcome is strong enough to justify spend once approval friction and MA rework are included.",
+      "What matters is outcome versus total burden: spend, approval path, and whether staff still has to reopen the case.",
+      "The value case only holds if patient benefit is clear and the approval path does not create another repair cycle for your MA.",
+      "The practical test is outcome plus access reality: if approval still loops back, the value case stays weak.",
+    ];
+  }
+
+  return [
+    "The decision point is whether patient outcome justifies spend in real practice, not just in a broad value statement.",
+    "What matters is whether the outcome is strong enough to justify cost once this reaches everyday clinic decisions.",
+    "The practical test is whether this changes treatment for real patients enough to justify the full spend.",
+    "The value case only holds if the outcome is concrete enough to change care in your own patient mix.",
+  ];
+}
+
+function buildPatientFitAlternatives(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+  const wantsOutcome = /outcome|what changes first|change treatment|changes practice|clinical decision|practice/.test(ask);
+
+  if (wantsOutcome) {
+    return [
+      "The first test is the uncontrolled subgroup: patients not reaching treatment goals on the current protocol, with an outcome gain large enough to change care.",
+      "The practice change would be limited to patients still uncontrolled on current care, where the outcome gain is concrete enough to justify a different decision.",
+      "I would start with patients missing treatment goals despite the current protocol, then ask whether the outcome gain is strong enough to change that decision.",
+      "This is not for stable responders. It is for the patients still falling short on current care where a measurable outcome gain would change the treatment choice.",
+    ];
+  }
+
+  return [
+    "The subgroup is patients still uncontrolled on the current protocol, not stable patients already doing well.",
+    "I would start with patients still missing treatment goals despite current care, not every patient in the clinic.",
+    "The relevant patients are the ones falling short on standard care, where a concrete outcome gain could justify reconsidering the protocol.",
+    "This is about the uncontrolled subgroup whose current care is not getting them to goal.",
+  ];
+}
+
 function rotateRepeatedRepLine(text = "", context = {}) {
   const candidate = String(text || "").trim();
   if (!candidate) return candidate;
 
   const normalizedCandidate = normalizeForMatch(candidate);
   const baseKey = `${prefix(context?.hcpTurn || "")}:${normalizedCandidate}`;
+  const normalizedAsk = normalizeForMatch(context?.hcpTurn || "");
+  const patientFitAsk = /be specific|which patients|patient subgroup|uncontrolled|current care|clinical decision|treatment protocol|what changes in practice|what changes first/.test(normalizedAsk);
+  const recent = getRecentRepReplies(context, 4);
+  const repeatedCount = recent.reduce(
+    (count, line) => (normalizeForMatch(line) === normalizedCandidate ? count + 1 : count),
+    0,
+  );
+
+  if (
+    patientFitAsk &&
+    (/specific patient decision that still does not change|patient-level decision still does not change|blocker is the specific patient decision/.test(normalizedCandidate) ||
+      repeatedCount > 0 ||
+      !/uncontrolled|current care|treatment goals|subgroup|outcome gain|protocol|stable responders/.test(normalizedCandidate))
+  ) {
+    return pickVariant(buildPatientFitAlternatives(context), candidate, `${baseKey}:${repeatedCount}:patient-fit`);
+  }
 
   if (/moves straight into scheduling instead of (looping back|rework)/.test(normalizedCandidate)) {
     return pickVariant(buildOperationalLoopAlternatives(context), candidate, `${baseKey}:schedule-loop`);
@@ -1702,17 +1937,26 @@ function rotateRepeatedRepLine(text = "", context = {}) {
     return pickVariant(buildOperationalLoopAlternatives(context), candidate, `${baseKey}:resubmission-loop`);
   }
 
-  const recent = getRecentRepReplies(context, 4);
-  const repeatedCount = recent.reduce(
-    (count, line) => (normalizeForMatch(line) === normalizedCandidate ? count + 1 : count),
-    0,
-  );
   if (repeatedCount === 0) return candidate;
 
   const key = `${prefix(context?.hcpTurn || "")}:${repeatedCount}:${normalizedCandidate}`;
+  const lanes = detectTopicLanes(candidate);
+  const looksLikeCrossLaneCostAccess =
+    (lanes.includes("clinical_value") || lanes.includes("cost_value"))
+    && (lanes.includes("prior_auth") || lanes.includes("access_formulary") || lanes.includes("workflow_implementation"));
+
+  if (looksLikeCrossLaneCostAccess) {
+    return pickVariant(buildCrossLaneCostAccessAlternatives(context), candidate, `${key}:cross-lane`);
+  }
 
   if (/^after that,/.test(normalizedCandidate)) {
     return candidate.replace(/^After that,/i, repeatedCount % 2 === 0 ? "Then," : "From there,");
+  }
+
+  const genericAlternatives = buildOperationalLoopAlternatives(context);
+  const varied = pickVariant(genericAlternatives, candidate, `${key}:generic`);
+  if (normalizeForMatch(varied) !== normalizedCandidate) {
+    return varied;
   }
 
   return candidate;
@@ -3294,7 +3538,7 @@ export function maybeEnforceFamilyAnswerReply({
     /clinical_value|clinical_value/.test(stageText) &&
     /total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)
   ) {
-    return buildDeterministicEvidenceFitReply({ scenario, turns });
+    return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
   }
 
   if (
@@ -3397,7 +3641,7 @@ export function maybeApplyHardFamilyAnswerReply({
       return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
     }
     if (/total cost per patient|overall cost of treatment per patient|cost per patient|what's included|what is included|what does that include|what goes into that number|break down|formulary|budget|justify the spend|evaluate value|cost-benefit|cost benefit/.test(activeConcernText)) {
-      return buildDeterministicEvidenceFitReply({ scenario, turns });
+      return buildCostValueFollowThroughReply({ scenario, turns, activeConcernText });
     }
     if (/that subgroup analysis still doesn't reflect my patient population|that subgroup analysis does not reflect my patient population|still doesn't reflect my patient population|doesn't reflect my patient population|still doesn't capture my patient population'?s complexity|doesn't capture my patient population'?s complexity|still doesn't capture my complex patients|doesn't capture my complex patients|my moderate renal impairment patients aren't well represented in these trials|not well represented in these trials/.test(activeConcernText)) {
       return buildDeterministicEvidenceFitReply({ scenario, turns });

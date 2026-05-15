@@ -26,6 +26,8 @@ export interface HcpCueInputs {
   recentCueLabels?: string[];
   repMessage?: string;
   allowFirstTurnCandidateCue?: boolean;
+  runtimeTemperature?: number;
+  escalationLevel?: number;
   scenario?: {
     id?: string;
     title?: string;
@@ -727,8 +729,18 @@ function deriveCueCategory(inputs: HcpCueInputs): CueCategory {
   const reply = normalizeText(inputs.hcpReply).toLowerCase();
   const behavior = String(inputs.behaviorState || "").toLowerCase();
   const pressures = inputs.interactionPressures || [];
+  const runtimeTemperature = Number(inputs.runtimeTemperature || 0);
+  const escalationLevel = Number(inputs.escalationLevel || 0);
+  const skepticalOrClosed =
+    pressures.includes("skeptical_resistant") ||
+    ["closed", "resistance", "frustration", "time_pressure"].includes(behavior);
 
   if (TERMINAL_DIALOGUE_PATTERN.test(reply)) return "terminal_exit";
+  if (runtimeTemperature >= 8 && (escalationLevel >= 1 || skepticalOrClosed)) return "hard_escalation";
+  if (runtimeTemperature >= 4 && runtimeTemperature <= 7 && (escalationLevel >= 1 || skepticalOrClosed)) return "focused_narrowing";
+  if (runtimeTemperature <= 3 && !pressures.includes("time_constrained") && escalationLevel < 2 && !TERMINAL_DIALOGUE_PATTERN.test(reply)) {
+    return ["open", "openness", "curiosity"].includes(behavior) ? "receptive_attentive" : "neutral_attentive";
+  }
   if (HARD_ESCALATION_PATTERN.test(reply) || ["frustration"].includes(behavior)) return "hard_escalation";
   if (
     pressures.includes("time_constrained") ||

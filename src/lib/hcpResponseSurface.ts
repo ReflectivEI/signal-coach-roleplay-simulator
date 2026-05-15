@@ -30,7 +30,7 @@ function enforceSentenceBoundaries(text = ""): string {
   if (!output) return "";
 
   output = output
-    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
+    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|That|This|It|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
     .replace(/([.?!])\s*([a-z])/g, (_, boundary, letter) => `${boundary} ${letter.toUpperCase()}`)
     .replace(/\s{2,}/g, " ");
 
@@ -50,6 +50,7 @@ function repairDanglingTail(text = ""): string {
   if (!output) return "";
 
   output = output
+    .replace(/,\s*what specific (?:change|adjustment|step) would\s+(?=(That|This|I|We|What|How|Who)\b)/gi, ". ")
     .replace(/,\s*what'?s\.$/i, ".")
     .replace(/\s+what'?s\.$/i, ".")
     .replace(/\s+(what|how|why|who|when|where)\.$/i, ".")
@@ -58,7 +59,7 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|they|them|we|i)\.$/i, ".")
     .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.");
   output = output.replace(
-    /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
+    /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff|patients|population|subgroup|trial|data|outcome)\s+(What|How|Why|Who|When|Where|Can|Would|Should|That|This|It|Tell|Show|Give|Keep|Stay)\b/g,
     "$1. $2"
   );
   output = output.replace(
@@ -115,15 +116,66 @@ function dedupeLateStageQuestions(text = ""): string {
   if (!sentences.length) return normalizeText(text);
 
   const seen = new Set<string>();
+  const retained: string[] = [];
+  const tokenSet = (value = "") => new Set(
+    value
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 3)
+  );
+  const overlapRatio = (a = "", b = "") => {
+    const aTokens = tokenSet(a);
+    const bTokens = tokenSet(b);
+    if (!aTokens.size || !bTokens.size) return 0;
+    let shared = 0;
+    aTokens.forEach((token) => {
+      if (bTokens.has(token)) shared += 1;
+    });
+    return shared / Math.min(aTokens.size, bTokens.size);
+  };
+
   const kept = sentences.filter((sentence) => {
     const normalized = sentence.toLowerCase().replace(/[.?!]+$/g, "").trim();
     if (!normalized) return false;
     if (seen.has(normalized)) return false;
+    if (retained.some((prior) => overlapRatio(prior, sentence) >= 0.84)) return false;
     seen.add(normalized);
+    retained.push(sentence);
     return true;
   });
 
   return normalizeText(kept.join(" "));
+}
+
+function hasConcreteOperationalAsk(text = ""): boolean {
+  return /\b(what|which|who|how)\b.{0,44}\b(access step|next step|first step|staff|team|owner|owns|workflow|implementation|process change|specific change|specific adjustment|practical)\b/i.test(text)
+    || /\b(access step|next step|first step|staff|team|owner|owns|workflow|implementation|process change|specific change|specific adjustment|practical)\b.{0,44}\b(what|which|who|how)\b/i.test(text);
+}
+
+function buildConditionalBridge(turn: HcpTurnDirectiveSet, scenario: any, hcpTurnCount = 0, mode = "partial_agreement"): string {
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${mode}|${hcpTurnCount}`;
+  if (turn.concernFamily === "access") {
+    return deterministicPick([
+      "If this reduces rework in the access step, I can look at it.",
+      "If there is a practical path through access, I can stay with it.",
+      "If this changes the access work my staff actually does, I can look at it.",
+      "If that makes the approval path cleaner for the team, I can keep going.",
+    ], seed);
+  }
+  if (turn.concernFamily === "hesitation") {
+    return deterministicPick([
+      "If you can make the next step concrete enough to act on, I can look at it.",
+      "If this becomes operationally clear, I can stay with it.",
+      "If the implementation step is specific, I can keep looking at it.",
+      "If this gives my team one practical move, I can stay with it.",
+    ], seed);
+  }
+  return deterministicPick([
+    "If you can keep this practical, I can stay with it.",
+    "If this gets specific enough to act on, I can stay with it.",
+    "If there is one concrete next step, I can keep looking at it.",
+  ], seed);
 }
 
 function hasNaturalTimePressureDirective(text = ""): boolean {
@@ -615,7 +667,9 @@ function applyLateStageNarrowing(
         hcpTurnCount,
       })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
-      output = `If there's a real way through that access step, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "partial_agreement")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `${deterministicPick([
         "If this does not add another staff step, I can look at it.",
@@ -624,7 +678,9 @@ function applyLateStageNarrowing(
         "If this does not create another handoff for the team, I can keep looking at it.",
       ], `${turn.phase}|${turn.concernFamily}|partial_agreement|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
-      output = `If you can make the next step concrete enough to actually do, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "partial_agreement")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
       output = `If this feels safe enough not to be first, I can look at it. ${output.replace(/[.?!]+$/, "")}`;
     } else {
@@ -641,7 +697,9 @@ function applyLateStageNarrowing(
         hcpTurnCount,
       })} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "access") {
-      output = `If there's a real path through that access step, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "close_mode")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "workflow") {
       output = `${deterministicPick([
         "If this stays workable for staff, I can stay with it.",
@@ -650,7 +708,9 @@ function applyLateStageNarrowing(
         "If the team does not inherit another handoff, I can stay with it.",
       ], `${turn.phase}|${turn.concernFamily}|close_mode|${hcpTurnCount}|${output}`)} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "hesitation") {
-      output = `If this gets concrete enough to act on, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
+      output = hasConcreteOperationalAsk(output)
+        ? output
+        : `${buildConditionalBridge(turn, scenario, hcpTurnCount, "close_mode")} ${output.replace(/[.?!]+$/, "")}`;
     } else if (turn.concernFamily === "adoption_caution") {
       output = `If this feels safe enough to trial without being first, I can stay with it. ${output.replace(/[.?!]+$/, "")}`;
     }
@@ -811,9 +871,7 @@ export function applyHcpResponseSurface({
     !hasNaturalTimePressureDirective(output) &&
     turn.escalationStage !== "baseline"
   ) {
-    output = ensureTerminalPunctuation(output.replace(/[.?!]+$/, ""));
-    output = `${output} ${pickDeterministicTimeTail(`${turn.phase}|${turn.concernFamily}|${turn.domain}|${output}`)}`;
-    output = trimToSentences(enforceSentenceBoundaries(output), 2);
+    output = trimToSentences(enforceSentenceBoundaries(output), 1);
   }
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
@@ -871,6 +929,14 @@ const NARRATION_PATTERNS = [
 ];
 
 function guardAndRepairNarrationLeakage(text: string, context: { scenario: any, turn: any, profile: any, hcpTurnCount: number }): string {
+  const sentences = splitSentences(text);
+  if (sentences.length > 1 && NARRATION_PATTERNS.some((pat) => pat.test(sentences[0] || ""))) {
+    const spokenTail = sentences.slice(1).join(" ").trim();
+    if (spokenTail && !NARRATION_PATTERNS.some((pat) => pat.test(spokenTail))) {
+      return spokenTail;
+    }
+  }
+
   const isNarration = NARRATION_PATTERNS.some((pat) => pat.test(text));
   if (!isNarration) return text;
   // If the text is only narration, replace with a natural HCP line based on context
@@ -884,35 +950,35 @@ function repairNarrationToNaturalLine(text: string, { scenario, turn, profile, h
   const pressure = (turn && turn.escalationStage) || "baseline";
   // Map some common narration to natural lines
   const narrationMap: Array<{ pat: RegExp, line: string }> = [
-    [/Keeps the study page in view/i, "I remember the study. What changes my decision?"],
-    [/Looks at the schedule/i, "Keep it quick. What’s the point?"],
+    [/Keeps the study page in view/i, "Show me which patient this evidence actually changes."],
+    [/Looks at the schedule/i, "I have a minute, so give me the part that matters."],
     [/Glances at the patient summary/i, "Which patient does this actually apply to?"],
-    [/Keeps the coverage notes in view/i, "If this still needs prior auth, what changes for my staff?"],
-    [/Glances at watch/i, "Be specific."],
-    [/Keeps the formulary sheet/i, "That still doesn’t answer the access issue."],
-    [/posture closed/i, "What’s the actual concern?"],
-    [/very little space left/i, "Let’s keep this focused."],
+    [/Keeps the coverage notes in view/i, "If this still needs prior auth, tell me what changes for my staff."],
+    [/Glances at watch/i, "Give me the specific point."],
+    [/Keeps the formulary sheet/i, "That still does not answer the access issue."],
+    [/posture closed/i, "Name the specific issue you want me to reconsider."],
+    [/very little space left/i, "Stay with the decision in front of me."],
   ];
   for (const { pat, line } of narrationMap) {
     if (pat.test(text)) return line;
   }
   // Fallback: use concern/pressure/phase to generate a short, natural line
   if (concern === "access") {
-    return "If this still needs prior auth, what changes for my staff?";
+    return "If this still needs prior auth, tell me what changes for my staff.";
   }
   if (concern === "evidence") {
-    return "What’s the endpoint or proof?";
+    return "Show me the endpoint that changes the decision.";
   }
   if (concern === "safety") {
-    return "What’s the safety signal?";
+    return "Start with the safety signal I should care about.";
   }
   if (pressure === "high_pressure" || pressure === "disengaging") {
-    return "Keep it quick. What’s the point?";
+    return "I have a minute, so give me the decision point.";
   }
   if (phase === "implementation_commitment") {
     return "Who actually owns the next step?";
   }
   // Default fallback
-  return "What’s the actual concern?";
+  return "Name the specific issue you want me to reconsider.";
 }
 // === END PILOT PATCH ===
