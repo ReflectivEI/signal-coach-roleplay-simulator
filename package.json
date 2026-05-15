@@ -14,6 +14,7 @@
     "deploy:worker:staging": "wrangler deploy --config wrangler.staging.toml",
     "deploy:staging": "npm run deploy:pages:staging && npm run deploy:worker:staging",
     "ci:build": "npm run build",
+    "confidence:gate": "echo 'Confidence gate placeholder - implement actual gate command here.'",
     "check:rps-deploy-targets": "node scripts/assert-rps-deploy-targets.mjs",
     "check:rps-ux-guardrails": "node scripts/check-rps-ux-guardrails.mjs",
     "lint": "eslint . --quiet",
