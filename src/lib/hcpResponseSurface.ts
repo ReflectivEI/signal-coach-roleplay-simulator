@@ -871,9 +871,7 @@ export function applyHcpResponseSurface({
     !hasNaturalTimePressureDirective(output) &&
     turn.escalationStage !== "baseline"
   ) {
-    output = ensureTerminalPunctuation(output.replace(/[.?!]+$/, ""));
-    output = `${output} ${pickDeterministicTimeTail(`${turn.phase}|${turn.concernFamily}|${turn.domain}|${output}`)}`;
-    output = trimToSentences(enforceSentenceBoundaries(output), 2);
+    output = trimToSentences(enforceSentenceBoundaries(output), 1);
   }
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
@@ -952,35 +950,35 @@ function repairNarrationToNaturalLine(text: string, { scenario, turn, profile, h
   const pressure = (turn && turn.escalationStage) || "baseline";
   // Map some common narration to natural lines
   const narrationMap: Array<{ pat: RegExp, line: string }> = [
-    [/Keeps the study page in view/i, "I remember the study. What changes my decision?"],
-    [/Looks at the schedule/i, "Keep it quick. What’s the point?"],
+    [/Keeps the study page in view/i, "Show me which patient this evidence actually changes."],
+    [/Looks at the schedule/i, "I have a minute, so give me the part that matters."],
     [/Glances at the patient summary/i, "Which patient does this actually apply to?"],
-    [/Keeps the coverage notes in view/i, "If this still needs prior auth, what changes for my staff?"],
-    [/Glances at watch/i, "Be specific."],
-    [/Keeps the formulary sheet/i, "That still doesn’t answer the access issue."],
-    [/posture closed/i, "What’s the actual concern?"],
-    [/very little space left/i, "Let’s keep this focused."],
+    [/Keeps the coverage notes in view/i, "If this still needs prior auth, tell me what changes for my staff."],
+    [/Glances at watch/i, "Give me the specific point."],
+    [/Keeps the formulary sheet/i, "That still does not answer the access issue."],
+    [/posture closed/i, "Name the specific issue you want me to reconsider."],
+    [/very little space left/i, "Stay with the decision in front of me."],
   ];
   for (const { pat, line } of narrationMap) {
     if (pat.test(text)) return line;
   }
   // Fallback: use concern/pressure/phase to generate a short, natural line
   if (concern === "access") {
-    return "If this still needs prior auth, what changes for my staff?";
+    return "If this still needs prior auth, tell me what changes for my staff.";
   }
   if (concern === "evidence") {
-    return "What’s the endpoint or proof?";
+    return "Show me the endpoint that changes the decision.";
   }
   if (concern === "safety") {
-    return "What’s the safety signal?";
+    return "Start with the safety signal I should care about.";
   }
   if (pressure === "high_pressure" || pressure === "disengaging") {
-    return "Keep it quick. What’s the point?";
+    return "I have a minute, so give me the decision point.";
   }
   if (phase === "implementation_commitment") {
     return "Who actually owns the next step?";
   }
   // Default fallback
-  return "What’s the actual concern?";
+  return "Name the specific issue you want me to reconsider.";
 }
 // === END PILOT PATCH ===

@@ -378,3 +378,55 @@ test("live RolePlayChat renders HCP cues even when the opening turn has no dialo
   assert.match(source, /if \(turn\.hcpDialogueBefore \|\| hasVisibleHcpCue\(turn\)\)/);
   assert.match(source, /SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue\(turn\)/);
 });
+
+test("HCP generator enforces Predictive Brain authority, escalation memory, and validator guardrails", () => {
+  const generatorSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
+    "utf8",
+  );
+  const surfaceSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseSurface.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(generatorSource, /PREDICTIVE HCP BRAIN \(AUTHORITATIVE SOURCE OF TRUTH FOR HCP DIALOGUE\)/);
+  assert.match(generatorSource, /Use the Predictive HCP Brain as the source of truth/);
+  assert.match(generatorSource, /Guardrails may constrain or request regeneration, but they must not become the voice of the HCP/);
+
+  for (const requiredField of [
+    "repeatedRepPatternCount",
+    "unansweredQuestionCount",
+    "genericAfterSpecificityCount",
+    "lastRepIntent",
+    "escalationLevel",
+  ]) {
+    assert.match(generatorSource, new RegExp(requiredField), `missing escalation memory field ${requiredField}`);
+  }
+
+  assert.match(generatorSource, /function applyEscalationBehavior/);
+  assert.match(generatorSource, /LOW realism: preserve cooperation/);
+  assert.match(generatorSource, /MEDIUM realism: show visible impatience/);
+  assert.match(generatorSource, /HIGH realism: escalate quickly/);
+  assert.match(generatorSource, /PRESSURE PERSISTENCE \(validator constraint - do not use stock phrases\)/);
+  assert.match(generatorSource, /regenerateWithPredictiveBrain/);
+  assert.match(generatorSource, /final_stock_phrase_detected: hasGlobalStockPhrase/);
+  assert.match(generatorSource, /final_missing_pressure: missingPersistentPressure/);
+
+  for (const banned of [
+    "what['’]?s concretely different for me after this",
+    "the practical answer has to stay tied",
+    "what changes in practice if this is worth continuing",
+    "i hear that a lot",
+    "keep this brief",
+    "i['’]?m not convinced yet",
+  ]) {
+    assert.ok(generatorSource.includes(banned), `missing banned phrase pattern ${banned}`);
+  }
+
+  assert.doesNotMatch(
+    surfaceSource,
+    /output\s*=\s*`\$\{output\}\s+\$\{pickDeterministicTimeTail/,
+    "surface layer must not append deterministic time-pressure tails",
+  );
+  assert.match(surfaceSource, /output = trimToSentences\(enforceSentenceBoundaries\(output\), 1\)/);
+});

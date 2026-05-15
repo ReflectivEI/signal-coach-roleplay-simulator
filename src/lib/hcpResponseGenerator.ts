@@ -37,6 +37,28 @@ export const HCP_GENERATOR_VERSION = "runtime-contract-v2";
 const HCP_PRIMARY_TIMEOUT_MS = 18000;
 const HCP_REWRITE_TIMEOUT_MS = 6000;
 
+type RuntimeTemperatureBand = "low" | "medium" | "high";
+
+type EscalationMemory = {
+  repeatedRepPatternCount: number;
+  unansweredQuestionCount: number;
+  genericAfterSpecificityCount: number;
+  lastRepIntent: string;
+  escalationLevel: number;
+  shouldEscalateThisTurn: boolean;
+  action: "restate" | "sharpen" | "reveal_barrier" | "acknowledge_progress" | "move_next_step" | "disengage";
+  reasons: string[];
+};
+
+const GLOBAL_STOCK_PHRASE_PATTERNS = [
+  /\bwhat['’]?s concretely different for me after this\b/i,
+  /\bthe practical answer has to stay tied\b/i,
+  /\bwhat changes in practice if this is worth continuing\b/i,
+  /\bi hear that a lot\b/i,
+  /\bkeep this brief\b/i,
+  /\bi['’]?m not convinced yet\b/i,
+];
+
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
 ).join("\n");
@@ -444,6 +466,125 @@ function deterministicConstraintFallback(hcpReply: string, constraint: TurnConst
   return `${base}.`;
 }
 
+async function regenerateWithPredictiveBrain({
+  currentLine,
+  reason,
+  predictiveContext,
+  scenario,
+  repMessage,
+  transcript,
+  escalationMemory,
+  missingPressures = [],
+  behaviorState,
+  currentJourneyState,
+}: {
+  currentLine: string;
+  reason: string;
+  predictiveContext: string;
+  scenario: any;
+  repMessage: string;
+  transcript: ConversationTurn[];
+  escalationMemory: EscalationMemory;
+  missingPressures?: string[];
+  behaviorState: string;
+  currentJourneyState: string;
+}): Promise<string> {
+  const previousHcpLine = getLastHcpReplyText(transcript);
+  const prompt = `Rewrite one HCP spoken line. The Predictive HCP Brain is the source of truth.
+
+Reason this line needs regeneration:
+${reason}
+
+Predictive HCP Brain:
+${predictiveContext || "Not provided; use scenario metadata only."}
+
+Scenario:
+- Title: ${scenario?.title || ""}
+- Stakeholder: ${scenario?.stakeholder || ""}
+- Persona: ${scenario?.persona || ""}
+- Journey Stage: ${scenario?.journeyStage || ""}
+- Current Journey State: ${currentJourneyState}
+- Behavior State: ${behaviorState}
+- Interaction Pressures: ${(scenario?.interactionPressure || []).join(", ") || "none"}
+- Opening Scene: ${scenario?.visualScene || scenario?.openingScene || "not provided"}
+
+Turn memory:
+- Previous HCP line: ${previousHcpLine || "none"}
+- Latest REP message: ${repMessage}
+- Escalation Level: ${escalationMemory.escalationLevel}/3
+- Escalation Action: ${escalationMemory.action}
+- Escalation Reasons: ${escalationMemory.reasons.join(", ") || "none"}
+- Missing pressure anchors to restore naturally: ${missingPressures.join(", ") || "none"}
+
+Current line:
+${currentLine}
+
+Hard rules:
+- Author as this specific HCP, not as a simulator guardrail.
+- Do not use global stock phrases or training-language scaffolding.
+- Do not repeat the previous HCP sentence.
+- Do not concatenate old and new lines.
+- Keep the same scenario topic lane and the same unresolved concern.
+- If escalation is level 2 or 3, show the consequence in this HCP's own words.
+- 1-2 sentences maximum, natural spoken clinician English.
+
+Return ONLY the corrected HCP line.`;
+
+  const rewritten = await invokeWorkerText({
+    prompt,
+    max_tokens: 130,
+    temperature: 0.16,
+    timeout_ms: HCP_REWRITE_TIMEOUT_MS,
+    retry_count: 1,
+  });
+
+  return String(rewritten || currentLine).trim();
+}
+
+function buildBrainGroundedScenarioFallback({
+  scenario,
+  repMessage,
+  escalationMemory,
+  missingPressures = [],
+}: {
+  scenario: any;
+  repMessage: string;
+  escalationMemory: EscalationMemory;
+  missingPressures?: string[];
+}): string {
+  const pressures = new Set([
+    ...(Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : []),
+    ...missingPressures,
+  ].map((value) => String(value || "").toLowerCase()));
+  const intent = inferRepIntent(repMessage);
+  const domain = String(scenario?.predictiveSeed?.diseaseState || scenario?.disease_state || scenario?.specialty || "").replace(/_/g, " ");
+  const role = String(scenario?.stakeholder || scenario?.hcpRoleType || "clinician");
+  const prefix = pressures.has("time_constrained")
+    ? "I have a narrow window here."
+    : pressures.has("skeptical_resistant")
+      ? "I need this tied to the patients I actually manage."
+      : `From where I sit as the ${role}, I need this to stay practical.`;
+
+  const concern =
+    intent === "access" || pressures.has("access_barrier")
+      ? "Tell me which part of the approval path moves and who handles it."
+      : intent === "workflow" || pressures.has("operationally_constrained") || pressures.has("workflow_pressure")
+        ? "Tell me which staff step gets easier before I add another task."
+        : intent === "evidence"
+          ? `Show me the evidence that applies to this ${domain || "patient"} population.`
+          : intent === "safety"
+            ? "Start with the safety tradeoff for the patients with comorbidities."
+            : "Narrow this to the specific patient decision you want me to reconsider.";
+
+  if (escalationMemory.escalationLevel >= 3) {
+    return `${prefix} ${concern} Otherwise, this probably is not worth continuing today.`;
+  }
+  if (escalationMemory.escalationLevel >= 2) {
+    return `${prefix} ${concern}`;
+  }
+  return `${prefix} ${concern}`;
+}
+
 function mapEngagementStateToBehaviorState(state: HcpEngagementState, currentBehaviorState: string): string {
   if (state === "Resistant") {
     return ["time_pressure", "frustration", "closed"].includes(String(currentBehaviorState || ""))
@@ -503,6 +644,195 @@ function deriveSamplingTemperatureFromRealism(realism: number, opts?: { highPres
   }
 
   return Number(base.toFixed(2));
+}
+
+function deriveTemperatureBand(realism: number): RuntimeTemperatureBand {
+  const value = requireRealismContract(realism, "scenario.runtimeTemperature");
+  if (value <= 3) return "low";
+  if (value <= 7) return "medium";
+  return "high";
+}
+
+function normalizeIntentText(value = ""): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferRepIntent(value = ""): string {
+  const text = normalizeIntentText(value);
+  if (!text) return "none";
+  if (/\b(prior auth|authorization|coverage|payer|formulary|access|approval)\b/.test(text)) return "access";
+  if (/\b(workflow|staff|ma|nurse|process|handoff|callback|queue|portal|ehr|emr)\b/.test(text)) return "workflow";
+  if (/\b(data|trial|study|evidence|endpoint|hazard ratio|subgroup|real world|outcome)\b/.test(text)) return "evidence";
+  if (/\b(safety|side effect|adverse|risk|tolerability|renal|kidney|hepatic)\b/.test(text)) return "safety";
+  if (/\b(cost|value|budget|affordability|copay|economic)\b/.test(text)) return "cost_value";
+  if (/\b(patient|population|profile|subgroup|who fits|candidate)\b/.test(text)) return "patient_fit";
+  if (/\b(next step|try|pilot|start|commit|follow up|schedule|send|bring)\b/.test(text)) return "commitment";
+  if (/\b(help|support|better|benefit|improve|solution|valuable|important)\b/.test(text)) return "generic_value";
+  return text.split(" ").slice(0, 4).join("_") || "general";
+}
+
+function repAnsweredPriorHcpQuestion(repMessage = "", transcript: ConversationTurn[] = [], latestConcern = ""): boolean {
+  const previousHcp = getLastHcpReplyText(transcript);
+  if (!/\?/.test(previousHcp)) return true;
+  const rep = normalizeIntentText(repMessage);
+  if (!rep) return false;
+  const concern = inferRepIntent(`${previousHcp} ${latestConcern}`);
+  if (concern === "access") return /\b(prior auth|authorization|coverage|payer|formulary|approval|access|step|pathway)\b/.test(rep);
+  if (concern === "workflow") return /\b(staff|ma|nurse|workflow|process|handoff|callback|queue|owns|step)\b/.test(rep);
+  if (concern === "evidence") return /\b(data|trial|study|endpoint|subgroup|outcome|evidence|real world|number)\b/.test(rep);
+  if (concern === "safety") return /\b(safety|side effect|adverse|risk|renal|hepatic|tolerability)\b/.test(rep);
+  if (concern === "patient_fit") return /\b(patient|subgroup|population|profile|candidate|fits|appropriate)\b/.test(rep);
+  return !/\b(great|help|valuable|solution|better|important|innovative|support)\b/.test(rep) || /\b(specific|because|means|would|step|data|patient|staff|coverage)\b/.test(rep);
+}
+
+function askedForSpecificityRecently(transcript: ConversationTurn[] = []): boolean {
+  const previousHcp = getLastHcpReplyText(transcript).toLowerCase();
+  return /\b(specific|concrete|which patient|what outcome|what step|what data|what proof|who owns|what changes)\b/.test(previousHcp);
+}
+
+function repStayedGeneric(repMessage = ""): boolean {
+  const rep = normalizeIntentText(repMessage);
+  if (!rep) return false;
+  const hasConcreteAnchor = /\b(prior auth|authorization|coverage|formulary|staff|ma|nurse|endpoint|trial|subgroup|outcome|patient|renal|safety|copay|next step|owner|timeline|specific)\b/.test(rep);
+  const genericValue = /\b(help|support|improve|better|valuable|benefit|solution|streamline|optimize|important)\b/.test(rep);
+  return genericValue && !hasConcreteAnchor;
+}
+
+function deriveEscalationMemory({
+  transcript,
+  repMessage,
+  latestConcern,
+  temperatureBand,
+  priorEscalationLevel,
+}: {
+  transcript: ConversationTurn[];
+  repMessage: string;
+  latestConcern: string;
+  temperatureBand: RuntimeTemperatureBand;
+  priorEscalationLevel?: number;
+}): EscalationMemory {
+  const recentRepIntents = transcript
+    .filter((turn) => turn?.speaker === "rep")
+    .slice(-3)
+    .map((turn) => inferRepIntent(turn?.text || ""));
+  const lastRepIntent = inferRepIntent(repMessage);
+  const repeatedRepPatternCount = recentRepIntents.filter((intent) => intent === lastRepIntent).length;
+  const unansweredQuestionCount = repAnsweredPriorHcpQuestion(repMessage, transcript, latestConcern) ? 0 : 1;
+  const genericAfterSpecificityCount = askedForSpecificityRecently(transcript) && repStayedGeneric(repMessage) ? 1 : 0;
+  const hardTriggers = [
+    repeatedRepPatternCount >= 2,
+    unansweredQuestionCount > 0,
+    genericAfterSpecificityCount > 0,
+  ].filter(Boolean).length;
+  const prior = Number.isFinite(Number(priorEscalationLevel)) ? Number(priorEscalationLevel) : 0;
+  const bandStep = temperatureBand === "high" ? hardTriggers : temperatureBand === "medium" ? Math.min(1, hardTriggers) : hardTriggers >= 2 ? 1 : 0;
+  const escalationLevel = Math.max(0, Math.min(3, prior + bandStep));
+  const shouldEscalateThisTurn = escalationLevel > prior || hardTriggers > 0;
+  const action: EscalationMemory["action"] =
+    escalationLevel >= 3 ? "disengage"
+      : escalationLevel === 2 ? "reveal_barrier"
+        : escalationLevel === 1 ? "sharpen"
+          : "restate";
+  const reasons: string[] = [];
+  if (repeatedRepPatternCount >= 2) reasons.push("rep repeated same intent");
+  if (unansweredQuestionCount > 0) reasons.push("rep did not answer prior HCP question");
+  if (genericAfterSpecificityCount > 0) reasons.push("rep stayed generic after specificity request");
+
+  return {
+    repeatedRepPatternCount,
+    unansweredQuestionCount,
+    genericAfterSpecificityCount,
+    lastRepIntent,
+    escalationLevel,
+    shouldEscalateThisTurn,
+    action,
+    reasons,
+  };
+}
+
+function applyEscalationBehavior({
+  temperatureBand,
+  escalationLevel,
+  repeatedRepPatternCount,
+  unansweredQuestionCount,
+  scenarioPressure,
+}: {
+  temperatureBand: RuntimeTemperatureBand;
+  escalationLevel: number;
+  repeatedRepPatternCount: number;
+  unansweredQuestionCount: number;
+  scenarioPressure: string[];
+}): string {
+  const pressureText = scenarioPressure.length ? scenarioPressure.join(", ") : "none";
+  const bandRule = temperatureBand === "low"
+    ? "LOW realism: preserve cooperation; restate the concern politely and avoid shutdown unless the rep repeatedly ignores direct questions."
+    : temperatureBand === "medium"
+      ? "MEDIUM realism: show visible impatience as misses accumulate; shorten the line and push for specificity."
+      : "HIGH realism: escalate quickly when the rep repeats or evades; challenge directly and consider ending the exchange at level 3.";
+
+  return [
+    "ESCALATION MEMORY (runtime only - use as behavior, not canned copy):",
+    `- Temperature Band: ${temperatureBand}`,
+    `- Scenario Pressure: ${pressureText}`,
+    `- Repeated Rep Pattern Count: ${repeatedRepPatternCount}`,
+    `- Unanswered HCP Question Count: ${unansweredQuestionCount}`,
+    `- Escalation Level: ${escalationLevel}/3`,
+    `- ${bandRule}`,
+    "- Level 0: continue normally while staying scenario-specific.",
+    "- Level 1: tighten the response and make the ask more direct.",
+    "- Level 2: introduce friction in this HCP's own words; make clear the rep has not addressed the actual concern.",
+    "- Level 3: introduce consequence in this HCP's own words; the HCP may disengage or stop the conversation.",
+    "- Do not use global stock phrases to express escalation. Use the Predictive HCP Brain, current state, and scenario pressure to author the line.",
+  ].join("\n");
+}
+
+function buildPressurePersistenceBlock(scenario: any): string {
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value || "").toLowerCase())
+    : [];
+  const required: string[] = [];
+  if (pressures.includes("time_constrained")) {
+    required.push("time_constrained: time/schedule pressure must remain visible every 1-2 HCP turns, but phrase it naturally for this scenario.");
+  }
+  if (pressures.includes("operationally_constrained") || pressures.includes("workflow_pressure")) {
+    required.push("workflow_pressure: staff/process impact must remain part of the decision filter when workflow is the blocker.");
+  }
+  if (pressures.includes("access_barrier")) {
+    required.push("access_barrier: approval, coverage, or pathway friction must remain part of the decision filter when access is the blocker.");
+  }
+  if (!required.length) return "";
+  return [
+    "PRESSURE PERSISTENCE (validator constraint - do not use stock phrases):",
+    ...required.map((line) => `- ${line}`),
+    "- If pressure is missing from a response that should carry it, regenerate from the Predictive HCP Brain with the missing pressure constraint.",
+  ].join("\n");
+}
+
+function missingPersistentPressure(hcpReply: string, scenario: any, hcpTurnCount: number): string[] {
+  const text = String(hcpReply || "");
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value || "").toLowerCase())
+    : [];
+  const missing: string[] = [];
+  const shouldCarryRecurringPressure = hcpTurnCount === 0 || hcpTurnCount % 2 === 1;
+  if (shouldCarryRecurringPressure && pressures.includes("time_constrained") && !/\b(time|minute|brief|quick|short|schedule|patient|room|waiting|clinic)\b/i.test(text)) {
+    missing.push("time_constrained");
+  }
+  if ((pressures.includes("operationally_constrained") || pressures.includes("workflow_pressure")) && !/\b(staff|workflow|process|handoff|callback|queue|MA|nurse|portal|step)\b/i.test(text)) {
+    missing.push("workflow_pressure");
+  }
+  if (pressures.includes("access_barrier") && !/\b(access|coverage|prior auth|authorization|approval|payer|formulary|pathway)\b/i.test(text)) {
+    missing.push("access_barrier");
+  }
+  return missing;
+}
+
+function hasGlobalStockPhrase(text = ""): boolean {
+  return GLOBAL_STOCK_PHRASE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
 }
 
 function needsNaturalnessRewrite(text: string): boolean {
@@ -973,18 +1303,18 @@ function deterministicContinuityVariation({
   const concernFollowUp = (family: string): string => {
     switch (family) {
       case "workflow":
-        return "What actually changes for staff first?";
+        return "Name the first staff step that changes.";
       case "access":
-        return "What changes in the access step first?";
+        return "Name the first access step that changes.";
       case "guideline":
       case "patient_fit":
-        return "Which patients does that actually change for?";
+        return "Which patient group does that affect first?";
       case "cost_value":
-        return "What changes in the value equation?";
+        return "Show me where the outcome justifies the cost.";
       case "evidence":
-        return "What proof changes the decision?";
+        return "Show me the proof that changes the decision.";
       default:
-        return "What changes in practice?";
+        return "Narrow this to the specific decision in front of me.";
     }
   };
 
@@ -1310,14 +1640,14 @@ function buildClinicalValueReplyVariants({
   if (accessTagged || workflowTagged) {
     variants.push(
       timeConstrained
-        ? `Keep it tight. ${practicalAsk}`
+        ? `I have a narrow window. ${practicalAsk}`
         : `Before we talk broad value, ${practicalAsk.charAt(0).toLowerCase()}${practicalAsk.slice(1)}`
     );
   }
 
   variants.push(
     timeConstrained
-      ? `We can keep this brief, but I need the practical threshold. ${practicalAsk}`
+      ? `I have time for the practical threshold. ${practicalAsk}`
       : `Value only matters if it changes a real patient decision. ${practicalAsk}`
   );
 
@@ -2195,7 +2525,15 @@ export async function generateHcpResponse(
   ..._legacyCompatibilityArgs: any[]
 ): Promise<SimulatorResponse> {
   scenario = buildDerivedScenarioContext(scenario);
+  const predictiveProfileArg = _legacyCompatibilityArgs[0] || null;
+  const predictivePromptContext = typeof _legacyCompatibilityArgs[1] === "string"
+    ? _legacyCompatibilityArgs[1]
+    : "";
+  const runtimeMemoryArg = _legacyCompatibilityArgs[2] && typeof _legacyCompatibilityArgs[2] === "object"
+    ? _legacyCompatibilityArgs[2]
+    : {};
   const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
+  const temperatureBand = deriveTemperatureBand(contractRealism);
   const transcriptText = transcript
     .map(t => `${t.speaker.toUpperCase()}: ${t.text}`)
     .join("\n");
@@ -2249,6 +2587,41 @@ export async function generateHcpResponse(
     highPressure: isHighPressureTurn,
     profileBrevity: runtimeProfile?.brevity,
   });
+  const escalationMemory = deriveEscalationMemory({
+    transcript,
+    repMessage,
+    latestConcern,
+    temperatureBand,
+    priorEscalationLevel: Number(runtimeMemoryArg?.escalationLevel || 0),
+  });
+  const escalationBlock = applyEscalationBehavior({
+    temperatureBand,
+    escalationLevel: escalationMemory.escalationLevel,
+    repeatedRepPatternCount: escalationMemory.repeatedRepPatternCount,
+    unansweredQuestionCount: escalationMemory.unansweredQuestionCount,
+    scenarioPressure: interactionPressures,
+  });
+  const pressurePersistenceBlock = buildPressurePersistenceBlock(scenario);
+  const predictiveBrainBlock = predictivePromptContext.trim()
+    ? `
+PREDICTIVE HCP BRAIN (AUTHORITATIVE SOURCE OF TRUTH FOR HCP DIALOGUE):
+${predictivePromptContext.trim()}
+
+Predictive Profile Snapshot:
+- Behavior Archetype: ${predictiveProfileArg?.type || scenario?.predictiveSeed?.behaviorArchetype || scenario?.persona || "unknown"}
+- Specialist Title: ${predictiveProfileArg?.specialistTitle || scenario?.stakeholder || "unknown"}
+
+Authority rules:
+- Use the Predictive HCP Brain as the source of truth.
+- Do not use generic training simulator language.
+- Speak as this specific HCP, with this specific mindset, decision filter, credibility drivers, trust breakers, and current state.
+- Guardrails may constrain or request regeneration, but they must not become the voice of the HCP.
+`
+    : `
+PREDICTIVE HCP BRAIN (FALLBACK MODE):
+- No external predictive synthesis was provided; use scenario metadata, predictiveSeed, current HCP state, and transcript memory as the source of truth.
+- Do not use generic training simulator language.
+`;
 
   const predictionBlock = `
 CAPABILITY-DRIVEN BEHAVIOR PREDICTION (PRIMARY — follow this, do not contradict it):
@@ -2342,6 +2715,12 @@ ${continuityBlock}
 
 ${buildTurnConstraintPromptBlock(turnConstraint)}
 
+${predictiveBrainBlock}
+
+${escalationBlock}
+
+${pressurePersistenceBlock}
+
 ${CAPABILITY_RULES}
 
 SPOKEN REALISM GUARDRAILS:
@@ -2398,6 +2777,9 @@ INSTRUCTIONS:
 31. Obey the TURN-LEVEL HCP CONSTRAINTS exactly. Do not output blocked intents.
 32. If blocked intent includes Advance, avoid agreement language and avoid commitment-forward phrases.
 33. If engagement is Selectively Engaged, keep the response conditional/probing and do not leap to full cooperation.
+34. The Predictive HCP Brain authors the HCP line. Routing, pressure, temperature, and continuity rules are validators and intensity controls, not canned copy sources.
+35. If the REP repeats, evades, or stays generic, progress the HCP stance using escalation memory: restate in new words, sharpen, reveal the deeper barrier, or disengage. Do not concatenate prior HCP phrasing.
+36. Never use these global stock phrases in final HCP dialogue: "What's concretely different for me after this?", "The practical answer has to stay tied...", "I hear that a lot", "Keep this brief", "I'm not convinced yet", or "What changes in practice if this is worth continuing?"
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -2553,11 +2935,27 @@ Return ONLY valid JSON:
         constraint: turnConstraint,
         scenario,
       });
-      hcpReply = violatesTurnConstraint(corrected, turnConstraint)
-        ? deterministicConstraintFallback(corrected, turnConstraint)
-        : corrected;
+      if (violatesTurnConstraint(corrected, turnConstraint)) {
+        hcpReply = await regenerateWithPredictiveBrain({
+          currentLine: corrected,
+          reason: "The line still violates turn-level behavioral constraints. Regenerate from the Predictive HCP Brain without blocked intent.",
+          predictiveContext: predictivePromptContext,
+          scenario,
+          repMessage,
+          transcript,
+          escalationMemory,
+          behaviorState: result.nextBehaviorState || currentBehaviorState,
+          currentJourneyState: result.nextJourneyState || currentJourneyState,
+        });
+      } else {
+        hcpReply = corrected;
+      }
     } catch {
-      hcpReply = deterministicConstraintFallback(hcpReply, turnConstraint);
+      hcpReply = buildBrainGroundedScenarioFallback({
+        scenario,
+        repMessage,
+        escalationMemory,
+      });
     }
   }
 
@@ -2655,6 +3053,42 @@ Return ONLY valid JSON:
     hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
   }
 
+  const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
+  if (hasGlobalStockPhrase(hcpReply) || finalMissingPressures.length > 0) {
+    try {
+      hcpReply = await regenerateWithPredictiveBrain({
+        currentLine: hcpReply,
+        reason: hasGlobalStockPhrase(hcpReply)
+          ? "The line used a banned global stock phrase. Regenerate without canned simulator language."
+          : "The line dropped scenario pressure persistence. Regenerate with the missing pressure anchor in this HCP's own words.",
+        predictiveContext: predictivePromptContext,
+        scenario,
+        repMessage,
+        transcript,
+        escalationMemory,
+        missingPressures: finalMissingPressures,
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        currentJourneyState: result.nextJourneyState || currentJourneyState,
+      });
+    } catch {
+      hcpReply = buildBrainGroundedScenarioFallback({
+        scenario,
+        repMessage,
+        escalationMemory,
+        missingPressures: finalMissingPressures,
+      });
+    }
+
+    hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
+      hcpReply,
+      scenario,
+      turn: turnDirectives,
+      profile: runtimeProfile,
+      hcpTurnCount,
+      liveRepAlignmentActive: firstTurnAlignment.applied || finalLiveAlignment.applied,
+    }), transcript, scenario);
+  }
+
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
     .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])
@@ -2718,6 +3152,21 @@ Return ONLY valid JSON:
         trust_level: turnConstraint.trustLevel,
         resolved_intent: turnConstraint.resolvedIntent,
         allowed_intents: turnConstraint.allowedIntents,
+      },
+      escalation_applied: {
+        type: "escalation_applied",
+        escalationLevel: escalationMemory.escalationLevel,
+        repeatedRepPatternCount: escalationMemory.repeatedRepPatternCount,
+        unansweredQuestionCount: escalationMemory.unansweredQuestionCount,
+        temperatureBand,
+        action: escalationMemory.action,
+        reasons: escalationMemory.reasons,
+      },
+      predictive_brain_authority: {
+        predictive_context_received: Boolean(predictivePromptContext.trim()),
+        guardrails_demoted_to_validators: true,
+        final_stock_phrase_detected: hasGlobalStockPhrase(hcpReply),
+        final_missing_pressure: missingPersistentPressure(hcpReply, scenario, hcpTurnCount),
       },
     },
   };
