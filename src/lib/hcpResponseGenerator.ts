@@ -1604,7 +1604,7 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     return clinicalValueEvidenceAsk();
   }
   if (topic === "screening" || screeningTagged) {
-    return "Which patients do you think this actually changes for?";
+    return "Which patient subgroup are you actually trying to change care for?";
   }
   if (topic === "evidence") {
     return "What do you think the evidence changes for how I treat patients?";
