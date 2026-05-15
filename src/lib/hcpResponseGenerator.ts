@@ -1570,6 +1570,14 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
   const accessTagged = /\bprior auth\b|\bcoverage\b|\bformulary\b|\bapproval\b|\baccess\b/.test(scenarioText);
   const workflowTagged = /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bclinic\b|\bcallback\b/.test(scenarioText);
   const screeningTagged = /\bpatient\b|\bsubgroup\b|\bfit\b|\bselection\b/.test(scenarioText);
+  const clinicalValueStage = String(scenario?.journeyStage || "").toLowerCase() === "clinical_value";
+  const renalTagged = /\brenal\b|\bkidney\b|\bckd\b|\bimpairment\b/.test(scenarioText);
+
+  const clinicalValueEvidenceAsk = () => (
+    renalTagged
+      ? "Which renal-impairment subgroup in the trial maps to the patients I actually see, and what outcome would change a treatment decision?"
+      : "Which trial subgroup maps to the patients I actually treat, and what outcome would change a treatment decision?"
+  );
 
   if (topic === "clinical_value") {
     if (accessTagged) {
@@ -1581,6 +1589,9 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     return "What patient-level outcome actually changes a treatment decision enough to justify the spend in real practice?";
   }
   if (topic === "study_follow_up") {
+    if (clinicalValueStage) {
+      return clinicalValueEvidenceAsk();
+    }
     return "What in that study do you think should change a real treatment decision for me?";
   }
   if (topic === "access" || accessTagged) {
@@ -1588,6 +1599,9 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
   }
   if (topic === "workflow" || workflowTagged) {
     return "What changes in the workflow for my staff if this is worth discussing?";
+  }
+  if (clinicalValueStage && (topic === "screening" || topic === "evidence" || screeningTagged)) {
+    return clinicalValueEvidenceAsk();
   }
   if (topic === "screening" || screeningTagged) {
     return "Which patients do you think this actually changes for?";
@@ -1733,6 +1747,63 @@ function enforceClinicalValueAccessWorkflowSurface({
     : withFirstTurnRepAcknowledgement(repaired, repMessage, scenario);
 }
 
+function buildClinicalValueEvidenceSurfaceReply(repMessage: string, scenario: any, transcript: ConversationTurn[] = []): string {
+  const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
+  const renalTagged = /\brenal\b|\bkidney\b|\bckd\b|\bimpairment\b/.test(scenarioText);
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${transcript.length}|clinical_value_evidence_surface`;
+  const variants = renalTagged
+    ? [
+      "I am not convinced by the broad trial average. Which renal-impairment subgroup maps to my patients, and what outcome changes the treatment decision?",
+      "For this to land clinically, I need the renal subgroup, the endpoint, and why that changes what I do with the patients excluded from the headline result.",
+      "The hazard ratio is not enough for me. Show me the subgroup that resembles my moderate renal-impairment patients and the outcome that changes treatment.",
+    ]
+    : [
+      "I am not convinced by the broad trial average. Which subgroup maps to my patients, and what outcome changes the treatment decision?",
+      "For this to land clinically, I need the subgroup, the endpoint, and why that changes what I do with the patients I actually treat.",
+      "The headline result is not enough for me. Show me the patient group that matches my practice and the outcome that changes treatment.",
+    ];
+
+  return selectNonRepeatingFallbackVariant({
+    variants,
+    transcript,
+    seed,
+  });
+}
+
+function enforceClinicalValueEvidenceSurface({
+  hcpReply,
+  repMessage,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): string {
+  if (!isClinicalValueStage(scenario)) return hcpReply;
+
+  const value = String(hcpReply || "").trim();
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((item: string) => String(item).toLowerCase())
+    : [];
+  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup|outcome|endpoint|hazard ratio|treatment decision\b/i.test(value);
+  const hasOperationalOrAccessAnchor = /\bprior auth|coverage|payer|approval|access|staff|workflow|MA|handoff|callback|process\b/i.test(value);
+  const earlyDiscoveryLeak = /\bwhich patients do you think\b|\bwhich patients\?\b|\bwhat are you seeing\b|\bgo over today\b/i.test(value);
+  const needsSkepticalPressure = pressures.includes("skeptical_resistant")
+    && !hasOperationalOrAccessAnchor
+    && !/\bnot convinced|broad trial average|headline result|trial design|threshold\b/i.test(value);
+
+  if (hasClinicalAnchor && !earlyDiscoveryLeak && !needsSkepticalPressure) {
+    return hcpReply;
+  }
+
+  const repaired = buildClinicalValueEvidenceSurfaceReply(repMessage, scenario, transcript);
+  return !hasPriorHcpTurns(transcript)
+    ? withFirstTurnRepAcknowledgement(repaired, repMessage, scenario)
+    : repaired;
+}
+
 function isInitialAccessStage(scenario: any): boolean {
   return String(scenario?.journeyStage || "").toLowerCase() === "initial_access";
 }
@@ -1869,9 +1940,23 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
     );
   }
   if (topic === "screening") {
+    if (isClinicalValueStage(scenario)) {
+      return withFirstTurnRepAcknowledgement(
+        `If this is about patient fit, tie it to the trial subgroup and decision threshold. ${practicalAsk}`,
+        repMessage,
+        scenario,
+      );
+    }
     return withFirstTurnRepAcknowledgement(`If you're talking patient fit, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "evidence") {
+    if (isClinicalValueStage(scenario)) {
+      return withFirstTurnRepAcknowledgement(
+        `If this is about the evidence, broad averages will not move me. ${practicalAsk}`,
+        repMessage,
+        scenario,
+      );
+    }
     return withFirstTurnRepAcknowledgement(`If this is about the evidence, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   return withFirstTurnRepAcknowledgement(buildGenericLiveAdaptiveReply(repMessage, scenario), repMessage, scenario);
@@ -3043,6 +3128,13 @@ Return ONLY valid JSON:
   });
 
   hcpReply = enforceClinicalValueAccessWorkflowSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+
+  hcpReply = enforceClinicalValueEvidenceSurface({
     hcpReply,
     repMessage,
     scenario,

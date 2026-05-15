@@ -30,7 +30,7 @@ function enforceSentenceBoundaries(text = ""): string {
   if (!output) return "";
 
   output = output
-    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
+    .replace(/([a-z0-9])\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are|That|This|It|Keep|Stay|Show|Tell|Give)\b/g, "$1. $2")
     .replace(/([.?!])\s*([a-z])/g, (_, boundary, letter) => `${boundary} ${letter.toUpperCase()}`)
     .replace(/\s{2,}/g, " ");
 
@@ -59,7 +59,7 @@ function repairDanglingTail(text = ""): string {
     .replace(/\s+\b(and|or|to|for|with|of|the|a|an|that|this|they|them|we|i)\.$/i, ".")
     .replace(/\s+\b(can you [^.?!]*?)\s+\byou\./i, " $1.");
   output = output.replace(
-    /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff)\s+(What|How|Why|Who|When|Where|Can|Would|Should|Tell|Show|Give|Keep|Stay)\b/g,
+    /\b(it|this|that|again|therapy|decision|care|treatment|cost|workflow|queue|staff|patients|population|subgroup|trial|data|outcome)\s+(What|How|Why|Who|When|Where|Can|Would|Should|That|This|It|Tell|Show|Give|Keep|Stay)\b/g,
     "$1. $2"
   );
   output = output.replace(

@@ -828,7 +828,7 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
         ? "The point is whether the broader story feels relevant even without explicit guideline language."
         : tier === "mediocre"
           ? "The main question is whether this feels close enough to current guideline practice to matter."
-          : "The guideline question is what evidence or patient-fit signal would matter before you would move without explicit society language.";
+          : "The clinical bridge is where the trial subgroup, endpoint, and current pathway threshold line up closely enough to matter before explicit society language changes.";
     default:
       return tier === "weak"
         ? "The point is the blocker that would actually change care for one of your patients."
@@ -1746,7 +1746,12 @@ function buildDirectAskStrongAnswer({ askType = "asks_for_concrete_difference", 
       if (/doing pretty well|no reason to change|need something different/.test(normalizeForMatch(lastHcpMessage))) {
         return "You would need evidence in the patients still not controlled on current care, with a concrete outcome gain that is strong enough to justify changing treatment.";
       }
-      return `The evidence only matters if it addresses the exact fit gap you raised, not a broad average result. The core gap in practice is ${extractIssueLabel(activeConcern)} in the patients you actually treat.`;
+      return pickStrongClinicalValueAnswer([
+        `The evidence has to map to the fit gap you raised: ${extractIssueLabel(activeConcern)} in the patients you actually treat, not a broad average result.`,
+        "The useful proof point is the subgroup result that matches your real patient mix and shows an outcome strong enough to change the treatment choice.",
+        "I would answer that by separating the trial average from the subgroup that resembles your clinic population, then tying the endpoint to a real decision threshold.",
+        "The data only becomes relevant if the subgroup, comparator, and endpoint match the patient you are deciding about today.",
+      ]);
     case "asks_for_guideline_fit":
       return "For guideline fit, the answer has to show where this sits in pathway placement versus current standard of care for your actual patient mix.";
     case "asks_for_safety_clarity":
