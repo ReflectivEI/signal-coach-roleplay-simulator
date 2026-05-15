@@ -21,8 +21,8 @@ function shortenLongSentence(sentence = "") {
     return normalizeText(sentence);
   }
 
-  const first = words.slice(0, splitIndex + 1).join(" ").replace(/[,:;]+$/, "");
-  const second = words.slice(splitIndex + 1).join(" ");
+  const first = words.slice(0, splitIndex).join(" ").replace(/[,:;]+$/, "");
+  const second = words.slice(splitIndex).join(" ");
   if (!first || !second) return normalizeText(sentence);
 
   return `${first}. ${second.charAt(0).toUpperCase()}${second.slice(1)}`;
@@ -64,6 +64,10 @@ export function humanizeRepResponse(text = "", context = {}) {
 
   const sentences = splitSentences(output).map((sentence) => shortenLongSentence(sentence));
   output = normalizeText(sentences.join(" "));
+  output = output
+    .replace(/\.\s+And\s+/g, ", and ")
+    .replace(/\.\s+But\s+/g, ", but ")
+    .replace(/\bi would\b/g, "I would");
 
   if (output && !/[.?!]$/.test(output)) {
     output = `${output}.`;

@@ -1158,6 +1158,61 @@ function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): strin
     : `I can listen, but make it specific. ${practicalAsk}`;
 }
 
+function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): string {
+  const repText = String(repMessage || "").trim();
+  if (!repText) return "";
+
+  const normalized = repText.toLowerCase();
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  const timeConstrained = pressures.includes("time_constrained");
+
+  if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bpaper\b|\bevidence\b/.test(normalized)) {
+    return timeConstrained ? "I hear you on the study, but keep it brief." : "I hear you on the study.";
+  }
+  if (/\bprior auth|prior authorization|coverage|formulary|payer|approval|access\b/.test(normalized)) {
+    if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
+      return timeConstrained ? "I hear the access and staff issue, but keep it brief." : "I hear the access and workflow issue.";
+    }
+    return timeConstrained ? "I hear the access issue, but keep it brief." : "I hear the access issue.";
+  }
+  if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
+    return timeConstrained ? "I hear the workflow issue, but keep it brief." : "I hear the workflow issue.";
+  }
+  if (/\bwhich patient|which patients|patient subgroup|right fit|patient fit|patient profile|selection\b/.test(normalized)) {
+    return timeConstrained ? "I hear the patient-fit question, but keep it brief." : "I hear the patient-fit question.";
+  }
+  if (/\bhow are you|how's it going|how are things\b/.test(normalized)) {
+    return timeConstrained ? "I'm fine, but I only have a minute." : "I'm fine, but keep it specific.";
+  }
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)) {
+    return timeConstrained ? "Hi, but keep it brief." : "Hi. I can listen.";
+  }
+  if (/\bcan we speak|can we talk|do you have a minute|can i speak with you|can i talk with you\b/.test(normalized)) {
+    return timeConstrained ? "Briefly." : "I can talk briefly.";
+  }
+  if (/\bnot sure|just checking in|wanted to check in|quick question\b/.test(normalized)) {
+    return timeConstrained ? "Keep the question tight." : "I hear you, but make the question concrete.";
+  }
+
+  return "";
+}
+
+function withFirstTurnRepAcknowledgement(reply: string, repMessage: string, scenario: any): string {
+  const value = String(reply || "").trim();
+  const acknowledgement = buildFirstTurnRepAcknowledgement(repMessage, scenario);
+  if (!acknowledgement || !value) return value;
+
+  const normalized = value.toLowerCase();
+  const ackNormalized = acknowledgement.toLowerCase().replace(/[.?!]+$/, "");
+  if (normalized.startsWith(ackNormalized) || /^(hi\.|i'm fine|briefly\.|i can talk briefly|i hear you)/i.test(value)) {
+    return value;
+  }
+
+  return `${acknowledgement} ${value}`;
+}
+
 function deriveLiveConversationConcern(transcript: ConversationTurn[], scenario: any, repMessage: string): string {
   if (hasPriorHcpTurns(transcript)) {
     const latestConcern = getLatestHcpConcern(transcript, scenario);
@@ -1285,6 +1340,69 @@ function buildClinicalValueReplyVariants({
   return variants.filter(Boolean);
 }
 
+function isClinicalValueStage(scenario: any): boolean {
+  return String(scenario?.journeyStage || "").toLowerCase() === "clinical_value";
+}
+
+function buildClinicalValueAccessWorkflowReply(repMessage: string, scenario: any, transcript: ConversationTurn[] = []): string {
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${transcript.length}|clinical_value_access_workflow`;
+  const variants = [
+    "The efficacy data is fine, but for the subgroup who can actually get through prior auth, what outcome justifies the cost and what work still lands on my MA?",
+    "Before I call that value, I need the trial outcome for the patients likely to clear coverage, and whether my staff avoids another callback.",
+    "The clinical question is not cost alone. It is whether the efficacy holds for the right patients and whether the access process keeps my staff out of a second repair cycle.",
+    "If this is value, tie it to the treated subgroup, the prior-auth path, and the workflow burden. Otherwise I cannot tell if it changes a real decision.",
+    "Show me the patient-level outcome, then tell me whether coverage can clear without another staff handoff. That is the only value equation that matters here.",
+  ];
+
+  return selectNonRepeatingFallbackVariant({
+    variants,
+    transcript,
+    seed,
+  });
+}
+
+function enforceClinicalValueAccessWorkflowSurface({
+  hcpReply,
+  repMessage,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): string {
+  if (!isClinicalValueStage(scenario)) return hcpReply;
+
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  const requiresAccess = pressures.includes("access_barrier");
+  const requiresWorkflow = pressures.includes("operationally_constrained");
+  if (!requiresAccess && !requiresWorkflow) return hcpReply;
+
+  const value = String(hcpReply || "").trim();
+  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup\b/i.test(value);
+  const hasAccessAnchor = /\bformulary|non-preferred|prior auth|prior authorization|committee|access|payer|coverage\b/i.test(value);
+  const hasWorkflowAnchor = /\bstaff|workflow|handoff|callback|extra step|extra steps|process|MA\b/i.test(value);
+  const costOnlyLoop = /\btotal cost per patient\b|\badded cost per patient\b|\bcost side is unclear\b/i.test(value)
+    && (!hasAccessAnchor || !hasWorkflowAnchor || !hasClinicalAnchor);
+
+  if (
+    (!requiresAccess || hasAccessAnchor) &&
+    (!requiresWorkflow || hasWorkflowAnchor) &&
+    hasClinicalAnchor &&
+    !costOnlyLoop
+  ) {
+    return hcpReply;
+  }
+
+  const repaired = buildClinicalValueAccessWorkflowReply(repMessage, scenario, transcript);
+  return hasPriorHcpTurns(transcript)
+    ? repaired
+    : withFirstTurnRepAcknowledgement(repaired, repMessage, scenario);
+}
+
 function isInitialAccessStage(scenario: any): boolean {
   return String(scenario?.journeyStage || "").toLowerCase() === "initial_access";
 }
@@ -1374,7 +1492,11 @@ function enforceInitialAccessSurface({
 
 function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   if (isInitialAccessStage(scenario)) {
-    return buildInitialAccessAlignedReply(repMessage, scenario);
+    return withFirstTurnRepAcknowledgement(
+      buildInitialAccessAlignedReply(repMessage, scenario),
+      repMessage,
+      scenario,
+    );
   }
 
   const topic = deriveFirstTurnRepTopic(repMessage, scenario);
@@ -1388,19 +1510,19 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   const hasFollowUpSignal = /\bfollow(?:ing)? up\b|\blast week\b|\byou asked\b|\bdropped off\b|\bwe discussed\b|\bearlier\b/.test(text);
 
   if (topic === "study_follow_up") {
-    if (timeConstrained && hasFollowUpSignal) return `I remember the study, but you'll need to keep this quick. ${practicalAsk}`;
-    if (hasFollowUpSignal) return `I remember the study. ${practicalAsk}`;
-    return `If this is about the study, be specific. ${practicalAsk}`;
+    if (timeConstrained && hasFollowUpSignal) return withFirstTurnRepAcknowledgement(`I remember the study, but you'll need to keep this quick. ${practicalAsk}`, repMessage, scenario);
+    if (hasFollowUpSignal) return withFirstTurnRepAcknowledgement(`I remember the study. ${practicalAsk}`, repMessage, scenario);
+    return withFirstTurnRepAcknowledgement(`If this is about the study, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "access") {
-    return timeConstrained
+    return withFirstTurnRepAcknowledgement(timeConstrained
       ? `If this is about access, keep it tight. ${practicalAsk}`
-      : `If this is about access, be specific. ${practicalAsk}`;
+      : `If this is about access, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "workflow") {
-    return timeConstrained
+    return withFirstTurnRepAcknowledgement(timeConstrained
       ? `If this is about workflow, keep it tight. ${practicalAsk}`
-      : `If this is about workflow, be specific. ${practicalAsk}`;
+      : `If this is about workflow, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "clinical_value") {
     const variants = buildClinicalValueReplyVariants({
@@ -1410,15 +1532,19 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
       workflowTagged,
     });
     const index = deterministicIndex(`${scenario?.id || scenario?.title || "scenario"}|${repMessage}|clinical_value`, variants.length);
-    return variants[index] || `Value only matters if it changes a real patient decision. ${practicalAsk}`;
+    return withFirstTurnRepAcknowledgement(
+      variants[index] || `Value only matters if it changes a real patient decision. ${practicalAsk}`,
+      repMessage,
+      scenario,
+    );
   }
   if (topic === "screening") {
-    return `If you're talking patient fit, be specific. ${practicalAsk}`;
+    return withFirstTurnRepAcknowledgement(`If you're talking patient fit, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "evidence") {
-    return `If this is about the evidence, be specific. ${practicalAsk}`;
+    return withFirstTurnRepAcknowledgement(`If this is about the evidence, be specific. ${practicalAsk}`, repMessage, scenario);
   }
-  return buildGenericLiveAdaptiveReply(repMessage, scenario);
+  return withFirstTurnRepAcknowledgement(buildGenericLiveAdaptiveReply(repMessage, scenario), repMessage, scenario);
 }
 
 function firstTurnReplyIgnoresRep(hcpReply: string, repMessage: string, transcript: ConversationTurn[]): boolean {
@@ -2517,6 +2643,17 @@ Return ONLY valid JSON:
     scenario,
     transcript,
   });
+
+  hcpReply = enforceClinicalValueAccessWorkflowSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+
+  if (!hasPriorHcpTurns(transcript)) {
+    hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
+  }
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
