@@ -38,41 +38,27 @@ function buildHcpCueState(cue, prediction) {
   };
 }
 
-function HcpCueSummary({ cue, prediction }) {
-  if (!cue && !prediction) return null;
+function buildVisibleCueDescriptor(cue, prediction) {
   const cueState = buildHcpCueState(cue, prediction);
+  if (cueState.behavioralNotes && cueState.behavioralNotes !== "Listening for the rep's opening move.") {
+    return cueState.behavioralNotes;
+  }
 
-  return (
-    <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
-      <div
-        className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words"
-        style={{
-          color: "#7B1F1F",
-          borderColor: "#D7B7B7",
-          background: "#F9F5F5",
-        }}
-      >
-        <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-        <div className="hcp-cue-predicted-state">- Predicted State: {cueState.predictedState}</div>
-        <div className="hcp-cue-openness">- Openness: {cueState.openness}</div>
-        <div className="hcp-cue-trajectory">- Trajectory: {cueState.trajectory}</div>
-        <div className="hcp-cue-risk">- Risk: {cueState.risk}</div>
-        <div className="hcp-cue-behavioral-notes">- Behavioral Notes: {cueState.behavioralNotes}</div>
-      </div>
-    </div>
-  );
+  const state = String(cueState.predictedState || "").toLowerCase();
+  const risk = String(cueState.risk || "").toLowerCase();
+  if (/frustration|resistance|closed/.test(state) || risk === "high") {
+    return "The HCP stays guarded, waiting for one specific point that fits their concern.";
+  }
+  if (/open|curiosity|engaged/.test(state)) {
+    return "The HCP stays engaged, leaving room for a more specific answer.";
+  }
+  return "The HCP watches for a clear, relevant reason to continue.";
 }
 
-// HCP cues are single-line observable behavioral signals aligned with dialogue
-function HcpCueStrip({ cue }) {
-  if (!cue) return null;
-  const rawLabel = typeof cue.label === "string" ? cue.label.trim() : "";
-  const normalizedLabel = rawLabel
-    ? rawLabel.replace(/^[a-z]/, (letter) => letter.toUpperCase()).replace(/[.?!]$/, "")
-    : "";
-  const cueText = normalizedLabel.toLowerCase().startsWith("the hcp")
-    ? `${normalizedLabel}.`
-    : `The HCP ${normalizedLabel.charAt(0).toLowerCase()}${normalizedLabel.slice(1)}.`;
+function HcpCueStrip({ cue, prediction }) {
+  if (!cue && !prediction) return null;
+  const cueText = buildVisibleCueDescriptor(cue, prediction);
+
   return (
     <div
       className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug"
@@ -186,8 +172,7 @@ function MessageBubble({ turn }) {
           </span>
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
-          {isHcp && SHOW_VISIBLE_HCP_CUES && <HcpCueSummary cue={cue} prediction={prediction} />}
-          {isHcp && !SHOW_VISIBLE_HCP_CUES && cue && <HcpCueStrip cue={cue} />}
+          {isHcp && SHOW_VISIBLE_HCP_CUES && <HcpCueStrip cue={cue} prediction={prediction} />}
           {isHcp && predictiveDebug && <PredictiveDebugChip debugInfo={predictiveDebug} />}
           <div className={`${isHcp ? "hcp-dialogue " : ""}px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit`} style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",

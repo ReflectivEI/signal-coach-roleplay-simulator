@@ -648,6 +648,21 @@ function buildVisibleHcpCueSummary(turn = {}, hcpDisplayName = "HCP") {
   };
 }
 
+function buildVisibleHcpCueDescriptor(turn = {}, hcpDisplayName = "HCP") {
+  const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+  if (cueSummary.behavioralNotes) return cueSummary.behavioralNotes;
+
+  const state = String(cueSummary.predictedState || "").toLowerCase();
+  const risk = String(cueSummary.risk || "").toLowerCase();
+  if (/frustration|resistance|closed/.test(state) || risk === "high") {
+    return `${hcpDisplayName} stays guarded, waiting for one specific point that fits their concern.`;
+  }
+  if (/open|curiosity|engaged/.test(state)) {
+    return `${hcpDisplayName} stays engaged, leaving room for a more specific answer.`;
+  }
+  return `${hcpDisplayName} watches for a clear, relevant reason to continue.`;
+}
+
 function hasVisibleHcpCue(turn = {}) {
   return Boolean(String(
     turn?.cueBefore
@@ -6299,17 +6314,10 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                   return (
                     <div key={item.key} className="flex flex-col items-start gap-1">
                       {SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && (() => {
-                        const cueSummary = buildVisibleHcpCueSummary(turn, hcpDisplayName);
+                        const cueDescriptor = buildVisibleHcpCueDescriptor(turn, hcpDisplayName);
                         return (
-                          <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
-                            <div className="w-fit max-w-full text-xs leading-snug px-3 py-2 rounded-lg border whitespace-normal break-words" style={{ color: "#7B1F1F", borderColor: "#D7B7B7", background: "#F9F5F5" }}>
-                              <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-                              <div className="hcp-cue-predicted-state">- Predicted State: {cueSummary.predictedState}</div>
-                              <div className="hcp-cue-openness">- Openness: {cueSummary.openness}</div>
-                              <div className="hcp-cue-trajectory">- Trajectory: {cueSummary.trajectory}</div>
-                              <div className="hcp-cue-risk">- Risk: {cueSummary.risk}</div>
-                              <div className="hcp-cue-behavioral-notes">- Behavioral Notes: {cueSummary.behavioralNotes || "Listening for the rep's opening move."}</div>
-                            </div>
+                          <div className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug" style={{ background: "rgba(244, 232, 236, 0.92)", borderColor: "rgba(191, 132, 145, 0.46)", color: "hsl(356 32% 43%)" }}>
+                            {cueDescriptor}
                           </div>
                         );
                       })()}
