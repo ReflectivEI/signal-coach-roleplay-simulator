@@ -1126,42 +1126,23 @@ function enforceRealismLeverDialogue({
         continuityOverlapScore(prior, line) >= 0.82 ||
         continuityContainmentScore(prior, line) >= 0.86;
     });
-  if (stageBoundReply && stageDrift) {
-    return stageBoundReply;
+
+  // Guardrail demotion: this layer may validate and flag bad dialogue, but it
+  // should not author normal HCP copy. Stage drift, pressure gaps, and repeated
+  // lines are handled by the Predictive Brain regeneration pass below.
+  if (stageDrift || repeatedRecentHcpLine || pressureGap) {
+    return line;
   }
-  if (stageBoundReply && repeatedRecentHcpLine) {
-    return stageBoundReply;
-  }
-  if (stageBoundReply && pressureGap) {
-    return stageBoundReply;
-  }
+
   if (stageBoundReply && malformedEnding) {
     return stageBoundReply;
   }
 
   if (lineAlreadyShowsRealism({ hcpReply: line, temperatureBand, escalationMemory })) {
-    if (temperatureBand !== "low") return line;
-    return line
-      .replace(/\bYou'?re not answering\b/gi, "I still need you to answer")
-      .replace(/\bwe can stop here\b/gi, "we may need to pause here")
-      .replace(/\bnot worth continuing\b/gi, "hard to continue");
+    return line;
   }
 
-  if (stageBoundReply) return stageBoundReply;
-  if (temperatureBand === "low") {
-    return `I can stay with you on this, but I still need ${ask}.`;
-  }
-  if (temperatureBand === "medium") {
-    return escalationMemory.escalationLevel >= 2
-      ? `That still does not answer the issue. I need ${ask}.`
-      : `You are staying too broad. I need ${ask}.`;
-  }
-  if (escalationMemory.escalationLevel >= 3) {
-    return `We have already covered the broad case. If you cannot give me ${ask}, we should stop here.`;
-  }
-  return escalationMemory.escalationLevel >= 1
-    ? `You are still not answering the point. Give me ${ask}.`
-    : `I am not moving on a broad answer. Give me ${ask}.`;
+  return line;
 }
 
 function deriveRealismCueCandidate({
@@ -1524,6 +1505,20 @@ function missingPersistentPressure(hcpReply: string, scenario: any, hcpTurnCount
 
 function hasGlobalStockPhrase(text = ""): boolean {
   return GLOBAL_STOCK_PHRASE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
+}
+
+function hasGenericGuardrailScaffold(text = ""): boolean {
+  const line = String(text || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return [
+    /\bif this stays general\b/,
+    /\bwe should stop here\b/,
+    /\byou'?re still not making this practical\b/,
+    /\bgive me why this is worth opening a conversation\b/,
+    /\byou are still not answering the point\b/,
+    /\byou are staying too broad\b/,
+    /\bgive me the specific answer\b/,
+    /\bwhat specifically changes\b/,
+  ].some((pattern) => pattern.test(line));
 }
 
 function needsNaturalnessRewrite(text: string): boolean {
@@ -3887,12 +3882,15 @@ Return ONLY valid JSON:
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
-  if (hasGlobalStockPhrase(hcpReply) || finalMissingPressures.length > 0) {
+  const finalGenericScaffold = hasGenericGuardrailScaffold(hcpReply);
+  if (hasGlobalStockPhrase(hcpReply) || finalGenericScaffold || finalMissingPressures.length > 0) {
     try {
       hcpReply = await regenerateWithPredictiveBrain({
         currentLine: hcpReply,
         reason: hasGlobalStockPhrase(hcpReply)
           ? "The line used a banned global stock phrase. Regenerate without canned simulator language."
+          : finalGenericScaffold
+            ? "The line used generic guardrail or escalation scaffolding. Regenerate as the specific HCP using the Predictive HCP Brain, current state, and rep message."
           : "The line dropped scenario pressure persistence. Regenerate with the missing pressure anchor in this HCP's own words.",
         predictiveContext: predictivePromptContext,
         scenario,
@@ -3929,6 +3927,33 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
+
+  if (predictivePromptContext.trim() && hasGenericGuardrailScaffold(hcpReply)) {
+    try {
+      hcpReply = await regenerateWithPredictiveBrain({
+        currentLine: hcpReply,
+        reason: "Final dialogue was overwritten by generic realism scaffolding. Re-author it from the Predictive HCP Brain while preserving the same realism intensity.",
+        predictiveContext: predictivePromptContext,
+        scenario,
+        repMessage,
+        transcript,
+        escalationMemory,
+        missingPressures: missingPersistentPressure(hcpReply, scenario, hcpTurnCount),
+        behaviorState: result.nextBehaviorState || currentBehaviorState,
+        currentJourneyState: result.nextJourneyState || currentJourneyState,
+      });
+      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
+        hcpReply,
+        scenario,
+        turn: turnDirectives,
+        profile: runtimeProfile,
+        hcpTurnCount,
+        liveRepAlignmentActive: firstTurnAlignment.applied || finalLiveAlignment.applied,
+      }), transcript, scenario);
+    } catch {
+      // Preserve the last valid line rather than falling back to another generic guardrail phrase.
+    }
+  }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
