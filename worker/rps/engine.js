@@ -1022,13 +1022,13 @@ export function evaluateRepResponse({
         liveTemperature: repSelectedTemperature,
         conversationMemory,
         scenarioContext: {
-            journeyStage: payload.journey_stage || payload.journeyStage || "",
-            interactionPressure: Array.isArray(payload.interaction_pressure)
-                ? payload.interaction_pressure
-                : Array.isArray(payload.interactionPressure)
-                    ? payload.interactionPressure
+            journeyStage: safeScenarioContext.journey_stage || safeScenarioContext.journeyStage || "",
+            interactionPressure: Array.isArray(safeScenarioContext.interaction_pressure)
+                ? safeScenarioContext.interaction_pressure
+                : Array.isArray(safeScenarioContext.interactionPressure)
+                    ? safeScenarioContext.interactionPressure
                     : [],
-            concernFamily: payload.concern_family || "",
+            concernFamily: safeScenarioContext.concern_family || "",
         },
     }));
 
@@ -1036,13 +1036,13 @@ export function evaluateRepResponse({
     // Persist hcp_state into conversation memory
     updatedMemory.hcp_state = stateProgression.hcp_state;
     updatedMemory.scenario_context = {
-        journeyStage: payload.journey_stage || payload.journeyStage || "",
-        interactionPressure: Array.isArray(payload.interaction_pressure)
-            ? payload.interaction_pressure
-            : Array.isArray(payload.interactionPressure)
-                ? payload.interactionPressure
+        journeyStage: safeScenarioContext.journey_stage || safeScenarioContext.journeyStage || "",
+        interactionPressure: Array.isArray(safeScenarioContext.interaction_pressure)
+            ? safeScenarioContext.interaction_pressure
+            : Array.isArray(safeScenarioContext.interactionPressure)
+                ? safeScenarioContext.interactionPressure
                 : [],
-        concernFamily: payload.concern_family || "",
+        concernFamily: safeScenarioContext.concern_family || "",
     };
     updatedMemory.response_type_history = [
         ...(Array.isArray(safeConversationMemory.response_type_history) ? safeConversationMemory.response_type_history : []),

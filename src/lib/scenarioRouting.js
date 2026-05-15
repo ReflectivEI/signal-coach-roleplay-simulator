@@ -193,7 +193,7 @@ export function buildScenarioRouting(scenario = {}) {
         mergedAllowed = [...new Set(mergedAllowed)];
     }
     if (journeyStage === "initial_access") {
-        const explicitWorkflowLane = pressures.includes("operationally_constrained") && /\bworkflow bottleneck\b/i.test(String(scenario?.title || ""));
+        const explicitWorkflowLane = pressures.includes("operationally_constrained");
         mergedAllowed = [...stageAllowed];
         if (explicitWorkflowLane) mergedAllowed.push("workflow_implementation");
         mergedAllowed = [...new Set(mergedAllowed)];

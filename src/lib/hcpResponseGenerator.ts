@@ -1285,7 +1285,98 @@ function buildClinicalValueReplyVariants({
   return variants.filter(Boolean);
 }
 
+function isInitialAccessStage(scenario: any): boolean {
+  return String(scenario?.journeyStage || "").toLowerCase() === "initial_access";
+}
+
+function buildInitialAccessAlignedReply(repMessage: string, scenario: any, transcript: ConversationTurn[] = []): string {
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
+    : [];
+  const timeConstrained = pressures.includes("time_constrained");
+  const operational = pressures.includes("operationally_constrained");
+  const skeptical = pressures.includes("skeptical_resistant");
+  const rawRepFocus = extractRepFocusPhrase(repMessage);
+  const repFocus = /\bprior auth|prior authorization|approval|access|coverage|formulary|payer|workflow\b/i.test(rawRepFocus)
+    ? ""
+    : rawRepFocus;
+  const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${transcript.length}|initial_access`;
+
+  const variants = operational
+    ? [
+      "I have a few minutes. Give me the short version: what does my staff have to do differently?",
+      "Keep it brief. What changes for the office before this is worth a real conversation?",
+      "I'm between patients. What is the practical reason my staff should pay attention?",
+    ]
+    : skeptical
+      ? [
+        "Before we get into details, what's this about for my patients?",
+        "I can listen briefly. What is the specific reason this matters here?",
+        "Give me the short version. Why is this worth the time right now?",
+      ]
+      : [
+        "I have a few minutes. What's this about for my patients?",
+        "Give me the short version. What are you trying to understand today?",
+        "I can listen briefly. What is the practical reason for the conversation?",
+      ];
+
+  const focusedVariants = repFocus
+    ? variants.map((line) => line.replace(/\?$/, `, specifically around ${repFocus}?`))
+    : variants;
+
+  if (!timeConstrained && !skeptical && !operational) {
+    focusedVariants.push("Before we get into details, what are you trying to learn from me today?");
+  }
+
+  return selectNonRepeatingFallbackVariant({
+    variants: focusedVariants,
+    transcript,
+    seed,
+  });
+}
+
+function enforceInitialAccessSurface({
+  hcpReply,
+  repMessage,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  repMessage: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): string {
+  if (!isInitialAccessStage(scenario)) return hcpReply;
+
+  const value = String(hcpReply || "").trim();
+  const lower = value.toLowerCase();
+  const repeatsOpeningScene = (() => {
+    const opening = String(scenario?.openingScene || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (!opening) return false;
+    const openingHead = opening.split(/\s+/).slice(0, 8).join(" ");
+    return Boolean(openingHead && lower.includes(openingHead));
+  })();
+
+  const driftedIntoDownstreamLane =
+    /\bprior auth|prior authorization|approval path|access step|formulary|coverage|payer\b/i.test(value) ||
+    /\bworkflow\b/i.test(value) ||
+    /^(look,|be specific\.?$|keep this practical\.?(?: one practical point\.?)?)$/i.test(value);
+
+  const lostOpeningPressure =
+    !/\bfew minutes|short version|briefly|between patients|worth the time|what'?s this about\b/i.test(value);
+
+  if (!repeatsOpeningScene && !driftedIntoDownstreamLane && !lostOpeningPressure) {
+    return hcpReply;
+  }
+
+  return buildInitialAccessAlignedReply(repMessage, scenario, transcript);
+}
+
 function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
+  if (isInitialAccessStage(scenario)) {
+    return buildInitialAccessAlignedReply(repMessage, scenario);
+  }
+
   const topic = deriveFirstTurnRepTopic(repMessage, scenario);
   const text = String(repMessage || "").toLowerCase();
   const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
@@ -1422,6 +1513,10 @@ function buildDeterministicHcpFallbackReply({
 
   if (!hasPriorHcpTurns(transcript)) {
     return buildFirstTurnAlignedReply(repMessage, scenario);
+  }
+
+  if (isInitialAccessStage(scenario)) {
+    return buildInitialAccessAlignedReply(repMessage, scenario, transcript);
   }
 
   if (clinicalValueStage) {
@@ -2415,6 +2510,13 @@ Return ONLY valid JSON:
       scenario,
     });
   }
+
+  hcpReply = enforceInitialAccessSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")

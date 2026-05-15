@@ -752,10 +752,10 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
 
   if (journeyStage === "initial_access") {
     return tier === "weak"
-      ? "The point is that this could make access feel easier overall."
+      ? "The point is one office step could get easier before the patient moves forward."
       : tier === "mediocre"
-        ? "The reason this matters is that access friction may be creating more delay than it needs to for the office."
-        : "In one sentence, this matters because prior-auth rework can delay patient start before the physician ever sees a clean path forward.";
+        ? "The reason this matters is that one staff step may be slowing the office before the patient can move forward."
+        : "The direct answer is one staff step gets removed, so the visit does not create another office task before the patient can move forward.";
   }
 
   if (journeyStage === "clinical_value") {
