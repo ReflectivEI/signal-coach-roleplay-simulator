@@ -4,7 +4,7 @@ import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
 
 const SHOW_DEBUG_UI = Boolean(import.meta.env.DEV);
-const SHOW_VISIBLE_HCP_CUES = false;
+const SHOW_VISIBLE_HCP_CUES = true;
 
 function formatCueValue(value, fallback = "Not yet established") {
   const text = String(value || "").replace(/_/g, " ").trim();
@@ -23,12 +23,24 @@ function buildBehavioralNotes(cue) {
     : `The HCP ${normalizedLabel.charAt(0).toLowerCase()}${normalizedLabel.slice(1)}.`;
 }
 
-function HcpCueSummary({ cue, prediction }) {
-  if (!cue && !prediction) return null;
+function buildHcpCueState(cue, prediction) {
   const predictedState = prediction?.predictedBehaviorState || prediction?.nextLikelyBehavior || prediction?.concernFamily;
   const openness = prediction?.openness || prediction?.opennessLevel;
   const trajectory = prediction?.trajectory || prediction?.nextLikelyBehavior;
   const risk = prediction?.riskLevel || prediction?.concernFamily;
+
+  return {
+    predictedState: formatCueValue(predictedState, "Guarded"),
+    openness: formatCueValue(openness, "Guarded"),
+    trajectory: formatCueValue(trajectory, "Testing relevance"),
+    risk: formatCueValue(risk, "Moderate"),
+    behavioralNotes: buildBehavioralNotes(cue),
+  };
+}
+
+function HcpCueSummary({ cue, prediction }) {
+  if (!cue && !prediction) return null;
+  const cueState = buildHcpCueState(cue, prediction);
 
   return (
     <div className="pl-1 w-fit max-w-[92%] md:max-w-[82%]">
@@ -41,11 +53,11 @@ function HcpCueSummary({ cue, prediction }) {
         }}
       >
         <div className="font-semibold tracking-wide uppercase text-[10px] mb-1">HCP Cues</div>
-        <div className="hcp-cue-predicted-state">- Predicted State: {formatCueValue(predictedState, "Guarded")}</div>
-        <div className="hcp-cue-openness">- Openness: {formatCueValue(openness, "Guarded")}</div>
-        <div className="hcp-cue-trajectory">- Trajectory: {formatCueValue(trajectory, "Testing relevance")}</div>
-        <div className="hcp-cue-risk">- Risk: {formatCueValue(risk, "Moderate")}</div>
-        <div className="hcp-cue-behavioral-notes">- Behavioral Notes: {buildBehavioralNotes(cue)}</div>
+        <div className="hcp-cue-predicted-state">- Predicted State: {cueState.predictedState}</div>
+        <div className="hcp-cue-openness">- Openness: {cueState.openness}</div>
+        <div className="hcp-cue-trajectory">- Trajectory: {cueState.trajectory}</div>
+        <div className="hcp-cue-risk">- Risk: {cueState.risk}</div>
+        <div className="hcp-cue-behavioral-notes">- Behavioral Notes: {cueState.behavioralNotes}</div>
       </div>
     </div>
   );
@@ -143,6 +155,16 @@ function MessageBubble({ turn }) {
   const prediction = turn.prediction || null;
   const predictiveDebug = turn.predictiveDebug || null;
 
+  useEffect(() => {
+    if (!isHcp || typeof window === "undefined") return;
+    const hcpCueState = buildHcpCueState(cue, prediction);
+    window.hcpCueState = hcpCueState;
+    globalThis.hcpCueState = hcpCueState;
+    if (import.meta.env.DEV) {
+      console.debug("hcpCueState", hcpCueState);
+    }
+  }, [cue, isHcp, prediction, turn.id]);
+
   return (
     <div>
       <motion.div
@@ -165,7 +187,7 @@ function MessageBubble({ turn }) {
         </div>
         <div className={`${isRep ? "order-1 items-end ml-auto" : "order-2 items-start"} flex flex-col gap-1 max-w-[82%]`}>
           {isHcp && SHOW_VISIBLE_HCP_CUES && <HcpCueSummary cue={cue} prediction={prediction} />}
-          {isHcp && cue && <HcpCueStrip cue={cue} />}
+          {isHcp && !SHOW_VISIBLE_HCP_CUES && cue && <HcpCueStrip cue={cue} />}
           {isHcp && predictiveDebug && <PredictiveDebugChip debugInfo={predictiveDebug} />}
           <div className={`${isHcp ? "hcp-dialogue " : ""}px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit`} style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
