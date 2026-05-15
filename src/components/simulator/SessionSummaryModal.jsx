@@ -368,13 +368,6 @@ function scoreFromObservationLevel(level = "developing") {
   return 2;
 }
 
-function displayScoreFromObservationLevel(level = "developing") {
-  if (level === "missed") return "1/5";
-  if (level === "strong") return "5/5";
-  if (level === "effective") return "4/5";
-  return "3/5";
-}
-
 function buildAnchoredEvidenceMoments(session = null, insights = [], max = 3) {
   const moments = [];
   const transcriptTurns = Array.isArray(session?.transcript) ? session.transcript : [];
@@ -606,15 +599,14 @@ function DeepDiveBlock({ number, title, children }) {
 
 // ─── Capability row ───────────────────────────────────────────────────────────
 
-function CapabilityRow({ cap, insight, initiallyOpen = false }) {
-  const [open, setOpen] = useState(Boolean(initiallyOpen));
+function CapabilityRow({ cap, insight }) {
+  const [open, setOpen] = useState(false);
   const sublabel = CAP_SUBLABELS[cap.id];
   const capabilityState = capabilityStateFromObservationLevel(insight?.observationLevel);
   const metricColor = getMetricColor(capabilityState);
   const { Icon: SignalIcon, tone } = getMetricSignal(capabilityState);
   const rowDiagnosis = cleanCoachingCopy(insight?.whatHappened || insight?.nextTimeAction || sublabel || "Behavior not observed clearly enough to diagnose.");
   const rowConsequence = cleanCoachingCopy(insight?.whyItMattered || insight?.pattern || "No direct interaction consequence was surfaced in this moment.");
-  const displayScore = displayScoreFromObservationLevel(insight?.observationLevel);
   const hasStructuredContent = Boolean(
     insight?.whatHappened ||
     insight?.transcriptEvidence ||
@@ -638,7 +630,7 @@ function CapabilityRow({ cap, insight, initiallyOpen = false }) {
         </span>
 
         <span className={`text-xs font-medium shrink-0 ${metricColor.text}`}>
-          Score {displayScore}
+          {capabilityState}
         </span>
 
         {!open && (
@@ -647,7 +639,7 @@ function CapabilityRow({ cap, insight, initiallyOpen = false }) {
         {open ? <span className="flex-1" /> : null}
 
         <span className={`text-xs font-semibold px-3 py-1 rounded-md border shrink-0 transition-opacity ${metricColor.text} ${metricColor.bg} ${metricColor.border}`}>
-          {open ? "Hide Analysis" : "Analyze"}
+          View Diagnosis
         </span>
 
         {open
@@ -668,7 +660,7 @@ function CapabilityRow({ cap, insight, initiallyOpen = false }) {
             <div className={`pb-5 px-4 space-y-4 border-t border-l-2 pt-4 ${metricColor.border}`} style={{ borderTopColor: "rgba(152, 160, 171, 0.24)", background: REVIEW_PANEL }}>
               <div className={`rounded-md border px-3 py-2 ${metricColor.bg} ${metricColor.border}`}>
                 <p className={`text-xs font-semibold uppercase tracking-wide ${metricColor.text}`}>
-                  Score {displayScore} · Capability State: {capabilityState}
+                  Capability State: {capabilityState}
                 </p>
               </div>
 
@@ -815,11 +807,6 @@ export default function SessionSummaryModal({
     ? capabilityStateFromObservationLevel(primaryFailure?.observationLevel)
     : "Not Observed";
   const secondaryEffects = rankedGrowth.slice(1, 3);
-  const overallScore = insights.length
-    ? Math.round(
-      insights.reduce((sum, item) => sum + Number(displayScoreFromObservationLevel(item?.observationLevel).split("/")[0] || 3), 0) / insights.length
-    )
-    : 3;
 
   const primaryFailureLine = primaryFailure
     ? applyDecisiveTone(`${primaryFailure.capabilityName}: ${primaryFailure.whatHappened || review.biggestGap || "The rep failed to answer the HCP's decisive ask."}`, isHighRealismTone)
@@ -827,57 +814,44 @@ export default function SessionSummaryModal({
   const whyItHappenedLine = applyDecisiveTone(primaryFailure?.whyItMattered || briefRationale || "The HCP stayed unconvinced because the rep did not resolve the practical barrier.", isHighRealismTone);
   const whatItCausedLine = applyDecisiveTone(primaryFailure?.pattern || review.nextAdjustment || "This caused resistance to persist and blocked commitment.", isHighRealismTone);
 
+  const signalAlignmentParagraphs = [primaryFailureLine];
   const structuredPrimaryDiagnosis = splitParagraphs(review.primaryDiagnosisText);
-  const exchangeSpecificSummary = buildExchangeSpecificSummary({ review, insightByCapability, session })
-    .map((item) => applyDecisiveTone(item, isHighRealismTone));
-  const signalAlignmentParagraphs = uniqCoachingPoints([
-    ...structuredPrimaryDiagnosis,
-    ...exchangeSpecificSummary,
-    primaryFailureLine,
-    whyItHappenedLine,
-    briefRationale,
-  ]).filter(Boolean).slice(0, 5);
-
+  if (structuredPrimaryDiagnosis.length > 0) {
+    signalAlignmentParagraphs.splice(0, signalAlignmentParagraphs.length, ...structuredPrimaryDiagnosis);
+  } else if (whyItHappenedLine) {
+    signalAlignmentParagraphs.push(whyItHappenedLine);
+  }
+  const outcomeText = [whatItCausedLine];
   const structuredInteractionConsequence = splitParagraphs(review.interactionConsequenceText);
-  const outcomeText = uniqCoachingPoints([
-    ...structuredInteractionConsequence,
-    whatItCausedLine,
-    primaryFailure?.whyItMattered,
-    primaryFailure?.pattern,
-    review.nextAdjustment ? `Without adjustment, the next exchange will repeat the same blocker: ${review.nextAdjustment}` : "",
-  ].map((item) => applyDecisiveTone(item, isHighRealismTone))).filter(Boolean).slice(0, 4);
+  if (structuredInteractionConsequence.length > 0) {
+    outcomeText.splice(0, outcomeText.length, ...structuredInteractionConsequence);
+  }
 
   const structuredLimitations = splitParagraphs(review.limitsText);
-  const limitationsList = uniqCoachingPoints([
-    ...structuredLimitations,
-    ...legacyWhatWasMissed,
-    ...secondaryEffects.map((item) => `${item.capabilityName}: ${item.whyItMattered || item.whatHappened || "This amplified the primary failure."}`),
-    primaryFailure?.whatHappened ? `Primary blocker: ${primaryFailure.whatHappened}` : "",
-    primaryFailure?.transcriptEvidence ? `Transcript anchor: "${primaryFailure.transcriptEvidence}"` : "",
-    "No secondary effect was stronger than the primary failure driver.",
-  ].map((item) => applyDecisiveTone(item, isHighRealismTone))).filter(Boolean).slice(0, 5);
+  const limitationsList = structuredLimitations.length > 0
+    ? structuredLimitations
+    : secondaryEffects.length > 0
+    ? secondaryEffects.map((item) => applyDecisiveTone(`${item.capabilityName}: ${item.whyItMattered || item.whatHappened || "This amplified the primary failure."}`, isHighRealismTone))
+    : [applyDecisiveTone("No secondary effect was stronger than the primary failure driver.", isHighRealismTone)];
 
   const structuredStrengths = splitParagraphs(review.whatWentWellText);
-  const strengthsList = uniqCoachingPoints([
-    ...structuredStrengths,
-    ...legacyWhatWorked,
-    ...buildTranscriptStrengthParagraphs(session),
-    ...effectiveInsights.map((insight) => buildSpecificStrengthParagraph(insight)),
-    ...growthInsights.map((insight) => buildAttemptedStrengthParagraph(insight)).filter((line) => /attempt|kept|asked|acknowledge|brief|specific/i.test(String(line || ""))).slice(0, 2),
-  ].map((item) => applyDecisiveTone(item, isHighRealismTone))).filter(Boolean).slice(0, 5);
+  const strengthsList = structuredStrengths.length > 0
+    ? structuredStrengths
+    : effectiveInsights
+    .map((insight) => applyDecisiveTone(buildSpecificStrengthParagraph(insight), isHighRealismTone))
+    .filter((line) => /moved|shifted|opened|advanced|commitment|trajectory|reduced resistance/i.test(String(line || "")))
+    .slice(0, 2);
   if (!strengthsList.length) {
     strengthsList.push("No meaningful strength changed interaction trajectory in this exchange.");
   }
 
   const structuredCoachingDirection = splitParagraphs(review.coachingDirectionText);
-  const improvementText = uniqCoachingPoints([
-    ...structuredCoachingDirection,
-    ...legacyCoaching,
+  const improvementText = structuredCoachingDirection.length > 0
+    ? structuredCoachingDirection
+    : uniqCoachingPoints([
     applyDecisiveTone(review.nextAdjustment || "Respond to the HCP's exact barrier first, then ask one narrow follow-up tied to workflow, access, or evidence.", isHighRealismTone),
     ...(review.improvementAreas || []).map((item) => applyDecisiveTone(buildGuidanceParagraph(item, insightByCapability), isHighRealismTone)),
-    ...(review.missedOpportunities || []).map((item) => applyDecisiveTone(buildGuidanceParagraph(item, insightByCapability), isHighRealismTone)),
-    primaryFailure?.nextTimeAction ? applyDecisiveTone(primaryFailure.nextTimeAction, isHighRealismTone) : "",
-  ]).filter(Boolean).slice(0, 5);
+  ]).filter(Boolean).slice(0, 3);
 
   const bestRewrite = insightByCapability["listening_responsiveness"]?.exampleRewrite
     || growthInsights.find((insight) => insight?.exampleRewrite)?.exampleRewrite
@@ -887,8 +861,7 @@ export default function SessionSummaryModal({
   const cleanedBestRewrite = cleanCoachingCopy(bestRewrite);
 
   const structuredHcpTesting = splitParagraphs(review.hcpTestingText);
-  const hcpWasTesting = uniqCoachingPoints([
-    ...structuredHcpTesting,
+  const hcpWasTesting = structuredHcpTesting.length > 0 ? structuredHcpTesting : [
     scenario?.persona ? `This HCP was testing whether your response fit a ${scenario.persona.toLowerCase()} decision style.` : "",
     scenario?.coreTension ? `Core tension in this interaction: ${scenario.coreTension}` : "",
     Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length > 0
@@ -897,8 +870,7 @@ export default function SessionSummaryModal({
     Array.isArray(scenario?.keyChallenges) && scenario.keyChallenges.length > 0
       ? `Critical challenge: ${scenario.keyChallenges[0]}`
       : "",
-    primaryFailure?.whyItMattered ? `Decision filter exposed: ${primaryFailure.whyItMattered}` : "",
-  ]).filter(Boolean).slice(0, 5);
+  ].filter(Boolean);
 
   const patternInsight = scenario?.rep_profile || scenario?.patternInsight || "";
   const temperatureBand = !Number.isFinite(temperatureValue)
@@ -929,15 +901,14 @@ export default function SessionSummaryModal({
   const transcriptEvidenceItems = buildAnchoredEvidenceMoments(session, review.capabilityInsights || [], 3)
     .map((item) => applyDecisiveTone(item, isHighRealismTone));
   const structuredFailureHierarchy = splitParagraphs(review.failureHierarchyText);
-  const failureHierarchyItems = uniqCoachingPoints([
-    ...structuredFailureHierarchy,
+  const failureHierarchyItems = structuredFailureHierarchy.length > 0 ? structuredFailureHierarchy : [
     `Primary Failure Driver: ${primaryFailureLine}`,
     `Capability State: ${primaryFailureState}`,
     `Behavioral Diagnosis: ${primaryFailure?.whatHappened || review.biggestGap || "The rep did not resolve the HCP's active barrier."}`,
     `Secondary Effects: ${secondaryEffects.length ? secondaryEffects.map((item) => item.capabilityName).join(", ") : "none"}`,
     `Interaction Consequence: ${whatItCausedLine}`,
     `Coaching Direction: ${review.nextAdjustment || "Answer the exact barrier first, then use one narrow question to move the exchange forward."}`,
-  ]).filter(Boolean).slice(0, 7);
+  ];
   const evidenceRecords = Array.isArray(session?.predictiveLens?.evidenceRecords) ? session.predictiveLens.evidenceRecords : [];
   const evidenceReferenceItems = evidenceRecords
     .map((record, index) => ({
@@ -1181,62 +1152,8 @@ export default function SessionSummaryModal({
                 )}
               </SectionCard>
 
-              <SectionCard label="8) Behavioral Metric Analysis" surface={sectionSurface.evidence}>
-                <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(152, 160, 171, 0.30)", background: "rgba(255,255,255,0.72)" }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowSkillBreakdown((current) => !current)}
-                    className="w-full flex items-center justify-between px-5 py-4 text-left"
-                    style={{ background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)" }}
-                  >
-                    <div className="flex-1 min-w-0 text-left">
-                      <p
-                        className="text-[11px] font-bold uppercase tracking-[0.16em]"
-                        style={{ color: "hsl(214 28% 28%)" }}
-                      >
-                        8 Behavioral Metrics
-                      </p>
-                      <p className="text-sm font-bold mt-0.5" style={{ color: "hsl(215 34% 22%)" }}>
-                        Overall: {overallScore}/5
-                      </p>
-                      <p className="text-xs mt-0.5 font-medium" style={{ color: "hsl(215 16% 40%)" }}>
-                        Capability feedback analysis by behavioral metric. Expand, then click Analyze on any metric for rationale, evidence, adjustment, and coaching cue.
-                      </p>
-                    </div>
-                    <span
-                      className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md border ml-4"
-                      style={{ color: "hsl(215 24% 30%)", background: "rgba(255,255,255,0.92)", borderColor: "rgba(140, 152, 168, 0.42)" }}
-                    >
-                      {showSkillBreakdown ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                      {showSkillBreakdown ? "Collapse" : "Expand"}
-                    </span>
-                  </button>
-
-                  <AnimatePresence initial={false}>
-                    {showSkillBreakdown && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="overflow-hidden"
-                      >
-                        <div className="divide-y border-t" style={{ borderColor: "rgba(152, 160, 171, 0.22)" }}>
-                          {SIGNAL_INTELLIGENCE_CAPABILITIES.map(cap => (
-                            <CapabilityRow
-                              key={cap.id}
-                              cap={cap}
-                              insight={insightByCapability[cap.id]}
-                          />
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-                {showEvidenceSection && (
-                  <div className="space-y-3 pt-4 mt-4 border-t" style={{ borderColor: "rgba(152, 160, 171, 0.18)" }}>
+              {showEvidenceSection && (
+                <SectionCard label="8) Evidence / References" surface={sectionSurface.evidence}>
                   {transcriptEvidenceItems.length > 0 && (
                     <div className="space-y-2">
                       <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: REVIEW_FAINT }}>Conversation evidence</p>
@@ -1280,9 +1197,61 @@ export default function SessionSummaryModal({
                   {!transcriptEvidenceItems.length && !evidenceReferenceItems.length && !session?.predictiveLens?.synthesisError
                     ? <NotObservedMarker />
                     : null}
+                </SectionCard>
+              )}
+
+              <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(152, 160, 171, 0.30)", background: "rgba(255,255,255,0.72)" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSkillBreakdown((current) => !current)}
+                  className="w-full flex items-center justify-between px-5 py-4 text-left"
+                  style={{ background: "linear-gradient(180deg, rgba(248,251,252,0.98) 0%, rgba(240,246,247,0.98) 100%)" }}
+                >
+                  <div className="flex-1 min-w-0 text-left">
+                    <p
+                      className="text-[11px] font-bold uppercase tracking-[0.16em]"
+                      style={{ color: "hsl(214 28% 28%)" }}
+                    >
+                      Capability Diagnosis
+                    </p>
+                    <p className="text-sm font-bold mt-0.5" style={{ color: "hsl(215 34% 22%)" }}>
+                      {primaryFailure ? `Primary Failure Driver: ${primaryFailure.capabilityName}` : "Primary Failure Driver: none detected"}
+                    </p>
+                    <p className="text-xs mt-0.5 font-medium" style={{ color: "hsl(215 16% 40%)" }}>
+                      All 8 behavioral metrics rendered as capability-state diagnosis.
+                    </p>
                   </div>
-                )}
-              </SectionCard>
+                  <span
+                    className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-md border ml-4"
+                    style={{ color: "hsl(215 24% 30%)", background: "rgba(255,255,255,0.92)", borderColor: "rgba(140, 152, 168, 0.42)" }}
+                  >
+                    {showSkillBreakdown ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    {showSkillBreakdown ? "Collapse" : "Expand"}
+                  </span>
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {showSkillBreakdown && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="divide-y border-t" style={{ borderColor: "rgba(152, 160, 171, 0.22)" }}>
+                        {SIGNAL_INTELLIGENCE_CAPABILITIES.map(cap => (
+                          <CapabilityRow
+                            key={cap.id}
+                            cap={cap}
+                            insight={insightByCapability[cap.id]}
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {review.overallGuidance?.[0] && (
                 <p className="text-xs leading-relaxed pt-1" style={{ color: REVIEW_FAINT }}>

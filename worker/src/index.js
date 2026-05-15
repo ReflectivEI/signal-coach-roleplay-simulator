@@ -494,11 +494,7 @@ async function invokeGroqWithFailover({
       retryAfterSeconds: rateLimit?.retryAfterSeconds ?? null,
     });
 
-    const recoverableProviderFailure = isRecoverableProviderFailure({
-      status: response.status,
-      details: errorText,
-    });
-    if (!recoverableProviderFailure) {
+    if (!(response.status === 429 || rateLimit)) {
       return {
         response,
         data: null,

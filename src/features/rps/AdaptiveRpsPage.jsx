@@ -269,7 +269,7 @@ export default function AdaptiveRpsPage() {
     }
 
     return (
-        <div className="si-dark-shell min-h-screen px-4 py-6 pb-48 md:px-8">
+        <div className="si-dark-shell min-h-screen px-4 py-6 md:px-8">
             <div className="mx-auto max-w-6xl space-y-4">
                 <AppHeader maxWidthClassName="max-w-6xl" />
 
@@ -589,37 +589,6 @@ export default function AdaptiveRpsPage() {
                 )}
 
                 {error ? <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p> : null}
-            </div>
-            <div className="fixed inset-x-0 bottom-0 z-50 border-t border-teal-300/30 bg-slate-950/95 px-3 py-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-2xl backdrop-blur">
-                <div className="mx-auto flex max-w-6xl flex-col gap-2 lg:flex-row lg:items-end">
-                    <textarea
-                        value={repText}
-                        onChange={(e) => {
-                            setRepText(e.target.value);
-                            speech.setTranscript(e.target.value);
-                        }}
-                        placeholder="Enter REP response text here."
-                        className="si-dark-field min-h-[52px] max-h-32 flex-1 rounded-lg p-3 text-sm"
-                    />
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={handleEvaluate}
-                            disabled={busy}
-                            className="flex-1 rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60 lg:flex-none"
-                        >
-                            Evaluate
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleSave}
-                            disabled={busy || !evaluation}
-                            className="flex-1 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60 lg:flex-none"
-                        >
-                            Save
-                        </button>
-                    </div>
-                </div>
             </div>
         </div>
     );

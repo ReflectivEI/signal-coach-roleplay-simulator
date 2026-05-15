@@ -563,9 +563,7 @@ function buildBrainGroundedScenarioFallback({
     ? "I have a narrow window here."
     : pressures.has("skeptical_resistant")
       ? "I need this tied to the patients I actually manage."
-      : role.toLowerCase().includes("committee") || role.toLowerCase().includes("department")
-        ? "I need the decision path to stay practical."
-        : "I need this tied to a practical patient decision.";
+      : `From where I sit as the ${role}, I need this to stay practical.`;
 
   const concern =
     intent === "access" || pressures.has("access_barrier")
@@ -676,17 +674,15 @@ function buildStageBoundRealismReply({
   const operational = pressures.includes("operationally_constrained");
   const repeatCount = Math.max(0, Number(escalationMemory.repeatedRepPatternCount || 0));
   const choose = (variants: string[], suffix: string) => {
-    const allPriorHcp = getVisibleHcpReplies(transcript);
-    const previousHcp = allPriorHcp[allPriorHcp.length - 1] || "";
-    const seed = `${scenario?.id || scenario?.title || "scenario"}|${temperatureBand}|${escalationMemory.escalationLevel}|${repeatCount}|${transcript.length}|${previousHcp}|${currentLine}|${suffix}`;
+    const recent = getRecentVisibleHcpReplies(transcript, 8);
+    const seed = `${scenario?.id || scenario?.title || "scenario"}|${temperatureBand}|${escalationMemory.escalationLevel}|${repeatCount}|${transcript.length}|${currentLine}|${suffix}`;
     const start = deterministicIndex(seed, variants.length);
     for (let offset = 0; offset < variants.length; offset += 1) {
       const candidate = variants[(start + offset) % variants.length];
-      const repeated = allPriorHcp.some((line) =>
+      const repeated = recent.some((line) =>
         normalizeLineForContinuity(line) === normalizeLineForContinuity(candidate) ||
-        continuityOverlapScore(line, candidate) >= 0.74 ||
-        continuityContainmentScore(line, candidate) >= 0.82 ||
-        startsWithSameFrame(line, candidate)
+        continuityOverlapScore(line, candidate) >= 0.82 ||
+        continuityContainmentScore(line, candidate) >= 0.86
       );
       if (!repeated) return candidate;
     }
@@ -723,11 +719,10 @@ function buildStageBoundRealismReply({
     })();
     for (let offset = 0; offset < fallbackVariants.length; offset += 1) {
       const candidate = fallbackVariants[(start + offset) % fallbackVariants.length];
-      const repeated = allPriorHcp.some((line) =>
+      const repeated = recent.some((line) =>
         normalizeLineForContinuity(line) === normalizeLineForContinuity(candidate) ||
-        continuityOverlapScore(line, candidate) >= 0.74 ||
-        continuityContainmentScore(line, candidate) >= 0.82 ||
-        startsWithSameFrame(line, candidate)
+        continuityOverlapScore(line, candidate) >= 0.82 ||
+        continuityContainmentScore(line, candidate) >= 0.86
       );
       if (!repeated) return candidate;
     }
@@ -1131,23 +1126,42 @@ function enforceRealismLeverDialogue({
         continuityOverlapScore(prior, line) >= 0.82 ||
         continuityContainmentScore(prior, line) >= 0.86;
     });
-
-  // Guardrail demotion: this layer may validate and flag bad dialogue, but it
-  // should not author normal HCP copy. Stage drift, pressure gaps, and repeated
-  // lines are handled by the Predictive Brain regeneration pass below.
-  if (stageDrift || repeatedRecentHcpLine || pressureGap) {
-    return line;
+  if (stageBoundReply && stageDrift) {
+    return stageBoundReply;
   }
-
+  if (stageBoundReply && repeatedRecentHcpLine) {
+    return stageBoundReply;
+  }
+  if (stageBoundReply && pressureGap) {
+    return stageBoundReply;
+  }
   if (stageBoundReply && malformedEnding) {
     return stageBoundReply;
   }
 
   if (lineAlreadyShowsRealism({ hcpReply: line, temperatureBand, escalationMemory })) {
-    return line;
+    if (temperatureBand !== "low") return line;
+    return line
+      .replace(/\bYou'?re not answering\b/gi, "I still need you to answer")
+      .replace(/\bwe can stop here\b/gi, "we may need to pause here")
+      .replace(/\bnot worth continuing\b/gi, "hard to continue");
   }
 
-  return line;
+  if (stageBoundReply) return stageBoundReply;
+  if (temperatureBand === "low") {
+    return `I can stay with you on this, but I still need ${ask}.`;
+  }
+  if (temperatureBand === "medium") {
+    return escalationMemory.escalationLevel >= 2
+      ? `That still does not answer the issue. I need ${ask}.`
+      : `You are staying too broad. I need ${ask}.`;
+  }
+  if (escalationMemory.escalationLevel >= 3) {
+    return `We have already covered the broad case. If you cannot give me ${ask}, we should stop here.`;
+  }
+  return escalationMemory.escalationLevel >= 1
+    ? `You are still not answering the point. Give me ${ask}.`
+    : `I am not moving on a broad answer. Give me ${ask}.`;
 }
 
 function deriveRealismCueCandidate({
@@ -1510,20 +1524,6 @@ function missingPersistentPressure(hcpReply: string, scenario: any, hcpTurnCount
 
 function hasGlobalStockPhrase(text = ""): boolean {
   return GLOBAL_STOCK_PHRASE_PATTERNS.some((pattern) => pattern.test(String(text || "")));
-}
-
-function hasGenericGuardrailScaffold(text = ""): boolean {
-  const line = String(text || "").toLowerCase().replace(/\s+/g, " ").trim();
-  return [
-    /\bif this stays general\b/,
-    /\bwe should stop here\b/,
-    /\byou'?re still not making this practical\b/,
-    /\bgive me why this is worth opening a conversation\b/,
-    /\byou are still not answering the point\b/,
-    /\byou are staying too broad\b/,
-    /\bgive me the specific answer\b/,
-    /\bwhat specifically changes\b/,
-  ].some((pattern) => pattern.test(line));
 }
 
 function needsNaturalnessRewrite(text: string): boolean {
@@ -1914,14 +1914,6 @@ function startsWithSameFrame(a = "", b = ""): boolean {
   const aHead = meaningfulContinuityTokens(a).slice(0, 4).join(" ");
   const bHead = meaningfulContinuityTokens(b).slice(0, 4).join(" ");
   return Boolean(aHead && bHead && aHead === bHead);
-}
-
-function hasGenericRoleFrame(text = ""): boolean {
-  return /\bfrom where i sit as\b|\bas (?:the )?(?:senior physician|department head|specialist physician|committee influencer|treating clinician)\b/i.test(String(text || ""));
-}
-
-function hasSameGenericRoleFrame(a = "", b = ""): boolean {
-  return hasGenericRoleFrame(a) && hasGenericRoleFrame(b);
 }
 
 function deterministicIndex(seed = "", length = 1): number {
@@ -2359,20 +2351,15 @@ function selectNonRepeatingFallbackVariant({
   seed: string;
 }): string {
   if (!Array.isArray(variants) || variants.length === 0) return "";
-  const allPriorHcp = getVisibleHcpReplies(transcript);
-  const previousHcp = allPriorHcp[allPriorHcp.length - 1] || "";
-  const start = deterministicIndex(`${seed}|${previousHcp}`, variants.length);
+  const recent = getRecentVisibleHcpReplies(transcript, 6);
+  const start = deterministicIndex(seed, variants.length);
 
   for (let offset = 0; offset < variants.length; offset += 1) {
     const candidate = variants[(start + offset) % variants.length];
-    const nearDuplicate = allPriorHcp.some((line) => {
+    const nearDuplicate = recent.some((line) => {
       const overlap = continuityOverlapScore(candidate, line);
       const containment = continuityContainmentScore(candidate, line);
-      return normalizeLineForContinuity(candidate) === normalizeLineForContinuity(line)
-        || startsWithSameFrame(candidate, line)
-        || overlap >= 0.68
-        || containment >= 0.78
-        || hasSameGenericRoleFrame(candidate, line);
+      return startsWithSameFrame(candidate, line) || overlap >= 0.72 || containment >= 0.8;
     });
     if (!nearDuplicate) return candidate;
   }
@@ -2472,7 +2459,7 @@ function enforceClinicalValueAccessWorkflowSurface({
   if (!requiresAccess && !requiresWorkflow) return hcpReply;
 
   const value = String(hcpReply || "").trim();
-  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup|endpoint|outcome|treatment decision|decision threshold|patient-level|hazard ratio\b/i.test(value);
+  const hasClinicalAnchor = /\btrial|guideline|renal|efficacy|safety|subgroup\b/i.test(value);
   const hasAccessAnchor = /\bformulary|non-preferred|prior auth|prior authorization|committee|access|payer|coverage\b/i.test(value);
   const hasWorkflowAnchor = /\bstaff|workflow|handoff|callback|extra step|extra steps|process|MA\b/i.test(value);
   const costOnlyLoop = /\btotal cost per patient\b|\badded cost per patient\b|\bcost side is unclear\b/i.test(value)
@@ -2965,28 +2952,19 @@ function summarizeConcernContinuity(transcript: ConversationTurn[], scenario: an
 
 
 
-function getVisibleHcpReplies(transcript: ConversationTurn[]): string[] {
+function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): string[] {
   return transcript
     .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
     .map((turn) => String(turn.text || "").trim())
-    .filter(Boolean);
-}
-
-function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): string[] {
-  return getVisibleHcpReplies(transcript)
-    .slice(-Math.max(1, limit));
+    .filter(Boolean)
+    .slice(-Math.max(3, Math.min(5, limit)));
 }
 
 function inferSkeletonSignature(text = ""): string {
   const lower = String(text || "").toLowerCase();
-  if (hasGenericRoleFrame(lower)) return "generic_role_frame";
   if (/\bwhat in that study\b/.test(lower)) return "what_in_study";
   if (/\bwhat specifically\b/.test(lower)) return "what_specifically";
   if (/\bwhat changes for my staff\b/.test(lower)) return "staff_change";
-  if (/\bgive me the short version\b/.test(lower)) return "short_version";
-  if (/\bwhich patient (?:subgroup|profile)\b/.test(lower)) return "which_patient_profile";
-  if (/\bclear total cost per patient\b/.test(lower)) return "clear_total_cost";
-  if (/\bkeep this on the evidence\b/.test(lower)) return "keep_evidence";
   if (/\bwhich endpoint\b/.test(lower)) return "which_endpoint";
   if (/\bwhich patients\b/.test(lower)) return "which_patients";
   if (/\bkeep it specific\b/.test(lower)) return "keep_specific";
@@ -2995,167 +2973,31 @@ function inferSkeletonSignature(text = ""): string {
   return "";
 }
 
-function buildSameConcernProgressionReply({
-  hcpReply,
-  transcript,
-  scenario,
-}: {
-  hcpReply: string;
-  transcript: ConversationTurn[];
-  scenario: any;
-}): string {
-  const current = String(hcpReply || "").trim();
-  const allPriorHcp = getVisibleHcpReplies(transcript);
-  const previousHcp = allPriorHcp[allPriorHcp.length - 1] || "";
-  const family = deriveRealismConcernFamily(scenario, `${previousHcp} ${current}`);
-  const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const pressures = Array.isArray(scenario?.interactionPressure)
-    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
-    : [];
-  const timeConstrained = pressures.includes("time_constrained");
-  const operational = pressures.includes("operationally_constrained") || pressures.includes("workflow_pressure");
-  const accessPressure = pressures.includes("access_barrier");
-  const scenarioText = `${scenario?.title || ""} ${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
-  const renal = /\brenal|kidney|ckd|impairment\b/.test(scenarioText);
-  const seed = `${scenario?.id || scenario?.title || "scenario"}|${stage}|${family}|${transcript.length}|${previousHcp}|${current}`;
-  const compoundClinicalValue = stage === "clinical_value" && (accessPressure || operational);
-
-  if (compoundClinicalValue) {
-    const compoundVariants = [
-      "For value to matter here, give me the patient-level outcome, the coverage path, and what work still lands on my MA.",
-      "Bring the three pieces together: subgroup and endpoint, prior-auth path, and the staff step that changes.",
-      "If the efficacy holds, tell me which patient subgroup benefits, how coverage clears, and what callback work comes off my team.",
-      "I need the value equation in one answer: outcome threshold, payer step, and what my staff does differently.",
-      "Do not split this apart. Show me the endpoint that changes treatment, the access path, and whether my staff avoids another repair cycle.",
-      "Before I call this value, I need the treated subgroup, the prior-auth requirement, and the workflow impact in the same answer.",
-    ];
-
-    return selectNonRepeatingFallbackVariant({
-      variants: compoundVariants,
-      transcript,
-      seed: `${seed}|compound-clinical-value`,
-    }) || compoundVariants[deterministicIndex(seed, compoundVariants.length)];
-  }
-
-  const variantsByFamily: Record<string, string[]> = {
-    time: [
-      operational
-        ? "I asked for the short version already. Now give me the one staff change before I get back to patients."
-        : "I asked for the short version already. Now give me the one point that changes a patient decision.",
-      "We are spending the limited time on the same setup. Narrow this to one practical answer.",
-      "I am nearly out of time. Either name the concrete change or send the detail over.",
-      "This is still not moving. Give me the decision point in one sentence.",
-    ],
-    workflow: [
-      "We have covered that this needs to be practical. What work comes off my staff first?",
-      "That still leaves the office burden unresolved. Name the handoff, owner, and step that changes.",
-      "I am not adding another process on a vague promise. What changes on day one for the team?",
-      "Move this from concept to workflow: who does what differently after this conversation?",
-    ],
-    access: [
-      "We have named access as the blocker. Which approval step changes first, and who handles it?",
-      "That still does not clear the access issue. Tell me the payer step, prior-auth requirement, and staff impact.",
-      "Before this goes further, map the coverage path I would actually use.",
-      "The access barrier is still sitting there. What changes before the patient start is delayed?",
-    ],
-    evidence: [
-      renal
-        ? "We have covered the broad evidence claim. Which renal subgroup, endpoint, and treatment threshold change my decision?"
-        : "We have covered the broad evidence claim. Which subgroup, endpoint, and treatment threshold change my decision?",
-      "Do not give me the headline again. Tie the evidence to the patient I would actually treat.",
-      "The data only matters if it changes care. Name the patient group and outcome that crosses that threshold.",
-      "I need the clinical bridge now: who benefits, on which endpoint, and why that should change practice.",
-    ],
-    screening: [
-      "We have already asked who fits. Name the patient profile and what I should do differently with them.",
-      "That is still not a patient definition. Which patient should I picture first?",
-      "If you cannot narrow the profile, I cannot tell whether this belongs in my practice.",
-      "Move from broad fit to a usable screen: who qualifies, who does not, and why?",
-    ],
-    general: [
-      "We are circling the same point. Make the specific decision you want me to reconsider clear.",
-      "That still does not tell me what changes in practice. Give me the concrete decision point.",
-      "If there is a practical reason to continue, name it plainly now.",
-      "I need the next answer to be specific: patient, decision, and action.",
-    ],
-  };
-
-  const stageVariants: string[] = [];
-  if (stage === "clinical_value") {
-    stageVariants.push(
-      accessPressure || operational
-        ? "For value to matter here, give me the patient outcome, the access path, and the staff work that changes."
-        : "For value to matter here, give me the subgroup, endpoint, and decision threshold.",
-      "The clinical value case is still incomplete. Tie the evidence to the patients I would actually treat.",
-    );
-  } else if (stage === "initial_access") {
-    stageVariants.push(
-      timeConstrained && operational
-        ? "Before I get back to patients, give me the staff change that makes this worth opening."
-        : "At this stage, I only need the reason this deserves access now.",
-      "Do not jump downstream. Tell me why this should get time today.",
-    );
-  } else if (stage === "early_discovery") {
-    stageVariants.push(
-      "At this stage, narrow the patient profile before asking me to buy the broader claim.",
-      "Start with the patient type. Without that, the rest is too broad.",
-    );
-  } else if (stage === "adoption_implementation") {
-    stageVariants.push(
-      "At implementation, the question is ownership: who changes the process and what comes off the team?",
-      "Do not leave this at concept level. What happens on day one, and who owns it?",
-    );
-  } else if (stage === "access_formulary") {
-    stageVariants.push(
-      "At this point the access path is the issue. What approval step changes first?",
-      "I need the formulary and prior-auth path, not another general value statement.",
-    );
-  }
-
-  const variants = [...stageVariants, ...(variantsByFamily[family] || variantsByFamily.general)];
-  return selectNonRepeatingFallbackVariant({
-    variants,
-    transcript,
-    seed,
-  }) || deterministicContinuityVariation({
-    hcpReply: current,
-    transcript,
-    scenario,
-  });
-}
-
 function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[], scenario: any): string {
   const recent = getRecentVisibleHcpReplies(transcript, 5);
-  const allPriorHcp = getVisibleHcpReplies(transcript);
   const current = String(hcpReply || "").trim();
-  if (!current || !allPriorHcp.length) return hcpReply;
+  if (!current || !recent.length) return hcpReply;
   const normalizedCurrent = normalizeLineForContinuity(current);
-  const normalizedPrior = allPriorHcp.map((line) => normalizeLineForContinuity(line));
-  const exactRepeat = normalizedPrior.includes(normalizedCurrent);
+  const normalizedRecent = recent.map((line) => normalizeLineForContinuity(line));
+  const exactRepeat = normalizedRecent.includes(normalizedCurrent);
 
   const skeleton = inferSkeletonSignature(current);
-  const repeatedSkeleton = skeleton && allPriorHcp.filter((line) => inferSkeletonSignature(line) === skeleton).length >= 1;
+  const repeatedSkeleton = skeleton && recent.slice(-3).some((line) => inferSkeletonSignature(line) === skeleton);
   const highOverlapRepeat = recent.slice(-4).some((line) =>
     continuityOverlapScore(current, line) >= 0.68
     || continuityContainmentScore(current, line) >= 0.82
     || startsWithSameFrame(current, line)
   );
-  const sessionNearRepeat = allPriorHcp.some((line) =>
-    continuityOverlapScore(current, line) >= 0.72
-    || continuityContainmentScore(current, line) >= 0.78
-    || hasSameGenericRoleFrame(current, line)
-  );
 
   const currentTags = inferConcernTags(current);
-  const repeatedIntent = allPriorHcp.filter((line) => {
+  const repeatedIntent = recent.slice(-3).filter((line) => {
     const tags = inferConcernTags(line);
     return currentTags.some((tag) => tags.includes(tag));
   }).length >= 2;
-  const genericRoleRepeat = hasGenericRoleFrame(current);
 
-  if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat && !sessionNearRepeat && !repeatedIntent && !genericRoleRepeat) return hcpReply;
+  if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat && !repeatedIntent) return hcpReply;
 
-  return buildSameConcernProgressionReply({
+  return deterministicContinuityVariation({
     hcpReply: current,
     transcript,
     scenario,
@@ -4045,15 +3887,12 @@ Return ONLY valid JSON:
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
-  const finalGenericScaffold = hasGenericGuardrailScaffold(hcpReply);
-  if (hasGlobalStockPhrase(hcpReply) || finalGenericScaffold || finalMissingPressures.length > 0) {
+  if (hasGlobalStockPhrase(hcpReply) || finalMissingPressures.length > 0) {
     try {
       hcpReply = await regenerateWithPredictiveBrain({
         currentLine: hcpReply,
         reason: hasGlobalStockPhrase(hcpReply)
           ? "The line used a banned global stock phrase. Regenerate without canned simulator language."
-          : finalGenericScaffold
-            ? "The line used generic guardrail or escalation scaffolding. Regenerate as the specific HCP using the Predictive HCP Brain, current state, and rep message."
           : "The line dropped scenario pressure persistence. Regenerate with the missing pressure anchor in this HCP's own words.",
         predictiveContext: predictivePromptContext,
         scenario,
@@ -4090,47 +3929,6 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
-  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
-  hcpReply = enforceClinicalValueAccessWorkflowSurface({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-  hcpReply = enforceClinicalValueEvidenceSurface({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
-
-  if (predictivePromptContext.trim() && hasGenericGuardrailScaffold(hcpReply)) {
-    try {
-      hcpReply = await regenerateWithPredictiveBrain({
-        currentLine: hcpReply,
-        reason: "Final dialogue was overwritten by generic realism scaffolding. Re-author it from the Predictive HCP Brain while preserving the same realism intensity.",
-        predictiveContext: predictivePromptContext,
-        scenario,
-        repMessage,
-        transcript,
-        escalationMemory,
-        missingPressures: missingPersistentPressure(hcpReply, scenario, hcpTurnCount),
-        behaviorState: result.nextBehaviorState || currentBehaviorState,
-        currentJourneyState: result.nextJourneyState || currentJourneyState,
-      });
-      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
-        hcpReply,
-        scenario,
-        turn: turnDirectives,
-        profile: runtimeProfile,
-        hcpTurnCount,
-        liveRepAlignmentActive: firstTurnAlignment.applied || finalLiveAlignment.applied,
-      }), transcript, scenario);
-    } catch {
-      // Preserve the last valid line rather than falling back to another generic guardrail phrase.
-    }
-  }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
