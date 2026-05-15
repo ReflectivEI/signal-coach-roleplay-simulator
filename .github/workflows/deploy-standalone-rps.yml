@@ -140,6 +140,15 @@ jobs:
           grep -q '"service":"reflectivai-rps-api"' worker-health.json
           grep -q '"ready":true' worker-health.json
 
+      - name: Verify live dedicated Worker LLM invoke
+        run: |
+          curl --fail --silent --show-error --request POST "$RPS_WORKER_URL/api/llm/invoke" \
+            --header "Content-Type: application/json" \
+            --data '{"prompt":"Return the single word ok.","max_tokens":8,"temperature":0}' \
+            | tee worker-llm-smoke.json
+          grep -q '"provider":"groq"' worker-llm-smoke.json
+          grep -q '"response"' worker-llm-smoke.json
+
       - name: Verify live dedicated Pages shell
         run: |
           curl --fail --silent --show-error "$RPS_PAGES_URL" | tee pages.html

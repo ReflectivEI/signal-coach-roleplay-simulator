@@ -30,6 +30,8 @@ deploy the standalone RPS Worker or bundle the RPS Worker into `reflect-ai-now`.
   - Deploys only `reflectivai-rps-api` and `signal-coach-roleplay-simulator`.
   - Uses `standalone-rps-production` as the GitHub deployment environment.
   - Verifies the live Worker `/health` endpoint after deploy.
+  - Verifies the live Worker `/api/llm/invoke` endpoint after deploy so stale or
+    invalid provider secrets cannot pass on health alone.
   - Verifies the live Pages shell after deploy.
 - `scripts/assert-rps-deploy-targets.mjs`
   - Fails if the workflow is not running in
