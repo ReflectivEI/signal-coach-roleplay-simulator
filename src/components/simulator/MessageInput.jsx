@@ -44,7 +44,7 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
 
   return (
     <div
-      className="p-4 border-t absolute bottom-0 left-0 right-0 z-10"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t p-3 pb-[max(12px,env(safe-area-inset-bottom))] lg:absolute lg:z-10 lg:p-4"
       style={{
         background: "linear-gradient(180deg, rgba(226, 241, 240, 0.72) 0%, rgba(241,248,249,0.92) 100%)",
         borderColor: "rgba(131, 164, 186, 0.22)",

@@ -6361,7 +6361,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
               />
 
               {/* Input */}
-              <div className="absolute bottom-0 left-0 right-0 px-3 md:px-5 py-3 border-t flex-shrink-0 z-10 bg-white pb-[max(12px,env(safe-area-inset-bottom))]">
+              <div className="fixed bottom-0 left-0 right-0 px-3 md:px-5 py-3 border-t flex-shrink-0 z-50 bg-white pb-[max(12px,env(safe-area-inset-bottom))] lg:absolute lg:z-10">
                 <form
                   onSubmit={e => {
                     e.preventDefault();
