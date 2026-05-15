@@ -1,0 +1,11 @@
+name = "reflectivai-rps-api-staging"
+main = "worker/index.ts"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+[vars]
+LLM_TIMEOUT_MS = "25000"
+
+[[kv_namespaces]]
+binding = "APP_DATA_KV"
+id = "6795e3581b984a7eb581f1f37b0bcfaf"
