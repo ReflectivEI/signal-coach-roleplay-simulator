@@ -754,9 +754,10 @@ function asRepReplyPayload(reply = "", concept = null, context = {}) {
       scenarioRouting,
     )
     : scrubStaleFallbackPhrases(aligned, scenarioRouting || {});
+  const repeatedSafe = rotateRepeatedRepLine(repaired, context);
 
   return {
-    text: repaired,
+    text: normalizeDialoguePunctuation(repeatedSafe).trim(),
     concept,
   };
 }
@@ -1418,19 +1419,19 @@ function hasEvidenceRelevanceDirectAnswer(text = "") {
 }
 
 function hasSemanticDomainSignal(text = "") {
-  return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
+  return /prior auth|prior authorization|\bpa\b|authorization|request|requests|form|paperwork|documentation|payer|office|staff|team|ma\b|medical assistant|workflow|callback|resubmit|resubmission|kicked back|kicked-back|bounce it back|bounced back|denied|clean submission|approval|chart notes|front desk|office staff|step therapy|missing info|missing information/.test(normalizeForMatch(text));
 }
 
 function hasSemanticChangeSignal(text = "") {
-  return /fix|complete|submit|send|reduce|remove|avoid|stop|less|fewer|no more|not have to|doesn't have to|goes through|move forward|cleaner|right first time|cuts out|drops off|isn't reopening|not doing|doesn't bounce back|isn't fixing/.test(normalizeForMatch(text));
+  return /fix|complete|submit|send|reduce|remove|removed|removes|avoid|stop|less|fewer|no more|not have to|doesn't have to|goes through|move forward|move to the next action|without repeating|cleaner|right first time|cuts out|drops off|isn't reopening|not doing|doesn't bounce back|isn't fixing/.test(normalizeForMatch(text));
 }
 
 function hasSemanticSpecificitySignal(text = "") {
-  return /resubmission|missing info|missing information|callback|kicked back|kicked-back|denied|reopened|payer|documentation|icd|step therapy|chart notes|form|front desk|ma\b|medical assistant|office staff|approval|clean first time|authorization|same authorization|same pa|same prior auth|bounced back|send it again|fix and send it again/.test(normalizeForMatch(text));
+  return /resubmission|repeat correction|repeating the same fix|fix step|staff step|office task|missing info|missing information|callback|kicked back|kicked-back|denied|reopened|payer|documentation|icd|step therapy|chart notes|form|front desk|ma\b|medical assistant|office staff|approval|clean first time|authorization|same authorization|same pa|same prior auth|bounced back|send it again|fix and send it again/.test(normalizeForMatch(text));
 }
 
 function hasOperationalAnchor(text = "") {
-  return /resubmit|resubmission|missing info|missing information|fix|fixing|correcting|reopen|reopening|send again|second time|same pa|same prior auth|same authorization|kicked back|kicked-back|denied|payer bounce|bounce it back|bounced back|form complete|form completion|form is complete|documentation gap|ma chasing|calling back|callback|callbacks|back and forth/.test(normalizeForMatch(text));
+  return /resubmit|resubmission|repeat correction|repeating the same fix|fix step|staff step|office task|missing info|missing information|fix|fixing|correcting|reopen|reopening|send again|second time|same pa|same prior auth|same authorization|kicked back|kicked-back|denied|payer bounce|bounce it back|bounced back|form complete|form completion|form is complete|documentation gap|ma chasing|calling back|callback|callbacks|back and forth/.test(normalizeForMatch(text));
 }
 
 function hasShortDirectOperationalResolution(text = "") {

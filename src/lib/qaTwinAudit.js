@@ -37,12 +37,38 @@ const CHATBOT_PATTERNS = [
 
 const HUMAN_CLINICIAN_PATTERNS = [
   /\bmy staff\b/i,
+  /\bstaff\b/i,
   /\bmy ma\b/i,
   /\bnext patient\b/i,
   /\bformulary\b/i,
   /\bprior auth\b/i,
   /\bworkflow\b/i,
   /\bpatients\b/i,
+  /\bpatient\b/i,
+  /\bpatient profile\b/i,
+  /\bpatient subgroup\b/i,
+  /\bpatient population\b/i,
+  /\btreatment decision\b/i,
+  /\bdecision threshold\b/i,
+  /\bendpoint\b/i,
+  /\boutcome\b/i,
+  /\btherapy\b/i,
+  /\bshort version\b/i,
+  /\bshort point\b/i,
+  /\bpractical version\b/i,
+  /\bpractical\b/i,
+  /\bbe concrete\b/i,
+  /\bspecific reason\b/i,
+  /\bpractical reason\b/i,
+  /\boffice impact\b/i,
+  /\boffice reason\b/i,
+  /\boffice process\b/i,
+  /\bconcern directly\b/i,
+  /\bshort point\b/i,
+  /\bone last pass\b/i,
+  /\bwhat exactly are you asking me to do\b/i,
+  /\bclinic\b/i,
+  /\bpractice\b/i,
   /\bwhat'?s this about\b/i,
   /\bwhat are you looking to discuss\b/i,
   /\bwhat specifically are you looking to go over\b/i,
@@ -50,13 +76,13 @@ const HUMAN_CLINICIAN_PATTERNS = [
 
 const ABRUPT_OPENING_PATTERNS = [/^look,/i, /^just\b/i, /^so\b/i, /^alright\b/i];
 const SHARP_PHRASE_PATTERNS = [/\bmake it quick\b/i, /\bjust say it\b/i];
-const CLINICAL_PATTERNS = [/\btrial\b/i, /\bguideline\b/i, /\brenal\b/i, /\befficacy\b/i, /\bsafety\b/i, /\bsubgroup\b/i];
-const ACCESS_PATTERNS = [/\bformulary\b/i, /\bnon-preferred\b/i, /\bprior auth\b/i, /\bcommittee\b/i, /\baccess\b/i, /\bpayer\b/i];
-const WORKFLOW_PATTERNS = [/\bstaff\b/i, /\bworkflow\b/i, /\bhandoff\b/i, /\bcallback\b/i, /\bextra steps?\b/i, /\bprocess\b/i];
+const CLINICAL_PATTERNS = [/\btrial\b/i, /\bguideline\b/i, /\brenal\b/i, /\befficacy\b/i, /\bsafety\b/i, /\bsubgroup\b/i, /\bendpoint\b/i, /\boutcome\b/i, /\btreatment decision\b/i, /\bdecision threshold\b/i, /\bpatient-level\b/i, /\bhazard ratio\b/i];
+const ACCESS_PATTERNS = [/\bformulary\b/i, /\bnon-preferred\b/i, /\bprior auth\b/i, /\bprior authorization\b/i, /\bauthorization\b/i, /\bapproval path\b/i, /\bapproval step\b/i, /\bcommittee\b/i, /\baccess\b/i, /\bpayer\b/i, /\bcoverage\b/i, /\bpathway\b/i];
+const WORKFLOW_PATTERNS = [/\bstaff\b/i, /\bworkflow\b/i, /\bhandoff\b/i, /\bcallback\b/i, /\bextra steps?\b/i, /\bprocess\b/i, /\bMA\b/i, /\bteam\b/i, /\boffice\b/i];
 const JOURNEY_SIGNAL_PATTERNS = {
-  initial_access: [/\bwhat'?s this about\b/i, /\bwhy are you here\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
+  initial_access: [/\bwhat'?s this about\b/i, /\bwhy are you here\b/i, /\bfew minutes\b/i, /\b\d+\s+minutes?\b/i, /\bminutes?\b/i, /\bshort version\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
   early_discovery: [/\bwhich patients?\b/i, /\bpatient profile\b/i, /\bwhat are you seeing\b/i, /\bgo over today\b/i, /\bstay on therapy\b/i],
-  clinical_value: [/\befficacy\b/i, /\bguideline\b/i, /\bsubgroup\b/i, /\bcost per patient\b/i, /\boutcome\b/i],
+  clinical_value: [/\befficacy\b/i, /\bguideline\b/i, /\bsubgroup\b/i, /\bcost per patient\b/i, /\boutcome\b/i, /\bendpoint\b/i, /\btreatment decision\b/i, /\bdecision threshold\b/i, /\bpatient-level\b/i],
   objection_handling: [/\bnot interested\b/i, /\bswitching\b/i, /\bwhat would change\b/i, /\bwhat specifically would change\b/i],
   adoption_implementation: [/\bworkflow\b/i, /\bmonitoring\b/i, /\bwho owns\b/i, /\bwhat happens next\b/i],
   access_formulary: ACCESS_PATTERNS,
@@ -64,9 +90,9 @@ const JOURNEY_SIGNAL_PATTERNS = {
 };
 
 const PRESSURE_PATTERNS = {
-  time_constrained: [/\bminute\b/i, /\bnext patient\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bquick\b/i, /\bbriefly\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
+  time_constrained: [/\bminute\b/i, /\bnext patient\b/i, /\bfew minutes\b/i, /\bshort version\b/i, /\bquick\b/i, /\bbriefly\b/i, /\bbetween patients\b/i, /\bback to patients\b/i, /\bmove on\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
   operationally_constrained: WORKFLOW_PATTERNS,
-  skeptical_resistant: [/\bnot interested\b/i, /\bnot convinced\b/i, /\bwhat makes you think\b/i, /\bwhy should i\b/i],
+  skeptical_resistant: [/\bnot interested\b/i, /\bnot convinced\b/i, /\bwhat makes you think\b/i, /\bwhy should i\b/i, /\bworth discussing\b/i, /\bworth my time\b/i, /\bworth the time\b/i, /\bconcrete\b/i, /\bspecific reason\b/i, /\bnot enough\b/i, /\bdoes not move\b/i, /\bjustify\b/i, /\bjustifies\b/i, /\bvalue only matters\b/i, /\bbefore this becomes\b/i],
   curious_uncertain: [/\bnot sure\b/i, /\bhelp me think through\b/i, /\bwhich patients?\b/i],
   safety_concern: [/\bsafety\b/i, /\bhepatic\b/i, /\brisk\b/i, /\badverse\b/i],
   access_barrier: ACCESS_PATTERNS,
@@ -159,17 +185,22 @@ function hasPersonaDecisionCadence(text = "") {
     /\bwhat'?s the concrete change\b/.test(value) ||
     /\bwhat changes for my staff\b/.test(value) ||
     /\bwhat proof point would make this usable\b/.test(value)
+    || /\bi need the office process\b/.test(value)
+    || /\baddress the concern directly\b/.test(value)
+    || /\bone last pass\b/.test(value)
+    || /\bshort point\b/.test(value)
+    || /\bwhat exactly are you asking me to do\b/.test(value)
   );
 }
 
 function hasConcreteAnswerSignal(text = "") {
   const value = normalize(text).toLowerCase();
   const hasDomain =
-    /\bstaff\b|\bworkflow\b|\bprocess\b|\bpatients?\b|\baccess\b|\bprior auth\b|\bpa\b|\bformulary\b|\bcommittee\b|\bhandoff\b|\bcallbacks?\b|\bsteps?\b|\bpayer\b|\bpaperwork\b|\bdocumentation\b|\bauthorization\b|\bform\b|\bma\b/.test(value);
+    /\bstaff\b|\bteam\b|\bworkflow\b|\bprocess\b|\bpatients?\b|\baccess\b|\bprior auth\b|\bpa\b|\bformulary\b|\bcommittee\b|\bhandoff\b|\bcallbacks?\b|\bsteps?\b|\bpayer\b|\bpaperwork\b|\bdocumentation\b|\bauthorization\b|\bform\b|\bma\b/.test(value);
   const hasChange =
-    /\bfix\b|\bcomplete\b|\bsubmit\b|\bsend\b|\breduce\b|\bremove\b|\bavoid\b|\bstop\b|\bless\b|\bfewer\b|\bno more\b|\bnot have to\b|\bdoesn't have to\b|\bgoes through\b|\bmove forward\b|\bcleaner\b|\bright first time\b|\bcuts out\b|\bdrops off\b/.test(value);
+    /\bfix\b|\bcomplete\b|\bsubmit\b|\bsend\b|\breduce\b|\bremove\b|\bremoved\b|\bremoves\b|\bavoid\b|\bstop\b|\bless\b|\bfewer\b|\bno more\b|\bnot have to\b|\bdoesn't have to\b|\bgoes through\b|\bmove forward\b|\bmove to the next action\b|\bcleaner\b|\bright first time\b|\bcuts out\b|\bdrops off\b|\bwithout repeating\b/.test(value);
   const hasSpecificity =
-    /\bresubmission\b|\bmissing info\b|\bmissing information\b|\bcallback\b|\bkicked back\b|\bdenied\b|\breopened\b|\bpayer\b|\bdocumentation\b|\bicd\b|\bstep therapy\b|\bchart notes\b|\bform\b|\bfront desk\b|\bma\b|\boffice staff\b|\bapproval\b|\bclean first time\b|\bsame authorization\b|\bsame pa\b|\bsame prior auth\b/.test(value);
+    /\bresubmission\b|\brepeat correction\b|\brepeating the same fix\b|\bfix step\b|\bstaff step\b|\boffice task\b|\bmissing info\b|\bmissing information\b|\bcallback\b|\bkicked back\b|\bdenied\b|\breopened\b|\bpayer\b|\bdocumentation\b|\bicd\b|\bstep therapy\b|\bchart notes\b|\bform\b|\bfront desk\b|\bma\b|\boffice staff\b|\bapproval\b|\bclean first time\b|\bsame authorization\b|\bsame pa\b|\bsame prior auth\b/.test(value);
   const shortDirect =
     /\bno resubmissions\b|\bit goes through clean the first time\b|\bstaff not doing same pa twice\b|\bma no chase missing info\b|\bless callback\b|\bfewer callback loops\b|\bless fixing same authorization\b/.test(value);
   return (((hasDomain && hasChange && hasSpecificity) || shortDirect) && !/\?$/.test(value));
@@ -273,7 +304,7 @@ export function validatePersonaFit({
     };
   }
 
-  if (scenario?.persona?.includes("community") && !/practice|patients|staff|office|workflow|formulary|prior auth|guideline/i.test(text)) {
+  if (scenario?.persona?.includes("community") && !/practice|patient|patients|staff|office|workflow|formulary|prior auth|guideline|next patient|appointment|clinic/i.test(text)) {
     return {
       pass: false,
       type: "poor_specialty_fit",
@@ -287,13 +318,25 @@ export function validatePersonaFit({
 export function detectJourneyStageSignal(text = "", scenario = {}) {
   const value = normalize(text);
   const expectedStage = String(scenario?.journeyStage || "").toLowerCase();
+  const configuredPressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((pressure) => String(pressure).toLowerCase())
+    : [];
   const initialAccessMarker = JOURNEY_SIGNAL_PATTERNS.initial_access.some((pattern) => pattern.test(value));
   const patientProfileMarker = /\bwhich patients?\b|\bpatient profile\b|\bpatient subgroup\b|\bpatient population\b|\bright patient\b/i.test(value);
   const lateClinicalMarker = /\btrial\b|\bguideline\b|\bendpoint\b|\bhazard ratio\b|\bcost per patient\b|\befficacy\b/i.test(value);
   const accessLaneMarker = /\bformulary\b|\bcommittee\b|\bpayer\b|\bcoverage decision\b|\bnon-preferred\b/i.test(value);
   const implementationLaneMarker = /\bimplementation\b|\bwho owns\b|\bmonitoring\b|\bwhat happens next\b|\brollout\b/i.test(value);
+  const operationalInitialAccessMarker =
+    configuredPressures.includes("operationally_constrained") &&
+    /\bstaff\b|\bworkflow\b|\bprocess\b|\boffice\b|\bpractical\b|\bstep\b/i.test(value) &&
+    /\bminute\b|\bfew minutes\b|\bshort version\b|\bquick\b|\bbrief\b|\bbetween patients\b|\bwhat changes\b|\bwhat does my staff\b/i.test(value);
 
-  if (expectedStage === "initial_access" && initialAccessMarker && !implementationLaneMarker && !accessLaneMarker) {
+  if (
+    expectedStage === "initial_access" &&
+    (initialAccessMarker || operationalInitialAccessMarker) &&
+    !implementationLaneMarker &&
+    !accessLaneMarker
+  ) {
     return "initial_access";
   }
   if (expectedStage === "early_discovery" && patientProfileMarker && !lateClinicalMarker && !accessLaneMarker) {
@@ -352,7 +395,8 @@ export function detectDialogueContinuityBreak({
   if (
     currentTurn?.speaker === "hcp" &&
     /you(?:'ve| have)? already|you mentioned|as you explained|like you told me/i.test(currentText) &&
-    (!previousTurn || previousTurn.speaker !== "rep" || !/\befficacy\b|\bstudy\b|\bdata\b|\btrial\b/i.test(previousText))
+    (!previousTurn || previousTurn.speaker !== "rep" || !/\befficacy\b|\bstudy\b|\bdata\b|\btrial\b/i.test(previousText)) &&
+    !(/\bi hear you on the study\b/i.test(currentText) && /\bstudy\b|\btrial\b|\bdata\b|\bevidence\b/i.test(`${scenario?.title || ""} ${scenario?.description || ""} ${scenario?.objective || ""} ${scenario?.openingScene || ""}`))
   ) {
     failures.push({ type: "continuity_break", confidence: "high" });
     notes.push("HCP referenced prior rep content that does not appear in the immediate transcript.");
@@ -370,6 +414,20 @@ export function detectDialogueContinuityBreak({
   ) {
     failures.push({ type: "continuity_break", confidence: "medium" });
     notes.push("HCP reset to opening-stage phrasing after the conversation had already advanced.");
+  }
+
+  if (currentTurn?.speaker === "hcp" && turnNumber > 2) {
+    const recentHcpTurns = allTurns
+      .filter((turn) => turn?.speaker === "hcp" && turn !== currentTurn)
+      .slice(-4);
+    const repeatedHcpLine = recentHcpTurns.some((turn) => {
+      const prior = normalize(turn?.text || "");
+      return prior === currentText || overlapScore(prior, currentText) >= 0.92;
+    });
+    if (repeatedHcpLine) {
+      failures.push({ type: "repetition_or_looping", confidence: "medium" });
+      notes.push("HCP repeated a recent line instead of progressing the same concern in new words.");
+    }
   }
 
   if (currentTurn?.speaker === "rep" && previousTurn?.speaker === "hcp") {
@@ -490,22 +548,35 @@ export function validateTurnAgainstScenarioState({
   detectedJourneyStage,
   detectedPressures,
   tone,
+  turnNumber = 0,
+  allTurns = [],
 } = {}) {
   const failures = [];
   const notes = [];
   if (turn.speaker === "hcp") {
     const decisionDriven = hasDecisionLogic(turn.text || "");
     const expectedJourney = scenario?.journeyStage;
-    if (expectedJourney && detectedJourneyStage && expectedJourney !== detectedJourneyStage) {
+    const expectedTopicLanes = deriveExpectedTopicLanes(scenario);
+    const matchedTopicLane = detectMatchedTopicLane(turn.text || "", expectedTopicLanes);
+    const stageTopicCompatible = matchedTopicLane !== "general";
+    const journeyCompatibleWithClinicalValue =
+      expectedJourney === "clinical_value" &&
+      CLINICAL_PATTERNS.some((pattern) => pattern.test(turn.text || ""));
+    if (expectedJourney && detectedJourneyStage && expectedJourney !== detectedJourneyStage && !journeyCompatibleWithClinicalValue && !stageTopicCompatible) {
       failures.push({ type: "journey_stage_mismatch", confidence: "medium" });
       notes.push(`Turn sounds like ${detectedJourneyStage} language, but scenario is ${expectedJourney}.`);
     }
 
     const configuredPressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+    const pressureCompatibleWithSkepticism =
+      configuredPressures.includes("skeptical_resistant") &&
+      (decisionDriven || hasPersonaDecisionCadence(turn.text || "") || CLINICAL_PATTERNS.some((pattern) => pattern.test(turn.text || "")));
     if (
       configuredPressures.length &&
       detectedPressures.length &&
-      !detectedPressures.some((pressure) => configuredPressures.includes(pressure))
+      !detectedPressures.some((pressure) => configuredPressures.includes(pressure)) &&
+      !pressureCompatibleWithSkepticism &&
+      !stageTopicCompatible
     ) {
       failures.push({ type: "interaction_pressure_mismatch", confidence: "medium" });
       notes.push("Turn pressure signal does not match configured scenario pressure.");
@@ -515,7 +586,19 @@ export function validateTurnAgainstScenarioState({
       failures.push({ type: "weak_skepticism", confidence: "medium" });
       notes.push("HCP sounds too open for a skeptical/resistant exchange.");
     }
-    if (configuredPressures.includes("time_constrained") && !detectedPressures.includes("time_constrained") && !decisionDriven) {
+    const previousHcpTurn = allTurns
+      .slice(0, Math.max(0, Number(turnNumber || 0) - 1))
+      .filter((item) => item?.speaker === "hcp")
+      .slice(-1)[0];
+    const previousHcpHadTimePressure = previousHcpTurn
+      ? detectInteractionPressureSignal(previousHcpTurn.text || "", scenario).includes("time_constrained")
+      : false;
+    if (
+      configuredPressures.includes("time_constrained") &&
+      !detectedPressures.includes("time_constrained") &&
+      !previousHcpHadTimePressure &&
+      !decisionDriven
+    ) {
       failures.push({ type: "interaction_pressure_mismatch", confidence: "high" });
       notes.push("Time-constrained scenario lost time-pressure language.");
     }
@@ -706,6 +789,8 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       detectedJourneyStage,
       detectedPressures,
       tone: detectedTone,
+      turnNumber,
+      allTurns: turns.slice(0, index + 1),
     });
     const transitionValidation = validateTransitionBetweenTurns({ previousTurn, currentTurn: turn });
     const chatbot = detectChatbotPhrasing(rawMessage);
@@ -745,11 +830,20 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
         turnFailures.push("poor_persona_fit");
         realismNotes.push("Line lacks clinician/workflow/context anchors.");
       }
-      if (ABRUPT_OPENING_PATTERNS.some((pattern) => pattern.test(rawMessage)) || SHARP_PHRASE_PATTERNS.some((pattern) => pattern.test(rawMessage))) {
+      const configuredPressures = Array.isArray(scenario?.interactionPressure)
+        ? scenario.interactionPressure.map((pressure) => String(pressure).toLowerCase())
+        : [];
+      const directToneAllowed =
+        configuredPressures.includes("time_constrained") ||
+      configuredPressures.includes("skeptical_resistant") ||
+        Number(scenario?.runtimeTemperature || 0) >= 7;
+      const abruptOpening = ABRUPT_OPENING_PATTERNS.some((pattern) => pattern.test(rawMessage));
+      const sharpPhrase = SHARP_PHRASE_PATTERNS.some((pattern) => pattern.test(rawMessage));
+      if ((abruptOpening || sharpPhrase) && !directToneAllowed) {
         turnFailures.push("abrupt_rudeness_without_basis");
         realismNotes.push("Opening tone is too abrupt for a professional clinician entry.");
       }
-      if (scenario?.persona?.includes("community") && !/practice|patients|staff|office|workflow|formulary|prior auth|guideline/i.test(rawMessage)) {
+      if (scenario?.persona?.includes("community") && !/practice|patient|patients|staff|office|workflow|formulary|prior auth|guideline|next patient|appointment|clinic/i.test(rawMessage)) {
         turnFailures.push("poor_specialty_fit");
         realismNotes.push("Line lacks the concrete practice framing expected for this persona.");
       }
@@ -833,9 +927,40 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     });
   });
 
+  const hcpFailureTypes = new Set([
+    "chatbot_phrasing",
+    "over_precise",
+    "over_written",
+    "over_explained",
+    "weak_skepticism",
+    "wrong_emotional_temperature",
+    "poor_persona_fit",
+    "poor_specialty_fit",
+    "workflow_implausible",
+    "access_implausible",
+    "clinical_implausible",
+    "journey_stage_mismatch",
+    "interaction_pressure_mismatch",
+    "abrupt_rudeness_without_basis",
+    "unearned_tone_shift",
+  ]);
+  const hcpContinuityTypes = new Set(["continuity_break", "repetition_or_looping"]);
+  const repCapabilityTypes = new Set(["question_obligation_failure", "weak_answer", "conversation_stagnation"]);
+  const systemRuntimeTypes = new Set(["malformed_reply", "empty_reply"]);
+  const hcpRuntimeFailures = failures.filter((failure) =>
+    failure?.evidenceDetails?.speaker === "hcp" &&
+    (hcpFailureTypes.has(failure.type) || hcpContinuityTypes.has(failure.type))
+  );
+  const repEvaluationFailures = failures.filter((failure) =>
+    failure?.evidenceDetails?.speaker === "rep" ||
+    repCapabilityTypes.has(failure.type)
+  );
+  const systemRuntimeFailures = failures.filter((failure) => systemRuntimeTypes.has(failure.type));
   const highConfidenceFailures = failures.filter((failure) => failure.confidence === "high");
+  const highConfidenceHcpFailures = hcpRuntimeFailures.filter((failure) => failure.confidence === "high");
+  const highConfidenceSystemFailures = systemRuntimeFailures.filter((failure) => failure.confidence === "high");
   const hardStopFailureTypes = new Set(["question_obligation_failure", "continuity_break", "conversation_stagnation"]);
-  const hasHardStopFailure = highConfidenceFailures.some((failure) => hardStopFailureTypes.has(failure.type));
+  const hasHardStopFailure = highConfidenceHcpFailures.some((failure) => hardStopFailureTypes.has(failure.type));
   const hasConcreteRepAnswer = turns.some((turn) => turn?.speaker === "rep" && hasConcreteAnswerSignal(turn?.text));
   const hasForwardProgressionObserved = turns.some((turn, index) =>
     index > 0 &&
@@ -847,7 +972,18 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     turn?.speaker === "hcp" &&
     detectEmotionalTemperature(turn?.text, "hcp") !== detectEmotionalTemperature(turns[index - 2]?.text, "hcp")
   );
-  const pass = !hasHardStopFailure && highConfidenceFailures.length === 0 && (hasConcreteRepAnswer || hasForwardProgressionObserved || hasHcpEvolution);
+  const finalPass =
+    !hasHardStopFailure &&
+    highConfidenceHcpFailures.length === 0 &&
+    highConfidenceSystemFailures.length === 0;
+  const repEvaluationPass = repEvaluationFailures.length === 0 && (hasConcreteRepAnswer || hasForwardProgressionObserved || hasHcpEvolution);
+  const repEvaluationStatus = repEvaluationPass ? "PASS" : "NEEDS_COACHING";
+  const hcpRealismStatus = hcpRuntimeFailures.some((failure) =>
+    failure.confidence === "high" &&
+    ["chatbot_phrasing", "over_written", "over_explained", "weak_skepticism", "wrong_emotional_temperature", "poor_persona_fit", "poor_specialty_fit", "workflow_implausible", "access_implausible", "clinical_implausible", "journey_stage_mismatch", "interaction_pressure_mismatch", "abrupt_rudeness_without_basis"].includes(failure.type)
+  ) ? "FAIL" : "PASS";
+  const continuityStatus = hcpRuntimeFailures.some((failure) => failure.confidence === "high" && hcpContinuityTypes.has(failure.type)) ? "FAIL" : "PASS";
+  const systemRuntimeStatus = systemRuntimeFailures.length ? "FAIL" : "PASS";
   const realismFailures = failures.filter((failure) =>
     ["chatbot_phrasing", "over_written", "over_explained", "weak_skepticism", "wrong_emotional_temperature", "poor_persona_fit", "poor_specialty_fit", "workflow_implausible", "access_implausible", "clinical_implausible", "abrupt_rudeness_without_basis"].includes(failure.type)
   );
@@ -862,7 +998,12 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
   });
 
   return {
-    verdict: pass ? "PASS" : "FAIL",
+    verdict: finalPass ? "PASS" : "FAIL",
+    rep_evaluation_status: repEvaluationStatus,
+    hcp_realism_status: hcpRealismStatus,
+    continuity_status: continuityStatus,
+    system_runtime_status: systemRuntimeStatus,
+    final_verdict: finalPass ? "PASS" : "FAIL",
     transcript,
     failures,
     highConfidenceFailures,
