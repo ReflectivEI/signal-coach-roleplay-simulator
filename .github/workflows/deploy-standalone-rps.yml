@@ -1,0 +1,170 @@
+name: Deploy Standalone RPS Worker and Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-standalone-rps-production
+  cancel-in-progress: false
+
+env:
+  CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
+  RPS_WORKER_NAME: reflectivai-rps-api
+  RPS_PAGES_PROJECT: signal-coach-roleplay-simulator
+  RPS_WORKER_URL: https://reflectivai-rps-api.tonyabdelmalak.workers.dev
+  RPS_PAGES_URL: https://signal-coach-roleplay-simulator.pages.dev
+  RPS_CUSTOM_DOMAIN: https://rps.reflectiv-ai.com
+  EXPECTED_REPOSITORY: ReflectivEI/signal-coach-roleplay-simulator
+
+jobs:
+  validate-boundary:
+    runs-on: ubuntu-latest
+    name: Validate standalone RPS deployment boundary
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Assert repository and Cloudflare targets
+        run: node scripts/assert-rps-deploy-targets.mjs
+
+      - name: Build standalone RPS bundle
+        env:
+          VITE_ROLEPLAY_WORKER_URL: ${{ env.RPS_WORKER_URL }}
+        run: npm run ci:build
+
+      - name: Run lint
+        run: npm run lint
+
+  deploy-worker:
+    runs-on: ubuntu-latest
+    name: Deploy dedicated RPS Worker
+    needs: validate-boundary
+
+    steps:
+      - name: Check deploy secret availability
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is missing"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Re-assert standalone RPS targets
+        run: node scripts/assert-rps-deploy-targets.mjs
+
+      - name: Deploy reflectivai-rps-api Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
+          command: deploy --config wrangler.toml
+
+  deploy-pages:
+    runs-on: ubuntu-latest
+    name: Deploy dedicated RPS Pages project
+    needs:
+      - validate-boundary
+      - deploy-worker
+
+    steps:
+      - name: Check deploy secret availability
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is missing"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Re-assert standalone RPS targets
+        run: node scripts/assert-rps-deploy-targets.mjs
+
+      - name: Build standalone RPS bundle
+        env:
+          VITE_ROLEPLAY_WORKER_URL: ${{ env.RPS_WORKER_URL }}
+        run: npm run ci:build
+
+      - name: Deploy signal-coach-roleplay-simulator Pages
+        id: deploy_pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CF_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.RPS_PAGES_PROJECT }} --branch=main
+
+      - name: Verify live dedicated Worker
+        run: |
+          curl --fail --silent --show-error "$RPS_WORKER_URL/health" | tee worker-health.json
+          grep -q '"service":"reflectivai-rps-api"' worker-health.json
+          grep -q '"ready":true' worker-health.json
+
+      - name: Verify live dedicated Pages shell
+        run: |
+          curl --fail --silent --show-error "$RPS_PAGES_URL" | tee pages.html
+          grep -q "Signal Coach Role Play Simulator" pages.html
+          grep -q "/assets/index-" pages.html
+
+      - name: Create GitHub Deployment
+        if: steps.deploy_pages.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'standalone-rps-production',
+              auto_merge: false,
+              required_contexts: [],
+              description: 'Deployment to dedicated standalone RPS Worker and Pages'
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'success',
+              environment_url: process.env.RPS_CUSTOM_DOMAIN,
+              description: 'Standalone RPS Worker and Pages deployment successful'
+            });
