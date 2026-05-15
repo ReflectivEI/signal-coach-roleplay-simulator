@@ -855,6 +855,57 @@ function pickRegeneratedQuestion(previous: string, baseFallback: string): string
     return next || baseFallback;
 }
 
+function stripAuthoredHcpStateForPredictivePrompt(hcpState: Record<string, unknown>): Record<string, unknown> {
+    const next = { ...hcpState };
+    delete next.last_hcp_response_text;
+    delete next.hcp_response_history;
+    return next;
+}
+
+function buildScenarioSpecificFallbackLine({
+    hcpState,
+    scenarioContext,
+    responseType,
+    liveTemperature,
+}: {
+    hcpState: Record<string, unknown>;
+    scenarioContext: Record<string, unknown>;
+    responseType: string;
+    liveTemperature: number;
+}): string {
+    const barrier = text(
+        hcpState.current_primary_barrier,
+        text(hcpState.current_secondary_barrier, text(scenarioContext.cue_signal, "the practical barrier")),
+    );
+
+    if (responseType === "disengage") {
+        return sanitizePredictiveHcpLine(
+            `We are short on time, and I still do not have a clear answer on ${barrier}.`,
+        );
+    }
+
+    if (["soft_next_step", "permission_to_continue", "conditionally_open"].includes(responseType)) {
+        return sanitizePredictiveHcpLine(
+            liveTemperature >= 8
+                ? `This is closer, but I still need a clearer answer on ${barrier} before I move it forward.`
+                : `This is closer, but I still need a clearer answer on ${barrier} before this feels actionable in practice.`,
+        );
+    }
+
+    return sanitizePredictiveHcpLine(
+        liveTemperature >= 8
+            ? `I still need a clearer answer on ${barrier}, and I need it kept focused.`
+            : `I still need a clearer answer on ${barrier} before this feels relevant in practice.`,
+    );
+}
+
+function isUsablePredictiveCandidate(candidate: string, previousHcpLine: string): boolean {
+    if (!candidate) return false;
+    if (hasPredictiveBrainBannedPhrase(candidate) || isGenericHcpLine(candidate)) return false;
+    if (previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)) return false;
+    return true;
+}
+
 async function authorPredictiveHcpResponse({
     env,
     transcript,
@@ -886,14 +937,28 @@ async function authorPredictiveHcpResponse({
     progressionExplanation: string;
     intentBucket: string;
 }): Promise<string> {
-    const fallbackLine = sanitizePredictiveHcpLine(deterministicLine);
+    const fallbackLine = buildScenarioSpecificFallbackLine({
+        hcpState,
+        scenarioContext,
+        responseType,
+        liveTemperature,
+    }) || sanitizePredictiveHcpLine(deterministicLine);
     if (!fallbackLine) return "";
 
     const previousHcpLine = text(
         conversationMemory.last_hcp_response_text,
-        text(hcpState.last_hcp_response_text, text((Array.isArray(conversationMemory.hcp_response_history)
+        text((Array.isArray(conversationMemory.hcp_response_history)
             ? conversationMemory.hcp_response_history[conversationMemory.hcp_response_history.length - 1]
-            : ""), "")),
+            : ""), ""),
+    );
+    const lastResponseType = text(
+        Array.isArray(conversationMemory.response_type_history)
+            ? conversationMemory.response_type_history[conversationMemory.response_type_history.length - 1]
+            : "",
+        "unknown",
+    );
+    const addressedPriorAsk = ["concern_partially_addressed", "deeper_barrier_revealed"].includes(
+        text(hcpStateDelta.concern_movement),
     );
     const unresolvedConcern = [
         text(hcpState.current_primary_barrier),
@@ -902,7 +967,7 @@ async function authorPredictiveHcpResponse({
         ...(Array.isArray(hcpState.revealed_concerns) ? hcpState.revealed_concerns.map((item) => text(item)).filter(Boolean) : []),
     ].filter(Boolean).slice(0, 3).join(" | ");
 
-    const prompt = `You are authoring the next HCP spoken line for a pharma role-play simulator.
+    const buildPrompt = (retryReason = "") => `You are authoring the next HCP spoken line for a pharma role-play simulator.
 
 Use the Predictive HCP Brain as the source of truth.
 Deterministic state progression, response type, routing, temperature, and anti-loop metadata are validator constraints, not canned copy sources.
@@ -913,6 +978,8 @@ ${hcpBrainContext || JSON.stringify(hcpBrain)}
 Current turn context:
 - Latest REP message: ${transcript}
 - Previous HCP line: ${previousHcpLine || "none"}
+- Previous HCP response type: ${lastResponseType}
+- REP addressed prior ask: ${addressedPriorAsk ? "yes" : "no"}
 - Journey stage: ${text(scenarioContext.journey_stage || scenarioContext.journeyStage, "unknown")}
 - Current HCP state: ${JSON.stringify(hcpState)}
 - State delta: ${JSON.stringify(hcpStateDelta)}
@@ -924,9 +991,7 @@ Current turn context:
 - Unresolved concern: ${unresolvedConcern || "not provided"}
 - Scenario opening: ${text(scenarioContext.opening_scene || scenarioContext.openingScene, "not provided")}
 - Scenario cue: ${text(scenarioContext.cue_signal, "not provided")}
-
-Validator fallback line to preserve meaning if needed:
-${fallbackLine}
+${retryReason ? `- Retry guidance: ${retryReason}` : ""}
 
 Hard rules:
 - Speak as this specific HCP, not as a guardrail or simulator.
@@ -942,12 +1007,21 @@ Hard rules:
 
 Return ONLY the final HCP line.`;
 
-    const aiText = await callGroq(env, prompt, 180);
+    const aiText = await callGroq(env, buildPrompt(), 180);
     const candidate = sanitizePredictiveHcpLine(aiText);
-    if (!candidate) return fallbackLine;
-    if (hasPredictiveBrainBannedPhrase(candidate) || isGenericHcpLine(candidate)) return fallbackLine;
-    if (previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)) return fallbackLine;
-    return candidate;
+    if (isUsablePredictiveCandidate(candidate, previousHcpLine)) return candidate;
+
+    const retryReason = !candidate
+        ? "The prior draft was empty. Regenerate with a natural clinician line in the same scenario lane."
+        : previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)
+            ? "The prior draft repeated the last HCP line. Regenerate with new wording and forward continuity."
+            : "The prior draft sounded generic or reused stock phrasing. Regenerate with scenario-specific wording.";
+
+    const retryText = await callGroq(env, buildPrompt(retryReason), 180);
+    const retryCandidate = sanitizePredictiveHcpLine(retryText);
+    if (isUsablePredictiveCandidate(retryCandidate, previousHcpLine)) return retryCandidate;
+
+    return fallbackLine;
 }
 
 async function readSessions(env: Env): Promise<unknown[]> {
@@ -1116,6 +1190,9 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
     });
 
     const deterministicSimulatedResponse = text(fullStateProgression.simulated_hcp_next_response);
+    const predictivePromptState = stripAuthoredHcpStateForPredictivePrompt(
+        asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
+    );
     const predictiveSimulatedResponse = sanitizePredictiveHcpLine(await authorPredictiveHcpResponse({
         env,
         transcript,
@@ -1125,13 +1202,18 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
         hcpBrainContext,
         liveTemperature: repSelectedTemperature,
         deterministicLine: deterministicSimulatedResponse,
-        hcpState: asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
+        hcpState: predictivePromptState,
         hcpStateDelta: asObject(fullStateProgression.hcp_state_delta as Record<string, unknown>, {} as Record<string, unknown>),
         responseType: text(fullStateProgression.hcp_response_type),
         responseTypeReason: text(fullStateProgression.response_type_reason),
         progressionExplanation: text(fullStateProgression.hcp_progression_explanation),
         intentBucket: text(fullStateProgression.intent_bucket),
-    })) || deterministicSimulatedResponse;
+    })) || buildScenarioSpecificFallbackLine({
+        hcpState: predictivePromptState,
+        scenarioContext,
+        responseType: text(fullStateProgression.hcp_response_type),
+        liveTemperature: repSelectedTemperature,
+    });
 
     const enrichedHcpState = {
         ...asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
@@ -1209,8 +1291,6 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
         const merged = normalizeEvaluationResponse({
             ...deterministicWithBrain,
             ...parsed,
-            // Deterministic state outputs remain authoritative for stage metadata.
-            // Final spoken HCP copy is predictive-brain-authored and preserved here.
             simulated_hcp_next_response: (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response,
             hcp_state: (deterministicWithBrain as Record<string, unknown>).hcp_state,
             hcp_state_delta: (deterministicWithBrain as Record<string, unknown>).hcp_state_delta,
