@@ -64,6 +64,12 @@ const BANNED_FALLBACK_PHRASES = [
     /one complete pass/i,
     /staff can move to the next office task/i,
     /callback cleanup step/i,
+    /\bwhat['’]?s concretely different for me after this\b/i,
+    /\bthe practical answer has to stay tied\b/i,
+    /\bwhat changes in practice if this is worth continuing\b/i,
+    /\bi hear that a lot\b/i,
+    /\bkeep this brief\b/i,
+    /\bi['’]?m not convinced yet\b/i,
 ];
 
 const DISALLOWED_TERM_PATTERNS = {
@@ -240,32 +246,36 @@ function buildStageSafeFallback({ scenarioRouting, repMessage = "", hcpState = "
     const stage = scenarioRouting?.journey_stage;
     const state = String(hcpState || "").toLowerCase();
     const pressured = scenarioRouting?.interaction_pressure?.includes("time_constrained") || state === "time_pressure";
+    const repLanes = detectTopicLanes(repMessage);
+    const repFocus = repLanes[0] || "general";
 
     if (stage === "initial_access") {
         return pressured
-            ? "I have two minutes. What is the practical reason for this conversation right now?"
-            : "Before we get into details, why is this relevant to my patients today?";
+            ? "Give me the short reason this matters today."
+            : "Why is this relevant to a patient I would act on today?";
     }
     if (stage === "clinical_value") {
-        return "That still doesn't show me how this applies to the patients I treat in real practice.";
+        return repFocus === "evidence_quality"
+            ? "Show me the patient-level evidence that changes a treatment decision."
+            : "Tie this to the patient decision, not a broader operational claim.";
     }
     if (stage === "access_formulary") {
-        return "If this is non-preferred, what is the exact access path for a patient to start without delay?";
+        return "Name the approval step that changes first.";
     }
     if (stage === "objection_handling") {
-        return "That doesn't answer my concern yet. Address the blocker directly before we move on.";
+        return "Stay on the blocker and answer that directly.";
     }
     if (stage === "adoption_implementation") {
-        return "If this adds work for my team, I need to know the exact step, owner, and what gets removed.";
+        return "Tell me the first task, who owns it, and what work comes off the team.";
     }
     if (stage === "commitment_close") {
-        return "I'm not ready for a broad change. What is one low-risk next step I can actually own?";
+        return "Keep it to one low-risk next step I can actually take.";
     }
 
-    if (/\bproof|data|evidence|guideline\b/i.test(repMessage)) {
-        return "What evidence point should actually change my decision for a real patient?";
+    if (repFocus === "evidence_quality" || /\bproof|data|evidence|guideline\b/i.test(repMessage)) {
+        return "What evidence point changes a real decision here?";
     }
-    return "Keep this practical. What changes in a way I would actually use?";
+    return "Keep this tied to one practical decision.";
 }
 
 function containsBannedFallbackPhrase(text = "") {
@@ -337,6 +347,7 @@ export function enforceScenarioTopicLane({
             violation_detected: true,
             action: "rewritten",
             reason: "empty_response_repaired",
+            requires_regeneration: true,
         };
     }
 
@@ -349,6 +360,7 @@ export function enforceScenarioTopicLane({
             detected_terms: [],
             violation_detected: false,
             action: "none",
+            requires_regeneration: false,
         };
     }
 
@@ -357,19 +369,21 @@ export function enforceScenarioTopicLane({
         disallowedLanes: disallowed,
         scenarioRouting: scenario_routing,
     });
-    const rewrittenLanes = detectTopicLanes(rewritten.text);
+    const cleanedText = scrubStaleFallbackPhrases(rewritten.text || text, scenario_routing);
+    const rewrittenLanes = detectTopicLanes(cleanedText);
     const remainingDisallowed = rewrittenLanes.filter((lane) => (scenario_routing?.disallowed_topic_lanes || []).includes(lane));
 
-    if (!remainingDisallowed.length && !containsBannedFallbackPhrase(rewritten.text)) {
+    if (!remainingDisallowed.length && !containsBannedFallbackPhrase(cleanedText)) {
         return {
-            text: rewritten.text,
-            changed: true,
+            text: cleanedText,
+            changed: cleanedText !== text,
             matched_topic_lanes: rewrittenLanes,
             prohibited_topic_detected: disallowed,
             detected_terms: rewritten.detected_terms,
             violation_detected: true,
             action: "rewritten",
             reason: "disallowed_lane_rewritten",
+            requires_regeneration: false,
         };
     }
 
@@ -383,6 +397,7 @@ export function enforceScenarioTopicLane({
         violation_detected: true,
         action: "rewritten",
         reason: containsBannedFallbackPhrase(text) ? "banned_fallback_phrase" : "disallowed_lane",
+        requires_regeneration: true,
     };
 }
 
@@ -398,7 +413,7 @@ export function enforceJourneyStageFit({
 
     if (!text) {
         const repaired = buildStageSafeFallback({ scenarioRouting: scenario_routing, hcpState: hcp_state });
-        return { text: repaired, changed: true, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: ["empty_response"] };
+        return { text: repaired, changed: true, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: ["empty_response"], requires_regeneration: true };
     }
 
     const lanes = detectTopicLanes(text);
@@ -407,7 +422,7 @@ export function enforceJourneyStageFit({
     const hasDisallowedLane = lanes.some((lane) => (scenario_routing?.disallowed_topic_lanes || []).includes(lane));
 
     if (hasAllowedLane && !hasDisallowedLane) {
-        return { text, changed: false, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: lanes.length ? lanes : ["general"] };
+        return { text, changed: false, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: lanes.length ? lanes : ["general"], requires_regeneration: false };
     }
 
     const repaired = buildStageSafeFallback({ scenarioRouting: scenario_routing, hcpState: hcp_state });
@@ -416,6 +431,7 @@ export function enforceJourneyStageFit({
         changed: true,
         expected_stage_behavior: deriveStageRules(stage),
         actual_stage_behavior: lanes.length ? lanes : ["general"],
+        requires_regeneration: true,
     };
 }
 
@@ -429,7 +445,7 @@ export function enforcePressureFit({
     const pressures = Array.isArray(interaction_pressure) ? interaction_pressure : [];
     let changed = false;
 
-    if (!text) return { text, changed: false };
+    if (!text) return { text, changed: false, requires_regeneration: false };
 
     if (pressures.includes("time_constrained")) {
         const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -445,15 +461,6 @@ export function enforcePressureFit({
                 changed = true;
             }
         }
-        if (!/\bminute|short version|quick\b/i.test(text)) {
-            text = `I have two minutes. ${text}`;
-            changed = true;
-        }
-    }
-
-    if (pressures.includes("skeptical_resistant") && !/\bnot convinced|still|doesn't|does not|not ready|not enough\b/i.test(text)) {
-        text = `${text.replace(/[.?!]+$/, "")}. I still need a clearer answer before I move on.`;
-        changed = true;
     }
 
     if (!scenario_routing?.allowed_topic_lanes?.includes("workflow_implementation") && /\bstaff|workflow|callback|handoff\b/i.test(text)) {
@@ -461,7 +468,17 @@ export function enforcePressureFit({
         changed = true;
     }
 
-    return { text: normalizeText(text), changed };
+    const cleanedText = scrubStaleFallbackPhrases(text, scenario_routing);
+    if (cleanedText !== text) {
+        text = cleanedText;
+        changed = true;
+    }
+
+    return {
+        text: normalizeText(text),
+        changed,
+        requires_regeneration: changed && containsBannedFallbackPhrase(draft_hcp_response),
+    };
 }
 
 /** @param {{ draft_hcp_response?: string, scenario_routing?: ScenarioRoutingLike }} params */
@@ -510,8 +527,8 @@ export function scrubStaleFallbackPhrases(text = "", scenarioRouting = {}) {
         || (scenarioRouting?.allowed_topic_lanes || []).includes("prior_auth")
         || (scenarioRouting?.allowed_topic_lanes || []).includes("access_formulary");
 
-    if (workflowAllowed) return input;
-
+    if (workflowAllowed && !containsBannedFallbackPhrase(input)) return input;
     if (!containsBannedFallbackPhrase(input)) return input;
+
     return buildStageSafeFallback({ scenarioRouting, repMessage: "", hcpState: "" });
 }
