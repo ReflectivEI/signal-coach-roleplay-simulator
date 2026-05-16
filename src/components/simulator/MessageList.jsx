@@ -16,6 +16,13 @@ function buildBehavioralNotes(cue) {
   const rawLabel = typeof cue?.label === "string" ? cue.label.trim() : "";
   if (!rawLabel) return "Listening for the rep's opening move.";
   const normalizedLabel = rawLabel
+    .replace(/\bglances at watch\b/gi, "glances at the watch")
+    .replace(/\bglances at clock\b/gi, "glances at the clock")
+    .replace(/\bglances at schedule\b/gi, "glances at the schedule")
+    .replace(/\bglances at patient chart\b/gi, "glances at the patient chart")
+    .replace(/\bglances at chart\b/gi, "glances at the chart")
+    .replace(/\bglances at notes\b/gi, "glances at the notes")
+    .replace(/\bexpression tightening around the ask\b/gi, "expression focused on the question")
     .replace(/^[a-z]/, (letter) => letter.toUpperCase())
     .replace(/[.?!]$/, "");
   return normalizedLabel.toLowerCase().startsWith("the hcp")

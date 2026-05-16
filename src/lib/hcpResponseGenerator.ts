@@ -3760,7 +3760,7 @@ INSTRUCTIONS:
 2. If volatility = slightly_disrupted or disrupted, shorten responses and increase sharpness
 3. Classify rep's observable behavior (question_type, response_alignment, etc.)
 4. Generate natural HCP reply with ONE aligned context-aware cue (physical/behavioral signal that matches the HCP's emotional/cognitive state and response)
-5. Cue MUST be a single observable signal (e.g., "glances at watch", "leans forward", "nods slowly", "crosses arms")
+5. Cue MUST be a single observable signal with natural phrasing (e.g., "glances toward the schedule", "leans forward slightly", "nods once", "keeps the chart open")
 6. Cue MUST logically connect to what the HCP is saying and their internal state
 7. Final spoken dialogue must sound like a real clinician speaking out loud, not a system summarizing workload or reasoning
 8. Strongly avoid abstract burden phrasing in final dialogue such as: "absorb", "carry" when abstract, "handle" when abstract, "changes in their day", generic "over time", or standalone "burden"
