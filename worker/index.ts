@@ -95,6 +95,11 @@ const PREDICTIVE_BRAIN_BANNED_PHRASES = [
     "what changes in practice if this is worth continuing",
     "i hear that a lot",
     "keep this brief",
+    "keep it tight",
+    "i need it kept focused",
+    "before this feels relevant in practice",
+    "before this feels actionable in practice",
+    "this is closer, but i still need a clearer answer",
     "i'm not convinced yet",
 ] as const;
 
@@ -323,14 +328,47 @@ function hasPredictiveBrainBannedPhrase(value: unknown): boolean {
     return PREDICTIVE_BRAIN_BANNED_PHRASES.some((phrase) => normalized.includes(phrase));
 }
 
+function naturalizePredictiveHcpLine(value: unknown): string {
+    let line = text(value);
+    if (!line) return "";
+
+    const replacements: Array<[RegExp, string]> = [
+        [/\bkeep it tight\b/gi, "Please keep this focused"],
+        [/\bkeep this brief\b/gi, "Please keep this concise"],
+        [/\bi need it kept focused\b/gi, "I need this to stay focused"],
+        [/\bbefore this feels relevant in practice\b/gi, "before this is useful in my practice"],
+        [/\bbefore this feels actionable in practice\b/gi, "before I can use this in practice"],
+        [/\bthe practical answer has to stay tied\b/gi, "the answer has to connect directly to my clinical workflow"],
+        [/\bwhat's concretely different for me after this\b/gi, "what specifically changes for my team after this"],
+        [/\bwhat changes in practice if this is worth continuing\b/gi, "what specifically changes in my clinic if we continue this conversation"],
+        [/\bi hear that a lot\b/gi, "I hear this claim often"],
+    ];
+
+    for (const [pattern, next] of replacements) {
+        line = line.replace(pattern, next);
+    }
+
+    // De-template common synthetic opener.
+    line = line.replace(
+        /^this is closer,\s*but\s*i still need a clearer answer on\s*/i,
+        "You're closer, but I still need a clear answer on ",
+    );
+
+    return line
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
 function sanitizePredictiveHcpLine(value: unknown): string {
-    const cleaned = text(value)
+    const cleaned = naturalizePredictiveHcpLine(value)
         .replace(/^['"`\s]+|['"`\s]+$/g, "")
         .replace(/\s+/g, " ")
         .trim();
     if (!cleaned) return "";
     const sentences = cleaned.match(/[^.!?]+[.!?]?/g) || [cleaned];
-    return sentences.slice(0, 2).join(" ").trim();
+    const sliced = sentences.slice(0, 2).join(" ").trim();
+    if (hasPredictiveBrainBannedPhrase(sliced)) return "";
+    return sliced;
 }
 
 function replaceLastHistoryLine(list: unknown, nextLine: string): string[] {
@@ -902,6 +940,7 @@ function buildScenarioSpecificFallbackLine({
 function isUsablePredictiveCandidate(candidate: string, previousHcpLine: string): boolean {
     if (!candidate) return false;
     if (hasPredictiveBrainBannedPhrase(candidate) || isGenericHcpLine(candidate)) return false;
+    if (/^keep it tight\b/i.test(candidate)) return false;
     if (previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)) return false;
     return true;
 }
