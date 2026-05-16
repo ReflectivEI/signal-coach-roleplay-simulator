@@ -177,37 +177,17 @@ export default function MessageInput({
       </div>
       <div className="mt-1.5 px-1 flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
         <p>Enter to send · Shift+Enter for new line</p>
-        <div className="flex shrink-0 items-center gap-2">
-          {speech.isSupported && (
-            <p>
-              {voiceMode
-                ? speech.isListening
-                  ? "Recording · Space pauses"
-                  : "Paused · Space resumes"
-                : speech.transcript
-                  ? "Voice captured"
-                  : "Voice"}
-            </p>
-          )}
-          {onEvaluateRep && speech.isSupported && (
-            <button
-              type="button"
-              onClick={handleEvaluateRep}
-              disabled={!value.trim() || disabled || isEvaluatingRep}
-              aria-label="Evaluate rep response"
-              title="Evaluate rep response"
-              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg border px-2.5 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
-              style={{
-                background: "rgba(255,255,255,0.78)",
-                color: "hsl(222 52% 24%)",
-                borderColor: "rgba(28, 52, 88, 0.20)",
-              }}
-            >
-              <BarChart2 className="w-3 h-3" />
-              <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating" : "Evaluate Rep"}</span>
-            </button>
-          )}
-        </div>
+        {speech.isSupported && (
+          <p className="shrink-0">
+            {voiceMode
+              ? speech.isListening
+                ? "Recording · Space pauses"
+                : "Paused · Space resumes"
+              : speech.transcript
+                ? "Voice captured"
+                : "Voice"}
+          </p>
+        )}
         {!speech.isSupported && (
           <p className="shrink-0 inline-flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
@@ -215,6 +195,27 @@ export default function MessageInput({
           </p>
         )}
       </div>
+      {onEvaluateRep && speech.isSupported && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={handleEvaluateRep}
+            disabled={!value.trim() || disabled || isEvaluatingRep}
+            aria-label="Evaluate rep response"
+            title="Evaluate rep response"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-3 transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-45"
+            style={{
+              background: value.trim() && !disabled && !isEvaluatingRep ? "hsl(222 52% 24%)" : "rgba(255,255,255,0.82)",
+              color: value.trim() && !disabled && !isEvaluatingRep ? "white" : "hsl(222 32% 48%)",
+              borderColor: value.trim() && !disabled && !isEvaluatingRep ? "hsl(222 52% 24%)" : "rgba(28, 52, 88, 0.22)",
+              boxShadow: value.trim() && !disabled && !isEvaluatingRep ? "0 10px 20px rgba(28, 52, 88, 0.14)" : "none",
+            }}
+          >
+            <BarChart2 className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating Rep" : "Evaluate Rep"}</span>
+          </button>
+        </div>
+      )}
       {speech.error ? (
         <p className="mt-1 px-1 text-xs" style={{ color: "hsl(356 56% 42%)" }}>
           Voice input error: {speech.error}
