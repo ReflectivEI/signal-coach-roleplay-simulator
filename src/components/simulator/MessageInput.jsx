@@ -177,15 +177,9 @@ export default function MessageInput({
       </div>
       <div className="mt-1.5 px-1 flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
         <p>Enter to send · Shift+Enter for new line</p>
-        {speech.isSupported && (
+        {speech.isSupported && voiceMode && (
           <p className="shrink-0">
-            {voiceMode
-              ? speech.isListening
-                ? "Recording · Space pauses"
-                : "Paused · Space resumes"
-              : speech.transcript
-                ? "Voice captured"
-                : "Voice"}
+            {speech.isListening ? "Recording · Space pauses" : "Paused · Space resumes"}
           </p>
         )}
         {!speech.isSupported && (
