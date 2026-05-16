@@ -1100,16 +1100,6 @@ function enforceRealismLeverDialogue({
   const line = String(hcpReply || "").trim();
   if (!line) return line;
 
-  if (
-    isReferralMismatchScenario(scenario) &&
-    (
-      /\boffice|staff|workflow|practical change|what changes\b/i.test(line) ||
-      !/\bdr\.?\s*patel|case|clinical|patient|treatment|evidence|referral|product intro\b/i.test(line)
-    )
-  ) {
-    return buildReferralMismatchAdaptiveReply(repMessage || "", transcript);
-  }
-
   const ask = buildRealismSpecificAsk(scenario, line);
   const stageBoundReply = buildStageBoundRealismReply({
     scenario,
@@ -1192,16 +1182,6 @@ function deriveRealismCueCandidate({
   escalationMemory: EscalationMemory;
   hcpReply: string;
 }): string {
-  if (isReferralMismatchScenario(scenario)) {
-    if (temperatureBand === "low") {
-      return "Keeps the referral context in view, giving the rep a narrow opening to make it clinical.";
-    }
-    if (temperatureBand === "medium") {
-      return "Goes still for a beat, recalibrating the referral against what the rep is actually asking.";
-    }
-    return "Holds the referral thread in place, expression closing around another generic setup.";
-  }
-
   const family = deriveRealismConcernFamily(scenario, hcpReply);
   if (temperatureBand === "low") {
     if (family === "access") return "Keeps the coverage notes open and gives a measured nod.";
@@ -2583,45 +2563,6 @@ function isInitialAccessStage(scenario: any): boolean {
   return String(scenario?.journeyStage || "").toLowerCase() === "initial_access";
 }
 
-function isReferralMismatchScenario(scenario: any): boolean {
-  const text = `${scenario?.title || ""} ${scenario?.openingScene || ""} ${scenario?.coreTension || ""} ${scenario?.description || ""}`.toLowerCase();
-  return isInitialAccessStage(scenario) && (
-    /\bwarm intro\b|\bwarm introduction\b|\bturns cold\b/.test(text) ||
-    (/\bdr\.?\s*patel\b/.test(text) && /\bcase discussion|case consult|rep visits?|sales visit\b/.test(text))
-  );
-}
-
-function buildReferralMismatchAdaptiveReply(repMessage: string, transcript: ConversationTurn[] = []): string {
-  const text = String(repMessage || "").toLowerCase();
-  const hasPrior = hasPriorHcpTurns(transcript);
-
-  if (/\bhow are you|how's it going|hi\b|hello\b|hey\b/.test(text)) {
-    return "I have a few minutes, but Dr. Patel made this sound like a case discussion. What are you asking me to consider?";
-  }
-  if (/\bnew treatment|treatment|therapy|product|drug|option\b/.test(text)) {
-    return hasPrior
-      ? "A new treatment is not enough by itself. What patient case makes it relevant here?"
-      : "If this is about a new treatment, tie it to a patient case. What are you asking me to reconsider?";
-  }
-  if (/\bopen to talking|open to talk|can we talk|can we speak|do you have a minute|talking\b/.test(text)) {
-    return hasPrior
-      ? "I'm open if this is a real clinical question, not a generic product intro. What case are we discussing?"
-      : "I'm open to a focused clinical question. What case did Dr. Patel think was worth discussing?";
-  }
-  if (/\bstudy|trial|data|evidence|outcome|endpoint\b/.test(text)) {
-    return hasPrior
-      ? "Then connect the evidence to the case Dr. Patel had in mind. Which patient decision changes?"
-      : "If this is evidence, connect it to the case Dr. Patel had in mind. Which patient decision changes?";
-  }
-  if (/\bpatient|case|profile|who fits|candidate\b/.test(text)) {
-    return "Now that is closer. Which patient are you asking me to think differently about?";
-  }
-
-  return hasPrior
-    ? "Bring this back to the case Dr. Patel thought was worth discussing. What is the clinical question?"
-    : "Dr. Patel made this sound like a case discussion. What clinical question are you bringing me?";
-}
-
 function buildInitialAccessAlignedReply(repMessage: string, scenario: any, transcript: ConversationTurn[] = []): string {
   const pressures = Array.isArray(scenario?.interactionPressure)
     ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
@@ -2635,10 +2576,6 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
     ? ""
     : rawRepFocus;
   const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${transcript.length}|initial_access`;
-
-  if (isReferralMismatchScenario(scenario)) {
-    return buildReferralMismatchAdaptiveReply(repMessage, transcript);
-  }
 
   if (topic === "study_follow_up") {
     return selectNonRepeatingFallbackVariant({
@@ -2761,10 +2698,6 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   const text = String(repMessage || "").toLowerCase();
   const greetingOnly = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(text)
     || /\bhow are you|how's it going|how are things\b/.test(text);
-
-  if (isReferralMismatchScenario(scenario)) {
-    return buildReferralMismatchAdaptiveReply(repMessage);
-  }
 
   if (isInitialAccessStage(scenario) && topic === "general") {
     if (greetingOnly) {
