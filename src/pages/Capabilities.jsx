@@ -121,7 +121,7 @@ function CapabilityCard({ cap, index }) {
 export default function Capabilities() {
   return (
     <div className="min-h-screen font-inter" style={{ background: "#f8fafb" }}>
-      <AppHeader maxWidthClassName="max-w-5xl" />
+      <AppHeader maxWidthClassName="max-w-[1180px]" />
 
       <div className="max-w-5xl mx-auto px-6 py-10">
 

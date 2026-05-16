@@ -21,7 +21,7 @@ function DesktopNavLink({ item }) {
         href={item.to}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm font-medium text-[#17213f] transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700"
+        className="whitespace-nowrap text-sm font-medium text-[#17213f] transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700"
       >
         <Icon className="w-3.5 h-3.5" />
         {item.label}
@@ -32,7 +32,7 @@ function DesktopNavLink({ item }) {
     <NavLink
       to={item.to}
       className={({ isActive }) => [
-        "text-sm font-medium transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700",
+        "whitespace-nowrap text-sm font-medium transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700",
         isActive ? "text-teal-700" : "text-[#17213f]",
       ].join(" ")}
     >
@@ -155,7 +155,7 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
             </a>
           </div>
 
-          <nav className="hidden xl:flex items-center gap-4" aria-label="Primary">
+          <nav className="hidden xl:flex items-center gap-3" aria-label="Primary">
             {navItems.map((item) => <DesktopNavLink key={item.to} item={item} />)}
           </nav>
 
