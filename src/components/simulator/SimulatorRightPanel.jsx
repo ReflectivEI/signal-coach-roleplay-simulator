@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
-import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
@@ -376,23 +375,6 @@ export default function SimulatorRightPanel({
               </div>
             </div>
           )}
-        </DarkSection>
-      )}
-
-      {focusCapabilities.length > 0 && (
-        <DarkSection icon={BookOpen} title="Focus Capabilities">
-          <div className="space-y-1.5">
-            {focusCapabilities.map((capId) => {
-              const cap = SIGNAL_INTELLIGENCE_CAPABILITIES.find((candidate) => candidate.id === capId);
-              if (!cap) return null;
-              return (
-                <div key={capId} className="p-2.5 rounded-lg bg-primary/8 border border-primary/25">
-                  <div className="text-xs font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{cap.label}</div>
-                  <div className="text-xs mt-1 leading-relaxed" style={{ color: "rgba(236, 245, 245, 0.86)" }}>{cap.definition}</div>
-                </div>
-              );
-            })}
-          </div>
         </DarkSection>
       )}
     </div>
