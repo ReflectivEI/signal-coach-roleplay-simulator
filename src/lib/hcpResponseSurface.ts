@@ -195,6 +195,7 @@ export function applyHcpResponseSurface({
     turn,
     profile,
     hcpTurnCount,
+    liveRepAlignmentActive,
   });
 
   // Remove exact stock phrases so validator cleanup does not leak canned trainer language.

@@ -638,12 +638,14 @@ export function enforceSourceBackedRealismSurface({
   turn,
   profile,
   hcpTurnCount,
+  liveRepAlignmentActive = false,
 }: {
   hcpReply: string;
   scenario: any;
   turn: HcpTurnDirectiveSet;
   profile: HcpRuntimeProfile;
   hcpTurnCount: number;
+  liveRepAlignmentActive?: boolean;
 }): string {
   let output = normalizeText(hcpReply);
   if (!output) return "";
@@ -652,7 +654,7 @@ export function enforceSourceBackedRealismSurface({
   const openingScene = normalizeText(scenario?.openingScene || "");
   const anchorType = detectOpeningAnchorType(openingScene);
 
-  if (firstTurn) {
+  if (firstTurn && !liveRepAlignmentActive) {
     const firstTurnUtterance = buildGlobalFirstTurnUtterance({
       scenario,
       turn,
@@ -663,7 +665,7 @@ export function enforceSourceBackedRealismSurface({
     }
   }
 
-  if (firstTurn && !hasConcreteAnchor(output, anchorType)) {
+  if (firstTurn && !liveRepAlignmentActive && !hasConcreteAnchor(output, anchorType)) {
     const anchored = buildOpeningAnchorReply(anchorType, openingScene);
     if (anchored) output = anchored;
   }
