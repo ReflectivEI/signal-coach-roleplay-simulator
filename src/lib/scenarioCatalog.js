@@ -9,7 +9,7 @@ export const ALL_SCENARIOS = [
     stakeholder: "Primary Care Physician",
     objective: "Earn a substantive conversation in a setting designed to prevent one.",
     context: "Primary Care Physician — Busy community practice, high patient volume, routes all rep interactions through staff before the physician sees anyone.",
-    openingScene: "I have a few minutes before my next patient. My MA mentioned you had something about prior auth reduction, so I can talk through that briefly.",
+    openingScene: "Look, I've got four minutes before my next patient. My MA said you had something about prior auth reduction — that's the only reason I said yes.",
     visualScene: generateOpeningScene({ title: "The Gatekeeper Filter", journeyStage: "initial_access", startingBehaviorState: "closed", decisionOrientation: "patient_centric", interactionPressure: ["time_constrained", "operationally_constrained"] }),
     journeyStage: "initial_access", journeyState: "early_discovery",
     hcpRoleType: "treating_clinician", decisionOrientation: "patient_centric",

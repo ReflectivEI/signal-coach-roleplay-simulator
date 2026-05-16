@@ -256,11 +256,11 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
   const lower = normalizeText(openingScene).toLowerCase();
   switch (anchorType) {
     case "prior_auth":
-      return "My MA said this was about prior auth reduction. I've only got a couple minutes, so tell me what you can actually do to make that easier on my staff.";
+      return "My MA said this was about prior auth reduction. I have a couple minutes, so can we start with how this helps my staff?";
     case "case_discussion":
-      return "Dr. Patel said I should talk with you, but I thought this was going to be a case discussion. I don't usually take rep visits, so tell me why this is worth the time.";
+      return "Dr. Patel said I should talk with you, but I thought this was going to be a case discussion. Can we connect this to the patient you want to discuss?";
     case "staff_gatekeeping":
-      return "My office manager said you've been trying to get in. I've got a few minutes, so tell me why I should make time for this.";
+      return "My office manager said you've been trying to get in. I have a few minutes, so can we start with what you wanted to discuss?";
     case "priority_mismatch":
       return "You've already given me the efficacy story. That's not really my question. I need to know what happens to the patients who can't stay on therapy.";
     case "status_quo":

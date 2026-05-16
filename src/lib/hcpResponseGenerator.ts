@@ -60,6 +60,19 @@ const GLOBAL_STOCK_PHRASE_PATTERNS = [
   /\bi['’]?m not convinced yet\b/i,
 ];
 
+function sanitizeScenarioTextForHcpPrompt(value = ""): string {
+  return String(value || "")
+    .replace(/\blook,\s*/gi, "")
+    .replace(/\bi['’]?ve got\b/gi, "I have")
+    .replace(/\bgive me\b/gi, "help me understand")
+    .replace(/\btell me why\b/gi, "help me understand why")
+    .replace(/\bget to the point\b/gi, "start with what matters")
+    .replace(/\bthat'?s the only reason I said yes\b/gi, "so I can talk through that briefly")
+    .replace(/\s+—\s+/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const capabilityCompactRef = SIGNAL_INTELLIGENCE_CAPABILITIES.map(c =>
   `[${c.id}] ${c.metric} — ${c.definition.slice(0, 120)}`
 ).join("\n");
@@ -691,416 +704,392 @@ function buildStageBoundRealismReply({
       if (isInitialAccessStage(scenario)) {
         if (timeConstrained && operational) {
           return [
-            "We have covered the setup. Before I get back to patients, name the staff change.",
-            "I am going to stop here unless you give me the staff change.",
-            "One last pass before I move on: what changes for my staff?",
+            "Okay, before I get pulled back in, what actually changes for my staff?",
+            "If I still can't tell what changes for the office, we're probably done here.",
+            "Last thing, what does my staff actually do differently?",
           ];
         }
         if (timeConstrained) {
-          ```
-return [
-  "Okay, before I get pulled back in — what actually changes for my staff?",
-  "If I still can't tell what changes for the office, we're probably done here.",
-  "Last thing — what does my staff actually do differently?",
-];
-```
+          return [
+            "Okay, quick version before I go, what's the actual point?",
+            "If this stays this broad, I don't think I'm getting it.",
+            "So what's the part you think actually matters?",
+          ];
+        }
+        return [
+          "Okay but what actually changes in real life?",
+          "If there's not a real office impact here, I'm probably not moving on it.",
+          "Bottom line, what's actually different?",
+        ];
+      }
+      if (isEarlyDiscoveryStage(scenario)) {
+        return [
+          "Okay but who are you actually talking about?",
+          "If we can't narrow the patients down, this gets hard to use.",
+          "Who exactly are you picturing here?",
+        ];
+      }
+      return variants;
+    })();
+    for (let offset = 0; offset < fallbackVariants.length; offset += 1) {
+      const candidate = fallbackVariants[(start + offset) % fallbackVariants.length];
+      const repeated = recent.some((line) =>
+        normalizeLineForContinuity(line) === normalizeLineForContinuity(candidate) ||
+        continuityOverlapScore(line, candidate) >= 0.82 ||
+        continuityContainmentScore(line, candidate) >= 0.86
+      );
+      if (!repeated) return candidate;
+    }
+    if (isInitialAccessStage(scenario)) {
+      if (timeConstrained && operational) {
+        return "Just tell me what changes for staff or send me the details.";
+      }
+      if (timeConstrained) {
+        return "Either give me the quick takeaway or just send it over.";
+      }
+      return "Just tell me what actually changes then.";
+    }
+    if (isEarlyDiscoveryStage(scenario)) {
+      return "Who exactly is this really for?";
+    }
+    return variants[start] || "";
+  };
 
-```
-return [
-  "Okay, quick version before I go — what's the actual point?",
-  "If this stays this broad, I don't think I'm getting it.",
-  "So what's the part you think actually matters?",
-];
-```
+  if (isInitialAccessStage(scenario)) {
+    if (temperatureBand === "low") {
+      if (timeConstrained && operational) {
+        return choose(repeatCount >= 2
+          ? [
+            "We're kind of circling now. What actually changes for my staff?",
+            "Short version, what does my office actually have to do differently?",
+            "I'm still between patients. What's the real office change?",
+          ]
+          : [
+            "I've got a minute, what changes for my staff?",
+            "I'm between patients. Just tell me what the office has to do differently.",
+            "Quick version, what changes for the team?",
+          ], "initial-low-time-ops");
+      }
+      if (timeConstrained) {
+        return choose(repeatCount >= 2
+          ? [
+            "I've got a patient waiting and we're starting to repeat ourselves.",
+            "I can stay another minute if you get to the actual point.",
+            "Give me one thing that's actually useful before I go.",
+          ]
+          : [
+            "I've got a minute, what's the actual takeaway?",
+            "I'm between patients. Quick version?",
+            "Keep this quick, why does this actually matter?",
+          ], "initial-low-time");
+      }
+      if (operational) {
+        return choose(repeatCount >= 2
+          ? [
+            "I still don't know what changes in the office.",
+            "Okay but what actually changes day to day?",
+            "I can stay with you if you make this more real-world.",
+          ]
+          : [
+            "I can listen, but keep this grounded in real practice.",
+            "Okay but what does this look like in clinic?",
+            "So why should the office care about this?",
+          ], "initial-low-ops");
+      }
+      return choose([
+        "Alright, why does this matter for my patients?",
+        "Okay but why would this change anything for my patients?",
+        "So what's the actual reason I'd care about this?",
+      ], "initial-low-general");
+    }
+    if (temperatureBand === "medium") {
+      if (escalationMemory.escalationLevel >= 2) {
+        return choose(timeConstrained
+          ? [
+            "You're still giving me the broad version and I need to move.",
+            "I still don't know what the actual takeaway is.",
+            "Okay but what actually changes for my staff?",
+          ]
+          : [
+            "You're still staying broad. What am I actually supposed to do differently?",
+            "I still don't know what actually changes.",
+            "Okay but what really becomes different here?",
+          ], "initial-medium-escalated");
+      }
+      return choose(timeConstrained
+        ? operational
+          ? [
+            "Keep it quick. What changes for my staff?",
+            "I've got limited time. Who has to do what differently?",
+            "Short version, what actually changes in the office?",
+          ]
+          : [
+            "Keep it quick. Why does this matter for my patients?",
+            "I've got limited time. What's the patient takeaway?",
+            "Short version, what actually changes?",
+          ]
+        : [
+          "Okay but what actually changes for me?",
+          "Where does this show up in real practice?",
+          "What am I doing differently tomorrow because of this?",
+        ], "initial-medium");
+    }
+    if (escalationMemory.escalationLevel >= 3) {
+      return choose(timeConstrained
+        ? [
+          "I need to get back to patients. Send me the details if there's more.",
+          "I'm not getting a clearer answer and I need to move.",
+          "Unless there's one concrete point, we should probably stop here.",
+        ]
+        : [
+          "At that point I'd rather just read it myself.",
+          "I don't think I'm getting a clearer answer.",
+          "If this stays this broad, we're probably done here.",
+        ], "initial-high-stop");
+    }
+    return choose(timeConstrained
+      ? operational
+        ? [
+          "I've got a patient waiting. What does my staff actually do?",
+          "This is still too broad for the time I have. One practical office point.",
+          "I need the real office step, not the overview.",
+        ]
+        : [
+          "I've got a patient waiting. What's the patient reason?",
+          "This is still too broad for the time I have. One practical patient point.",
+          "What changes enough for me to care?",
+        ]
+      : [
+        "I still don't know why I'd change anything.",
+        "This still feels pretty theoretical.",
+        "Okay but what's actually different?",
+      ], "initial-high");
+  }
 
-```
-return [
-  "Okay but what actually changes in real life?",
-  "If there's not a real office impact here, I'm probably not moving on it.",
-  "Bottom line — what's actually different?",
-];
-```
+  if (isEarlyDiscoveryStage(scenario)) {
+    if (temperatureBand === "low") return choose([
+      "Which patients are you really talking about?",
+      "Okay but who actually stands out here?",
+      "Who are you thinking I'd treat differently?",
+    ], "early-low");
+    if (temperatureBand === "medium") {
+      return choose(escalationMemory.escalationLevel >= 2
+        ? [
+          "I still can't picture the patient you're talking about.",
+          "Okay but who exactly changes management because of this?",
+          "Who is this really for?",
+        ]
+        : [
+          "Which patients should I be picturing?",
+          "That still feels broad. Who are we actually talking about?",
+          "Give me the patient, not the category.",
+        ], "early-medium");
+    }
+    if (escalationMemory.escalationLevel >= 3) {
+      return choose([
+        "If we can't narrow the patients down, this gets hard to use.",
+        "I still don't know who this is really for.",
+        "At that point I'd rather just go through the study myself.",
+      ], "early-high-stop");
+    }
+    return choose([
+      "I still don't know who I'd actually treat differently.",
+      "Okay but which patients really move the needle here?",
+      "Help me narrow this down clinically.",
+    ], "early-high");
+  }
 
-```
-return [
-  "Okay but who are you actually talking about?",
-  "If we can't narrow the patients down, this gets hard to use.",
-  "Who exactly are you picturing here?",
-];
-```
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const family = deriveRealismConcernFamily(scenario, currentLine);
+  const clinicalAsk = /\brenal|kidney|ckd|impairment\b/i.test(`${scenario?.openingScene || ""} ${scenario?.description || ""} ${scenario?.objective || ""}`)
+    ? "the renal subgroup, endpoint, and treatment decision"
+    : "the patient subgroup, endpoint, and treatment decision";
+  const stopSuffix = timeConstrained
+    ? "before I get back to patients"
+    : "before we spend more time on this";
 
-```
-return "Just tell me what changes for staff or send me the details.";
-```
-
-```
-return "Either give me the quick takeaway or just send it over.";
-```
-
-```
-return "Just tell me what actually changes then.";
-```
-
-```
-return "Who exactly is this really for?";
-```
-
-```
-return choose(repeatCount >= 2
-  ? [
-      "We're kind of circling now. What actually changes for my staff?",
-      "Short version — what does my office actually have to do differently?",
-      "I'm still between patients. What's the real office change?",
-    ]
-  : [
-      "I've got a minute — what changes for my staff?",
-      "I'm between patients. Just tell me what the office has to do differently.",
-      "Quick version — what changes for the team?",
-    ], "initial-low-time-ops");
-```
-
-```
-return choose(repeatCount >= 2
-  ? [
-      "I've got a patient waiting and we're starting to repeat ourselves.",
-      "I can stay another minute if you get to the actual point.",
-      "Give me one thing that's actually useful before I go.",
-    ]
-  : [
-      "I've got a minute — what's the actual takeaway?",
-      "I'm between patients. Quick version?",
-      "Keep this quick — why does this actually matter?",
-    ], "initial-low-time");
-```
-
-```
-return choose(repeatCount >= 2
-  ? [
-      "I still don't know what changes in the office.",
-      "Okay but what actually changes day to day?",
-      "I can stay with you if you make this more real-world.",
-    ]
-  : [
-      "I can listen, but keep this grounded in real practice.",
-      "Okay but what does this look like in clinic?",
-      "So why should the office care about this?",
-    ], "initial-low-ops");
-```
-
-```
-return choose([
-  "Alright — why does this matter for my patients?",
-  "Okay but why would this change anything for my patients?",
-  "So what's the actual reason I'd care about this?",
-], "initial-low-general");
-```
-
-```
-return choose(timeConstrained
-  ? [
-      "You're still giving me the broad version and I need to move.",
-      "I still don't know what the actual takeaway is.",
-      "Okay but what actually changes for my staff?",
-    ]
-  : [
-      "You're still staying broad. What am I actually supposed to do differently?",
-      "I still don't know what actually changes.",
-      "Okay but what really becomes different here?",
-    ], "initial-medium-escalated");
-```
-
-```
-return choose(timeConstrained
-  ? operational
-    ? [
-        "Keep it quick. What changes for my staff?",
-        "I've got limited time. Who has to do what differently?",
-        "Short version — what actually changes in the office?",
+  if (stage === "clinical_value") {
+    if (operational || pressures.includes("access_barrier")) {
+      return choose(escalationMemory.escalationLevel >= 2
+        ? [
+          "If this adds work, the benefit has to be obvious.",
+          "Okay but why is this worth the extra hassle?",
+          "I need to know what gets better and what my staff gets stuck doing.",
+        ]
+        : [
+          "The data matters, but so does the hassle of actually using it.",
+          "Okay but how much better are the outcomes really?",
+          "If staff workload goes up, the benefit better be clear.",
+        ], "clinical-pressure-combined");
+    }
+    if (temperatureBand === "low") {
+      return choose(repeatCount >= 2
+        ? [
+          "We're circling. Why would I actually switch?",
+          "I still need the part that changes what I'd do.",
+          "Which patients did better enough for this to matter?",
+        ]
+        : [
+          "Okay but why would I switch?",
+          "What outcome are you saying actually changes?",
+          "Is the benefit really enough to matter clinically?",
+        ], "clinical-low");
+    }
+    if (temperatureBand === "medium") {
+      return choose(escalationMemory.escalationLevel >= 2
+        ? [
+          "The top-line result isn't enough for me.",
+          "I still don't know why I'd move off what I'm doing now.",
+          "What's the part you think changes my mind?",
+        ]
+        : [
+          "Where does this actually become treatment-changing?",
+          "Which patients did better enough to matter?",
+          "What gets meaningfully better here?",
+        ], "clinical-medium");
+    }
+    return choose(escalationMemory.escalationLevel >= 3
+      ? [
+        "If the difference is marginal, I'm not changing what already works.",
+        "At that point I'd rather review the data myself.",
+        "I still don't see the reason to switch.",
       ]
-    : [
-        "Keep it quick. Why does this matter for my patients?",
-        "I've got limited time. What's the patient takeaway?",
-        "Short version — what actually changes?",
-      ]
-  : [
-      "Okay but what actually changes for me?",
-      "Where does this show up in real practice?",
-      "What am I doing differently tomorrow because of this?",
-    ], "initial-medium");
-```
-
-```
-return choose(timeConstrained
-  ? [
-      "I need to get back to patients. Send me the details if there's more.",
-      "I'm not getting a clearer answer and I need to move.",
-      "Unless there's one concrete point, we should probably stop here.",
-    ]
-  : [
-      "At that point I'd rather just read it myself.",
-      "I don't think I'm getting a clearer answer.",
-      "If this stays this broad, we're probably done here.",
-    ], "initial-high-stop");
-```
-
-```
-return choose(timeConstrained
-  ? operational
-    ? [
-        "I've got a patient waiting. What does my staff actually do?",
-        "This is still too broad for the time I have.",
-        "I need the real office step, not the overview.",
-      ]
-    : [
-        "I've got a patient waiting. What's the patient reason?",
-        "This is still too broad for the time I have.",
-        "What changes enough for me to care?",
-      ]
-  : [
-      "I still don't know why I'd change anything.",
-      "This still feels pretty theoretical.",
-      "Okay but what's actually different?",
-    ], "initial-high");
-```
-
-```
-if (temperatureBand === "low") return choose([
-  "Which patients are you really talking about?",
-  "Okay but who actually stands out here?",
-  "Who are you thinking I'd treat differently?",
-], "early-low");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 2
-  ? [
-      "I still can't picture the patient you're talking about.",
-      "Okay but who exactly changes management because of this?",
-      "Who is this really for?",
-    ]
-  : [
-      "Which patients should I be picturing?",
-      "That still feels broad. Who are we actually talking about?",
-      "Give me the patient, not the category.",
-    ], "early-medium");
-```
-
-```
-return choose([
-  "If we can't narrow the patients down, this gets hard to use.",
-  "I still don't know who this is really for.",
-  "At that point I'd rather just go through the study myself.",
-], "early-high-stop");
-```
-
-```
-return choose([
-  "I still don't know who I'd actually treat differently.",
-  "Okay but which patients really move the needle here?",
-  "Help me narrow this down clinically.",
-], "early-high");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 2
-  ? [
-      "If this adds work, the benefit has to be obvious.",
-      "Okay but why is this worth the extra hassle?",
-      "I need to know what gets better and what my staff gets stuck doing.",
-    ]
-  : [
-      "The data matters, but so does the hassle of actually using it.",
-      "Okay but how much better are the outcomes really?",
-      "If staff workload goes up, the benefit better be clear.",
-    ], "clinical-pressure-combined");
-```
-
-```
-return choose(repeatCount >= 2
-  ? [
-      "We're circling. Why would I actually switch?",
-      "I still need the part that changes what I'd do.",
-      "Which patients did better enough for this to matter?",
-    ]
-  : [
-      "Okay but why would I switch?",
-      "What outcome are you saying actually changes?",
-      "Is the benefit really enough to matter clinically?",
-    ], "clinical-low");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 2
-  ? [
-      "The top-line result isn't enough for me.",
-      "I still don't know why I'd move off what I'm doing now.",
-      "What's the part you think changes my mind?",
-    ]
-  : [
-      "Where does this actually become treatment-changing?",
-      "Which patients did better enough to matter?",
-      "What gets meaningfully better here?",
-    ], "clinical-medium");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 3
-  ? [
-      "If the difference is marginal, I'm not changing what already works.",
-      "At that point I'd rather review the data myself.",
-      "I still don't see the reason to switch.",
-    ]
-  : [
-      "I still don't know why I'd move off current therapy.",
-      "It's hard to justify switching if the difference is small.",
-      "If I'm paying more, the benefit better be obvious.",
-    ], "clinical-high");
-```
+      : [
+        "I still don't know why I'd move off current therapy.",
+        "It's hard to justify switching if the difference is small.",
+        "If I'm paying more, the benefit better be obvious.",
+      ], "clinical-high");
   }
 
   if (stage === "access_formulary" || family === "access") {
     if (temperatureBand === "low") {
-      ```
-return choose([
-  "Okay but what does coverage actually look like?",
-  "So how painful is prior auth going to be?",
-  "What ends up falling on my staff here?",
-], "access-low");
-```
+      return choose([
+        "Okay but what does coverage actually look like?",
+        "So how painful is prior auth going to be?",
+        "What ends up falling on my staff here?",
+      ], "access-low");
+    }
+    if (temperatureBand === "medium") {
+      return choose(escalationMemory.escalationLevel >= 2
+        ? [
+          "I still don't understand how this gets approved consistently.",
+          "Okay but who's spending time fighting for this?",
+          "If this turns into another prior-auth battle, that's a problem.",
+        ]
+        : [
+          "How hard is this realistically going to be to get covered?",
+          "What does my staff actually have to do here?",
+          "Where does this usually get stuck?",
+        ], "access-medium");
+    }
+    return choose(escalationMemory.escalationLevel >= 3
+      ? [
+        "I can't work with vague coverage answers.",
+        "If this is hard to get approved, that's the whole problem.",
+        "Without a clearer access story, this gets tough to use.",
+      ]
+      : [
+        "So how does this actually get approved?",
+        "I need the real access answer, not the polished version.",
+        "If coverage is messy, that's going to slow everything down.",
+      ], "access-high");
+  }
 
-```
-return choose(escalationMemory.escalationLevel >= 2
-  ? [
-      "I still don't understand how this gets approved consistently.",
-      "Okay but who's spending time fighting for this?",
-      "If this turns into another prior-auth battle, that's a problem.",
-    ]
-  : [
-      "How hard is this realistically going to be to get covered?",
-      "What does my staff actually have to do here?",
-      "Where does this usually get stuck?",
-    ], "access-medium");
-```
+  if (stage === "adoption_implementation" || family === "workflow") {
+    if (temperatureBand === "low") {
+      return choose([
+        "Okay so what happens first if we actually do this?",
+        "Who's handling this step initially?",
+        "What does my staff suddenly have to learn?",
+      ], "implementation-low");
+    }
+    if (temperatureBand === "medium") {
+      return choose(escalationMemory.escalationLevel >= 2
+        ? [
+          "I still can't picture how this actually rolls out.",
+          "Okay but who's owning this in the office?",
+          "That's usually where these things get messy.",
+        ]
+        : [
+          "Walk me through day one realistically.",
+          "What does this actually turn into for my staff?",
+          "How complicated is this really?",
+        ], "implementation-medium");
+    }
+    return choose(escalationMemory.escalationLevel >= 3
+      ? [
+        "If the workflow's confusing, adoption usually dies pretty quickly.",
+        "I still don't know how this works day to day.",
+        "Right now I can picture staff confusion more than execution.",
+      ]
+      : [
+        "I'm still missing the real office flow.",
+        "This still sounds harder than you're making it sound.",
+        "At some point this has to become concrete.",
+      ], "implementation-high");
+  }
 
-```
-return choose(escalationMemory.escalationLevel >= 3
-  ? [
-      "I can't work with vague coverage answers.",
-      "If this is hard to get approved, that's the whole problem.",
-      "Without a clearer access story, this gets tough to use.",
-    ]
-  : [
-      "So how does this actually get approved?",
-      "I need the real access answer, not the polished version.",
-      "If coverage is messy, that's going to slow everything down.",
-    ], "access-high");
-```
+  if (stage === "commitment_close") {
+    const decisionAsk = family === "evidence"
+      ? "why I'd actually change treatment"
+      : family === "access"
+        ? "how this realistically gets covered"
+        : family === "workflow"
+          ? "what my staff actually has to do"
+          : "what you're actually asking me to do";
+    if (temperatureBand === "low") {
+      return choose([
+        "Okay but what exactly are you asking me to do?",
+        "Before I commit to anything, walk me through the actual next step.",
+        "If you're asking for a change, make it specific.",
+      ], "close-low");
+    }
+    if (temperatureBand === "medium") {
+      return choose([
+        "I still don't know what you're actually asking me to do after this.",
+        "Okay but what's the concrete next step here?",
+        "If there's an action you're asking for, just say it directly.",
+      ], "close-medium");
+    }
+    return choose(escalationMemory.escalationLevel >= 3
+      ? [
+        "If there's a real next step, just send it over.",
+        "I'm not committing to something vague.",
+        "I still don't know what you're actually asking for.",
+      ]
+      : [
+        "The ask still feels vague to me.",
+        "Okay but what exactly are you asking me to do?",
+        "If there's a real next step here, name it clearly.",
+      ], "close-high");
+  }
 
-```
-return choose([
-  "Okay so what happens first if we actually do this?",
-  "Who's handling this step initially?",
-  "What does my staff suddenly have to learn?",
-], "implementation-low");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 2
-  ? [
-      "I still can't picture how this actually rolls out.",
-      "Okay but who's owning this in the office?",
-      "That's usually where these things get messy.",
-    ]
-  : [
-      "Walk me through day one realistically.",
-      "What does this actually turn into for my staff?",
-      "How complicated is this really?",
-    ], "implementation-medium");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 3
-  ? [
-      "If the workflow's confusing, adoption usually dies pretty quickly.",
-      "I still don't know how this works day to day.",
-      "Right now I can picture staff confusion more than execution.",
-    ]
-  : [
-      "I'm still missing the real office flow.",
-      "This still sounds harder than you're making it sound.",
-      "At some point this has to become concrete.",
-    ], "implementation-high");
-```
-
-```
-const decisionAsk = family === "evidence"
-  ? "why I'd actually change treatment"
-  : family === "access"
-    ? "how this realistically gets covered"
-    : family === "workflow"
-      ? "what my staff actually has to do"
-      : "what you're actually asking me to do";
-```
-
-```
-return choose([
-  "Okay but what exactly are you asking me to do?",
-  "Before I commit to anything, walk me through the actual next step.",
-  "If you're asking for a change, make it specific.",
-], "close-low");
-```
-
-```
-return choose([
-  "I still don't know what you're actually asking me to do after this.",
-  "Okay but what's the concrete next step here?",
-  "If there's an action you're asking for, just say it directly.",
-], "close-medium");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 3
-  ? [
-      "If there's a real next step, just send it over.",
-      "I'm not committing to something vague.",
-      "I still don't know what you're actually asking for.",
-    ]
-  : [
-      "The ask still feels vague to me.",
-      "Okay but what exactly are you asking me to do?",
-      "If there's a real next step here, name it clearly.",
-    ], "close-high");
-```
-
-```
-return choose([
-  "Okay but you still haven't answered the concern directly.",
-  "Stay on the actual issue for me.",
-  "I can keep listening if you address the real blocker.",
-], "objection-low");
-```
-
-```
-return choose([
-  "I still don't think that answers the concern.",
-  "You're kind of talking around the issue right now.",
-  "Okay but what actually changes about the concern?",
-], "objection-medium");
-```
-
-```
-return choose(escalationMemory.escalationLevel >= 3
-  ? [
-      "We're still stuck on the same issue.",
-      "If the concern isn't changing, we're probably done here.",
-      "I still need a direct answer to the objection.",
-    ]
-  : [
-      "You still haven't really answered the concern.",
-      "The blocker hasn't changed for me yet.",
-      "I need a more direct answer here.",
-    ], "objection-high");
-```
+  if (stage === "objection_handling") {
+    if (temperatureBand === "low") {
+      return choose([
+        "Okay but you still haven't answered the concern directly.",
+        "Stay on the actual issue for me.",
+        "I can keep listening if you address the real blocker.",
+      ], "objection-low");
+    }
+    if (temperatureBand === "medium") {
+      return choose([
+        "I still don't think that answers the concern.",
+        "You're kind of talking around the issue right now.",
+        "Okay but what actually changes about the concern?",
+      ], "objection-medium");
+    }
+    return choose(escalationMemory.escalationLevel >= 3
+      ? [
+        "We're still stuck on the same issue.",
+        "If the concern isn't changing, we're probably done here.",
+        "I still need a direct answer to the objection.",
+      ]
+      : [
+        "You still haven't really answered the concern.",
+        "The blocker hasn't changed for me yet.",
+        "I need a more direct answer here.",
+      ], "objection-high");
   }
 
   return "";
@@ -1872,9 +1861,10 @@ Goal:
 Hard constraints:
 - one sentence preferred
 - stay spoken and clinician-realistic
-- do not soften the objection
+- keep the same concern, but do not repeat the same relevance/premise challenge
 - do not introduce a new concern family
 - stay aligned with the opening-scene reality
+- if the rep briefly confirms the premise, acknowledge it and ask for the missing clinical detail instead of asking why the conversation is relevant again
 
 Scenario: ${scenario.title}
 Opening Scene: ${scenario.visualScene || scenario.openingScene || "not provided"}
@@ -3085,6 +3075,8 @@ function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): 
 
 function inferSkeletonSignature(text = ""): string {
   const lower = String(text || "").toLowerCase();
+  if (/\bwhat makes you think\b.*\b(relevant|appl(?:y|ies))\b/.test(lower)) return "premise_relevance_challenge";
+  if (/\b(can you|could you|help me)\b.*\bconnect\b.*\b(current patients|patients|practice|case discussion|study)\b/.test(lower)) return "premise_relevance_challenge";
   if (/\bwhat in that study\b/.test(lower)) return "what_in_study";
   if (/\bwhat specifically\b/.test(lower)) return "what_specifically";
   if (/\bwhat changes for my staff\b/.test(lower)) return "staff_change";
@@ -3147,12 +3139,12 @@ function inferConcernTags(text: string): string[] {
   if (/prior auth|prior authorization|coverage|copay|formulary|payer|benefits|approval/.test(normalized)) tags.push("access");
   if (/system implementation|implementation|implement|rollout|roll out|deploy|deployment|integrat|ehr|emr|owner|handoff/.test(normalized)) tags.push("implementation");
   if (/staff|workflow|handoff|callback|operational|monitoring|follow-up|rework/.test(normalized)) tags.push("workflow");
-  if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
+  if (/what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|relevance|relevant|what makes you think|appl(?:y|ies) to|connect .* to|requested|asked me|follow up|follow-up|left with you|bring you a copy|study you asked/i.test(normalized)) tags.push("premise");
   return tags;
 }
 
 function isPremiseChallenge(text: string): boolean {
-  return /what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|what do you want me to know|relevance|what makes you think/i.test(String(text || "").toLowerCase());
+  return /what'?s the point|why are you here|why are we talking|what is this about|what'?s this about|what do you want me to know|relevance|relevant|what makes you think|appl(?:y|ies) to|connect .* to/i.test(String(text || "").toLowerCase());
 }
 
 function repAddressesPremiseChallenge(repMessage: string, latestConcern: string): boolean {
@@ -3613,6 +3605,8 @@ ${volatility.curveballTriggerSignal ? `Curveball Cause (missed signal): ${volati
   const continuityBlock = `
 ${summarizeConcernContinuity(transcript, scenario, repMessage)}
 `;
+  const openingSceneForPrompt = sanitizeScenarioTextForHcpPrompt(scenario.openingScene || "");
+  const visualSceneForPrompt = sanitizeScenarioTextForHcpPrompt(scenario.visualScene || "");
 
   const prompt = `You are a Signal Intelligence Coaching Simulator engine. Return a JSON object.
 
@@ -3622,8 +3616,8 @@ Objective: ${scenario.objective}
 HCP Persona: ${scenario.persona}
 Journey Stage: ${scenario.journeyStage}
 Current Journey State: ${currentJourneyState}
-Opening Scene Reality: ${scenario.visualScene || scenario.openingScene || "not provided"}
-Opening HCP Setup: ${scenario.openingScene || "not provided"}
+Opening Scene Reality: ${visualSceneForPrompt || openingSceneForPrompt || "not provided"}
+Opening HCP Setup: ${openingSceneForPrompt || "not provided"}
 Starting Behavior State: ${scenario.startingBehaviorState}
 Current Behavior State: ${currentBehaviorState}
 Interaction Pressures: ${(scenario.interactionPressure || []).join(", ")}

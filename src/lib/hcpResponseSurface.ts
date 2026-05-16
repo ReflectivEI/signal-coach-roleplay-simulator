@@ -67,7 +67,7 @@ function enforceSentenceCase(text = ""): string {
 function repairCommaSplices(text = ""): string {
   return normalizeText(text)
     .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1")
-    .replace(/,\s+(what|how|why|who|when|where|which|do|does|did|is|are)\b/g, ". $1")
+    .replace(/,\s+(what|how|why|who|when|where|which|can|could|would|should|do|does|did|is|are)\b/g, ". $1")
     .replace(/\b(before my next patient|patients waiting|patient waiting|I have patients waiting),\s+(can you|could you|would you|what|how|why|which|give me|tell me)\b/gi, "$1. $2")
     .replace(/\b(I(?:'ve| have) (?:only )?got (?:a minute|a few minutes|limited time|patients waiting)),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2")
     .replace(/\b(I(?:'m| am) between patients),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2");
@@ -80,6 +80,7 @@ function repairQuestionPunctuation(text = ""): string {
   output = output
     .replace(/\?\s*\?/g, "?")
     .replace(/\.\?$/g, "?")
+    .replace(/\b(can you|could you|would you|should you|do you|does this|is this|are you)([^.?!]*)\.$/i, "$1$2?")
     .replace(/\b(What|How|Why|Who|When|Where|Which|Can|Could|Would|Should|Do|Does|Did|Is|Are)([^.?!]*)\.$/, "$1$2?");
 
   return normalizeText(output);
@@ -183,6 +184,19 @@ function softenHostileTone(text = ""): string {
     .replace(/\bwhat'?s the key takeaway from this new study that I need to know about\b/gi, "what should I take from this study for my patients")
     .replace(/\bhow this new study impacts their treatment or outcomes\b/gi, "how this study changes treatment or outcomes")
     .replace(/\bhow it applies to my patients\b/gi, "how it applies to my patients here")
+    .replace(/\bas per\b/gi, "based on")
+    .replace(/\bDr\.?\s+([A-Z][a-z]+)\s+said I should talk to you about a case discussion,\s+not a product pitch\b/g, "Dr. $1 said this was about a patient case, so let's keep it focused there")
+    .replace(/\bnot a product pitch\b/gi, "focused on the patient")
+    .replace(/\bI thought this was about a case discussion,\s+focused on the patient\b/gi, "I thought this was about a patient case, so let's keep it focused there")
+    .replace(/\bwhat makes you think this case discussion is about a product\?/gi, "Okay, then connect it to the case.")
+    .replace(/\bwhat makes you think I need (?:something different|a different approach|a change) for my patients\?/gi, "can you help me connect this to my patients?")
+    .replace(/\bwhat makes you think this patient case needs a different approach\?/gi, "What would change for this patient?")
+    .replace(/\bthat doesn'?t connect to my current patients\b/gi, "I still need the connection to my current patients")
+    .replace(/\bwhat makes you think I need (.+?) when (.+?)\?/gi, "okay, can you connect $1 to that?")
+    .replace(/\bwhat makes you think (.+?) is relevant to (.+?)\?/gi, "can you help me connect $1 to $2?")
+    .replace(/\bwhat makes you think (.+?) applies to (.+?)\?/gi, "can you help me connect $1 to $2?")
+    .replace(/\bwhat makes you think (.+?) is relevant to (.+?)\b/gi, "can you help me connect $1 to $2")
+    .replace(/\bwhat makes you think (.+?) applies to (.+?)\b/gi, "can you help me connect $1 to $2")
     .replace(/\bwhat makes you think this is relevant to my practice\b/gi, "can you help me understand why this is relevant to my practice")
     .replace(/\bwhat makes you think this matters to my practice\b/gi, "can you help me understand why this matters to my practice")
     .replace(/\bwhat makes you think this is relevant\b/gi, "can you help me understand why this is relevant")

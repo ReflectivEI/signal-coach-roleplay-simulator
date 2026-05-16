@@ -19,6 +19,7 @@ import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
 import AnnotatedTranscript from "./AnnotatedTranscript";
+import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import {
   deriveInitialState, deriveInitialTemperature,
   transitionState, transitionTemperature, transitionSeverity,
@@ -61,6 +62,7 @@ function useVoiceSessionControl() {
 import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
+import { applyHcpResponseSurface } from "@/lib/hcpResponseSurface";
 import { invokeWorkerText } from "@/services/workerClient";
 import {
   applyMetricApplicabilityGating,
@@ -221,6 +223,19 @@ function normalizeLlmInvokeText(payload) {
   return String(source || "").trim();
 }
 
+function sanitizeScenarioTextForHcpRuntime(value = "") {
+  return String(value || "")
+    .replace(/\blook,\s*/gi, "")
+    .replace(/\bi['’]?ve got\b/gi, "I have")
+    .replace(/\bgive me\b/gi, "help me understand")
+    .replace(/\btell me why\b/gi, "help me understand why")
+    .replace(/\bget to the point\b/gi, "start with what matters")
+    .replace(/\bthat'?s the only reason I said yes\b/gi, "so I can talk through that briefly")
+    .replace(/\s+—\s+/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildPredictiveRoutePayload({
   repMessage = "",
   scenario = {},
@@ -259,6 +274,8 @@ function buildPredictiveRoutePayload({
     initial_temperature: realism,
     scenario_context: {
       ...scenario,
+      openingScene: sanitizeScenarioTextForHcpRuntime(scenario?.openingScene || ""),
+      visualScene: sanitizeScenarioTextForHcpRuntime(scenario?.visualScene || ""),
       cue_signal: scenario?.cue_signal || safeConcern,
       hcp_state: resolvedHcpState,
     },
@@ -275,6 +292,13 @@ function buildPredictiveRoutePayload({
     },
     hcp_state: resolvedHcpState,
     conversation_memory: resolvedMemory,
+    response_surface_directive: {
+      realism,
+      tone: realism <= 5 ? "cordial_neutral" : "professional_pressure",
+      must_acknowledge_rep: true,
+      avoid_repeated_premise_challenges: true,
+      avoid_hostile_stock_phrases: true,
+    },
   };
 }
 
@@ -3074,6 +3098,8 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [sessionReview, setSessionReview] = useState(null);
+  const [showSessionSummary, setShowSessionSummary] = useState(false);
   const [activeTab, setActiveTab] = useState("chat");
   const [coachingTip, setCoachingTip] = useState(null);
   const [voiceSettings, setVoiceSettings] = useState({ ttsEnabled: true, volume: 0.9, rate: 1.0 });
@@ -5948,11 +5974,46 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
     }
+    const finalSurfaceDialogue = applyHcpResponseSurface({
+      hcpReply: nextHcpDialogue,
+      scenario,
+      turn: {
+        phase: nextHcpState === "engaged" ? "engagement" : "objection_resolution",
+        concernFamily: primaryConcern,
+        escalationStage: nextHcpState,
+        responseShape: nextHcpState === "engaged" ? "open" : "compressed_probe",
+        targetWordBudget: repSelectedTemperature <= 5 ? 26 : 22,
+      },
+      profile: {
+        brevity: repSelectedTemperature <= 5 ? "normal" : "tight",
+      },
+      hcpTurnCount: nextTurnNumber,
+      liveRepAlignmentActive: true,
+    });
+    if (finalSurfaceDialogue) {
+      nextHcpDialogue = hardenTextSurface(finalSurfaceDialogue);
+    }
+    const finalSurfaceRepeatRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues);
+    if (finalSurfaceRepeatRepair) {
+      const repairConcern = resolveVariantConcernForTurn({
+        concern: primaryConcern,
+        repMessage,
+        dialogue: nextHcpDialogue,
+      });
+      nextHcpDialogue = chooseConcernSpecificVariant({
+        concern: repairConcern,
+        seed: `${generationKey}:${nextTurnNumber}:${repairConcern}:surface-repeat-repair`,
+        recentDialogues: recentHcpDialogues,
+      });
+      nextHcpDialogue = hardenTextSurface(stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue)));
+    }
     finalHcpReactionContract = {
       ...finalHcpReactionContract,
       selectedDialogueText: nextHcpDialogue,
       finalImplementationTurnRepair,
       finalSpokenOnlyRepeatRepair,
+      finalSurfaceRepeatRepair,
     };
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;
@@ -6312,7 +6373,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       );
 
       const coachingFeedback = buildSessionReviewMarkdown(review);
+      setSessionReview(review);
       setFeedback(enforceFeedbackEvidenceRules(coachingFeedback, runtimeScenarioContractRef.current));
+      setShowSessionSummary(true);
     } catch (err) {
       console.error('Session feedback generation error:', err);
       setFeedback("Unable to generate session feedback. Please try again.");
@@ -6695,6 +6758,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         <div className="hidden" aria-hidden="true">
           <LiveMetricsPanel turns={turns} scenario={scenario} />
         </div>
+      )}
+      {showSessionSummary && sessionReview && (
+        <SessionSummaryModal
+          review={sessionReview}
+          scenario={scenario}
+          session={{
+            id: sessionIdRef.current,
+            realism: repSelectedTemperature,
+            temperature: repSelectedTemperature,
+          }}
+          sessionTurnCount={repTurnsCount}
+          onClose={() => setShowSessionSummary(false)}
+          onExport={exportFeedbackPDF}
+          onNewSession={() => {
+            setShowSessionSummary(false);
+            setActiveTab("chat");
+          }}
+          onRegenerate={endSession}
+        />
       )}
     </div>
   );

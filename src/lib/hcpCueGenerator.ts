@@ -609,13 +609,29 @@ function cleanCueText(text: string): string {
   return String(text || "")
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/^◆\s*/, "")
+    .replace(/\bglances at watch\b/gi, "glances at the watch")
+    .replace(/\bglances at clock\b/gi, "glances at the clock")
+    .replace(/\bglances at schedule\b/gi, "glances at the schedule")
+    .replace(/\bglances at patient intake forms\b/gi, "glances at the patient intake forms")
+    .replace(/\bglances at chart\b/gi, "glances at the chart")
+    .replace(/\bglances at notes\b/gi, "glances at the notes")
+    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat,?\s*expression tightening around the ask\b/gi, "keeps steady eye contact, waiting for a more specific answer")
+    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat\b/gi, "keeps steady eye contact")
+    .replace(/\bexpression tightening around the ask\b/gi, "expression focused on the question")
+    .replace(/\bkeeps the ([a-z -]+) under one hand,?\s*expression tightening around the ([a-z -]+)\b/gi, "keeps the $1 nearby, focused on the $2")
+    .replace(/\bunder one hand\b/gi, "nearby")
+    .replace(/\bexpression tightening around the ([a-z -]+)\b/gi, "focused on the $1")
+    .replace(/\bgoes still for a beat,?\s*leaving little room for a detour\b/gi, "pauses briefly, waiting for the answer to stay specific")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function normalizeCueSentence(text: string): string {
-  const cleaned = cleanCueText(text).replace(/[.?!]+$/g, "").trim();
+  let cleaned = cleanCueText(text).replace(/[.?!]+$/g, "").trim();
   if (!cleaned) return "";
+  if (/^(glances|checks|looks|leans|nods|pauses|scans|reviews|shifts|gestures|rereads|folds|gathers|taps|closes)\b/i.test(cleaned)) {
+    cleaned = `The HCP ${cleaned.charAt(0).toLowerCase()}${cleaned.slice(1)}`;
+  }
   return `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}.`;
 }
 

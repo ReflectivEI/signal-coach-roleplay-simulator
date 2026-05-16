@@ -10,6 +10,32 @@ function normalizeText(value = "") {
   return String(value || "").trim();
 }
 
+function repairCueSurface(cueText = "") {
+  let cue = normalizeText(cueText).replace(/\s+/g, " ");
+  if (!cue) return "";
+
+  cue = cue
+    .replace(/\bglances at watch\b/gi, "glances at the watch")
+    .replace(/\bglances at clock\b/gi, "glances at the clock")
+    .replace(/\bglances at schedule\b/gi, "glances at the schedule")
+    .replace(/\bglances at patient intake forms\b/gi, "glances at the patient intake forms")
+    .replace(/\bglances at chart\b/gi, "glances at the chart")
+    .replace(/\bglances at notes\b/gi, "glances at the notes")
+    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat,?\s*expression tightening around the ask\b/gi, "keeps steady eye contact, waiting for a more specific answer")
+    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat\b/gi, "keeps steady eye contact")
+    .replace(/\bexpression tightening around the ask\b/gi, "expression focused on the question")
+    .replace(/\bkeeps the ([a-z -]+) under one hand,?\s*expression tightening around the ([a-z -]+)\b/gi, "keeps the $1 nearby, focused on the $2")
+    .replace(/\bunder one hand\b/gi, "nearby")
+    .replace(/\bexpression tightening around the ([a-z -]+)\b/gi, "focused on the $1")
+    .replace(/\bgoes still for a beat,?\s*leaving little room for a detour\b/gi, "pauses briefly, waiting for the answer to stay specific");
+
+  if (/^(glances|checks|looks|leans|nods|pauses|scans|reviews|shifts|gestures|rereads|folds|gathers|taps|closes)\b/i.test(cue)) {
+    cue = `The HCP ${cue.charAt(0).toLowerCase()}${cue.slice(1)}`;
+  }
+
+  return cue.replace(/\s+/g, " ").trim();
+}
+
 function normalizeConcernFamily(value = "general") {
   const text = String(value || "").toLowerCase();
   if (/evidence|data|proof|decision|durability|formulary/.test(text)) return "evidence";
@@ -228,7 +254,7 @@ export function detectInternalNarrationLeak(cueText = "") {
 }
 
 export function reviseCueForObservableBehavior({ cueText = "", cueCategory = "neutral_attentive", concernFamily = "general" } = {}) {
-  const cue = normalizeText(cueText);
+  const cue = repairCueSurface(cueText);
   if (!detectInternalNarrationLeak(cue)) return cue;
   const replacements = {
     evidence: {
