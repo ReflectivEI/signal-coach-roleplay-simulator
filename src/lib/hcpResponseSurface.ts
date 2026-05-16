@@ -103,7 +103,11 @@ const BANNED_STOCK_PHRASE_PATTERNS = [
   /\bwhat changes in practice if this is worth continuing\b/i,
   /\bi hear that a lot\b/i,
   /\bkeep this brief\b/i,
+  /\bkeep it brief\b/i,
+  /\bkeep it tight\b/i,
   /\bi'?m not convinced yet\b/i,
+  /\bi'?m not convinced this needs time yet\b/i,
+  /\bwhat'?s the specific reason it matters for my patients\b/i,
 ];
 
 function stripNarrationLeakage(text = ""): string {
