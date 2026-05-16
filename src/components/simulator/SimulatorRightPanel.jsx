@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, ChevronRight, Mic } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, ChevronRight, Mic, Bot } from "lucide-react";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
@@ -100,6 +100,7 @@ export default function SimulatorRightPanel({
   lastSignals = {},
   latestVoiceAnalysis = null,
   voiceEvaluation = null,
+  coachShadow = null,
   lastNudge = null,
   realtimeFeedback = null,
   onAnalyzeVoice = null,
@@ -114,6 +115,7 @@ export default function SimulatorRightPanel({
   const displayRealism = requireRealismContract(realism, "session.realism display");
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
+  const [showCoachShadow, setShowCoachShadow] = useState(false);
   const [showVoiceEvaluation, setShowVoiceEvaluation] = useState(false);
   const [selectedVoiceSectionId, setSelectedVoiceSectionId] = useState("delivery");
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
@@ -264,6 +266,92 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
+      {coachShadow?.isReady && (
+        <DarkSection
+          icon={Bot}
+          title="Coach Shadow"
+          headerRight={
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold"
+              style={{ color: "hsl(174 60% 68%)" }}
+              onClick={() => setShowCoachShadow((prev) => !prev)}
+            >
+              {showCoachShadow ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              {showCoachShadow ? "Hide" : "Peek"}
+            </button>
+          }
+        >
+          <div className="flex items-center gap-2">
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border"
+              style={{
+                background: coachShadow.avatarState === "watch" ? "rgba(231,196,83,0.16)" : "rgba(37,124,123,0.16)",
+                borderColor: coachShadow.avatarState === "watch" ? "rgba(231,196,83,0.32)" : "rgba(116,227,206,0.26)",
+                color: coachShadow.avatarState === "watch" ? "rgba(255,235,169,0.96)" : "hsl(174 60% 72%)",
+                boxShadow: "0 10px 22px rgba(0,0,0,0.12)",
+              }}
+            >
+              <Bot className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(244,249,249,0.94)" }}>
+                Predictive coach
+              </p>
+              <p className="mt-0.5 text-xs leading-snug" style={{ color: "rgba(220,236,236,0.72)" }}>
+                {coachShadow.draft ? "Reading next move" : "Waiting for rep draft"}
+              </p>
+            </div>
+          </div>
+
+          {showCoachShadow && (
+            <div className="space-y-1.5 pt-1">
+              {[
+                ["Likely HCP Move", coachShadow.likelyReaction],
+                ["Best Next Move", coachShadow.bestMove],
+                ["Risk", coachShadow.risk],
+                ["HCP Is Testing", coachShadow.hcpWasTesting],
+              ].filter(([, detail]) => detail).map(([label, detail]) => (
+                <div
+                  key={label}
+                  className="rounded-lg border px-2.5 py-2"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    borderColor: "rgba(125,173,190,0.16)",
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "hsl(174 60% 68%)" }}>
+                    {label}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
+                    {detail}
+                  </p>
+                </div>
+              ))}
+              {coachShadow.afterAction && (
+                <div
+                  className="rounded-lg border px-2.5 py-2"
+                  style={{
+                    background: "rgba(231,196,83,0.12)",
+                    borderColor: "rgba(231,196,83,0.28)",
+                  }}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: "rgba(255,235,169,0.96)" }}>
+                    After-Action Check
+                  </p>
+                  <p className="mt-1 text-xs font-semibold" style={{ color: "rgba(255,235,169,0.96)" }}>
+                    {coachShadow.afterAction.label}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "rgba(255,244,203,0.90)" }}>
+                    {coachShadow.afterAction.detail}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </DarkSection>
+      )}
+
       <DarkSection icon={Activity} title="Realism">
         <Row label="Level">
           <div className="flex items-center gap-2">
@@ -380,7 +468,7 @@ export default function SimulatorRightPanel({
       {onAnalyzeVoice && (
         <DarkSection
           icon={Mic}
-          title="Voice Analysis"
+          title="Rep Response"
           headerRight={
             <button
               type="button"
@@ -450,7 +538,7 @@ export default function SimulatorRightPanel({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 48% 34%)" }}>Voice Analysis</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 48% 34%)" }}>Rep Response</p>
                 <h3 className="mt-1 text-lg font-semibold" style={{ color: "hsl(222 48% 22%)" }}>{selectedVoiceSection.title}</h3>
               </div>
               <button

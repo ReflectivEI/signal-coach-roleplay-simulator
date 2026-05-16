@@ -138,7 +138,10 @@ function asStringArray(value: unknown, fallback: string[] = []): string[] {
 
 function normalizeCapabilityInsights(
   rawInsights: any[],
-  deterministicAssessment: Record<string, string>
+  deterministicAssessment: Record<string, string>,
+  transcript: ConversationTurn[] = [],
+  allSignals: BehaviorSignals[] = [],
+  scenario: any = {},
 ) {
   const rawById = new Map(
     (Array.isArray(rawInsights) ? rawInsights : [])
@@ -148,18 +151,27 @@ function normalizeCapabilityInsights(
 
   return SIGNAL_INTELLIGENCE_CAPABILITIES.map((capability) => {
     const raw = rawById.get(capability.id) || {};
+    const fallback = buildCapabilityInsightFallback({
+      capability,
+      observationLevel: deterministicAssessment[capability.id] || raw.observationLevel || "developing",
+      transcript,
+      allSignals,
+      scenario,
+    });
     return {
       capabilityId: capability.id,
       capabilityName: capability.metric,
       observationLevel: deterministicAssessment[capability.id] || raw.observationLevel || "developing",
-      whatHappened: asNonEmptyString(raw.whatHappened),
-      transcriptEvidence: asNonEmptyString(raw.transcriptEvidence),
-      whyItMattered: asNonEmptyString(raw.whyItMattered),
-      pattern: asNonEmptyString(raw.pattern),
-      whatGoodLooksLike: asNonEmptyString(raw.whatGoodLooksLike),
-      exampleRewrite: asNonEmptyString(raw.exampleRewrite),
-      nextTimeAction: asNonEmptyString(raw.nextTimeAction),
-      relatedTurnIds: asStringArray(raw.relatedTurnIds, []),
+      whatHappened: takeSpecificNonEmpty([raw.whatHappened], fallback.whatHappened),
+      transcriptEvidence: takeSpecificNonEmpty([raw.transcriptEvidence], fallback.transcriptEvidence),
+      whyItMattered: takeSpecificNonEmpty([raw.whyItMattered], fallback.whyItMattered),
+      pattern: takeSpecificNonEmpty([raw.pattern], fallback.pattern),
+      whatGoodLooksLike: takeSpecificNonEmpty([raw.whatGoodLooksLike], fallback.whatGoodLooksLike),
+      exampleRewrite: takeSpecificNonEmpty([raw.exampleRewrite], fallback.exampleRewrite),
+      nextTimeAction: takeSpecificNonEmpty([raw.nextTimeAction], fallback.nextTimeAction),
+      relatedTurnIds: asStringArray(raw.relatedTurnIds, fallback.relatedTurnIds).length
+        ? asStringArray(raw.relatedTurnIds, fallback.relatedTurnIds)
+        : fallback.relatedTurnIds,
     };
   });
 }
@@ -236,6 +248,118 @@ function inferReviewConcernFamily(scenario: any, transcript: ConversationTurn[] 
   if (/guideline/.test(joined)) return "guideline fit";
   if (/subgroup|patient fit|patient population|who fits|which patients/.test(joined)) return "patient fit";
   return "evidence fit";
+}
+
+function quoteForReview(value = "", maxWords = 24): string {
+  const words = String(value || "").replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const clipped = words.length > maxWords ? `${words.slice(0, maxWords).join(" ")}...` : words.join(" ");
+  return clipped.replace(/^["']|["']$/g, "");
+}
+
+function buildRepHcpPairs(transcript: ConversationTurn[] = []) {
+  const pairs: Array<{ rep: ConversationTurn; hcp?: ConversationTurn; index: number }> = [];
+  transcript.forEach((turn, index) => {
+    if (turn?.speaker !== "rep") return;
+    const hcp = transcript.slice(index + 1).find((candidate) => candidate?.speaker === "hcp");
+    pairs.push({ rep: turn, hcp, index: pairs.length });
+  });
+  return pairs;
+}
+
+function pickEvidencePair(
+  capabilityId: string,
+  transcript: ConversationTurn[] = [],
+  allSignals: BehaviorSignals[] = [],
+) {
+  const pairs = buildRepHcpPairs(transcript);
+  if (!pairs.length) return null;
+
+  const selectors: Record<string, (signal: BehaviorSignals) => boolean> = {
+    question_quality: (signal) => signal.question_type !== "none",
+    listening_responsiveness: (signal) => Boolean(signal.response_alignment || signal.listening_pattern),
+    making_it_matter: (signal) => Boolean(signal.response_alignment || signal.engagement_level),
+    customer_engagement_signals: (signal) => Boolean(signal.engagement_level || signal.listening_pattern),
+    objection_navigation: (signal) => Boolean(signal.objection_type && signal.objection_type !== "none"),
+    conversation_control_structure: (signal) => Boolean(signal.control_pattern),
+    adaptability: (_signal) => allSignals.length > 1,
+    commitment_gaining: (signal) => Boolean(signal.commitment_attempt && signal.commitment_attempt !== "none"),
+  };
+
+  const selector = selectors[capabilityId] || (() => true);
+  const signalIndex = allSignals.findIndex(selector);
+  if (signalIndex >= 0 && pairs[signalIndex]) return { ...pairs[signalIndex], signal: allSignals[signalIndex] };
+  const fallbackIndex = Math.max(0, Math.min(pairs.length - 1, allSignals.length - 1));
+  return { ...pairs[fallbackIndex], signal: allSignals[fallbackIndex] || {} };
+}
+
+function describeCapabilitySignal(capabilityId: string, signal: BehaviorSignals = {}) {
+  if (capabilityId === "question_quality") return `question form was ${String(signal.question_type || "not observable").replace(/_/g, " ")}`;
+  if (capabilityId === "listening_responsiveness") return `response alignment was ${String(signal.response_alignment || "not observable").replace(/_/g, " ")} and listening was ${String(signal.listening_pattern || "not observable").replace(/_/g, " ")}`;
+  if (capabilityId === "making_it_matter") return `value framing showed ${String(signal.response_alignment || "not observable").replace(/_/g, " ")} alignment to the HCP concern`;
+  if (capabilityId === "customer_engagement_signals") return `HCP participation was ${String(signal.engagement_level || "not observable").replace(/_/g, " ")}`;
+  if (capabilityId === "objection_navigation") return `objection handling was tested against a ${String(signal.objection_type || "no explicit").replace(/_/g, " ")} objection`;
+  if (capabilityId === "conversation_control_structure") return `conversation control was ${String(signal.control_pattern || "not observable").replace(/_/g, " ")}`;
+  if (capabilityId === "adaptability") return `the rep's approach was judged against whether it changed after the HCP response`;
+  if (capabilityId === "commitment_gaining") return `next-step behavior was ${String(signal.commitment_attempt || "not observable").replace(/_/g, " ")}`;
+  return "the observable signal was incomplete";
+}
+
+function exampleRewriteForCapability(capabilityId: string, concernFamily: string) {
+  if (capabilityId === "question_quality") return `Can I ask where ${concernFamily} shows up most often in your current decision process?`;
+  if (capabilityId === "listening_responsiveness") return `I hear that ${concernFamily} is the issue. Let me answer that directly first.`;
+  if (capabilityId === "making_it_matter") return `The practical reason this matters is that it changes the ${concernFamily} decision before the next step.`;
+  if (capabilityId === "customer_engagement_signals") return `It sounds like that point is not landing yet. Which part feels least relevant to your practice?`;
+  if (capabilityId === "objection_navigation") return `That's a fair concern. Before I respond, can I clarify whether your main issue is evidence fit, workflow, or access?`;
+  if (capabilityId === "conversation_control_structure") return `Let me keep this focused: first the practical issue, then whether it changes your next patient decision.`;
+  if (capabilityId === "adaptability") return `Let me adjust. Rather than covering the study broadly, I'll tie it to the concern you just raised.`;
+  if (capabilityId === "commitment_gaining") return `Would it be useful if I sent the one-page criteria and we revisit whether it fits your next appropriate patient?`;
+  return `Let me make that specific to your practice before I go further.`;
+}
+
+function buildCapabilityInsightFallback({
+  capability,
+  observationLevel,
+  transcript,
+  allSignals,
+  scenario,
+}: {
+  capability: typeof SIGNAL_INTELLIGENCE_CAPABILITIES[number];
+  observationLevel: string;
+  transcript: ConversationTurn[];
+  allSignals: BehaviorSignals[];
+  scenario: any;
+}) {
+  const pair = pickEvidencePair(capability.id, transcript, allSignals);
+  const concernFamily = inferReviewConcernFamily(scenario, transcript);
+  const signalDescription = describeCapabilitySignal(capability.id, pair?.signal || {});
+  const repQuote = quoteForReview(pair?.rep?.text || "");
+  const hcpQuote = quoteForReview(pair?.hcp?.text || "");
+  const pressureText = Array.isArray(scenario?.interactionPressure) && scenario.interactionPressure.length
+    ? scenario.interactionPressure.join(", ").replace(/_/g, " ")
+    : "the scenario pressure";
+  const stateText =
+    observationLevel === "effective" ? "demonstrated" :
+      observationLevel === "missed" ? "did not demonstrate" :
+        "partially demonstrated";
+  const hcpReaction = hcpQuote
+    ? `the HCP responded with "${hcpQuote}"`
+    : "the next HCP reaction was not available in the transcript";
+
+  return {
+    whatHappened: `The rep ${stateText} ${capability.metric} when the ${concernFamily} issue was active. The observable signal was that ${signalDescription}.`,
+    transcriptEvidence: repQuote
+      ? `Rep: "${repQuote}"${hcpQuote ? ` HCP: "${hcpQuote}"` : ""}`
+      : "No transcript quote was available for this capability.",
+    whyItMattered: `Because ${capability.metric} was ${observationLevel}, ${hcpReaction}. This shaped whether the conversation moved toward the HCP's ${concernFamily} concern or stayed broad.`,
+    pattern: allSignals.length > 1
+      ? `This pattern was evaluated across ${allSignals.length} rep turns, with the clearest evidence at ${pair?.rep?.id || "the selected rep turn"}.`
+      : "This was an isolated moment in the exchange.",
+    whatGoodLooksLike: `For this ${String(scenario?.persona || "HCP").replace(/_/g, " ")} under ${pressureText}, strong ${capability.metric} means ${capability.whatGoodLooksLike?.[0] || capability.definition}`,
+    exampleRewrite: exampleRewriteForCapability(capability.id, concernFamily),
+    nextTimeAction: `When the HCP signals ${concernFamily}, use ${capability.metric} before adding new content. Keep the response anchored to the HCP's words, then make one narrow move that advances the exchange.`,
+    relatedTurnIds: pair?.rep?.id ? [pair.rep.id, pair?.hcp?.id].filter(Boolean) : [],
+  };
 }
 
 function buildStructuredSectionTexts({
@@ -350,8 +474,15 @@ function normalizeSessionReviewShape(
   volatilityEvents: VolatilityEvent[],
   scenario: any,
   transcript: ConversationTurn[],
+  allSignals: BehaviorSignals[] = [],
 ): SessionReview {
-  const normalizedInsights = normalizeCapabilityInsights(result?.capabilityInsights || [], deterministicAssessment);
+  const normalizedInsights = normalizeCapabilityInsights(
+    result?.capabilityInsights || [],
+    deterministicAssessment,
+    transcript,
+    allSignals,
+    scenario,
+  );
   const structuredSections = buildStructuredSectionTexts({
     result,
     normalizedInsights,
@@ -848,7 +979,7 @@ Return ONLY valid JSON with this exact structure:
 
   const result = await invokeWorkerJson({
     prompt,
-    max_tokens: 1600,
+    max_tokens: 6200,
     temperature: 0.2,
     timeout_ms: 45000,
     response_json_schema: {
@@ -873,5 +1004,5 @@ Return ONLY valid JSON with this exact structure:
     }
   });
 
-  return normalizeSessionReviewShape(result, deterministicAssessment, volatilityEvents, scenario, transcript);
+  return normalizeSessionReviewShape(result, deterministicAssessment, volatilityEvents, scenario, transcript, allSignals);
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import AppHeader from "@/components/layout/AppHeader";
 import { computeVolatilityEvents } from "@/lib/simulatorEngine";
@@ -75,6 +75,102 @@ function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
     type,
     source: runtimeLens?.synthesisSource || "deterministic",
     specialistTitle: runtimeLens?.specialistTitle || scenario?.stakeholder || "Clinical Specialist",
+  };
+}
+
+function normalizeShadowText(value = "") {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function getLastHcpTurn(turns = []) {
+  return [...turns].reverse().find((turn) => turn.speaker === "hcp") || null;
+}
+
+function buildCoachShadowMode({
+  draftText = "",
+  hcpPrediction = null,
+  predictiveLensData = null,
+  session = null,
+  scenario = null,
+  lastSignals = {},
+  activeCues = [],
+  lastHcpTurn = null,
+  afterAction = null,
+} = {}) {
+  const draft = normalizeShadowText(draftText);
+  const lowerDraft = draft.toLowerCase();
+  const sections = predictiveLensData?.lens?.sections || {};
+  const pressure = String(scenario?.interactionPressure?.[0] || predictiveLensData?.selection?.interactionPressure || "").replace(/_/g, " ");
+  const concern = String(hcpPrediction?.concernFamily || lastSignals?.concern_family || pressure || "current concern").replace(/_/g, " ");
+  const hcpState = hcpPrediction?.predictedBehaviorState || session?.currentBehaviorState || scenario?.startingBehaviorState || "neutral";
+  const cue = activeCues?.[0]?.label || activeCues?.[0]?.text || "";
+
+  const isPitch = /\b(study|data|efficacy|product|treatment|dose|trial|new)\b/i.test(draft);
+  const isAcknowledging = /\b(hear|understand|sounds like|you'?re looking|workflow|burden|staff|time|practical|concern|before)\b/i.test(draft);
+  const isQuestion = /\?|\bwhat\b|\bhow\b|\bwhich\b|\bwhere\b|\bwhen\b|\bcould\b|\bcan\b/i.test(draft);
+  const isVague = draft.length > 0 && draft.split(/\s+/).length < 5;
+
+  let likelyReaction = "HCP likely stays neutral until the rep connects to the current concern.";
+  let bestMove = sections.repApproach?.headline || "Ask a narrowing question tied to the HCP's immediate decision.";
+  let risk = "Risk: the rep may answer with content before confirming what the HCP is actually testing.";
+
+  if (!draft) {
+    likelyReaction = lastHcpTurn?.text
+      ? "HCP is waiting to see whether the next rep move addresses the last concern."
+      : "HCP is forming an early relevance judgment from the opening move.";
+  } else if (isVague) {
+    likelyReaction = "HCP likely asks for a more specific reason this matters.";
+    bestMove = "Name the practical reason, then ask one focused question.";
+    risk = "Risk: a vague opener makes the HCP tighten the time gate.";
+  } else if (isPitch && !isAcknowledging) {
+    likelyReaction = "If you pitch now, HCP likely closes down or redirects to the practical barrier.";
+    bestMove = "Acknowledge the barrier first, then connect one specific point to it.";
+    risk = `Risk: rep is about to answer product interest instead of the ${concern} concern.`;
+  } else if (isAcknowledging && isQuestion) {
+    likelyReaction = "If you acknowledge the burden first, openness likely improves.";
+    bestMove = "Ask a narrowing question that lets the HCP define the decision threshold.";
+    risk = "Risk is lower if the rep keeps the question concise and tied to the HCP's context.";
+  } else if (isQuestion) {
+    likelyReaction = "HCP likely gives a more useful constraint if the question is specific enough.";
+    bestMove = "Anchor the question to patient fit, workflow, evidence, or access.";
+    risk = "Risk: a broad question may keep the conversation generic.";
+  } else if (isAcknowledging) {
+    likelyReaction = "HCP likely stays engaged if the next sentence makes the practical payoff clear.";
+    bestMove = "Follow the acknowledgement with one concrete change or a focused question.";
+    risk = "Risk: acknowledgement without a next move can stall momentum.";
+  }
+
+  return {
+    isReady: Boolean(predictiveLensData || hcpPrediction || session || scenario),
+    draft,
+    avatarState: hcpPrediction?.riskLevel === "high" ? "watch" : hcpState === "openness" ? "clear" : "thinking",
+    likelyReaction,
+    bestMove,
+    risk,
+    cue,
+    hcpWasTesting: sections.objections?.headline || sections.mindset?.headline || hcpPrediction?.nextLikelyBehavior || "Whether the rep can make the next move relevant and practical.",
+    afterAction,
+  };
+}
+
+function compareCoachShadowPrediction(shadow, response) {
+  if (!shadow || !response) return null;
+  const actualPrediction = response.prediction || {};
+  const actualState = response.nextBehaviorState || actualPrediction.predictedBehaviorState || "unknown";
+  const actualRisk = actualPrediction.riskLevel || "unknown";
+  const expectedCloseDown = /closes down|tighten|risk/i.test(shadow.likelyReaction || shadow.risk || "");
+  const improved = ["curiosity", "openness", "neutral"].includes(String(actualState).toLowerCase())
+    && actualRisk !== "high";
+  const matched = expectedCloseDown
+    ? ["resistance", "frustration", "closed", "time_pressure"].includes(String(actualState).toLowerCase()) || actualRisk === "high"
+    : improved;
+
+  return {
+    label: matched ? "Prediction tracked" : "Prediction updated",
+    detail: matched
+      ? `The HCP response followed the shadow read: ${String(actualState).replace(/_/g, " ")} with ${actualRisk} risk.`
+      : `The HCP moved differently than expected: ${String(actualState).replace(/_/g, " ")} with ${actualRisk} risk.`,
+    actualMove: response.hcpReply || "",
   };
 }
 
@@ -245,6 +341,7 @@ export default function Simulator() {
   const [voiceEvaluation, setVoiceEvaluation] = useState(null);
   const [isVoiceEvaluating, setIsVoiceEvaluating] = useState(false);
   const [repDraftForAnalysis, setRepDraftForAnalysis] = useState({ text: "", inputMode: "typed", voiceMetadata: null });
+  const [coachShadowAfterAction, setCoachShadowAfterAction] = useState(null);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
   const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
@@ -258,6 +355,7 @@ export default function Simulator() {
   const [predictiveLens, setPredictiveLens] = useState({ isLoading: false, data: null });
   const predictiveLensRef = useRef({ isLoading: false, data: null });
   const predictiveLensReadyPromiseRef = useRef(Promise.resolve(null));
+  const pendingCoachShadowRef = useRef(null);
   const coachingEnabled = true;
 
   const setPredictiveLensState = useCallback((nextLens) => {
@@ -340,6 +438,7 @@ export default function Simulator() {
 
       setTurns([]);
       setHasRepSpoken(false);
+      setCoachShadowAfterAction(null);
 
       const initCues = [];
       const openingCue = resolveObservedCue("", {
@@ -451,6 +550,9 @@ export default function Simulator() {
       inputMode: draft?.inputMode || "typed",
       voiceMetadata: draft?.voiceMetadata || null,
     });
+    if (draft?.text) {
+      setCoachShadowAfterAction(null);
+    }
   }, []);
 
   const handleVoiceAnalysisRequest = useCallback(() => {
@@ -508,6 +610,17 @@ export default function Simulator() {
     console.log("temperature_applied", {
       value: temperature,
       band: temperature <= 3 ? "low" : temperature <= 7 ? "medium" : "high",
+    });
+
+    pendingCoachShadowRef.current = buildCoachShadowMode({
+      draftText: repText,
+      hcpPrediction,
+      predictiveLensData: predictiveRuntimeData,
+      session,
+      scenario,
+      lastSignals,
+      activeCues,
+      lastHcpTurn: getLastHcpTurn(turns),
     });
 
     setHasRepSpoken(true);
@@ -636,6 +749,7 @@ export default function Simulator() {
 
       const prediction = response.prediction || predictHcpBehavior(updatedSignals, updatedSignals, scenario);
       setHcpPrediction(prediction);
+      setCoachShadowAfterAction(compareCoachShadowPrediction(pendingCoachShadowRef.current, response));
       if (coachingEnabled && response.coachingNudge) {
         setLastNudge(response.coachingNudge);
       }
@@ -707,7 +821,7 @@ export default function Simulator() {
     } finally {
       setIsLoading(false);
     }
-  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile, hasRepSpoken]);
+  }, [session, scenario, turns, coachingEnabled, isLoading, allSignals, repTurnIds, currentVolatilityProfile, hasRepSpoken, hcpPrediction, lastSignals, activeCues]);
 
   const handleEndSession = async () => {
     if (!session || isReviewing) return;
@@ -904,6 +1018,27 @@ export default function Simulator() {
 
   const showCurrentJourneyState = session?.currentJourneyState;
   const showActivePressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
+  const coachShadow = useMemo(() => buildCoachShadowMode({
+    draftText: repDraftForAnalysis.text,
+    hcpPrediction,
+    predictiveLensData: predictiveLens?.data,
+    session,
+    scenario,
+    lastSignals,
+    activeCues,
+    lastHcpTurn: getLastHcpTurn(turns),
+    afterAction: coachShadowAfterAction,
+  }), [
+    repDraftForAnalysis.text,
+    hcpPrediction,
+    predictiveLens?.data,
+    session,
+    scenario,
+    lastSignals,
+    activeCues,
+    turns,
+    coachShadowAfterAction,
+  ]);
 
   return (
     <div className="h-screen overflow-hidden flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
@@ -1084,6 +1219,7 @@ export default function Simulator() {
                 lastSignals={lastSignals}
                 latestVoiceAnalysis={latestVoiceAnalysis}
                 voiceEvaluation={voiceEvaluation}
+                coachShadow={coachShadow}
                 onAnalyzeVoice={handleVoiceAnalysisRequest}
                 isVoiceEvaluating={isVoiceEvaluating}
                 canAnalyzeVoice={Boolean(repDraftForAnalysis.text?.trim()) && !isLoading && !isReviewing && !session?.isComplete}
@@ -1119,6 +1255,7 @@ export default function Simulator() {
               lastSignals={lastSignals}
               latestVoiceAnalysis={latestVoiceAnalysis}
               voiceEvaluation={voiceEvaluation}
+              coachShadow={coachShadow}
               onAnalyzeVoice={handleVoiceAnalysisRequest}
               isVoiceEvaluating={isVoiceEvaluating}
               canAnalyzeVoice={Boolean(repDraftForAnalysis.text?.trim()) && !isLoading && !isReviewing && !session?.isComplete}
