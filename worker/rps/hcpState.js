@@ -63,6 +63,9 @@ function humanizeBarrierFragment(value = "") {
     if (/signals are mixed and context-dependent/.test(lower)) {
         return "a clearer practical signal for this clinic";
     }
+    if (/unclear practical relevance to clinic workflow/.test(lower)) {
+        return "what actually changes for staff in our clinic workflow";
+    }
     return str(value).replace(/\.$/, "");
 }
 
@@ -420,7 +423,7 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}, 
             ]);
         }
         return pickLead([
-            "If we're talking about that study, what exactly changes for the patients I actually treat?",
+            "I’ve seen studies like this before; what specifically changes for the patients I’m treating this week?",
             "Stay on the study for a second. Which result changes how I'd treat a real patient?",
             "If this is the data discussion, tell me which treatment decision actually changes.",
         ]);
@@ -428,14 +431,14 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}, 
     if (bucketForTopic === "patient_fit") {
         return pickLead([
             "If we're discussing patient fit, tell me exactly which patients you mean and who should be excluded.",
-            "Keep this on patient selection. Who fits first, and who clearly does not?",
+            "Can you be specific on patient selection—who is the right fit first, and who should I exclude?",
             "Which patients are you actually talking about, and who should I leave out?",
         ]);
     }
     if (bucketForTopic === "cost") {
         return pickLead([
             "If we're discussing value, tell me which patient outcome actually justifies the total spend.",
-            "Keep this on value. What outcome changes enough to justify the full cost per patient?",
+            "For me this is a value question: what patient-level outcome changes enough to justify the full cost?",
             "If this is the cost discussion, what clinical result makes the spend worth it in practice?",
         ]);
     }
@@ -443,40 +446,40 @@ function buildRepAlignedLead(topic = "none", repTranscript = "", hcpState = {}, 
         if (lanePolicy.stage === "clinical_value") {
             return pickLead([
                 "If access is still part of the value story, tell me which approval step changes for the patients you'd actually put on it.",
-                "Keep this on access tied to value. What changes in prior auth before the patient can actually start?",
+                "Before this has value in practice, what changes in prior auth so a patient can actually start?",
                 "If this is still worth the spend, where does the approval path get simpler for a real patient?",
             ]);
         }
         return pickLead([
             "If this is about access, I need to know which approval step changes for my team.",
-            "Keep this on access. What changes in the approval path for my staff first?",
-            "If we're talking access, tell me where the prior-auth burden actually drops.",
+            "Walk me through access: what changes first in the approval path for my staff?",
+            "If access is the blocker, where exactly does prior-auth burden decrease for the team?",
         ]);
     }
     if (bucketForTopic === "workflow") {
         if (lanePolicy.stage === "clinical_value") {
             return pickLead([
                 "Before this becomes a value decision, tell me what staff step actually gets easier first.",
-                "Keep this on workflow tied to value. Which task comes off my team's plate if this matters?",
+                "If this is truly practical, which workflow task actually comes off my team’s plate first?",
                 "If this changes practice, where does the callback or handoff burden drop for staff first?",
             ]);
         }
         return pickLead([
             "If this is about workflow, tell me what staff step gets easier first.",
-            "Keep this on workflow. Which task actually comes off my team's plate first?",
-            "If we're talking workflow, where does the callback burden drop first for staff?",
+            "From a workflow standpoint, which task actually comes off my team’s plate first?",
+            "Where, specifically, does callback burden drop for staff if we use this?",
         ]);
     }
     if (bucketForTopic === "risk") {
         return pickLead([
             "If this is about safety, I need to know what signal lowers risk for the patients I actually treat.",
-            "Keep this on safety. What lowers risk in the patients I'd actually see?",
-            "If we're talking safety, give me the signal that changes risk in practice.",
+            "On safety, what signal would lower risk in the patients I actually see in clinic?",
+            "If safety is the claim, what concrete signal changes risk in real practice?",
         ]);
     }
     return pickLead([
         "I need a direct answer tied to what I just asked.",
-        "Keep this on the point I raised and tell me what actually changes.",
+        "Please stay with the exact point I raised and tell me what actually changes.",
     ]);
 }
 
@@ -489,23 +492,23 @@ function buildTopicRepeatBreaker(topic = "none", repTranscript = "", hcpState = 
             "I remember the paper. Which finding changes who you would actually treat?",
         ],
         patient_fit: [
-            "Keep this on patient selection. Who fits first, and who clearly does not?",
+            "Can you be specific on patient selection—who fits first, and who clearly does not?",
             "Which patients are you actually talking about, and who should I leave out?",
         ],
         access: [
-            "Keep this on access. What changes in the approval path for my staff first?",
-            "If we're talking access, tell me where the prior-auth burden actually drops.",
+            "Walk me through access: what changes first in the approval path for my staff?",
+            "If access is the issue, where does prior-auth burden actually drop?",
         ],
         workflow: [
-            "Keep this on workflow. Which task actually comes off my team's plate first?",
-            "If we're talking workflow, where does the callback burden drop first for staff?",
+            "From a workflow lens, which task actually comes off my team’s plate first?",
+            "Where does callback burden drop first for staff if this is implemented?",
         ],
         safety: [
-            "Keep this on safety. What lowers risk in the patients I'd actually see?",
-            "If we're talking safety, give me the signal that changes risk in practice.",
+            "On safety, what lowers risk in the patients I’m actually seeing?",
+            "If we’re discussing safety, what signal changes risk in real practice?",
         ],
         cost: [
-            "Keep this on value. What outcome changes enough to justify the total spend?",
+            "For value, what outcome changes enough to justify the total spend?",
             "If this is still worth it, what result justifies the full cost per patient?",
         ],
     };
@@ -569,42 +572,42 @@ function buildForcedBucketLine({
     const high = temp >= 8;
     const templates = {
         workflow: [
-            `Operational path first: who owns the next handoff and what task drops?`,
-            `Keep this operational: identify the next handoff owner and the removed step.`,
-            `I need the care-path sequence: who takes the first handoff and what clears?`,
+            `From an operations view, who owns the next handoff and which step is removed?`,
+            `If we run this, who takes first ownership and what task comes off the workflow?`,
+            `Map the care-path handoff for me: who owns step one and what bottleneck clears?`,
         ],
         evidence: [
-            `Evidence-level clarity now. Which data point supports this in real patients?`,
-            `Stay on evidence: which real-world signal shifts this decision?`,
-            `Give one evidence point that changes confidence.`,
+            `Help me with the evidence in practical terms: which data point applies to real patients in my clinic?`,
+            `Which real-world signal would actually shift this decision for you?`,
+            `What is the strongest evidence point I can use with a real patient tomorrow?`,
         ],
         access: [
             `Payer path first: which approval step moves and where does denial risk fall?`,
             `Give me the payer sequence: what shifts in approval timing or denial risk?`,
-            `Keep this on payer access: which approval gate moves first?`,
+            `On payer access, which approval gate moves first in real workflow?`,
         ],
         cost: [
-            `Value first: which patient outcome actually justifies the full cost per patient?`,
-            `Keep this on value: what result makes the spend defensible in practice?`,
-            `I need the cost answer tied to one patient-level outcome, not a broad value claim.`,
+            `Which patient outcome specifically justifies the full cost per patient here?`,
+            `What result would make this spend defensible in your day-to-day practice?`,
+            `Tie the cost discussion to one patient-level outcome I can actually use in clinic.`,
         ],
         implementation: [
             `Keep this usable: who owns the first implementation step and what do they do?`,
             `I need one implementation detail: which role executes step one?`,
-            `Implementation answer only: what gets added and who coordinates it?`,
+            `What gets added operationally, and who coordinates it on day one?`,
         ],
         time: [
-            `I need the short version. Which immediate minute-level burden drops first?`,
+            `Short version: which immediate time burden drops first for staff?`,
             `Time is tight. Give me one change that saves time this week.`,
             `Be brief: which immediate burden drops?`,
         ],
         risk: [
-            `I still see risk here. Which signal reduces uncertainty for my patients and team?`,
+            `I still see risk here; which signal reduces uncertainty for my patients and team?`,
             `Give me a risk signal: what shifts safety confidence in real practice?`,
             `I need one risk control before this moves forward.`,
         ],
         patient_fit: [
-            `Which patient profile is this for, and who should be excluded at the start?`,
+            `Which patient profile is this really for, and who should be excluded at the start?`,
             `Stay on patient fit: which subgroup should I treat and which should I avoid?`,
             `I need one fit rule for patient selection before I proceed.`,
         ],
