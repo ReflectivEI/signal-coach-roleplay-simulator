@@ -1005,17 +1005,6 @@ export default function Simulator() {
     URL.revokeObjectURL(url);
   };
 
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
-        <div className="text-center space-y-3">
-          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Initializing scenario...</p>
-        </div>
-      </div>
-    );
-  }
-
   const showCurrentJourneyState = session?.currentJourneyState;
   const showActivePressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : [];
   const coachShadow = useMemo(() => buildCoachShadowMode({
@@ -1039,6 +1028,17 @@ export default function Simulator() {
     turns,
     coachShadowAfterAction,
   ]);
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>
+        <div className="text-center space-y-3">
+          <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Initializing scenario...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen overflow-hidden flex flex-col font-inter" style={{ background: "linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%)" }}>

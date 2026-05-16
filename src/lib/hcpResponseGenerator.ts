@@ -44,6 +44,8 @@ type EscalationMemory = {
   repeatedRepPatternCount: number;
   unansweredQuestionCount: number;
   genericAfterSpecificityCount: number;
+  hostileOrUnpreparedCount: number;
+  recentBoundaryMissCount: number;
   lastRepIntent: string;
   escalationLevel: number;
   shouldEscalateThisTurn: boolean;
@@ -1386,6 +1388,12 @@ function inferRepIntent(value = ""): string {
   return text.split(" ").slice(0, 4).join("_") || "general";
 }
 
+function isHostileOrUnpreparedRepMessage(repMessage = ""): boolean {
+  const rep = normalizeIntentText(repMessage);
+  if (!rep) return false;
+  return /\b(who cares|i don t care|don t care|not my problem|not my job|whatever|irrelevant|doesn t matter|waste of time|stupid|dumb|shut up|no idea|i don t know|not sure|unprepared|didn t prepare|trust me|just trust me)\b/.test(rep);
+}
+
 function repAnsweredPriorHcpQuestion(repMessage = "", transcript: ConversationTurn[] = [], latestConcern = ""): boolean {
   const previousHcp = getLastHcpReplyText(transcript);
   if (!/\?/.test(previousHcp)) return true;
@@ -1398,6 +1406,40 @@ function repAnsweredPriorHcpQuestion(repMessage = "", transcript: ConversationTu
   if (concern === "safety") return /\b(safety|side effect|adverse|risk|renal|hepatic|tolerability)\b/.test(rep);
   if (concern === "patient_fit") return /\b(patient|subgroup|population|profile|candidate|fits|appropriate)\b/.test(rep);
   return !/\b(great|help|valuable|solution|better|important|innovative|support)\b/.test(rep) || /\b(specific|because|means|would|step|data|patient|staff|coverage)\b/.test(rep);
+}
+
+function countRecentBoundaryMisses({
+  transcript,
+  repMessage,
+  latestConcern,
+}: {
+  transcript: ConversationTurn[];
+  repMessage: string;
+  latestConcern: string;
+}) {
+  const repTurns = [
+    ...transcript
+      .map((turn, index) => ({ turn, index }))
+      .filter(({ turn }) => turn?.speaker === "rep")
+      .slice(-3),
+    { turn: { speaker: "rep", text: repMessage } as ConversationTurn, index: transcript.length },
+  ];
+
+  let hostileOrUnpreparedCount = 0;
+  let recentBoundaryMissCount = 0;
+
+  repTurns.forEach(({ turn, index }) => {
+    const transcriptBeforeTurn = index >= transcript.length ? transcript : transcript.slice(0, index);
+    const hostileOrUnprepared = isHostileOrUnpreparedRepMessage(turn?.text || "");
+    const unansweredQuestion = !repAnsweredPriorHcpQuestion(turn?.text || "", transcriptBeforeTurn, latestConcern);
+    const genericAfterSpecificity = askedForSpecificityRecently(transcriptBeforeTurn) && repStayedGeneric(turn?.text || "");
+    if (hostileOrUnprepared) hostileOrUnpreparedCount += 1;
+    if (hostileOrUnprepared || unansweredQuestion || genericAfterSpecificity) {
+      recentBoundaryMissCount += 1;
+    }
+  });
+
+  return { hostileOrUnpreparedCount, recentBoundaryMissCount };
 }
 
 function askedForSpecificityRecently(transcript: ConversationTurn[] = []): boolean {
@@ -1434,14 +1476,23 @@ function deriveEscalationMemory({
   const repeatedRepPatternCount = recentRepIntents.filter((intent) => intent === lastRepIntent).length;
   const unansweredQuestionCount = repAnsweredPriorHcpQuestion(repMessage, transcript, latestConcern) ? 0 : 1;
   const genericAfterSpecificityCount = askedForSpecificityRecently(transcript) && repStayedGeneric(repMessage) ? 1 : 0;
+  const { hostileOrUnpreparedCount, recentBoundaryMissCount } = countRecentBoundaryMisses({
+    transcript,
+    repMessage,
+    latestConcern,
+  });
   const hardTriggers = [
     repeatedRepPatternCount >= 2,
     unansweredQuestionCount > 0,
     genericAfterSpecificityCount > 0,
+    hostileOrUnpreparedCount > 0,
   ].filter(Boolean).length;
   const prior = Number.isFinite(Number(priorEscalationLevel)) ? Number(priorEscalationLevel) : 0;
-  const bandStep = temperatureBand === "high" ? hardTriggers : temperatureBand === "medium" ? Math.min(1, hardTriggers) : hardTriggers >= 2 ? 1 : 0;
-  const escalationLevel = Math.max(0, Math.min(3, prior + bandStep));
+  const forceDisengage = hostileOrUnpreparedCount >= 2 || recentBoundaryMissCount >= 2;
+  const bandStep = forceDisengage
+    ? 3
+    : temperatureBand === "high" ? hardTriggers : temperatureBand === "medium" ? Math.min(1, hardTriggers) : hardTriggers >= 2 ? 1 : 0;
+  const escalationLevel = forceDisengage ? 3 : Math.max(0, Math.min(3, prior + bandStep));
   const shouldEscalateThisTurn = escalationLevel > prior || hardTriggers > 0;
   const action: EscalationMemory["action"] =
     escalationLevel >= 3 ? "disengage"
@@ -1452,11 +1503,15 @@ function deriveEscalationMemory({
   if (repeatedRepPatternCount >= 2) reasons.push("rep repeated same intent");
   if (unansweredQuestionCount > 0) reasons.push("rep did not answer prior HCP question");
   if (genericAfterSpecificityCount > 0) reasons.push("rep stayed generic after specificity request");
+  if (hostileOrUnpreparedCount > 0) reasons.push("rep was hostile, dismissive, or unprepared");
+  if (forceDisengage) reasons.push("two-turn boundary reached");
 
   return {
     repeatedRepPatternCount,
     unansweredQuestionCount,
     genericAfterSpecificityCount,
+    hostileOrUnpreparedCount,
+    recentBoundaryMissCount,
     lastRepIntent,
     escalationLevel,
     shouldEscalateThisTurn,
@@ -1496,9 +1551,27 @@ function applyEscalationBehavior({
     "- Level 0: continue normally while staying scenario-specific.",
     "- Level 1: tighten the response and make the ask more direct.",
     "- Level 2: introduce friction in this HCP's own words; make clear the rep has not addressed the actual concern.",
-    "- Level 3: introduce consequence in this HCP's own words; the HCP may disengage or stop the conversation.",
+    "- Level 3: introduce consequence in this HCP's own words; the HCP should professionally disengage or stop the conversation.",
+    "- Hard boundary: if the rep is hostile, dismissive, unprepared, or does not answer the HCP's question twice, do not ask again. End the exchange professionally.",
     "- Do not use global stock phrases to express escalation. Use the Predictive HCP Brain, current state, and scenario pressure to author the line.",
   ].join("\n");
+}
+
+function buildBoundaryDisengagementReply(scenario: any, latestConcern = ""): string {
+  const family = deriveRealismConcernFamily(scenario, latestConcern);
+  if (family === "access") {
+    return "Unfortunately, this is not worth my time today if we cannot address the access issue directly.";
+  }
+  if (family === "workflow") {
+    return "Unfortunately, this is not worth my time today if we cannot talk about the actual workflow issue.";
+  }
+  if (family === "screening") {
+    return "Unfortunately, this is not worth my time today if we cannot be specific about the patients in question.";
+  }
+  if (family === "evidence") {
+    return "Unfortunately, this is not worth my time today if we cannot stay with the evidence question.";
+  }
+  return "Unfortunately, this is not worth my time today if we cannot stay with the question I asked.";
 }
 
 function buildPressurePersistenceBlock(scenario: any): string {
@@ -3873,6 +3946,10 @@ Return ONLY valid JSON:
     }
   }
 
+  if (escalationMemory.action === "disengage" && escalationMemory.reasons.includes("two-turn boundary reached")) {
+    hcpReply = buildBoundaryDisengagementReply(scenario, latestConcern);
+  }
+
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
@@ -4034,6 +4111,8 @@ Return ONLY valid JSON:
         escalationLevel: escalationMemory.escalationLevel,
         repeatedRepPatternCount: escalationMemory.repeatedRepPatternCount,
         unansweredQuestionCount: escalationMemory.unansweredQuestionCount,
+        hostileOrUnpreparedCount: escalationMemory.hostileOrUnpreparedCount,
+        recentBoundaryMissCount: escalationMemory.recentBoundaryMissCount,
         temperatureBand,
         action: escalationMemory.action,
         reasons: escalationMemory.reasons,
