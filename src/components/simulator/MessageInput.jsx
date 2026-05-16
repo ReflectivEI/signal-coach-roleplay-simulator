@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from "react";
-import { AlertCircle, Mic, Pause, Play, Send } from "lucide-react";
+import { AlertCircle, BarChart2, Mic, Pause, Play, Send } from "lucide-react";
 import { useSpeechInput } from "@/features/rps/useSpeechInput";
 
 export default function MessageInput({
   onSend,
+  onEvaluateRep = null,
+  isEvaluatingRep = false,
   disabled,
   placeholder = "Your response as the rep...",
   onVoiceMetadataChange = null,
@@ -62,6 +64,33 @@ export default function MessageInput({
     speech.reset();
     setVoiceMode(false);
     setValue("");
+  };
+
+  const buildVoicePayload = () => {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const voiceMetadata = speech.transcript.trim()
+      ? {
+          ...speech.voiceMetadata,
+          transcript_source: "speech_recognition",
+        }
+      : null;
+    return {
+      text: trimmed,
+      inputMode: voiceMetadata ? "voice" : "typed",
+      voiceMetadata,
+    };
+  };
+
+  const handleEvaluateRep = () => {
+    if (!onEvaluateRep || disabled || isEvaluatingRep) return;
+    const payload = buildVoicePayload();
+    if (!payload) return;
+    if (speech.isListening) speech.pause();
+    onEvaluateRep(payload.text, {
+      inputMode: payload.inputMode,
+      voiceMetadata: payload.voiceMetadata,
+    });
   };
 
   const startVoice = () => {
@@ -134,6 +163,25 @@ export default function MessageInput({
             }}
           >
             {!voiceMode ? <Mic className="w-3.5 h-3.5" /> : speech.isListening ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+        )}
+
+        {onEvaluateRep && speech.isSupported && (
+          <button
+            type="button"
+            onClick={handleEvaluateRep}
+            disabled={!value.trim() || disabled || isEvaluatingRep}
+            aria-label="Evaluate rep response"
+            title="Evaluate rep response"
+            className="rounded-xl h-9 px-3 flex items-center gap-1.5 justify-center shrink-0 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              background: "rgba(255,255,255,0.78)",
+              color: "hsl(222 52% 24%)",
+              border: "1px solid rgba(28, 52, 88, 0.20)",
+            }}
+          >
+            <BarChart2 className="w-3.5 h-3.5" />
+            <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating" : "Evaluate Rep"}</span>
           </button>
         )}
         

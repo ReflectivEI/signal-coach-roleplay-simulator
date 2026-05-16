@@ -21,6 +21,7 @@ import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import { buildPredictivePromptContext, buildPredictiveRuntimeLens } from "@/lib/predictiveRuntimeService";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
+import { evaluateAdaptiveResponse } from "@/features/rps/api";
 import { toast } from "@/components/ui/use-toast";
 
 function createSafeId() {
@@ -241,6 +242,8 @@ export default function Simulator() {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [allSignals, setAllSignals] = useState([]);
   const [latestVoiceAnalysis, setLatestVoiceAnalysis] = useState(null);
+  const [voiceEvaluation, setVoiceEvaluation] = useState(null);
+  const [isVoiceEvaluating, setIsVoiceEvaluating] = useState(false);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
   const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
@@ -359,6 +362,87 @@ export default function Simulator() {
       setIsInitializing(false);
     }
   };
+
+  const handleEvaluateRep = useCallback(async (repText, inputMeta = {}) => {
+    if (!session || !scenario || isVoiceEvaluating) return;
+    const trimmed = String(repText || "").trim();
+    if (!trimmed) return;
+
+    let temperature;
+    try {
+      temperature = requireRealismContract(session?.realism, "session.realism");
+    } catch {
+      toast({
+        title: "Evaluation unavailable",
+        description: "Missing session realism setting.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const voiceAnalysis = analyzeVoiceDelivery(inputMeta?.voiceMetadata || null);
+    setLatestVoiceAnalysis(voiceAnalysis);
+    setIsVoiceEvaluating(true);
+    setVoiceEvaluation((current) => current ? { ...current, isLoading: true } : { isLoading: true });
+
+    try {
+      const selection = predictiveLensRef.current?.data?.selection || {};
+      const result = await evaluateAdaptiveResponse({
+        scenario_id: scenario.id,
+        scenario_context: {
+          ...scenario,
+          currentBehaviorState: session.currentBehaviorState,
+          currentJourneyState: session.currentJourneyState,
+          predictiveProfile: session.predictiveProfile,
+          predictiveLens: predictiveLensRef.current?.data || null,
+        },
+        rep_response_transcript: trimmed,
+        voice_metadata: inputMeta?.voiceMetadata || null,
+        selected_dropdowns: {
+          hcpType: selection.hcpType || scenario.persona || scenario.stakeholder || "",
+          stage: selection.stage || selection.conversationStage || scenario.journeyState || "",
+          challenge: selection.challenge || selection.challengeContext || scenario.challengeContext || "",
+          realism: temperature,
+        },
+        rep_selected_temperature: temperature,
+        live_temperature: temperature,
+        initial_temperature: temperature,
+        hcp_state: session.hcpState || null,
+        conversation_memory: {
+          hcp_state: session.hcpState || null,
+          interaction_history: session.interactionHistory || [],
+          session_memory: session.sessionMemory || [],
+        },
+      });
+      setVoiceEvaluation({
+        isLoading: false,
+        transcript: trimmed,
+        inputMode: inputMeta?.inputMode || "typed",
+        voiceMetadata: inputMeta?.voiceMetadata || null,
+        voiceAnalysis,
+        result,
+        evaluatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to evaluate rep response.";
+      setVoiceEvaluation({
+        isLoading: false,
+        transcript: trimmed,
+        inputMode: inputMeta?.inputMode || "typed",
+        voiceMetadata: inputMeta?.voiceMetadata || null,
+        voiceAnalysis,
+        error: message,
+        evaluatedAt: new Date().toISOString(),
+      });
+      toast({
+        title: "Rep evaluation failed",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsVoiceEvaluating(false);
+    }
+  }, [session, scenario, isVoiceEvaluating, toast]);
 
   const handleRepMessage = useCallback(async (repText, inputMeta = {}) => {
     if (!session || !scenario || isLoading) return;
@@ -915,6 +999,8 @@ export default function Simulator() {
 
           <MessageInput
             onSend={handleRepMessage}
+            onEvaluateRep={handleEvaluateRep}
+            isEvaluatingRep={isVoiceEvaluating}
             disabled={isLoading || isReviewing || session?.isComplete}
             placeholder={conversationInit?.inputPlaceholder}
           />
@@ -982,6 +1068,7 @@ export default function Simulator() {
                 hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
                 lastSignals={lastSignals}
                 latestVoiceAnalysis={latestVoiceAnalysis}
+                voiceEvaluation={voiceEvaluation}
                 focusCapabilities={scenario?.suggestedFocusCapabilities || []}
                 lastNudge={lastNudge}
                 realtimeFeedback={realtimeFeedback}
@@ -1013,6 +1100,7 @@ export default function Simulator() {
               hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
               lastSignals={lastSignals}
               latestVoiceAnalysis={latestVoiceAnalysis}
+              voiceEvaluation={voiceEvaluation}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
               realtimeFeedback={realtimeFeedback}

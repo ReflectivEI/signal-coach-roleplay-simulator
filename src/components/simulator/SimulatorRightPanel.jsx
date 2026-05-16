@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
@@ -99,6 +99,7 @@ export default function SimulatorRightPanel({
   hcpPrediction = null,
   lastSignals = {},
   latestVoiceAnalysis = null,
+  voiceEvaluation = null,
   lastNudge = null,
   realtimeFeedback = null,
   scenario = null,
@@ -110,6 +111,7 @@ export default function SimulatorRightPanel({
   const displayRealism = requireRealismContract(realism, "session.realism display");
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
+  const [showVoiceEvaluation, setShowVoiceEvaluation] = useState(false);
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
   const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
     title: "Live coaching",
@@ -117,7 +119,6 @@ export default function SimulatorRightPanel({
     guidance: realtimeFeedback.guidance,
   } : null);
   const sceneDescription = scenario?.visualScene || scenario?.description || "";
-  const openingGuidance = !hasRepSpoken ? (conversationInit?.openingGuidance || []) : [];
 
   const openPredictiveBuilder = () => {
     const selection = predictiveLens?.data?.selection;
@@ -143,6 +144,13 @@ export default function SimulatorRightPanel({
   };
 
   const showPredictiveLensPanel = Boolean(predictiveLens?.isLoading || predictiveLens?.data);
+  const voiceEvalResult = voiceEvaluation?.result || null;
+  const voiceEvalPrimary =
+    voiceEvalResult?.coaching_feedback?.[0]
+    || voiceEvalResult?.delivery_coaching?.recommended_delivery_adjustment
+    || voiceEvalResult?.next_best_question
+    || voiceEvaluation?.error
+    || "Evaluate a spoken rep response to see delivery and behavioral coaching.";
 
   return (
     <div className="space-y-3">
@@ -348,6 +356,53 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
+      {(voiceEvaluation || latestVoiceAnalysis) && (
+        <DarkSection
+          icon={Mic}
+          title="Rep Evaluation"
+          headerRight={
+            voiceEvaluation && !voiceEvaluation.isLoading ? (
+              <button
+                type="button"
+                className="text-[11px] font-semibold"
+                style={{ color: "hsl(174 60% 68%)" }}
+                onClick={() => setShowVoiceEvaluation(true)}
+              >
+                Open
+              </button>
+            ) : null
+          }
+        >
+          {voiceEvaluation?.isLoading ? (
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.90)" }}>
+              Evaluating rep delivery and behavioral fit...
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs leading-relaxed" style={{ color: "rgba(236,245,245,0.90)" }}>
+                {voiceEvalPrimary}
+              </p>
+              {voiceEvalResult?.overall_score || voiceEvalResult?.outcome_analysis?.actual_outcome ? (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {voiceEvalResult?.overall_score ? (
+                    <div className="rounded-lg px-2 py-1.5" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
+                      <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>Score</p>
+                      <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{voiceEvalResult.overall_score}</p>
+                    </div>
+                  ) : null}
+                  {voiceEvalResult?.outcome_analysis?.conversation_advanced !== undefined ? (
+                    <div className="rounded-lg px-2 py-1.5" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
+                      <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>Advanced</p>
+                      <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{voiceEvalResult.outcome_analysis.conversation_advanced ? "Yes" : "No"}</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          )}
+        </DarkSection>
+      )}
+
       {scenario && sceneDescription && (
         <DarkSection icon={MapPin} title="Scene">
           <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
@@ -356,24 +411,70 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      {openingGuidance.length > 0 && (
-        <DarkSection icon={Lightbulb} title="Opening Tips">
-          <div className="flex flex-wrap gap-1.5">
-            {openingGuidance.map((hint, i) => (
-              <span
-                key={i}
-                className="text-[11px] px-2 py-0.5 rounded-md"
-                style={{
-                  background: "rgba(37,124,123,0.12)",
-                  border: "1px solid rgba(37,124,123,0.24)",
-                  color: "rgba(244,249,249,0.96)",
-                }}
+      {showVoiceEvaluation && voiceEvaluation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={() => setShowVoiceEvaluation(false)}>
+          <div
+            className="max-h-[82vh] w-full max-w-xl overflow-y-auto rounded-2xl p-5"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%)",
+              border: "1.5px solid rgba(92, 135, 165, 0.36)",
+              boxShadow: "0 24px 70px rgba(14, 24, 43, 0.26)",
+              color: "hsl(222 38% 20%)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 48% 34%)" }}>Rep Evaluation</p>
+                <h3 className="mt-1 text-lg font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Voice + Behavioral Analysis</h3>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                style={{ borderColor: "rgba(38,67,117,0.22)", color: "hsl(222 48% 22%)" }}
+                onClick={() => setShowVoiceEvaluation(false)}
               >
-                {hint}
-              </span>
-            ))}
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="rounded-xl p-3" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)" }}>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Transcript</p>
+                <p className="mt-1 leading-relaxed">{voiceEvaluation.transcript}</p>
+              </div>
+
+              {voiceEvaluation.error ? (
+                <div className="rounded-xl p-3" style={{ background: "rgba(255,244,244,0.92)", border: "1px solid rgba(191,132,145,0.46)" }}>
+                  {voiceEvaluation.error}
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ["Pace", `${voiceEvaluation.voiceMetadata?.words_per_minute || 0} wpm`],
+                      ["Pauses", voiceEvaluation.voiceMetadata?.pause_count || 0],
+                      ["Fillers", voiceEvaluation.voiceMetadata?.filler_word_count || 0],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-xl p-3" style={{ background: "rgba(37,124,123,0.08)", border: "1px solid rgba(37,124,123,0.22)" }}>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>{label}</p>
+                        <p className="mt-1 font-semibold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl p-3" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)" }}>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Coaching</p>
+                    <p className="mt-1 leading-relaxed">{voiceEvalPrimary}</p>
+                    {voiceEvalResult?.better_phrasing ? <p className="mt-2 leading-relaxed"><span className="font-semibold">Better phrasing:</span> {voiceEvalResult.better_phrasing}</p> : null}
+                    {voiceEvalResult?.next_best_question ? <p className="mt-2 leading-relaxed"><span className="font-semibold">Next question:</span> {voiceEvalResult.next_best_question}</p> : null}
+                    {voiceEvalResult?.what_hcp_likely_heard ? <p className="mt-2 leading-relaxed"><span className="font-semibold">What HCP heard:</span> {voiceEvalResult.what_hcp_likely_heard}</p> : null}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </DarkSection>
+        </div>
       )}
     </div>
   );
