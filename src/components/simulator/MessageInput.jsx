@@ -166,25 +166,6 @@ export default function MessageInput({
           </button>
         )}
 
-        {onEvaluateRep && speech.isSupported && (
-          <button
-            type="button"
-            onClick={handleEvaluateRep}
-            disabled={!value.trim() || disabled || isEvaluatingRep}
-            aria-label="Evaluate rep response"
-            title="Evaluate rep response"
-            className="rounded-xl h-9 px-3 flex items-center gap-1.5 justify-center shrink-0 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{
-              background: "rgba(255,255,255,0.78)",
-              color: "hsl(222 52% 24%)",
-              border: "1px solid rgba(28, 52, 88, 0.20)",
-            }}
-          >
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating" : "Evaluate Rep"}</span>
-          </button>
-        )}
-        
         <button
           onClick={handleSend}
           disabled={!value.trim() || disabled} className="rounded-xl w-9 h-9 flex items-center justify-center shrink-0 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -196,17 +177,37 @@ export default function MessageInput({
       </div>
       <div className="mt-1.5 px-1 flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
         <p>Enter to send · Shift+Enter for new line</p>
-        {speech.isSupported && (
-          <p className="shrink-0">
-            {voiceMode
-              ? speech.isListening
-                ? "Recording · Space pauses"
-                : "Paused · Space resumes"
-              : speech.transcript
-                ? "Voice captured"
-                : "Voice input available"}
-          </p>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          {speech.isSupported && (
+            <p>
+              {voiceMode
+                ? speech.isListening
+                  ? "Recording · Space pauses"
+                  : "Paused · Space resumes"
+                : speech.transcript
+                  ? "Voice captured"
+                  : "Voice"}
+            </p>
+          )}
+          {onEvaluateRep && speech.isSupported && (
+            <button
+              type="button"
+              onClick={handleEvaluateRep}
+              disabled={!value.trim() || disabled || isEvaluatingRep}
+              aria-label="Evaluate rep response"
+              title="Evaluate rep response"
+              className="inline-flex h-7 items-center justify-center gap-1.5 rounded-lg border px-2.5 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{
+                background: "rgba(255,255,255,0.78)",
+                color: "hsl(222 52% 24%)",
+                borderColor: "rgba(28, 52, 88, 0.20)",
+              }}
+            >
+              <BarChart2 className="w-3 h-3" />
+              <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating" : "Evaluate Rep"}</span>
+            </button>
+          )}
+        </div>
         {!speech.isSupported && (
           <p className="shrink-0 inline-flex items-center gap-1">
             <AlertCircle className="w-3 h-3" />
