@@ -697,386 +697,410 @@ function buildStageBoundRealismReply({
           ];
         }
         if (timeConstrained) {
-          return [
-            "We have covered the setup. Give me one useful point before I get back to patients.",
-            "I am going to stop here unless you make the short point clear.",
-            "One last pass before I move on: what is the point?",
-          ];
-        }
-        return [
-          "We have covered the broad point. Make the practical change concrete.",
-          "I am going to stop here unless there is a concrete office reason.",
-          "One last pass: what actually changes?",
-        ];
-      }
-      if (isEarlyDiscoveryStage(scenario)) {
-        return [
-          "We have covered the broad point. Name the patient profile or we should pause.",
-          "I am going to pause here unless you can narrow the patient type.",
-          "One last pass: which patients are we actually talking about?",
-        ];
-      }
-      return variants;
-    })();
-    for (let offset = 0; offset < fallbackVariants.length; offset += 1) {
-      const candidate = fallbackVariants[(start + offset) % fallbackVariants.length];
-      const repeated = recent.some((line) =>
-        normalizeLineForContinuity(line) === normalizeLineForContinuity(candidate) ||
-        continuityOverlapScore(line, candidate) >= 0.82 ||
-        continuityContainmentScore(line, candidate) >= 0.86
-      );
-      if (!repeated) return candidate;
-    }
-    if (isInitialAccessStage(scenario)) {
-      if (timeConstrained && operational) {
-        return "This is the last pass: give me the staff change or send it over.";
-      }
-      if (timeConstrained) {
-        return "This is the last pass: give me the short point or send it over.";
-      }
-      return "This is the last pass: make the practical change concrete.";
-    }
-    if (isEarlyDiscoveryStage(scenario)) {
-      return "This is the last pass: name the patient profile or we should pause.";
-    }
-    return variants[start] || "";
-  };
+          ```
+return [
+  "Okay, before I get pulled back in — what actually changes for my staff?",
+  "If I still can't tell what changes for the office, we're probably done here.",
+  "Last thing — what does my staff actually do differently?",
+];
+```
 
-  if (isInitialAccessStage(scenario)) {
-    if (temperatureBand === "low") {
-      if (timeConstrained && operational) {
-        return choose(repeatCount >= 2
-          ? [
-            "I have a few minutes, and we are circling the same point. What changes for my staff before my next patient?",
-            "Okay, keep it to the short version now: what does my staff do differently before this gets more time?",
-            "I am still between patients. Give me the practical staff change in one sentence.",
-          ]
-          : [
-            "I have a few minutes. Give me the short version before my next patient, including what changes for my staff.",
-            "I'm between patients. Keep this to the practical staff change.",
-            "Give me the short version now: what changes for my staff?",
-          ], "initial-low-time-ops");
-      }
-      if (timeConstrained) {
-        return choose(repeatCount >= 2
-          ? [
-            "I have a patient waiting, and this is starting to repeat. Give me the short version.",
-            "I can stay another moment, but only if you narrow this to the point.",
-            "Keep it to one useful point before I get back to patients.",
-          ]
-          : [
-            "I have a few minutes. Give me the short version before my next patient.",
-            "I am between patients. What is the short version?",
-            "Keep this quick. What is the practical reason to keep talking?",
-          ], "initial-low-time");
-      }
-      if (operational) {
-        return choose(repeatCount >= 2
-          ? [
-            "I am still hearing the same broad point. What changes for the office?",
-            "Keep this practical for the office. What actually changes?",
-            "I can keep listening if you make the office impact concrete.",
-          ]
-          : [
-            "I can listen, but keep this practical for the office.",
-            "Make this practical for the office first.",
-            "What is the office-level reason to keep this open?",
-          ], "initial-low-ops");
-      }
-      return choose([
-        "I can listen briefly. What's this about for my patients?",
-        "Before we go further, what is the reason this matters for my patients?",
-        "Give me the practical reason to keep the conversation open.",
-      ], "initial-low-general");
-    }
-    if (temperatureBand === "medium") {
-      if (escalationMemory.escalationLevel >= 2) {
-        return choose(timeConstrained
-          ? [
-            "You're getting too broad. I have a patient waiting, so give me the short version now.",
-            "That is still too general. I need the quick practical point before I move on.",
-            "We are repeating the setup. What changes for my staff right now?",
-          ]
-          : [
-            `You're getting too broad. I need ${ask}.`,
-            "That is still too general. Make the practical change clear.",
-            "We are repeating the setup. Narrow this to what changes.",
-          ], "initial-medium-escalated");
-      }
-      return choose(timeConstrained
-        ? operational
-          ? [
-            "Keep it tight. What changes for my staff before my next patient?",
-            "I have limited time. Give me the practical staff version.",
-            "Short version only: what changes in the office enough for this to matter?",
-          ]
-          : [
-            "Keep it tight. What's the short version for my patients before my next appointment?",
-            "I have limited time. Give me the practical patient version.",
-            "Short version only: what changes enough for my patients to matter?",
-          ]
-        : [
-          `Keep this practical. I need ${ask}.`,
-          "Stay practical. What changes for the office here?",
-          "Make the patient or office impact concrete before we go further.",
-        ], "initial-medium");
-    }
-    if (escalationMemory.escalationLevel >= 3) {
-      return choose(timeConstrained
-        ? [
-          "I have to get back to patients. If there isn't a short practical point, send it over.",
-          "We have covered this enough. Send me the practical details if there is no new point.",
-          "I need to stop here unless you have one concrete staff change.",
-        ]
-        : [
-          "If there isn't a practical reason to continue, send the details over.",
-          "We have covered the broad point. Send me the specific office detail.",
-          "Let's stop here unless there is a concrete change to discuss.",
-        ], "initial-high-stop");
-    }
-    return choose(timeConstrained
-      ? operational
-        ? [
-          "I have a patient waiting. Give me the staff change or let's stop here.",
-          "This is still too broad for the time I have. One practical office point.",
-          "I am out of room for a broad answer. What changes for my staff?",
-        ]
-        : [
-          "I have a patient waiting. Give me the patient point or let's stop here.",
-          "This is still too broad for the time I have. One practical patient point.",
-          "I am out of room for a broad answer. What changes for my patients?",
-        ]
-      : [
-        `You're still not making this practical. Give me ${ask}.`,
-        "You are repeating the broad point. Make the practical change concrete.",
-        "If this stays general, we should stop here.",
-      ], "initial-high");
-  }
+```
+return [
+  "Okay, quick version before I go — what's the actual point?",
+  "If this stays this broad, I don't think I'm getting it.",
+  "So what's the part you think actually matters?",
+];
+```
 
-  if (isEarlyDiscoveryStage(scenario)) {
-    if (temperatureBand === "low") return choose([
-      `I can stay with you, but I need ${ask}.`,
-      "I can keep going, but narrow this to the patient profile.",
-      "Which patients are we actually talking about first?",
-    ], "early-low");
-    if (temperatureBand === "medium") {
-      return choose(escalationMemory.escalationLevel >= 2
-        ? [
-          "That is still too broad. Which patient profile are you actually talking about?",
-          "You still have not narrowed the patient type. Who is this for?",
-          "We are not moving until the patient profile is clear.",
-        ]
-        : [
-          `You are staying too broad. I need ${ask}.`,
-          "That is still broad. Which patients should I picture?",
-          "Give me the patient profile before we go further.",
-        ], "early-medium");
-    }
-    if (escalationMemory.escalationLevel >= 3) {
-      return choose([
-        "We have circled the same broad point. If you cannot narrow the patient profile, we should stop here.",
-        "This is not getting more specific. Send the patient-profile detail if you have it.",
-        "I am going to stop here unless you can name the patient type.",
-      ], "early-high-stop");
-    }
-    return choose([
-      "You are still not narrowing this. Which patients are we actually talking about?",
-      "That is still broad. Name the patient profile.",
-      "I need the patient type, not another broad setup.",
-    ], "early-high");
-  }
+```
+return [
+  "Okay but what actually changes in real life?",
+  "If there's not a real office impact here, I'm probably not moving on it.",
+  "Bottom line — what's actually different?",
+];
+```
 
-  const stage = String(scenario?.journeyStage || "").toLowerCase();
-  const family = deriveRealismConcernFamily(scenario, currentLine);
-  const clinicalAsk = /\brenal|kidney|ckd|impairment\b/i.test(`${scenario?.openingScene || ""} ${scenario?.description || ""} ${scenario?.objective || ""}`)
-    ? "the renal subgroup, endpoint, and treatment decision"
-    : "the patient subgroup, endpoint, and treatment decision";
-  const stopSuffix = timeConstrained
-    ? "before I get back to patients"
-    : "before we spend more time on this";
+```
+return [
+  "Okay but who are you actually talking about?",
+  "If we can't narrow the patients down, this gets hard to use.",
+  "Who exactly are you picturing here?",
+];
+```
 
-  if (stage === "clinical_value") {
-    if (operational || pressures.includes("access_barrier")) {
-      return choose(escalationMemory.escalationLevel >= 2
-        ? [
-          "That is still too broad for a value decision. Give me the patient subgroup, the endpoint, the coverage path, and what work comes off my staff.",
-          "I need the full value equation: clinical endpoint, access path, and the staff step that changes.",
-          "The evidence alone is not enough here. Which patients benefit, how does coverage clear, and what changes for my team?",
-        ]
-        : [
-          "Before I call that value, I need the subgroup, endpoint, coverage path, and staff impact together.",
-          "For value to matter, show me the patient outcome, the access pathway, and what staff work changes.",
-          "Tie the evidence to the office reality: patient subgroup, endpoint, approval path, and staff workload.",
-        ], "clinical-pressure-combined");
-    }
-    if (temperatureBand === "low") {
-      return choose(repeatCount >= 2
-        ? [
-          `I can keep going, but we are circling. Give me ${clinicalAsk}.`,
-          `I still need the clinical bridge: ${clinicalAsk}.`,
-          "Stay with the evidence. Which patient group and endpoint change what I do?",
-        ]
-        : [
-          `Tie this to the evidence for my patients: ${clinicalAsk}.`,
-          "Value is only useful if it changes a real treatment decision. Which subgroup and endpoint are you pointing to?",
-          "I can consider the data, but make it patient-specific and decision-specific.",
-        ], "clinical-low");
-    }
-    if (temperatureBand === "medium") {
-      return choose(escalationMemory.escalationLevel >= 2
-        ? [
-          `That is still too broad clinically. Give me ${clinicalAsk}.`,
-          "You are not connecting the evidence to my treatment threshold. Which subgroup and endpoint matter?",
-          "The headline result is not enough. Show me the patient group and the outcome that changes care.",
-        ]
-        : [
-          `Keep this on the evidence. I need ${clinicalAsk}.`,
-          "Which patients in the trial look like mine, and what outcome changes the decision?",
-          "Before I call that value, I need the subgroup and endpoint that apply here.",
-        ], "clinical-medium");
-    }
-    return choose(escalationMemory.escalationLevel >= 3
-      ? [
-        "We have covered the broad data. If you cannot tie it to a subgroup and endpoint, send the evidence over.",
-        `I am not moving on the headline claim. Give me ${clinicalAsk} or we should stop here.`,
-        "This is still not clinically specific. Send the patient-level evidence if you have it.",
+```
+return "Just tell me what changes for staff or send me the details.";
+```
+
+```
+return "Either give me the quick takeaway or just send it over.";
+```
+
+```
+return "Just tell me what actually changes then.";
+```
+
+```
+return "Who exactly is this really for?";
+```
+
+```
+return choose(repeatCount >= 2
+  ? [
+      "We're kind of circling now. What actually changes for my staff?",
+      "Short version — what does my office actually have to do differently?",
+      "I'm still between patients. What's the real office change?",
+    ]
+  : [
+      "I've got a minute — what changes for my staff?",
+      "I'm between patients. Just tell me what the office has to do differently.",
+      "Quick version — what changes for the team?",
+    ], "initial-low-time-ops");
+```
+
+```
+return choose(repeatCount >= 2
+  ? [
+      "I've got a patient waiting and we're starting to repeat ourselves.",
+      "I can stay another minute if you get to the actual point.",
+      "Give me one thing that's actually useful before I go.",
+    ]
+  : [
+      "I've got a minute — what's the actual takeaway?",
+      "I'm between patients. Quick version?",
+      "Keep this quick — why does this actually matter?",
+    ], "initial-low-time");
+```
+
+```
+return choose(repeatCount >= 2
+  ? [
+      "I still don't know what changes in the office.",
+      "Okay but what actually changes day to day?",
+      "I can stay with you if you make this more real-world.",
+    ]
+  : [
+      "I can listen, but keep this grounded in real practice.",
+      "Okay but what does this look like in clinic?",
+      "So why should the office care about this?",
+    ], "initial-low-ops");
+```
+
+```
+return choose([
+  "Alright — why does this matter for my patients?",
+  "Okay but why would this change anything for my patients?",
+  "So what's the actual reason I'd care about this?",
+], "initial-low-general");
+```
+
+```
+return choose(timeConstrained
+  ? [
+      "You're still giving me the broad version and I need to move.",
+      "I still don't know what the actual takeaway is.",
+      "Okay but what actually changes for my staff?",
+    ]
+  : [
+      "You're still staying broad. What am I actually supposed to do differently?",
+      "I still don't know what actually changes.",
+      "Okay but what really becomes different here?",
+    ], "initial-medium-escalated");
+```
+
+```
+return choose(timeConstrained
+  ? operational
+    ? [
+        "Keep it quick. What changes for my staff?",
+        "I've got limited time. Who has to do what differently?",
+        "Short version — what actually changes in the office?",
       ]
-      : [
-        `The broad claim is not enough. Give me ${clinicalAsk}.`,
-        "You are still not tying this to a treatment decision. Which subgroup and endpoint change care?",
-        "I need patient-level evidence now, not another general value statement.",
-      ], "clinical-high");
+    : [
+        "Keep it quick. Why does this matter for my patients?",
+        "I've got limited time. What's the patient takeaway?",
+        "Short version — what actually changes?",
+      ]
+  : [
+      "Okay but what actually changes for me?",
+      "Where does this show up in real practice?",
+      "What am I doing differently tomorrow because of this?",
+    ], "initial-medium");
+```
+
+```
+return choose(timeConstrained
+  ? [
+      "I need to get back to patients. Send me the details if there's more.",
+      "I'm not getting a clearer answer and I need to move.",
+      "Unless there's one concrete point, we should probably stop here.",
+    ]
+  : [
+      "At that point I'd rather just read it myself.",
+      "I don't think I'm getting a clearer answer.",
+      "If this stays this broad, we're probably done here.",
+    ], "initial-high-stop");
+```
+
+```
+return choose(timeConstrained
+  ? operational
+    ? [
+        "I've got a patient waiting. What does my staff actually do?",
+        "This is still too broad for the time I have.",
+        "I need the real office step, not the overview.",
+      ]
+    : [
+        "I've got a patient waiting. What's the patient reason?",
+        "This is still too broad for the time I have.",
+        "What changes enough for me to care?",
+      ]
+  : [
+      "I still don't know why I'd change anything.",
+      "This still feels pretty theoretical.",
+      "Okay but what's actually different?",
+    ], "initial-high");
+```
+
+```
+if (temperatureBand === "low") return choose([
+  "Which patients are you really talking about?",
+  "Okay but who actually stands out here?",
+  "Who are you thinking I'd treat differently?",
+], "early-low");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 2
+  ? [
+      "I still can't picture the patient you're talking about.",
+      "Okay but who exactly changes management because of this?",
+      "Who is this really for?",
+    ]
+  : [
+      "Which patients should I be picturing?",
+      "That still feels broad. Who are we actually talking about?",
+      "Give me the patient, not the category.",
+    ], "early-medium");
+```
+
+```
+return choose([
+  "If we can't narrow the patients down, this gets hard to use.",
+  "I still don't know who this is really for.",
+  "At that point I'd rather just go through the study myself.",
+], "early-high-stop");
+```
+
+```
+return choose([
+  "I still don't know who I'd actually treat differently.",
+  "Okay but which patients really move the needle here?",
+  "Help me narrow this down clinically.",
+], "early-high");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 2
+  ? [
+      "If this adds work, the benefit has to be obvious.",
+      "Okay but why is this worth the extra hassle?",
+      "I need to know what gets better and what my staff gets stuck doing.",
+    ]
+  : [
+      "The data matters, but so does the hassle of actually using it.",
+      "Okay but how much better are the outcomes really?",
+      "If staff workload goes up, the benefit better be clear.",
+    ], "clinical-pressure-combined");
+```
+
+```
+return choose(repeatCount >= 2
+  ? [
+      "We're circling. Why would I actually switch?",
+      "I still need the part that changes what I'd do.",
+      "Which patients did better enough for this to matter?",
+    ]
+  : [
+      "Okay but why would I switch?",
+      "What outcome are you saying actually changes?",
+      "Is the benefit really enough to matter clinically?",
+    ], "clinical-low");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 2
+  ? [
+      "The top-line result isn't enough for me.",
+      "I still don't know why I'd move off what I'm doing now.",
+      "What's the part you think changes my mind?",
+    ]
+  : [
+      "Where does this actually become treatment-changing?",
+      "Which patients did better enough to matter?",
+      "What gets meaningfully better here?",
+    ], "clinical-medium");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 3
+  ? [
+      "If the difference is marginal, I'm not changing what already works.",
+      "At that point I'd rather review the data myself.",
+      "I still don't see the reason to switch.",
+    ]
+  : [
+      "I still don't know why I'd move off current therapy.",
+      "It's hard to justify switching if the difference is small.",
+      "If I'm paying more, the benefit better be obvious.",
+    ], "clinical-high");
+```
   }
 
   if (stage === "access_formulary" || family === "access") {
     if (temperatureBand === "low") {
-      return choose([
-        "I can stay with it, but I need the actual coverage path and what my staff has to do.",
-        "Make the access piece concrete: payer step, prior-auth requirement, and who owns the work.",
-        `Before we go further, tell me the approval path ${stopSuffix}.`,
-      ], "access-low");
-    }
-    if (temperatureBand === "medium") {
-      return choose(escalationMemory.escalationLevel >= 2
-        ? [
-          "That still does not answer the access barrier. What approval step changes for my team?",
-          "You are staying too general on coverage. Name the pathway and what work comes off staff.",
-          `I need the prior-auth path and staff impact ${stopSuffix}.`,
-        ]
-        : [
-          "What changes in the approval path, and what does my staff do differently?",
-          "Before this is usable, I need the coverage pathway and the staff step.",
-          "Tie this to access: payer step, prior auth, and office workload.",
-        ], "access-medium");
-    }
-    return choose(escalationMemory.escalationLevel >= 3
-      ? [
-        "We have covered the access concern. If you cannot name the approval path, send the details over.",
-        "I am not adding work for staff on a vague coverage answer. Give me the path or we stop here.",
-        "Without a clear prior-auth pathway, this is not something I can move forward today.",
-      ]
-      : [
-        "The access answer is still too vague. What approval path changes for my staff?",
-        "Name the payer step and the office work, or this does not move.",
-        "I need the exact access path now, not another broad assurance.",
-      ], "access-high");
-  }
+      ```
+return choose([
+  "Okay but what does coverage actually look like?",
+  "So how painful is prior auth going to be?",
+  "What ends up falling on my staff here?",
+], "access-low");
+```
 
-  if (stage === "adoption_implementation" || family === "workflow") {
-    if (temperatureBand === "low") {
-      return choose([
-        "I can consider it if the workflow is clear. Who owns the first staff step?",
-        "Make the implementation practical: what changes in the office on day one?",
-        "Before this goes anywhere, I need the handoff and staff workload spelled out.",
-      ], "implementation-low");
-    }
-    if (temperatureBand === "medium") {
-      return choose(escalationMemory.escalationLevel >= 2
-        ? [
-          "That still leaves the work on my team. What staff step changes and who owns it?",
-          "You are not answering the implementation issue. What happens in the office first?",
-          "The workflow is still vague. Name the handoff, owner, and staff impact.",
-        ]
-        : [
-          "What happens in the workflow first, and who owns that step?",
-          "Implementation only works if my staff knows what changes. Spell out the first handoff.",
-          "I need the office process, not just the concept.",
-        ], "implementation-medium");
-    }
-    return choose(escalationMemory.escalationLevel >= 3
-      ? [
-        "We have gone over the concept. If the workflow is not concrete, we should stop here.",
-        "I am not taking this back to my team without the first step and owner.",
-        "Send the implementation detail over if you have it. This is too vague to keep discussing.",
-      ]
-      : [
-        "The workflow answer is still too broad. What changes for staff on day one?",
-        "You are still not naming the owner or the handoff. That is the blocker.",
-        "Make the implementation real: first step, owner, and staff impact.",
-      ], "implementation-high");
-  }
+```
+return choose(escalationMemory.escalationLevel >= 2
+  ? [
+      "I still don't understand how this gets approved consistently.",
+      "Okay but who's spending time fighting for this?",
+      "If this turns into another prior-auth battle, that's a problem.",
+    ]
+  : [
+      "How hard is this realistically going to be to get covered?",
+      "What does my staff actually have to do here?",
+      "Where does this usually get stuck?",
+    ], "access-medium");
+```
 
-  if (stage === "commitment_close") {
-    const decisionAsk = family === "evidence"
-      ? "the evidence threshold and the patient profile"
-      : family === "access"
-        ? "the access path and the first patient it applies to"
-        : family === "workflow"
-          ? "the staff step and owner"
-          : "the specific next step you are asking me to take";
-    if (temperatureBand === "low") {
-      return choose([
-        `I can consider a next step, but make it specific: ${decisionAsk}.`,
-        "Before I agree to anything, define the patient and the action.",
-        `If you want a commitment, tie it to ${decisionAsk}.`,
-      ], "close-low");
-    }
-    if (temperatureBand === "medium") {
-      return choose([
-        `Do not ask for a vague next step. Give me ${decisionAsk}.`,
-        "What exactly are you asking me to do after this conversation?",
-        `I need the next action, owner, and patient fit before I commit.`,
-      ], "close-medium");
-    }
-    return choose(escalationMemory.escalationLevel >= 3
-      ? [
-        "We are past the point for a broad ask. Send the exact next step if there is one.",
-        "I am not committing to a vague action. We can stop here unless you make it specific.",
-        `No commitment from me without ${decisionAsk}.`,
-      ]
-      : [
-        `The ask is still vague. Give me ${decisionAsk}.`,
-        "You are still not making the next step concrete.",
-        "If there is an action here, name it now.",
-      ], "close-high");
-  }
+```
+return choose(escalationMemory.escalationLevel >= 3
+  ? [
+      "I can't work with vague coverage answers.",
+      "If this is hard to get approved, that's the whole problem.",
+      "Without a clearer access story, this gets tough to use.",
+    ]
+  : [
+      "So how does this actually get approved?",
+      "I need the real access answer, not the polished version.",
+      "If coverage is messy, that's going to slow everything down.",
+    ], "access-high");
+```
 
-  if (stage === "objection_handling") {
-    if (temperatureBand === "low") {
-      return choose([
-        `I can hear the point, but you need to answer the objection directly: ${ask}.`,
-        "Stay on the objection. What changes my current concern?",
-        "I can keep listening if you address the actual blocker.",
-      ], "objection-low");
-    }
-    if (temperatureBand === "medium") {
-      return choose([
-        `That does not answer the objection yet. I need ${ask}.`,
-        "You are talking around the blocker. What specifically changes?",
-        "Address the concern directly before adding another point.",
-      ], "objection-medium");
-    }
-    return choose(escalationMemory.escalationLevel >= 3
-      ? [
-        "We have covered the objection. If you cannot answer it directly, we should stop here.",
-        "This is not moving past the blocker. Send the specific answer over.",
-        "I am not continuing unless you address the objection directly.",
-      ]
-      : [
-        `You are still not answering the objection. Give me ${ask}.`,
-        "The blocker is unchanged. What specifically changes?",
-        "I need a direct answer to the objection now.",
-      ], "objection-high");
+```
+return choose([
+  "Okay so what happens first if we actually do this?",
+  "Who's handling this step initially?",
+  "What does my staff suddenly have to learn?",
+], "implementation-low");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 2
+  ? [
+      "I still can't picture how this actually rolls out.",
+      "Okay but who's owning this in the office?",
+      "That's usually where these things get messy.",
+    ]
+  : [
+      "Walk me through day one realistically.",
+      "What does this actually turn into for my staff?",
+      "How complicated is this really?",
+    ], "implementation-medium");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 3
+  ? [
+      "If the workflow's confusing, adoption usually dies pretty quickly.",
+      "I still don't know how this works day to day.",
+      "Right now I can picture staff confusion more than execution.",
+    ]
+  : [
+      "I'm still missing the real office flow.",
+      "This still sounds harder than you're making it sound.",
+      "At some point this has to become concrete.",
+    ], "implementation-high");
+```
+
+```
+const decisionAsk = family === "evidence"
+  ? "why I'd actually change treatment"
+  : family === "access"
+    ? "how this realistically gets covered"
+    : family === "workflow"
+      ? "what my staff actually has to do"
+      : "what you're actually asking me to do";
+```
+
+```
+return choose([
+  "Okay but what exactly are you asking me to do?",
+  "Before I commit to anything, walk me through the actual next step.",
+  "If you're asking for a change, make it specific.",
+], "close-low");
+```
+
+```
+return choose([
+  "I still don't know what you're actually asking me to do after this.",
+  "Okay but what's the concrete next step here?",
+  "If there's an action you're asking for, just say it directly.",
+], "close-medium");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 3
+  ? [
+      "If there's a real next step, just send it over.",
+      "I'm not committing to something vague.",
+      "I still don't know what you're actually asking for.",
+    ]
+  : [
+      "The ask still feels vague to me.",
+      "Okay but what exactly are you asking me to do?",
+      "If there's a real next step here, name it clearly.",
+    ], "close-high");
+```
+
+```
+return choose([
+  "Okay but you still haven't answered the concern directly.",
+  "Stay on the actual issue for me.",
+  "I can keep listening if you address the real blocker.",
+], "objection-low");
+```
+
+```
+return choose([
+  "I still don't think that answers the concern.",
+  "You're kind of talking around the issue right now.",
+  "Okay but what actually changes about the concern?",
+], "objection-medium");
+```
+
+```
+return choose(escalationMemory.escalationLevel >= 3
+  ? [
+      "We're still stuck on the same issue.",
+      "If the concern isn't changing, we're probably done here.",
+      "I still need a direct answer to the objection.",
+    ]
+  : [
+      "You still haven't really answered the concern.",
+      "The blocker hasn't changed for me yet.",
+      "I need a more direct answer here.",
+    ], "objection-high");
+```
   }
 
   return "";
