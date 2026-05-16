@@ -21,8 +21,7 @@ function DesktopNavLink({ item }) {
         href={item.to}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm font-medium transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700"
-        style={{ color: "hsl(222 55% 18%)" }}
+        className="text-sm font-medium text-[#17213f] transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700"
       >
         <Icon className="w-3.5 h-3.5" />
         {item.label}
@@ -34,11 +33,8 @@ function DesktopNavLink({ item }) {
       to={item.to}
       className={({ isActive }) => [
         "text-sm font-medium transition-all duration-200 flex items-center gap-1.5 hover:-translate-y-0.5 hover:text-teal-700",
-        isActive ? "text-teal-700" : "",
+        isActive ? "text-teal-700" : "text-[#17213f]",
       ].join(" ")}
-      style={({ isActive }) => ({
-        color: isActive ? "hsl(177 49% 32%)" : "hsl(222 55% 18%)",
-      })}
     >
       <Icon className="w-3.5 h-3.5" />
       {item.label}
