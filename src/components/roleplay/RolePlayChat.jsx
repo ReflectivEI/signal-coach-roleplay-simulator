@@ -6288,6 +6288,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ].join("\n");
   }
 
+  function parseSessionFeedbackSections(markdown = "") {
+    const source = String(markdown || "").trim();
+    if (!source) return [];
+    return source
+      .split(/^##\s+/m)
+      .map((section) => section.trim())
+      .filter(Boolean)
+      .map((section) => {
+        const [rawTitle = "", ...bodyLines] = section.split("\n");
+        return {
+          title: rawTitle.trim(),
+          body: bodyLines.join("\n").trim(),
+        };
+      })
+      .filter((section) => section.title && section.body);
+  }
+
   // Current HCP state = the state the rep is currently facing (last turn's hcpStateBefore)
 
   const displayTurns = turns.filter((turn, index) => {
@@ -6316,6 +6333,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   });
 
   const repTurnsCount = turns.filter((t) => t.repMessage).length;
+  const feedbackSections = parseSessionFeedbackSections(feedback);
   // Keep live metrics calculations running for end-session scoring, but hide panel from rep view.
   const showLiveMetricsPanel = ENABLE_V2_INTERVENTION_UI;
 
@@ -6677,7 +6695,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
           {activeTab === "capabilities" && (
             <div className="flex-1 overflow-y-auto">
-              <div className="px-4 pt-4 pb-2">
+              <div className="px-4 pt-4 pb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-teal-700">Session Review</p>
+                  <h3 className="text-lg font-bold text-slate-900">8-section coaching debrief</h3>
+                </div>
                 <button
                   onClick={endSession}
                   disabled={isEnding || repTurnsCount < 2}
@@ -6686,38 +6708,49 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                   {isEnding ? "Generating feedback…" : feedback ? "Regenerate Sections 1-8" : "Generate Sections 1-8"}
                 </button>
               </div>
-              {/* Section 1: Embed CapabilityFeedbackPanel at the top of End & Get Feedback pill */}
-              <div className="mb-6">
-                <CapabilityFeedbackPanel
-                  messages={flatMessages}
-                  turns={turns}
-                  scenario={scenario}
-                  voiceSessionEvaluation={voiceSessionEvaluation}
-                />
-              </div>
-              {/* Sections 2-5: Render feedback markdown below CapabilityFeedbackPanel */}
               {isEnding && (
                 <div className="mx-4 mb-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-sm text-teal-800">
                   Generating final evaluation sections…
                 </div>
               )}
-              {feedback && (
-                <div className="mx-4 mb-8 mt-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <ReactMarkdown
-                    components={{
-                      h2: ({ children, ...props }) => <h2 className="text-xl font-bold text-slate-900 mt-7 mb-3 first:mt-0" {...props}>{children}</h2>,
-                      h3: (props) => <h3 className="text-base font-semibold text-slate-800 mt-4 mb-2" {...props} />,
-                      h4: (props) => <h4 className="text-sm font-semibold text-slate-700 mt-3 mb-1" {...props} />,
-                      p: (props) => <p className="mb-4 leading-7 text-slate-700" {...props} />,
-                      ul: (props) => <ul className="list-disc list-inside mb-4 space-y-2 ml-1" {...props} />,
-                      ol: (props) => <ol className="list-decimal list-inside mb-4 space-y-2 ml-1" {...props} />,
-                      li: (props) => <li className="mb-0" {...props} />,
-                      strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
-                      em: (props) => <em className="italic text-slate-600" {...props} />,
-                      blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
-                    }}
-                  >{feedback}</ReactMarkdown>
-                  <div className="mt-6 border-t border-slate-200 pt-4 flex flex-wrap items-center gap-2">
+              {feedbackSections.length > 0 ? (
+                <div className="mx-4 mb-8 mt-1 space-y-3">
+                  {feedbackSections.map((section, index) => (
+                    <section key={`${section.title}-${index}`} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-50 text-xs font-bold text-teal-700 border border-teal-100">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-base font-bold text-slate-900">{section.title.replace(/^\d+\)\s*/, "")}</h4>
+                          <div className="mt-2 text-sm leading-7 text-slate-700">
+                            <ReactMarkdown
+                              components={{
+                                p: (props) => <p className="mb-3 last:mb-0 leading-7 text-slate-700" {...props} />,
+                                ul: (props) => <ul className="list-disc list-inside mb-3 space-y-1 ml-1" {...props} />,
+                                ol: (props) => <ol className="list-decimal list-inside mb-3 space-y-1 ml-1" {...props} />,
+                                li: (props) => <li className="mb-0" {...props} />,
+                                strong: (props) => <strong className="font-semibold text-slate-900" {...props} />,
+                                em: (props) => <em className="italic text-slate-600" {...props} />,
+                                blockquote: (props) => <blockquote className="border-l-4 border-slate-300 pl-4 italic text-slate-600 my-3" {...props} />,
+                              }}
+                            >{section.body}</ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  ))}
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm flex flex-wrap items-center gap-2">
+                    {sessionReview && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSessionSummary(true)}
+                        className="text-xs border-[#1A334D] bg-[#1A334D] text-white hover:bg-[#10243a]"
+                      >
+                        Open Full Review Modal
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -6737,7 +6770,25 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                     </Button>
                   </div>
                 </div>
-              )}
+              ) : feedback ? (
+                <div className="mx-4 mb-8 mt-2 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <ReactMarkdown>{feedback}</ReactMarkdown>
+                </div>
+              ) : !isEnding ? (
+                <div className="mx-4 mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm text-sm text-slate-600">
+                  End the session to generate the full 8-section coaching debrief.
+                </div>
+              ) : null}
+
+              <div className="mx-4 mb-8 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <p className="mb-3 text-[11px] uppercase tracking-[0.16em] font-bold text-slate-500">Capability Snapshot</p>
+                <CapabilityFeedbackPanel
+                  messages={flatMessages}
+                  turns={turns}
+                  scenario={scenario}
+                  voiceSessionEvaluation={voiceSessionEvaluation}
+                />
+              </div>
             </div>
           )}
         </div>
