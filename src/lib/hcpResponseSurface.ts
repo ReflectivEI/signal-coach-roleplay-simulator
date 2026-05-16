@@ -46,7 +46,10 @@ function enforceSentenceCase(text = ""): string {
 
 function repairCommaSplices(text = ""): string {
   return normalizeText(text)
-    .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1");
+    .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1")
+    .replace(/\b(before my next patient|patients waiting|patient waiting|I have patients waiting),\s+(can you|could you|would you|what|how|why|which|give me|tell me)\b/gi, "$1. $2")
+    .replace(/\b(I(?:'ve| have) (?:only )?got (?:a minute|a few minutes|limited time|patients waiting)),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2")
+    .replace(/\b(I(?:'m| am) between patients),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2");
 }
 
 function repairQuestionPunctuation(text = ""): string {
@@ -143,6 +146,21 @@ function compressContractions(text = ""): string {
     .replace(/\bit is\b/gi, "it's");
 }
 
+function softenHostileTone(text = ""): string {
+  return normalizeText(text)
+    .replace(/\bwhat'?s the point of\b/gi, "what is the clinical point of")
+    .replace(/\bwhat'?s the point\b/gi, "what is the clinical point")
+    .replace(/\bget to the point\b/gi, "keep it focused")
+    .replace(/\bskip the pleasantries\b/gi, "keep it focused")
+    .replace(/\byou are not answering\b/gi, "that does not answer")
+    .replace(/\byou'?re not answering\b/gi, "that does not answer")
+    .replace(/\byou are staying too broad\b/gi, "that is still too broad")
+    .replace(/\bi do not have patience for this\b/gi, "I do not have much time for this")
+    .replace(/\bi don't have patience for this\b/gi, "I don't have much time for this")
+    .replace(/\bnot interested\b/gi, "not ready to keep going")
+    .replace(/\bthis is going nowhere\b/gi, "this is not getting specific enough");
+}
+
 function determineMaxSentences(
   turn: HcpTurnDirectiveSet,
   profile: HcpRuntimeProfile,
@@ -193,6 +211,7 @@ export function applyHcpResponseSurface({
   if (!output) return "";
 
   output = compressContractions(output);
+  output = softenHostileTone(output);
   output = enforceSentenceBoundaries(output);
   output = repairCommaSplices(output);
   output = dedupeSentences(output);
