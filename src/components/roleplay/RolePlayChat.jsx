@@ -227,6 +227,9 @@ function buildPredictiveRoutePayload({
   activeConcern = "",
   repSelectedTemperature = 5,
   previousHcpLine = "",
+  hcpState = null,
+  conversationMemory = null,
+  selectedDropdowns = {},
 }) {
   const safeState = String(nextHcpState || "neutral");
   const safeConcern = String(activeConcern || "").trim() || "workflow";
@@ -236,34 +239,41 @@ function buildPredictiveRoutePayload({
     ? Math.max(1, Math.min(10, Math.round(Number(repSelectedTemperature))))
     : 5;
 
+  const resolvedHcpState = hcpState || {
+    hcp_position: safeState,
+    conversation_stage: safeState,
+    current_primary_barrier: safeConcern,
+    last_hcp_response_text: safePrev,
+  };
+
+  const resolvedMemory = {
+    ...(conversationMemory || {}),
+    hcp_state: resolvedHcpState,
+  };
+
   return {
     rep_response_transcript: safeRep,
     rep_selected_temperature: realism,
     live_temperature: realism,
+    initial_temperature: realism,
     scenario_context: {
-      cue_signal: safeConcern,
-      hcp_state: {
-        hcp_position: safeState,
-        conversation_stage: safeState,
-        current_primary_barrier: safeConcern,
-        last_hcp_response_text: safePrev,
-      },
-      scenario_title: scenario?.title || "",
-      specialty: scenario?.specialty || "",
-      disease_state: scenario?.disease_state || "",
-      hcp_category: scenario?.hcp_category || "",
-      difficulty: scenario?.difficulty || "",
+      ...scenario,
+      cue_signal: scenario?.cue_signal || safeConcern,
+      hcp_state: resolvedHcpState,
     },
     selected_dropdowns: {
-      disease_state: scenario?.disease_state || "",
-      specialty_hcp_type: scenario?.specialty || scenario?.hcp_category || "",
-      hcp_type: scenario?.hcp_category || "",
-      journey_stage: scenario?.journey_stage || "",
-      interaction_pressure: scenario?.interaction_pressure || "",
-      influence_driver: scenario?.influence_driver || "",
-      behavior_archetype: scenario?.behavior_archetype || "",
+      ...(selectedDropdowns || {}),
+      disease_state: selectedDropdowns?.disease_state || scenario?.disease_state || "",
+      specialty_hcp_type: selectedDropdowns?.specialty_hcp_type || selectedDropdowns?.hcp_type || scenario?.specialty_hcp_type || scenario?.specialty || scenario?.hcp_category || "",
+      hcp_type: selectedDropdowns?.hcp_type || scenario?.hcp_type || scenario?.hcp_category || "",
+      journey_stage: selectedDropdowns?.journey_stage || scenario?.journey_stage || "",
+      interaction_pressure: selectedDropdowns?.interaction_pressure || scenario?.interaction_pressure || "",
+      influence_driver: selectedDropdowns?.influence_driver || scenario?.influence_driver || "",
+      behavior_archetype: selectedDropdowns?.behavior_archetype || scenario?.behavior_archetype || "",
       realism,
     },
+    hcp_state: resolvedHcpState,
+    conversation_memory: resolvedMemory,
   };
 }
 
@@ -4399,6 +4409,23 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           activeConcern: effectiveActiveConcern,
           repSelectedTemperature,
           previousHcpLine: respondingToTurn?.hcpDialogueBefore || "",
+          hcpState: respondingToTurn?.hcpStateAfter || respondingToTurn?.hcpStateBefore || null,
+          conversationMemory: {
+            hcp_state: respondingToTurn?.hcpStateAfter || respondingToTurn?.hcpStateBefore || null,
+            hcp_response_history: prevTurns
+              .map((turn) => String(turn?.hcpDialogueBefore || "").trim())
+              .filter(Boolean)
+              .slice(-8),
+          },
+          selectedDropdowns: {
+            disease_state: scenario?.disease_state || "",
+            specialty_hcp_type: scenario?.specialty_hcp_type || scenario?.specialty || scenario?.hcp_category || "",
+            hcp_type: scenario?.hcp_type || scenario?.hcp_category || "",
+            journey_stage: scenario?.journey_stage || "",
+            interaction_pressure: scenario?.interaction_pressure || "",
+            influence_driver: scenario?.influence_driver || "",
+            behavior_archetype: scenario?.behavior_archetype || "",
+          },
         });
         try {
           const predictiveRes = await fetch('/api/rps/evaluate-response', {

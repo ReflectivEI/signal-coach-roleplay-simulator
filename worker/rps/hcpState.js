@@ -133,8 +133,8 @@ function forceNonRepeatingVariation({
     candidateLine = "",
 } = {}) {
     const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
-    const barrier = pickBarrierText(hcpState, hcpBrain);
-    const revealed = pickRevealedBarrier(hcpState, hcpBrain);
+    const barrier = humanizeBarrierFragment(pickBarrierText(hcpState, hcpBrain)) || "the practical barrier in my clinic";
+    const revealed = humanizeBarrierFragment(pickRevealedBarrier(hcpState, hcpBrain));
     const emphasisPool = [
         `I still need a concrete workflow answer on ${barrier}.`,
         `I still need to understand what this changes for the patients I'd actually consider.`,
@@ -560,6 +560,11 @@ function hasSessionNearDuplicate(line = "", history = []) {
     return recent.some((prior) => semanticSimilarityScore(candidate, prior) >= 0.72);
 }
 
+function firstSentenceSignature(line = "") {
+    const first = str(line).split(/[.!?]/)[0] || "";
+    return normalizeSimilarityText(first);
+}
+
 /** @param {{ targetBucket?: string, barrier?: string, revealedBarrier?: string, variationSeed?: number, liveTemperature?: number }} [params] */
 function buildForcedBucketLine({
     targetBucket,
@@ -639,8 +644,8 @@ function enforceDeterministicAntiLoop({
         ...arr(hcpState?.intent_bucket_history || []),
     ], 5).filter(Boolean);
 
-    const barrier = pickBarrierText(hcpState, hcpBrain);
-    const revealedBarrier = pickRevealedBarrier(hcpState, hcpBrain);
+    const barrier = humanizeBarrierFragment(pickBarrierText(hcpState, hcpBrain)) || "the practical barrier in my clinic";
+    const revealedBarrier = humanizeBarrierFragment(pickRevealedBarrier(hcpState, hcpBrain));
     const candidateBucket = inferIntentBucketFromLine(hcpStatement, hcpState, hcpBrain);
     const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
     const normalizedCandidateBucket = lanePolicy.allowedBuckets.includes(candidateBucket)
@@ -1742,8 +1747,8 @@ export function generateHcpResponse({
 } = {}) {
     const temp = clamp(Math.round(Number(liveTemperature) || 5), 1, 10);
     const band = temp <= 3 ? "low" : temp <= 7 ? "mid" : "high";
-    const barrier = pickBarrierText(hcpState, hcpBrain);
-    const revealedBarrier = pickRevealedBarrier(hcpState, hcpBrain);
+    const barrier = humanizeBarrierFragment(pickBarrierText(hcpState, hcpBrain)) || "the practical barrier in my clinic";
+    const revealedBarrier = humanizeBarrierFragment(pickRevealedBarrier(hcpState, hcpBrain)) || barrier;
     const credibilityHook = pickCredibilityHook(hcpBrain);
     const stage = hcpState.conversation_stage;
     const repQuality = hcpState.last_rep_quality;
@@ -1814,9 +1819,9 @@ export function generateHcpResponse({
         }
         case "ask_for_specificity": {
             const variants = [
-                `I can follow where you're going, but I need more specificity. What exactly would change regarding ${barrier} — for my team specifically, not in general?`,
-                `That's a reasonable framing. But help me understand: where does this actually make a difference on ${barrier}? I need that to be concrete.`,
-                `Okay. If I were to test this with one patient, what would I tell my staff about ${barrier}? What's the specific answer?`,
+                `I can follow your point, but I still need this translated to my clinic. What would change first for my team around ${barrier}?`,
+                `That’s a fair framing. Help me make it practical: where does this change workflow around ${barrier} in real practice?`,
+                `If I tested this with one patient tomorrow, what would I tell staff actually changes around ${barrier}?`,
             ];
             hcp_statement = variants[hcpState.openness_level % variants.length];
             hcp_progression_explanation = "HCP is engaged but demands specificity before progressing — generic answers won't move this forward.";
@@ -1941,6 +1946,28 @@ export function generateHcpResponse({
             liveTemperature,
         }), 2);
         hcp_progression_explanation = `${hcp_progression_explanation} Full-session anti-repeat guard rotated the prompt lane.`.trim();
+    }
+
+    // Lead-sentence continuity guard: avoid reusing the same opening across long exchanges.
+    const recentLeadSignatures = dedupeTail(sessionHistory, 6)
+        .map((line) => firstSentenceSignature(line))
+        .filter(Boolean);
+    const currentLeadSignature = firstSentenceSignature(hcp_statement);
+    if (currentLeadSignature && recentLeadSignatures.includes(currentLeadSignature)) {
+        const currentBucket = inferIntentBucketFromLine(hcp_statement, hcpState, hcpBrain);
+        const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
+        const rotatedBucket = nextIntentBucket(
+            lanePolicy.allowedBuckets.includes(currentBucket) ? currentBucket : lanePolicy.primaryBucket,
+            lanePolicy.allowedBuckets,
+        );
+        hcp_statement = clipToSentenceCount(buildForcedBucketLine({
+            targetBucket: rotatedBucket,
+            barrier,
+            revealedBarrier,
+            variationSeed: recentLeadSignatures.length + Number(hcpState?.anti_loop_intervention_count || 0) + 3,
+            liveTemperature,
+        }), 2);
+        hcp_progression_explanation = `${hcp_progression_explanation} Lead-sentence continuity guard rotated opening phrasing.`.trim();
     }
 
     if (antiLoopEnforcement.anti_loop_intervention_triggered) {

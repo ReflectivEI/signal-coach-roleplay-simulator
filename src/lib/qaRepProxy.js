@@ -796,31 +796,31 @@ function concernFamilyRepAnchor(scenarioRouting = {}, personaKey = "strong_rep")
   switch (family) {
     case "evidence":
       return tier === "weak"
-        ? "The point is whether the broader value story feels relevant overall."
+        ? "The relevant test is whether the subgroup evidence matches the patients you actually treat."
         : tier === "mediocre"
           ? "The main question is whether the evidence feels relevant enough for the patients you actually treat."
           : "The real issue is whether the evidence gap you raised would actually change a treatment decision for one of your patients.";
     case "access":
       return tier === "weak"
-        ? "The point is whether the access process feels easier overall."
+        ? "The key access test is whether one approval step gets simpler for your staff before patient start."
         : tier === "mediocre"
           ? "The main access question is whether one approval step actually becomes simpler for the office."
           : "The concrete access step is whether the case clears review without a second repair cycle before the patient can start.";
     case "workflow":
       return tier === "weak"
-        ? "The point is whether the workflow feels easier for the team overall."
+        ? "The key workflow test is whether one repeat staff task comes off the team immediately."
         : tier === "mediocre"
           ? "The main workflow question is whether one step becomes clearer for the team."
           : "The concrete workflow step is who owns the next handoff and what repeat work actually comes off the team.";
     case "safety":
       return tier === "weak"
-        ? "The point is whether the broader safety comfort level feels acceptable overall."
+        ? "The safety test is which risk signal still blocks confidence for the exact patient subgroup in front of you."
         : tier === "mediocre"
           ? "The main safety question is which issue still affects confidence in the right patient."
           : "The safety question is which signal still blocks confidence in the patient you would actually treat.";
     case "cost":
       return tier === "weak"
-        ? "The point is whether the broader value story feels compelling overall."
+        ? "The value test is whether the patient outcome is strong enough to justify total spend in real practice."
         : tier === "mediocre"
           ? "The main value question is which outcome would feel relevant in everyday practice."
           : "The value question is which single outcome would actually change what you do for a real patient.";
@@ -1821,6 +1821,14 @@ function getRecentRepReplies(context = {}, window = 4) {
   return repTexts.slice(-Math.max(1, window));
 }
 
+function getAllRepReplies(context = {}) {
+  const transcript = Array.isArray(context?.transcript) ? context.transcript : [];
+  return transcript
+    .filter((turn) => turn?.speaker === "rep" && typeof turn?.text === "string")
+    .map((turn) => turn.text.trim())
+    .filter(Boolean);
+}
+
 function stableIndex(key = "", size = 1) {
   const span = Math.max(1, size);
   const score = String(key || "")
@@ -1832,6 +1840,31 @@ function stableIndex(key = "", size = 1) {
 function pickVariant(variants = [], fallback = "", key = "") {
   if (!Array.isArray(variants) || !variants.length) return fallback;
   return variants[stableIndex(key, variants.length)] || variants[0] || fallback;
+}
+
+function meaningfulSimilarityTokens(text = "") {
+  const stopwords = new Set([
+    "the", "a", "an", "and", "or", "but", "if", "is", "it", "this", "that", "to", "of", "for", "in",
+    "on", "at", "we", "you", "your", "my", "me", "i", "am", "are", "was", "were", "be", "been",
+    "with", "do", "does", "did", "have", "has", "had", "can", "could", "would", "should", "will",
+    "still", "just", "not", "one", "more", "what", "how", "why", "where", "when", "who", "main",
+    "point", "difference", "practical", "operational", "change"
+  ]);
+
+  return normalizeForMatch(text)
+    .split(" ")
+    .filter((token) => token.length > 2 && !stopwords.has(token));
+}
+
+function similarityScore(a = "", b = "") {
+  const aSet = new Set(meaningfulSimilarityTokens(a));
+  const bSet = new Set(meaningfulSimilarityTokens(b));
+  if (!aSet.size || !bSet.size) return 0;
+  let overlap = 0;
+  aSet.forEach((token) => {
+    if (bSet.has(token)) overlap += 1;
+  });
+  return overlap / Math.max(aSet.size, bSet.size);
 }
 
 function buildOperationalLoopAlternatives(context = {}) {
@@ -1856,10 +1889,10 @@ function buildOperationalLoopAlternatives(context = {}) {
   }
 
   return [
-    "The first request is cleaner, so the team can move forward without a repeat correction cycle.",
-    "The operational change is reducing avoidable back-and-forth after submission.",
-    "Your team can move to the next action without repeating the same fix step.",
-    "The practical difference is less repeat work after the initial request.",
+    "The first packet goes out complete, so your team is not reopening the same case for another correction cycle.",
+    "The step that changes is submission quality: fewer rework loops before the case can move forward.",
+    "Your staff handles one clean submission and can move to the next patient task instead of repair work.",
+    "Operationally, it removes repeat back-and-forth after submission so the case can progress in one pass.",
   ];
 }
 
@@ -1878,10 +1911,10 @@ function buildCrossLaneCostAccessAlternatives(context = {}) {
   }
 
   return [
-    "The decision point is whether patient outcome justifies spend in real practice, not just in a broad value statement.",
-    "What matters is whether the outcome is strong enough to justify cost once this reaches everyday clinic decisions.",
-    "The practical test is whether this changes treatment for real patients enough to justify the full spend.",
-    "The value case only holds if the outcome is concrete enough to change care in your own patient mix.",
+    "The decision point is whether patient outcome justifies spend for the subgroup you actually treat in clinic.",
+    "What matters is whether the outcome is strong enough to change treatment in your real patient mix, not in a broad average.",
+    "The practical test is whether this changes a real treatment decision for patients still missing goals on current care.",
+    "The value case only holds if the outcome is concrete enough to change care for your specific subgroup, not every patient.",
   ];
 }
 
@@ -1915,18 +1948,29 @@ function rotateRepeatedRepLine(text = "", context = {}) {
   const normalizedAsk = normalizeForMatch(context?.hcpTurn || "");
   const patientFitAsk = /be specific|which patients|patient subgroup|uncontrolled|current care|clinical decision|treatment protocol|what changes in practice|what changes first/.test(normalizedAsk);
   const recent = getRecentRepReplies(context, 4);
+  const allRepLines = getAllRepReplies(context);
   const repeatedCount = recent.reduce(
     (count, line) => (normalizeForMatch(line) === normalizedCandidate ? count + 1 : count),
     0,
   );
+  const sessionExactRepeats = allRepLines.reduce(
+    (count, line) => (normalizeForMatch(line) === normalizedCandidate ? count + 1 : count),
+    0,
+  );
+  const sessionNearRepeats = allRepLines.reduce((count, line) => {
+    if (normalizeForMatch(line) === normalizedCandidate) return count;
+    return similarityScore(line, candidate) >= 0.72 ? count + 1 : count;
+  }, 0);
 
   if (
     patientFitAsk &&
     (/specific patient decision that still does not change|patient-level decision still does not change|blocker is the specific patient decision/.test(normalizedCandidate) ||
       repeatedCount > 0 ||
+      sessionExactRepeats > 0 ||
+      sessionNearRepeats > 0 ||
       !/uncontrolled|current care|treatment goals|subgroup|outcome gain|protocol|stable responders/.test(normalizedCandidate))
   ) {
-    return pickVariant(buildPatientFitAlternatives(context), candidate, `${baseKey}:${repeatedCount}:patient-fit`);
+    return pickVariant(buildPatientFitAlternatives(context), candidate, `${baseKey}:${repeatedCount}:${sessionNearRepeats}:patient-fit`);
   }
 
   if (/moves straight into scheduling instead of (looping back|rework)/.test(normalizedCandidate)) {
@@ -1937,9 +1981,9 @@ function rotateRepeatedRepLine(text = "", context = {}) {
     return pickVariant(buildOperationalLoopAlternatives(context), candidate, `${baseKey}:resubmission-loop`);
   }
 
-  if (repeatedCount === 0) return candidate;
+  if (repeatedCount === 0 && sessionExactRepeats === 0 && sessionNearRepeats === 0) return candidate;
 
-  const key = `${prefix(context?.hcpTurn || "")}:${repeatedCount}:${normalizedCandidate}`;
+  const key = `${prefix(context?.hcpTurn || "")}:${repeatedCount}:${sessionExactRepeats}:${sessionNearRepeats}:${normalizedCandidate}`;
   const lanes = detectTopicLanes(candidate);
   const looksLikeCrossLaneCostAccess =
     (lanes.includes("clinical_value") || lanes.includes("cost_value"))
@@ -1950,7 +1994,7 @@ function rotateRepeatedRepLine(text = "", context = {}) {
   }
 
   if (/^after that,/.test(normalizedCandidate)) {
-    return candidate.replace(/^After that,/i, repeatedCount % 2 === 0 ? "Then," : "From there,");
+    return candidate.replace(/^After that,/i, (repeatedCount + sessionNearRepeats) % 2 === 0 ? "Then," : "From there,");
   }
 
   const genericAlternatives = buildOperationalLoopAlternatives(context);

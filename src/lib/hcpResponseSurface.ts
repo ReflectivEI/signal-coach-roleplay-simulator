@@ -220,7 +220,7 @@ export function applyHcpResponseSurface({
     !hasNaturalTimePressureDirective(output) &&
     turn.escalationStage !== "baseline"
   ) {
-    output = trimToSentences(output, 1);
+    output = trimToSentences(enforceSentenceBoundaries(output), 1);
   }
 
   if (turn.phase === "objection_resolution" && turn.concernFamily === "access") {
