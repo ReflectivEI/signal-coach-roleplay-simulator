@@ -7,18 +7,18 @@ import { requireRealismContract } from "@/lib/scenarioInputResolver";
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
   return (
     <div
-      className="rounded-2xl overflow-hidden"
+      className="rounded-xl overflow-hidden"
       style={{
         background: "linear-gradient(180deg, rgba(18,28,49,0.94) 0%, rgba(20,39,53,0.94) 100%)",
         border: "1px solid rgba(83, 148, 155, 0.24)",
       }}
     >
-      <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: "rgba(83, 148, 155, 0.16)" }}>
-        {Icon && <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />}
-        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>{title}</span>
+      <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: "rgba(83, 148, 155, 0.16)" }}>
+        {Icon && <Icon className="w-3 h-3 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />}
+        <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 60% 68%)" }}>{title}</span>
         {headerRight && <div className="ml-auto">{headerRight}</div>}
       </div>
-      <div className="px-4 py-4 space-y-3">{children}</div>
+      <div className="px-3 py-2.5 space-y-2">{children}</div>
     </div>
   );
 }
@@ -29,8 +29,8 @@ function LightSection(props) {
 
 function Row({ label, children }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-xs font-medium uppercase tracking-wider shrink-0" style={{ color: "rgba(236, 245, 245, 0.82)" }}>
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px] font-medium uppercase tracking-[0.13em] shrink-0" style={{ color: "rgba(236, 245, 245, 0.76)" }}>
         {label}
       </span>
       <div className="flex items-center justify-end text-right">{children}</div>
@@ -41,7 +41,7 @@ function Row({ label, children }) {
 function Pill({ children }) {
   return (
     <span
-      className="px-2.5 py-1 text-xs font-semibold rounded-md border"
+      className="px-2 py-0.5 text-[11px] font-semibold rounded-md border"
       style={{
         background: "rgba(255,255,255,0.10)",
         color: "rgba(244,249,249,0.96)",
@@ -70,6 +70,7 @@ function formatSpecialistTitle(title = "") {
   if (!normalized) return "N/A";
 
   const compactMap = [
+    { pattern: /Cardiology\s*\/\s*Cardiovascular Medicine/i, replacement: "CARDIOLOGY" },
     { pattern: /Primary Care\s*\/\s*Internal Medicine Specialist/i, replacement: "PCP / INTERNAL MEDICINE" },
     { pattern: /Primary Care Physician/i, replacement: "PCP" },
     { pattern: /Internal Medicine Specialist/i, replacement: "INTERNAL MEDICINE" },
@@ -135,7 +136,7 @@ export default function SimulatorRightPanel({
   const showPredictiveLensPanel = Boolean(predictiveLens?.isLoading || predictiveLens?.data);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {showPredictiveLensPanel && (
         <DarkSection
           icon={BrainCircuit}
@@ -160,9 +161,6 @@ export default function SimulatorRightPanel({
 
           {predictiveLens?.data && (
             <>
-              <Row label="Source">
-                <Pill>{predictiveLens.data.synthesisSource === "ai" ? "AI-synthesized" : "Deterministic"}</Pill>
-              </Row>
               <Row label="Specialist">
                 <span className="text-[11px] font-semibold uppercase whitespace-nowrap" style={{ color: "rgba(244,249,249,0.96)" }}>
                   {formatSpecialistTitle(predictiveLens.data.specialistTitle)}
@@ -203,15 +201,9 @@ export default function SimulatorRightPanel({
       )}
 
       <DarkSection icon={Activity} title="Realism">
-        <div className="space-y-2">
-          <Row label="Level">
-            <Pill>{displayRealism}/10</Pill>
-          </Row>
-          <div className="flex items-center justify-between text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>
-            <span>1 (Open)</span>
-            <span>5 (Balanced)</span>
-            <span>10 (High Resistance)</span>
-          </div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>Balanced resistance</span>
+          <Pill>{displayRealism}/10</Pill>
         </div>
       </DarkSection>
 
@@ -226,7 +218,7 @@ export default function SimulatorRightPanel({
           ) : null}
         >
           <div
-            className="p-3 rounded-xl"
+            className="p-2.5 rounded-xl"
             style={{
               background: "linear-gradient(180deg, rgba(98, 74, 13, 0.20) 0%, rgba(68, 52, 11, 0.16) 100%)",
               border: "1px solid rgba(231, 196, 83, 0.30)",
@@ -235,7 +227,7 @@ export default function SimulatorRightPanel({
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255, 216, 94, 0.98)" }}>
               {liveCoaching.capabilityName || liveCoaching.title || "Live coaching"}
             </p>
-            <p className="mt-2 text-xs leading-relaxed" style={{ color: "rgba(255, 235, 169, 0.94)" }}>
+            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: "rgba(255, 235, 169, 0.94)" }}>
               <span style={{ color: "hsl(2 57% 43%)", fontStyle: "italic", fontWeight: 700 }}>Tip:</span>{" "}
               {liveCoaching.guidance}
             </p>
@@ -276,7 +268,7 @@ export default function SimulatorRightPanel({
           </Row>
           {hcpPrediction.nextLikelyBehavior && (
             <div
-              className="mt-2 p-3 rounded-lg"
+              className="mt-1.5 p-2.5 rounded-lg"
               style={{
                 background: "rgba(37,124,123,0.10)",
                 border: "1px solid rgba(37,124,123,0.20)",
@@ -288,7 +280,7 @@ export default function SimulatorRightPanel({
             </div>
           )}
           {hcpPrediction.concernFamily && (
-            <div className="grid grid-cols-1 gap-2 pt-1">
+            <div className="grid grid-cols-1 gap-1.5 pt-1">
               <Row label="Concern Family">
                 <span className="text-xs font-medium capitalize" style={{ color: "rgba(244,249,249,0.96)" }}>
                   {String(hcpPrediction.concernFamily).replace(/_/g, " ")}
@@ -328,26 +320,20 @@ export default function SimulatorRightPanel({
 
       {latestVoiceAnalysis && (
         <DarkSection icon={Mic} title="Voice Delivery">
-          <Row label="Mode">
-            <Pill>{latestVoiceAnalysis.label}</Pill>
-          </Row>
-          <Row label="Pace">
-            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
-              {latestVoiceAnalysis.metadata?.words_per_minute || 0} wpm
-            </span>
-          </Row>
-          <Row label="Pauses">
-            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
-              {latestVoiceAnalysis.metadata?.pause_count || 0}
-            </span>
-          </Row>
-          <Row label="Fillers">
-            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
-              {latestVoiceAnalysis.metadata?.filler_word_count || 0}
-            </span>
-          </Row>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[
+              ["Pace", `${latestVoiceAnalysis.metadata?.words_per_minute || 0} wpm`],
+              ["Pauses", latestVoiceAnalysis.metadata?.pause_count || 0],
+              ["Fillers", latestVoiceAnalysis.metadata?.filler_word_count || 0],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg px-2 py-1.5 text-center" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
+                <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>{label}</p>
+                <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{value}</p>
+              </div>
+            ))}
+          </div>
           <div
-            className="mt-2 p-3 rounded-lg"
+            className="mt-1.5 p-2.5 rounded-lg"
             style={{
               background: "rgba(37,124,123,0.10)",
               border: "1px solid rgba(37,124,123,0.20)",
@@ -366,7 +352,7 @@ export default function SimulatorRightPanel({
             {sceneDescription}
           </p>
           {openingGuidance.length > 0 && (
-            <div className="space-y-2 pt-1">
+            <div className="space-y-1.5 pt-1">
               <div className="flex items-center gap-2">
                 <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
                 <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
@@ -400,7 +386,7 @@ export default function SimulatorRightPanel({
               const cap = SIGNAL_INTELLIGENCE_CAPABILITIES.find((candidate) => candidate.id === capId);
               if (!cap) return null;
               return (
-                <div key={capId} className="p-3 rounded-lg bg-primary/8 border border-primary/25">
+                <div key={capId} className="p-2.5 rounded-lg bg-primary/8 border border-primary/25">
                   <div className="text-xs font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{cap.label}</div>
                   <div className="text-xs mt-1 leading-relaxed" style={{ color: "rgba(236, 245, 245, 0.86)" }}>{cap.definition}</div>
                 </div>
