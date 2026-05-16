@@ -61,6 +61,7 @@ function useVoiceSessionControl() {
 import { getDifficultyVisuals } from "./difficultyStyles";
 import { normalizeMessage } from "@/lib/messageNormalization";
 import { normalizeTone } from "@/lib/conversationToneNormalization";
+import { invokeWorkerText } from "@/services/workerClient";
 import {
   applyMetricApplicabilityGating,
   enforceFeedbackEvidenceRules,
@@ -590,7 +591,7 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
   return value;
 }
 
-const SHOW_VISIBLE_HCP_CUES = true;
+const SHOW_VISIBLE_HCP_CUES = false;
 
 function formatCueValue(value = "") {
   return String(value || "")
@@ -4479,20 +4480,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             concernAddressed: decayState.concernAddressed,
           },
         });
-        const res = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        try {
+          const rawStr = await invokeWorkerText({
             prompt: systemPrompt,
             max_tokens: 220,
             temperature: 0,
             roleplay: true,
-            roleplayTurnValidation: roleplayTurnValidationContext,
-          })
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const rawStr = normalizeLlmInvokeText(data);
+            timeout_ms: 12000,
+            retry_count: 0,
+          });
           nextHcpDialogue = rawStr.trim().split('\n')[0];
           if (!nextHcpDialogue) {
             if (import.meta.env.DEV) {
@@ -4526,7 +4522,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           ) {
             console.warn("PUNCTUATION_INTEGRITY_VIOLATION", { source: "hcp-message-normalization" });
           }
-        } else {
+        } catch {
           usedDeterministicFallback = true;
           draftResponseSource = "fetch_non_ok_fallback";
           nextHcpDialogue = isFirstHcpResponse
@@ -4565,25 +4561,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "- Keep realistic clinical/workflow pressure tone.",
         ].join('\n');
 
-        const recoveryRes = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: fallbackRecoveryPrompt,
-            max_tokens: 120,
-            temperature: 0,
-            roleplay: true,
-            roleplayTurnValidation: roleplayTurnValidationContext,
-          })
-        });
-        if (recoveryRes.ok) {
-          const recoveryData = await recoveryRes.json();
-          const recoveredLine = normalizeLlmInvokeText(recoveryData).split('\n')[0].trim();
-          if (recoveredLine) {
-            nextHcpDialogue = recoveredLine;
-            draftResponseBeforePostProcessing = recoveredLine;
-            draftResponseSource = `${draftResponseSource}_ai_recovery`;
-          }
+        const recoveredLine = (await invokeWorkerText({
+          prompt: fallbackRecoveryPrompt,
+          max_tokens: 120,
+          temperature: 0,
+          roleplay: true,
+          timeout_ms: 8000,
+          retry_count: 0,
+        })).split('\n')[0].trim();
+        if (recoveredLine) {
+          nextHcpDialogue = recoveredLine;
+          draftResponseBeforePostProcessing = recoveredLine;
+          draftResponseSource = `${draftResponseSource}_ai_recovery`;
         }
       } catch (recoveryError) {
         if (import.meta.env.DEV) {
@@ -5443,21 +5432,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "- Use different wording from both previous and current lines.",
         ].join("\n");
 
-        const antiRepeatRes = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: antiRepeatPrompt,
-            max_tokens: 120,
-            temperature: 0,
-            roleplay: true,
-            roleplayTurnValidation: roleplayTurnValidationContext,
-          })
-        });
-        if (antiRepeatRes.ok) {
-          const antiRepeatData = await antiRepeatRes.json();
-          regenerated = normalizeLlmInvokeText(antiRepeatData).split('\n')[0].trim();
-        }
+        regenerated = (await invokeWorkerText({
+          prompt: antiRepeatPrompt,
+          max_tokens: 120,
+          temperature: 0,
+          roleplay: true,
+          timeout_ms: 8000,
+          retry_count: 0,
+        })).split('\n')[0].trim();
       } catch (antiRepeatError) {
         if (import.meta.env.DEV) {
           console.warn("ROLEPLAY_ANTI_REPEAT_REGEN_FAILED", { antiRepeatError });
@@ -5503,22 +5485,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           "- If rep addressed an evidence/study question, react to that directly before redirecting.",
         ].join('\n');
 
-        const continuityRes = await fetch('/api/llm/invoke', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: continuityPrompt,
-            max_tokens: 120,
-            temperature: 0,
-            roleplay: true,
-            roleplayTurnValidation: roleplayTurnValidationContext,
-          })
-        });
-        if (continuityRes.ok) {
-          const continuityData = await continuityRes.json();
-          const revisedLine = normalizeLlmInvokeText(continuityData).split('\n')[0].trim();
-          if (revisedLine) nextHcpDialogue = revisedLine;
-        }
+        const revisedLine = (await invokeWorkerText({
+          prompt: continuityPrompt,
+          max_tokens: 120,
+          temperature: 0,
+          roleplay: true,
+          timeout_ms: 8000,
+          retry_count: 0,
+        })).split('\n')[0].trim();
+        if (revisedLine) nextHcpDialogue = revisedLine;
       } catch (continuityError) {
         if (import.meta.env.DEV) {
           console.warn("ROLEPLAY_CONTINUITY_REPAIR_FAILED", { continuityError });
@@ -6517,11 +6492,6 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
                           </div>
                         );
                       })()}
-                      {!SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue(turn) && turn.cueBefore && (
-                        <div className="hcp-cue-descriptor inline-flex items-center max-w-fit px-3 py-1 rounded-full border text-[11px] italic leading-snug" style={{ background: "rgba(244, 232, 236, 0.92)", borderColor: "rgba(191, 132, 145, 0.46)", color: "hsl(356 32% 43%)" }}>
-                          {turn.cueBefore}
-                        </div>
-                      )}
                       {turn.hcpDialogueBefore && (
                         <div className="flex items-start">
                           <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-bold mr-2 flex-shrink-0 mt-1" title={hcpDisplayName}>HCP</div>

@@ -2212,25 +2212,25 @@ function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): st
   const timeConstrained = pressures.includes("time_constrained");
 
   if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bpaper\b|\bevidence\b/.test(normalized)) {
-    return timeConstrained ? "I hear you on the study, but keep it brief." : "I hear you on the study.";
+    return "";
   }
   if (/\bprior auth|prior authorization|coverage|formulary|payer|approval|access\b/.test(normalized)) {
     if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
-      return timeConstrained ? "I hear the access and staff issue, but keep it brief." : "I hear the access and workflow issue.";
+      return timeConstrained ? "I have a few minutes. What changes in access for my staff?" : "What changes in access or workflow for my staff?";
     }
-    return timeConstrained ? "I hear the access issue, but keep it brief." : "I hear the access issue.";
+    return timeConstrained ? "I have a few minutes. What changes in the access step?" : "What changes in the access step?";
   }
   if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
-    return timeConstrained ? "I hear the workflow issue, but keep it brief." : "I hear the workflow issue.";
+    return timeConstrained ? "I have a few minutes. What changes for my staff?" : "What changes for my staff?";
   }
   if (/\bwhich patient|which patients|patient subgroup|right fit|patient fit|patient profile|selection\b/.test(normalized)) {
     return timeConstrained ? "I hear the patient-fit question, but keep it brief." : "I hear the patient-fit question.";
   }
   if (/\bhow are you|how's it going|how are things\b/.test(normalized)) {
-    return timeConstrained ? "I'm fine, but I only have a minute." : "I'm fine, but keep it specific.";
+    return "";
   }
   if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)) {
-    return timeConstrained ? "Hi, but keep it brief." : "Hi. I can listen.";
+    return "";
   }
   if (/\bcan we speak|can we talk|do you have a minute|can i speak with you|can i talk with you\b/.test(normalized)) {
     return timeConstrained ? "Briefly." : "I can talk briefly.";
@@ -2291,6 +2291,21 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     : [];
 
   if (initialAccessStage) {
+    if (topic === "study_follow_up") {
+      return "Give me the patient decision it changes before my next room.";
+    }
+    if (topic === "evidence") {
+      return "Give me the evidence point that changes a patient decision before my next room.";
+    }
+    if (topic === "screening") {
+      return "Give me the patient group this changes before my next room.";
+    }
+    if (topic === "access") {
+      return "Give me the access step that changes before my next room.";
+    }
+    if (topic === "workflow") {
+      return "Give me the staff step that changes before my next room.";
+    }
     if (pressures.includes("time_constrained") && pressures.includes("operationally_constrained")) {
       return "Give me the short version before my next patient: what changes for my staff?";
     }
@@ -2549,11 +2564,46 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
   const timeConstrained = pressures.includes("time_constrained");
   const operational = pressures.includes("operationally_constrained");
   const skeptical = pressures.includes("skeptical_resistant");
+  const topic = deriveFirstTurnRepTopic(repMessage, scenario);
   const rawRepFocus = extractRepFocusPhrase(repMessage);
   const repFocus = /\bprior auth|prior authorization|approval|access|coverage|formulary|payer|workflow\b/i.test(rawRepFocus)
     ? ""
     : rawRepFocus;
   const seed = `${scenario?.id || scenario?.title || "scenario"}|${repMessage}|${transcript.length}|initial_access`;
+
+  if (topic === "study_follow_up") {
+    return selectNonRepeatingFallbackVariant({
+      variants: timeConstrained
+        ? [
+          "If it is a new study, give me the patient decision it changes before my next room.",
+          "Tie the study to one patient decision before my next room.",
+          "Give me the data point and the patient decision it changes.",
+        ]
+        : [
+          "Tie the study to one patient decision I should handle differently.",
+          "What patient decision does the study change?",
+          "Give me the data point that changes how I treat a patient.",
+        ],
+      transcript,
+      seed: `${seed}|study`,
+    });
+  }
+
+  if (topic === "evidence") {
+    return selectNonRepeatingFallbackVariant({
+      variants: timeConstrained
+        ? [
+          "Give me the evidence point that changes a patient decision before my next room.",
+          "What proof changes what I do for a patient before my next room?",
+        ]
+        : [
+          "What evidence point changes a real patient decision?",
+          "Show me the proof that changes how I treat a patient.",
+        ],
+      transcript,
+      seed: `${seed}|evidence`,
+    });
+  }
 
   const variants = operational
     ? [
@@ -2563,9 +2613,9 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
     ]
     : skeptical
       ? [
-        "I'm not convinced this needs time yet. What's the specific reason it matters for my patients?",
-        "I can listen briefly, but be concrete. Why is this worth discussing here?",
-        "Give me the short version. What makes this worth my time right now?",
+        "I have a few minutes. What changes for my patients if I give this time?",
+        "Be concrete. What changes for the patients I actually see?",
+        "Give me the short version. What patient decision changes first?",
       ]
       : [
         "I have a few minutes. What's this about for my patients?",
@@ -2603,6 +2653,18 @@ function enforceInitialAccessSurface({
 
   const value = String(hcpReply || "").trim();
   const lower = value.toLowerCase();
+  const repTopic = deriveFirstTurnRepTopic(repMessage, scenario);
+  const topicAnchored =
+    (repTopic === "study_follow_up" && /\bstudy|trial|data|paper|journal|evidence|patient decision|patients\b/i.test(value)) ||
+    (repTopic === "evidence" && /\bevidence|data|trial|outcome|patient decision|patients\b/i.test(value)) ||
+    (repTopic === "screening" && /\bpatient|subgroup|profile|fit|selection|group\b/i.test(value)) ||
+    (repTopic === "access" && /\baccess|prior auth|prior authorization|coverage|approval|formulary|payer|staff\b/i.test(value)) ||
+    (repTopic === "workflow" && /\bstaff|workflow|handoff|callback|process|office\b/i.test(value));
+
+  if (repTopic !== "general" && topicAnchored) {
+    return hcpReply;
+  }
+
   const repeatsOpeningScene = (() => {
     const opening = String(scenario?.openingScene || "").toLowerCase().replace(/\s+/g, " ").trim();
     if (!opening) return false;
@@ -2626,7 +2688,15 @@ function enforceInitialAccessSurface({
 }
 
 function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
-  if (isInitialAccessStage(scenario)) {
+  const topic = deriveFirstTurnRepTopic(repMessage, scenario);
+  const text = String(repMessage || "").toLowerCase();
+  const greetingOnly = /^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(text)
+    || /\bhow are you|how's it going|how are things\b/.test(text);
+
+  if (isInitialAccessStage(scenario) && topic === "general") {
+    if (greetingOnly) {
+      return "I have a few minutes. What are you asking me to consider?";
+    }
     return withFirstTurnRepAcknowledgement(
       buildInitialAccessAlignedReply(repMessage, scenario),
       repMessage,
@@ -2634,8 +2704,6 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
     );
   }
 
-  const topic = deriveFirstTurnRepTopic(repMessage, scenario);
-  const text = String(repMessage || "").toLowerCase();
   const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
   const pressures = Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase()) : [];
   const timeConstrained = pressures.includes("time_constrained");
@@ -2645,7 +2713,8 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   const hasFollowUpSignal = /\bfollow(?:ing)? up\b|\blast week\b|\byou asked\b|\bdropped off\b|\bwe discussed\b|\bearlier\b/.test(text);
 
   if (topic === "study_follow_up") {
-    if (timeConstrained && hasFollowUpSignal) return withFirstTurnRepAcknowledgement(`I remember the study, but you'll need to keep this quick. ${practicalAsk}`, repMessage, scenario);
+    if (timeConstrained && hasFollowUpSignal) return withFirstTurnRepAcknowledgement(`I remember the study. ${practicalAsk}`, repMessage, scenario);
+    if (timeConstrained) return withFirstTurnRepAcknowledgement(`If this is a new study, ${practicalAsk.charAt(0).toLowerCase()}${practicalAsk.slice(1)}`, repMessage, scenario);
     if (hasFollowUpSignal) return withFirstTurnRepAcknowledgement(`I remember the study. ${practicalAsk}`, repMessage, scenario);
     return withFirstTurnRepAcknowledgement(`If this is about the study, be specific. ${practicalAsk}`, repMessage, scenario);
   }
