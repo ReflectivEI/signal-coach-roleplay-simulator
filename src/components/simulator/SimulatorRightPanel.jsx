@@ -32,8 +32,19 @@ function Row({ label, children }) {
       <span className="text-[10px] font-medium uppercase tracking-[0.13em] shrink-0" style={{ color: "rgba(236, 245, 245, 0.76)" }}>
         {label}
       </span>
-      <div className="flex items-center justify-end text-right">{children}</div>
+      <div className="flex items-center justify-end text-right min-w-0">{children}</div>
     </div>
+  );
+}
+
+function ValueText({ children, className = "" }) {
+  return (
+    <span
+      className={`text-[11px] font-semibold uppercase whitespace-nowrap ${className}`}
+      style={{ color: "rgba(244,249,249,0.96)" }}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -88,7 +99,6 @@ export default function SimulatorRightPanel({
   hcpPrediction = null,
   lastSignals = {},
   latestVoiceAnalysis = null,
-  focusCapabilities = [],
   lastNudge = null,
   realtimeFeedback = null,
   scenario = null,
@@ -161,9 +171,7 @@ export default function SimulatorRightPanel({
           {predictiveLens?.data && (
             <>
               <Row label="Specialist">
-                <span className="text-[11px] font-semibold uppercase whitespace-nowrap" style={{ color: "rgba(244,249,249,0.96)" }}>
-                  {formatSpecialistTitle(predictiveLens.data.specialistTitle)}
-                </span>
+                <ValueText>{formatSpecialistTitle(predictiveLens.data.specialistTitle)}</ValueText>
               </Row>
               {predictiveLens.data.synthesisError ? (
                 <p className="text-xs" style={{ color: "rgba(255, 220, 173, 0.92)" }}>
@@ -200,10 +208,12 @@ export default function SimulatorRightPanel({
       )}
 
       <DarkSection icon={Activity} title="Realism">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px]" style={{ color: "rgba(220,236,236,0.72)" }}>Balanced resistance</span>
+        <Row label="Level">
+          <div className="flex items-center gap-2">
+          <ValueText>Balanced resistance</ValueText>
           <Pill>{displayRealism}/10</Pill>
-        </div>
+          </div>
+        </Row>
       </DarkSection>
 
       {liveCoaching && (
@@ -245,13 +255,13 @@ export default function SimulatorRightPanel({
             <Row label="Trajectory">
               <div className="flex items-center gap-1 text-xs font-medium" style={{ color: traj.color }}>
                 <traj.Icon className="w-3 h-3" />
-                <span>{traj.label}</span>
+                <span className="text-[11px] font-semibold uppercase">{traj.label}</span>
               </div>
             </Row>
           )}
           <Row label="Risk">
             <span
-              className="text-xs font-medium capitalize"
+              className="text-[11px] font-semibold uppercase"
               style={{
                 color:
                   hcpPrediction.riskLevel === "high"
@@ -280,14 +290,10 @@ export default function SimulatorRightPanel({
           {hcpPrediction.concernFamily && (
             <div className="grid grid-cols-1 gap-1.5 pt-1">
               <Row label="Concern Family">
-                <span className="text-xs font-medium capitalize" style={{ color: "rgba(244,249,249,0.96)" }}>
-                  {String(hcpPrediction.concernFamily).replace(/_/g, " ")}
-                </span>
+                <ValueText>{String(hcpPrediction.concernFamily).replace(/_/g, " ")}</ValueText>
               </Row>
               <Row label="Scenario Domain">
-                <span className="text-xs font-medium capitalize" style={{ color: "rgba(244,249,249,0.96)" }}>
-                  {String(hcpPrediction.scenarioDomain || "general")}
-                </span>
+                <ValueText>{String(hcpPrediction.scenarioDomain || "general")}</ValueText>
               </Row>
             </div>
           )}
@@ -307,9 +313,7 @@ export default function SimulatorRightPanel({
             if (!val) return null;
             return (
               <Row key={key} label={label}>
-                <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
-                  {values[val] || val}
-                </span>
+                <ValueText>{values[val] || val}</ValueText>
               </Row>
             );
           })}
@@ -349,31 +353,26 @@ export default function SimulatorRightPanel({
           <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.92)" }}>
             {sceneDescription}
           </p>
-          {openingGuidance.length > 0 && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex items-center gap-2">
-                <Lightbulb className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
-                <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "hsl(174 60% 68%)" }}>
-                  Opening Tips
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {openingGuidance.map((hint, i) => (
-                  <span
-                    key={i}
-                    className="text-[11px] px-2 py-0.5 rounded-md"
-                    style={{
-                      background: "rgba(37,124,123,0.12)",
-                      border: "1px solid rgba(37,124,123,0.24)",
-                      color: "rgba(244,249,249,0.96)",
-                    }}
-                  >
-                    {hint}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+        </DarkSection>
+      )}
+
+      {openingGuidance.length > 0 && (
+        <DarkSection icon={Lightbulb} title="Opening Tips">
+          <div className="flex flex-wrap gap-1.5">
+            {openingGuidance.map((hint, i) => (
+              <span
+                key={i}
+                className="text-[11px] px-2 py-0.5 rounded-md"
+                style={{
+                  background: "rgba(37,124,123,0.12)",
+                  border: "1px solid rgba(37,124,123,0.24)",
+                  color: "rgba(244,249,249,0.96)",
+                }}
+              >
+                {hint}
+              </span>
+            ))}
+          </div>
         </DarkSection>
       )}
     </div>
