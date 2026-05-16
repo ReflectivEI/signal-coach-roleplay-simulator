@@ -591,7 +591,7 @@ function enforceNaturalStandaloneUtterance(text = "", activeConcern = "workflow"
   return value;
 }
 
-const SHOW_VISIBLE_HCP_CUES = false;
+const SHOW_VISIBLE_HCP_CUES = true;
 
 function formatCueValue(value = "") {
   return String(value || "")
