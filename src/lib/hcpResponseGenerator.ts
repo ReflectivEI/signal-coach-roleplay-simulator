@@ -3649,6 +3649,8 @@ GOOD STYLE EXAMPLES:
 - "I hear you. Help me connect that to the patient decision."
 - "I have a minute. Can we start with how this affects patients like mine?"
 - "That could be useful. Can you connect it to the decision I would make here?"
+- "The study could be useful. How does it apply to my patients here?"
+- "I can talk briefly. What should I take from the study for my patients?"
 - "This data doesn't capture what I actually see."
 - "My staff is already buried in prior auths."
 - "If that's the subgroup you're talking about, that's not who I'm worried about."
@@ -3660,6 +3662,7 @@ BAD STYLE EXAMPLES:
 - casual/social phrasing that ignores clinical pressure
 - abstract workload language with no concrete task reality
 - interrogative or combative phrasing such as "why should I change?", "prove it", "give me one concrete point", or repeated "what changes?" as the default opening
+- formal or essay-like phrases such as "I'm intrigued by the new study", "diverting attention from current treatment plans", or "given my already packed schedule"
 
 INSTRUCTIONS:
 1. Reflect the predicted HCP state — your tone and body language MUST align with predictedBehaviorState and predicted engagement
@@ -3702,6 +3705,7 @@ INSTRUCTIONS:
 38. If the REP repeats, evades, or stays generic, progress the HCP stance using escalation memory: restate in new words, sharpen, reveal the deeper barrier, or disengage. Do not concatenate prior HCP phrasing.
 39. Never use these global stock phrases in final HCP dialogue: "What's concretely different for me after this?", "The practical answer has to stay tied...", "I hear that a lot", "Keep this brief", "I'm not convinced yet", or "What changes in practice if this is worth continuing?"
 40. Do not default to workflow/change-burden language. Only ask about workflow, staff steps, "one concrete point", or "why should I change" when the scenario or rep turn explicitly raises that issue.
+41. Keep follow-up turns conversational. Avoid long subordinate clauses and formal words like "intrigued" or "diverting attention"; say the natural clinician version instead.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
