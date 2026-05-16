@@ -38,6 +38,7 @@ const HCP_PRIMARY_TIMEOUT_MS = 18000;
 const HCP_REWRITE_TIMEOUT_MS = 6000;
 
 type RuntimeTemperatureBand = "low" | "medium" | "high";
+type PostLlmRewriteKind = "naturalness" | "spoken_style" | "context_consistency";
 
 type EscalationMemory = {
   repeatedRepPatternCount: number;
@@ -3666,7 +3667,20 @@ Return ONLY valid JSON:
   }
 
   let hcpReply = result.hcpReply || "";
+  let postLlmRewriteKind: PostLlmRewriteKind | null = null;
   if (needsNaturalnessRewrite(hcpReply)) {
+    postLlmRewriteKind = "naturalness";
+  } else if (needsSpokenStyleRewrite({ hcpReply, scenario })) {
+    postLlmRewriteKind = "spoken_style";
+  } else if (needsContextConsistencyRewrite({
+    hcpReply,
+    scenario,
+    behaviorState: result.nextBehaviorState || currentBehaviorState,
+  })) {
+    postLlmRewriteKind = "context_consistency";
+  }
+
+  if (postLlmRewriteKind === "naturalness") {
     try {
       hcpReply = await rewriteForSpokenNaturalness({
         hcpReply,
@@ -3677,7 +3691,7 @@ Return ONLY valid JSON:
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
-  } else if (needsSpokenStyleRewrite({ hcpReply, scenario })) {
+  } else if (postLlmRewriteKind === "spoken_style") {
     try {
       hcpReply = await rewriteForSpokenStyle({
         hcpReply,
@@ -3687,11 +3701,7 @@ Return ONLY valid JSON:
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
-  } else if (needsContextConsistencyRewrite({
-    hcpReply,
-    scenario,
-    behaviorState: result.nextBehaviorState || currentBehaviorState,
-  })) {
+  } else if (postLlmRewriteKind === "context_consistency") {
     try {
       hcpReply = await rewriteForContextConsistency({
         hcpReply,
@@ -3929,6 +3939,17 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
+
+  const postRegenerationFirstTurnAlignment = enforceFirstTurnRepAdaptation({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+  if (postRegenerationFirstTurnAlignment.applied) {
+    hcpReply = postRegenerationFirstTurnAlignment.hcpReply;
+    cueOverride = postRegenerationFirstTurnAlignment.cueOverride;
+  }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
