@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { BookOpen, Brain, ExternalLink, FlaskConical, GitBranch, Home, Menu, Settings, X, Zap } from "lucide-react";
+import { BookOpen, Brain, FlaskConical, GitBranch, Menu, Settings, X, Zap } from "lucide-react";
 
 const MAIN_SITE_URL = "https://reflectiv-ai.com";
 
@@ -143,16 +143,15 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
               href={MAIN_SITE_URL}
               aria-label="Back to Reflectiv AI main site"
               title="Back to main site"
-              className="group inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-200 hover:-translate-y-0.5"
+              className="inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:text-teal-700"
               style={{
                 background: "rgba(255,255,255,0.76)",
-                borderColor: "rgba(38, 67, 117, 0.16)",
-                color: "hsl(222 44% 28%)",
+                borderColor: "hsl(222 52% 24% / 0.55)",
+                color: "hsl(222 52% 24%)",
                 boxShadow: "0 8px 18px rgba(12, 25, 46, 0.08)",
               }}
             >
-              <Home className="h-3.5 w-3.5" />
-              <ExternalLink className="ml-0.5 h-2.5 w-2.5 opacity-55 transition-opacity group-hover:opacity-90" />
+              Home
             </a>
           </div>
 
