@@ -86,6 +86,40 @@ function getLastHcpTurn(turns = []) {
   return [...turns].reverse().find((turn) => turn.speaker === "hcp") || null;
 }
 
+function cleanConcernFamily(value = "") {
+  return String(value || "current concern").replace(/_/g, " ").trim().toLowerCase();
+}
+
+function buildConcernSpecificRepMove({ concern = "", lastHcpTurn = null, pressure = "", repApproach = "" } = {}) {
+  const normalizedConcern = cleanConcernFamily(concern || pressure);
+  const lastQuestion = normalizeShadowText(lastHcpTurn?.text || "");
+  const answerFirst = lastQuestion.includes("?")
+    ? "Answer the HCP's question first"
+    : "Start with the HCP's current concern";
+
+  if (/workflow|operational|staff|burden|admin|prior auth|access/.test(normalizedConcern)) {
+    return `${answerFirst}: name the office step that changes, then ask whether that is the workflow burden they want solved.`;
+  }
+
+  if (/screening|patient|fit|selection|adherence|therapy|drop/.test(normalizedConcern)) {
+    return `${answerFirst}: identify the patient group affected, then ask what patient-fit threshold would make this worth continuing.`;
+  }
+
+  if (/evidence|data|clinical|outcome|safety|efficacy|trial/.test(normalizedConcern)) {
+    return `${answerFirst}: give one outcome or evidence point in plain clinical language, then ask if that addresses their decision standard.`;
+  }
+
+  if (/cost|coverage|access|formulary|authorization/.test(normalizedConcern)) {
+    return `${answerFirst}: connect the point to access friction, then ask what barrier most often stops the patient from moving forward.`;
+  }
+
+  if (repApproach && !/recommended rep strategy/i.test(repApproach)) {
+    return repApproach;
+  }
+
+  return `${answerFirst}: reflect the concern in one sentence, answer it directly, then ask one narrow follow-up.`;
+}
+
 function buildCoachShadowMode({
   draftText = "",
   hcpPrediction = null,
@@ -104,6 +138,12 @@ function buildCoachShadowMode({
   const concern = String(hcpPrediction?.concernFamily || lastSignals?.concern_family || pressure || "current concern").replace(/_/g, " ");
   const hcpState = hcpPrediction?.predictedBehaviorState || session?.currentBehaviorState || scenario?.startingBehaviorState || "neutral";
   const cue = activeCues?.[0]?.label || activeCues?.[0]?.text || "";
+  const profileMove = buildConcernSpecificRepMove({
+    concern,
+    lastHcpTurn,
+    pressure,
+    repApproach: sections.repApproach?.headline || sections.repApproach?.repMoves?.[0] || "",
+  });
 
   const isPitch = /\b(study|data|efficacy|product|treatment|dose|trial|new)\b/i.test(draft);
   const isAcknowledging = /\b(hear|understand|sounds like|you'?re looking|workflow|burden|staff|time|practical|concern|before)\b/i.test(draft);
@@ -111,7 +151,7 @@ function buildCoachShadowMode({
   const isVague = draft.length > 0 && draft.split(/\s+/).length < 5;
 
   let likelyReaction = "HCP likely stays neutral until the rep connects to the current concern.";
-  let bestMove = sections.repApproach?.headline || "Ask a narrowing question tied to the HCP's immediate decision.";
+  let bestMove = profileMove;
   let risk = "Risk: the rep may answer with content before confirming what the HCP is actually testing.";
 
   if (!draft) {
@@ -120,23 +160,23 @@ function buildCoachShadowMode({
       : "HCP is forming an early relevance judgment from the opening move.";
   } else if (isVague) {
     likelyReaction = "HCP likely asks for a more specific reason this matters.";
-    bestMove = "Name the practical reason, then ask one focused question.";
+    bestMove = `${profileMove} Keep it to one sentence before asking the follow-up.`;
     risk = "Risk: a vague opener makes the HCP tighten the time gate.";
   } else if (isPitch && !isAcknowledging) {
     likelyReaction = "If you pitch now, HCP likely closes down or redirects to the practical barrier.";
-    bestMove = "Acknowledge the barrier first, then connect one specific point to it.";
+    bestMove = `Acknowledge the ${cleanConcernFamily(concern)} concern before adding content; then give one specific point tied to it.`;
     risk = `Risk: rep is about to answer product interest instead of the ${concern} concern.`;
   } else if (isAcknowledging && isQuestion) {
     likelyReaction = "If you acknowledge the burden first, openness likely improves.";
-    bestMove = "Ask a narrowing question that lets the HCP define the decision threshold.";
+    bestMove = "Ask a narrowing question that lets this HCP define the decision threshold, then stay with that answer.";
     risk = "Risk is lower if the rep keeps the question concise and tied to the HCP's context.";
   } else if (isQuestion) {
     likelyReaction = "HCP likely gives a more useful constraint if the question is specific enough.";
-    bestMove = "Anchor the question to patient fit, workflow, evidence, or access.";
+    bestMove = profileMove;
     risk = "Risk: a broad question may keep the conversation generic.";
   } else if (isAcknowledging) {
     likelyReaction = "HCP likely stays engaged if the next sentence makes the practical payoff clear.";
-    bestMove = "Follow the acknowledgement with one concrete change or a focused question.";
+    bestMove = `${profileMove} Do not add a second topic yet.`;
     risk = "Risk: acknowledgement without a next move can stall momentum.";
   }
 

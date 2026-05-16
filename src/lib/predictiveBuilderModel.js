@@ -437,9 +437,8 @@ export function buildPredictiveProfile(selection) {
   );
 
   const repApproachSection = buildSection(
-    "Recommended REP strategy for this exact profile",
+    archetypeProfile.repApproach,
     [
-      archetypeProfile.repApproach,
       stageIntel.predictivePriority,
       "Balance clinical confidence with operational feasibility in every key answer.",
       "Sequence responses as: acknowledge -> clarify -> apply -> next step.",
