@@ -190,10 +190,10 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
               title="Back to main site"
               className="inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:text-teal-700"
               style={{
-                background: "rgba(255,255,255,0.76)",
-                borderColor: "hsl(222 52% 24% / 0.55)",
+                background: "rgba(116, 227, 206, 0.26)",
+                borderColor: "hsl(222 52% 24% / 0.42)",
                 color: "hsl(222 52% 24%)",
-                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.08)",
+                boxShadow: "0 8px 18px rgba(37, 124, 123, 0.08)",
               }}
             >
               Home
