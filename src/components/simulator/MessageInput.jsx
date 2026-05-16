@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from "react";
-import { AlertCircle, BarChart2, Mic, Pause, Play, Send } from "lucide-react";
+import { AlertCircle, Mic, Pause, Play, Send } from "lucide-react";
 import { useSpeechInput } from "@/features/rps/useSpeechInput";
 
 export default function MessageInput({
   onSend,
-  onEvaluateRep = null,
-  isEvaluatingRep = false,
   disabled,
   placeholder = "Your response as the rep...",
   onVoiceMetadataChange = null,
+  onDraftChange = null,
 }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef(null);
@@ -46,16 +45,29 @@ export default function MessageInput({
     onVoiceMetadataChange?.(speech.voiceMetadata);
   }, [onVoiceMetadataChange, speech.voiceMetadata]);
 
-  const handleSend = () => {
-    const trimmed = value.trim();
-    if (!trimmed || disabled) return;
-    shouldRestoreFocusRef.current = true;
+  const buildInputPayload = () => {
     const voiceMetadata = speech.transcript.trim()
       ? {
           ...speech.voiceMetadata,
           transcript_source: "speech_recognition",
         }
       : null;
+    return {
+      text: value.trim(),
+      inputMode: voiceMetadata ? "voice" : "typed",
+      voiceMetadata,
+    };
+  };
+
+  useEffect(() => {
+    onDraftChange?.(buildInputPayload());
+  }, [value, speech.transcript, speech.voiceMetadata, onDraftChange]);
+
+  const handleSend = () => {
+    const trimmed = value.trim();
+    if (!trimmed || disabled) return;
+    shouldRestoreFocusRef.current = true;
+    const { voiceMetadata } = buildInputPayload();
     if (speech.isListening) speech.stop();
     onSend(trimmed, {
       inputMode: voiceMetadata ? "voice" : "typed",
@@ -64,33 +76,6 @@ export default function MessageInput({
     speech.reset();
     setVoiceMode(false);
     setValue("");
-  };
-
-  const buildVoicePayload = () => {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const voiceMetadata = speech.transcript.trim()
-      ? {
-          ...speech.voiceMetadata,
-          transcript_source: "speech_recognition",
-        }
-      : null;
-    return {
-      text: trimmed,
-      inputMode: voiceMetadata ? "voice" : "typed",
-      voiceMetadata,
-    };
-  };
-
-  const handleEvaluateRep = () => {
-    if (!onEvaluateRep || disabled || isEvaluatingRep) return;
-    const payload = buildVoicePayload();
-    if (!payload) return;
-    if (speech.isListening) speech.pause();
-    onEvaluateRep(payload.text, {
-      inputMode: payload.inputMode,
-      voiceMetadata: payload.voiceMetadata,
-    });
   };
 
   const startVoice = () => {
@@ -188,27 +173,6 @@ export default function MessageInput({
           </p>
         )}
       </div>
-      {onEvaluateRep && speech.isSupported && (
-        <div className="mt-1 flex justify-end">
-          <button
-            type="button"
-            onClick={handleEvaluateRep}
-            disabled={!value.trim() || disabled || isEvaluatingRep}
-            aria-label="Evaluate rep response"
-            title="Evaluate rep response"
-            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-3 transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-45"
-            style={{
-              background: value.trim() && !disabled && !isEvaluatingRep ? "hsl(222 52% 24%)" : "rgba(255,255,255,0.82)",
-              color: value.trim() && !disabled && !isEvaluatingRep ? "white" : "hsl(222 32% 48%)",
-              borderColor: value.trim() && !disabled && !isEvaluatingRep ? "hsl(222 52% 24%)" : "rgba(28, 52, 88, 0.22)",
-              boxShadow: value.trim() && !disabled && !isEvaluatingRep ? "0 10px 20px rgba(28, 52, 88, 0.14)" : "none",
-            }}
-          >
-            <BarChart2 className="w-3.5 h-3.5" />
-            <span className="text-[11px] font-semibold">{isEvaluatingRep ? "Evaluating Rep" : "Evaluate Rep"}</span>
-          </button>
-        </div>
-      )}
       {speech.error ? (
         <p className="mt-1 px-1 text-xs" style={{ color: "hsl(356 56% 42%)" }}>
           Voice input error: {speech.error}

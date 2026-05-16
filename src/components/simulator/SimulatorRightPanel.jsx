@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, ChevronRight, Mic } from "lucide-react";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
@@ -102,6 +102,9 @@ export default function SimulatorRightPanel({
   voiceEvaluation = null,
   lastNudge = null,
   realtimeFeedback = null,
+  onAnalyzeVoice = null,
+  isVoiceEvaluating = false,
+  canAnalyzeVoice = false,
   scenario = null,
   conversationInit = null,
   hasRepSpoken = false,
@@ -112,6 +115,7 @@ export default function SimulatorRightPanel({
   const navigate = useNavigate();
   const [showPredictiveLens, setShowPredictiveLens] = useState(false);
   const [showVoiceEvaluation, setShowVoiceEvaluation] = useState(false);
+  const [selectedVoiceSectionId, setSelectedVoiceSectionId] = useState("delivery");
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
   const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
     title: "Live coaching",
@@ -151,6 +155,51 @@ export default function SimulatorRightPanel({
     || voiceEvalResult?.next_best_question
     || voiceEvaluation?.error
     || "Evaluate a spoken rep response to see delivery and behavioral coaching.";
+  const voiceMetadata = voiceEvaluation?.voiceMetadata || latestVoiceAnalysis?.metadata || {};
+  const voiceEvaluationSections = [
+    {
+      id: "delivery",
+      title: "Delivery",
+      detail: voiceEvaluation?.error
+        ? voiceEvaluation.error
+        : `Pace: ${voiceMetadata.words_per_minute || 0} wpm. Pauses: ${voiceMetadata.pause_count || 0}. Fillers: ${voiceMetadata.filler_word_count || 0}.`,
+    },
+    {
+      id: "coaching",
+      title: "Coaching Direction",
+      detail: voiceEvalPrimary,
+    },
+    {
+      id: "outcome",
+      title: "Outcome Read",
+      detail: voiceEvalResult?.outcome_analysis?.actual_outcome
+        || voiceEvalResult?.outcome_analysis?.rationale
+        || "",
+    },
+    {
+      id: "better",
+      title: "Better Phrasing",
+      detail: voiceEvalResult?.better_phrasing || "",
+    },
+    {
+      id: "heard",
+      title: "What HCP Heard",
+      detail: voiceEvalResult?.what_hcp_likely_heard || "",
+    },
+    {
+      id: "transcript",
+      title: "Transcript",
+      detail: voiceEvaluation?.transcript || "",
+    },
+  ].filter((section) => String(section.detail || "").trim());
+  const selectedVoiceSection = voiceEvaluationSections.find((section) => section.id === selectedVoiceSectionId)
+    || voiceEvaluationSections[0]
+    || null;
+
+  const openVoiceSection = (sectionId) => {
+    setSelectedVoiceSectionId(sectionId);
+    setShowVoiceEvaluation(true);
+  };
 
   return (
     <div className="space-y-3">
@@ -328,77 +377,53 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      {latestVoiceAnalysis && (
-        <DarkSection icon={Mic} title="Voice Delivery">
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              ["Pace", `${latestVoiceAnalysis.metadata?.words_per_minute || 0} wpm`],
-              ["Pauses", latestVoiceAnalysis.metadata?.pause_count || 0],
-              ["Fillers", latestVoiceAnalysis.metadata?.filler_word_count || 0],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg px-2 py-1.5 text-center" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
-                <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>{label}</p>
-                <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{value}</p>
-              </div>
-            ))}
-          </div>
-          <div
-            className="mt-1.5 p-2.5 rounded-lg"
-            style={{
-              background: "rgba(37,124,123,0.10)",
-              border: "1px solid rgba(37,124,123,0.20)",
-            }}
-          >
-            <p className="text-xs leading-relaxed" style={{ color: "rgba(236,245,245,0.90)" }}>
-              {latestVoiceAnalysis.coaching}
-            </p>
-          </div>
-        </DarkSection>
-      )}
-
-      {(voiceEvaluation || latestVoiceAnalysis) && (
+      {onAnalyzeVoice && (
         <DarkSection
           icon={Mic}
-          title="Rep Evaluation"
+          title="Voice Analysis"
           headerRight={
-            voiceEvaluation && !voiceEvaluation.isLoading ? (
-              <button
-                type="button"
-                className="text-[11px] font-semibold"
-                style={{ color: "hsl(174 60% 68%)" }}
-                onClick={() => setShowVoiceEvaluation(true)}
-              >
-                Open
-              </button>
-            ) : null
+            <button
+              type="button"
+              onClick={onAnalyzeVoice}
+              disabled={!canAnalyzeVoice || isVoiceEvaluating}
+              className="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition-all disabled:cursor-not-allowed disabled:opacity-45"
+              style={{
+                color: canAnalyzeVoice && !isVoiceEvaluating ? "hsl(174 60% 72%)" : "rgba(220,236,236,0.56)",
+                borderColor: "rgba(125, 173, 190, 0.24)",
+                background: canAnalyzeVoice && !isVoiceEvaluating ? "rgba(37,124,123,0.16)" : "rgba(255,255,255,0.06)",
+              }}
+            >
+              {isVoiceEvaluating ? "Analyzing" : "Analyze"}
+            </button>
           }
         >
-          {voiceEvaluation?.isLoading ? (
+          {isVoiceEvaluating || voiceEvaluation?.isLoading ? (
             <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.90)" }}>
               Evaluating rep delivery and behavioral fit...
             </p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs leading-relaxed" style={{ color: "rgba(236,245,245,0.90)" }}>
-                {voiceEvalPrimary}
-              </p>
-              {voiceEvalResult?.overall_score || voiceEvalResult?.outcome_analysis?.actual_outcome ? (
-                <div className="grid grid-cols-2 gap-1.5">
-                  {voiceEvalResult?.overall_score ? (
-                    <div className="rounded-lg px-2 py-1.5" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
-                      <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>Score</p>
-                      <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{voiceEvalResult.overall_score}</p>
-                    </div>
-                  ) : null}
-                  {voiceEvalResult?.outcome_analysis?.conversation_advanced !== undefined ? (
-                    <div className="rounded-lg px-2 py-1.5" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(125,173,190,0.16)" }}>
-                      <p className="text-[9px] uppercase tracking-[0.12em]" style={{ color: "rgba(220,236,236,0.62)" }}>Advanced</p>
-                      <p className="text-[11px] font-semibold" style={{ color: "rgba(244,249,249,0.96)" }}>{voiceEvalResult.outcome_analysis.conversation_advanced ? "Yes" : "No"}</p>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+          ) : voiceEvaluationSections.length ? (
+            <div className="space-y-1.5">
+              {voiceEvaluationSections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => openVoiceSection(section.id)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border px-2.5 py-2 text-left transition-all hover:-translate-y-0.5"
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    borderColor: "rgba(125,173,190,0.16)",
+                    color: "rgba(244,249,249,0.94)",
+                  }}
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.12em]">{section.title}</span>
+                  <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />
+                </button>
+              ))}
             </div>
+          ) : (
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(244,249,249,0.76)" }}>
+              Draft a response, then analyze delivery and behavioral fit.
+            </p>
           )}
         </DarkSection>
       )}
@@ -411,7 +436,7 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      {showVoiceEvaluation && voiceEvaluation && (
+      {showVoiceEvaluation && selectedVoiceSection && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4" onClick={() => setShowVoiceEvaluation(false)}>
           <div
             className="max-h-[82vh] w-full max-w-xl overflow-y-auto rounded-2xl p-5"
@@ -425,8 +450,8 @@ export default function SimulatorRightPanel({
           >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 48% 34%)" }}>Rep Evaluation</p>
-                <h3 className="mt-1 text-lg font-semibold" style={{ color: "hsl(222 48% 22%)" }}>Voice + Behavioral Analysis</h3>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 48% 34%)" }}>Voice Analysis</p>
+                <h3 className="mt-1 text-lg font-semibold" style={{ color: "hsl(222 48% 22%)" }}>{selectedVoiceSection.title}</h3>
               </div>
               <button
                 type="button"
@@ -438,40 +463,10 @@ export default function SimulatorRightPanel({
               </button>
             </div>
 
-            <div className="mt-4 space-y-3 text-sm">
-              <div className="rounded-xl p-3" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)" }}>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Transcript</p>
-                <p className="mt-1 leading-relaxed">{voiceEvaluation.transcript}</p>
-              </div>
-
-              {voiceEvaluation.error ? (
-                <div className="rounded-xl p-3" style={{ background: "rgba(255,244,244,0.92)", border: "1px solid rgba(191,132,145,0.46)" }}>
-                  {voiceEvaluation.error}
-                </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      ["Pace", `${voiceEvaluation.voiceMetadata?.words_per_minute || 0} wpm`],
-                      ["Pauses", voiceEvaluation.voiceMetadata?.pause_count || 0],
-                      ["Fillers", voiceEvaluation.voiceMetadata?.filler_word_count || 0],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-xl p-3" style={{ background: "rgba(37,124,123,0.08)", border: "1px solid rgba(37,124,123,0.22)" }}>
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>{label}</p>
-                        <p className="mt-1 font-semibold">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-xl p-3" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)" }}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Coaching</p>
-                    <p className="mt-1 leading-relaxed">{voiceEvalPrimary}</p>
-                    {voiceEvalResult?.better_phrasing ? <p className="mt-2 leading-relaxed"><span className="font-semibold">Better phrasing:</span> {voiceEvalResult.better_phrasing}</p> : null}
-                    {voiceEvalResult?.next_best_question ? <p className="mt-2 leading-relaxed"><span className="font-semibold">Next question:</span> {voiceEvalResult.next_best_question}</p> : null}
-                    {voiceEvalResult?.what_hcp_likely_heard ? <p className="mt-2 leading-relaxed"><span className="font-semibold">What HCP heard:</span> {voiceEvalResult.what_hcp_likely_heard}</p> : null}
-                  </div>
-                </>
-              )}
+            <div className="mt-4 rounded-xl p-3 text-sm" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)" }}>
+              {selectedVoiceSection.detail.split("\n").map((line) => (
+                <p key={line} className="leading-relaxed">{line}</p>
+              ))}
             </div>
           </div>
         </div>

@@ -244,6 +244,7 @@ export default function Simulator() {
   const [latestVoiceAnalysis, setLatestVoiceAnalysis] = useState(null);
   const [voiceEvaluation, setVoiceEvaluation] = useState(null);
   const [isVoiceEvaluating, setIsVoiceEvaluating] = useState(false);
+  const [repDraftForAnalysis, setRepDraftForAnalysis] = useState({ text: "", inputMode: "typed", voiceMetadata: null });
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
   const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
@@ -443,6 +444,21 @@ export default function Simulator() {
       setIsVoiceEvaluating(false);
     }
   }, [session, scenario, isVoiceEvaluating, toast]);
+
+  const handleRepDraftChange = useCallback((draft) => {
+    setRepDraftForAnalysis({
+      text: draft?.text || "",
+      inputMode: draft?.inputMode || "typed",
+      voiceMetadata: draft?.voiceMetadata || null,
+    });
+  }, []);
+
+  const handleVoiceAnalysisRequest = useCallback(() => {
+    handleEvaluateRep(repDraftForAnalysis.text, {
+      inputMode: repDraftForAnalysis.inputMode,
+      voiceMetadata: repDraftForAnalysis.voiceMetadata,
+    });
+  }, [handleEvaluateRep, repDraftForAnalysis]);
 
   const handleRepMessage = useCallback(async (repText, inputMeta = {}) => {
     if (!session || !scenario || isLoading) return;
@@ -999,8 +1015,7 @@ export default function Simulator() {
 
           <MessageInput
             onSend={handleRepMessage}
-            onEvaluateRep={handleEvaluateRep}
-            isEvaluatingRep={isVoiceEvaluating}
+            onDraftChange={handleRepDraftChange}
             disabled={isLoading || isReviewing || session?.isComplete}
             placeholder={conversationInit?.inputPlaceholder}
           />
@@ -1069,6 +1084,9 @@ export default function Simulator() {
                 lastSignals={lastSignals}
                 latestVoiceAnalysis={latestVoiceAnalysis}
                 voiceEvaluation={voiceEvaluation}
+                onAnalyzeVoice={handleVoiceAnalysisRequest}
+                isVoiceEvaluating={isVoiceEvaluating}
+                canAnalyzeVoice={Boolean(repDraftForAnalysis.text?.trim()) && !isLoading && !isReviewing && !session?.isComplete}
                 focusCapabilities={scenario?.suggestedFocusCapabilities || []}
                 lastNudge={lastNudge}
                 realtimeFeedback={realtimeFeedback}
@@ -1101,6 +1119,9 @@ export default function Simulator() {
               lastSignals={lastSignals}
               latestVoiceAnalysis={latestVoiceAnalysis}
               voiceEvaluation={voiceEvaluation}
+              onAnalyzeVoice={handleVoiceAnalysisRequest}
+              isVoiceEvaluating={isVoiceEvaluating}
+              canAnalyzeVoice={Boolean(repDraftForAnalysis.text?.trim()) && !isLoading && !isReviewing && !session?.isComplete}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
               realtimeFeedback={realtimeFeedback}
