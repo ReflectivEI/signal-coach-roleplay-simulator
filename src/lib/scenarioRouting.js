@@ -92,6 +92,10 @@ function normalizeText(value = "") {
     return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function collapsePunctuation(value = "") {
+    return normalizeText(String(value || "").replace(/\s+([,.!?])/g, "$1"));
+}
+
 export function detectTopicLanes(text = "") {
     const value = normalizeText(text);
     if (!value) return [];
@@ -292,7 +296,6 @@ function getLaneTermReplacement(lane = "", stage = "") {
     return "practical decision point";
 }
 
-/** @param {{ text?: string, disallowedLanes?: string[], scenarioRouting?: ScenarioRoutingLike }} params */
 function rewriteDisallowedTerms({
     text = "",
     disallowedLanes = [],
@@ -314,18 +317,33 @@ function rewriteDisallowedTerms({
         });
     });
 
-    rewritten = rewritten
-        .replace(/\s+/g, " ")
-        .replace(/\s+([,.!?])/g, "$1")
-        .trim();
-
     return {
-        text: rewritten,
+        text: collapsePunctuation(rewritten),
         detected_terms: [...new Set(detectedTerms)],
     };
 }
 
-/** @param {{ draft_hcp_response?: string, scenario_routing?: ScenarioRoutingLike, rep_message?: string, hcp_state?: string }} params */
+function stripBannedFallbackPhrases(text = "") {
+    let cleaned = String(text || "");
+    BANNED_FALLBACK_PHRASES.forEach((pattern) => {
+        cleaned = cleaned.replace(pattern, "");
+    });
+    cleaned = cleaned
+        .replace(/\s+,/g, ",")
+        .replace(/\s+\./g, ".")
+        .replace(/\s+\?/g, "?")
+        .replace(/\s+/g, " ")
+        .trim();
+    return cleaned;
+}
+
+function buildValidatorRedirect(scenarioRouting = {}) {
+    const stage = String(scenarioRouting?.journey_stage || "general").toLowerCase();
+    const allowed = Array.isArray(scenarioRouting?.allowed_topic_lanes) ? scenarioRouting.allowed_topic_lanes : [];
+    const laneHint = allowed[0] || "current scenario lane";
+    return `Regenerate from the predictive HCP brain on the ${laneHint} lane for ${stage}.`;
+}
+
 export function enforceScenarioTopicLane({
     draft_hcp_response = "",
     scenario_routing = {},
@@ -345,22 +363,10 @@ export function enforceScenarioTopicLane({
             prohibited_topic_detected: [],
             detected_terms: [],
             violation_detected: true,
-            action: "rewritten",
+            action: "fallback_only",
             reason: "empty_response_repaired",
             requires_regeneration: true,
-        };
-    }
-
-    if (!disallowed.length && !containsBannedFallbackPhrase(text)) {
-        return {
-            text,
-            changed: false,
-            matched_topic_lanes: lanes,
-            prohibited_topic_detected: [],
-            detected_terms: [],
-            violation_detected: false,
-            action: "none",
-            requires_regeneration: false,
+            validator_redirect: buildValidatorRedirect(scenario_routing),
         };
     }
 
@@ -372,36 +378,27 @@ export function enforceScenarioTopicLane({
     const cleanedText = scrubStaleFallbackPhrases(rewritten.text || text, scenario_routing);
     const rewrittenLanes = detectTopicLanes(cleanedText);
     const remainingDisallowed = rewrittenLanes.filter((lane) => (scenario_routing?.disallowed_topic_lanes || []).includes(lane));
+    const bannedFallbackDetected = containsBannedFallbackPhrase(text);
+    const requiresRegeneration = remainingDisallowed.length > 0 || bannedFallbackDetected;
 
-    if (!remainingDisallowed.length && !containsBannedFallbackPhrase(cleanedText)) {
-        return {
-            text: cleanedText,
-            changed: cleanedText !== text,
-            matched_topic_lanes: rewrittenLanes,
-            prohibited_topic_detected: disallowed,
-            detected_terms: rewritten.detected_terms,
-            violation_detected: true,
-            action: "rewritten",
-            reason: "disallowed_lane_rewritten",
-            requires_regeneration: false,
-        };
-    }
-
-    const repaired = buildStageSafeFallback({ scenarioRouting: scenario_routing, repMessage: rep_message, hcpState: hcp_state });
     return {
-        text: repaired,
-        changed: true,
-        matched_topic_lanes: detectTopicLanes(repaired),
+        text: cleanedText,
+        changed: cleanedText !== text,
+        matched_topic_lanes: rewrittenLanes,
         prohibited_topic_detected: disallowed,
         detected_terms: rewritten.detected_terms,
-        violation_detected: true,
-        action: "rewritten",
-        reason: containsBannedFallbackPhrase(text) ? "banned_fallback_phrase" : "disallowed_lane",
-        requires_regeneration: true,
+        violation_detected: disallowed.length > 0 || bannedFallbackDetected,
+        action: requiresRegeneration ? "validator_redirect" : (cleanedText !== text ? "rewritten" : "none"),
+        reason: bannedFallbackDetected
+            ? "banned_fallback_phrase"
+            : disallowed.length > 0
+                ? remainingDisallowed.length > 0 ? "disallowed_lane_requires_regeneration" : "disallowed_lane_rewritten"
+                : "none",
+        requires_regeneration: requiresRegeneration,
+        validator_redirect: requiresRegeneration ? buildValidatorRedirect(scenario_routing) : "",
     };
 }
 
-/** @param {{ draft_hcp_response?: string, journey_stage?: string, scenario_routing?: ScenarioRoutingLike, hcp_state?: string }} params */
 export function enforceJourneyStageFit({
     draft_hcp_response = "",
     journey_stage = "",
@@ -413,7 +410,14 @@ export function enforceJourneyStageFit({
 
     if (!text) {
         const repaired = buildStageSafeFallback({ scenarioRouting: scenario_routing, hcpState: hcp_state });
-        return { text: repaired, changed: true, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: ["empty_response"], requires_regeneration: true };
+        return {
+            text: repaired,
+            changed: true,
+            expected_stage_behavior: deriveStageRules(stage),
+            actual_stage_behavior: ["empty_response"],
+            requires_regeneration: true,
+            validator_redirect: buildValidatorRedirect(scenario_routing),
+        };
     }
 
     const lanes = detectTopicLanes(text);
@@ -421,21 +425,16 @@ export function enforceJourneyStageFit({
     const hasAllowedLane = lanes.some((lane) => allowed.includes(lane));
     const hasDisallowedLane = lanes.some((lane) => (scenario_routing?.disallowed_topic_lanes || []).includes(lane));
 
-    if (hasAllowedLane && !hasDisallowedLane) {
-        return { text, changed: false, expected_stage_behavior: deriveStageRules(stage), actual_stage_behavior: lanes.length ? lanes : ["general"], requires_regeneration: false };
-    }
-
-    const repaired = buildStageSafeFallback({ scenarioRouting: scenario_routing, hcpState: hcp_state });
     return {
-        text: repaired,
-        changed: true,
+        text,
+        changed: false,
         expected_stage_behavior: deriveStageRules(stage),
         actual_stage_behavior: lanes.length ? lanes : ["general"],
-        requires_regeneration: true,
+        requires_regeneration: !hasAllowedLane || hasDisallowedLane,
+        validator_redirect: !hasAllowedLane || hasDisallowedLane ? buildValidatorRedirect(scenario_routing) : "",
     };
 }
 
-/** @param {{ draft_hcp_response?: string, interaction_pressure?: string[], scenario_routing?: ScenarioRoutingLike }} params */
 export function enforcePressureFit({
     draft_hcp_response = "",
     interaction_pressure = [],
@@ -444,8 +443,9 @@ export function enforcePressureFit({
     let text = normalizeText(draft_hcp_response);
     const pressures = Array.isArray(interaction_pressure) ? interaction_pressure : [];
     let changed = false;
+    let requiresRegeneration = false;
 
-    if (!text) return { text, changed: false, requires_regeneration: false };
+    if (!text) return { text, changed: false, requires_regeneration: false, validator_redirect: "" };
 
     if (pressures.includes("time_constrained")) {
         const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -464,8 +464,7 @@ export function enforcePressureFit({
     }
 
     if (!scenario_routing?.allowed_topic_lanes?.includes("workflow_implementation") && /\bstaff|workflow|callback|handoff\b/i.test(text)) {
-        text = text.replace(/\b(staff|workflow|callbacks?|handoffs?)\b/gi, "practice");
-        changed = true;
+        requiresRegeneration = true;
     }
 
     const cleanedText = scrubStaleFallbackPhrases(text, scenario_routing);
@@ -477,11 +476,13 @@ export function enforcePressureFit({
     return {
         text: normalizeText(text),
         changed,
-        requires_regeneration: changed && containsBannedFallbackPhrase(draft_hcp_response),
+        requires_regeneration: requiresRegeneration || containsBannedFallbackPhrase(draft_hcp_response),
+        validator_redirect: requiresRegeneration || containsBannedFallbackPhrase(draft_hcp_response)
+            ? buildValidatorRedirect(scenario_routing)
+            : "",
     };
 }
 
-/** @param {{ draft_hcp_response?: string, scenario_routing?: ScenarioRoutingLike }} params */
 export function addPersonaSpecificAnchor({
     draft_hcp_response = "",
     scenario_routing = {},
@@ -503,7 +504,6 @@ export function addPersonaSpecificAnchor({
     return { text, changed: true };
 }
 
-/** @param {{ text?: string, scenarioRouting?: ScenarioRoutingLike }} params */
 export function summarizeRoutingAlignment({ text = "", scenarioRouting = {} }) {
     const matched = detectTopicLanes(text);
     const prohibited = matched.filter((lane) => (scenarioRouting?.disallowed_topic_lanes || []).includes(lane));
@@ -518,17 +518,12 @@ export function summarizeRoutingAlignment({ text = "", scenarioRouting = {} }) {
     };
 }
 
-/** @param {string} [text] @param {ScenarioRoutingLike} [scenarioRouting] */
 export function scrubStaleFallbackPhrases(text = "", scenarioRouting = {}) {
     const input = normalizeText(text);
     if (!input) return input;
 
-    const workflowAllowed = (scenarioRouting?.allowed_topic_lanes || []).includes("workflow_implementation")
-        || (scenarioRouting?.allowed_topic_lanes || []).includes("prior_auth")
-        || (scenarioRouting?.allowed_topic_lanes || []).includes("access_formulary");
-
-    if (workflowAllowed && !containsBannedFallbackPhrase(input)) return input;
-    if (!containsBannedFallbackPhrase(input)) return input;
+    const stripped = stripBannedFallbackPhrases(input);
+    if (stripped) return stripped;
 
     return buildStageSafeFallback({ scenarioRouting, repMessage: "", hcpState: "" });
 }
