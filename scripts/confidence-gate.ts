@@ -8,8 +8,8 @@
  * 
  * REALISM CRITERIA:
  * 1. High-pressure scenarios (time_constrained OR operationally_constrained):
- *    - First HCP line must start with blocker-first phrasing (e.g., "Which", "The", concrete task)
- *    - NO polished lead-ins ("I'm still waiting to hear how you...")
+ *    - First HCP line must acknowledge the rep's opener when relevant, then pivot to the scenario
+ *    - NO hostile canned blockers ("give me one point", "look", "get to the point")
  *    - Word count ≤ 30 words for tight scenarios
  *    - Context-aware (references details from rep message or scenario, not generic)
  * 
@@ -117,7 +117,7 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
 
     const sentences = trimmed.split(/(?<=[.?!])\s+/).filter(Boolean);
 
-    // Forbidden polished lead-ins
+    // Forbidden polished or hostile lead-ins
     const forbiddenPatterns = [
         /^i'm still waiting to hear how you\b/i,
         /^i'm still waiting to hear how you plan to\b/i,
@@ -126,6 +126,12 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
         /^i'd like to understand\b/i,
         /^i think it's important\b/i,
         /^let me be clear\b/i,
+        /^look[,.]?\s/i,
+        /^give me\b/i,
+        /\bgive me one (?:concrete|practical|useful|clear) point\b/i,
+        /\bget to the point\b/i,
+        /\bmake it relevant\b/i,
+        /\bwhy should i change\b/i,
     ];
 
     for (const pattern of forbiddenPatterns) {
@@ -137,25 +143,26 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
         }
     }
 
-    // Expected blocker-first patterns (can appear in sentence 1 or 2)
-    const blockerPatterns = [
+    // Expected adaptive pivot patterns (can appear in sentence 1 or 2)
+    const adaptivePivotPatterns = [
         /^which\s/i,
         /^what\s/i,
         /^the\s/i,
-        /^i've got\b/i,
-        /^look[,.]?\s/i,
-        /^tell me\b/i,
-        /\bso tell me\b/i,
-        /^give me\b/i,
+        /^i (?:have|can|hear|understand)\b/i,
+        /^i'm (?:doing|between|on)\b/i,
+        /^can (?:we|you)\b/i,
+        /^help me\b/i,
         /^walk me through\b/i,
+        /\bconnect\b/i,
+        /\btalk (?:through|briefly)\b/i,
     ];
 
     const firstTwo = sentences.slice(0, 2);
-    const hasBlockerInFirstTwo = firstTwo.some((s) => blockerPatterns.some((pattern) => pattern.test(s.trim())));
-    if (!hasBlockerInFirstTwo) {
+    const hasAdaptivePivotInFirstTwo = firstTwo.some((s) => adaptivePivotPatterns.some((pattern) => pattern.test(s.trim())));
+    if (!hasAdaptivePivotInFirstTwo) {
         return {
             pass: false,
-            detail: `No blocker-first pivot in first two sentences: "${trimmed.slice(0, 60)}..."`,
+            detail: `No adaptive pivot in first two sentences: "${trimmed.slice(0, 60)}..."`,
         };
     }
 
@@ -170,7 +177,7 @@ function validateHighPressureClipping(text: string): { pass: boolean; detail: st
 
     return {
         pass: true,
-        detail: `Blocker-first, ${wordCount} words, appropriate tension`,
+        detail: `Adaptive pivot, ${wordCount} words, appropriate tension`,
     };
 }
 
@@ -460,14 +467,18 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
 
             allScenariosFirstTurns.push({
                 scenarioId: scenario.id,
+                title: scenario.title || scenario.id,
                 pass: hcpResponse.hcpReply && hcpResponse.hcpReply.trim().length > 10,
                 length: (hcpResponse.hcpReply || "").trim().length,
+                reply: String(hcpResponse.hcpReply || "").trim().slice(0, 120),
             });
         } catch {
             allScenariosFirstTurns.push({
                 scenarioId: scenario.id,
+                title: scenario.title || scenario.id,
                 pass: false,
                 length: 0,
+                reply: "",
             });
         }
     }
@@ -479,7 +490,7 @@ async function runConfidenceGateChecks(): Promise<ConfidenceGateReport> {
         weight: 0.12,
         pass: gate3Pass,
         score: gate3Pass ? 1 : 0,
-        detail: `${allScenariosFirstTurns.filter((i) => i.pass).length}/${allScenariosFirstTurns.length} scenarios pass (non-empty first-turn)`,
+        detail: `${allScenariosFirstTurns.filter((i) => i.pass).length}/${allScenariosFirstTurns.length} scenarios pass (non-empty first-turn): ${allScenariosFirstTurns.map((i) => `${i.title}=${i.pass ? "pass" : `fail(${i.length}) ${i.reply}`}`).join(" | ")}`,
         delta: gate3Pass ? 0.05 : -0.1,
     });
 

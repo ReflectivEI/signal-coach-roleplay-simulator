@@ -7,14 +7,34 @@ function normalizeText(value = ""): string {
 
 function splitSentences(text = ""): string[] {
   return normalizeText(text)
+    .replace(/\bDr\./g, "Dr<abbr>")
+    .replace(/\bMr\./g, "Mr<abbr>")
+    .replace(/\bMs\./g, "Ms<abbr>")
+    .replace(/\bMrs\./g, "Mrs<abbr>")
     .split(/(?<=[.!?])\s+/)
-    .map((line) => line.trim())
+    .map((line) => line
+      .replace(/Dr<abbr>/g, "Dr.")
+      .replace(/Mr<abbr>/g, "Mr.")
+      .replace(/Ms<abbr>/g, "Ms.")
+      .replace(/Mrs<abbr>/g, "Mrs.")
+      .trim())
     .filter(Boolean);
 }
 
 function trimToSentences(text = "", maxSentences = 1): string {
   const sentences = splitSentences(text);
   if (!sentences.length) return normalizeText(text);
+  if (
+    maxSentences <= 1 &&
+    sentences.length > 1 &&
+    sentences[0].split(/\s+/).length <= 8 &&
+    (
+      (!/[?]$/.test(sentences[0]) && /[?]$/.test(sentences[1])) ||
+      /^(I'm doing alright|I am doing alright|Hi|Hello|Good morning|Good afternoon|Good evening)\b/i.test(sentences[0])
+    )
+  ) {
+    return normalizeText(sentences.slice(0, 2).join(" "));
+  }
   return normalizeText(sentences.slice(0, Math.max(1, maxSentences)).join(" "));
 }
 
@@ -47,6 +67,7 @@ function enforceSentenceCase(text = ""): string {
 function repairCommaSplices(text = ""): string {
   return normalizeText(text)
     .replace(/,\s+(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, ". $1")
+    .replace(/,\s+(what|how|why|who|when|where|which|do|does|did|is|are)\b/g, ". $1")
     .replace(/\b(before my next patient|patients waiting|patient waiting|I have patients waiting),\s+(can you|could you|would you|what|how|why|which|give me|tell me)\b/gi, "$1. $2")
     .replace(/\b(I(?:'ve| have) (?:only )?got (?:a minute|a few minutes|limited time|patients waiting)),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2")
     .replace(/\b(I(?:'m| am) between patients),\s+(can you|could you|what|give me|tell me)\b/gi, "$1. $2");
@@ -57,9 +78,9 @@ function repairQuestionPunctuation(text = ""): string {
   if (!output) return "";
 
   output = output
-    .replace(/\.\s*(What|How|Why|Who|When|Where|Can|Could|Would|Should|Do|Does|Did|Is|Are)\b/g, "? $1")
     .replace(/\?\s*\?/g, "?")
-    .replace(/\.\?$/g, "?");
+    .replace(/\.\?$/g, "?")
+    .replace(/\b(What|How|Why|Who|When|Where|Which|Can|Could|Would|Should|Do|Does|Did|Is|Are)([^.?!]*)\.$/, "$1$2?");
 
   return normalizeText(output);
 }
@@ -148,8 +169,22 @@ function compressContractions(text = ""): string {
 
 function softenHostileTone(text = ""): string {
   return normalizeText(text)
+    .replace(/\bwhat makes you think this is relevant to my practice\b/gi, "can you help me understand why this is relevant to my practice")
+    .replace(/\bwhat makes you think this matters to my practice\b/gi, "can you help me understand why this matters to my practice")
+    .replace(/\bwhat makes you think this is relevant\b/gi, "can you help me understand why this is relevant")
+    .replace(/\bmake it relevant to my patients\b/gi, "can you connect this to my patients")
+    .replace(/\bgive me one (?:concrete|practical|useful|clear) point\b/gi, "help me understand the most relevant point")
+    .replace(/\bgive me one reason\b/gi, "help me understand the reason")
+    .replace(/\bgive me the short version\b/gi, "walk me through the short version")
+    .replace(/\bgive me the practical\b/gi, "help me understand the practical")
+    .replace(/\bbe quick\b/gi, "we can be brief")
+    .replace(/\bmake this quick\b/gi, "we can keep this brief")
+    .replace(/^look,\s*/i, "")
     .replace(/\bwhat'?s the point of\b/gi, "what is the clinical point of")
     .replace(/\bwhat'?s the point\b/gi, "what is the clinical point")
+    .replace(/\bwhat is the clinical point of this visit\b/gi, "what were you hoping to talk through")
+    .replace(/\bwhat is the clinical point of\b/gi, "what should I understand about")
+    .replace(/\bwhat is the clinical point\b/gi, "what should I understand first")
     .replace(/\bget to the point\b/gi, "keep it focused")
     .replace(/\bskip the pleasantries\b/gi, "keep it focused")
     .replace(/\byou are not answering\b/gi, "that does not answer")

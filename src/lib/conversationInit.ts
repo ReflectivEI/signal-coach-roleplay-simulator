@@ -29,8 +29,8 @@ export async function initializeConversation(scenario: any): Promise<Conversatio
   const guidanceMap: Record<string, string[]> = {
     time_constrained_community_doctor: [
       "Acknowledge time constraints immediately",
-      "Lead with a single, specific question",
-      "Avoid any framing or setup — get to the point"
+      "Open with a relevant question tied to the HCP's context",
+      "Keep the setup brief while still sounding human"
     ],
     skeptical_specialist: [
       "Reference a specific clinical context, not a product claim",

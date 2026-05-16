@@ -15,7 +15,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     phase: "initial_access",
     directness: "high",
     pressure: "time_constrained",
-    example: "Look, I've got four minutes before my next patient. My MA said you had something about prior auth reduction, that's why I said yes.",
+    example: "I have a few minutes before my next patient. My MA mentioned you had something about prior auth reduction, so I can talk through that briefly.",
   },
   {
     family: "general",
@@ -28,7 +28,7 @@ const APPROVED_SPOKEN_EXAMPLES: RealismExample[] = [
     phase: "initial_access",
     directness: "high",
     pressure: "operationally_constrained",
-    example: "Okay, I've got a few minutes. My office manager said you've been trying to get in. Keep it useful and get to the point.",
+    example: "Okay, I have a few minutes. My office manager said you've been trying to get in, so let's start with what would matter for the office.",
   },
   {
     family: "screening",

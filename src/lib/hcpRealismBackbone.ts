@@ -27,10 +27,10 @@ function deterministicPick<T>(items: T[], seed = ""): T {
 
 function pickTimePressureCloser(seed = ""): string {
   return deterministicPick([
-    "Give me the short version.",
-    "Keep it brief and practical.",
-    "I've only got a minute.",
-    "Give me one practical point.",
+    "Can we start with the part that matters most?",
+    "Let's keep this focused on the patient decision.",
+    "I have a minute to talk it through.",
+    "Can you connect this to the decision in front of me?",
   ], seed);
 }
 
@@ -79,9 +79,9 @@ function buildExplicitFollowUpForAnchor(anchorType: OpeningAnchorType, concernFa
 
   if (family === "time") {
     return deterministicPick([
-      "What's the short version that matters here?",
-      "What's the one point that matters right now?",
-      "What's the practical point in one sentence?",
+      "Can we start with what matters most here?",
+      "What should I understand first?",
+      "How does this connect to the patient decision?",
     ], `${anchorType}|${family}`);
   }
 
@@ -289,7 +289,7 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
       return "Clinically, I can see it. The problem is who actually owns the extra monitoring step in a practice like mine.";
     default:
       if (/few minutes|next patient|make it quick/.test(lower)) {
-        return "I've only got a minute, so give me the short version of why this matters right now.";
+        return "I have a minute, so help me understand why this matters right now.";
       }
       return null;
   }
@@ -501,9 +501,9 @@ function buildGlobalFirstTurnUtterance({
 
   if (turn.concernFamily === "time" && profile.directness === "high") {
     output = output
-      .replace(/\bthat'?s the only reason i said yes\b/i, "that's why I said yes")
-      .replace(/\bi've got four minutes before my next patient\b/i, "I've got four minutes before my next patient")
-      .replace(/\bi have a few minutes\b/i, "I've got a few minutes");
+      .replace(/\bthat'?s the only reason i said yes\b/i, "so I can talk through that briefly")
+      .replace(/\bi've got four minutes before my next patient\b/i, "I have a few minutes before my next patient")
+      .replace(/\bi have a few minutes\b/i, "I have a few minutes");
   }
 
   if (turn.concernFamily === "screening") {

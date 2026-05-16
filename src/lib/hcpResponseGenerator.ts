@@ -624,7 +624,7 @@ function buildRealismSpecificAsk(scenario: any, hcpReply = ""): string {
   }
   if (family === "access") return "the exact approval path and what changes for staff";
   if (family === "workflow") return "the staff step that changes and who owns it";
-  if (family === "time") return "the one point that matters before I get back to patients";
+  if (family === "time") return "what matters most before I get back to patients";
   if (family === "screening") return "the patient profile that changes the decision";
   if (family === "evidence") {
     return renal
@@ -1270,7 +1270,7 @@ function buildDeterministicLiveCoachingNudge({
   if (pressure.includes("time_constrained")) {
     return {
       title: "Conversation Control & Structure",
-      guidance: "Keep the next move to one concrete point that respects the HCP's limited time.",
+      guidance: "Acknowledge the HCP's time limit, then offer one relevant reason to keep talking.",
       capabilityId: "conversation_control_structure",
       capabilityName: "Conversation Control & Structure",
     };
@@ -2203,8 +2203,8 @@ function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): strin
   }
 
   return timeConstrained
-    ? `I can give you a minute, but skip the pleasantries. ${practicalAsk}`
-    : `I can listen, but make it specific. ${practicalAsk}`;
+    ? `I'm doing alright, but I only have a minute. ${practicalAsk}`
+    : `I'm doing alright. ${practicalAsk}`;
 }
 
 function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): string {
@@ -2233,10 +2233,10 @@ function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): st
     return timeConstrained ? "I hear the patient-fit question, but keep it brief." : "I hear the patient-fit question.";
   }
   if (/\bhow are you|how's it going|how are things\b/.test(normalized)) {
-    return "";
+    return timeConstrained ? "I'm doing alright, but I only have a minute." : "I'm doing alright.";
   }
   if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)) {
-    return "";
+    return timeConstrained ? "Hi. I only have a minute." : "Hi.";
   }
   if (/\bcan we speak|can we talk|do you have a minute|can i speak with you|can i talk with you\b/.test(normalized)) {
     return timeConstrained ? "Briefly." : "I can talk briefly.";
@@ -2258,6 +2258,33 @@ function withFirstTurnRepAcknowledgement(reply: string, repMessage: string, scen
   if (normalized.startsWith(ackNormalized) || /^(hi\.|i'm fine|briefly\.|i can talk briefly|i hear you)/i.test(value)) {
     return value;
   }
+
+  return `${acknowledgement} ${value}`;
+}
+
+function repOpensWithCourtesy(repMessage: string): boolean {
+  const normalized = String(repMessage || "").trim().toLowerCase();
+  return /^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)
+    || /\bhow are you|how's it going|how are things\b/.test(normalized);
+}
+
+function hcpAcknowledgesCourtesy(hcpReply: string): boolean {
+  return /\b(i'?m (?:doing )?(?:alright|fine|okay|ok)|good to see you|thanks for (?:coming|stopping)|hi\.|hello\.|good morning\.|good afternoon\.)\b/i
+    .test(String(hcpReply || ""));
+}
+
+function withCourtesyAcknowledgement(reply: string, repMessage: string, scenario: any): string {
+  const value = String(reply || "").trim();
+  if (!value || !repOpensWithCourtesy(repMessage) || hcpAcknowledgesCourtesy(value)) return value;
+
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((item: string) => String(item).toLowerCase())
+    : [];
+  const acknowledgement = /\bhow are you|how's it going|how are things\b/i.test(repMessage)
+    ? "I'm doing alright."
+    : pressures.includes("time_constrained")
+      ? "Hi."
+      : "Hi.";
 
   return `${acknowledgement} ${value}`;
 }
@@ -2298,28 +2325,28 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
 
   if (initialAccessStage) {
     if (topic === "study_follow_up") {
-      return "Give me the patient decision it changes before my next room.";
+      return "Can we connect the study to a patient decision before my next room?";
     }
     if (topic === "evidence") {
-      return "Give me the evidence point that changes a patient decision before my next room.";
+      return "Can we connect the evidence to a patient decision before my next room?";
     }
     if (topic === "screening") {
-      return "Give me the patient group this changes before my next room.";
+      return "Can we start with the patient group this would affect?";
     }
     if (topic === "access") {
-      return "Give me the access step that changes before my next room.";
+      return "Can we start with the access step this would affect?";
     }
     if (topic === "workflow") {
-      return "Give me the staff step that changes before my next room.";
+      return "Can we start with how this would affect my staff?";
     }
     if (pressures.includes("time_constrained") && pressures.includes("operationally_constrained")) {
-      return "Give me the short version before my next patient: what changes for my staff?";
+      return "Can we keep this brief and start with what changes for my staff?";
     }
     if (pressures.includes("time_constrained")) {
-      return "Give me the short version before my next patient.";
+      return "Can we keep this brief before my next patient?";
     }
     if (pressures.includes("operationally_constrained")) {
-      return "Keep it practical for the office.";
+      return "Can we keep this practical for the office?";
     }
     return "What's this about for my patients?";
   }
@@ -2343,7 +2370,7 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     if (clinicalValueStage) {
       return clinicalValueEvidenceAsk();
     }
-    return "What in that study do you think should change a real treatment decision for me?";
+    return "Can we talk through what the study may change for patients like mine?";
   }
   if (topic === "access" || accessTagged) {
     return "What changes in the access step or for my staff if this actually matters?";
@@ -2358,9 +2385,9 @@ function deriveFirstTurnPracticalAsk(topic: FirstTurnRepTopic, scenario: any): s
     return "Which patient subgroup are you actually trying to change care for?";
   }
   if (topic === "evidence") {
-    return "What do you think the evidence changes for how I treat patients?";
+    return "Can we connect the evidence to how I treat patients here?";
   }
-  return "What do you think this changes for me or for my patients?";
+  return "Can we connect this to my patients or my practice?";
 }
 
 function selectNonRepeatingFallbackVariant({
@@ -2581,14 +2608,14 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
     return selectNonRepeatingFallbackVariant({
       variants: timeConstrained
         ? [
-          "If it is a new study, give me the patient decision it changes before my next room.",
-          "Tie the study to one patient decision before my next room.",
-          "Give me the data point and the patient decision it changes.",
+          "I'm between patients, but we can talk briefly. Can you connect the study to one patient decision?",
+          "I have a minute. Can we start with which patient decision the study affects?",
+          "I can look at the study briefly. Which patient decision are you connecting it to?",
         ]
         : [
-          "Tie the study to one patient decision I should handle differently.",
-          "What patient decision does the study change?",
-          "Give me the data point that changes how I treat a patient.",
+          "Can we connect the study to a patient decision I would make here?",
+          "What patient decision are you hoping this study informs?",
+          "Help me understand which patient decision this study is meant to affect.",
         ],
       transcript,
       seed: `${seed}|study`,
@@ -2599,12 +2626,12 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
     return selectNonRepeatingFallbackVariant({
       variants: timeConstrained
         ? [
-          "Give me the evidence point that changes a patient decision before my next room.",
-          "What proof changes what I do for a patient before my next room?",
+          "Can we connect the evidence to a patient decision before my next room?",
+          "What proof would affect what I do for a patient before my next room?",
         ]
         : [
-          "What evidence point changes a real patient decision?",
-          "Show me the proof that changes how I treat a patient.",
+          "What evidence would affect a real patient decision?",
+          "Can you show me how the proof connects to treating a patient?",
         ],
       transcript,
       seed: `${seed}|evidence`,
@@ -2613,20 +2640,20 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
 
   const variants = operational
     ? [
-      "I have a few minutes. Give me the short version: what does my staff have to do differently?",
-      "Keep it quick. What changes for the office before this is worth a real conversation?",
-      "I'm between patients. What is the practical reason my staff should pay attention?",
+      "I have a few minutes. Can we start with how this would affect the office?",
+      "I'm between patients, so let's keep it practical. What would change for the team?",
+      "I can talk briefly. How would this fit into the way we work now?",
     ]
     : skeptical
       ? [
-        "I have a few minutes. What changes for my patients if I give this time?",
-        "Be concrete. What changes for the patients I actually see?",
-        "Give me the short version. What patient decision changes first?",
+        "I have a few minutes. Can you connect this to the patients I actually see?",
+        "I can talk briefly. What patient need are you trying to address?",
+        "Let's start with the patient decision this would affect.",
       ]
       : [
-        "I have a few minutes. What's this about for my patients?",
-        "Give me the short version. What are you trying to understand today?",
-        "I can listen briefly. What is the practical reason for the conversation?",
+        "I have a few minutes. What are you hoping to talk through for my patients?",
+        "I can listen briefly. What are you trying to understand today?",
+        "Sure, briefly. How can I help with this conversation?",
       ];
 
   const focusedVariants = repFocus
@@ -2701,7 +2728,7 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
 
   if (isInitialAccessStage(scenario) && topic === "general") {
     if (greetingOnly) {
-      return "I have a few minutes. What are you asking me to consider?";
+      return "I'm doing alright. I have a minute, so what are you hoping to talk through?";
     }
     return withFirstTurnRepAcknowledgement(
       buildInitialAccessAlignedReply(repMessage, scenario),
@@ -2918,13 +2945,13 @@ function buildDeterministicHcpFallbackReply({
   }
 
   if (concernTags.includes("workflow")) {
-    return "Keep this practical for the office. What staff step actually gets easier first?";
+    return "Can we keep this practical for the office? What would change for the team first?";
   }
   if (concernTags.includes("access")) {
-    return "Be specific about access. What changes in the approval path for my staff first?";
+    return "Can we start with access? What would change in the approval path for my staff?";
   }
   if (concernTags.includes("cost_value")) {
-    return "Keep this on value. What outcome justifies the full cost per patient?";
+    return "Can we keep this on value? What outcome would justify the full cost per patient?";
   }
   if (concernTags.includes("patient_fit") || concernTags.includes("guideline")) {
     return "Which patients does that actually change for in practice?";
@@ -2933,14 +2960,14 @@ function buildDeterministicHcpFallbackReply({
     return "What lowers the risk enough to change treatment for the patients I actually manage?";
   }
   if (prediction?.concernFamily === "evidence" || concernTags.includes("evidence")) {
-    return "Keep this on the evidence. What proof changes the treatment decision for a real patient?";
+    return "Can we keep this on the evidence? What proof would affect a real treatment decision?";
   }
 
   if (currentBehaviorState === "closed" || currentBehaviorState === "resistance") {
-    return "I can listen, but keep it specific: which patients in my clinic actually change, and what outcome changes first?";
+    return "I can listen briefly. Which patients in my clinic are you trying to affect, and what outcome would change?";
   }
 
-  return "Be specific for my practice. Which patient changes first, and why?";
+  return "Can you make this specific to my practice? Which patient would this affect first?";
 }
 
 function enforceFirstTurnRepAdaptation({
@@ -3613,9 +3640,15 @@ SPOKEN REALISM GUARDRAILS:
 - Under pressure, the HCP should be professionally guarded, concise, and specific, not hostile or contemptuous
 - The HCP should sound clinically grounded, not theatrically hostile and not socially casual
 - Keep the line rooted in what this HCP would realistically say in this scenario
+- The HCP should acknowledge the rep's actual wording before pivoting back to the clinical, operational, or access concern
+- At realism 5/10, default to neutral, cordial, and slightly engaged. Do not make the HCP resistant, hostile, or dismissive unless the scenario state explicitly requires it.
 
 GOOD STYLE EXAMPLES:
 - "I have limited time, so keep this focused."
+- "I'm doing alright. What are you hoping to cover?"
+- "I hear you. Help me connect that to the patient decision."
+- "I have a minute. Can we start with how this affects patients like mine?"
+- "That could be useful. Can you connect it to the decision I would make here?"
 - "This data doesn't capture what I actually see."
 - "My staff is already buried in prior auths."
 - "If that's the subgroup you're talking about, that's not who I'm worried about."
@@ -3626,6 +3659,7 @@ BAD STYLE EXAMPLES:
 - generic chatbot empathy
 - casual/social phrasing that ignores clinical pressure
 - abstract workload language with no concrete task reality
+- interrogative or combative phrasing such as "why should I change?", "prove it", "give me one concrete point", or repeated "what changes?" as the default opening
 
 INSTRUCTIONS:
 1. Reflect the predicted HCP state — your tone and body language MUST align with predictedBehaviorState and predicted engagement
@@ -3641,7 +3675,7 @@ INSTRUCTIONS:
 11. The HCP must stay inside the opening-scene reality unless the rep has plausibly changed the tone through the exchange
 12. Cue, dialogue, and emotional tone must align on the same turn
 13. Never let a pressured or guarded HCP suddenly sound casual, socially loose, or unconstrained
-14. In time-pressured or operationally constrained scenarios, brevity and directness matter more than polish
+14. In time-pressured or operationally constrained scenarios, be concise and direct while preserving proper grammar and punctuation
 15. Keep the HCP reply to 1-2 sentences maximum
 16. If pressure is high, target under ${Math.min(30, turnDirectives.targetWordBudget)} spoken words
 17. If pressure is moderate or low, target under ${Math.max(32, turnDirectives.targetWordBudget)} spoken words
@@ -3658,12 +3692,16 @@ INSTRUCTIONS:
 28. Do not end an HCP line on an incomplete ask such as "reduce?", "change?", "help with?", or any question missing what is actually being asked about.
 29. Avoid comma splices in HCP dialogue. If there are two complete thoughts, split them into separate sentences with proper punctuation.
 30. In operational or access questions, explicitly name the object of the ask such as the queue, the prior auth step, the approval path, the callback burden, the monitoring step, or the staff task.
-31. Obey the TURN-LEVEL HCP CONSTRAINTS exactly. Do not output blocked intents.
-32. If blocked intent includes Advance, avoid agreement language and avoid commitment-forward phrases.
-33. If engagement is Selectively Engaged, keep the response conditional/probing and do not leap to full cooperation.
-34. The Predictive HCP Brain authors the HCP line. Routing, pressure, temperature, and continuity rules are validators and intensity controls, not canned copy sources.
-35. If the REP repeats, evades, or stays generic, progress the HCP stance using escalation memory: restate in new words, sharpen, reveal the deeper barrier, or disengage. Do not concatenate prior HCP phrasing.
-36. Never use these global stock phrases in final HCP dialogue: "What's concretely different for me after this?", "The practical answer has to stay tied...", "I hear that a lot", "Keep this brief", "I'm not convinced yet", or "What changes in practice if this is worth continuing?"
+31. If the rep opens with a greeting, courtesy, or off-topic social phrase, briefly acknowledge it in the HCP's own tone, then pivot back to the scenario-relevant ask. Do not ignore the rep's greeting.
+32. If the rep goes off topic, acknowledge the move once and redirect to the current HCP concern rather than repeating the blocker verbatim.
+33. Use human bridge phrases when connecting context to a question: "can we talk through that?", "help me connect that to...", "what would that change for...". Avoid adversarial frames such as "what makes you think..." unless the scenario explicitly calls for confrontation.
+34. Obey the TURN-LEVEL HCP CONSTRAINTS exactly. Do not output blocked intents.
+35. If blocked intent includes Advance, avoid agreement language and avoid commitment-forward phrases.
+36. If engagement is Selectively Engaged, keep the response conditional/probing and do not leap to full cooperation.
+37. The Predictive HCP Brain authors the HCP line. Routing, pressure, temperature, and continuity rules are validators and intensity controls, not canned copy sources.
+38. If the REP repeats, evades, or stays generic, progress the HCP stance using escalation memory: restate in new words, sharpen, reveal the deeper barrier, or disengage. Do not concatenate prior HCP phrasing.
+39. Never use these global stock phrases in final HCP dialogue: "What's concretely different for me after this?", "The practical answer has to stay tied...", "I hear that a lot", "Keep this brief", "I'm not convinced yet", or "What changes in practice if this is worth continuing?"
+40. Do not default to workflow/change-burden language. Only ask about workflow, staff steps, "one concrete point", or "why should I change" when the scenario or rep turn explicitly raises that issue.
 
 ${coachingEnabled ? `COACHING NUDGE:
 Evaluate the rep's turn against the 8 capabilities above.
@@ -3821,6 +3859,7 @@ Return ONLY valid JSON:
     hcpTurnCount,
     liveRepAlignmentActive: false,
   });
+  hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
 
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
@@ -3843,6 +3882,7 @@ Return ONLY valid JSON:
         hcpTurnCount,
         liveRepAlignmentActive: false,
       });
+      hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
         } catch {
       continuityAdjusted = true;
     }
@@ -3877,6 +3917,7 @@ Return ONLY valid JSON:
       hcpTurnCount,
       liveRepAlignmentActive: false,
     });
+    hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
   }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
