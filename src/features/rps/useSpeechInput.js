@@ -9,7 +9,11 @@ const SpeechRecognitionCtor =
 export function useSpeechInput() {
     const recognitionRef = useRef(null);
     const startTimeRef = useRef(0);
+    const activeStartedAtRef = useRef(0);
+    const accumulatedMsRef = useRef(0);
+    const baseTranscriptRef = useRef("");
     const chunkCountRef = useRef(0);
+    const pauseCountRef = useRef(0);
     const [isSupported] = useState(Boolean(SpeechRecognitionCtor));
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState("");
@@ -25,8 +29,9 @@ export function useSpeechInput() {
 
         recognition.onstart = () => {
             setIsListening(true);
-            startTimeRef.current = Date.now();
-            chunkCountRef.current = 0;
+            const now = Date.now();
+            if (!startTimeRef.current) startTimeRef.current = now;
+            activeStartedAtRef.current = now;
             setError("");
         };
 
@@ -37,7 +42,8 @@ export function useSpeechInput() {
                 finalText += result[0]?.transcript || "";
             }
             chunkCountRef.current += 1;
-            setTranscript(finalText.trim());
+            const combined = `${baseTranscriptRef.current} ${finalText}`.replace(/\s+/g, " ").trim();
+            setTranscript(combined);
         };
 
         recognition.onerror = (evt) => {
@@ -46,6 +52,10 @@ export function useSpeechInput() {
         };
 
         recognition.onend = () => {
+            if (activeStartedAtRef.current) {
+                accumulatedMsRef.current += Date.now() - activeStartedAtRef.current;
+                activeStartedAtRef.current = 0;
+            }
             setIsListening(false);
         };
 
@@ -57,10 +67,36 @@ export function useSpeechInput() {
         };
     }, []);
 
-    const start = useCallback(() => {
+    const start = useCallback((options = {}) => {
         if (!recognitionRef.current) return;
-        setTranscript("");
-        recognitionRef.current.start();
+        const preserveTranscript = Boolean(options.preserveTranscript);
+        if (!preserveTranscript) {
+            setTranscript("");
+            baseTranscriptRef.current = "";
+            accumulatedMsRef.current = 0;
+            startTimeRef.current = 0;
+            chunkCountRef.current = 0;
+            pauseCountRef.current = 0;
+        } else {
+            baseTranscriptRef.current = transcript.trim();
+        }
+        try {
+            recognitionRef.current.start();
+        } catch (err) {
+            if (err?.name !== "InvalidStateError") {
+                setError(err?.message || "speech_start_error");
+            }
+        }
+    }, [transcript]);
+
+    const resume = useCallback(() => {
+        start({ preserveTranscript: true });
+    }, [start]);
+
+    const pause = useCallback(() => {
+        if (!recognitionRef.current) return;
+        pauseCountRef.current += 1;
+        recognitionRef.current.stop();
     }, []);
 
     const stop = useCallback(() => {
@@ -71,22 +107,28 @@ export function useSpeechInput() {
         setTranscript("");
         setError("");
         startTimeRef.current = 0;
+        activeStartedAtRef.current = 0;
+        accumulatedMsRef.current = 0;
+        baseTranscriptRef.current = "";
         chunkCountRef.current = 0;
+        pauseCountRef.current = 0;
     }, []);
 
     const voiceMetadata = useMemo(() => {
-        const durationSec = Math.max(1, (Date.now() - (startTimeRef.current || Date.now())) / 1000);
+        const activeMs = activeStartedAtRef.current ? Date.now() - activeStartedAtRef.current : 0;
+        const durationSec = Math.max(1, (accumulatedMsRef.current + activeMs) / 1000);
         const words = transcript ? transcript.split(/\s+/).filter(Boolean) : [];
-        const fillerWords = words.filter((word) => /^(um+|uh+|like|you\s*know)$/i.test(word)).length;
+        const fillerWordMatches = transcript.match(/\b(um+|uh+|like|you know|sort of|kind of)\b/gi) || [];
         const questionCount = (transcript.match(/\?/g) || []).length;
 
         return {
             response_duration_seconds: Number(durationSec.toFixed(2)),
             words_per_minute: Number(((words.length / durationSec) * 60).toFixed(1)),
-            pause_count: chunkCountRef.current,
-            avg_pause_duration_ms: chunkCountRef.current > 0 ? Math.round((durationSec * 1000) / chunkCountRef.current) : 0,
-            filler_word_count: fillerWords,
-            filler_word_rate: words.length ? Number((fillerWords / words.length).toFixed(3)) : 0,
+            pause_count: pauseCountRef.current,
+            recognition_chunk_count: chunkCountRef.current,
+            avg_pause_duration_ms: pauseCountRef.current > 0 ? Math.round((durationSec * 1000) / Math.max(1, pauseCountRef.current + 1)) : 0,
+            filler_word_count: fillerWordMatches.length,
+            filler_word_rate: words.length ? Number((fillerWordMatches.length / words.length).toFixed(3)) : 0,
             question_count: questionCount,
             speech_confidence_score: transcript ? 0.78 : 0.5,
         };
@@ -99,6 +141,8 @@ export function useSpeechInput() {
         error,
         voiceMetadata,
         start,
+        pause,
+        resume,
         stop,
         reset,
         setTranscript,

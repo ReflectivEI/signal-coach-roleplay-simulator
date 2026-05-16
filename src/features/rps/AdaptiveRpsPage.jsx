@@ -30,10 +30,27 @@ const defaults = {
 /** @param {{ title: string; children: import("react").ReactNode }} props */
 function DashboardCard({ title, children }) {
     return (
-        <section className="si-dark-panel rounded-2xl p-4">
-            <h3 className="si-dark-title mb-3 text-sm font-semibold uppercase tracking-wide">{title}</h3>
+        <section className="si-dark-panel rounded-[24px] p-5">
+            <h3 className="si-dark-title mb-4 text-sm font-semibold uppercase tracking-[0.14em]">{title}</h3>
             {children}
         </section>
+    );
+}
+
+/** @param {{ label: string; children: import("react").ReactNode; tone?: "default" | "teal" }} props */
+function InfoPanel({ label, children, tone = "default" }) {
+    return (
+        <div
+            className="rounded-xl p-3 text-sm"
+            style={{
+                background: tone === "teal" ? "rgba(37,124,123,0.08)" : "rgba(20,56,89,0.05)",
+                border: tone === "teal" ? "1px solid rgba(37,124,123,0.22)" : "1px solid rgba(92,135,165,0.26)",
+                color: "hsl(222 38% 20%)",
+            }}
+        >
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>{label}</p>
+            {children}
+        </div>
     );
 }
 
@@ -273,12 +290,19 @@ export default function AdaptiveRpsPage() {
             <div className="mx-auto max-w-6xl space-y-4">
                 <AppHeader maxWidthClassName="max-w-6xl" />
 
-                <header className="si-dark-panel rounded-2xl bg-gradient-to-r from-slate-950/95 via-blue-950/90 to-teal-950/90 p-5">
+                <header
+                    className="rounded-[24px] p-6"
+                    style={{
+                        background: "linear-gradient(135deg, hsl(222 52% 17%) 0%, hsl(174 28% 16%) 60%, hsl(174 35% 19%) 100%)",
+                        border: "1px solid hsl(174 60% 52% / 0.3)",
+                        boxShadow: "0 18px 40px rgba(14, 24, 43, 0.10)",
+                    }}
+                >
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <p className="text-xs uppercase tracking-[0.2em] text-teal-200">Adaptive Behavioral Intelligence Engine</p>
-                            <h1 className="text-2xl font-semibold">Real-Time HCP Interaction Lab</h1>
-                            <p className="si-dark-label mt-1 text-sm">Evaluates what the REP said, how they said it, and whether the interaction advanced.</p>
+                            <h1 className="text-2xl font-semibold text-slate-50">Real-Time HCP Interaction Lab</h1>
+                            <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-700">Evaluates what the REP said, how they said it, and whether the interaction advanced.</p>
                         </div>
                     </div>
                 </header>
@@ -344,7 +368,7 @@ export default function AdaptiveRpsPage() {
                             />
                         </div>
 
-                        <p className="mt-4 text-xs text-slate-400">
+                        <p className="mt-4 text-xs text-slate-500">
                             Hidden fields are derived automatically from these four controls before the worker payload is built.
                         </p>
 
@@ -361,22 +385,22 @@ export default function AdaptiveRpsPage() {
 
                     <DashboardCard title="HCP Interaction Panel">
                         <p className="si-dark-muted text-xs uppercase tracking-wide">Opening scene</p>
-                        <p className="si-dark-field mt-1 rounded-lg p-3 text-sm">
+                        <p className="si-dark-field mt-1 rounded-xl p-3 text-sm">
                             {scenario?.opening_scene || "Generate a scenario to begin."}
                         </p>
 
                         <p className="si-dark-muted mt-3 text-xs uppercase tracking-wide">HCP statement or question</p>
-                        <p className="mt-1 rounded-lg border border-cyan-300/50 bg-cyan-400/18 p-3 text-sm text-cyan-50">
+                        <p className="mt-1 rounded-xl p-3 text-sm" style={{ background: "rgba(37,124,123,0.08)", border: "1px solid rgba(37,124,123,0.22)", color: "hsl(222 38% 20%)" }}>
                             {scenario?.hcp_statement_or_question || "No prompt yet."}
                         </p>
 
                         <p className="si-dark-muted mt-3 text-xs uppercase tracking-wide">REP-only cue / signal</p>
-                        <p className="mt-1 rounded-lg border border-amber-300/50 bg-amber-400/18 p-3 text-sm text-amber-50">
+                        <p className="mt-1 rounded-xl p-3 text-sm" style={{ background: "rgba(20,56,89,0.05)", border: "1px solid rgba(92,135,165,0.26)", color: "hsl(222 38% 20%)" }}>
                             {scenario?.cue_signal || "No cue signal yet."}
                         </p>
 
-                        <div className="mt-3 rounded-lg border border-violet-300/45 bg-violet-500/16 p-3 text-sm text-violet-50">
-                            <p className="text-xs uppercase tracking-wide text-violet-100">Powered by Predictive HCP Brain</p>
+                        <div className="mt-3 rounded-xl p-3 text-sm" style={{ background: "rgba(20,56,89,0.06)", border: "1px solid rgba(92,135,165,0.28)", color: "hsl(222 38% 20%)" }}>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Powered by Predictive HCP Brain</p>
                             <p className="mt-1"><span className="font-semibold">Archetype:</span> {scenario?.hcp_brain_summary?.archetype || "Not generated"}</p>
                             <p><span className="font-semibold">Quality Test:</span> {scenario?.hcp_brain_summary?.quality_test_question || "Not generated"}</p>
                             <p><span className="font-semibold">Primary Trust Breaker:</span> {scenario?.hcp_brain_summary?.primary_trust_breaker || "Not generated"}</p>
@@ -393,7 +417,8 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={speech.start}
                                 disabled={!speech.isSupported || busy || speech.isListening}
-                                className="inline-flex items-center gap-2 rounded-lg border border-teal-300/60 bg-teal-400/24 px-3 py-2 text-sm text-teal-50 hover:bg-teal-400/32 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                                style={{ background: "rgba(37,124,123,0.10)", borderColor: "rgba(37,124,123,0.24)", color: "hsl(180 45% 28%)" }}
                             >
                                 <Mic className="h-4 w-4" />
                                 Start Mic
@@ -402,7 +427,8 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={speech.stop}
                                 disabled={!speech.isSupported || !speech.isListening}
-                                className="inline-flex items-center gap-2 rounded-lg border border-rose-300/60 bg-rose-400/24 px-3 py-2 text-sm text-rose-50 hover:bg-rose-400/32 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"
+                                style={{ background: "rgba(20,56,89,0.06)", borderColor: "rgba(92,135,165,0.30)", color: "hsl(222 48% 22%)" }}
                             >
                                 <MicOff className="h-4 w-4" />
                                 Stop Mic
@@ -410,9 +436,9 @@ export default function AdaptiveRpsPage() {
                         </div>
 
                         {speech.isListening && speech.transcript && (
-                            <div className="mt-3 rounded-lg border border-teal-400/50 bg-teal-500/10 p-3">
-                                <p className="text-xs uppercase tracking-wide text-teal-100 mb-2">Live Voice Input</p>
-                                <p className="text-sm text-teal-50 break-words">{speech.transcript}</p>
+                            <div className="mt-3 rounded-xl p-3" style={{ background: "rgba(37,124,123,0.08)", border: "1px solid rgba(37,124,123,0.22)" }}>
+                                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "hsl(206 39% 30%)" }}>Live Voice Input</p>
+                                <p className="text-sm text-teal-800 break-words">{speech.transcript}</p>
                             </div>
                         )}
 
@@ -431,7 +457,8 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={handleEvaluate}
                                 disabled={busy}
-                                className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-400 disabled:opacity-60"
+                                className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                style={{ background: "hsl(222 52% 24%)" }}
                             >
                                 Evaluate REP Response
                             </button>
@@ -439,7 +466,8 @@ export default function AdaptiveRpsPage() {
                                 type="button"
                                 onClick={handleSave}
                                 disabled={busy || !evaluation}
-                                className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                style={{ background: "hsl(174 45% 34%)" }}
                             >
                                 <Save className="h-4 w-4" />
                                 Save Session
@@ -452,71 +480,71 @@ export default function AdaptiveRpsPage() {
                             <p className="si-dark-label text-sm">Run an evaluation to see capability-state diagnosis, interaction consequence, and coaching direction.</p>
                         ) : (
                             <div className="space-y-3 text-sm">
-                                <div className="rounded-lg border border-teal-300/40 bg-teal-500/16 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-100">Primary Failure Driver</p>
-                                    <p className="font-semibold text-slate-100">{primaryFailureDriver}</p>
-                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Capability State</p>
-                                    <p className="font-semibold text-slate-100">{primaryCapabilityState}</p>
-                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Behavioral Diagnosis</p>
-                                    <p className="text-slate-100">{behavioralDiagnosis}</p>
-                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Interaction Consequence</p>
-                                    <p className="text-slate-100">{interactionConsequence}</p>
-                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-100">Coaching Direction</p>
-                                    <p className="text-slate-100">{coachingDirection}</p>
+                                <div className="rounded-lg border border-teal-200 bg-teal-50/80 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-700">Primary Failure Driver</p>
+                                    <p className="font-semibold text-slate-800">{primaryFailureDriver}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-700">Capability State</p>
+                                    <p className="font-semibold text-slate-800">{primaryCapabilityState}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-700">Behavioral Diagnosis</p>
+                                    <p className="text-slate-800">{behavioralDiagnosis}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-700">Interaction Consequence</p>
+                                    <p className="text-slate-800">{interactionConsequence}</p>
+                                    <p className="mt-2 text-xs uppercase tracking-wide text-teal-700">Coaching Direction</p>
+                                    <p className="text-slate-800">{coachingDirection}</p>
                                 </div>
                                 <div className="si-dark-field rounded-lg p-3">
                                     <p className="si-dark-muted mb-2 text-xs uppercase tracking-wide">Capability Diagnosis (8)</p>
                                     <div className="space-y-1.5">
                                         {metricRows.map((row) => (
-                                            <div key={row.key} className="rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2">
+                                            <div key={row.key} className="rounded-lg border border-slate-200 bg-white/70 px-3 py-2">
                                                 <p>
-                                                    <span className="font-semibold text-slate-100">{row.label} — {row.state}</span>
+                                                    <span className="font-semibold text-slate-800">{row.label} — {row.state}</span>
                                                 </p>
-                                                {row.rationale ? <p className="mt-1 text-slate-300">{row.rationale}</p> : null}
-                                                <p className="mt-1 text-xs text-slate-400">{describeCapabilityConsequence(row.state)}</p>
+                                                {row.rationale ? <p className="mt-1 text-slate-600">{row.rationale}</p> : null}
+                                                <p className="mt-1 text-xs text-slate-500">{describeCapabilityConsequence(row.state)}</p>
                                             </div>
                                         ))}
                                     </div>
                                 </div>
-                                <div className="rounded-lg border border-white/10 bg-slate-950/35 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-400">Outcome Read</p>
-                                    <p><span className="font-semibold text-slate-200">Actual Outcome:</span> {evaluation.outcome_analysis?.actual_outcome || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Conversation Advanced:</span> {evaluation.outcome_analysis?.conversation_advanced ? "Yes" : "No"}</p>
-                                    <p><span className="font-semibold text-slate-200">Progression Rationale:</span> {evaluation.outcome_analysis?.progression_rationale || evaluation.outcome_analysis?.outcome_rationale || "Not available."}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/70 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-500">Outcome Read</p>
+                                    <p><span className="font-semibold text-slate-700">Actual Outcome:</span> {evaluation.outcome_analysis?.actual_outcome || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Conversation Advanced:</span> {evaluation.outcome_analysis?.conversation_advanced ? "Yes" : "No"}</p>
+                                    <p><span className="font-semibold text-slate-700">Progression Rationale:</span> {evaluation.outcome_analysis?.progression_rationale || evaluation.outcome_analysis?.outcome_rationale || "Not available."}</p>
                                 </div>
-                                <p><span className="font-semibold text-slate-200">Strengths:</span> {evaluation.observed_strengths?.join(" | ") || "None"}</p>
-                                <p><span className="font-semibold text-slate-200">Missed Cues:</span> {evaluation.missed_cues?.join(" | ") || "None"}</p>
-                                <p><span className="font-semibold text-slate-200">Delivery Issues:</span> {evaluation.delivery_issues?.join(" | ") || "None"}</p>
-                                <div className="rounded-lg border border-teal-300/40 bg-teal-500/16 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-100">Delivery Impact on HCP</p>
-                                    <p><span className="font-semibold text-slate-200">Perceived Listening:</span> {evaluation.voice_behavior_adaptation?.perceived_listening_signal || "unknown"}</p>
-                                    <p><span className="font-semibold text-slate-200">Likely HCP Reaction:</span> {evaluation.delivery_impact_on_hcp?.likely_hcp_reaction || evaluation.voice_behavior_adaptation?.hcp_reaction_modifier || "hold"}</p>
-                                    <p><span className="font-semibold text-slate-200">Interaction Pressure Effect:</span> {`${describeDelta(evaluation.voice_behavior_adaptation?.resistance_delta, "Resistance increased.", "Resistance eased.", "Resistance held steady.")} ${describeDelta(evaluation.voice_behavior_adaptation?.trust_delta, "Trust improved.", "Trust dropped.", "Trust held steady.")}`}</p>
-                                    <p><span className="font-semibold text-slate-200">Delivery Tip:</span> {evaluation.delivery_coaching?.recommended_delivery_adjustment || "Acknowledge, pause, and ask one diagnostic question."}</p>
+                                <p><span className="font-semibold text-slate-700">Strengths:</span> {evaluation.observed_strengths?.join(" | ") || "None"}</p>
+                                <p><span className="font-semibold text-slate-700">Missed Cues:</span> {evaluation.missed_cues?.join(" | ") || "None"}</p>
+                                <p><span className="font-semibold text-slate-700">Delivery Issues:</span> {evaluation.delivery_issues?.join(" | ") || "None"}</p>
+                                <div className="rounded-lg border border-teal-200 bg-teal-50/80 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-teal-700">Delivery Impact on HCP</p>
+                                    <p><span className="font-semibold text-slate-700">Perceived Listening:</span> {evaluation.voice_behavior_adaptation?.perceived_listening_signal || "unknown"}</p>
+                                    <p><span className="font-semibold text-slate-700">Likely HCP Reaction:</span> {evaluation.delivery_impact_on_hcp?.likely_hcp_reaction || evaluation.voice_behavior_adaptation?.hcp_reaction_modifier || "hold"}</p>
+                                    <p><span className="font-semibold text-slate-700">Interaction Pressure Effect:</span> {`${describeDelta(evaluation.voice_behavior_adaptation?.resistance_delta, "Resistance increased.", "Resistance eased.", "Resistance held steady.")} ${describeDelta(evaluation.voice_behavior_adaptation?.trust_delta, "Trust improved.", "Trust dropped.", "Trust held steady.")}`}</p>
+                                    <p><span className="font-semibold text-slate-700">Delivery Tip:</span> {evaluation.delivery_coaching?.recommended_delivery_adjustment || "Acknowledge, pause, and ask one diagnostic question."}</p>
                                 </div>
-                                <div className="rounded-lg border border-violet-300/40 bg-violet-500/16 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-violet-100">HCP Brain Alignment</p>
-                                    <p><span className="font-semibold text-slate-200">Quality Test Satisfied:</span> {evaluation.hcp_brain_alignment?.quality_test_satisfied ? "Yes" : "No"}</p>
-                                    <p><span className="font-semibold text-slate-200">Credibility Drivers:</span> {(evaluation.hcp_brain_alignment?.credibility_drivers_demonstrated || []).join(" | ") || "None"}</p>
-                                    <p><span className="font-semibold text-slate-200">Trust Breakers Triggered:</span> {(evaluation.hcp_brain_alignment?.trust_breakers_triggered || []).join(" | ") || "None"}</p>
-                                    <p><span className="font-semibold text-slate-200">Likely Objections Addressed:</span> {evaluation.hcp_brain_alignment?.likely_objections_addressed ? "Yes" : "No"}</p>
-                                    <p><span className="font-semibold text-slate-200">Recommended Approach Used:</span> {evaluation.hcp_brain_alignment?.recommended_rep_approach_used ? "Yes" : "No"}</p>
-                                    <p><span className="font-semibold text-slate-200">Alignment Rationale:</span> {evaluation.hcp_brain_alignment?.alignment_rationale || "No rationale available."}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">HCP Brain Alignment</p>
+                                    <p><span className="font-semibold text-slate-700">Quality Test Satisfied:</span> {evaluation.hcp_brain_alignment?.quality_test_satisfied ? "Yes" : "No"}</p>
+                                    <p><span className="font-semibold text-slate-700">Credibility Drivers:</span> {(evaluation.hcp_brain_alignment?.credibility_drivers_demonstrated || []).join(" | ") || "None"}</p>
+                                    <p><span className="font-semibold text-slate-700">Trust Breakers Triggered:</span> {(evaluation.hcp_brain_alignment?.trust_breakers_triggered || []).join(" | ") || "None"}</p>
+                                    <p><span className="font-semibold text-slate-700">Likely Objections Addressed:</span> {evaluation.hcp_brain_alignment?.likely_objections_addressed ? "Yes" : "No"}</p>
+                                    <p><span className="font-semibold text-slate-700">Recommended Approach Used:</span> {evaluation.hcp_brain_alignment?.recommended_rep_approach_used ? "Yes" : "No"}</p>
+                                    <p><span className="font-semibold text-slate-700">Alignment Rationale:</span> {evaluation.hcp_brain_alignment?.alignment_rationale || "No rationale available."}</p>
                                 </div>
-                                <div className="rounded-lg border border-emerald-300/40 bg-emerald-500/16 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-emerald-100">HCP Brain Coaching</p>
-                                    <p><span className="font-semibold text-slate-200">Quality Test Feedback:</span> {evaluation.hcp_brain_coaching?.quality_test_feedback || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Credibility Feedback:</span> {evaluation.hcp_brain_coaching?.credibility_driver_feedback || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Trust Breaker Feedback:</span> {evaluation.hcp_brain_coaching?.trust_breaker_feedback || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Objection Alignment Feedback:</span> {evaluation.hcp_brain_coaching?.objection_alignment_feedback || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Recommended Rep Move:</span> {evaluation.hcp_brain_coaching?.recommended_rep_move_feedback || "Not available."}</p>
-                                    <p><span className="font-semibold text-slate-200">Grounded Improved Response:</span> {evaluation.hcp_brain_coaching?.improved_response_grounded_in_hcp_brain || "Not available."}</p>
+                                <div className="rounded-lg border border-teal-200 bg-white/75 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">HCP Brain Coaching</p>
+                                    <p><span className="font-semibold text-slate-700">Quality Test Feedback:</span> {evaluation.hcp_brain_coaching?.quality_test_feedback || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Credibility Feedback:</span> {evaluation.hcp_brain_coaching?.credibility_driver_feedback || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Trust Breaker Feedback:</span> {evaluation.hcp_brain_coaching?.trust_breaker_feedback || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Objection Alignment Feedback:</span> {evaluation.hcp_brain_coaching?.objection_alignment_feedback || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Recommended Rep Move:</span> {evaluation.hcp_brain_coaching?.recommended_rep_move_feedback || "Not available."}</p>
+                                    <p><span className="font-semibold text-slate-700">Grounded Improved Response:</span> {evaluation.hcp_brain_coaching?.improved_response_grounded_in_hcp_brain || "Not available."}</p>
                                 </div>
-                                <p><span className="font-semibold text-slate-200">Coaching:</span> {(evaluation.coaching_feedback || []).join(" | ")}</p>
-                                <p><span className="font-semibold text-slate-200">Better Phrasing:</span> {evaluation.better_phrasing}</p>
-                                <p><span className="font-semibold text-slate-200">Next Best Question:</span> {evaluation.next_best_question}</p>
-                                <p><span className="font-semibold text-slate-200">What HCP Likely Heard:</span> {evaluation.what_hcp_likely_heard}</p>
-                                <p><span className="font-semibold text-slate-200">Improved Response Example:</span> {evaluation.improved_response_example}</p>
+                                <p><span className="font-semibold text-slate-700">Coaching:</span> {(evaluation.coaching_feedback || []).join(" | ")}</p>
+                                <p><span className="font-semibold text-slate-700">Better Phrasing:</span> {evaluation.better_phrasing}</p>
+                                <p><span className="font-semibold text-slate-700">Next Best Question:</span> {evaluation.next_best_question}</p>
+                                <p><span className="font-semibold text-slate-700">What HCP Likely Heard:</span> {evaluation.what_hcp_likely_heard}</p>
+                                <p><span className="font-semibold text-slate-700">Improved Response Example:</span> {evaluation.improved_response_example}</p>
                             </div>
                         )}
 
@@ -528,67 +556,67 @@ export default function AdaptiveRpsPage() {
                     <DashboardCard title="HCP State Progression">
                         <div className="space-y-3 text-sm">
                             <div className="grid gap-2 sm:grid-cols-2">
-                                <div className="rounded-lg border border-white/10 bg-slate-950/60 p-3 space-y-1">
-                                    <p className="text-xs uppercase tracking-wide text-slate-400">Resistance / Trust / Openness / Patience</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3 space-y-1">
+                                    <p className="text-xs uppercase tracking-wide text-slate-500">Resistance / Trust / Openness / Patience</p>
                                     {[
-                                        { label: "Resistance", value: evaluation.hcp_state?.resistance_level, color: "bg-rose-500" },
-                                        { label: "Trust", value: evaluation.hcp_state?.trust_level, color: "bg-teal-500" },
-                                        { label: "Openness", value: evaluation.hcp_state?.openness_level, color: "bg-sky-500" },
-                                        { label: "Patience", value: evaluation.hcp_state?.patience_level, color: "bg-amber-400" },
+                                        { label: "Resistance", value: evaluation.hcp_state?.resistance_level, color: "bg-[#1c3458]" },
+                                        { label: "Trust", value: evaluation.hcp_state?.trust_level, color: "bg-[#257c7b]" },
+                                        { label: "Openness", value: evaluation.hcp_state?.openness_level, color: "bg-[#5c87a5]" },
+                                        { label: "Patience", value: evaluation.hcp_state?.patience_level, color: "bg-[#39acac]" },
                                     ].map(({ label, value, color }) => (
                                         <div key={label} className="flex items-center gap-2">
-                                            <span className="w-20 text-xs text-slate-300">{label}</span>
-                                            <div className="flex-1 rounded bg-slate-800 h-2">
+                                            <span className="w-20 text-xs text-slate-600">{label}</span>
+                                            <div className="flex-1 rounded bg-slate-200 h-2">
                                                 <div className={`h-2 rounded ${color}`} style={{ width: `${(Number(value) || 0) * 10}%` }} />
                                             </div>
-                                            <span className="w-16 text-right text-xs font-semibold text-slate-300">{describeLevel(value)}</span>
+                                            <span className="w-16 text-right text-xs font-semibold text-slate-600">{describeLevel(value)}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="rounded-lg border border-white/10 bg-slate-950/60 p-3 space-y-1">
-                                    <p className="text-xs uppercase tracking-wide text-slate-400">Conversation State</p>
-                                    <p><span className="font-semibold text-slate-200">Stage:</span> {evaluation.hcp_state?.conversation_stage?.replace(/_/g, " ") || "—"}</p>
-                                    <p><span className="font-semibold text-slate-200">Position:</span> {evaluation.hcp_state?.hcp_position?.replace(/_/g, " ") || "—"}</p>
-                                    <p><span className="font-semibold text-slate-200">Rep Quality Read:</span> {evaluation.hcp_state?.last_rep_quality || "—"}</p>
-                                    <p><span className="font-semibold text-slate-200">Response Type:</span> {evaluation.hcp_response_type?.replace(/_/g, " ") || "—"}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3 space-y-1">
+                                    <p className="text-xs uppercase tracking-wide text-slate-500">Conversation State</p>
+                                    <p><span className="font-semibold text-slate-700">Stage:</span> {evaluation.hcp_state?.conversation_stage?.replace(/_/g, " ") || "—"}</p>
+                                    <p><span className="font-semibold text-slate-700">Position:</span> {evaluation.hcp_state?.hcp_position?.replace(/_/g, " ") || "—"}</p>
+                                    <p><span className="font-semibold text-slate-700">Rep Quality Read:</span> {evaluation.hcp_state?.last_rep_quality || "—"}</p>
+                                    <p><span className="font-semibold text-slate-700">Response Type:</span> {evaluation.hcp_response_type?.replace(/_/g, " ") || "—"}</p>
                                 </div>
                             </div>
                             {evaluation.hcp_state_delta && (
-                                <div className="rounded-lg border border-indigo-400/25 bg-indigo-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-indigo-200">State Delta (this turn)</p>
-                                    <p><span className="font-semibold text-slate-200">Resistance:</span> {describeDelta(evaluation.hcp_state_delta.resistance_change, "increased", "eased", "held steady")}</p>
-                                    <p><span className="font-semibold text-slate-200">Trust:</span> {describeDelta(evaluation.hcp_state_delta.trust_change, "improved", "dropped", "held steady")}</p>
-                                    <p><span className="font-semibold text-slate-200">Stage Change:</span> {evaluation.hcp_state_delta.stage_change || "unchanged"}</p>
-                                    <p><span className="font-semibold text-slate-200">Concern Movement:</span> {evaluation.hcp_state_delta.concern_movement?.replace(/_/g, " ") || "none"}</p>
-                                    <p className="mt-1 text-slate-300">{evaluation.hcp_state_delta.reason}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">State Delta (this turn)</p>
+                                    <p><span className="font-semibold text-slate-700">Resistance:</span> {describeDelta(evaluation.hcp_state_delta.resistance_change, "increased", "eased", "held steady")}</p>
+                                    <p><span className="font-semibold text-slate-700">Trust:</span> {describeDelta(evaluation.hcp_state_delta.trust_change, "improved", "dropped", "held steady")}</p>
+                                    <p><span className="font-semibold text-slate-700">Stage Change:</span> {evaluation.hcp_state_delta.stage_change || "unchanged"}</p>
+                                    <p><span className="font-semibold text-slate-700">Concern Movement:</span> {evaluation.hcp_state_delta.concern_movement?.replace(/_/g, " ") || "none"}</p>
+                                    <p className="mt-1 text-slate-600">{evaluation.hcp_state_delta.reason}</p>
                                 </div>
                             )}
-                            <div className="rounded-lg border border-cyan-400/25 bg-cyan-500/10 p-3">
-                                <p className="mb-1 text-xs uppercase tracking-wide text-cyan-200">Simulated HCP Next Response</p>
-                                <p className="text-cyan-100">{evaluation.simulated_hcp_next_response || "—"}</p>
+                            <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-3">
+                                <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">Simulated HCP Next Response</p>
+                                <p className="text-slate-700">{evaluation.simulated_hcp_next_response || "—"}</p>
                                 {evaluation.hcp_progression_explanation && (
-                                    <p className="mt-1 text-xs text-slate-400">{evaluation.hcp_progression_explanation}</p>
+                                    <p className="mt-1 text-xs text-slate-500">{evaluation.hcp_progression_explanation}</p>
                                 )}
                             </div>
                             {evaluation.hcp_state?.unresolved_concerns?.length > 0 && (
-                                <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-rose-200">Unresolved Concerns</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">Unresolved Concerns</p>
                                     {evaluation.hcp_state.unresolved_concerns.map((/** @type {string} */ c, /** @type {number} */ i) => (
-                                        <p key={i} className="text-rose-100 text-xs">{c}</p>
+                                        <p key={i} className="text-slate-700 text-xs">{c}</p>
                                     ))}
                                 </div>
                             )}
                             {evaluation.hcp_state?.next_expected_rep_move && (
-                                <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3">
-                                    <p className="mb-1 text-xs uppercase tracking-wide text-amber-200">Next Expected REP Move</p>
-                                    <p className="text-amber-100">{evaluation.hcp_state.next_expected_rep_move}</p>
+                                <div className="rounded-lg border border-slate-200 bg-white/75 p-3">
+                                    <p className="mb-1 text-xs uppercase tracking-wide text-slate-700">Next Expected REP Move</p>
+                                    <p className="text-slate-700">{evaluation.hcp_state.next_expected_rep_move}</p>
                                 </div>
                             )}
                         </div>
                     </DashboardCard>
                 )}
 
-                {error ? <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p> : null}
+                {error ? <p className="rounded-lg border border-slate-200 bg-white/75 p-3 text-sm text-slate-700">{error}</p> : null}
             </div>
         </div>
     );

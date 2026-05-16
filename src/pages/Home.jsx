@@ -35,7 +35,6 @@ export default function Home() {
   };
 
   const filtered = applyScenarioFilters(scenarios, filters);
-  const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
   // Group scenarios by journey stage for display
   const STAGE_ORDER = ["initial_access", "discovery", "clinical_value", "objection_handling", "adoption_implementation", "access_formulary", "commitment_close"];
@@ -82,48 +81,6 @@ export default function Home() {
               <p className="text-base text-white max-w-2xl leading-snug">
                 Practice realistic HCP conversations across disease states and stakeholder types. Each scenario delivers targeted Signal Intelligence coaching feedback.
               </p>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-                      {/* Scenario builder link removed for isolation */}
-              {isLocalHost ? (
-                <Link
-                  to="/simulator"
-                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
-                  style={{
-                    background: "rgba(116, 227, 206, 0.16)",
-                    border: "1px solid rgba(116, 227, 206, 0.36)",
-                    color: "#1a3a3a",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                    fontSize: "1.1rem",
-                    letterSpacing: "0.01em",
-                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
-                    marginLeft: "0.5rem"
-                  }}
-                >
-                  ▶ Role Play Simulator
-                </Link>
-              ) : (
-                <a
-                  href="https://rps.reflectiv-ai.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl text-center font-bold text-white transition-colors"
-                  style={{
-                    background: "rgba(116, 227, 206, 0.16)",
-                    border: "1px solid rgba(116, 227, 206, 0.36)",
-                    color: "#1a3a3a",
-                    textDecoration: "none",
-                    fontWeight: 600,
-                    fontSize: "1.1rem",
-                    letterSpacing: "0.01em",
-                    boxShadow: "0 2px 8px rgba(116, 227, 206, 0.08)",
-                    marginLeft: "0.5rem"
-                  }}
-                >
-                  ▶ Role Play Simulator
-                </a>
-              )}
             </div>
           </div>
         </motion.div>

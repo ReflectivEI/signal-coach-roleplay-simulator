@@ -11,7 +11,7 @@ import MessageInput from "@/components/simulator/MessageInput";
 import SimulatorRightPanel from "@/components/simulator/SimulatorRightPanel";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
 import { motion } from "framer-motion";
-import { Square, ChevronDown } from "lucide-react";
+import { Square, ChevronDown, PanelRightClose, PanelRightOpen, BrainCircuit } from "lucide-react";
 import { BEHAVIOR_STATE_LABELS, JOURNEY_STATE_LABELS, PRESSURE_LABELS } from "@/lib/signalIntelligence";
 import { computeHcpStateHistory } from "@/lib/hcpStateEngine";
 import { predictHcpBehavior } from "@/lib/hcpBehaviorPrediction";
@@ -121,6 +121,35 @@ function temperatureTraits(temperature) {
   };
 }
 
+function analyzeVoiceDelivery(metadata = null) {
+  if (!metadata) return null;
+  const wpm = Number(metadata.words_per_minute || 0);
+  const fillerRate = Number(metadata.filler_word_rate || 0);
+  const pauses = Number(metadata.pause_count || 0);
+  const duration = Number(metadata.response_duration_seconds || 0);
+  const issues = [];
+  const strengths = [];
+
+  if (wpm > 175) issues.push("Pace may feel rushed.");
+  else if (wpm > 0 && wpm < 95) issues.push("Pace may feel overly slow.");
+  else if (wpm > 0) strengths.push("Pace stayed in a conversational range.");
+
+  if (fillerRate >= 0.08) issues.push("Filler words may weaken confidence.");
+  else if (metadata.filler_word_count > 0) strengths.push("Filler use stayed low.");
+
+  if (pauses >= 3) strengths.push("Used pauses to create space.");
+  else if (duration >= 12) issues.push("Few pauses detected for a longer response.");
+
+  const label = issues.length ? "Needs calibration" : strengths.length ? "Steady delivery" : "Captured";
+  return {
+    label,
+    metadata,
+    issues,
+    strengths,
+    coaching: issues[0] || strengths[0] || "Delivery metadata captured for this turn.",
+  };
+}
+
 function deriveHcpStateSnapshot({
   priorState,
   behaviorState,
@@ -209,7 +238,9 @@ export default function Simulator() {
   const [isReviewing, setIsReviewing] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [showMobileRail, setShowMobileRail] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [allSignals, setAllSignals] = useState([]);
+  const [latestVoiceAnalysis, setLatestVoiceAnalysis] = useState(null);
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
   const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
@@ -329,7 +360,7 @@ export default function Simulator() {
     }
   };
 
-  const handleRepMessage = useCallback(async (repText) => {
+  const handleRepMessage = useCallback(async (repText, inputMeta = {}) => {
     if (!session || !scenario || isLoading) return;
     setIsLoading(true);
     setLastNudge(null);
@@ -381,6 +412,9 @@ export default function Simulator() {
 
     setHasRepSpoken(true);
 
+    const voiceAnalysis = analyzeVoiceDelivery(inputMeta?.voiceMetadata || null);
+    setLatestVoiceAnalysis(voiceAnalysis);
+
     const repTurnObj = {
       id: createSafeId(),
       speaker: "rep",
@@ -388,6 +422,9 @@ export default function Simulator() {
       timestamp: new Date().toISOString(),
       cues: [],
       nudge: null,
+      inputMode: inputMeta?.inputMode || "typed",
+      voiceMetadata: inputMeta?.voiceMetadata || null,
+      voiceAnalysis,
     };
     setTurns((prev) => [...prev, repTurnObj]);
 
@@ -479,8 +516,14 @@ export default function Simulator() {
       });
 
       setActiveCues(response.activeCues || []);
-      setLastSignals(response.behaviorSignals || {});
-      const updatedSignals = [...allSignals, response.behaviorSignals || {}];
+      const enrichedBehaviorSignals = {
+        ...(response.behaviorSignals || {}),
+        input_mode: inputMeta?.inputMode || "typed",
+        voice_metadata: inputMeta?.voiceMetadata || null,
+        voice_delivery_analysis: voiceAnalysis,
+      };
+      setLastSignals(enrichedBehaviorSignals);
+      const updatedSignals = [...allSignals, enrichedBehaviorSignals];
       setAllSignals(updatedSignals);
 
       const updatedRepTurnIds = [...repTurnIds, repTurnObj.id];
@@ -545,7 +588,9 @@ export default function Simulator() {
             temperature,
             concernFamily: response?.prediction?.concernFamily || session?.lastConcernFamily || "",
             repMessage: repText,
-            behaviorSignals: response?.behaviorSignals || {},
+            behaviorSignals: enrichedBehaviorSignals,
+            voiceMetadata: inputMeta?.voiceMetadata || null,
+            voiceDeliveryAnalysis: voiceAnalysis,
             timestamp: new Date().toISOString(),
           },
         ].slice(-10),
@@ -875,29 +920,80 @@ export default function Simulator() {
           />
         </div>
 
-        <div
-          className="hidden lg:flex w-80 xl:w-96 flex-col overflow-y-auto rounded-[28px]"
+        <motion.aside
+          initial={false}
+          animate={{ width: rightPanelCollapsed ? 76 : 384 }}
+          transition={{ type: "spring", stiffness: 260, damping: 30 }}
+          className="hidden lg:flex relative shrink-0 flex-col overflow-hidden rounded-[28px]"
           style={{
             background: "linear-gradient(180deg, hsl(224 41% 14%) 0%, hsl(214 43% 18%) 52%, hsl(184 37% 21%) 100%)",
             border: "1px solid rgba(80, 143, 149, 0.28)",
             boxShadow: "0 18px 40px rgba(14, 24, 43, 0.14)",
           }}
         >
-          <div className="p-5 space-y-4">
-            <SimulatorRightPanel
-              hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
-              lastSignals={lastSignals}
-              focusCapabilities={scenario?.suggestedFocusCapabilities || []}
-              lastNudge={lastNudge}
-              realtimeFeedback={realtimeFeedback}
-              scenario={scenario}
-              conversationInit={conversationInit}
-              hasRepSpoken={hasRepSpoken}
-              predictiveLens={predictiveLens}
-              realism={session?.realism}
-            />
-          </div>
-        </div>
+          <button
+            type="button"
+            onClick={() => setRightPanelCollapsed((current) => !current)}
+            aria-expanded={!rightPanelCollapsed}
+            aria-label={rightPanelCollapsed ? "Expand intelligence panel" : "Collapse intelligence panel"}
+            title={rightPanelCollapsed ? "Expand panel" : "Collapse panel"}
+            className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-all duration-200 hover:-translate-y-0.5"
+            style={{
+              background: "rgba(255,255,255,0.10)",
+              borderColor: "rgba(125, 173, 190, 0.28)",
+              color: "hsl(174 60% 72%)",
+              boxShadow: "0 10px 24px rgba(0,0,0,0.16)",
+            }}
+          >
+            {rightPanelCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+          </button>
+
+          {rightPanelCollapsed ? (
+            <div className="flex h-full flex-col items-center justify-center gap-4 px-3">
+              <div
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border"
+                style={{
+                  background: "rgba(37,124,123,0.16)",
+                  borderColor: "rgba(116,227,206,0.26)",
+                  color: "hsl(174 60% 72%)",
+                }}
+              >
+                <BrainCircuit className="h-5 w-5" />
+              </div>
+              <div
+                className="rotate-180 text-[10px] font-semibold uppercase tracking-[0.26em]"
+                style={{
+                  color: "rgba(204,238,244,0.78)",
+                  writingMode: "vertical-rl",
+                }}
+              >
+                Intelligence
+              </div>
+            </div>
+          ) : (
+            <motion.div
+              key="right-panel-content"
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="h-full overflow-y-auto p-5 pt-14 space-y-4"
+            >
+              <SimulatorRightPanel
+                hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
+                lastSignals={lastSignals}
+                latestVoiceAnalysis={latestVoiceAnalysis}
+                focusCapabilities={scenario?.suggestedFocusCapabilities || []}
+                lastNudge={lastNudge}
+                realtimeFeedback={realtimeFeedback}
+                scenario={scenario}
+                conversationInit={conversationInit}
+                hasRepSpoken={hasRepSpoken}
+                predictiveLens={predictiveLens}
+                realism={session?.realism}
+              />
+            </motion.div>
+          )}
+        </motion.aside>
 
         <button
           onClick={() => setShowMobileRail(!showMobileRail)}
@@ -916,6 +1012,7 @@ export default function Simulator() {
             <SimulatorRightPanel
               hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
               lastSignals={lastSignals}
+              latestVoiceAnalysis={latestVoiceAnalysis}
               focusCapabilities={scenario?.suggestedFocusCapabilities || []}
               lastNudge={lastNudge}
               realtimeFeedback={realtimeFeedback}

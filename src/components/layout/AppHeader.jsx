@@ -1,6 +1,8 @@
 import { useEffect, useId, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { BookOpen, Brain, FlaskConical, GitBranch, Menu, Settings, X, Zap } from "lucide-react";
+import { BookOpen, Brain, ExternalLink, FlaskConical, GitBranch, Home, Menu, Settings, X, Zap } from "lucide-react";
+
+const MAIN_SITE_URL = "https://reflectiv-ai.com";
 
 const BASE_NAV_ITEMS = [
   { to: "/library", label: "Library", Icon: BookOpen },
@@ -123,20 +125,37 @@ export default function AppHeader({ maxWidthClassName = "max-w-[1420px]" }) {
     >
       <div className={`${maxWidthClassName} mx-auto px-5 xl:px-6 py-3.5`}>
         <div className="flex items-center justify-between gap-4">
-          <Link to="/" className="flex min-w-0 items-center gap-2.5" aria-label="Signal Intelligence home">
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Link to="/" className="flex min-w-0 items-center gap-2.5" aria-label="Signal Intelligence home">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{
+                  background: "linear-gradient(145deg, hsl(223 56% 18%), hsl(182 48% 23%))",
+                  boxShadow: "0 8px 18px rgba(12, 25, 46, 0.14)",
+                }}
+              >
+                <Zap className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
+              </div>
+              <span className="font-semibold text-[1.02rem] leading-tight" style={{ color: "hsl(222 48% 22%)" }}>
+                Signal Intelligence
+              </span>
+            </Link>
+            <a
+              href={MAIN_SITE_URL}
+              aria-label="Back to Reflectiv AI main site"
+              title="Back to main site"
+              className="group inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-all duration-200 hover:-translate-y-0.5"
               style={{
-                background: "linear-gradient(145deg, hsl(223 56% 18%), hsl(182 48% 23%))",
-                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.14)",
+                background: "rgba(255,255,255,0.76)",
+                borderColor: "rgba(38, 67, 117, 0.16)",
+                color: "hsl(222 44% 28%)",
+                boxShadow: "0 8px 18px rgba(12, 25, 46, 0.08)",
               }}
             >
-              <Zap className="w-4 h-4" style={{ color: "hsl(174 60% 70%)" }} />
-            </div>
-            <span className="font-semibold text-[1.02rem] leading-tight" style={{ color: "hsl(222 48% 22%)" }}>
-              Signal Intelligence
-            </span>
-          </Link>
+              <Home className="h-3.5 w-3.5" />
+              <ExternalLink className="ml-0.5 h-2.5 w-2.5 opacity-55 transition-opacity group-hover:opacity-90" />
+            </a>
+          </div>
 
           <nav className="hidden xl:flex items-center gap-4" aria-label="Primary">
             {navItems.map((item) => <DesktopNavLink key={item.to} item={item} />)}

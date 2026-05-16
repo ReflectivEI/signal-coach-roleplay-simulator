@@ -1,10 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { Send } from "lucide-react";
+import { AlertCircle, Mic, Pause, Play, Send } from "lucide-react";
+import { useSpeechInput } from "@/features/rps/useSpeechInput";
 
-export default function MessageInput({ onSend, disabled, placeholder = "Your response as the rep..." }) {
+export default function MessageInput({
+  onSend,
+  disabled,
+  placeholder = "Your response as the rep...",
+  onVoiceMetadataChange = null,
+}) {
   const [value, setValue] = useState("");
   const textareaRef = useRef(null);
   const shouldRestoreFocusRef = useRef(false);
+  const speech = useSpeechInput();
+  const [voiceMode, setVoiceMode] = useState(false);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -27,15 +35,54 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
     }
   }, [disabled]);
 
+  useEffect(() => {
+    if (!speech.transcript) return;
+    setValue(speech.transcript);
+  }, [speech.transcript]);
+
+  useEffect(() => {
+    onVoiceMetadataChange?.(speech.voiceMetadata);
+  }, [onVoiceMetadataChange, speech.voiceMetadata]);
+
   const handleSend = () => {
     const trimmed = value.trim();
     if (!trimmed || disabled) return;
     shouldRestoreFocusRef.current = true;
-    onSend(trimmed);
+    const voiceMetadata = speech.transcript.trim()
+      ? {
+          ...speech.voiceMetadata,
+          transcript_source: "speech_recognition",
+        }
+      : null;
+    if (speech.isListening) speech.stop();
+    onSend(trimmed, {
+      inputMode: voiceMetadata ? "voice" : "typed",
+      voiceMetadata,
+    });
+    speech.reset();
+    setVoiceMode(false);
     setValue("");
   };
 
+  const startVoice = () => {
+    if (disabled || !speech.isSupported) return;
+    setVoiceMode(true);
+    speech.start();
+    window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+  };
+
+  const toggleVoicePause = () => {
+    if (disabled || !speech.isSupported || !voiceMode) return;
+    if (speech.isListening) speech.pause();
+    else speech.resume();
+  };
+
   const handleKeyDown = (e) => {
+    if (voiceMode && speech.isSupported && e.code === "Space" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      toggleVoicePause();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -58,8 +105,6 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
           boxShadow: "0 10px 24px rgba(14, 24, 43, 0.04)",
         }}
       >
-
-        
         <textarea
           ref={textareaRef}
           value={value}
@@ -69,7 +114,28 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
           placeholder={disabled ? "Waiting for HCP response..." : placeholder}
           rows={1} className="bg-transparent text-sm leading-relaxed opacity-100 flex-1 resize-none outline-none min-h-[24px]"
           style={{ color: "hsl(222 30% 22%)" }} />
-        
+
+        {speech.isSupported && (
+          <button
+            type="button"
+            onClick={() => {
+              if (disabled) return;
+              if (!voiceMode) startVoice();
+              else toggleVoicePause();
+            }}
+            disabled={disabled}
+            aria-label={!voiceMode ? "Start voice input" : speech.isListening ? "Pause voice input" : "Resume voice input"}
+            title={!voiceMode ? "Start voice input" : speech.isListening ? "Pause voice input" : "Resume voice input"}
+            className="rounded-xl w-9 h-9 flex items-center justify-center shrink-0 transition-all duration-150 disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{
+              background: speech.isListening ? "rgba(37, 124, 123, 0.16)" : voiceMode ? "rgba(28, 52, 88, 0.10)" : "rgba(37, 124, 123, 0.12)",
+              color: speech.isListening ? "hsl(180 45% 28%)" : "hsl(222 52% 24%)",
+              border: speech.isListening ? "1px solid rgba(37, 124, 123, 0.26)" : "1px solid rgba(28, 52, 88, 0.18)",
+            }}
+          >
+            {!voiceMode ? <Mic className="w-3.5 h-3.5" /> : speech.isListening ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+        )}
         
         <button
           onClick={handleSend}
@@ -80,7 +146,31 @@ export default function MessageInput({ onSend, disabled, placeholder = "Your res
           <Send className="text-slate-50 lucide lucide-send w-3.5 h-3.5" />
         </button>
       </div>
-      <p className="mt-1.5 px-1 text-xs" style={{ color: "hsl(215 18% 46%)" }}>Enter to send · Shift+Enter for new line</p>
+      <div className="mt-1.5 px-1 flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
+        <p>Enter to send · Shift+Enter for new line</p>
+        {speech.isSupported && (
+          <p className="shrink-0">
+            {voiceMode
+              ? speech.isListening
+                ? "Recording · Space pauses"
+                : "Paused · Space resumes"
+              : speech.transcript
+                ? "Voice captured"
+                : "Voice input available"}
+          </p>
+        )}
+        {!speech.isSupported && (
+          <p className="shrink-0 inline-flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" />
+            Voice unavailable
+          </p>
+        )}
+      </div>
+      {speech.error ? (
+        <p className="mt-1 px-1 text-xs" style={{ color: "hsl(356 56% 42%)" }}>
+          Voice input error: {speech.error}
+        </p>
+      ) : null}
     </div>);
 
 }

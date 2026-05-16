@@ -133,38 +133,36 @@
   }
 
   .si-dark-shell {
-    background: radial-gradient(circle at 15% 10%, rgba(12, 74, 110, 0.3), transparent 38%),
-      radial-gradient(circle at 88% 8%, rgba(20, 184, 166, 0.18), transparent 36%),
-      #07111f;
-    color: #edf6ff;
+    background: linear-gradient(180deg, #f7fbfc 0%, #eef5f6 38%, #f8fbfc 100%);
+    color: hsl(222 38% 20%);
   }
 
   .si-dark-panel {
-    background: linear-gradient(180deg, rgba(7, 18, 33, 0.9) 0%, rgba(6, 15, 28, 0.9) 100%);
-    border: 1px solid rgba(104, 173, 205, 0.34);
-    box-shadow: 0 16px 36px rgba(1, 8, 20, 0.35);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(242,248,249,0.98) 100%);
+    border: 1.5px solid rgba(92, 135, 165, 0.36);
+    box-shadow: 0 14px 32px rgba(14, 24, 43, 0.05), inset 0 1px 0 rgba(255,255,255,0.68);
   }
 
   .si-dark-title {
-    color: #8de5d6;
+    color: hsl(222 48% 22%);
   }
 
   .si-dark-label {
-    color: #c2dced;
+    color: hsl(213 20% 36%);
   }
 
   .si-dark-muted {
-    color: #9fbfd3;
+    color: hsl(206 35% 34%);
   }
 
   .si-dark-field {
-    background: #091c32;
-    border: 1px solid #44708c;
-    color: #eff7ff;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid rgba(92, 135, 165, 0.34);
+    color: hsl(222 38% 20%);
   }
 
   .si-dark-field::placeholder {
-    color: #93b4c8;
+    color: hsl(215 18% 50%);
     opacity: 1;
   }
 

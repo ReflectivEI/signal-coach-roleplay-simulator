@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp } from "lucide-react";
+import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, BookOpen, MapPin, Lightbulb, BrainCircuit, ChevronDown, ChevronUp, Mic } from "lucide-react";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES } from "@/lib/signalIntelligence";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
 
@@ -87,6 +87,7 @@ function formatSpecialistTitle(title = "") {
 export default function SimulatorRightPanel({
   hcpPrediction = null,
   lastSignals = {},
+  latestVoiceAnalysis = null,
   focusCapabilities = [],
   lastNudge = null,
   realtimeFeedback = null,
@@ -322,6 +323,40 @@ export default function SimulatorRightPanel({
               </Row>
             );
           })}
+        </DarkSection>
+      )}
+
+      {latestVoiceAnalysis && (
+        <DarkSection icon={Mic} title="Voice Delivery">
+          <Row label="Mode">
+            <Pill>{latestVoiceAnalysis.label}</Pill>
+          </Row>
+          <Row label="Pace">
+            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
+              {latestVoiceAnalysis.metadata?.words_per_minute || 0} wpm
+            </span>
+          </Row>
+          <Row label="Pauses">
+            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
+              {latestVoiceAnalysis.metadata?.pause_count || 0}
+            </span>
+          </Row>
+          <Row label="Fillers">
+            <span className="text-xs font-medium" style={{ color: "rgba(244,249,249,0.96)" }}>
+              {latestVoiceAnalysis.metadata?.filler_word_count || 0}
+            </span>
+          </Row>
+          <div
+            className="mt-2 p-3 rounded-lg"
+            style={{
+              background: "rgba(37,124,123,0.10)",
+              border: "1px solid rgba(37,124,123,0.20)",
+            }}
+          >
+            <p className="text-xs leading-relaxed" style={{ color: "rgba(236,245,245,0.90)" }}>
+              {latestVoiceAnalysis.coaching}
+            </p>
+          </div>
         </DarkSection>
       )}
 
