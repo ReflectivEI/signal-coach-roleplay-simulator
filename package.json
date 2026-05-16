@@ -20,6 +20,7 @@
     "lint": "eslint . --quiet",
     "audit:architecture": "npx vite-node scripts/audit-architecture-alignment.ts",
     "audit:scenarios": "npx vite-node scripts/audit-scenarios.ts",
+    "test:continuous-learning-eval": "npx vite-node scripts/continuous-learning-memory-eval.ts",
     "test:qa-realism-calibration": "npx vite-node scripts/qa-realism-calibration.ts",
     "test:roleplay:runtime": "node --loader ./test/jsx-loader.mjs --test test/roleplayRuntimePaths.integration.test.mjs",
     "test:release-candidate-gates": "echo 'Release candidate gates passed (placeholder)'"

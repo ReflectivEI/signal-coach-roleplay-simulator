@@ -31,5 +31,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: continuous-learning-latest
-          path: artifacts/continuous-learning/latest.json
+          path: |
+            artifacts/continuous-learning/latest.json
+            artifacts/continuous-learning/trend.ndjson
           if-no-files-found: warn

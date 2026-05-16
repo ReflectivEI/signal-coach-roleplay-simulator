@@ -12,14 +12,25 @@ type MetricsSnapshot = {
   crossPathParity: number;
 };
 
+type TrendSourceSnapshot = {
+  confidenceGateRuns: number;
+  openerAdaptationRuns: number;
+  crossPathParityRuns: number;
+  personaLaneRuns: number;
+  qaHistoryRuns: number;
+  sourceStatus: "ready" | "partial" | "empty";
+};
+
 type EvaluationReport = {
   timestamp: string;
   promoted: boolean;
   pass: boolean;
   score: number;
   metrics: MetricsSnapshot;
+  trendSources: TrendSourceSnapshot;
   policy: Record<string, number>;
   weights: Record<string, number>;
+  learningLoop: string[];
   failures: string[];
   outputProfilePath: string;
 };
@@ -92,6 +103,10 @@ function tail<T>(values: T[], count: number): T[] {
 }
 
 async function computeMetrics(): Promise<MetricsSnapshot> {
+  return (await computeMetricsAndSources()).metrics;
+}
+
+async function computeMetricsAndSources(): Promise<{ metrics: MetricsSnapshot; trendSources: TrendSourceSnapshot }> {
   const confidenceLatest = await readJsonObject(CONFIDENCE_LATEST_PATH);
   const openerLatest = await readJsonObject(OPENER_LATEST_PATH);
   const parityLatest = await readJsonObject(PARITY_LATEST_PATH);
@@ -102,6 +117,14 @@ async function computeMetrics(): Promise<MetricsSnapshot> {
   const parityTrend = tail(await readNdjson(PARITY_TREND_PATH), 7);
   const personaTrend = tail(await readNdjson(PERSONA_TREND_PATH), 7);
   const qaHistory = tail(await readJsonArray(QA_HISTORY_PATH), 80);
+  const sourceCounts = [
+    confidenceLatest || confidenceTrend.length ? 1 : 0,
+    openerLatest || openerTrend.length ? 1 : 0,
+    parityLatest || parityTrend.length ? 1 : 0,
+    personaLatest || personaTrend.length ? 1 : 0,
+    qaHistory.length ? 1 : 0,
+  ];
+  const populatedSources = sourceCounts.reduce((sum, value) => sum + value, 0);
 
   const confidenceGate = Number(
     confidenceLatest?.weightedScore ?? mean(confidenceTrend.map((item: any) => Number(item?.weightedScore ?? 0)))
@@ -123,12 +146,24 @@ async function computeMetrics(): Promise<MetricsSnapshot> {
     ? highRiskLowOpennessCount / qaHistory.length
     : 0;
 
-  return {
+  const metrics = {
     confidenceGate,
     openerAdaptation,
     highRiskLowOpennessRatio,
     personaLanePassRate,
     crossPathParity,
+  };
+
+  return {
+    metrics,
+    trendSources: {
+      confidenceGateRuns: confidenceTrend.length + (confidenceLatest ? 1 : 0),
+      openerAdaptationRuns: openerTrend.length + (openerLatest ? 1 : 0),
+      crossPathParityRuns: parityTrend.length + (parityLatest ? 1 : 0),
+      personaLaneRuns: personaTrend.length + (personaLatest ? 1 : 0),
+      qaHistoryRuns: qaHistory.length,
+      sourceStatus: populatedSources >= 4 ? "ready" : populatedSources > 0 ? "partial" : "empty",
+    },
   };
 }
 
@@ -170,10 +205,16 @@ async function run() {
   const policy = (continuousLearningProfile as any)?.policy || {};
   const weights = (continuousLearningProfile as any)?.weights || {};
 
-  const metrics = await computeMetrics();
+  const { metrics, trendSources } = await computeMetricsAndSources();
   const failures = evaluateAgainstPolicy(metrics, policy);
   const score = buildScore(metrics, weights);
   const pass = failures.length === 0;
+  const learningLoop = [
+    "Ingest recent QA, confidence-gate, opener-adaptation, persona-calibration, and cross-path parity artifacts.",
+    "Evaluate against explicit promotion policy before any runtime profile update is allowed.",
+    "Write latest.json and trend.ndjson for auditability; promote profile only when --promote is requested and policy passes.",
+    "Do not perform hidden model training or uncontrolled memory updates.",
+  ];
 
   let promoted = false;
   if (promote && pass) {
@@ -199,8 +240,10 @@ async function run() {
     pass,
     score,
     metrics,
+    trendSources,
     policy,
     weights,
+    learningLoop,
     failures,
     outputProfilePath: PROMOTED_PROFILE_PATH,
   };
