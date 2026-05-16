@@ -1694,10 +1694,6 @@ export function enforcePressureBehavior({ line, hcpState, liveTemperature = 5 } 
         .replace(/^\s*(thanks[^.?!]*[.?!]\s*)/i, "")
         .replace(/^\s*(okay[, ]+)?/i, "");
 
-    if (!/\bshort\b|\bquick\b|\bminute\b|\bkeep it tight\b|\bout of time\b/.test(normalized.toLowerCase())) {
-        normalized = `${normalized.trim()} Keep it tight.`;
-    }
-
     return clipToSentenceCount(normalized, 2);
 }
 
@@ -1709,18 +1705,12 @@ export function enforceJourneyStageBehavior({ line, hcpState } = {}) {
     const stage = str(hcpState?.conversation_stage, "guarded_opening");
     if (stage === "guarded_opening" || stage === "resistance_surface") {
         if (/\bwould you be open\b|\bnext step\b|\bschedule\b|\bfollow-up\b/.test(text.toLowerCase())) {
-            return clipToSentenceCount(
-                `I still need a direct answer on ${str(hcpState?.current_primary_barrier, "the practical barrier")} before we talk next steps.`,
-                2,
-            );
+            return clipToSentenceCount(text, 2);
         }
     }
 
     if (stage === "next_step_consideration" && !/\bnext step\b|\breview\b|\bopen to\b|\bfollow-up\b|\bone patient\b/.test(text.toLowerCase())) {
-        return clipToSentenceCount(
-            `${text} If this stays practical, I can review one concrete next step.`,
-            2,
-        );
+        return clipToSentenceCount(text, 2);
     }
 
     return clipToSentenceCount(text, 2);
@@ -1755,9 +1745,7 @@ export function generateHcpResponse({
     // Resistance/patience-aware sentence suffix
     const urgencyTag = hcpState.patience_level <= 3
         ? " I don't have much more time for this today."
-        : hcpState.patience_level <= 5 && band === "high"
-            ? " Keep it tight."
-            : "";
+        : "";
 
     let hcp_statement = "";
     let hcp_progression_explanation = "";
@@ -1878,11 +1866,7 @@ export function generateHcpResponse({
         hcpBrain,
     });
     if (!workflowValidation.pass) {
-        hcp_statement = clipToSentenceCount(
-            `The practical issue is still ${barrier}. If this does not reduce staff rework in our workflow, this will not move forward.`,
-            2,
-        );
-        hcp_progression_explanation = `${hcp_progression_explanation} Workflow plausibility enforcement applied.`.trim();
+        hcp_progression_explanation = `${hcp_progression_explanation} Workflow plausibility warning: ${workflowValidation.reason}.`.trim();
     }
 
     const personaValidation = validatePersonaFit({
@@ -1891,11 +1875,7 @@ export function generateHcpResponse({
         hcpBrain,
     });
     if (!personaValidation.pass) {
-        hcp_statement = clipToSentenceCount(
-            `In this clinic, I need to see what changes for patients and staff before I commit more time.`,
-            2,
-        );
-        hcp_progression_explanation = `${hcp_progression_explanation} Persona-fit enforcement applied.`.trim();
+        hcp_progression_explanation = `${hcp_progression_explanation} Persona-fit warning: ${personaValidation.reason}.`.trim();
     }
 
     if (isNearDuplicateResponse(hcp_statement, previousHcpLine)) {
