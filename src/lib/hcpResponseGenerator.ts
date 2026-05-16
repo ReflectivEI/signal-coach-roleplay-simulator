@@ -1150,7 +1150,7 @@ function enforceRealismLeverDialogue({
       .replace(/\bnot worth continuing\b/gi, "hard to continue");
   }
 
-  if (isInitialAccessStage(scenario) && !stageDrift && !pressureGap && !malformedEnding && !repeatedRecentHcpLine) {
+  if (!stageDrift && !pressureGap && !malformedEnding && !repeatedRecentHcpLine) {
     return line;
   }
 
@@ -3065,13 +3065,7 @@ function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[
     || startsWithSameFrame(current, line)
   );
 
-  const currentTags = inferConcernTags(current);
-  const repeatedIntent = recent.slice(-3).filter((line) => {
-    const tags = inferConcernTags(line);
-    return currentTags.some((tag) => tags.includes(tag));
-  }).length >= 2;
-
-  if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat && !repeatedIntent) return hcpReply;
+  if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat) return hcpReply;
 
   return deterministicContinuityVariation({
     hcpReply: current,
@@ -4051,7 +4045,7 @@ Return ONLY valid JSON:
     .map((cue: any) => cue?.label)
     .filter(Boolean)
     .slice(-8);
-  const cue = resolveObservedCue(realismCueCandidate || cueOverride || result.hcpCue || "", {
+  const cue = resolveObservedCue(cueOverride || result.hcpCue || realismCueCandidate || "", {
     hcpReply,
     behaviorState: realismAdjustedBehaviorState,
     hcpTurnCount,

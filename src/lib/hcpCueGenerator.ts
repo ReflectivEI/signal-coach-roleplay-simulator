@@ -780,6 +780,19 @@ function cueContradictsCategory(cueText: string, cueCategory: CueCategory): bool
   return false;
 }
 
+function softenCueLabel(text = ""): string {
+  return normalizeText(text)
+    .replace(/\bjaw set\b/gi, "expression measured")
+    .replace(/\bjaw tightening slightly\b/gi, "expression tightening slightly")
+    .replace(/\bclipped, closed expression\b/gi, "measured, closed expression")
+    .replace(/\bclipped expression\b/gi, "measured expression")
+    .replace(/\bexpression clipped around the ask\b/gi, "expression tightening around the ask")
+    .replace(/\bvisibly less patient with another setup pass\b/gi, "waiting for a more direct answer")
+    .replace(/\bno longer following another detour\b/gi, "waiting for the answer to stay on point")
+    .replace(/\bsignaling that only\b/gi, "leaving room for only")
+    .replace(/\bwill keep the exchange going\b/gi, "to keep the exchange focused");
+}
+
 export function isValidObservedCue(text: string): boolean {
   const cue = cleanCueText(text);
   const lower = cue.toLowerCase();
@@ -980,13 +993,14 @@ export function resolveObservedCue(
   inputs: HcpCueInputs
 ): { label: string; description: string; source: "hcp_context" } {
   const selected = selectStateAlignedCue(inputs, candidateCue);
+  const label = softenCueLabel(selected.label);
 
   return {
-    label: selected.label,
+    label,
     description: buildCueDescription(
       inputs.behaviorState,
       inputs.interactionPressures || [],
-      selected.label,
+      label,
       selected.cueCategory,
       selected.concernFamily,
       inputs.scenario
