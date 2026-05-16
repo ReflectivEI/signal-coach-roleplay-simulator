@@ -134,6 +134,7 @@ export default function ScenarioCard({ scenario, index, isFeatured, onDelete, se
             scenario={scenario}
             difficulty={difficulty}
             onClose={() => setShowDetail(false)}
+            onStart={() => navigate(launchUrl)}
           />
         )}
       </AnimatePresence>

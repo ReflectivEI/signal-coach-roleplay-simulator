@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { X, MapPin, Send, Loader2, Brain, Zap, ChevronRight } from "lucide-react";
+import { X, MapPin, Send, Loader2, Zap, ChevronRight } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { initializeConversation } from "@/lib/conversationInit";
@@ -11,28 +11,11 @@ import {
   CHALLENGE_CONTEXT_OPTIONS,
   CONVERSATION_STAGE_OPTIONS,
   HCP_ROLE_OPTIONS,
-  REALISM_LEVEL_LABELS,
-  RPS_UI_LABELS,
 } from "@/lib/rpsUserInputOptions";
 import { deriveUISelectionFromBrain, requireRealismContract } from "@/lib/scenarioInputResolver";
 import {
   SIGNAL_INTELLIGENCE_CAPABILITIES,
 } from "@/lib/signalIntelligence";
-
-// ── Field label ───────────────────────────────────────────────────────────────
-function FieldLabel({ children }) {
-  return (
-    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider mb-1.5">{children}</p>
-  );
-}
-
-// ── Variable pill with tooltip ───────────────────────────────────────────
-const TOOLTIP_DESCRIPTIONS = {
-  "Discovery": "Early-stage conversation where rep learns about HCP's patient population and clinical priorities.",
-  "Open": "HCP is receptive and engaged; showing genuine interest in the conversation.",
-  "Treating Clinician": "Physician directly responsible for patient care and clinical decisions.",
-  "Patient-Centric": "HCP prioritizes patient outcomes and benefits as the primary decision driver."
-};
 
 function deriveContractTemperature(scenario) {
   return requireRealismContract(scenario?.runtimeTemperature, "scenario detail realism");
@@ -170,34 +153,77 @@ function CapPill({ children }) {
   );
 }
 
-// ── Info box ──────────────────────────────────────────────────────────────────
-function InfoBox({ children, className = "" }) {
+function BriefSection({ eyebrow, title, children, tone = "light", className = "" }) {
+  const isDark = tone === "dark";
   return (
-    <div className={`rounded-xl p-4 border border-slate-100 bg-slate-50 ${className}`}>
-      {children}
+    <section
+      className={`rounded-2xl p-4 ${className}`}
+      style={{
+        background: isDark
+          ? "linear-gradient(135deg, hsl(223 45% 17%) 0%, hsl(188 43% 20%) 100%)"
+          : "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,249,248,0.98) 100%)",
+        border: isDark ? "1px solid rgba(120, 220, 203, 0.18)" : "1px solid rgba(114, 190, 178, 0.34)",
+        boxShadow: isDark ? "none" : "0 10px 24px rgba(14, 24, 43, 0.04)",
+      }}
+    >
+      <p
+        className="text-[11px] font-bold uppercase tracking-[0.18em]"
+        style={{ color: isDark ? "hsl(174 62% 74%)" : "hsl(176 52% 30%)" }}
+      >
+        {eyebrow}
+      </p>
+      {title ? (
+        <p
+          className="mt-2 text-sm font-semibold leading-snug"
+          style={{ color: isDark ? "rgba(255,255,255,0.98)" : "hsl(222 44% 20%)" }}
+        >
+          {title}
+        </p>
+      ) : null}
+      <div
+        className="mt-2 text-sm leading-relaxed"
+        style={{ color: isDark ? "rgba(235,248,248,0.84)" : "hsl(213 20% 33%)" }}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function BriefMetric({ label, value }) {
+  if (!value) return null;
+  return (
+    <div className="rounded-xl border px-3 py-2" style={{ background: "rgba(255,255,255,0.72)", borderColor: "rgba(114, 190, 178, 0.30)" }}>
+      <p className="text-[10px] font-bold uppercase tracking-[0.15em]" style={{ color: "hsl(176 48% 31%)" }}>{label}</p>
+      <p className="mt-1 text-sm font-semibold leading-snug" style={{ color: "hsl(222 42% 22%)" }}>{value}</p>
     </div>
   );
+}
+
+function cleanPredictiveHighlight(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (/^how this hcp is most likely framing decisions$/i.test(text)) return "";
+  if (/^most probable objections you should anticipate$/i.test(text)) return "";
+  if (/^predicted conversational behavior in the next interaction$/i.test(text)) return "";
+  if (/^recommended rep strategy/i.test(text)) return "";
+  return text;
 }
 
 // ── Opening Scene ─────────────────────────────────────────────────────────────
 function OpeningSceneBlock({ scenario }) {
   const sceneText = scenario.visualScene || scenario.context || "";
   return (
-    <div className="rounded-xl p-4 border" style={{ background: "hsl(174 40% 97%)", borderColor: "hsl(162 50% 80%)" }}>
+    <div className="rounded-2xl p-4 border" style={{ background: "hsl(174 40% 97%)", borderColor: "hsl(162 50% 80%)" }}>
       <div className="flex items-center gap-2 mb-2.5">
         <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(162 55% 38%)" }} />
         <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(162 55% 38%)" }}>
           Opening Scene
         </span>
       </div>
-      <p className="text-sm text-slate-700 leading-relaxed italic">{sceneText}</p>
+      <p className="text-sm text-slate-700 leading-relaxed">{sceneText}</p>
     </div>
   );
-}
-
-function getPredictiveLabel(field, value) {
-  const options = PREDICTIVE_SELECTOR_OPTIONS[field] || [];
-  return options.find((option) => option.value === value)?.label || value;
 }
 
 // ── AI Coach ──────────────────────────────────────────────────────────────────
@@ -380,10 +406,6 @@ function AiCoachSection({ scenario }) {
 // ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function ScenarioDetailModal({ scenario, difficulty: _difficulty, onClose, onStart }) {
   const navigate = useNavigate();
-  // Wrap content in TooltipProvider for tooltips to work
-  const WrappedContent = ({ children }) => {
-    return <TooltipProvider>{children}</TooltipProvider>;
-  };
   // Recompute difficulty using light palette labels
   const getDiff = () => {
     const stage = scenario.journeyStage || "";
@@ -407,10 +429,9 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
   const controlSelection = useMemo(() => deriveUISelectionFromBrain(scenario), [scenario]);
   const realismValue = deriveContractTemperature(scenario);
   const predictiveHighlights = [
-    { label: "Mindset", value: predictiveProfile?.sections?.mindset?.headline },
-    { label: "Likely objection", value: predictiveProfile?.sections?.objections?.headline },
-    { label: "Response style", value: predictiveProfile?.sections?.responseStyle?.headline },
-    { label: "Best rep approach", value: predictiveProfile?.sections?.repApproach?.headline },
+    { label: "Mindset", value: cleanPredictiveHighlight(predictiveProfile?.sections?.mindset?.headline) },
+    { label: "Likely blocker", value: cleanPredictiveHighlight(predictiveProfile?.sections?.objections?.headline) },
+    { label: "Best next move", value: cleanPredictiveHighlight(predictiveProfile?.sections?.repApproach?.headline) },
   ].filter((item) => item.value);
 
   const openAdvancedBuilder = () => {
@@ -442,7 +463,7 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 40 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
-          className="relative w-full sm:max-w-[980px] max-h-[94vh] overflow-y-auto rounded-t-2xl sm:rounded-[28px] bg-white shadow-2xl"
+          className="relative w-full sm:max-w-[1080px] max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-[28px] bg-white shadow-2xl"
           style={{
             border: "1px solid rgba(11, 58, 73, 0.16)",
             boxShadow: "0 30px 80px rgba(15, 23, 42, 0.22)",
@@ -475,54 +496,28 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           </div>
 
           <div
-            className="px-6 py-6 space-y-6"
-            style={{ background: "linear-gradient(180deg, #f9fbfc 0%, #f1f7f7 100%)" }}
+            className="px-6 py-6 space-y-5"
+            style={{ background: "linear-gradient(180deg, #f9fbfc 0%, #eef7f7 100%)" }}
           >
-
-            {/* HCP Profile + Objective banners */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(180deg, hsl(223 44% 18%) 0%, hsl(219 39% 15%) 100%)",
-                  border: "1px solid rgba(100, 223, 201, 0.16)",
-                }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>HCP Profile</p>
-                <p className="text-sm text-white font-semibold leading-snug mb-1.5">{scenario.stakeholder}</p>
-                {contextDetail && (
-                  <p className="text-xs text-white leading-relaxed">{contextDetail}</p>
-                )}
-              </div>
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 48% 23%) 100%)",
-                  border: "1px solid rgba(100, 223, 201, 0.16)",
-                }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>Objective</p>
-                <p className="text-xs text-white leading-relaxed">{scenario.objective}</p>
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
+              <BriefSection eyebrow="HCP profile" title={scenario.stakeholder} tone="dark">
+                {contextDetail || "Scenario-specific HCP context will appear here."}
+              </BriefSection>
+              <BriefSection eyebrow="Objective" title="What the rep is trying to accomplish" tone="dark">
+                {scenario.objective}
+              </BriefSection>
             </div>
 
-            {/* Opening Scene — always visible */}
             <OpeningSceneBlock scenario={scenario} />
 
-            <div
-              className="rounded-2xl p-4"
-              style={{
-                background: "linear-gradient(135deg, hsl(223 44% 18%) 0%, hsl(176 42% 24%) 100%)",
-                border: "1px solid rgba(100, 223, 201, 0.18)",
-              }}
-            >
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-2xl">
-                  <p className="text-xs font-semibold uppercase tracking-widest mb-2.5" style={{ color: "hsl(162 60% 65%)" }}>
-                    Predictive HCP Brief
+            <div className="rounded-2xl border p-4" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,249,248,0.98) 100%)", borderColor: "rgba(114, 190, 178, 0.34)" }}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "hsl(176 52% 30%)" }}>
+                    Predictive Read
                   </p>
-                  <p className="text-sm text-white leading-relaxed">
-                    Review this brief before roleplay. The advanced Predictive Builder is optional and only needed when you want a deeper synthesis workspace.
+                  <p className="mt-1 text-sm leading-relaxed" style={{ color: "hsl(213 20% 33%)" }}>
+                    What the HCP is likely testing before they give the rep more time.
                   </p>
                 </div>
                 <button
@@ -531,126 +526,59 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
                   className="shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors"
                   style={{
                     color: "hsl(176 45% 14%)",
-                    background: "rgba(233, 248, 245, 0.96)",
-                    border: "1px solid rgba(169, 235, 220, 0.82)",
+                    background: "rgba(227, 247, 243, 0.96)",
+                    border: "1px solid rgba(89, 175, 164, 0.45)",
                   }}
                 >
                   Open Advanced Builder
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4 mt-4">
-                <div className="rounded-2xl p-4" style={{ background: "rgba(8, 23, 41, 0.22)", border: "1px solid rgba(169, 235, 220, 0.12)" }}>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(174 62% 82%)" }}>
-                    Scenario-derived lens
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(predictiveSeed).map(([field, value]) => (
-                      <span
-                        key={field}
-                        className="px-2.5 py-1 rounded-full text-[11px] font-medium"
-                        style={{
-                          color: "rgba(245, 251, 250, 0.96)",
-                          background: "rgba(255,255,255,0.08)",
-                          border: "1px solid rgba(169, 235, 220, 0.16)",
-                        }}
-                      >
-                        {getPredictiveLabel(field, value)}
-                      </span>
-                    ))}
-                  </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                {predictiveHighlights.map((item) => (
+                  <BriefMetric key={item.label} label={item.label} value={item.value} />
+                ))}
+              </div>
 
-                <div className="rounded-2xl p-4" style={{ background: "rgba(8, 23, 41, 0.22)", border: "1px solid rgba(169, 235, 220, 0.12)" }}>
-                  <p className="text-[11px] font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(174 62% 82%)" }}>
-                    Roleplay calibration
-                  </p>
-                  <div className="space-y-2.5">
-                    {predictiveHighlights.map((item) => (
-                      <div key={item.label}>
-                        <p className="text-[11px] font-semibold uppercase tracking-widest mb-1" style={{ color: "rgba(206, 239, 235, 0.72)" }}>
-                          {item.label}
-                        </p>
-                        <p className="text-sm text-white leading-relaxed">{item.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <div className="flex flex-wrap gap-2 mt-4 border-t pt-4" style={{ borderColor: "rgba(114, 190, 178, 0.20)" }}>
+                {[
+                  ["HCP", getControlLabel(HCP_ROLE_OPTIONS, controlSelection.hcpType)],
+                  ["Stage", getControlLabel(CONVERSATION_STAGE_OPTIONS, controlSelection.stage)],
+                  ["Pressure", getControlLabel(CHALLENGE_CONTEXT_OPTIONS, controlSelection.challenge)],
+                  ["Realism", `${realismValue}/10`],
+                ].map(([field, value]) => (
+                  <span
+                    key={field}
+                    className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                    style={{
+                      color: "hsl(213 32% 29%)",
+                      background: "rgba(231, 242, 243, 0.95)",
+                      border: "1px solid rgba(114, 190, 178, 0.32)",
+                    }}
+                  >
+                    {field}: {value}
+                  </span>
+                ))}
               </div>
             </div>
 
-            {/* Tactical Focus + Key Challenges */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(180deg, hsl(223 35% 17%) 0%, hsl(221 33% 15%) 100%)",
-                  border: "1px solid rgba(39, 63, 103, 0.35)",
-                }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Tactical Focus</p>
-                <p className="text-sm text-white leading-relaxed">{scenario.description}</p>
-              </div>
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(135deg, hsl(223 35% 17%) 0%, hsl(176 40% 23%) 100%)",
-                  border: "1px solid rgba(58, 123, 121, 0.30)",
-                }}
-              >
-                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "hsl(162 60% 65%)" }}>Key Challenges</p>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
+              <BriefSection eyebrow="Tactical focus" title="What matters in this scenario">
+                {scenario.description}
+              </BriefSection>
+              <BriefSection eyebrow="Key challenges" title="Watch for these blockers">
                 <ul className="space-y-2">
                   {challenges.map((c, i) => (
-                    <li key={i} className="text-sm text-white flex items-start gap-2.5 leading-relaxed">
-                      <span
-                        className="shrink-0"
-                        style={{ width: 5, height: 5, borderRadius: "50%", background: "hsl(162 60% 55%)", marginTop: 8 }}
-                      />
+                    <li key={i} className="flex items-start gap-2 leading-relaxed">
+                      <span className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: "hsl(176 52% 36%)" }} />
                       <span>{c}</span>
                     </li>
                   ))}
                 </ul>
-              </div>
+              </BriefSection>
             </div>
 
-            {/* Scenario Variables + Signal Intelligence */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-              {/* Scenario Variables */}
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
-                  border: "1.5px solid rgba(134, 209, 194, 0.70)",
-                }}
-              >
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
-                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
-                    Scenario Variables
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.hcpType}</p>
-                    <VarPill>{getControlLabel(HCP_ROLE_OPTIONS, controlSelection.hcpType)}</VarPill>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.stage}</p>
-                    <VarPill>{getControlLabel(CONVERSATION_STAGE_OPTIONS, controlSelection.stage)}</VarPill>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.challenge}</p>
-                    <VarPill>{getControlLabel(CHALLENGE_CONTEXT_OPTIONS, controlSelection.challenge)}</VarPill>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: "hsl(162 55% 38%)" }}>{RPS_UI_LABELS.realism}</p>
-                    <VarPill>{`${realismValue}/10 — ${REALISM_LEVEL_LABELS[realismValue] || ""}`}</VarPill>
-                  </div>
-                </div>
-              </div>
-
-              {/* Signal Intelligence Focus */}
+            <div className="grid grid-cols-1 gap-4">
               <div
                 className="rounded-2xl p-4"
                 style={{
@@ -667,10 +595,7 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Focus Capabilities</p>
-                    <p className="text-xs text-slate-700 mb-2.5 leading-relaxed italic">
-                      Capabilities most relevant to this scenario
-                    </p>
-                    <div className="space-y-2">
+                    <div className="grid sm:grid-cols-3 gap-2">
                       {SIGNAL_INTELLIGENCE_CAPABILITIES
                         .filter(cap => focusCaps.includes(cap.id))
                         .map(cap => (
