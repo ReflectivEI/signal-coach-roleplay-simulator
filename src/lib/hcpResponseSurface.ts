@@ -1,6 +1,5 @@
 import { HcpRuntimeProfile } from "./hcpRuntimeProfiles";
 import { HcpTurnDirectiveSet } from "./hcpTurnDirectives";
-import { enforceSourceBackedRealismSurface } from "./hcpRealismBackbone";
 
 function normalizeText(value = ""): string {
   return String(value || "").replace(/\s+/g, " ").trim();
@@ -188,15 +187,6 @@ export function applyHcpResponseSurface({
 
   output = stripNarrationLeakage(output);
   if (!output) return "";
-
-  output = enforceSourceBackedRealismSurface({
-    hcpReply: output,
-    scenario,
-    turn,
-    profile,
-    hcpTurnCount,
-    liveRepAlignmentActive,
-  });
 
   // Remove exact stock phrases so validator cleanup does not leak canned trainer language.
   output = stripBannedStockPhrases(output);

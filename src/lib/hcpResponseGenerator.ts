@@ -2954,6 +2954,14 @@ function enforceFirstTurnRepAdaptation({
   scenario: any;
   transcript: ConversationTurn[];
 }): FirstTurnAlignmentResult {
+  if (hasPriorHcpTurns(transcript)) {
+    return {
+      applied: false,
+      hcpReply,
+      cueOverride: "",
+    };
+  }
+
   if (!firstTurnReplyIgnoresRep(hcpReply, repMessage, transcript)) {
     return {
       applied: false,
@@ -2964,19 +2972,7 @@ function enforceFirstTurnRepAdaptation({
 
   return {
     applied: true,
-    hcpReply: hasPriorHcpTurns(transcript)
-      ? buildFirstTurnAlignedReply(repMessage, scenario)
-        .replace(/^I remember the study, but you'll need to keep this quick\.\s*/i, "")
-        .replace(/^I remember the study\.\s*/i, "")
-        .replace(/^If this is about the study, be specific\.\s*/i, "")
-        .replace(/^If this is about access, keep it tight\.\s*/i, "")
-        .replace(/^If this is about access, be specific\.\s*/i, "")
-        .replace(/^If this is about workflow, keep it tight\.\s*/i, "")
-        .replace(/^If this is about workflow, be specific\.\s*/i, "")
-        .replace(/^If you're talking patient fit, be specific\.\s*/i, "")
-        .replace(/^If this is about the evidence, be specific\.\s*/i, "")
-        .trim()
-      : buildFirstTurnAlignedReply(repMessage, scenario),
+    hcpReply: buildFirstTurnAlignedReply(repMessage, scenario),
     cueOverride: buildFirstTurnCueOverride(repMessage, scenario),
   };
 }
@@ -3718,21 +3714,8 @@ Return ONLY valid JSON:
         }
       }
     });
-  } catch {
-    result = {
-      hcpReply: buildDeterministicHcpFallbackReply({
-        scenario,
-        transcript,
-        repMessage,
-        currentBehaviorState,
-        prediction,
-      }),
-      hcpCue: buildFirstTurnCueOverride(repMessage, scenario),
-      nextBehaviorState: currentBehaviorState,
-      nextJourneyState: currentJourneyState,
-      behaviorSignals: {},
-      coachingNudge: null,
-    };
+  } catch (error) {
+    throw error;
   }
 
   let hcpReply = result.hcpReply || "";
@@ -3784,16 +3767,7 @@ Return ONLY valid JSON:
     }
   }
   let continuityAdjusted = false;
-  const firstTurnAlignment = enforceFirstTurnRepAdaptation({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-  let cueOverride = firstTurnAlignment.cueOverride;
-  if (firstTurnAlignment.applied) {
-    hcpReply = firstTurnAlignment.hcpReply;
-  }
+  let cueOverride = "";
 
   if (needsContinuityVariationRewrite({
     hcpReply,
@@ -3809,22 +3783,9 @@ Return ONLY valid JSON:
       });
       continuityAdjusted = true;
     } catch {
-      hcpReply = deterministicContinuityVariation({
-        hcpReply,
-        transcript,
-        scenario,
-      });
       continuityAdjusted = true;
     }
   }
-  if (repAddressesPremiseChallenge(repMessage, getLatestHcpConcern(transcript, scenario)) && hcpStillRepeatsPremiseChallenge(hcpReply)) {
-    hcpReply = deterministicPremiseCorrectionRewrite({
-      hcpReply,
-      scenario,
-      transcript,
-    });
-  }
-
   if (violatesTurnConstraint(hcpReply, turnConstraint)) {
     try {
       const corrected = await rewriteForConstraintCompliance({
@@ -3848,20 +3809,9 @@ Return ONLY valid JSON:
         hcpReply = corrected;
       }
     } catch {
-      hcpReply = buildBrainGroundedScenarioFallback({
-        scenario,
-        repMessage,
-        escalationMemory,
-      });
+      // Keep the model-authored line when constraint repair is unavailable.
     }
   }
-
-  hcpReply = enforceAdaptiveNaturalCompression({
-    hcpReply,
-    scenario,
-    behaviorState: result.nextBehaviorState || currentBehaviorState,
-    prediction,
-  });
 
   hcpReply = applyHcpResponseSurface({
     hcpReply,
@@ -3869,10 +3819,9 @@ Return ONLY valid JSON:
     turn: turnDirectives,
     profile: runtimeProfile,
     hcpTurnCount,
-    liveRepAlignmentActive: firstTurnAlignment.applied,
+    liveRepAlignmentActive: false,
   });
 
-  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
   if (!continuityAdjusted && needsContinuityVariationRewrite({
     hcpReply,
     transcript,
@@ -3892,78 +3841,11 @@ Return ONLY valid JSON:
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
-        liveRepAlignmentActive: firstTurnAlignment.applied,
+        liveRepAlignmentActive: false,
       });
-      hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
-    } catch {
+        } catch {
       continuityAdjusted = true;
-      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
-        hcpReply: deterministicContinuityVariation({
-          hcpReply,
-          transcript,
-          scenario,
-        }),
-        scenario,
-        turn: turnDirectives,
-        profile: runtimeProfile,
-        hcpTurnCount,
-        liveRepAlignmentActive: firstTurnAlignment.applied,
-      }), transcript, scenario);
     }
-  }
-
-  const finalLiveAlignment = enforceFirstTurnRepAdaptation({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-  if (finalLiveAlignment.applied) {
-    hcpReply = finalLiveAlignment.hcpReply;
-    cueOverride = finalLiveAlignment.cueOverride;
-  }
-
-  if (needsImplementationTurnRepair({ repMessage, hcpReply })) {
-    hcpReply = buildImplementationAdaptiveReply({
-      repMessage,
-      hcpReply,
-      transcript,
-      scenario,
-    });
-  }
-
-  hcpReply = enforceInitialAccessSurface({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-
-  hcpReply = enforceClinicalValueAccessWorkflowSurface({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-
-  hcpReply = enforceClinicalValueEvidenceSurface({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-
-  hcpReply = enforceRealismLeverDialogue({
-    hcpReply,
-    repMessage,
-    scenario,
-    temperatureBand,
-    escalationMemory,
-    transcript,
-  });
-
-  if (!hasPriorHcpTurns(transcript)) {
-    hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
@@ -3984,42 +3866,17 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
     } catch {
-      hcpReply = buildBrainGroundedScenarioFallback({
-        scenario,
-        repMessage,
-        escalationMemory,
-        missingPressures: finalMissingPressures,
-      });
+      // Keep the model-authored line when Predictive Brain regeneration is unavailable.
     }
 
-    hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
+    hcpReply = applyHcpResponseSurface({
       hcpReply,
       scenario,
       turn: turnDirectives,
       profile: runtimeProfile,
       hcpTurnCount,
-      liveRepAlignmentActive: firstTurnAlignment.applied || finalLiveAlignment.applied,
-    }), transcript, scenario);
-  }
-
-  hcpReply = enforceRealismLeverDialogue({
-    hcpReply,
-    repMessage,
-    scenario,
-    temperatureBand,
-    escalationMemory,
-    transcript,
-  });
-
-  const postRegenerationFirstTurnAlignment = enforceFirstTurnRepAdaptation({
-    hcpReply,
-    repMessage,
-    scenario,
-    transcript,
-  });
-  if (postRegenerationFirstTurnAlignment.applied) {
-    hcpReply = postRegenerationFirstTurnAlignment.hcpReply;
-    cueOverride = postRegenerationFirstTurnAlignment.cueOverride;
+      liveRepAlignmentActive: false,
+    });
   }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
