@@ -150,8 +150,21 @@ export function detectHcpDirectAsk(hcpText = "") {
   const hasQuestionSignal = text.includes("?")
     || /(?:^|[.!?]\s+)(show|tell|name|give|walk me through|explain|be specific)\b/.test(text)
     || /\b(be specific|need to know|need to understand|need the|need a)\b/.test(text);
+  const askPriority = [
+    "disengagement_boundary",
+    "asks_for_cost_value",
+    "asks_for_safety_clarity",
+    "asks_for_guideline_fit",
+    "asks_for_evidence_relevance",
+    "asks_for_patient_fit",
+    "asks_for_access_step",
+    "asks_for_workflow_impact",
+    "asks_for_next_step",
+    "asks_for_concrete_difference",
+  ];
   let askType = "none";
-  for (const [type, pattern] of Object.entries(DIRECT_ASK_TYPES)) {
+  for (const type of askPriority) {
+    const pattern = DIRECT_ASK_TYPES[type];
     if (pattern.test(text)) {
       askType = type;
       break;
@@ -907,6 +920,21 @@ export function enforceRepScenarioAlignment({
 
 function renderConcept(type = "core_change", context = {}) {
   const bucket = context?.bucket || "general_staff_burden";
+  if (context?.topic === "clinical" || isEvidenceOrClinicalAsk(context)) {
+    const clinicalVariants = buildClinicalEvidenceAlternatives(context);
+    switch (type) {
+      case "example":
+        return pickVariant(clinicalVariants, clinicalVariants[0], `${prefix(context?.hcpTurn || "")}:clinical-example`);
+      case "staff_impact":
+        return "The office impact only matters after the evidence question is answered: which patient subgroup, which endpoint, and what decision changes.";
+      case "operational_detail":
+        return "The concrete detail is the subgroup and endpoint that map to your real patients.";
+      case "next_step":
+        return "The next step is testing that evidence against one patient profile and one decision threshold.";
+      default:
+        return clinicalVariants[0];
+    }
+  }
 
   switch (type) {
     case "example":
@@ -1797,9 +1825,28 @@ function buildDirectAskMediocreAnswer({ askType = "asks_for_concrete_difference"
 
 function buildDirectAskWeakAnswer({ askType = "asks_for_concrete_difference" }) {
   if (askType === "disengagement_boundary") {
-    return "Can I ask what would need to change before you would continue this discussion?";
+    return "Understood. We can pause unless I can stay on the blocker you named.";
   }
-  return "Can I ask how your team is currently thinking about this right now?";
+  switch (askType) {
+    case "asks_for_cost_value":
+      return "The answer is whether the patient outcome is worth the total spend in your real patient mix.";
+    case "asks_for_safety_clarity":
+      return "The answer has to be the specific safety signal and what monitoring would make that risk acceptable.";
+    case "asks_for_guideline_fit":
+      return "The answer is where this would fit against the current pathway for the patients you actually treat.";
+    case "asks_for_evidence_relevance":
+      return "The answer is the subgroup evidence and whether the endpoint changes a real treatment decision.";
+    case "asks_for_patient_fit":
+      return "The patient group is the uncontrolled subgroup where current care is not getting them to goal.";
+    case "asks_for_access_step":
+      return "The access step is a cleaner first approval packet so the case is less likely to come back for repair.";
+    case "asks_for_workflow_impact":
+      return "The workflow impact is one less repeat handoff for the staff member handling the case.";
+    case "asks_for_next_step":
+      return "The next step is one low-risk patient profile and one decision threshold.";
+    default:
+      return "The practical answer is the one change tied to the blocker you raised.";
+  }
 }
 
 export function deriveHcpConsequenceLine({ askType = "asks_for_concrete_difference", requiredAnchor = "concrete_difference" } = {}) {
@@ -1918,6 +1965,69 @@ function buildCrossLaneCostAccessAlternatives(context = {}) {
   ];
 }
 
+function isEvidenceOrClinicalAsk(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+  const scenario = context?.scenario || {};
+  const routing = scenario ? buildScenarioRouting(scenario) : {};
+  const journeyStage = normalizeForMatch(routing?.journey_stage || scenario?.journeyStage || "");
+  const concernFamily = normalizeForMatch(routing?.concern_family || scenario?.concernFamily || scenario?.scenario_family || "");
+
+  return /clinical_value|evidence/.test(journeyStage)
+    || /evidence|safety|cost|guideline|patient_fit/.test(concernFamily)
+    || /renal|kidney|subgroup|endpoint|hazard ratio|trial|study|evidence|data|guideline|outcome|treatment decision|patient-level outcome|cost|spend|safety|hepatic|liver|transaminitis|monitoring|efficacy|comparator/.test(ask);
+}
+
+function buildClinicalEvidenceAlternatives(context = {}) {
+  const ask = normalizeForMatch(context?.hcpTurn || "");
+
+  if (/renal|kidney|egfr/.test(ask)) {
+    return [
+      "The relevant answer is the renal subgroup and endpoint, not the office workflow. I would look at patients with moderate renal impairment and whether the endpoint changes treatment selection.",
+      "For renal impairment, the answer has to be subgroup fit plus the outcome that changes a real treatment decision, not a broad trial average.",
+      "The broad efficacy story has to be separated from the renal subgroup, then tied to whether that endpoint changes what you do for those patients.",
+      "The clinical test is whether the renal-impairment subgroup maps to your patients and whether the endpoint changes the treatment choice.",
+    ];
+  }
+
+  if (/cost|spend|value|budget|cost per patient|monitoring|testing/.test(ask)) {
+    return [
+      "The value answer is total patient benefit against total cost, including monitoring or testing, for the subgroup you would actually treat.",
+      "This has to be a patient-level value test: outcome gain, total spend, and whether that changes care for your real patient mix.",
+      "The cost case only holds if the clinical outcome is concrete enough to justify the full treatment burden for the patients you see.",
+      "The useful answer is not a broad value claim; it is whether the outcome justifies the spend for a specific patient subgroup.",
+    ];
+  }
+
+  if (/safety|hepatic|liver|transaminitis|adverse|risk|monitoring|tolerability/.test(ask)) {
+    return [
+      "The safety answer has to start with the labeled safety signal and monitoring expectations, then say whether that changes confidence for the patient in front of you.",
+      "For the hepatic concern, efficacy has to be separated from safety, then tied to the monitoring threshold that would make you pause.",
+      "The relevant answer is the safety signal, how it is monitored, and whether that risk changes your treatment decision for this subgroup.",
+      "That should not pivot to workflow. The blocker is safety confidence, especially liver-enzyme monitoring for the patients you treat.",
+    ];
+  }
+
+  if (/guideline|pathway|standard of care|protocol/.test(ask)) {
+    return [
+      "The guideline answer is where the evidence fits relative to current standard care and which patient group would change first.",
+      "This needs to tie to pathway placement: the subgroup, endpoint, and threshold where current standard care stops being enough.",
+      "The clinical bridge is not a workflow claim; it is whether the trial result is close enough to current pathway decisions to matter.",
+      "For guideline fit, the answer has to show which patient profile would move before a broader protocol change.",
+    ];
+  }
+
+  if (/which patients|patient subgroup|uncontrolled|treatment goals|patient population|patient fit|clinical decision/.test(ask)) {
+    return buildPatientFitAlternatives(context);
+  }
+
+  return [
+    "The useful answer is the subgroup, endpoint, and decision threshold for patients like yours.",
+    "The answer needs the patient group, the outcome, and why that result changes a treatment decision.",
+    "The clinical test is whether the evidence maps to your patient mix and changes what you would do next.",
+    "The direct answer has to stay with the evidence gap: which patients, which endpoint, and what decision changes.",
+  ];
+}
+
 function buildPatientFitAlternatives(context = {}) {
   const ask = normalizeForMatch(context?.hcpTurn || "");
   const wantsOutcome = /outcome|what changes first|change treatment|changes practice|clinical decision|practice/.test(ask);
@@ -1947,6 +2057,7 @@ function rotateRepeatedRepLine(text = "", context = {}) {
   const baseKey = `${prefix(context?.hcpTurn || "")}:${normalizedCandidate}`;
   const normalizedAsk = normalizeForMatch(context?.hcpTurn || "");
   const patientFitAsk = /be specific|which patients|patient subgroup|uncontrolled|current care|clinical decision|treatment protocol|what changes in practice|what changes first/.test(normalizedAsk);
+  const evidenceOrClinicalAsk = isEvidenceOrClinicalAsk(context);
   const recent = getRecentRepReplies(context, 4);
   const allRepLines = getAllRepReplies(context);
   const repeatedCount = recent.reduce(
@@ -1971,6 +2082,22 @@ function rotateRepeatedRepLine(text = "", context = {}) {
       !/uncontrolled|current care|treatment goals|subgroup|outcome gain|protocol|stable responders/.test(normalizedCandidate))
   ) {
     return pickVariant(buildPatientFitAlternatives(context), candidate, `${baseKey}:${repeatedCount}:${sessionNearRepeats}:patient-fit`);
+  }
+
+  if (
+    evidenceOrClinicalAsk &&
+    (
+      repeatedCount > 0 ||
+      sessionExactRepeats > 0 ||
+      sessionNearRepeats > 0 ||
+      /prior auth|prior authorization|clean submission|authorization|callback|staff|workflow|repair work|one pass|submission quality|office action|packet|handoff|resubmission/.test(normalizedCandidate)
+    )
+  ) {
+    return pickVariant(
+      buildClinicalEvidenceAlternatives(context),
+      candidate,
+      `${baseKey}:${repeatedCount}:${sessionNearRepeats}:clinical-evidence`,
+    );
   }
 
   if (/moves straight into scheduling instead of (looping back|rework)/.test(normalizedCandidate)) {

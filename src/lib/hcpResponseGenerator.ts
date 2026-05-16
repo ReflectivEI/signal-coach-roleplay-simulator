@@ -30,7 +30,7 @@ import { buildRuntimeProfilePrompt, deriveHcpRuntimeProfile } from "./hcpRuntime
 import { buildTurnDirectivePrompt, deriveHcpTurnDirectives } from "./hcpTurnDirectives";
 import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
-import { scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
+import { getScenarioConcernFamily, scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
 
 export const HCP_GENERATOR_VERSION = "runtime-contract-v2";
@@ -602,20 +602,44 @@ function buildBrainGroundedScenarioFallback({
 }
 
 function deriveRealismConcernFamily(scenario: any, hcpReply = ""): "evidence" | "workflow" | "access" | "time" | "screening" | "general" {
-  const text = [
+  const registeredFamily = getScenarioConcernFamily(scenario);
+  if (
+    registeredFamily === "evidence" ||
+    registeredFamily === "workflow" ||
+    registeredFamily === "access" ||
+    registeredFamily === "time" ||
+    registeredFamily === "screening" ||
+    registeredFamily === "general"
+  ) {
+    return registeredFamily;
+  }
+
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const scenarioText = [
     scenario?.title,
     scenario?.journeyStage,
     scenario?.objective,
     scenario?.description,
     scenario?.openingScene,
-    hcpReply,
     ...(Array.isArray(scenario?.interactionPressure) ? scenario.interactionPressure : []),
   ].filter(Boolean).join(" ").toLowerCase();
+  const replyText = String(hcpReply || "").toLowerCase();
+  const text = [
+    scenarioText,
+    hcpReply,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (stage === "clinical_value") return "evidence";
+  if (stage === "access_formulary") return "access";
+  if (stage === "adoption_implementation") return /\bstaff|workflow|handoff|callback|process|clinic|ma\b/.test(text) ? "workflow" : "general";
+  if (stage === "commitment_close") return /\bnext step|commit|try|start|patient fit|right patient|still maybe|maybe\b/.test(text) ? "screening" : "general";
+
+  if (/\btrial|study|data|evidence|guideline|subgroup|endpoint|outcome|hazard ratio|renal\b/.test(scenarioText)) return "evidence";
   if (/\bprior auth|coverage|formulary|payer|approval|access\b/.test(text)) return "access";
   if (/\bstaff|workflow|handoff|callback|process|clinic|ma\b/.test(text)) return "workflow";
   if (/\btime|minute|schedule|waiting|brief|quick\b/.test(text)) return "time";
   if (/\bpatient fit|which patient|screen|selection|candidate|profile\b/.test(text)) return "screening";
-  if (/\btrial|study|data|evidence|guideline|subgroup|endpoint|outcome|hazard ratio|renal\b/.test(text)) return "evidence";
+  if (/\btrial|study|data|evidence|guideline|subgroup|endpoint|outcome|hazard ratio|renal\b/.test(replyText)) return "evidence";
   return "general";
 }
 
@@ -2166,6 +2190,17 @@ function deterministicContinuityVariation({
       return `${text}.`;
     }
     return `${text} I still do not know what that means in the renal patients I manage.`;
+  }
+
+  if (/you still haven'?t really answered|need a more direct answer|narrow this to the specific decision/i.test(text)) {
+    const hcpTurns = transcript.filter((turn) => turn?.speaker === "hcp").length;
+    const variants = [
+      "Give me the specific patient, endpoint, and decision that changes.",
+      "If you cannot make this specific, I am going to stop here.",
+      "Tie it to one patient decision, or this is not useful.",
+      "I need the exact decision point, not another broad evidence frame.",
+    ];
+    return variants[hcpTurns % variants.length];
   }
 
   return `${text}. ${concernFollowUp(concernTags[0] || "general")}`;
@@ -3847,8 +3882,21 @@ Return ONLY valid JSON:
         }
       }
     });
-  } catch (error) {
-    throw error;
+  } catch {
+    result = {
+      hcpReply: buildDeterministicHcpFallbackReply({
+        scenario,
+        transcript,
+        repMessage,
+        currentBehaviorState,
+        prediction,
+      }),
+      hcpCue: buildFirstTurnCueOverride(repMessage, scenario),
+      nextBehaviorState: currentBehaviorState,
+      nextJourneyState: currentJourneyState,
+      behaviorSignals: {},
+      coachingNudge: null,
+    };
   }
 
   let hcpReply = result.hcpReply || "";
@@ -3958,6 +4006,7 @@ Return ONLY valid JSON:
     hcpTurnCount,
     liveRepAlignmentActive: false,
   });
+  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
   hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
 
   if (!continuityAdjusted && needsContinuityVariationRewrite({
@@ -3973,18 +4022,72 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
       continuityAdjusted = true;
-      hcpReply = applyHcpResponseSurface({
+      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
         hcpReply,
         scenario,
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
         liveRepAlignmentActive: false,
-      });
+      }), transcript, scenario);
       hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
         } catch {
       continuityAdjusted = true;
     }
+  }
+
+  const finalLiveAlignment = enforceFirstTurnRepAdaptation({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+  if (finalLiveAlignment.applied) {
+    hcpReply = finalLiveAlignment.hcpReply;
+    cueOverride = finalLiveAlignment.cueOverride;
+  }
+
+  if (needsImplementationTurnRepair({ repMessage, hcpReply })) {
+    hcpReply = buildImplementationAdaptiveReply({
+      repMessage,
+      hcpReply,
+      transcript,
+      scenario,
+    });
+  }
+
+  hcpReply = enforceInitialAccessSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+
+  hcpReply = enforceClinicalValueAccessWorkflowSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+
+  hcpReply = enforceClinicalValueEvidenceSurface({
+    hcpReply,
+    repMessage,
+    scenario,
+    transcript,
+  });
+
+  hcpReply = enforceRealismLeverDialogue({
+    hcpReply,
+    repMessage,
+    scenario,
+    temperatureBand,
+    escalationMemory,
+    transcript,
+  });
+
+  if (!hasPriorHcpTurns(transcript)) {
+    hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
@@ -4005,19 +4108,34 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
     } catch {
-      // Keep the model-authored line when Predictive Brain regeneration is unavailable.
+      hcpReply = buildBrainGroundedScenarioFallback({
+        scenario,
+        repMessage,
+        escalationMemory,
+        missingPressures: finalMissingPressures,
+      });
     }
 
-    hcpReply = applyHcpResponseSurface({
+    hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
       hcpReply,
       scenario,
       turn: turnDirectives,
       profile: runtimeProfile,
       hcpTurnCount,
-      liveRepAlignmentActive: false,
-    });
+      liveRepAlignmentActive: finalLiveAlignment.applied,
+    }), transcript, scenario);
     hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
   }
+
+  hcpReply = enforceRealismLeverDialogue({
+    hcpReply,
+    repMessage,
+    scenario,
+    temperatureBand,
+    escalationMemory,
+    transcript,
+  });
+  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
