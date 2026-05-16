@@ -120,14 +120,14 @@ export default function MessageInput({
 
   return (
     <div
-      className="p-4 border-t absolute bottom-0 left-0 right-0 z-10"
+      className="px-4 pb-3 pt-5 border-t absolute bottom-0 left-0 right-0 z-10"
       style={{
         background: "linear-gradient(180deg, rgba(226, 241, 240, 0.72) 0%, rgba(241,248,249,0.92) 100%)",
         borderColor: "rgba(131, 164, 186, 0.22)",
       }}
     >
       <div
-        className="px-4 py-3 rounded-[22px] flex items-end gap-3 border transition-all duration-200"
+        className="px-3.5 py-2.5 rounded-[22px] flex items-end gap-3 border transition-all duration-200"
         style={{
           background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(247,251,252,0.98) 100%)",
           borderColor: "rgba(28, 52, 88, 0.22)",
@@ -175,8 +175,7 @@ export default function MessageInput({
           <Send className="text-slate-50 lucide lucide-send w-3.5 h-3.5" />
         </button>
       </div>
-      <div className="mt-1.5 px-1 flex items-center justify-between gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
-        <p>Enter to send · Shift+Enter for new line</p>
+      <div className="mt-1 px-1 flex items-center justify-end gap-3 text-xs" style={{ color: "hsl(215 18% 46%)" }}>
         {speech.isSupported && voiceMode && (
           <p className="shrink-0">
             {speech.isListening ? "Recording · Space pauses" : "Paused · Space resumes"}
@@ -190,7 +189,7 @@ export default function MessageInput({
         )}
       </div>
       {onEvaluateRep && speech.isSupported && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-1 flex justify-end">
           <button
             type="button"
             onClick={handleEvaluateRep}
