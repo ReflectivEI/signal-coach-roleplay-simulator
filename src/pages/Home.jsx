@@ -99,7 +99,6 @@ export default function Home() {
               <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: "hsl(174 62% 74%)" }} />
               <h2 className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(174 62% 82%)" }}>Training Scenarios</h2>
             </div>
-                    {/* Build Your Own link removed for isolation */}
           </div>
           <ScenarioFilters filters={filters} onChange={setFilters} />
           <p className="text-xs mt-1.5" style={{ color: "rgba(234, 248, 247, 0.78)" }}>

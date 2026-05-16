@@ -1560,18 +1560,18 @@ function applyEscalationBehavior({
 function buildBoundaryDisengagementReply(scenario: any, latestConcern = ""): string {
   const family = deriveRealismConcernFamily(scenario, latestConcern);
   if (family === "access") {
-    return "Unfortunately, this is not worth my time today if we cannot address the access issue directly.";
+    return "I don't think this is the right use of time today if we can't address the access issue directly.";
   }
   if (family === "workflow") {
-    return "Unfortunately, this is not worth my time today if we cannot talk about the actual workflow issue.";
+    return "Let's stop here unless we can stay with the actual workflow issue.";
   }
   if (family === "screening") {
-    return "Unfortunately, this is not worth my time today if we cannot be specific about the patients in question.";
+    return "I'm going to move on if we can't stay with the patient issue.";
   }
   if (family === "evidence") {
-    return "Unfortunately, this is not worth my time today if we cannot stay with the evidence question.";
+    return "I don't think this is the right use of time today if we can't answer the evidence question directly.";
   }
-  return "Unfortunately, this is not worth my time today if we cannot stay with the question I asked.";
+  return "Let's stop here unless you can answer the question directly.";
 }
 
 function buildPressurePersistenceBlock(scenario: any): string {

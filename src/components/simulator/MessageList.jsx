@@ -134,7 +134,7 @@ function PredictiveDebugChip({ debugInfo }) {
   );
 }
 
-function MessageBubble({ turn }) {
+function MessageBubble({ turn, isHighlighted = false }) {
   const isRep = turn.speaker === "rep";
   const isHcp = turn.speaker === "hcp";
   const cue = turn.cues?.[0] || null;
@@ -158,6 +158,7 @@ function MessageBubble({ turn }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
         className="flex gap-3 mb-3"
+        data-turn-id={turn.id}
       >
         <div className={`${isRep ? "order-2" : "order-1"} mt-1 shrink-0`}>
           <span
@@ -177,8 +178,12 @@ function MessageBubble({ turn }) {
           <div className={`${isHcp ? "hcp-dialogue " : ""}px-4 py-2.5 rounded-2xl text-[15px] leading-relaxed max-w-fit`} style={{
             background: isRep ? "linear-gradient(180deg, rgba(90, 182, 186, 0.92) 0%, rgba(74, 163, 170, 0.94) 100%)" : "linear-gradient(180deg, rgba(237,241,247,0.98) 0%, rgba(229,235,244,0.98) 100%)",
             color: isRep ? "white" : "hsl(222 30% 28%)",
-            border: isRep ? "1px solid rgba(74, 163, 170, 0.34)" : "1px solid rgba(193, 203, 219, 0.72)",
-            boxShadow: isRep ? "0 10px 24px rgba(16, 54, 76, 0.06)" : "0 6px 18px rgba(14, 24, 43, 0.04)"
+            border: isHighlighted
+              ? "2px solid rgba(231, 196, 83, 0.92)"
+              : isRep ? "1px solid rgba(74, 163, 170, 0.34)" : "1px solid rgba(193, 203, 219, 0.72)",
+            boxShadow: isHighlighted
+              ? "0 0 0 4px rgba(231, 196, 83, 0.22), 0 14px 32px rgba(14, 24, 43, 0.14)"
+              : isRep ? "0 10px 24px rgba(16, 54, 76, 0.06)" : "0 6px 18px rgba(14, 24, 43, 0.04)"
           }}>
             {turn.text}
           </div>
@@ -188,15 +193,23 @@ function MessageBubble({ turn }) {
   );
 }
 
-export default function MessageList({ turns, isLoading, realtimeFeedback }) {
+export default function MessageList({ turns, isLoading, realtimeFeedback, highlightedTurnId = "" }) {
   const bottomRef = useRef(null);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
+    if (highlightedTurnId) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns, isLoading]);
+  }, [turns, isLoading, highlightedTurnId]);
+
+  useEffect(() => {
+    if (!highlightedTurnId || !scrollRef.current) return;
+    const node = scrollRef.current.querySelector(`[data-turn-id="${CSS.escape(highlightedTurnId)}"]`);
+    node?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightedTurnId]);
 
   return (
-    <div className="px-6 py-6 pb-28 flex-1 overflow-y-auto space-y-3">
+    <div ref={scrollRef} className="px-6 py-6 pb-28 flex-1 overflow-y-auto space-y-3">
       {turns.length === 0 && !isLoading && (
         <div className="py-12 text-center flex flex-col items-center justify-center h-full gap-3">
           <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "linear-gradient(145deg, hsl(223 46% 19%), hsl(176 45% 30%))", border: "1px solid rgba(46, 124, 121, 0.24)" }}>
@@ -210,7 +223,7 @@ export default function MessageList({ turns, isLoading, realtimeFeedback }) {
       <AnimatePresence>
         {turns.map((turn) => (
           <div key={turn.id}>
-            <MessageBubble turn={turn} />
+            <MessageBubble turn={turn} isHighlighted={turn.id === highlightedTurnId} />
           </div>
         ))}
       </AnimatePresence>

@@ -382,6 +382,7 @@ export default function Simulator() {
   const [isVoiceEvaluating, setIsVoiceEvaluating] = useState(false);
   const [repDraftForAnalysis, setRepDraftForAnalysis] = useState({ text: "", inputMode: "typed", voiceMetadata: null });
   const [coachShadowAfterAction, setCoachShadowAfterAction] = useState(null);
+  const [highlightedTurnId, setHighlightedTurnId] = useState("");
   const [hcpPrediction, setHcpPrediction] = useState(null);
   const [volatilityState, setVolatilityState] = useState(null);
   const [currentVolatilityProfile, setCurrentVolatilityProfile] = useState(/** @type {"stable" | "slightly_disrupted" | "disrupted"} */("stable"));
@@ -601,6 +602,13 @@ export default function Simulator() {
       voiceMetadata: repDraftForAnalysis.voiceMetadata,
     });
   }, [handleEvaluateRep, repDraftForAnalysis]);
+
+  const handleJumpToTurn = useCallback((turnId) => {
+    if (!turnId) return;
+    setShowSummary(false);
+    setHighlightedTurnId(turnId);
+    window.setTimeout(() => setHighlightedTurnId(""), 3200);
+  }, []);
 
   const handleRepMessage = useCallback(async (repText, inputMeta = {}) => {
     if (!session || !scenario || isLoading) return;
@@ -1186,7 +1194,12 @@ export default function Simulator() {
               {lastRuntimeError}
             </div>
           ) : null}
-          <MessageList turns={turns} isLoading={isLoading} realtimeFeedback={realtimeFeedback} />
+          <MessageList
+            turns={turns}
+            isLoading={isLoading}
+            realtimeFeedback={realtimeFeedback}
+            highlightedTurnId={highlightedTurnId}
+          />
 
           <MessageInput
             onSend={handleRepMessage}
@@ -1336,6 +1349,7 @@ export default function Simulator() {
           onExport={handleExport}
           onNewSession={() => navigate("/")}
           onRegenerate={handleRegenerateReview}
+          onJumpToTurn={handleJumpToTurn}
         />
       )}
     </div>

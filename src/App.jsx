@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/lib/ThemeContext';
 // Add page imports here
 import Home from './pages/Home';
 // import Simulator from './pages/Simulator';
-// import ScenarioBuilder from './pages/ScenarioBuilder';
+import ScenarioBuilder from './pages/ScenarioBuilder';
 import Capabilities from './pages/Capabilities';
 import QATwin from './pages/QATwin';
 import AdminDashboard from './pages/AdminDashboard';
@@ -36,7 +36,7 @@ const AppRoutes = () => {
       <Route path="/" element={<Home />} />
       <Route path="/simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
       <Route path="/simulator/*" element={<ThemeProvider><Simulator /></ThemeProvider>} />
-      {/* <Route path="/builder" element={<ScenarioBuilder />} /> */}
+      <Route path="/builder" element={<ScenarioBuilder />} />
       <Route path="/capabilities" element={<Capabilities />} />
       <Route path="/qa" element={<QATwin />} />
       <Route path="/admin" element={<AdminDashboard />} />

@@ -249,6 +249,12 @@ function getTranscriptTurns(session, speaker) {
   return speaker ? turns.filter((turn) => turn?.speaker === speaker) : turns;
 }
 
+function getTranscriptTurnsByIds(session, ids = []) {
+  const wanted = new Set((Array.isArray(ids) ? ids : []).filter(Boolean));
+  if (!wanted.size) return [];
+  return getTranscriptTurns(session).filter((turn) => wanted.has(turn?.id));
+}
+
 function findNextHcpTurn(session, repText = "") {
   const turns = getTranscriptTurns(session);
   const repIndex = turns.findIndex(
@@ -620,7 +626,7 @@ function DeepDiveBlock({ number, title, children }) {
 
 // ─── Capability row ───────────────────────────────────────────────────────────
 
-function CapabilityRow({ cap, insight }) {
+function CapabilityRow({ cap, insight, session = null, onJumpToTurn = null }) {
   const [open, setOpen] = useState(false);
   const sublabel = CAP_SUBLABELS[cap.id];
   const capabilityState = capabilityStateFromObservationLevel(insight?.observationLevel);
@@ -637,6 +643,7 @@ function CapabilityRow({ cap, insight }) {
     insight?.exampleRewrite ||
     insight?.nextTimeAction
   );
+  const linkedTurns = getTranscriptTurnsByIds(session, insight?.relatedTurnIds || []);
 
   return (
     <div className={`border-b border-border/30 last:border-b-0 border-l-2 ${open ? metricColor.border : "border-l-transparent"}`}>
@@ -698,20 +705,52 @@ function CapabilityRow({ cap, insight }) {
                 </DeepDiveBlock>
               )}
 
+              {linkedTurns.length > 0 && (
+                <DeepDiveBlock number="2" title="Transcript Moment">
+                  <div className="space-y-2">
+                    {linkedTurns.map((turn) => (
+                      <button
+                        key={turn.id}
+                        type="button"
+                        onClick={() => onJumpToTurn?.(turn.id)}
+                        className="w-full rounded-lg border px-3 py-2 text-left transition-colors hover:bg-white"
+                        style={{
+                          background: "rgba(255,255,255,0.74)",
+                          borderColor: "rgba(120, 156, 208, 0.34)",
+                          color: REVIEW_TEXT,
+                        }}
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: REVIEW_FAINT }}>
+                          {turn.speaker === "rep" ? "Rep" : "HCP"} moment
+                        </span>
+                        <span className="mt-1 block text-sm leading-relaxed">
+                          "{cleanTranscriptQuote(turn.text, 28)}"
+                        </span>
+                        {typeof onJumpToTurn === "function" && (
+                          <span className="mt-1 block text-xs font-semibold" style={{ color: "hsl(190 56% 32%)" }}>
+                            Jump to this moment
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </DeepDiveBlock>
+              )}
+
               {(insight.whyItMattered || rowConsequence) && (
-                <DeepDiveBlock number="2" title="Interaction Consequence">
+                <DeepDiveBlock number="3" title="Interaction Consequence">
                   <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{rowConsequence}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.pattern && (
-                <DeepDiveBlock number="3" title="Recurring Pattern">
+                <DeepDiveBlock number="4" title="Recurring Pattern">
                   <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.pattern)}</p>
                 </DeepDiveBlock>
               )}
 
               {insight.whatGoodLooksLike && (
-                <DeepDiveBlock number="4" title="Coaching Direction">
+                <DeepDiveBlock number="5" title="Coaching Direction">
                   <p className="text-sm leading-relaxed" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.whatGoodLooksLike)}</p>
                   {insight.exampleRewrite && (
                     <div className="mt-2 p-3 rounded-lg bg-signal-positive/5 border border-signal-positive/20">
@@ -723,14 +762,12 @@ function CapabilityRow({ cap, insight }) {
               )}
 
               {insight.nextTimeAction && (
-                <DeepDiveBlock number="5" title="Next Interaction">
+                <DeepDiveBlock number="6" title="Next Interaction">
                   <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: REVIEW_TEXT }}>{cleanCoachingCopy(insight.nextTimeAction)}</p>
                 </DeepDiveBlock>
               )}
 
               {!hasStructuredContent && <NotObservedMarker />}
-
-              {false && insight.relatedTurnIds?.length > 0 && null}
             </div>
           </motion.div>
         )}
@@ -763,6 +800,7 @@ function CapabilityRow({ cap, insight }) {
  *   onExport: () => void;
  *   onNewSession: () => void;
  *   onRegenerate?: () => void;
+ *   onJumpToTurn?: (turnId: string) => void;
  * }} props
  */
 export default function SessionSummaryModal({
@@ -773,7 +811,8 @@ export default function SessionSummaryModal({
   onClose,
   onExport,
   onNewSession,
-  onRegenerate = null
+  onRegenerate = null,
+  onJumpToTurn = null
 }) {
   const [showSkillBreakdown, setShowSkillBreakdown] = useState(false);
   if (!review) return null;
@@ -1266,6 +1305,8 @@ export default function SessionSummaryModal({
                             key={cap.id}
                             cap={cap}
                             insight={insightByCapability[cap.id]}
+                            session={session}
+                            onJumpToTurn={onJumpToTurn}
                           />
                         ))}
                       </div>

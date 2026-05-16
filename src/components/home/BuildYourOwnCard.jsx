@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const TYPED_TEXT = "Create one, and take it for a spin.";
 const PILL_TEXT = "Customize";
@@ -7,6 +8,7 @@ const PILL_SPEED = 1000; // ms per char — one letter per second
 const PILL_DELAY = 300;  // ms pause after description finishes before pill starts
 
 export default function BuildYourOwnCard() {
+  const navigate = useNavigate();
   const [desc, setDesc] = useState("");
   const [pill, setPill] = useState("");
   const [cursor, setCursor] = useState(true);
@@ -43,6 +45,15 @@ export default function BuildYourOwnCard() {
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => navigate("/builder")}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate("/builder");
+        }
+      }}
       className="flex flex-col gap-[0.62rem] rounded-2xl h-full"
       style={{
         padding: "1rem 1rem 0.95rem",
@@ -52,6 +63,7 @@ export default function BuildYourOwnCard() {
         transition: "transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease",
         minHeight: "118px",
         justifyContent: "space-between",
+        cursor: "pointer",
       }}
       onMouseEnter={e => {
         e.currentTarget.style.background = "linear-gradient(135deg, hsl(351 80% 90%) 0%, hsl(6 82% 86%) 100%)";
