@@ -196,6 +196,8 @@ function softenHostileTone(text = ""): string {
     .replace(/\bas per\b/gi, "based on")
     .replace(/\bDr\.?\s+([A-Z][a-z]+)\s+said I should talk to you about a case discussion,\s+not a product pitch\b/g, "Dr. $1 said this was about a patient case, so let's keep it focused there")
     .replace(/\bnot a product pitch\b/gi, "focused on the patient")
+    .replace(/\bI was expecting a case discussion,\s*focused on the patient\b/gi, "I thought this was going to be a patient case. Can we keep it there")
+    .replace(/\bI was expecting a case discussion,?\s*focused on the patient\b/gi, "I thought this was going to be a patient case. Can we keep it there")
     .replace(/\bI thought this was about a case discussion,\s+focused on the patient\b/gi, "I thought this was about a patient case, so let's keep it focused there")
     .replace(/\bwhat makes you think this case discussion is about a product\?/gi, "Okay, then connect it to the case.")
     .replace(/\bwhat makes you think I need (?:something different|a different approach|a change) for my patients\?/gi, "can you help me connect this to my patients?")

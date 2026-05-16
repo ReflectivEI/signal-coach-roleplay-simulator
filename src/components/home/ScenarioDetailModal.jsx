@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
 import { X, MapPin, Send, Loader2, Zap, ChevronRight } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { generateHcpResponse } from "@/lib/hcpResponseGenerator";
 import { initializeConversation } from "@/lib/conversationInit";
-import { buildPredictiveProfile, PREDICTIVE_SELECTOR_OPTIONS } from "@/lib/predictiveBuilderModel";
+import { buildPredictiveProfile } from "@/lib/predictiveBuilderModel";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import {
   CHALLENGE_CONTEXT_OPTIONS,
@@ -110,6 +108,7 @@ function VarPill({ children }) {
 
 // ── Capability pill ───────────────────────────────────────────────────────────
 function CapPill({ children }) {
+  const [open, setOpen] = useState(false);
   const CAP_DESCRIPTIONS = {
     "Question Quality": "Asking questions that are timely, relevant, and move the conversation forward.",
     "Listening & Responsiveness": "Accurately understanding customer input and responding in a way that clearly reflects understanding.",
@@ -131,25 +130,35 @@ function CapPill({ children }) {
   const description = CAP_DESCRIPTIONS[children];
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <motion.div
-          className="flex items-center gap-2 group"
-          whileHover={{ x: 4 }}
-          transition={{ type: "spring", stiffness: 300, damping: 20 }}
+    <div className="rounded-xl border border-teal-100/80 bg-white/55 px-3 py-2">
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 text-left group"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <motion.span
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ duration: 0.16, ease: "easeOut" }}
+          className="shrink-0"
         >
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-          <p className="text-sm text-slate-700 font-semibold leading-snug group-hover:text-slate-900 transition-colors">
-            {children}
-          </p>
-        </motion.div>
-      </TooltipTrigger>
-      {description && (
-        <TooltipContent className="max-w-xs bg-white text-slate-900 border border-slate-200 text-sm font-normal rounded-lg p-3 shadow-lg">
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-teal-600 transition-colors" />
+        </motion.span>
+        <span className="text-sm text-slate-700 font-semibold leading-snug group-hover:text-slate-900 transition-colors">
+          {children}
+        </span>
+      </button>
+      {description && open ? (
+        <motion.p
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          className="mt-2 pl-6 text-xs leading-relaxed text-slate-600"
+        >
           {description}
-        </TooltipContent>
-      )}
-    </Tooltip>
+        </motion.p>
+      ) : null}
+    </div>
   );
 }
 
@@ -405,7 +414,6 @@ function AiCoachSection({ scenario }) {
 
 // ── Main Modal ─────────────────────────────────────────────────────────────────
 export default function ScenarioDetailModal({ scenario, difficulty: _difficulty, onClose, onStart }) {
-  const navigate = useNavigate();
   // Recompute difficulty using light palette labels
   const getDiff = () => {
     const stage = scenario.journeyStage || "";
@@ -434,15 +442,6 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
     { label: "Best next move", value: cleanPredictiveHighlight(predictiveProfile?.sections?.repApproach?.headline) },
   ].filter((item) => item.value);
 
-  const openAdvancedBuilder = () => {
-    const params = new URLSearchParams();
-    Object.entries(predictiveSeed).forEach(([key, value]) => {
-      if (value) params.set(key, String(value));
-    });
-    const suffix = params.toString();
-    navigate(`/predictive-builder${suffix ? `?${suffix}` : ""}`);
-  };
-
   // Strip "Role — " prefix from context
   const contextDetail = (() => {
     const raw = scenario.context || "";
@@ -453,7 +452,6 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
   const getControlLabel = (options, value) => options.find((option) => option.value === value)?.label || value;
 
   return (
-    <TooltipProvider>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={onClose} />
@@ -511,54 +509,67 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
             <OpeningSceneBlock scenario={scenario} />
 
             <div className="rounded-2xl border p-4" style={{ background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,249,248,0.98) 100%)", borderColor: "rgba(114, 190, 178, 0.34)" }}>
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-4">
+                <div className="min-w-0">
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em]" style={{ color: "hsl(176 52% 30%)" }}>
                     Predictive Read
                   </p>
                   <p className="mt-1 text-sm leading-relaxed" style={{ color: "hsl(213 20% 33%)" }}>
                     What the HCP is likely testing before they give the rep more time.
                   </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                    {predictiveHighlights.map((item) => (
+                      <BriefMetric key={item.label} label={item.label} value={item.value} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-4 border-t pt-4" style={{ borderColor: "rgba(114, 190, 178, 0.20)" }}>
+                    {[
+                      ["HCP", getControlLabel(HCP_ROLE_OPTIONS, controlSelection.hcpType)],
+                      ["Stage", getControlLabel(CONVERSATION_STAGE_OPTIONS, controlSelection.stage)],
+                      ["Pressure", getControlLabel(CHALLENGE_CONTEXT_OPTIONS, controlSelection.challenge)],
+                      ["Realism", `${realismValue}/10`],
+                    ].map(([field, value]) => (
+                      <span
+                        key={field}
+                        className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                        style={{
+                          color: "hsl(213 32% 29%)",
+                          background: "rgba(231, 242, 243, 0.95)",
+                          border: "1px solid rgba(114, 190, 178, 0.32)",
+                        }}
+                      >
+                        {field}: {value}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={openAdvancedBuilder}
-                  className="shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors"
+                <div
+                  className="rounded-2xl p-4"
                   style={{
-                    color: "hsl(176 45% 14%)",
-                    background: "rgba(227, 247, 243, 0.96)",
-                    border: "1px solid rgba(89, 175, 164, 0.45)",
+                    background: "rgba(238, 249, 247, 0.78)",
+                    border: "1.5px solid rgba(134, 209, 194, 0.62)",
                   }}
                 >
-                  Open Advanced Builder
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
-                {predictiveHighlights.map((item) => (
-                  <BriefMetric key={item.label} label={item.label} value={item.value} />
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-2 mt-4 border-t pt-4" style={{ borderColor: "rgba(114, 190, 178, 0.20)" }}>
-                {[
-                  ["HCP", getControlLabel(HCP_ROLE_OPTIONS, controlSelection.hcpType)],
-                  ["Stage", getControlLabel(CONVERSATION_STAGE_OPTIONS, controlSelection.stage)],
-                  ["Pressure", getControlLabel(CHALLENGE_CONTEXT_OPTIONS, controlSelection.challenge)],
-                  ["Realism", `${realismValue}/10`],
-                ].map(([field, value]) => (
-                  <span
-                    key={field}
-                    className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                    style={{
-                      color: "hsl(213 32% 29%)",
-                      background: "rgba(231, 242, 243, 0.95)",
-                      border: "1px solid rgba(114, 190, 178, 0.32)",
-                    }}
-                  >
-                    {field}: {value}
-                  </span>
-                ))}
+                  <div className="flex items-center gap-2 mb-4">
+                    <Zap className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
+                        Signal Intelligence Focus
+                      </p>
+                      <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "hsl(176 42% 34%)" }}>
+                        Focus Capabilities
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    {SIGNAL_INTELLIGENCE_CAPABILITIES
+                      .filter(cap => focusCaps.includes(cap.id))
+                      .map(cap => (
+                        <CapPill key={cap.id}>{cap.metric}</CapPill>
+                      ))
+                    }
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -578,36 +589,6 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
               </BriefSection>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
-              <div
-                className="rounded-2xl p-4"
-                style={{
-                  background: "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(238, 249, 247, 0.98) 100%)",
-                  border: "1.5px solid rgba(134, 209, 194, 0.70)",
-                }}
-              >
-                <div className="flex items-center gap-2 mb-4">
-                  <Zap className="w-4 h-4" style={{ color: "hsl(162 55% 38%)" }} />
-                  <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "hsl(162 55% 38%)" }}>
-                    Signal Intelligence Focus
-                  </p>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider mb-2.5" style={{ color: "hsl(162 55% 38%)" }}>Focus Capabilities</p>
-                    <div className="grid sm:grid-cols-3 gap-2">
-                      {SIGNAL_INTELLIGENCE_CAPABILITIES
-                        .filter(cap => focusCaps.includes(cap.id))
-                        .map(cap => (
-                          <CapPill key={cap.id}>{cap.metric}</CapPill>
-                        ))
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* AI Coach */}
             <AiCoachSection scenario={scenario} />
 
@@ -616,18 +597,6 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
               <button onClick={onClose}
                 className="py-2 px-5 rounded-lg border border-slate-200 text-slate-500 text-sm hover:border-slate-300 hover:text-slate-700 transition-colors">
                 Close
-              </button>
-              <button
-                type="button"
-                onClick={openAdvancedBuilder}
-                className="py-2 px-5 rounded-lg border text-sm font-semibold transition-colors"
-                style={{
-                  borderColor: "rgba(34, 123, 118, 0.24)",
-                  color: "hsl(176 42% 28%)",
-                  background: "rgba(227, 247, 243, 0.92)",
-                }}
-              >
-                Advanced Builder
               </button>
               <button onClick={onStart}
                 className="py-2 px-6 rounded-lg text-sm font-semibold text-white transition-colors"
@@ -641,6 +610,5 @@ export default function ScenarioDetailModal({ scenario, difficulty: _difficulty,
           </div>
         </motion.div>
       </div>
-    </TooltipProvider>
   );
 }
