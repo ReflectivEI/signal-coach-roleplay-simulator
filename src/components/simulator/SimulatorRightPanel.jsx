@@ -217,7 +217,7 @@ export default function SimulatorRightPanel({
           ) : null}
         >
           <div
-            className="p-2.5 rounded-xl"
+            className="p-2.5 rounded-xl text-left"
             style={{
               background: "linear-gradient(180deg, rgba(98, 74, 13, 0.20) 0%, rgba(68, 52, 11, 0.16) 100%)",
               border: "1px solid rgba(231, 196, 83, 0.30)",
@@ -226,8 +226,7 @@ export default function SimulatorRightPanel({
             <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255, 216, 94, 0.98)" }}>
               {liveCoaching.capabilityName || liveCoaching.title || "Live coaching"}
             </p>
-            <p className="mt-1.5 text-xs leading-relaxed" style={{ color: "rgba(255, 235, 169, 0.94)" }}>
-              <span style={{ color: "hsl(2 57% 43%)", fontStyle: "italic", fontWeight: 700 }}>Tip:</span>{" "}
+            <p className="mt-1.5 text-xs leading-relaxed text-left" style={{ color: "rgba(255, 235, 169, 0.94)" }}>
               {liveCoaching.guidance}
             </p>
           </div>
