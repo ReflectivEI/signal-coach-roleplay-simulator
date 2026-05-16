@@ -550,6 +550,13 @@ function enforceRepTranscriptAlignment(line = "", repTranscript = "", hcpState =
     return clipToSentenceCount(merged, 2);
 }
 
+function hasSessionNearDuplicate(line = "", history = []) {
+    const candidate = str(line);
+    if (!candidate) return false;
+    const recent = dedupeTail(history, 8).filter(Boolean);
+    return recent.some((prior) => semanticSimilarityScore(candidate, prior) >= 0.72);
+}
+
 /** @param {{ targetBucket?: string, barrier?: string, revealedBarrier?: string, variationSeed?: number, liveTemperature?: number }} [params] */
 function buildForcedBucketLine({
     targetBucket,
@@ -1908,6 +1915,29 @@ export function generateHcpResponse({
         const topic = inferRepTopic(repResponseTranscript);
         hcp_statement = clipToSentenceCount(buildTopicRepeatBreaker(topic, repResponseTranscript, hcpState, conversationMemory, scenarioContext), 2);
         hcp_progression_explanation = `${hcp_progression_explanation} Final topic-preserving duplicate breaker applied.`.trim();
+    }
+
+    // Full-session uniqueness guard (not just prior turn) to prevent repeated stock lines.
+    const sessionHistory = dedupeTail([
+        ...arr(conversationMemory?.hcp_response_history || []),
+        ...arr(hcpState?.hcp_response_history || []),
+    ], 8).filter(Boolean);
+    if (hasSessionNearDuplicate(hcp_statement, sessionHistory)) {
+        const currentBucket = inferIntentBucketFromLine(hcp_statement, hcpState, hcpBrain);
+        const lanePolicy = buildScenarioLanePolicy({ hcpState, conversationMemory, scenarioContext });
+        const rotatedBucket = nextIntentBucket(
+            lanePolicy.allowedBuckets.includes(currentBucket) ? currentBucket : lanePolicy.primaryBucket,
+            lanePolicy.allowedBuckets,
+        );
+        const variationSeed = sessionHistory.length + Number(hcpState?.anti_loop_intervention_count || 0);
+        hcp_statement = clipToSentenceCount(buildForcedBucketLine({
+            targetBucket: rotatedBucket,
+            barrier,
+            revealedBarrier,
+            variationSeed,
+            liveTemperature,
+        }), 2);
+        hcp_progression_explanation = `${hcp_progression_explanation} Full-session anti-repeat guard rotated the prompt lane.`.trim();
     }
 
     if (antiLoopEnforcement.anti_loop_intervention_triggered) {
