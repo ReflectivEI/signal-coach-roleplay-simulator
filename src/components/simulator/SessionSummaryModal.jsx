@@ -132,6 +132,12 @@ function cleanCoachingCopy(text = "") {
   if (!text) return "";
 
   const normalized = stripSystemReferences(text)
+    .replace(/\bGive me the short version\b/gi, "Start with the practical version")
+    .replace(/\bkeep it tight\b/gi, "keep it focused")
+    .replace(/\bbecame increasingly frustrated and resistant\b/gi, "stayed guarded and narrowed the exchange")
+    .replace(/\bincreasingly frustrated\b/gi, "less open")
+    .replace(/\bclear understanding of what we'?re discussing\b/gi, "specific answer to the HCP's stated concern")
+    .replace(/\bbrief overview of our topic\b/gi, "direct answer to the HCP's question")
     .replace(/\bforensic\b/gi, "detailed")
     .replace(/\bdiagnostic\b/gi, "focused")
     .replace(/\bbehavioral signal\b/gi, "moment")
@@ -148,6 +154,12 @@ function cleanCoachingCopyExpanded(text = "", maxWords = 44) {
   if (!text) return "";
 
   const normalized = stripSystemReferences(text)
+    .replace(/\bGive me the short version\b/gi, "Start with the practical version")
+    .replace(/\bkeep it tight\b/gi, "keep it focused")
+    .replace(/\bbecame increasingly frustrated and resistant\b/gi, "stayed guarded and narrowed the exchange")
+    .replace(/\bincreasingly frustrated\b/gi, "less open")
+    .replace(/\bclear understanding of what we'?re discussing\b/gi, "specific answer to the HCP's stated concern")
+    .replace(/\bbrief overview of our topic\b/gi, "direct answer to the HCP's question")
     .replace(/\bforensic\b/gi, "detailed")
     .replace(/\bdiagnostic\b/gi, "focused")
     .replace(/\bbehavioral signal\b/gi, "moment")
@@ -247,13 +259,22 @@ function findNextHcpTurn(session, repText = "") {
   return turns.slice(repIndex + 1).find((turn) => turn?.speaker === "hcp") || null;
 }
 
+function isSubstantiveRepQuestion(text = "") {
+  const value = String(text || "").trim().toLowerCase();
+  if (!/\?/.test(value)) return false;
+  if (/^(hi|hello|hey|good morning|good afternoon|good evening)?\s*(how are you|how are things|how'?s it going)\??$/i.test(value)) {
+    return false;
+  }
+  return /\b(patient|practice|workflow|staff|office|access|prior auth|coverage|study|trial|data|evidence|outcome|safety|cost|value|next step|concern|question|consider)\b/i.test(value);
+}
+
 function buildTranscriptAttemptParagraph(session) {
   const repTurns = getTranscriptTurns(session, "rep");
-  const firstRepQuestion = repTurns.find((turn) => /\?/.test(String(turn?.text || "")));
+  const firstRepQuestion = repTurns.find((turn) => isSubstantiveRepQuestion(turn?.text || ""));
 
   if (!firstRepQuestion) {
     if (repTurns.length > 1) {
-      return "You did stay in the conversation after the initial pushback instead of ending the exchange immediately, but each follow-up stayed too vague to rebuild credibility.";
+      return "You stayed in the conversation after the initial pushback, but the follow-ups did not yet answer the HCP's active concern or move the exchange toward a clearer decision.";
     }
     return "";
   }

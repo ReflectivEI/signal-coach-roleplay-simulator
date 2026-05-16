@@ -91,7 +91,8 @@ function repairIncompleteOperationalAsks(text = ""): string {
     .replace(/\bwho owns that step\.$/i, "Who owns that step?")
     .replace(/\bwhat happens next\.$/i, "What happens next?")
     .replace(/\bwhat changes for staff\.$/i, "What changes for staff?")
-    .replace(/\bwhat changes in the access step\.$/i, "What changes in the access step?");
+    .replace(/\bwhat changes in the access step\.$/i, "What changes in the access step?")
+    .replace(/\bwhat changes for my staff before my next patient[.?]?$/i, "What changes for my staff in practice?");
 }
 
 function dedupeSentences(text = ""): string {
@@ -174,6 +175,14 @@ function softenHostileTone(text = ""): string {
     .replace(/\bI'm intrigued by the new study, but I need to understand how it applies to my patients and if it's worth diverting attention from their current treatment plans, given my already packed schedule\b/gi, "The study could be useful. How does it apply to my patients right now")
     .replace(/\bI'm intrigued by the new study, but\b/gi, "The study could be useful, but")
     .replace(/\bI'm intrigued by the study, but\b/gi, "The study could be useful, but")
+    .replace(/\bLook,\s*I'?ve got four minutes before my next patient\.\s*My MA said you had something about prior auth reduction,?\s*that'?s why I said yes\.?/gi, "I have a little time. My MA said this was about prior auth reduction, so we can talk through that briefly.")
+    .replace(/\bLook,\s*I'?ve got four minutes before my next patient\.\s*My MA said you had something about prior auth reduction\s*(?:-|—)\s*that'?s the only reason I said yes\.?/gi, "I have a little time. My MA said this was about prior auth reduction, so we can talk through that briefly.")
+    .replace(/\bI'?ve got a packed schedule today and my staff'?s already stretched thin,?\s*so what'?s the one thing they can take away from this that'?ll actually save us time on prior auths\??/gi, "My staff is stretched today. What would actually save time in the prior auth process?")
+    .replace(/\bI have a few minutes\.\s*Give me the short version before my next patient, including what changes for my staff\.?/gi, "I have a little time. What changes for my staff in practice?")
+    .replace(/\bI have a few minutes\.\s*Give me the short version before my next patient\.?/gi, "I have a little time. What is the practical takeaway?")
+    .replace(/\bShort version only:\s*what changes in the office enough for this to matter\??/gi, "What changes in the office enough for this to matter?")
+    .replace(/\bKeep it tight\.\s*What changes for my staff before my next patient\??/gi, "What changes for my staff in practice?")
+    .replace(/\bI have limited time\.\s*Give me the practical staff version\.?/gi, "I have a little time. What is the practical staff impact?")
     .replace(/\bintrigued by the new study\b/gi, "open to hearing about the study")
     .replace(/\bintrigued by the study\b/gi, "open to hearing about the study")
     .replace(/\bworth diverting attention from (?:their|my patients'?|the) current treatment plans\b/gi, "worth changing what we are already doing")
@@ -203,8 +212,10 @@ function softenHostileTone(text = ""): string {
     .replace(/\bmake it relevant to my patients\b/gi, "can you connect this to my patients")
     .replace(/\bgive me one (?:concrete|practical|useful|clear) point\b/gi, "help me understand the most relevant point")
     .replace(/\bgive me one reason\b/gi, "help me understand the reason")
-    .replace(/\bgive me the short version\b/gi, "walk me through the short version")
+    .replace(/\bgive me the short version\b/gi, "walk me through the practical version")
     .replace(/\bgive me the practical\b/gi, "help me understand the practical")
+    .replace(/\bshort version only\b/gi, "keep it practical")
+    .replace(/\bkeep it tight\b/gi, "keep it focused")
     .replace(/\bbe quick\b/gi, "we can be brief")
     .replace(/\bmake this quick\b/gi, "we can keep this brief")
     .replace(/^look,\s*/i, "")

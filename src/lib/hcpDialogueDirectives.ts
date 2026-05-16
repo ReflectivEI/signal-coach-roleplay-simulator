@@ -40,7 +40,7 @@ export function buildDialogueDirectivePrompt(scenario: any = {}, behaviorState =
             : concernFamily === "screening"
               ? "When the concern family is screening, the HCP should stay on patient boundaries, candidacy, or what would actually identify the right patient."
               : concernFamily === "time"
-                ? "When the concern family is time, the HCP should compress the exchange and demand the short version, not broaden the conversation."
+                ? "When the concern family is time, the HCP should stay concise and ask for the practical point, not broaden the conversation."
             : "Keep the HCP on one concrete concern instead of broadening the discussion.";
 
   const pressureDirective =
@@ -73,7 +73,7 @@ export function buildDialogueDirectivePrompt(scenario: any = {}, behaviorState =
       : concernFamily === "adoption_caution"
         ? 'Example tone: "I am not arguing with the data. I need to know what makes this safe enough not to be first."'
       : concernFamily === "time"
-        ? 'Example tone: "I only have a minute. Give me the short version."'
+        ? 'Example tone: "I have a little time. Start with what changes in practice."'
       : 'Example tone: "Keep it practical. What changes for me in the room?"';
 
   return [

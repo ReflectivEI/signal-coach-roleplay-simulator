@@ -240,7 +240,7 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
       "Checks the clock, then looks back with a tighter expression.",
       "Glances toward the next room and comes back ready for one concise point.",
       "Looks at the schedule, then back with very little space left in the exchange.",
-      "Checks the next patient slot, attention returning only for the short version.",
+      "Checks the next patient slot, attention returning to the practical point.",
     ],
     general: [
       "Checks the clock, then looks back with a tighter expression.",

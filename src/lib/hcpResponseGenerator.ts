@@ -626,9 +626,9 @@ function buildRealismSpecificAsk(scenario: any, hcpReply = ""): string {
     : [];
   if (isInitialAccessStage(scenario)) {
     if (pressures.includes("time_constrained") && pressures.includes("operationally_constrained")) {
-      return "the short version before my next patient and what changes for my staff";
+      return "what changes for my staff in practice";
     }
-    if (pressures.includes("time_constrained")) return "the short version before my next patient";
+    if (pressures.includes("time_constrained")) return "the practical takeaway for the time we have";
     if (pressures.includes("operationally_constrained")) return "what changes for my staff in practical terms";
     return "why this is worth opening a conversation";
   }
@@ -711,7 +711,7 @@ function buildStageBoundRealismReply({
         }
         if (timeConstrained) {
           return [
-            "Okay, quick version before I go, what's the actual point?",
+            "Okay, before I get pulled back in, what should I understand first?",
             "If this stays this broad, I don't think I'm getting it.",
             "So what's the part you think actually matters?",
           ];
@@ -761,26 +761,26 @@ function buildStageBoundRealismReply({
         return choose(repeatCount >= 2
           ? [
             "We're kind of circling now. What actually changes for my staff?",
-            "Short version, what does my office actually have to do differently?",
-            "I'm still between patients. What's the real office change?",
+            "What does my office actually have to do differently?",
+            "I'm still between patients. What's the practical office change?",
           ]
           : [
-            "I've got a minute, what changes for my staff?",
+            "I have a little time. What changes for my staff?",
             "I'm between patients. Just tell me what the office has to do differently.",
-            "Quick version, what changes for the team?",
+            "What changes for the team?",
           ], "initial-low-time-ops");
       }
       if (timeConstrained) {
         return choose(repeatCount >= 2
           ? [
             "I've got a patient waiting and we're starting to repeat ourselves.",
-            "I can stay another minute if you get to the actual point.",
-            "Give me one thing that's actually useful before I go.",
+            "I can stay another minute if you connect this to the patient decision.",
+            "Help me understand the practical point before I go.",
           ]
           : [
-            "I've got a minute, what's the actual takeaway?",
-            "I'm between patients. Quick version?",
-            "Keep this quick, why does this actually matter?",
+            "I have a little time. What's the actual takeaway?",
+            "I'm between patients. What should I understand first?",
+            "Why does this actually matter in practice?",
           ], "initial-low-time");
       }
       if (operational) {
@@ -851,12 +851,12 @@ function buildStageBoundRealismReply({
       ? operational
         ? [
           "I've got a patient waiting. What does my staff actually do?",
-          "This is still too broad for the time I have. One practical office point.",
+          "This is still too broad for the time I have. Help me connect it to the office step.",
           "I need the real office step, not the overview.",
         ]
         : [
           "I've got a patient waiting. What's the patient reason?",
-          "This is still too broad for the time I have. One practical patient point.",
+          "This is still too broad for the time I have. Help me connect it to the patient.",
           "What changes enough for me to care?",
         ]
       : [
@@ -2021,10 +2021,10 @@ function deterministicContinuityVariation({
       : [];
     if (pressures.includes("time_constrained")) {
       return pressures.includes("operationally_constrained")
-        ? "I have a few minutes. Give me the short version before my next patient, including what changes for my staff."
-        : "I have a few minutes. Give me the short version before my next patient.";
+        ? "I hear the staff-workflow point. Can you connect it to what changes for my team in practice?"
+        : "I hear you. Can you make the practical takeaway clear for the time we have?";
     }
-    return "Keep this practical. What's the reason to open the conversation?";
+    return "I hear you. What should I understand first for this office?";
   }
 
   if (isEarlyDiscoveryStage(scenario)) {
@@ -2212,13 +2212,13 @@ function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): strin
 
   if (focusPhrase) {
     return timeConstrained
-      ? `If we're talking about ${focusPhrase}, keep it tight. ${practicalAsk}`
-      : `If we're talking about ${focusPhrase}, be specific. ${practicalAsk}`;
+      ? `If we're talking about ${focusPhrase}, can you connect it to what changes for the office?`
+      : `If we're talking about ${focusPhrase}, help me connect that to the patient or workflow decision.`;
   }
 
   return timeConstrained
-    ? `I'm doing alright, but I only have a minute. ${practicalAsk}`
-    : `I'm doing alright. ${practicalAsk}`;
+    ? "I'm doing alright. I have a little time, so start with what changes in practice."
+    : "I'm doing alright. What were you hoping to talk through?";
 }
 
 function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): string {
@@ -2236,27 +2236,27 @@ function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): st
   }
   if (/\bprior auth|prior authorization|coverage|formulary|payer|approval|access\b/.test(normalized)) {
     if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
-      return timeConstrained ? "I have a few minutes. What changes in access for my staff?" : "What changes in access or workflow for my staff?";
+      return timeConstrained ? "I hear the access-workflow point. What changes for my team in practice?" : "I hear the access-workflow point. How does it change the office process?";
     }
-    return timeConstrained ? "I have a few minutes. What changes in the access step?" : "What changes in the access step?";
+    return timeConstrained ? "I hear the access point. What changes in the approval path?" : "What changes in the approval path?";
   }
   if (/\bstaff|workflow|office|callback|handoff|process\b/.test(normalized)) {
-    return timeConstrained ? "I have a few minutes. What changes for my staff?" : "What changes for my staff?";
+    return timeConstrained ? "I hear the workflow point. What changes for my staff in practice?" : "What changes for my staff in practice?";
   }
   if (/\bwhich patient|which patients|patient subgroup|right fit|patient fit|patient profile|selection\b/.test(normalized)) {
     return timeConstrained ? "I hear the patient-fit question, but keep it brief." : "I hear the patient-fit question.";
   }
   if (/\bhow are you|how's it going|how are things\b/.test(normalized)) {
-    return timeConstrained ? "I'm doing alright, but I only have a minute." : "I'm doing alright.";
+    return timeConstrained ? "I'm doing alright. I have a little time." : "I'm doing alright.";
   }
   if (/^(hi|hello|hey|good morning|good afternoon|good evening)\b/.test(normalized)) {
-    return timeConstrained ? "Hi. I only have a minute." : "Hi.";
+    return timeConstrained ? "Hi. I have a little time." : "Hi.";
   }
   if (/\bcan we speak|can we talk|do you have a minute|can i speak with you|can i talk with you\b/.test(normalized)) {
-    return timeConstrained ? "Briefly." : "I can talk briefly.";
+    return timeConstrained ? "Briefly, yes. What did you want to discuss?" : "I can talk briefly. What did you want to discuss?";
   }
   if (/\bnot sure|just checking in|wanted to check in|quick question\b/.test(normalized)) {
-    return timeConstrained ? "Keep the question tight." : "I hear you, but make the question concrete.";
+    return timeConstrained ? "I hear you. What question should we start with?" : "I hear you. What question should we start with?";
   }
 
   return "";
@@ -2460,7 +2460,7 @@ function buildClinicalValueReplyVariants({
   if (accessTagged) {
     variants.push(
       timeConstrained
-        ? "I need the short version: what changes in prior auth for staff, and what outcome still justifies cost per patient?"
+        ? "Help me connect the prior auth change to staff time and the patient outcome it protects."
         : "I need the operational answer: what changes in prior auth for my staff, and what outcome still justifies cost per patient?"
     );
   }
@@ -2767,12 +2767,12 @@ function buildFirstTurnAlignedReply(repMessage: string, scenario: any): string {
   }
   if (topic === "access") {
     return withFirstTurnRepAcknowledgement(timeConstrained
-      ? `If this is about access, keep it tight. ${practicalAsk}`
+      ? `If this is about access, connect it to the practical change. ${practicalAsk}`
       : `If this is about access, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "workflow") {
     return withFirstTurnRepAcknowledgement(timeConstrained
-      ? `If this is about workflow, keep it tight. ${practicalAsk}`
+      ? `If this is about workflow, connect it to the practical change. ${practicalAsk}`
       : `If this is about workflow, be specific. ${practicalAsk}`, repMessage, scenario);
   }
   if (topic === "clinical_value") {
@@ -3662,7 +3662,7 @@ SPOKEN REALISM GUARDRAILS:
 - At realism 5/10, default to neutral, cordial, and slightly engaged. Do not make the HCP resistant, hostile, or dismissive unless the scenario state explicitly requires it.
 
 GOOD STYLE EXAMPLES:
-- "I have limited time, so keep this focused."
+- "I have a little time, so let's keep this practical."
 - "I'm doing alright. What are you hoping to cover?"
 - "I hear you. Help me connect that to the patient decision."
 - "I have a minute. Can we start with how this affects patients like mine?"

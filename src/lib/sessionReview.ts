@@ -92,7 +92,7 @@ const TRAILING_SENTENCE_REPAIRS: Array<[RegExp, string]> = [
 ];
 
 function repairGeneratedText(value: unknown, fallback = ""): string {
-  let text = String(value ?? "").replace(/\s+/g, " ").trim();
+  let text = applyReviewTextSurface(String(value ?? "").replace(/\s+/g, " ").trim());
   if (!text) return fallback;
 
   for (const [pattern, replacement] of TRAILING_SENTENCE_REPAIRS) {
@@ -107,6 +107,21 @@ function repairGeneratedText(value: unknown, fallback = ""): string {
 
   if (!repaired) return fallback;
   return /[.!?"]$/.test(repaired) ? repaired : `${repaired}.`;
+}
+
+function applyReviewTextSurface(value = ""): string {
+  return String(value || "")
+    .replace(/\bGive me the short version\b/gi, "Start with the practical version")
+    .replace(/\bkeep it tight\b/gi, "keep it focused")
+    .replace(/\bI have limited time\b/gi, "I have a little time")
+    .replace(/\bbecame increasingly frustrated and resistant\b/gi, "stayed guarded and narrowed the exchange")
+    .replace(/\bincreasingly frustrated\b/gi, "less open")
+    .replace(/\bclear understanding of what we'?re discussing\b/gi, "specific answer to the HCP's stated concern")
+    .replace(/\bbrief overview of our topic\b/gi, "direct answer to your question")
+    .replace(/\bCan I provide a brief overview of our topic\?/gi, "Can I answer that directly first?")
+    .replace(/\bthe rep did attempt to ask open-ended questions, such as ['"]?how are you['"]?[^.?!]*[.?!]?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function asNonEmptyString(value: unknown, fallback = ""): string {
@@ -177,6 +192,31 @@ function takeNonEmpty(values: Array<unknown>, fallback = ""): string {
   return fallback;
 }
 
+function isWeakReviewText(value = ""): boolean {
+  const text = String(value || "").toLowerCase();
+  if (!text.trim()) return true;
+  return [
+    /brief overview of our topic/,
+    /clear understanding of what we're discussing/,
+    /clear understanding of what we are discussing/,
+    /the rep did attempt to ask open-ended questions, such as ['"]?how are you/,
+    /ask better questions/,
+    /improve your listening/,
+    /be more relevant/,
+    /address the concern/,
+    /adapt better/,
+    /try to be more/,
+  ].some((pattern) => pattern.test(text));
+}
+
+function takeSpecificNonEmpty(values: Array<unknown>, fallback = ""): string {
+  for (const value of values) {
+    const normalized = asNonEmptyString(value);
+    if (normalized && !isWeakReviewText(normalized)) return normalized;
+  }
+  return fallback;
+}
+
 function inferReviewConcernFamily(scenario: any, transcript: ConversationTurn[] = []): string {
   const joined = [
     scenario?.title,
@@ -224,14 +264,14 @@ function buildStructuredSectionTexts({
   const persona = String(scenario?.persona || "unspecified");
 
   const primaryDiagnosisText = takeNonEmpty([
-    result?.primaryDiagnosisText,
+    takeSpecificNonEmpty([result?.primaryDiagnosisText]),
     primaryMiss
       ? `${primaryMiss.capabilityName}: ${takeNonEmpty([primaryMiss.whatHappened, result?.briefRationale, result?.biggestGap])}`
       : result?.briefRationale,
   ], "No primary diagnosis was generated.");
 
   const failureHierarchyText = takeNonEmpty([
-    result?.failureHierarchyText,
+    takeSpecificNonEmpty([result?.failureHierarchyText]),
     primaryMiss
       ? [
         `Primary Failure Driver: ${primaryMiss.capabilityName}.`,
@@ -243,21 +283,21 @@ function buildStructuredSectionTexts({
   ], "No failure hierarchy was generated.");
 
   const interactionConsequenceText = takeNonEmpty([
-    result?.interactionConsequenceText,
+    takeSpecificNonEmpty([result?.interactionConsequenceText]),
     primaryMiss?.whyItMattered,
     Array.isArray(result?.signalResponseAlignment) ? result.signalResponseAlignment[1] : "",
     result?.briefRationale,
   ], "No interaction consequence was generated.");
 
   const whatWentWellText = takeNonEmpty([
-    result?.whatWentWellText,
+    takeSpecificNonEmpty([result?.whatWentWellText, result?.didWell]),
     effectiveInsights.length
       ? effectiveInsights.map((item) => takeNonEmpty([item.whatHappened, item.whatGoodLooksLike])).filter(Boolean).join(" ")
-      : result?.didWell,
+      : "No trajectory-changing strength appeared in this exchange. The rep stayed in the conversation, but the usable behavior did not yet move the HCP's concern forward.",
   ], "No meaningful strength changed interaction trajectory in this exchange.");
 
   const limitsText = takeNonEmpty([
-    result?.limitsText,
+    takeSpecificNonEmpty([result?.limitsText]),
     [...missedInsights, ...developingInsights]
       .slice(0, 3)
       .map((item) => takeNonEmpty([item.whatHappened, item.pattern, item.whyItMattered]))
@@ -267,12 +307,12 @@ function buildStructuredSectionTexts({
   ], "No limitation detail was generated.");
 
   const hcpTestingText = takeNonEmpty([
-    result?.hcpTestingText,
+    takeSpecificNonEmpty([result?.hcpTestingText]),
     `This HCP was testing ${concernFamily} under a ${persona} persona with ${pressures} pressure.`,
   ], "No HCP test was generated.");
 
   const coachingDirectionText = takeNonEmpty([
-    result?.coachingDirectionText,
+    takeSpecificNonEmpty([result?.coachingDirectionText]),
     [
       takeNonEmpty([result?.nextAdjustment]),
       primaryMiss?.nextTimeAction ? `Next move: ${primaryMiss.nextTimeAction}` : "",

@@ -6233,7 +6233,15 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   }
 
   function buildSessionReviewMarkdown(review = {}) {
-    const safeParagraph = (value = "") => String(value || "").trim();
+    const safeParagraph = (value = "") => String(value || "")
+      .replace(/\bGive me the short version\b/gi, "Start with the practical version")
+      .replace(/\bkeep it tight\b/gi, "keep it focused")
+      .replace(/\bbecame increasingly frustrated and resistant\b/gi, "stayed guarded and narrowed the exchange")
+      .replace(/\bincreasingly frustrated\b/gi, "less open")
+      .replace(/\bclear understanding of what we'?re discussing\b/gi, "specific answer to the HCP's stated concern")
+      .replace(/\bbrief overview of our topic\b/gi, "direct answer to the HCP's question")
+      .replace(/\s+/g, " ")
+      .trim();
     const safeList = (value) => Array.isArray(value) ? value.map((item) => safeParagraph(item)).filter(Boolean) : [];
     const transcriptEvidence = Array.isArray(review?.capabilityInsights)
       ? review.capabilityInsights

@@ -33,19 +33,19 @@ function buildExampleMatrix(openers = [], responses = []) {
 const JOURNEY_STAGE_SEEDS = {
   initial_access: {
     openers: [
-      "I've got a few minutes before my next patient.",
+      "I have a little time before my next patient.",
       "I'm listening, but I'm between visits right now.",
-      "Okay, but I need the short version.",
+      "Okay, start with what changes in practice.",
       "I can give you a minute here.",
       "If this lands on my office, I need to know that up front.",
-      "I don't have time for a long setup.",
+      "Let's keep this focused on what changes in practice.",
     ],
     responses: [
       "What are you here to cover?",
       "If this is about prior auth, that's been one of the bigger headaches for my staff.",
       "If you're here about access, that's usually where this gets stuck for us.",
-      "Tell me the practical reason I should make time for this.",
-      "Keep it focused and get to the point.",
+      "Help me understand the practical reason this matters here.",
+      "Keep it focused on the office impact.",
       "Start with the part that's actually relevant to my office.",
     ],
   },
@@ -110,7 +110,7 @@ const JOURNEY_STAGE_SEEDS = {
       "Prior auth is where good intentions go to die sometimes.",
       "The access piece is usually where the plan falls apart for us.",
       "If the payer step is still a mess, I need the honest version of that.",
-      "I don't need the sales version of access.",
+      "I need the practical access version.",
     ],
     responses: [
       "It's whether patients can actually get it.",
@@ -151,7 +151,7 @@ const JOURNEY_STAGE_SEEDS = {
     responses: [
       "I'll look at something concise.",
       "Make sure it answers the access question.",
-      "Give me the practical next step, not the full deck.",
+      "Give me the practical next step in plain terms.",
       "I need the next step to feel workable.",
       "If this moves forward, it has to be on a realistic path.",
       "Don't make it bigger than it needs to be.",
@@ -162,20 +162,20 @@ const JOURNEY_STAGE_SEEDS = {
 const INTERACTION_PRESSURE_SEEDS = {
   time_constrained: {
     openers: [
-      "I've got about two minutes.",
-      "Give me the short version.",
-      "I'm not going to sit through a long setup.",
+      "I have a little time.",
+      "Start with what changes in practice.",
+      "Let's skip the long setup and keep this practical.",
       "I'm between patients right now.",
-      "Keep this tight for me.",
-      "Start with the one thing that matters here.",
+      "Keep this focused for me.",
+      "Start with what matters for the office.",
     ],
     responses: [
-      "What's the point you need me to hear?",
-      "Be specific.",
+      "What should I understand first?",
+      "Make it specific to this office.",
       "I need the practical point first.",
-      "Use the minute well.",
-      "Don't make me dig for the real point.",
-      "If this matters, I should hear it quickly.",
+      "Use the time to connect this to practice.",
+      "Make the practical point clear up front.",
+      "If this matters, connect it to what changes here.",
     ],
   },
   operationally_constrained: {
@@ -203,7 +203,7 @@ const INTERACTION_PRESSURE_SEEDS = {
       "I'm not saying no, but I'm not there yet.",
       "I've seen this story before.",
       "I'm not going to move on this just because it sounds promising.",
-      "You're going to have to earn the next step here.",
+      "I need a practical reason to keep this moving.",
     ],
     responses: [
       "What's different this time?",
@@ -211,7 +211,7 @@ const INTERACTION_PRESSURE_SEEDS = {
       "Tell me what really changes.",
       "That still sounds like the broad version of the pitch.",
       "I need you to close the gap between the claim and the reality.",
-      "Don't give me the smooth version. Give me the real one.",
+      "Give me the practical version, not the polished one.",
     ],
   },
   competitive_bias: {
@@ -588,16 +588,16 @@ function stripStockHcpPhraseScaffolding(sentence = "", { interactionPressures = 
 
   output = output
     .replace(/\bhi,? but\b/gi, "")
-    .replace(/\bkeep it brief\b/gi, "I only have a minute here")
-    .replace(/\bkeep this brief\b/gi, "I only have a minute here")
-    .replace(/\bkeep it tight\b/gi, "I only have a minute here")
+    .replace(/\bkeep it brief\b/gi, "let's keep this practical")
+    .replace(/\bkeep this brief\b/gi, "let's keep this practical")
+    .replace(/\bkeep it tight\b/gi, "let's keep this focused")
     .replace(/\bi'?m not convinced yet\b/gi, "I still need a reason to stay with this")
     .replace(/\bi'?m not convinced this needs time yet\b/gi, "I still need a reason to stay with this")
     .replace(/\bwhat'?s the specific reason it matters for my patients\b/gi, "What changes for the patients I actually treat")
     .replace(/\s+([,.;?!])/g, "$1")
     .replace(/([.?!])\s*[.?!]+/g, "$1");
 
-  if ((interactionPressures || []).includes("time_constrained") && /i only have a minute here/i.test(output) && !/[.?!]$/.test(output)) {
+  if ((interactionPressures || []).includes("time_constrained") && /(i only have a minute here|let's keep this practical|let's keep this focused)/i.test(output) && !/[.?!]$/.test(output)) {
     output = `${output}.`;
   }
 
@@ -690,8 +690,8 @@ function buildTopicAcknowledgment({
     line = line.replace(/^If this is about [^,]+,\s*/i, "Yes, ");
   }
 
-  if (constrained && !/\bminute|short version|few minutes|practical\b/i.test(line)) {
-    line = joinSentences([line, skeptical ? "I only have a minute here." : "Give me the practical version."]);
+  if (constrained && !/\bminute|little time|few minutes|practical\b/i.test(line)) {
+    line = joinSentences([line, skeptical ? "I have a little time." : "Start with the practical version."]);
   }
 
   return stripStockHcpPhraseScaffolding(line, { interactionPressures });
@@ -779,7 +779,7 @@ export function validateHcpHumanRealism(text = "", context = {}) {
   if ((interactionPressures || []).includes("time_constrained") && sentences[0] && sentences[0].length > 150) {
     sentences[0] = sentences[0]
       .replace(/\bI can give you more context if needed\b/gi, "")
-      .replace(/\bI would want to discuss this in detail\b/gi, "I only have a minute here")
+      .replace(/\bI would want to discuss this in detail\b/gi, "I have a little time to talk this through")
       .trim();
     issues.push("overwritten");
   }

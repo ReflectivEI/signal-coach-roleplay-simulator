@@ -124,9 +124,9 @@ function applyGlobalOpeningSpeechCadence(
 
   if (turn.concernFamily === "time" && profile.directness === "high") {
     output = output
-      .replace(/\bOK, I have a few minutes\b/i, "Okay, I've got a few minutes")
-      .replace(/\bI'll be honest, I'm not usually a fan of these visits, but here we are\b/i, "I'll be honest, I'm not usually a fan of these visits, so let's keep this useful")
-      .replace(/\bthat's the only reason I said yes\b/i, "that's why I said yes");
+      .replace(/\bOK, I have a few minutes\b/i, "Okay, I have a few minutes")
+      .replace(/\bI'll be honest, I'm not usually a fan of these visits, but here we are\b/i, "I'll be honest, I'm not usually a fan of these visits, so let's keep this practical")
+      .replace(/\bthat's the only reason I said yes\b/i, "so I can talk through that briefly");
   }
 
   if (anchorType === "case_discussion") {
@@ -256,7 +256,7 @@ function buildOpeningAnchorReply(anchorType: OpeningAnchorType, openingScene = "
   const lower = normalizeText(openingScene).toLowerCase();
   switch (anchorType) {
     case "prior_auth":
-      return "My MA said this was about prior auth reduction. I have a couple minutes, so can we start with how this helps my staff?";
+      return "My MA said this was about prior auth reduction. I have a little time, so can we start with what changes for my staff in practice?";
     case "case_discussion":
       return "Dr. Patel said I should talk with you, but I thought this was going to be a case discussion. Can we connect this to the patient you want to discuss?";
     case "staff_gatekeeping":
@@ -314,7 +314,7 @@ export function buildGlobalFirstTurnCue({
   if (journeyStage === "initial_access") {
     if (concernFamily === "time" || pressures.includes("time_constrained") || anchorType === "prior_auth") {
       return deterministicPick([
-        "The HCP checks the next patient slot, then looks back expecting the short version.",
+        "The HCP checks the next patient slot, then looks back with the practical question still open.",
         "The HCP glances toward the next room and comes back with time clearly tight.",
         "The HCP looks at the schedule, then back with only a small window left for this.",
       ], `${title}|initial_access|time`);
@@ -502,7 +502,7 @@ function buildGlobalFirstTurnUtterance({
   if (turn.concernFamily === "time" && profile.directness === "high") {
     output = output
       .replace(/\bthat'?s the only reason i said yes\b/i, "so I can talk through that briefly")
-      .replace(/\bi've got four minutes before my next patient\b/i, "I have a few minutes before my next patient")
+      .replace(/\bi've got four minutes before my next patient\b/i, "I have a little time before my next patient")
       .replace(/\bi have a few minutes\b/i, "I have a few minutes");
   }
 
@@ -681,7 +681,7 @@ export function enforceSourceBackedRealismSurface({
   if (
     turn.concernFamily === "time" &&
     profile.directness === "high" &&
-    !/\bget to the point|short version|give me the short version|30 seconds|one practical point\b/i.test(output)
+    !/\bstart with what matters|practical version|30 seconds|one practical point\b/i.test(output)
   ) {
     const closer = pickTimePressureCloser(`${scenario?.title || "scenario"}|${turn.phase}|${turn.concernFamily}|${hcpTurnCount}|${output}`);
     output = `${output.replace(/[.?!]+$/, "")}. ${closer}`;
