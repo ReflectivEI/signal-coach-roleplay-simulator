@@ -97,6 +97,15 @@ const NARRATION_PATTERNS = [
   /attention tightening/i,
 ];
 
+const BANNED_STOCK_PHRASE_PATTERNS = [
+  /\bwhat'?s concretely different for me after this\b/i,
+  /\bthe practical answer has to stay tied\b/i,
+  /\bwhat changes in practice if this is worth continuing\b/i,
+  /\bi hear that a lot\b/i,
+  /\bkeep this brief\b/i,
+  /\bi'?m not convinced yet\b/i,
+];
+
 function stripNarrationLeakage(text = ""): string {
   const sentences = splitSentences(text);
   if (!sentences.length) return "";
@@ -104,6 +113,23 @@ function stripNarrationLeakage(text = ""): string {
   const spoken = sentences.filter((sentence) => !NARRATION_PATTERNS.some((pattern) => pattern.test(sentence)));
   if (spoken.length) return normalizeText(spoken.join(" "));
   return "";
+}
+
+function stripBannedStockPhrases(text = ""): string {
+  const scrub = (value = "") => normalizeText(
+    BANNED_STOCK_PHRASE_PATTERNS.reduce((result, pattern) => result.replace(pattern, ""), value)
+      .replace(/\s+([,.;?!])/g, "$1")
+      .replace(/([.?!])\s*[.?!]+/g, "$1")
+  );
+
+  const sentences = splitSentences(text);
+  if (!sentences.length) return scrub(text);
+
+  const kept = sentences
+    .map((sentence) => scrub(sentence))
+    .filter((sentence) => sentence && !BANNED_STOCK_PHRASE_PATTERNS.some((pattern) => pattern.test(sentence)));
+
+  return normalizeText(kept.join(" "));
 }
 
 function compressContractions(text = ""): string {
@@ -167,6 +193,10 @@ export function applyHcpResponseSurface({
     hcpTurnCount,
   });
 
+  // Remove exact stock phrases so validator cleanup does not leak canned trainer language.
+  output = stripBannedStockPhrases(output);
+  if (!output) return "";
+
   output = compressContractions(output);
   output = enforceSentenceBoundaries(output);
   output = repairCommaSplices(output);
@@ -207,5 +237,6 @@ export function applyHcpResponseSurface({
       .replace(/\bwhat first step would actually make this workable\b/gi, "what one step would actually make this workable");
   }
 
+  output = stripBannedStockPhrases(output);
   return ensureTerminalPunctuation(output);
 }
