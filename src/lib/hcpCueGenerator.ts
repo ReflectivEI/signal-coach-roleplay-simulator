@@ -58,7 +58,7 @@ type ConcernFamily =
   | "general";
 
 const TERMINAL_DIALOGUE_PATTERN =
-  /\b(need to run|have to run|got to go|we should stop|we can stop there|we are done|i have to get back|wrap this up|that is all i have time for)\b/i;
+  /\b(need to run|have to run|got to go|we should stop|we can stop there|we are done|i have to get back|wrap this up|that is all i have time for|probably done|not ready to keep going|pause here|should pause|not useful|cannot make this specific)\b/i;
 
 const HIGH_PRESSURE_DIALOGUE_PATTERN =
   /\b(quick|be brief|make this quick|short version|not much time|patient waiting|keep this tight|to the point)\b/i;
@@ -87,7 +87,7 @@ const BANNED_CUE_TERMS = [
 ];
 
 const CONCERN_KEYWORDS: Record<ConcernFamily, string[]> = {
-  evidence: ["data", "study", "trial", "evidence", "proof", "subgroup", "threshold", "guideline", "journal"],
+  evidence: ["data", "study", "trial", "evidence", "proof", "subgroup", "threshold", "guideline", "journal", "endpoint", "decision", "safety", "hepatic", "adverse", "monitoring"],
   workflow: ["workflow", "staff", "handoff", "process", "step", "clinic", "callback", "room", "flow"],
   access: ["access", "coverage", "copay", "prior auth", "formulary", "payer", "benefits", "paperwork"],
   screening: ["screen", "screening", "candidate", "eligibility", "criteria", "identify", "selection"],
@@ -685,7 +685,54 @@ function hasAny(text: string, patterns: string[]): boolean {
   return patterns.some((pattern) => value.includes(pattern));
 }
 
+function deriveCurrentTurnConcernFamily(text = ""): ConcernFamily | null {
+  const value = normalizeText(text).toLowerCase();
+  if (!value) return null;
+  if (/\b(safety|hepatic|renal|adverse|warning|side effect|monitoring|medical resource|case-level)\b/.test(value)) return "evidence";
+  if (/\b(endpoint|subgroup|evidence|trial|study|data|proof|guideline|treatment decision|patient decision|decision that changes|clinically useful|applies to my patients)\b/.test(value)) return "evidence";
+  if (/\b(access|coverage|prior auth|authorization|formulary|payer|approval|reimbursement|covered|support pathway)\b/.test(value)) return "access";
+  if (/\b(workflow|staff|ma|front desk|nurse|team|handoff|clinic flow|task|process|practical step)\b/.test(value)) return "workflow";
+  if (/\b(screen|screening|candidate|eligibility|criteria|patient fit|which patients|patient profile|selection)\b/.test(value)) return "screening";
+  if (/\b(time|minutes|clock|schedule|next patient|brief|quick)\b/.test(value)) return "time";
+  return null;
+}
+
+function isSafetyFocusedTurn(text = ""): boolean {
+  return /\b(safety|hepatic|renal|adverse|warning|side effect|monitoring|medical resource|case-level)\b/i.test(normalizeText(text));
+}
+
+const SAFETY_EVIDENCE_CUE_POOLS: Partial<Record<CueCategory, string[]>> = {
+  receptive_attentive: [
+    "Keeps the safety section open, eyes moving back to the patient context.",
+    "Leaves the adverse-event notes visible and looks back for the approved safety boundary.",
+  ],
+  neutral_attentive: [
+    "Keeps the safety section open, expression measured.",
+    "Leaves the hepatic-signal note visible and looks back with professional reserve.",
+  ],
+  focused_narrowing: [
+    "Keeps a finger on the hepatic-signal note, waiting for the answer to stay specific.",
+    "Looks from the safety section back to you with a narrower expression.",
+  ],
+  time_constrained: [
+    "Checks the schedule, then taps the safety section once.",
+    "Glances toward the doorway, safety notes still open beneath one hand.",
+  ],
+  hard_escalation: [
+    "Sets the safety section flat on the desk, expression measured.",
+    "Holds the hepatic-signal note still and waits for a direct answer.",
+  ],
+  terminal_exit: [
+    "Closes the safety notes and turns back toward the next task.",
+    "Gathers the safety section and shifts back toward the door.",
+  ],
+};
+
 function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
+  const reply = normalizeText(inputs.hcpReply).toLowerCase();
+  const currentTurnConcern = deriveCurrentTurnConcernFamily(reply);
+  if (currentTurnConcern) return currentTurnConcern;
+
   const registeredConcern = getScenarioConcernFamily({
     title: inputs.scenario?.title,
   });
@@ -706,7 +753,6 @@ function deriveCueConcernFamily(inputs: HcpCueInputs): ConcernFamily {
   if ((scenarioConcern as unknown as string) === "adoption_caution" || (scenarioConcern as unknown as string) === "hesitation") return "general";
   if (scenarioConcern && scenarioConcern !== "general") return scenarioConcern;
 
-  const reply = normalizeText(inputs.hcpReply).toLowerCase();
   const scenarioText = normalizeText(
     inputs.scenario?.title,
     journeyStage,
@@ -872,7 +918,10 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.[concernFamily]
     || DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.general
     || [];
-  const pool = [...domainPool, ...(CUE_POOLS[cueCategory]?.[concernFamily] || CUE_POOLS[cueCategory].general)];
+  const safetyPool = isSafetyFocusedTurn(inputs.hcpReply) && concernFamily === "evidence"
+    ? SAFETY_EVIDENCE_CUE_POOLS[cueCategory] || []
+    : [];
+  const pool = [...safetyPool, ...domainPool, ...(CUE_POOLS[cueCategory]?.[concernFamily] || CUE_POOLS[cueCategory].general)];
   const seed = [
     inputs.scenario?.id || inputs.scenario?.title || "scenario",
     inputs.scenario?.journeyStage || "",
@@ -880,6 +929,7 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     concernFamily,
     inputs.behaviorState,
     normalizeText(inputs.hcpReply),
+    String(inputs.hcpTurnCount || 0),
   ].join(":");
 
   const recentCueFingerprints = new Set(
@@ -925,8 +975,13 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     }
   }
   const cleanedCandidate = cleanCueText(candidateCue);
+  const candidateConcern = inferConcernFamilyFromCueLabel(cleanedCandidate);
+  const candidateMatchesCurrentConcern = !candidateConcern || candidateConcern === concernFamily;
+  const canUseCandidateAfterOpening = (inputs.hcpTurnCount || 0) <= 0 || Boolean(inputs.allowFirstTurnCandidateCue && candidateMatchesCurrentConcern && !isSafetyFocusedTurn(inputs.hcpReply));
   const useCandidate =
+    canUseCandidateAfterOpening &&
     isValidObservedCue(cleanedCandidate) &&
+    candidateMatchesCurrentConcern &&
     !cueContradictsCategory(cleanedCandidate, cueCategory) &&
     !recentCueFingerprints.has(normalizeCueFingerprint(cleanedCandidate)) &&
     cueSequenceSignature(cleanedCandidate) !== lastSignature &&

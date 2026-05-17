@@ -1,6 +1,6 @@
 export const HCP_CUE_ALIGNMENT_VERSION = "hcp_cue_state_alignment_v1";
 
-const TERMINAL_DIALOGUE_PATTERN = /\b(pause here|get back to clinic|stop here|wrap|ending|move on|front desk|follow-up slot|cannot continue|we are done)\b/i;
+const TERMINAL_DIALOGUE_PATTERN = /\b(pause here|should pause|probably done|not ready to keep going|not useful|get back to clinic|stop here|wrap|ending|move on|front desk|follow-up slot|cannot continue|we are done|cannot make this specific)\b/i;
 const TERMINAL_CUE_PATTERN = /\b(door|leav|ending|exchange is over|wrap|front desk|turns back toward|patient room|gathers the chart)\b/i;
 const SOFT_CUE_PATTERN = /\b(open|receptive|warm|relaxed|inviting|thoughtful|leans in|steady eye contact)\b/i;
 const HIGH_PRESSURE_PATTERN = /\b(time|minutes|clock|schedule|busy|short-staffed|bandwidth|next patient|clinic flow|protect clinic)\b/i;
@@ -38,7 +38,7 @@ function repairCueSurface(cueText = "") {
 
 function normalizeConcernFamily(value = "general") {
   const text = String(value || "").toLowerCase();
-  if (/evidence|data|proof|decision|durability|formulary/.test(text)) return "evidence";
+  if (/evidence|data|proof|decision|durability|endpoint|subgroup|safety|hepatic|adverse|monitor|formulary/.test(text)) return "evidence";
   if (/screen|selection|candidate|criteria|resistance|adherence|injectable/.test(text)) return "screening";
   if (/access|coverage|payer|prior|auth|copay|benefits|hub/.test(text)) return "access";
   if (/workflow|process|team|staff|step|clinic|monitor|implementation|practical/.test(text)) return "workflow";

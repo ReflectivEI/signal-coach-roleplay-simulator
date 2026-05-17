@@ -201,6 +201,32 @@ function latestRepText(turns: SimulatorIntelligenceInput["turns"] = []): string 
   return [...turns].reverse().find((turn) => turn.speaker === "rep")?.text?.toLowerCase() || "";
 }
 
+function activeExchangeText(turns: SimulatorIntelligenceInput["turns"] = []): string {
+  const latestHcp = latestHcpText(turns);
+  const latestRep = latestRepText(turns);
+  return `${latestHcp} ${latestRep}`.toLowerCase();
+}
+
+function hasSafetyTopic(text = ""): boolean {
+  return /\b(safety|adverse|hepatic|renal|warning|side effect|medical|monitoring|case-level)\b/.test(text);
+}
+
+function hasEvidenceTopic(text = ""): boolean {
+  return /\b(data|evidence|trial|study|guideline|hazard ratio|subgroup|endpoint|treatment decision|patient decision|decision that changes|clinically useful|applies to my patients)\b/.test(text);
+}
+
+function hasAccessTopic(text = ""): boolean {
+  return /\b(prior auth|authorization|coverage|formulary|payer|access|approval|reimbursement|covered)\b/.test(text);
+}
+
+function hasTimeTopic(text = ""): boolean {
+  return /\b(few minutes|quick|brief|next patient|short on time)\b/.test(text);
+}
+
+function hasSpecificityBoundary(text = ""): boolean {
+  return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause)\b/.test(text);
+}
+
 function pressureFromSignals(input: SimulatorIntelligenceInput): PressureSignal[] {
   const text = textFromTurns(input.turns);
   const hcp = latestHcpText(input.turns);
@@ -209,17 +235,24 @@ function pressureFromSignals(input: SimulatorIntelligenceInput): PressureSignal[
   const prediction = input.hcpPrediction || {};
   const signals: PressureSignal[] = [];
 
-  if (/\b(prior auth|authorization|coverage|formulary|payer|access)\b/.test(text)) {
+  const active = activeExchangeText(input.turns);
+  const activeSafety = hasSafetyTopic(active);
+  const activeEvidence = hasEvidenceTopic(active);
+  const activeAccess = hasAccessTopic(active);
+
+  if (activeAccess || (hasAccessTopic(text) && !activeSafety && !activeEvidence)) {
     signals.push({
       id: "pressure-access",
       label: "Access objection pressure",
       level: "high",
-      source: "transcript",
-      explanation: "Access language is active, so the HCP may test operational practicality before accepting value claims.",
+      source: activeAccess ? "transcript" : "scenario",
+      explanation: activeAccess
+        ? "Access language is active in the current exchange, so the HCP may test operational practicality before accepting value claims."
+        : "Access language appeared earlier, but it is not the dominant current ask.",
     });
   }
 
-  if (/\b(safety|adverse|hepatic|renal|warning|side effect|medical)\b/.test(text)) {
+  if (activeSafety || (hasSafetyTopic(text) && !activeAccess && !activeEvidence)) {
     signals.push({
       id: "pressure-compliance",
       label: "Compliance boundary pressure active",
@@ -239,7 +272,7 @@ function pressureFromSignals(input: SimulatorIntelligenceInput): PressureSignal[
     });
   }
 
-  if (/\b(few minutes|quick|next patient|short on time|brief)\b/.test(text)) {
+  if (hasTimeTopic(active) || hasTimeTopic(text)) {
     signals.push({
       id: "pressure-time",
       label: "Response window narrowing",
@@ -298,6 +331,7 @@ export function buildPressureVisualizationState(input: SimulatorIntelligenceInpu
 export function inferHcpPosture(input: SimulatorIntelligenceInput): HCPPosture {
   const text = textFromTurns(input.turns);
   const hcp = latestHcpText(input.turns);
+  const active = activeExchangeText(input.turns);
   const prediction = input.hcpPrediction || {};
 
   const base = {
@@ -305,13 +339,45 @@ export function inferHcpPosture(input: SimulatorIntelligenceInput): HCPPosture {
     complianceSensitivity: "moderate" as HCPPosture["complianceSensitivity"],
   };
 
-  if (/\b(prior auth|authorization|coverage|formulary|payer|access)\b/.test(text)) {
+  if (hasSafetyTopic(hcp) || hasSafetyTopic(active)) {
+    return {
+      id: "safety-evidence-boundary",
+      label: "Safety evidence boundary",
+      description: "The HCP is testing whether the rep can stay within approved safety information while making the evidence relevant to a patient decision.",
+      observableSignals: [
+        { label: "Safety signal", evidence: "The current HCP ask contains safety, hepatic, adverse-event, monitoring, or medical-detail language.", source: "transcript" },
+      ],
+      riskImplication: "Improvised case-level interpretation can create compliance risk and reduce trust.",
+      recommendedRepBehavior: "Acknowledge the safety concern, stay with approved safety information, and connect case-level detail to the appropriate medical resource.",
+      prohibitedRepBehavior: "Do not interpret patient-specific safety risk, add off-label monitoring advice, or expand beyond approved materials.",
+      complianceSensitivity: "critical",
+      reallyTesting: "Whether the rep can handle a safety-specific evidence question without overstepping.",
+    };
+  }
+
+  if (hasEvidenceTopic(hcp) || (hasEvidenceTopic(active) && !hasAccessTopic(hcp))) {
+    return {
+      id: "evidence-scrutiny",
+      label: "Evidence scrutiny",
+      description: "The HCP is testing whether the rep can connect evidence to a specific clinical decision threshold.",
+      observableSignals: [
+        { label: "Evidence challenge", evidence: "The current HCP ask contains data, study, endpoint, subgroup, or treatment-decision language.", source: "transcript" },
+      ],
+      riskImplication: "Generalized value language will likely increase skepticism.",
+      recommendedRepBehavior: "Answer the exact evidence threshold or ask which approved proof point would change the decision.",
+      prohibitedRepBehavior: "Do not overstate evidence, extrapolate beyond label, or imply unsupported superiority.",
+      complianceSensitivity: "high",
+      reallyTesting: "Whether the rep can be precise without expanding claims.",
+    };
+  }
+
+  if (hasAccessTopic(hcp) || (hasAccessTopic(active) && !hasEvidenceTopic(hcp))) {
     return {
       id: "access-frustrated",
       label: "Access-frustrated",
       description: "The HCP is evaluating whether the conversation solves a practical access or reimbursement burden.",
       observableSignals: [
-        { label: "Access language", evidence: "Coverage, prior authorization, payer, or formulary language is present.", source: "transcript" },
+        { label: "Access language", evidence: "The current HCP ask contains coverage, prior authorization, payer, approval, or formulary language.", source: "transcript" },
       ],
       riskImplication: "Broad clinical claims may miss the actual barrier.",
       recommendedRepBehavior: "Acknowledge access burden, then clarify one approved support pathway.",
@@ -321,29 +387,13 @@ export function inferHcpPosture(input: SimulatorIntelligenceInput): HCPPosture {
     };
   }
 
-  if (/\b(data|evidence|trial|study|guideline|hazard ratio|subgroup)\b/.test(text)) {
-    return {
-      id: "evidence-scrutiny",
-      label: "Evidence scrutiny",
-      description: "The HCP is testing whether the rep can connect evidence to a specific clinical decision threshold.",
-      observableSignals: [
-        { label: "Evidence challenge", evidence: "The exchange contains data, guideline, study, or subgroup language.", source: "transcript" },
-      ],
-      riskImplication: "Generalized value language will likely increase skepticism.",
-      recommendedRepBehavior: "Ask which evidence threshold matters, then use one approved proof point.",
-      prohibitedRepBehavior: "Do not overstate evidence, extrapolate beyond label, or imply unsupported superiority.",
-      complianceSensitivity: "high",
-      reallyTesting: "Whether the rep can be precise without expanding claims.",
-    };
-  }
-
-  if (/\b(competitor|switch|already using|current therapy|standard of care|patients do well)\b/.test(text)) {
+  if (/\b(competitor|switch|already using|current therapy|standard of care|patients do well)\b/.test(hcp) || /\b(competitor|switch|already using|current therapy|standard of care|patients do well)\b/.test(active)) {
     return {
       id: "competitor-anchored",
       label: "Competitor anchored",
       description: "The HCP is anchored to an incumbent option and is testing differentiated relevance.",
       observableSignals: [
-        { label: "Incumbent preference", evidence: "Competitor, switching, or current-therapy language is active.", source: "transcript" },
+        { label: "Incumbent preference", evidence: "Competitor, switching, or current-therapy language is active in the current exchange.", source: "transcript" },
       ],
       riskImplication: "Comparative claims can create compliance and credibility risk.",
       recommendedRepBehavior: "Ask what comparison matters and stay with approved differentiating language.",
@@ -353,13 +403,13 @@ export function inferHcpPosture(input: SimulatorIntelligenceInput): HCPPosture {
     };
   }
 
-  if (/\b(few minutes|quick|brief|next patient)\b/.test(text)) {
+  if (hasTimeTopic(hcp) || hasTimeTopic(active)) {
     return {
       id: "time-constrained-skepticism",
       label: "Time-constrained skepticism",
       description: "The HCP is limiting the response window and testing whether the rep can be immediately relevant.",
       observableSignals: [
-        { label: "Time constraint", evidence: "The exchange includes brief-visit or next-patient pressure.", source: "scenario" },
+        { label: "Time constraint", evidence: "The current exchange includes brief-visit or next-patient pressure.", source: "transcript" },
       ],
       riskImplication: "Long setup language may cause disengagement.",
       recommendedRepBehavior: "Use one concise acknowledgment and one practical point.",
@@ -369,13 +419,13 @@ export function inferHcpPosture(input: SimulatorIntelligenceInput): HCPPosture {
     };
   }
 
-  if (/\b(specific|what exactly|not my question|generic|prove|show me)\b/.test(hcp)) {
+  if (hasSpecificityBoundary(hcp)) {
     return {
       id: "waiting-for-specificity",
       label: "Waiting for specificity",
       description: "The HCP is withholding progress until the rep answers the exact concern.",
       observableSignals: [
-        { label: "Specificity demand", evidence: "The HCP is asking for exactness or rejecting generalization.", source: "transcript" },
+        { label: "Specificity demand", evidence: "The latest HCP turn asks for exactness or rejects generalization.", source: "transcript" },
       ],
       riskImplication: "Additional broad messaging may degrade trust.",
       recommendedRepBehavior: "Answer the exact concern before introducing any new point.",
@@ -462,10 +512,14 @@ export function detectTrajectoryTransition(input: SimulatorIntelligenceInput, pr
 export function generatePredictiveChain(input: SimulatorIntelligenceInput, trajectory: TrajectoryTransition): PredictiveChain {
   const text = textFromTurns(input.turns);
   const posture = inferHcpPosture(input);
-  const access = /\b(access|prior auth|authorization|coverage|formulary|payer)\b/.test(text);
-  const safety = /\b(safety|adverse|hepatic|renal|medical|warning)\b/.test(text);
-  const competitor = /\b(competitor|switch|already using|current therapy)\b/.test(text);
-  const evidence = /\b(data|evidence|trial|study|guideline)\b/.test(text);
+  const active = activeExchangeText(input.turns);
+  const activeSafety = hasSafetyTopic(active);
+  const activeEvidence = hasEvidenceTopic(active);
+  const activeAccess = hasAccessTopic(active);
+  const access = activeAccess || (hasAccessTopic(text) && !activeSafety && !activeEvidence);
+  const safety = activeSafety || (hasSafetyTopic(text) && !activeAccess && !activeEvidence);
+  const competitor = /\b(competitor|switch|already using|current therapy)\b/.test(active) || /\b(competitor|switch|already using|current therapy)\b/.test(text);
+  const evidence = activeEvidence || (hasEvidenceTopic(text) && !activeAccess);
 
   const trigger: ChainTrigger = safety
     ? "compliance_boundary"
@@ -541,11 +595,15 @@ export function generatePredictiveChain(input: SimulatorIntelligenceInput, traje
 
 export function adaptRealismProfile(input: SimulatorIntelligenceInput): RealismProfile {
   const text = textFromTurns(input.turns);
+  const active = activeExchangeText(input.turns);
   const realism = Number(input.realism || 5);
-  const access = /\b(access|prior auth|authorization|coverage|formulary|payer)\b/.test(text);
-  const evidence = /\b(data|evidence|trial|study|guideline|subgroup)\b/.test(text);
-  const competitor = /\b(competitor|switch|already using|current therapy)\b/.test(text);
-  const time = /\b(few minutes|quick|brief|next patient)\b/.test(text);
+  const activeSafety = hasSafetyTopic(active);
+  const activeEvidence = hasEvidenceTopic(active);
+  const activeAccess = hasAccessTopic(active);
+  const access = activeAccess || (hasAccessTopic(text) && !activeSafety && !activeEvidence);
+  const evidence = activeSafety || activeEvidence || (hasEvidenceTopic(text) && !activeAccess);
+  const competitor = /\b(competitor|switch|already using|current therapy)\b/.test(active) || /\b(competitor|switch|already using|current therapy)\b/.test(text);
+  const time = hasTimeTopic(active) || hasTimeTopic(text);
   const dimensions: RealismDimension[] = [
     { id: "clinical_skepticism", label: "Clinical skepticism", qualitativeState: evidence ? "elevated" : "moderate", driver: "Evidence scrutiny and patient-fit demand", repFacingSignal: evidence ? "Evidence scrutiny elevated" : "Clinical skepticism balanced", adminValue: evidence ? 74 : 52 },
     { id: "time_pressure", label: "Time pressure", qualitativeState: time ? "elevated" : "moderate", driver: "Compressed response window", repFacingSignal: time ? "Time pressure elevated" : "Time pressure moderate", adminValue: time ? 72 : 46 },
