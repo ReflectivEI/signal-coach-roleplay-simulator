@@ -132,7 +132,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ env.CF_ACCOUNT_ID }}
         run: |
           npx wrangler secret list --config wrangler.toml | tee worker-secrets.json
-          grep -Eq '"name":"(GROQ_API_KEY|OPENAI_API_KEY)"' worker-secrets.json
+          grep -Eq '"name"[[:space:]]*:[[:space:]]*"(GROQ_API_KEY|OPENAI_API_KEY)"' worker-secrets.json
 
   deploy-pages:
     runs-on: ubuntu-latest
