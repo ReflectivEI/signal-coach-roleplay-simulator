@@ -23,16 +23,16 @@ const OVER_EXPLANATORY_PATTERN = /would be|which can be|ensure they'?re on track
 const DISCOVERY_LOOP_PATTERN = /^(can i ask|tell me more|how are you thinking about|what would you need to see|help me understand|walk me through|can you share|how do you currently|where do you think)/i;
 
 const DIRECT_ASK_TYPES = {
-  asks_for_workflow_impact: /workflow|staff|team|ma\b|what gets added|what does that add|tomorrow|operational|handoff|callback|process/i,
-  asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step/i,
+  asks_for_workflow_impact: /workflow|staff|team|ma\b|office|clinic flow|what gets added|what does that add|tomorrow|operational|handoff|callback|process|who has to do what differently|who does what differently|what changes for the office|what changes for my team|what changes for my staff|what does my staff do/i,
+  asks_for_access_step: /access|coverage|prior auth|prior authorization|formulary|approval|payer|step therapy|committee|pathway step|need.{0,20}\baccess step\b|\baccess step\b|what.{0,15}step|specific.{0,15}step|approved consistently|gets approved|approval path|non-preferred|preferred/i,
   asks_for_cost_value: /cost savings|justify the cost|what we'd spend|worth the spend|cost per patient|total cost per patient|what's included|what is included|what does that include|break down|added testing|monitoring|justify the spend|value discussion|does the outcome justify/i,
-  asks_for_patient_fit: /be specific|which patients|what specific subgroup|particular patient population|patient population|still isn'?t controlled|current care|standard of care|treatment goals|specific patient decision|clinical decision|treatment protocol|what changes in practice|what would change in practice/i,
-  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|excluded|patient population|relevant to my patients|own population|analysis|what would make you think i need something different|why would i need something different|what would make this relevant/i,
+  asks_for_patient_fit: /be specific|which patients|who are we actually talking about|what specific subgroup|particular patient population|patient population|still isn'?t controlled|current care|standard of care|treatment goals|specific patient decision|clinical decision|treatment protocol|what changes in practice|what would change in practice/i,
+  asks_for_evidence_relevance: /evidence|data|real-?world|subgroup|endpoint|proof|decision point|treatment-changing|treatment changing|excluded|patient population|relevant to my patients|own population|analysis|what would make you think i need something different|why would i need something different|what would make this relevant/i,
   asks_for_guideline_fit: /guideline|pathway|standard of care|protocol|fits in guideline/i,
   asks_for_safety_clarity: /safety|risk|adverse|hepatic|contraind|monitoring concern|tolerability/i,
   asks_for_next_step: /what happens next|next step|who owns|would you be open|what do i do next|what should we do now/i,
   disengagement_boundary: /stop here|pause here|not discussing this now|leave it there|send (?:the|it) over|no further|not moving this forward/i,
-  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|what's the point|what does that actually change|what would actually be different/i,
+  asks_for_concrete_difference: /what(?:'s| is)? (?:concretely )?different|what changes|bottom line|takeaway|what should i understand|what's the point|what does that actually change|what would actually be different|what am i doing differently|what actually changes/i,
 };
 
 function mapAskToAnswerMode(askType = "") {
@@ -155,10 +155,10 @@ export function detectHcpDirectAsk(hcpText = "") {
     "asks_for_cost_value",
     "asks_for_safety_clarity",
     "asks_for_guideline_fit",
-    "asks_for_evidence_relevance",
-    "asks_for_patient_fit",
     "asks_for_access_step",
     "asks_for_workflow_impact",
+    "asks_for_evidence_relevance",
+    "asks_for_patient_fit",
     "asks_for_next_step",
     "asks_for_concrete_difference",
   ];
@@ -1584,21 +1584,21 @@ function buildMediocreSolutionSeekingAnswer(params = {}) {
   const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
 
   if (/prior auth|prior authorization|\bpa\b|workflow|staff|ma\b|paperwork|documentation|authorization|callback|resubmit|approval|office/.test(response)) {
-    return "The main access change should be a cleaner approval step up front, although the exact payer impact still depends on how your office handles those reviews today.";
+    return "The access change is a cleaner first prior-auth packet, so your staff is not reopening the same case for missing information or a second submission.";
   }
 
   if (
     EVIDENCE_PROOF_ASK_PATTERN.test(response) ||
     /evidence|data|subgroup|excluded|patient population|analysis|guideline|real-?world/.test(response)
   ) {
-    return "The main difference would be subgroup evidence that feels relevant enough to the patients you actually treat, although the fit still depends on how closely they match the studied group.";
+    return "The evidence answer is the subgroup, endpoint, and outcome threshold for the patients you actually treat, not the broad trial average.";
   }
 
   if (/commitment_close|adoption_implementation/.test(stageText)) {
-    return "The practical change would be having one lower-risk next step the team can try before anyone commits more broadly.";
+    return "The practical next step is one low-risk patient profile and one owner for the first office action, before any broader commitment.";
   }
 
-  return "The practical change would have to be something that feels relevant to your current patients instead of just sounding directionally positive.";
+  return "The practical change has to be one patient decision or one staff step that changes now, not a broad value claim.";
 }
 
 /** @param {{ scenario?: Record<string, any>, turns?: Array<Record<string, any>> }} [params] */
@@ -1610,21 +1610,21 @@ function buildWeakSolutionSeekingAnswer(params = {}) {
   const stageText = `${scenario?.journeyStage || ""}`.toLowerCase();
 
   if (/prior auth|prior authorization|\bpa\b|workflow|staff|ma\b|paperwork|documentation|authorization|callback|resubmit|approval|office/.test(response)) {
-    return "The main access benefit is broader approval support so the process feels easier overall.";
+    return "The access answer is a cleaner first prior-auth packet, so staff has less repeat correction work after submission.";
   }
 
   if (
     EVIDENCE_PROOF_ASK_PATTERN.test(response) ||
     /evidence|data|subgroup|excluded|patient population|analysis|guideline|real-?world/.test(response)
   ) {
-    return "The main difference is the broader clinical value this could create across appropriate patients overall.";
+    return "The evidence answer is the subgroup and endpoint that would change treatment for the patients still missing goals.";
   }
 
   if (/commitment_close|adoption_implementation/.test(stageText)) {
-    return "What matters is building confidence so the team feels comfortable moving this forward over time.";
+    return "The next step is one low-risk patient profile and one office owner, not a broad rollout.";
   }
 
-  return "What matters is the broader value this could bring once you look at the full picture.";
+  return "The practical answer is one patient decision or staff step tied to the blocker you named.";
 }
 
 function buildPersonaSolutionSeekingAnswer({ personaKey = "strong_rep", scenario = {}, turns = [] }) {
@@ -1837,15 +1837,15 @@ function buildDirectAskWeakAnswer({ askType = "asks_for_concrete_difference" }) 
     case "asks_for_evidence_relevance":
       return "The answer is the subgroup evidence and whether the endpoint changes a real treatment decision.";
     case "asks_for_patient_fit":
-      return "The patient group is the uncontrolled subgroup where current care is not getting them to goal.";
+      return "The patient group is the uncontrolled subgroup where current care is not getting them to goal, and the decision is whether the endpoint is strong enough to justify changing treatment.";
     case "asks_for_access_step":
-      return "The access step is a cleaner first approval packet so the case is less likely to come back for repair.";
+      return "The access step is a cleaner first prior-auth packet, so the case is less likely to come back to staff for repair.";
     case "asks_for_workflow_impact":
-      return "The workflow impact is one less repeat handoff for the staff member handling the case.";
+      return "The workflow impact is one less repeat handoff for the MA or office staff handling the case.";
     case "asks_for_next_step":
       return "The next step is one low-risk patient profile and one decision threshold.";
     default:
-      return "The practical answer is the one change tied to the blocker you raised.";
+      return "The practical answer is one specific patient decision or staff step tied to the blocker you raised.";
   }
 }
 
@@ -1928,18 +1928,18 @@ function buildOperationalLoopAlternatives(context = {}) {
 
   if (/prior auth|prior authorization|pa\b/.test(ask)) {
     return [
-      "The initial prior-auth packet is cleaner, so your staff does not have to run a second correction pass.",
-      "The operational change is one clean prior auth packet instead of a follow-up fix step.",
+      "The initial prior-auth packet is cleaner, so your MA does not have to run a second correction pass.",
+      "The operational change is one clean prior-auth packet instead of a follow-up fix step for office staff.",
       "Your team handles prior auth in one pass and can move directly to the next office action.",
-      "The practical shift is fewer prior auth touchpoints because the required fields are complete upfront.",
+      "The practical shift is fewer prior-auth touchpoints because the required fields are complete up front.",
     ];
   }
 
   return [
-    "The first packet goes out complete, so your team is not reopening the same case for another correction cycle.",
-    "The step that changes is submission quality: fewer rework loops before the case can move forward.",
-    "Your staff handles one clean submission and can move to the next patient task instead of repair work.",
-    "Operationally, it removes repeat back-and-forth after submission so the case can progress in one pass.",
+    "The first packet goes out complete, so your office staff is not reopening the same case for another correction cycle.",
+    "The step that changes is submission quality: fewer staff rework loops before the case can move forward.",
+    "Your MA handles one clean submission and can move to the next patient task instead of repair work.",
+    "Operationally, it removes repeat back-and-forth after submission so the office can progress the case in one pass.",
   ];
 }
 
@@ -1982,7 +1982,7 @@ function buildClinicalEvidenceAlternatives(context = {}) {
 
   if (/renal|kidney|egfr/.test(ask)) {
     return [
-      "The relevant answer is the renal subgroup and endpoint, not the office workflow. I would look at patients with moderate renal impairment and whether the endpoint changes treatment selection.",
+      "The relevant answer is the renal subgroup and endpoint, not the office workflow. I would look at moderate renal impairment and whether the endpoint changes treatment selection.",
       "For renal impairment, the answer has to be subgroup fit plus the outcome that changes a real treatment decision, not a broad trial average.",
       "The broad efficacy story has to be separated from the renal subgroup, then tied to whether that endpoint changes what you do for those patients.",
       "The clinical test is whether the renal-impairment subgroup maps to your patients and whether the endpoint changes the treatment choice.",
@@ -1991,7 +1991,7 @@ function buildClinicalEvidenceAlternatives(context = {}) {
 
   if (/cost|spend|value|budget|cost per patient|monitoring|testing/.test(ask)) {
     return [
-      "The value answer is total patient benefit against total cost, including monitoring or testing, for the subgroup you would actually treat.",
+      "The value answer is patient-level benefit against total cost, including monitoring or testing, for the subgroup you would actually treat.",
       "This has to be a patient-level value test: outcome gain, total spend, and whether that changes care for your real patient mix.",
       "The cost case only holds if the clinical outcome is concrete enough to justify the full treatment burden for the patients you see.",
       "The useful answer is not a broad value claim; it is whether the outcome justifies the spend for a specific patient subgroup.",
@@ -2009,7 +2009,7 @@ function buildClinicalEvidenceAlternatives(context = {}) {
 
   if (/guideline|pathway|standard of care|protocol/.test(ask)) {
     return [
-      "The guideline answer is where the evidence fits relative to current standard care and which patient group would change first.",
+      "The guideline answer is where the evidence fits relative to current standard care, and which patient subgroup would change treatment first.",
       "This needs to tie to pathway placement: the subgroup, endpoint, and threshold where current standard care stops being enough.",
       "The clinical bridge is not a workflow claim; it is whether the trial result is close enough to current pathway decisions to matter.",
       "For guideline fit, the answer has to show which patient profile would move before a broader protocol change.",
@@ -2022,7 +2022,7 @@ function buildClinicalEvidenceAlternatives(context = {}) {
 
   return [
     "The useful answer is the subgroup, endpoint, and decision threshold for patients like yours.",
-    "The answer needs the patient group, the outcome, and why that result changes a treatment decision.",
+    "The answer needs the patient subgroup, the outcome, and why that result changes a treatment decision.",
     "The clinical test is whether the evidence maps to your patient mix and changes what you would do next.",
     "The direct answer has to stay with the evidence gap: which patients, which endpoint, and what decision changes.",
   ];
@@ -2034,18 +2034,18 @@ function buildPatientFitAlternatives(context = {}) {
 
   if (wantsOutcome) {
     return [
-      "The first test is the uncontrolled subgroup: patients not reaching treatment goals on the current protocol, with an outcome gain large enough to change care.",
+      "The first test is the uncontrolled subgroup: patients not reaching treatment goals on the current protocol, with an endpoint gain large enough to change care.",
       "The practice change would be limited to patients still uncontrolled on current care, where the outcome gain is concrete enough to justify a different decision.",
-      "I would start with patients missing treatment goals despite the current protocol, then ask whether the outcome gain is strong enough to change that decision.",
-      "This is not for stable responders. It is for the patients still falling short on current care where a measurable outcome gain would change the treatment choice.",
+      "I would start with patients missing treatment goals despite the current protocol, then ask whether the endpoint gain is strong enough to change that decision.",
+      "This is not for stable responders. It is for patients still falling short on current care where a measurable endpoint gain would change the treatment choice.",
     ];
   }
 
   return [
-    "The subgroup is patients still uncontrolled on the current protocol, not stable patients already doing well.",
-    "I would start with patients still missing treatment goals despite current care, not every patient in the clinic.",
-    "The relevant patients are the ones falling short on standard care, where a concrete outcome gain could justify reconsidering the protocol.",
-    "This is about the uncontrolled subgroup whose current care is not getting them to goal.",
+    "The subgroup is patients still uncontrolled on the current protocol, not stable patients already doing well; the decision is whether the endpoint justifies changing treatment.",
+    "I would start with patients still missing treatment goals despite current care, not every patient in the clinic, then test whether the outcome changes the decision.",
+    "The relevant patients are the ones falling short on standard care, where a concrete endpoint gain could justify reconsidering the protocol.",
+    "This is about the uncontrolled subgroup whose current care is not getting them to goal, and whether the endpoint changes treatment.",
   ];
 }
 

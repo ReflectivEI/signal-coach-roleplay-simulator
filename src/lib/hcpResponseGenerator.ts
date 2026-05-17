@@ -730,9 +730,9 @@ function buildStageBoundRealismReply({
       if (isInitialAccessStage(scenario)) {
         if (timeConstrained && operational) {
           return [
-            "Okay, before I get pulled back in, what actually changes for my staff?",
-            "If I still can't tell what changes for the office, we're probably done here.",
-            "Last thing, what does my staff actually do differently?",
+            "Okay, before I get pulled back in, what changes for my MA or front desk?",
+            "If I still can't tell what changes for the office workflow, we're probably done here.",
+            "Last thing, what does my staff do differently before the next patient task?",
           ];
         }
         if (timeConstrained) {
@@ -786,14 +786,14 @@ function buildStageBoundRealismReply({
       if (timeConstrained && operational) {
         return choose(repeatCount >= 2
           ? [
-            "We're kind of circling now. What actually changes for my staff?",
-            "What does my office actually have to do differently?",
-            "I'm still between patients. What's the practical office change?",
+            "We're circling now. What changes for my MA or front-desk workflow?",
+            "What does my office staff do differently before the patient can move forward?",
+            "I'm still between patients. What is the practical office step that changes?",
           ]
           : [
-            "I have a little time. What changes for my staff?",
-            "I'm between patients. Just tell me what the office has to do differently.",
-            "What changes for the team?",
+            "I have a little time. What changes for my staff in clinic workflow?",
+            "I'm between patients. Tell me what the office has to do differently.",
+            "What changes for the team before the next patient task?",
           ], "initial-low-time-ops");
       }
       if (timeConstrained) {
@@ -812,9 +812,9 @@ function buildStageBoundRealismReply({
       if (operational) {
         return choose(repeatCount >= 2
           ? [
-            "I still don't know what changes in the office.",
-            "Okay but what actually changes day to day?",
-            "I can stay with you if you make this more real-world.",
+            "I still don't know what changes in the office workflow.",
+            "Okay, but what staff task actually changes day to day?",
+            "I can stay with you if you make this real for clinic flow.",
           ]
           : [
             "I can listen, but keep this grounded in real practice.",
@@ -832,27 +832,27 @@ function buildStageBoundRealismReply({
       if (escalationMemory.escalationLevel >= 2) {
         return choose(timeConstrained
           ? [
-            "You're still giving me the broad version and I need to move.",
-            "I still don't know what the actual takeaway is.",
-            "Okay but what actually changes for my staff?",
+            "You're still giving me the broad version, and I need the office workflow impact before I move.",
+            "I still don't know what my staff does differently for the next patient.",
+            "Okay, but what changes for my MA or front desk in practice?",
           ]
           : [
             "You're still staying broad. What am I actually supposed to do differently?",
-            "I still don't know what actually changes.",
+            "I still don't know what changes in the office workflow.",
             "Okay but what really becomes different here?",
           ], "initial-medium-escalated");
       }
       return choose(timeConstrained
         ? operational
           ? [
-            "Keep it quick. What changes for my staff?",
-            "I've got limited time. Who has to do what differently?",
-            "Short version, what actually changes in the office?",
+            "Keep it quick. What changes for my staff before the next patient moves?",
+            "I've got limited time. Which staff step changes, and who owns it?",
+            "Short version, what changes in the office workflow?",
           ]
           : [
-            "Keep it quick. Why does this matter for my patients?",
-            "I've got limited time. What's the patient takeaway?",
-            "Short version, what actually changes?",
+            "Keep it quick. Which patient decision does this change?",
+            "I've got limited time. What is the patient-specific takeaway?",
+            "Short version, what changes for a patient I am seeing today?",
           ]
         : [
           "Okay but what actually changes for me?",
@@ -876,14 +876,14 @@ function buildStageBoundRealismReply({
     return choose(timeConstrained
       ? operational
         ? [
-          "I've got a patient waiting. What does my staff actually do?",
-          "This is still too broad for the time I have. Help me connect it to the office step.",
+          "I've got a patient waiting. What does my staff actually do before the case moves?",
+          "This is still too broad for the time I have. Connect it to the office workflow step.",
           "I need the real office step, not the overview.",
         ]
         : [
-          "I've got a patient waiting. What's the patient reason?",
-          "This is still too broad for the time I have. Help me connect it to the patient.",
-          "What changes enough for me to care?",
+          "I've got a patient waiting. Which patient decision is this supposed to change?",
+          "This is still too broad for the time I have. Connect it to a patient in front of me.",
+          "What changes enough for a patient decision to matter?",
         ]
       : [
         "I still don't know why I'd change anything.",
@@ -938,40 +938,40 @@ function buildStageBoundRealismReply({
     if (operational || pressures.includes("access_barrier")) {
       return choose(escalationMemory.escalationLevel >= 2
         ? [
-          "If this adds work, the benefit has to be obvious.",
-          "Okay but why is this worth the extra hassle?",
-          "I need to know what gets better and what my staff gets stuck doing.",
+          "If this adds prior-auth work, the endpoint benefit has to be obvious.",
+          "Okay, but why is the clinical outcome worth the extra approval hassle?",
+          "I need the subgroup outcome and what my staff gets stuck doing.",
         ]
         : [
-          "The data matters, but so does the hassle of actually using it.",
-          "Okay but how much better are the outcomes really?",
-          "If staff workload goes up, the benefit better be clear.",
+          "The data matters, but so does whether prior auth turns into staff rework.",
+          "Which endpoint improves enough to justify the access work?",
+          "If staff workload goes up, the subgroup outcome better be clear.",
         ], "clinical-pressure-combined");
     }
     if (temperatureBand === "low") {
       return choose(repeatCount >= 2
         ? [
-          "We're circling. Why would I actually switch?",
-          "I still need the part that changes what I'd do.",
-          "Which patients did better enough for this to matter?",
+          "We're circling. Which subgroup result would actually make me switch?",
+          "I still need the endpoint that changes what I would do.",
+          "Which patients in the trial did better enough to matter clinically?",
         ]
         : [
-          "Okay but why would I switch?",
-          "What outcome are you saying actually changes?",
-          "Is the benefit really enough to matter clinically?",
+          "Okay, but what endpoint would make me switch?",
+          "What patient outcome are you saying actually changes?",
+          "Is the subgroup benefit enough to matter clinically?",
         ], "clinical-low");
     }
     if (temperatureBand === "medium") {
       return choose(escalationMemory.escalationLevel >= 2
         ? [
-          "The top-line result isn't enough for me.",
-          "I still don't know why I'd move off what I'm doing now.",
-          "What's the part you think changes my mind?",
+          "The top-line result is not enough for my patient mix.",
+          "I still don't know what endpoint would move me off the current protocol.",
+          "Which subgroup result is supposed to change the treatment decision?",
         ]
         : [
-          "Where does this actually become treatment-changing?",
-          "Which patients did better enough to matter?",
-          "What gets meaningfully better here?",
+          "Where does this become treatment-changing in the trial data?",
+          "Which subgroup did better enough to matter?",
+          "What endpoint gets meaningfully better here?",
         ], "clinical-medium");
     }
     return choose(escalationMemory.escalationLevel >= 3
@@ -990,22 +990,22 @@ function buildStageBoundRealismReply({
   if (stage === "access_formulary" || family === "access") {
     if (temperatureBand === "low") {
       return choose([
-        "Okay but what does coverage actually look like?",
-        "So how painful is prior auth going to be?",
-        "What ends up falling on my staff here?",
+        "Okay, but what does coverage actually look like for this formulary path?",
+        "So how painful is prior auth going to be for my staff?",
+        "What access step ends up falling on my office here?",
       ], "access-low");
     }
     if (temperatureBand === "medium") {
       return choose(escalationMemory.escalationLevel >= 2
         ? [
-          "I still don't understand how this gets approved consistently.",
-          "Okay but who's spending time fighting for this?",
-          "If this turns into another prior-auth battle, that's a problem.",
+          "I still don't understand how this gets approved consistently through the payer path.",
+          "Okay, but who in my office is spending time fighting the prior auth?",
+          "If this turns into another formulary or prior-auth battle for staff, that's a problem.",
         ]
         : [
           "How hard is this realistically going to be to get covered?",
-          "What does my staff actually have to do here?",
-          "Where does this usually get stuck?",
+          "What does my staff actually have to do in the approval step?",
+          "Where does this usually get stuck in the payer or formulary process?",
         ], "access-medium");
     }
     return choose(escalationMemory.escalationLevel >= 3
@@ -1024,22 +1024,22 @@ function buildStageBoundRealismReply({
   if (stage === "adoption_implementation" || family === "workflow") {
     if (temperatureBand === "low") {
       return choose([
-        "Okay so what happens first if we actually do this?",
-        "Who's handling this step initially?",
-        "What does my staff suddenly have to learn?",
+        "Okay, so what happens first in the clinic workflow if we actually do this?",
+        "Who handles this step initially, my MA or someone else?",
+        "What does my staff suddenly have to learn before the first patient?",
       ], "implementation-low");
     }
     if (temperatureBand === "medium") {
       return choose(escalationMemory.escalationLevel >= 2
         ? [
-          "I still can't picture how this actually rolls out.",
-          "Okay but who's owning this in the office?",
-          "That's usually where these things get messy.",
+          "I still can't picture how this rolls out in our office workflow.",
+          "Okay, but who owns this in the office on day one?",
+          "That's usually where these things get messy for staff.",
         ]
         : [
-          "Walk me through day one realistically.",
-          "What does this actually turn into for my staff?",
-          "How complicated is this really?",
+          "What happens on day one in the office workflow?",
+          "What does this turn into for my staff during the first patient start?",
+          "How complicated is this for the team in real clinic flow?",
         ], "implementation-medium");
     }
     return choose(escalationMemory.escalationLevel >= 3
@@ -1066,7 +1066,7 @@ function buildStageBoundRealismReply({
     if (temperatureBand === "low") {
       return choose([
         "Okay but what exactly are you asking me to do?",
-        "Before I commit to anything, walk me through the actual next step.",
+        "Before I commit to anything, name the actual next step.",
         "If you're asking for a change, make it specific.",
       ], "close-low");
     }
@@ -1079,14 +1079,14 @@ function buildStageBoundRealismReply({
     }
     return choose(escalationMemory.escalationLevel >= 3
       ? [
-        "If there's a real next step, just send it over.",
-        "I'm not committing to something vague.",
-        "I still don't know what you're actually asking for.",
+        "If there is a real next step for one patient, send that over.",
+        "I'm not committing to something vague without a patient or office action.",
+        "I still don't know what action you're actually asking my team to take.",
       ]
       : [
-        "The ask still feels vague to me.",
-        "Okay but what exactly are you asking me to do?",
-        "If there's a real next step here, name it clearly.",
+        "The ask still feels vague for a real patient decision.",
+        "Okay, but what exactly are you asking me or my staff to do?",
+        "If there is a real next step here, name the patient action clearly.",
       ], "close-high");
   }
 
@@ -2138,7 +2138,7 @@ function deterministicContinuityVariation({
         return "Name the first access step that changes.";
       case "guideline":
       case "patient_fit":
-        return "Which patient group does that affect first?";
+        return "Which patient subgroup does that affect first, and what decision changes?";
       case "cost_value":
         return "Show me where the outcome justifies the cost.";
       case "evidence":
