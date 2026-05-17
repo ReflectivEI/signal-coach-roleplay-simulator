@@ -381,6 +381,7 @@ export default function Simulator() {
   const [voiceEvaluation, setVoiceEvaluation] = useState(null);
   const [isVoiceEvaluating, setIsVoiceEvaluating] = useState(false);
   const [repDraftForAnalysis, setRepDraftForAnalysis] = useState({ text: "", inputMode: "typed", voiceMetadata: null });
+  const [recommendedResponseDraft, setRecommendedResponseDraft] = useState(null);
   const [coachShadowAfterAction, setCoachShadowAfterAction] = useState(null);
   const [highlightedTurnId, setHighlightedTurnId] = useState("");
   const [hcpPrediction, setHcpPrediction] = useState(null);
@@ -602,6 +603,34 @@ export default function Simulator() {
       voiceMetadata: repDraftForAnalysis.voiceMetadata,
     });
   }, [handleEvaluateRep, repDraftForAnalysis]);
+
+  const handleUseRecommendedResponse = useCallback((text) => {
+    const response = String(text || "").trim();
+    if (!response) return;
+    setRecommendedResponseDraft({ id: createSafeId(), text: response });
+    setCoachShadowAfterAction(null);
+    toast({
+      title: "Recommended response loaded",
+      description: "The safest compliant response is ready in the rep input.",
+    });
+  }, [toast]);
+
+  const handleCriticalVoiceEvent = useCallback((event, guidance) => {
+    if (!event || !guidance) return;
+    setRealtimeFeedback({
+      repTurnId: "voice-" + event.id,
+      guidance,
+      timestamp: new Date(),
+      source: "voice_telemetry",
+      eventType: event.type,
+    });
+    if (event.severity === "critical") {
+      toast({
+        title: "Critical voice telemetry event",
+        description: event.coachingRecommendation,
+      });
+    }
+  }, [toast]);
 
   const handleJumpToTurn = useCallback((turnId) => {
     if (!turnId) return;
@@ -1204,6 +1233,7 @@ export default function Simulator() {
           <MessageInput
             onSend={handleRepMessage}
             onDraftChange={handleRepDraftChange}
+            draftToApply={recommendedResponseDraft}
             disabled={isLoading || isReviewing || session?.isComplete}
             placeholder={conversationInit?.inputPlaceholder}
           />
@@ -1268,6 +1298,7 @@ export default function Simulator() {
               className="h-full overflow-y-auto p-5 pt-14 space-y-4"
             >
               <SimulatorRightPanel
+                turns={turns}
                 hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
                 lastSignals={lastSignals}
                 latestVoiceAnalysis={latestVoiceAnalysis}
@@ -1284,6 +1315,9 @@ export default function Simulator() {
                 hasRepSpoken={hasRepSpoken}
                 predictiveLens={predictiveLens}
                 realism={session?.realism}
+                onUseRecommendedResponse={handleUseRecommendedResponse}
+                onCriticalVoiceEvent={handleCriticalVoiceEvent}
+                adminIntelligenceMode={urlParams.get("intelligenceAdmin") === "true" || urlParams.get("admin") === "true"}
               />
             </motion.div>
           )}
@@ -1304,6 +1338,7 @@ export default function Simulator() {
           >
             <div className="w-10 h-1 bg-border rounded-full mx-auto mb-4" />
             <SimulatorRightPanel
+              turns={turns}
               hcpPrediction={repTurnIds.length >= 2 ? hcpPrediction : null}
               lastSignals={lastSignals}
               latestVoiceAnalysis={latestVoiceAnalysis}
@@ -1320,6 +1355,9 @@ export default function Simulator() {
               hasRepSpoken={hasRepSpoken}
               predictiveLens={predictiveLens}
               realism={session?.realism}
+              onUseRecommendedResponse={handleUseRecommendedResponse}
+              onCriticalVoiceEvent={handleCriticalVoiceEvent}
+              adminIntelligenceMode={urlParams.get("intelligenceAdmin") === "true" || urlParams.get("admin") === "true"}
             />
           </motion.div>
         )}

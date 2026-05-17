@@ -8,6 +8,7 @@ import { MODULE_LIBRARY, CAPABILITY_META, getUrgency } from "@/components/learni
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { ENABLEMENT_HUB_SPOKES, ENTERPRISE_SAMPLE_CONFIG, getConfidenceLabel } from "@/lib/enablementHub";
+import { formatDevelopmentBenchmark, scoringAnchorState, signalStateClasses, signalStateFromFivePoint } from "@/lib/signalStateLanguage";
 
 const URGENCY_CONFIG = {
   critical: { label: "Critical", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500" },
@@ -26,12 +27,16 @@ const LEVEL_COLORS = {
 function ScoreBar({ score, color }) {
   const pct = score ? ((score - 1) / 4) * 100 : 0;
   const barColor = score < 2 ? "#ef4444" : score < 3 ? "#f97316" : score < 4 ? "#39ACAC" : "#22c55e";
+  const state = signalStateFromFivePoint(score);
   return (
-    <div className="flex items-center gap-2">
+    <div className="space-y-1.5">
       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: barColor }} />
       </div>
-      <span className="text-xs font-bold text-gray-700 w-8">{score ? `${score}/5` : "—"}</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${signalStateClasses(state.tone)}`}>{state.label}</span>
+        <span className="text-[11px] font-semibold text-slate-500">{formatDevelopmentBenchmark(score)}</span>
+      </div>
     </div>
   );
 }
@@ -154,10 +159,11 @@ function ModuleCard({ module, completed, onToggle, onStartRoleplay }) {
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Scoring Anchors</p>
               <div className="space-y-1.5">
                 {module.scoringAnchors.map((a, i) => {
-                  const c = a.score === 5 ? "bg-green-50 border-green-200 text-green-800" : a.score === 3 ? "bg-yellow-50 border-yellow-200 text-yellow-800" : "bg-red-50 border-red-200 text-red-800";
+                  const anchorState = scoringAnchorState(a.score);
+                  const c = signalStateClasses(anchorState.tone);
                   return (
                     <div key={i} className={`flex gap-2 p-2.5 rounded-lg border text-xs ${c}`}>
-                      <span className="font-bold w-8 flex-shrink-0">{a.score}/5</span>
+                      <span className="font-bold w-28 flex-shrink-0">{anchorState.label}</span>
                       <span>{a.desc}</span>
                     </div>
                   );
@@ -288,12 +294,12 @@ export default function LearningPaths() {
       
       const path = paths.find(p => p.capability === capabilityId);
       console.log('🔵 Found path:', path);
-      const score = path?.avg_score || "no score yet";
+      const state = signalStateFromFivePoint(path?.avg_score || 0);
       const sessionCount = path?.session_count || 0;
 
       const prompt = `You are a sales coaching expert. Generate a personalized learning recommendation for a pharmaceutical sales representative who needs to improve their "${cap.label}" capability.
 
-Current Performance: ${score}/5 (based on ${sessionCount} roleplay sessions)
+Current Development State: ${state.label} (${state.benchmark}; based on ${sessionCount} roleplay sessions)
 
 Provide a clear, actionable recommendation using this markdown structure:
 
@@ -362,13 +368,13 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     }
   };
 
-  // Sort capabilities by urgency (based on avg score)
+  // Sort capabilities by urgency using hidden numeric inputs while exposing state language in the UI.
   const sortedCapabilities = Object.entries(CAPABILITY_META).sort(([aId], [bId]) => {
     const aPath = paths.find(p => p.capability === aId);
     const bPath = paths.find(p => p.capability === bId);
     const aScore = aPath?.avg_score || 3.5;
     const bScore = bPath?.avg_score || 3.5;
-    return aScore - bScore; // lowest score = highest priority
+    return aScore - bScore;
   });
 
   const capModules = selectedCap
@@ -394,7 +400,7 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
     };
   });
   const readinessNarrative = remediationQueue[0]?.label
-    ? `${remediationQueue[0].label} is the highest-priority remediation lane based on current score, practice volume, and module completion.`
+    ? `${remediationQueue[0].label} is the highest-priority remediation lane based on current state, practice volume, and module completion.`
     : 'Start collecting simulator evidence to activate personalized remediation.';
   const confidenceLabel = getConfidenceLabel(paths.reduce((sum, path) => sum + (path?.session_count || 0), 0) || ENTERPRISE_SAMPLE_CONFIG.sessions);
 
@@ -480,8 +486,8 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
                     <p className="mt-1 text-xs text-slate-500">{item.sessions || 0} sessions observed · {item.completed} modules completed</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">{item.score ? `${item.score}/5` : '—'}</p>
-                    <p className="text-xs text-slate-500">current average</p>
+                    <p className="text-sm font-bold text-slate-900">{signalStateFromFivePoint(item.score).label}</p>
+                    <p className="text-xs text-slate-500">{formatDevelopmentBenchmark(item.score)}</p>
                   </div>
                 </button>
               ))}
@@ -491,9 +497,9 @@ Keep it practical, specific to pharmaceutical sales, and aligned with Signal Int
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Remediation guidance</p>
             <h3 className="mt-1 text-lg font-bold text-slate-900">How this spoke should operate</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-600">
-              <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Sequence content from lowest score to highest urgency, not by static curriculum order.</div>
+              <div className="rounded-xl border border-teal-100 bg-teal-50 p-4">Sequence content from weakest development state to highest urgency, not by static curriculum order.</div>
               <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">Pair every module recommendation with one simulator action and one measurable behavior objective.</div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{readinessNarrative}</div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">{readinessNarrative.replace("current score", "current state")}</div>
             </div>
           </div>
         </div>

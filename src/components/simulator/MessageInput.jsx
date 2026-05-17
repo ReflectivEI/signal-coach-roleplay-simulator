@@ -8,12 +8,20 @@ export default function MessageInput({
   placeholder = "Your response as the rep...",
   onVoiceMetadataChange = null,
   onDraftChange = null,
+  draftToApply = null,
 }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef(null);
   const shouldRestoreFocusRef = useRef(false);
   const speech = useSpeechInput();
   const [voiceMode, setVoiceMode] = useState(false);
+
+  useEffect(() => {
+    if (draftToApply?.text) {
+      setValue(draftToApply.text);
+      window.requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+    }
+  }, [draftToApply?.id]);
 
   useEffect(() => {
     if (textareaRef.current) {

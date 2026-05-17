@@ -1414,6 +1414,173 @@ async function handleSaveSession(request: Request, env: Env): Promise<Response> 
     return json(request, { success: true, session_id: sessionId });
 }
 
+async function handlePredictNextEvent(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+        return json(request, { error: "Method not allowed" }, 405);
+    }
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const transcript = Array.isArray(body.liveTranscript) ? body.liveTranscript : [];
+    const text = JSON.stringify(transcript).toLowerCase();
+    const safety = /safety|adverse|hepatic|renal|side effect|warning/.test(text);
+    const access = /access|prior auth|authorization|coverage|formulary|payer/.test(text);
+    const type = safety ? "safety_concern_escalation" : access ? "access_escalation" : "next_hcp_objection";
+    const label = safety
+        ? "Safety concern escalation likely in the next exchange"
+        : access
+            ? "Access friction likely to become the next HCP objection"
+            : "HCP likely to sharpen the next practical objection";
+    const probability = safety ? 0.72 : access ? 0.68 : 0.56;
+
+    return json(request, {
+        predictions: [{
+            id: `api-${type}`,
+            type,
+            label,
+            probability,
+            timeHorizonSeconds: safety ? 14 : 22,
+            severity: safety ? "critical" : probability >= 0.65 ? "high" : "moderate",
+            trajectory: probability >= 0.65 ? "Escalating" : "Recoverable",
+            evidence: [{
+                signal: "Server placeholder route",
+                detail: "Deterministic placeholder until the promoted prediction service is connected.",
+                source: "transcript",
+            }],
+            recommendedStrategy: "Acknowledge the concern, narrow to the decision threshold, and stay within approved messaging.",
+            safestResponse: "That is a fair concern. Let me keep this grounded in the approved information and clarify the specific point that would help you decide.",
+            expectedImpact: {
+                trust: { delta: 3, state: "positive", rationale: "Acknowledges the HCP concern before answering." },
+                compliance: { delta: safety ? 8 : 4, state: "positive", rationale: "Keeps the response inside approved language." },
+                objectionResolution: { delta: 4, state: "positive", rationale: "Narrows the next objection into an answerable issue." },
+                closeEffectiveness: { delta: 2, state: "positive", rationale: "Protects momentum without forcing a premature close." },
+            },
+        }],
+        transport: { sse: "/api/predict-next-event/stream", websocket: "/api/predict-next-event/ws" },
+    });
+}
+
+async function handleVoiceTelemetry(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+        return json(request, { error: "Method not allowed" }, 405);
+    }
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const voice = (body.voiceMetadata || body.voice_metadata || {}) as Record<string, unknown>;
+    const wpm = Number(voice.words_per_minute || 0);
+    const fillers = Number(voice.filler_word_count || 0);
+    const pauses = Number(voice.pause_count || 0);
+    const stressLoad = Math.min(100, Math.max(0, Math.round(Math.max(0, wpm - 135) * 0.35 + fillers * 9 + pauses * 6)));
+    const confidence = Math.min(100, Math.max(0, Math.round(78 - Math.max(0, wpm - 165) * 0.24 - fillers * 4 - stressLoad * 0.16)));
+    const critical = stressLoad >= 72 || confidence <= 42;
+
+    return json(request, {
+        id: "api-voice-telemetry-" + Date.now(),
+        capturedAt: new Date().toISOString(),
+        pacingWordsPerMinute: wpm || 142,
+        confidence,
+        hesitationIndex: Math.min(100, Math.round(pauses * 14 + fillers * 5)),
+        fillerWordCount: fillers,
+        interruptionFrequency: Number(voice.recognition_chunk_count || 1) > 3 ? 2 : 0,
+        stressLoad,
+        emotionalCalibration: critical ? 48 : 68,
+        tonalStability: critical ? 44 : 74,
+        responseLatencyMs: Math.round(Number(voice.response_duration_seconds || 2) * 1000),
+        composureUnderPressure: critical ? 38 : 72,
+        conversationalDominance: wpm > 175 ? 72 : 48,
+        confidenceDrift: [],
+        waveform: [],
+        events: [{
+            id: critical ? "api-confidence-drop" : "api-composure-recovery",
+            timestamp: new Date().toISOString(),
+            type: critical ? "confidence_drop" : "composure_recovery",
+            severity: critical ? "critical" : "low",
+            metricImpact: [{
+                metricId: critical ? "objection_navigation" : "conversation_control_structure",
+                metricLabel: critical ? "Objection Handling" : "Conversation Control & Structure",
+                delta: critical ? -3 : 2,
+                rationale: critical ? "Voice pressure may make objection handling sound defensive." : "Stable delivery supports structured objection handling.",
+            }],
+            insight: critical ? "Voice telemetry indicates elevated pressure during objection handling." : "Voice telemetry is stable in the current window.",
+            coachingRecommendation: critical ? "Slow down, acknowledge the HCP concern, and answer with one approved point." : "Maintain the current pace and keep the response tied to the HCP concern.",
+        }],
+        trajectoryImpact: critical ? "critical" : "stabilizing",
+        transport: { sse: "/api/voice-telemetry/stream", websocket: "/api/voice-telemetry/ws" },
+    });
+}
+
+async function handleRecommendationReasoning(request: Request): Promise<Response> {
+    if (request.method !== "POST") {
+        return json(request, { error: "Method not allowed" }, 405);
+    }
+
+    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const recommendation = String(body.recommendation || "Use the safest compliant response tied to the current HCP signal.");
+    const now = new Date().toISOString();
+
+    return json(request, {
+        recommendationId: String(body.recommendationId || "api-reasoning-" + Date.now()),
+        recommendation,
+        confidence: Number(body.confidence || 0.74),
+        primaryReason: String(body.primaryReason || "This recommendation was generated from transcript, voice, metric, and compliance evidence."),
+        evidenceSignals: [
+            {
+                id: "api-signal-transcript",
+                label: "Transcript signal",
+                detail: "Recent conversation context was used to identify the active HCP concern.",
+                source: "transcript",
+                weight: 0.32,
+            },
+            {
+                id: "api-signal-metric",
+                label: "Execution metric signal",
+                detail: "Current 8-metric behavior evidence was used to select the safest coaching move.",
+                source: "metric",
+                weight: 0.24,
+            },
+            {
+                id: "api-signal-compliance",
+                label: "Compliance basis",
+                detail: "Approved-language constraints were applied before returning the recommendation.",
+                source: "compliance",
+                weight: 0.2,
+            },
+        ],
+        transcriptEvidence: [],
+        voiceEvidence: [],
+        metricEvidence: [],
+        complianceBasis: [{
+            ruleId: "approved-language",
+            rule: "Use approved messaging and observable behavior evidence.",
+            basis: "The recommendation avoids unsupported claims and explains the evidence path.",
+            approvedSource: "ReflectivAI commercial compliance guardrail",
+        }],
+        rejectedAlternatives: [{
+            id: "api-alt-generic",
+            alternative: "Provide a generic coaching recommendation without evidence.",
+            rejectedBecause: "Alternative rejected because enterprise users need auditable evidence and compliance basis.",
+            riskReduced: "Reduces black-box AI and compliance-review risk.",
+        }],
+        auditTrail: [
+            {
+                id: "api-audit-ingest",
+                timestamp: now,
+                action: "reasoning_request_received",
+                actor: "system",
+                detail: "Recommendation reasoning request received by placeholder API route.",
+            },
+            {
+                id: "api-audit-response",
+                timestamp: now,
+                action: "reasoning_response_generated",
+                actor: "rules_engine",
+                detail: "Placeholder reasoning response generated for frontend integration.",
+            },
+        ],
+        generatedAt: now,
+        modelVersion: "reasoning-transparency-v1",
+    });
+}
+
 function routeAdaptiveRps(pathname: string, request: Request, env: Env): Promise<Response> | null {
     if (pathname === "/api/rps/generate-scenario" && request.method === "POST") {
         return handleGenerateScenario(request, env);
@@ -1423,6 +1590,15 @@ function routeAdaptiveRps(pathname: string, request: Request, env: Env): Promise
     }
     if (pathname === "/api/rps/save-session" && request.method === "POST") {
         return handleSaveSession(request, env);
+    }
+    if (pathname === "/api/predict-next-event") {
+        return handlePredictNextEvent(request);
+    }
+    if (pathname === "/api/voice-telemetry") {
+        return handleVoiceTelemetry(request);
+    }
+    if (pathname === "/api/recommendation-reasoning") {
+        return handleRecommendationReasoning(request);
     }
     return null;
 }

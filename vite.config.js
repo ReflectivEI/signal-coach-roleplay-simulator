@@ -13,6 +13,9 @@ const workerPaths = [
   "/api/rps/generate-scenario",
   "/api/rps/evaluate-response",
   "/api/rps/save-session",
+  "/api/predict-next-event",
+  "/api/voice-telemetry",
+  "/api/recommendation-reasoning",
 ];
 
 const localWorkerUrl = "http://127.0.0.1:8787";

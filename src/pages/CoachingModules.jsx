@@ -7,6 +7,8 @@ import { createPageUrl } from "../utils";
 import ReactMarkdown from "react-markdown";
 import { SIGNAL_CAPABILITIES } from "@/components/roleplay/signalIntelligenceSOT";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
+import { buildReflectivAiCoachPrompt, compressCoachResponse } from "@/lib/reflectivAiCoachTone";
+import { scoringAnchorState, signalStateClasses } from "@/lib/signalStateLanguage";
 
 const ALL_CAPABILITY_IDS = SIGNAL_CAPABILITIES.map((c) => c.id);
 const CAPABILITY_LABELS = Object.fromEntries(SIGNAL_CAPABILITIES.map((capability) => [capability.id, capability.label || capability.name || capability.id.replace(/_/g, " ")]));
@@ -248,9 +250,9 @@ export default function CoachingModules() {
     setAiLoading(key);
     const module = modules.find((m) => m.id === moduleId);
     const prompts = {
-      tips: `You are a pharma sales coach. Provide 5 advanced, actionable tips for mastering "${module.title}" based on Signal Intelligence™. Return clean markdown bullets only, no tables. Focus on observable behaviors and real-world application.`,
-      example: `Write a realistic example conversation between a sales rep and HCP, where the rep demonstrates excellent "${module.title}". Return clean markdown with short dialogue bullets and brief coaching notes. Do not use tables.`,
-      checklist: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions. Do not use tables.`,
+      tips: buildReflectivAiCoachPrompt({ userTask: `Provide 5 advanced, actionable tips for mastering "${module.title}" based on Signal Intelligence. Return clean markdown bullets only, no tables. Focus on observable behaviors and field execution.` }),
+      example: buildReflectivAiCoachPrompt({ userTask: `Write a realistic example conversation between a sales rep and HCP, where the rep demonstrates excellent "${module.title}". Return clean markdown with short dialogue bullets and brief tactical notes. Do not use tables.` }),
+      checklist: buildReflectivAiCoachPrompt({ userTask: `Create a pre-call checklist for "${module.title}" that a sales rep can use before any HCP interaction. Format as a bulleted list of 8-10 specific, observable actions. Do not use tables.` }),
     };
     try {
       const res = await fetch('/api/llm/invoke', {
@@ -417,17 +419,13 @@ export default function CoachingModules() {
                 </section>
 
                 <section>
-                  <SectionHeader icon={BookOpen} iconClassName="text-teal-600" title="Scoring Anchors (Signal Intelligence™ 1–5)" />
+                  <SectionHeader icon={BookOpen} iconClassName="text-teal-600" title="Development State Anchors" />
                   <div className="space-y-2.5">
                     {open.scoringAnchors.map((anchor, index) => {
-                      const colors = {
-                        "5": "bg-green-50 border-green-200 text-green-800",
-                        "3": "bg-yellow-50 border-yellow-200 text-yellow-800",
-                        "1": "bg-red-50 border-red-200 text-red-800",
-                      };
+                      const state = scoringAnchorState(anchor.score);
                       return (
-                        <div key={index} className={`flex items-start gap-3 rounded-xl border p-3.5 ${colors[anchor.score]}`}>
-                          <span className="w-12 flex-shrink-0 text-sm font-bold">{anchor.score}/5</span>
+                        <div key={index} className={`flex items-start gap-3 rounded-xl border p-3.5 ${signalStateClasses(state.tone)}`}>
+                          <span className="w-36 flex-shrink-0 text-sm font-bold">{state.label}</span>
                           <span className="text-sm leading-relaxed">{anchor.desc}</span>
                         </div>
                       );
@@ -529,10 +527,10 @@ function CoachInputPanel({ moduleName, moduleTagline }) {
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: `You are a pharma sales coach specializing in Signal Intelligence™. A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation. \n\nTheir situation: "${trimmedInput}"\n\nReturn clean markdown with exactly 3 concise bullet recommendations. Each bullet must begin with a bold action label using only the first 2-5 keywords, followed immediately by one continuous practical sentence that ends with a period. Do not insert line breaks inside any bullet. Do not use tables. Reference Signal Intelligence™ principles where relevant.` })
+        body: JSON.stringify({ prompt: buildReflectivAiCoachPrompt({ userTask: `A sales rep is asking for advice on applying "${moduleName}" (${moduleTagline}) to their situation.\n\nSituation: "${trimmedInput}"\n\nReturn clean markdown with exactly 3 concise bullet recommendations. Each bullet must begin with a bold action label using only the first 2-5 keywords, followed immediately by one continuous practical sentence that ends with a period. Do not insert line breaks inside any bullet. Do not use tables. Reference Signal Intelligence principles where relevant.` }) })
       });
       const data = await res.json();
-      setResponse(normalizeCoachAdvice(data.response || data.text || data.content || ''));
+      setResponse(compressCoachResponse(normalizeCoachAdvice(data.response || data.text || data.content || ''), 6));
     } catch {
       setResponse('AI service unavailable.');
     }

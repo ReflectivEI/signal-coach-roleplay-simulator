@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ChevronDown, ChevronUp, RefreshCw, MessageSquare, FileText, Target, AlertTriangle, CheckCircle2, AlertCircle, XCircle, Maximize2, Minimize2 } from "lucide-react";
 import { capabilityStateFromObservationLevel, capabilityStateTone } from "@/lib/capabilityStates";
 import { SIGNAL_INTELLIGENCE_CAPABILITIES, PRESSURE_LABELS } from "@/lib/signalIntelligence";
+import ReasoningDrawer from "@/components/simulator/ReasoningDrawer";
+import { buildReasoningCard } from "@/lib/recommendationReasoning";
 
 const metricColorTokens = {
   success: {
@@ -815,7 +817,26 @@ export default function SessionSummaryModal({
   onJumpToTurn = null
 }) {
   const [showSkillBreakdown, setShowSkillBreakdown] = useState(false);
+  const [reasoningCard, setReasoningCard] = useState(null);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
   if (!review) return null;
+
+  const openPostCallReasoning = () => {
+    const card = buildReasoningCard({
+      source: "post_call_summary",
+      recommendation: review.nextAdjustment || review.coachingDirectionText || review.overallGuidance?.[0] || "Answer the HCP's exact concern first, then use one narrow follow-up to move the exchange forward.",
+      confidence: 0.78,
+      primaryReason: review.briefRationale || review.primaryDiagnosisText || "This post-call recommendation was generated from session review evidence, capability scoring, and transcript-based behavioral diagnosis.",
+      turns: session?.transcript || session?.turns || [],
+      event: {
+        type: "post_call_intelligence_summary",
+        label: review.biggestGap || review.primaryDiagnosisText || "Post-call coaching direction",
+      },
+      metricScores: review.metricScores || review.capabilityScores || {},
+    });
+    setReasoningCard(card);
+    setReasoningOpen(true);
+  };
 
   // Build insight lookup, preserving the full forensic capability insight as the source of truth.
   // Legacy guidance objects can fill gaps, but should never overwrite the richer review object.
@@ -1316,9 +1337,23 @@ export default function SessionSummaryModal({
               </div>
 
               {review.overallGuidance?.[0] && (
-                <p className="text-xs leading-relaxed pt-1" style={{ color: REVIEW_FAINT }}>
-                  {cleanCoachingCopy(review.overallGuidance[0])}
-                </p>
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs leading-relaxed" style={{ color: REVIEW_FAINT }}>
+                    {cleanCoachingCopy(review.overallGuidance[0])}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={openPostCallReasoning}
+                    className="inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all hover:-translate-y-0.5"
+                    style={{
+                      borderColor: "rgba(37,124,123,0.24)",
+                      background: "rgba(37,124,123,0.08)",
+                      color: "hsl(174 50% 28%)",
+                    }}
+                  >
+                    Why this recommendation?
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1349,6 +1384,11 @@ export default function SessionSummaryModal({
           </button>
         </div>
       </motion.div>
+      <ReasoningDrawer
+        open={reasoningOpen}
+        card={reasoningCard}
+        onClose={() => setReasoningOpen(false)}
+      />
     </div>
   );
 }

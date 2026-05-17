@@ -56,6 +56,12 @@ import SessionSummaryPill from "@/components/coach/SessionSummaryPill";
 import TodaysTipCard from "@/components/shared/TodaysTipCard";
 import { getTopicGuardResponse, sanitizeAiText } from "@/lib/aiTopicGuard";
 import { normalizeInvokeResponseText } from "@/lib/roleplayUiFormatting";
+import {
+  buildReflectivAiCoachPrompt,
+  compressCoachResponse,
+  enforceReflectivAiCoachTone,
+  REFLECTIVAI_COACH_PERSONA_PROMPT,
+} from "@/lib/reflectivAiCoachTone";
 
 const suggestedQuestions = [
   "How can I better understand what motivates healthcare providers in my territory?",
@@ -174,7 +180,7 @@ Please give me specific, actionable feedback that directly addresses these misal
     setIsLoading(true);
     try {
       const contextMessage = buildSessionContextMessage(ctx);
-      const prompt = `You are an expert AI Coach using Signal Intelligence™ source-of-truth behaviors.
+      const prompt = `${REFLECTIVAI_COACH_PERSONA_PROMPT}
 
 Session context:
 ${contextMessage}
@@ -189,7 +195,8 @@ Rules:
 - Use only observable behavior from provided context
 - Tie recommendations to Signal Intelligence capabilities
 - Keep it practical and specific
-- No filler preamble`; 
+- No filler preamble
+- No praise, reassurance, or assistant-style language`;
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -201,7 +208,7 @@ Rules:
         const data = await res.json();
         const coachResponse = sanitizeAiText(data.response || data.text || data.content || '');
         const coachText = typeof coachResponse === 'string' ? coachResponse : String(coachResponse);
-        const finalResponse = addRolePlayLinks(coachText);
+        const finalResponse = addRolePlayLinks(compressCoachResponse(coachText, 8));
         const updatedMessages = [{ role: "assistant", content: finalResponse }];
         setMessages(updatedMessages);
         generateSessionSummary(updatedMessages);
@@ -260,7 +267,10 @@ COACHING MANDATE: When the user asks for feedback, directly reference these spec
 
     // Call LLM endpoint with conversation and context
     try {
-      const systemPrompt = `You are an expert sales coach and pharmaceutical industry knowledge expert specializing in Sales Intelligence behaviors. You help reps in two ways:
+      const systemPrompt = buildReflectivAiCoachPrompt({
+        sessionContext: sessionCtxBlock,
+        conversationHistory,
+        userTask: `You help reps in two ways:
 
 1. ANSWER KNOWLEDGE QUESTIONS: When the user asks for information, knowledge, or insights about pharmaceutical sales, HCP considerations, frameworks, strategies, cultural factors, clinical evidence, or industry topics—provide comprehensive, factual answers with relevant statistics and examples.
 
@@ -269,17 +279,13 @@ COACHING MANDATE: When the user asks for feedback, directly reference these spec
 IMPORTANT GUIDELINES:
 - ONLY discuss this current conversation. DO NOT reference "previous sessions", "former conversations", or "past roleplays"
 - Distinguish between info questions and coaching requests. Answer info questions directly without treating them as sales practice.
-- NEVER offer to do roleplay practice with the user. Instead, if relevant, recommend "I recommend practicing this in the Role Play Simulator to test it out with an HCP"
+- NEVER offer to do roleplay practice with the user. Instead, if relevant, say "Test this in the Role Play Simulator against an HCP response."
 - When providing coaching, keep feedback specific and actionable
 - Ground all advice in Signal Intelligence™ principles
-- Be encouraging but honest
+- Use ReflectivAI operational coach tone, not Alora tone
 
-${sessionCtxBlock}
-
-Conversation so far:
-${conversationHistory}
-
-Respond as the AI Coach. If this is a knowledge/info question, provide a comprehensive answer. If this is a coaching request, provide helpful feedback grounded in observable patterns and behaviors.`;
+If this is a knowledge/info question, provide a concise answer. If this is a coaching request, provide tactical feedback grounded in observable patterns and behaviors.`,
+      });
 
       const res = await fetch('/api/llm/invoke', {
         method: 'POST',
@@ -298,7 +304,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         }
 
         // Add Role Play Simulator links
-        finalResponse = addRolePlayLinks(finalResponse);
+        finalResponse = addRolePlayLinks(compressCoachResponse(finalResponse, isContentToolExample ? 10 : 7));
 
         const updatedMessages = [...newMessages, { role: "assistant", content: finalResponse }];
         setMessages(updatedMessages);
@@ -341,7 +347,11 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Analyze this AI Coach conversation and provide a brief 2-3 sentence summary of the key coaching insights and action items discussed. Be conversational and focused on practical takeaways:\n\n${conversationText}`,
+          prompt: `${REFLECTIVAI_COACH_PERSONA_PROMPT}
+
+Analyze this ReflectivAI Coach conversation and provide a brief 2-3 sentence operational summary of the key coaching signals and action items. Use tactical, concise language. Avoid praise and assistant-style phrasing.
+
+${conversationText}`,
         })
       });
       if (res.ok) {
@@ -349,7 +359,7 @@ Respond as the AI Coach. If this is a knowledge/info question, provide a compreh
         let summaryText = normalizeInvokeResponseText(data);
         // Strip markdown code blocks if present
         summaryText = summaryText.replace(/^```[\w]*\n?|\n?```$/g, '').trim();
-        if (summaryText) setSessionSummary(summaryText);
+        if (summaryText) setSessionSummary(enforceReflectivAiCoachTone(summaryText));
       }
     } catch (err) {
       console.error('Summary generation error:', err);

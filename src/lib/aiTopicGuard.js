@@ -1,3 +1,5 @@
+import { buildReflectivAiScopeBoundary, enforceReflectivAiCoachTone } from "@/lib/reflectivAiCoachTone";
+
 const PLATFORM_KEYWORDS = [
   "reflectivai",
   "reflectiv ai",
@@ -105,14 +107,14 @@ export function isTopicAllowed(text, scope = "general") {
 
 export function buildTopicGuardMessage(scope = "general") {
   if (scope === "analytics") {
-    return "I can help with ReflectivAI reporting, coaching analytics, performance trends, and sales-data questions only. Please ask about reports, prescriber trends, capability scores, territory performance, or export-ready summaries.";
+    return buildReflectivAiScopeBoundary("analytics");
   }
 
   if (scope === "platform") {
-    return "I’m here to help with ReflectivAI platform usage, Signal Intelligence, and coaching workflows only. Please ask about navigation, tools, modules, reporting, or how to use a feature inside ReflectivAI.";
+    return buildReflectivAiScopeBoundary("platform");
   }
 
-  return "I can help only with ReflectivAI, Signal Intelligence, pharmaceutical sales coaching, and related platform workflows. Please reframe your question around an HCP interaction, coaching scenario, capability, module, or ReflectivAI feature.";
+  return buildReflectivAiScopeBoundary(scope);
 }
 
 export function getTopicGuardResponse(text, scope = "general") {
@@ -120,8 +122,8 @@ export function getTopicGuardResponse(text, scope = "general") {
 }
 
 export function sanitizeAiText(value) {
-  return String(value || "")
+  return enforceReflectivAiCoachTone(String(value || "")
     .replace(/^```[\w-]*\n?|\n?```$/g, "")
     .replace(/\r\n/g, "\n")
-    .trim();
+    .trim());
 }
