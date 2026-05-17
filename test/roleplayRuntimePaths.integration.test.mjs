@@ -391,6 +391,8 @@ test("HCP first-turn choice questions are answered before scenario pressure is a
   assert.match(generatorSource, /Patient fit is the part that matters most/);
   assert.match(generatorSource, /The evidence question is the part that matters most/);
   assert.match(generatorSource, /applyDecisionLaneChoiceAcknowledgement\(hcpReply, repMessage, scenario\)/);
+  assert.match(generatorSource, /stripDecisionLaneAcknowledgementStack/);
+  assert.match(generatorSource, /for \(let i = 0; i < 6; i \+= 1\)/);
   assert.match(generatorSource, /replace\(\/\^if this is about access/);
 });
 
