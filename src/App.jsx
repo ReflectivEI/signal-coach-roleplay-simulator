@@ -14,6 +14,7 @@ import PredictiveBuilder from './pages/PredictiveBuilder';
 import PredictiveBuilderReferences from './pages/PredictiveBuilderReferences';
 import AdaptiveRpsPage from './features/rps/AdaptiveRpsPage';
 import EnterpriseRpsGateway from './enterprise-rps-gateway/EnterpriseRpsGateway';
+import PreCallPlanning from './pages/PreCallPlanning';
 // import RolePlaySimulator from './pages/RolePlaySimulator';
 import Simulator from './pages/Simulator';
 
@@ -43,6 +44,7 @@ const AppRoutes = () => {
       <Route path="/library" element={<ScenarioLibrary />} />
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
+      <Route path="/PreCallPlanning" element={<PreCallPlanning />} />
       <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} />
       {/* Redirect all RPS routes to the standalone RPS site */}
       <Route path="/rps" element={<ExternalRpsRedirect />} />

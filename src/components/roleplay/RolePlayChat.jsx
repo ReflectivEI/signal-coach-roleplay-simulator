@@ -14,9 +14,12 @@ import {
   Clapperboard,
   TriangleAlert,
   CornerRightUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import ReactMarkdown from "react-markdown";
+import { motion } from "framer-motion";
 import CapabilityFeedbackPanel from "./CapabilityFeedbackPanel";
 import AnnotatedTranscript from "./AnnotatedTranscript";
 import SessionSummaryModal from "@/components/simulator/SessionSummaryModal";
@@ -6417,7 +6420,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
   const flatMessages = flattenTurns(turns);
 
   const renderTabPills = () => (
-    <div className="flex gap-1.5 flex-shrink-0 bg-transparent overflow-x-auto">
+    <div className="relative max-w-full overflow-hidden px-5 pb-1">
+      <div className="pointer-events-none absolute left-0 top-0 z-10 flex h-8 w-6 items-center justify-start bg-gradient-to-r from-white via-white/92 to-transparent">
+        <ChevronLeft className="h-4 w-4 text-teal-500" aria-hidden="true" />
+      </div>
+      <motion.div
+        className="scrollbar-light flex max-w-full flex-shrink-0 gap-1.5 overflow-x-auto scroll-smooth bg-transparent pb-1 pr-7 [-webkit-overflow-scrolling:touch] [touch-action:pan-x]"
+        initial={{ x: 10, opacity: 0.92 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
+        whileTap={{ x: -2 }}
+      >
       {([
         { id: "chat", label: "Live Chat", icon: MessageSquare },
         { id: "annotate", label: "Annotated Transcript", icon: Highlighter, disabled: repTurnsCount < 1 },
@@ -6432,17 +6445,22 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
               endSession();
             }
           }}
-          className={`inline-flex items-center gap-1.5 rounded-full border font-semibold transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
-            ? "border-[#39ACAC] text-[#39ACAC] bg-[#e6f7f7]"
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border font-semibold shadow-[0_8px_18px_rgba(15,23,42,0.08)] transition-all duration-200 text-xs px-3 py-1 ${activeTab === id
+            ? "border-[#39ACAC] text-[#0f766e] bg-[#e6f7f7]"
             : disabled
-              ? "border-gray-200 text-gray-300 cursor-not-allowed"
-              : "border-[#1A334D] text-[#1A334D] bg-white hover:border-[#39ACAC] hover:text-[#39ACAC] hover:bg-[#e6f7f7]"
+              ? "border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed"
+              : "border-[#39ACAC] bg-white/95 text-slate-800 hover:border-[#5eead4] hover:text-[#0f766e] hover:bg-[#ecfdfd]"
             }`}
         >
           <Icon className="w-3.5 h-3.5" />
           {label}
         </button>
       ))}
+      <span className="h-7 w-8 shrink-0" aria-hidden="true" />
+      </motion.div>
+      <div className="pointer-events-none absolute right-0 top-0 z-10 flex h-8 w-7 items-center justify-end bg-gradient-to-l from-white via-white/92 to-transparent">
+        <ChevronRight className="h-4 w-4 text-teal-500" aria-hidden="true" />
+      </div>
     </div>
   );
 

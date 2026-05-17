@@ -518,6 +518,7 @@ function getPlanHighlights(structured) {
 
 export default function PreCallPlanning() {
   const [showForm, setShowForm] = useState(false);
+  const [editingPlanId, setEditingPlanId] = useState(null);
   const [form, setForm] = useState(defaultForm);
   const [plans, setPlans] = useState([]);
   const [aiGenerating, setAiGenerating] = useState(null);
@@ -617,7 +618,52 @@ export default function PreCallPlanning() {
     localStorage.setItem("precall-predictive-tips", JSON.stringify(nextTips));
   };
 
-  const createPlan = (data) => {
+  const openNewPlan = () => {
+    setEditingPlanId(null);
+    setForm(defaultForm);
+    setShowForm(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById("precall-plan-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const openEditPlan = (plan) => {
+    setEditingPlanId(plan.id);
+    setForm({
+      hcp_name: plan.hcp_name || "",
+      specialty: plan.specialty || "",
+      disease_state: plan.disease_state || "",
+      objectives: plan.objectives || "",
+      key_messages: plan.key_messages || "",
+      anticipated_objections: plan.anticipated_objections || "",
+      notes: plan.notes || "",
+    });
+    setExpandedPlan(plan.id);
+    setShowForm(true);
+    window.requestAnimationFrame(() => {
+      document.getElementById("precall-plan-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const savePlan = (data) => {
+    if (editingPlanId) {
+      const normalized = normalizePlan(data);
+      setPlans((prev) => prev.map((plan) => plan.id === editingPlanId
+        ? {
+          ...plan,
+          ...normalized,
+          updated_date: new Date().toISOString(),
+          status: plan.status || "draft",
+        }
+        : plan
+      ));
+      setExpandedPlan(editingPlanId);
+      setEditingPlanId(null);
+      setShowForm(false);
+      setForm(defaultForm);
+      return;
+    }
+
     const normalized = normalizePlan(data);
     setPlans((prev) => [{
       ...normalized,
@@ -688,7 +734,7 @@ export default function PreCallPlanning() {
               <p className="text-sm text-gray-600">Prepare for your HCP conversations with one consistent save and export workflow.</p>
             </div>
           </div>
-          <Button className="h-10 min-w-[140px] border border-teal-500 bg-teal-500 text-white shadow-sm hover:bg-teal-600" onClick={() => setShowForm(true)}>
+          <Button type="button" className="h-10 min-w-[140px] border border-teal-500 bg-teal-500 text-white shadow-sm hover:bg-teal-600" onClick={openNewPlan}>
             <Plus className="mr-1 h-4 w-4" /> New Plan
           </Button>
         </div>
@@ -701,8 +747,17 @@ export default function PreCallPlanning() {
         </div>
 
         {showForm && (
-          <Card className="mb-7 border-teal-200 shadow-sm">
+          <Card id="precall-plan-editor" className="mb-7 border-teal-200 shadow-sm">
             <CardContent className="space-y-4 p-5 md:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">{editingPlanId ? "Edit Plan" : "New Plan"}</p>
+                  <h2 className="mt-1 text-lg font-bold text-slate-900">{editingPlanId ? "Update field-ready plan" : "Create field-ready plan"}</h2>
+                </div>
+                {editingPlanId && (
+                  <span className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">Editing saved plan</span>
+                )}
+              </div>
               <div className="flex gap-3 rounded-2xl border border-teal-200 bg-[#e6f7f7] p-4">
                 <Sparkles className="mt-0.5 h-5 w-5 flex-shrink-0 text-teal-700" />
                 <div>
@@ -782,9 +837,9 @@ export default function PreCallPlanning() {
               <div className="flex flex-col gap-3 border-t border-slate-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-slate-500">AI Assist stays disabled until all required context fields are complete.</p>
                 <div className="flex flex-wrap justify-end gap-2">
-                  <Button variant="outline" className="h-10 min-w-[104px] border-slate-200 text-slate-700 hover:bg-slate-50" onClick={() => setShowForm(false)}>Cancel</Button>
-                  <Button className="h-10 min-w-[136px] bg-teal-500 font-semibold hover:bg-teal-600" onClick={() => createPlan(form)} disabled={!form.hcp_name || aiGenerating !== null}>
-                    Create Plan
+                  <Button type="button" variant="outline" className="h-10 min-w-[104px] border-slate-200 text-slate-700 hover:bg-slate-50" onClick={() => { setShowForm(false); setEditingPlanId(null); setForm(defaultForm); }}>Cancel</Button>
+                  <Button type="button" className="h-10 min-w-[136px] bg-teal-500 font-semibold hover:bg-teal-600" onClick={() => savePlan(form)} disabled={!form.hcp_name || aiGenerating !== null}>
+                    {editingPlanId ? "Save Changes" : "Create Plan"}
                   </Button>
                 </div>
               </div>
@@ -799,7 +854,7 @@ export default function PreCallPlanning() {
             <FileText className="mx-auto mb-4 h-16 w-16 text-gray-200" />
             <h3 className="mb-2 text-lg font-semibold text-gray-900">No Plans Yet</h3>
             <p className="mb-6 text-sm text-gray-600">Create your first Pre-Call Plan to start preparing for HCP conversations.</p>
-            <Button className="bg-teal-500 hover:bg-teal-600" onClick={() => setShowForm(true)}>
+            <Button type="button" className="bg-teal-500 hover:bg-teal-600" onClick={openNewPlan}>
               <Plus className="mr-1 h-4 w-4" /> Create Your First Plan
             </Button>
           </div>
@@ -833,6 +888,9 @@ export default function PreCallPlanning() {
                       </div>
                       <div className="flex flex-shrink-0 items-center gap-2">
                         <span className="text-xs text-gray-600">{format(new Date(plan.created_date), "MMM d, yyyy")}</span>
+                        <Button type="button" variant="outline" size="sm" className="h-8 rounded-full border-teal-200 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50" onClick={() => openEditPlan(plan)}>
+                          Edit plan
+                        </Button>
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setExpandedPlan(expandedPlan === plan.id ? null : plan.id)}>
                           {expandedPlan === plan.id ? <ChevronUp className="h-4 w-4 text-gray-600" /> : <ChevronDown className="h-4 w-4 text-gray-600" />}
                         </Button>

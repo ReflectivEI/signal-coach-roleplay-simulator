@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Zap, TrendingUp, TrendingDown, Minus, AlertTriangle, Activity, MapPin, BrainCircuit, ChevronDown, ChevronUp, ChevronRight, Mic, Bot } from "lucide-react";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
+import PredictedNextEventPanel from "@/components/simulator/PredictedNextEventPanel";
+import VoiceTelemetryPanel from "@/components/simulator/VoiceTelemetryPanel";
+import AdaptiveIntelligenceLayer from "@/components/simulator/AdaptiveIntelligenceLayer";
+import ReasoningDrawer from "@/components/simulator/ReasoningDrawer";
+import { buildReasoningCard } from "@/lib/recommendationReasoning";
 
 function DarkSection({ icon: Icon, title, headerRight = null, children }) {
   return (
@@ -14,7 +19,7 @@ function DarkSection({ icon: Icon, title, headerRight = null, children }) {
     >
       <div className="flex items-center gap-2 px-3 py-2 border-b" style={{ borderColor: "rgba(83, 148, 155, 0.16)" }}>
         {Icon && <Icon className="w-3 h-3 shrink-0" style={{ color: "hsl(174 60% 68%)" }} />}
-        <span className="text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: "hsl(174 60% 68%)" }}>{title}</span>
+        <span className="text-[12px] font-semibold uppercase tracking-[0.16em]" style={{ color: "#ffffff" }}>{title}</span>
         {headerRight && <div className="ml-auto">{headerRight}</div>}
       </div>
       <div className="px-3 py-2.5 space-y-2">{children}</div>
@@ -29,7 +34,7 @@ function LightSection(props) {
 function Row({ label, children }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[10px] font-medium uppercase tracking-[0.13em] shrink-0" style={{ color: "rgba(236, 245, 245, 0.76)" }}>
+      <span className="text-[11px] font-medium uppercase tracking-[0.13em] shrink-0" style={{ color: "#ffffff" }}>
         {label}
       </span>
       <div className="flex items-center justify-end text-right min-w-0">{children}</div>
@@ -55,7 +60,7 @@ function Pill({ children }) {
       style={{
         background: "rgba(255,255,255,0.10)",
         color: "rgba(244,249,249,0.96)",
-        borderColor: "rgba(125, 173, 190, 0.24)",
+        borderColor: "#39ACAC",
       }}
     >
       {children}
@@ -95,7 +100,28 @@ function formatSpecialistTitle(title = "") {
   return compact.replace(/\s{2,}/g, " ").trim() || normalized;
 }
 
+function deriveReasoningMetricScores(lastSignals = {}) {
+  const map = (value, strong, partial) => {
+    if (value === strong) return 4.2;
+    if (value === partial) return 3.1;
+    if (!value) return 3;
+    return 2.2;
+  };
+
+  return {
+    question_quality: map(lastSignals.question_type, "open_ended", "closed_ended"),
+    listening_responsiveness: map(lastSignals.listening_pattern, "responsive", "partially_responsive"),
+    customer_engagement_signals: map(lastSignals.engagement_level, "high", "moderate"),
+    making_it_matter: map(lastSignals.response_alignment, "strong", "partial"),
+    objection_navigation: lastSignals.objection_type && lastSignals.objection_type !== "none" ? 2.8 : 3.4,
+    conversation_control_structure: map(lastSignals.control_pattern, "balanced", "hcp_dominant"),
+    adaptability: map(lastSignals.response_alignment, "strong", "partial"),
+    commitment_gaining: map(lastSignals.commitment_attempt, "clear", "weak"),
+  };
+}
+
 export default function SimulatorRightPanel({
+  turns = [],
   hcpPrediction = null,
   lastSignals = {},
   latestVoiceAnalysis = null,
@@ -111,6 +137,9 @@ export default function SimulatorRightPanel({
   hasRepSpoken = false,
   predictiveLens = null,
   realism,
+  onUseRecommendedResponse = null,
+  onCriticalVoiceEvent = null,
+  adminIntelligenceMode = false,
 }) {
   const displayRealism = requireRealismContract(realism, "session.realism display");
   const navigate = useNavigate();
@@ -118,6 +147,9 @@ export default function SimulatorRightPanel({
   const [showCoachShadow, setShowCoachShadow] = useState(false);
   const [showVoiceEvaluation, setShowVoiceEvaluation] = useState(false);
   const [selectedVoiceSectionId, setSelectedVoiceSectionId] = useState("delivery");
+  const [reasoningCard, setReasoningCard] = useState(null);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
+  const reasoningMetricScores = useMemo(() => deriveReasoningMetricScores(lastSignals), [lastSignals]);
   const traj = hcpPrediction?.trajectory ? trajectoryConfig[hcpPrediction.trajectory] : null;
   const liveCoaching = lastNudge || (realtimeFeedback?.guidance ? {
     title: "Live coaching",
@@ -203,8 +235,26 @@ export default function SimulatorRightPanel({
     setShowVoiceEvaluation(true);
   };
 
+  const openReasoning = (payload = {}) => {
+    const card = buildReasoningCard({
+      turns,
+      lastSignals,
+      metricScores: payload.metricScores || reasoningMetricScores,
+      voiceTelemetry: payload.voiceTelemetry || voiceEvaluation?.voiceMetadata || latestVoiceAnalysis?.metadata || latestVoiceAnalysis,
+      complianceRules: [
+        "Use approved messaging and labeling only.",
+        "Do not make unsupported comparative, safety, access, or outcomes claims.",
+        "Route patient-specific medical questions to the appropriate medical resource.",
+        "Use observable behavior and transcript evidence when generating coaching recommendations.",
+      ],
+      ...payload,
+    });
+    setReasoningCard(card);
+    setReasoningOpen(true);
+  };
+
   return (
-    <div className="space-y-3">
+    <div className="simulator-operational-readable space-y-3">
       {showPredictiveLensPanel && (
         <DarkSection
           icon={BrainCircuit}
@@ -265,6 +315,40 @@ export default function SimulatorRightPanel({
           )}
         </DarkSection>
       )}
+
+      <AdaptiveIntelligenceLayer
+        turns={turns}
+        lastSignals={lastSignals}
+        hcpPrediction={hcpPrediction}
+        voiceMetadata={voiceEvaluation?.voiceMetadata || latestVoiceAnalysis?.metadata || latestVoiceAnalysis}
+        coachShadow={coachShadow}
+        realism={displayRealism}
+        adminMode={adminIntelligenceMode}
+        onApplyIntervention={onUseRecommendedResponse}
+      />
+
+      <PredictedNextEventPanel
+        turns={turns}
+        scenario={scenario}
+        predictiveLens={predictiveLens}
+        hcpPrediction={hcpPrediction}
+        lastSignals={lastSignals}
+        latestVoiceAnalysis={latestVoiceAnalysis}
+        voiceEvaluation={voiceEvaluation}
+        realtimeFeedback={realtimeFeedback}
+        onUseRecommendedResponse={onUseRecommendedResponse}
+        onOpenReasoning={openReasoning}
+      />
+
+      <VoiceTelemetryPanel
+        turns={turns}
+        lastSignals={lastSignals}
+        latestVoiceAnalysis={latestVoiceAnalysis}
+        voiceEvaluation={voiceEvaluation}
+        hcpPrediction={hcpPrediction}
+        onCriticalVoiceEvent={onCriticalVoiceEvent}
+        onOpenReasoning={openReasoning}
+      />
 
       {coachShadow?.isReady && (
         <DarkSection
@@ -352,15 +436,6 @@ export default function SimulatorRightPanel({
         </DarkSection>
       )}
 
-      <DarkSection icon={Activity} title="Realism">
-        <Row label="Level">
-          <div className="flex items-center gap-2">
-          <ValueText>Balanced resistance</ValueText>
-          <Pill>{displayRealism}/10</Pill>
-          </div>
-        </Row>
-      </DarkSection>
-
       {liveCoaching && (
         <LightSection
           icon={Zap}
@@ -384,6 +459,24 @@ export default function SimulatorRightPanel({
             <p className="mt-1.5 text-xs leading-relaxed text-left" style={{ color: "rgba(255, 235, 169, 0.94)" }}>
               {liveCoaching.guidance}
             </p>
+            <button
+              type="button"
+              onClick={() => openReasoning({
+                source: realtimeFeedback?.source === "voice_telemetry" ? "voice_telemetry" : "live_coaching",
+                recommendation: liveCoaching.guidance,
+                confidence: 0.74,
+                primaryReason: "This recommendation was generated from the current live coaching signal, recent transcript context, and observable execution metrics.",
+                event: realtimeFeedback?.eventType ? { type: realtimeFeedback.eventType, coachingRecommendation: liveCoaching.guidance } : null,
+              })}
+              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
+              style={{
+                background: "rgba(255,255,255,0.075)",
+                borderColor: "rgba(255,255,255,0.16)",
+                color: "rgba(255, 242, 198, 0.96)",
+              }}
+            >
+              Why this recommendation?
+            </button>
           </div>
         </LightSection>
       )}
@@ -441,6 +534,30 @@ export default function SimulatorRightPanel({
                 <ValueText>{String(hcpPrediction.scenarioDomain || "general")}</ValueText>
               </Row>
             </div>
+          )}
+          {["high", "critical"].includes(String(hcpPrediction.riskLevel || "").toLowerCase()) && (
+            <button
+              type="button"
+              onClick={() => openReasoning({
+                source: "compliance_alert",
+                recommendation: hcpPrediction.nextLikelyBehavior || "Use approved language and avoid unsupported claims while addressing the HCP concern.",
+                confidence: hcpPrediction.riskLevel === "critical" ? 0.86 : 0.76,
+                primaryReason: "Risk increased because the predictive layer detected elevated HCP pressure and a compliance-sensitive response boundary.",
+                event: {
+                  type: "compliance_alert",
+                  label: hcpPrediction.nextLikelyBehavior || "Compliance-sensitive HCP pressure",
+                  probability: hcpPrediction.riskLevel === "critical" ? 0.86 : 0.76,
+                },
+              })}
+              className="mt-2 inline-flex w-full items-center justify-center rounded-xl border px-3 py-2 text-[11px] font-semibold transition-all duration-200 hover:-translate-y-0.5"
+              style={{
+                background: "rgba(255,255,255,0.065)",
+                borderColor: "rgba(255,207,214,0.22)",
+                color: "rgba(255,226,232,0.94)",
+              }}
+            >
+              Why this recommendation?
+            </button>
           )}
         </LightSection>
       )}
@@ -559,6 +676,12 @@ export default function SimulatorRightPanel({
           </div>
         </div>
       )}
+
+      <ReasoningDrawer
+        open={reasoningOpen}
+        card={reasoningCard}
+        onClose={() => setReasoningOpen(false)}
+      />
     </div>
   );
 }

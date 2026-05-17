@@ -115,8 +115,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
+    background: rgba(89, 200, 191, 0.72);
     border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(94, 234, 212, 0.92);
   }
 }
 
@@ -170,5 +174,90 @@
     outline: none;
     border-color: #59c8bf;
     box-shadow: 0 0 0 2px rgba(89, 200, 191, 0.18);
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-light {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(89, 200, 191, 0.84) rgba(226, 247, 247, 0.72);
+  }
+
+  .scrollbar-light::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-track {
+    background: rgba(226, 247, 247, 0.72);
+    border-radius: 999px;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-thumb {
+    background: rgba(89, 200, 191, 0.84);
+    border: 2px solid rgba(226, 247, 247, 0.88);
+    border-radius: 999px;
+  }
+
+  .scrollbar-light::-webkit-scrollbar-thumb:hover {
+    background: rgba(94, 234, 212, 0.96);
+  }
+
+  .operational-readable {
+    color: hsl(218 26% 30%);
+    font-size: clamp(12px, 0.82rem, 14px);
+    line-height: 1.65;
+  }
+
+  .operational-readable-muted {
+    color: hsl(218 18% 42%);
+    font-size: clamp(11px, 0.78rem, 13px);
+    line-height: 1.55;
+  }
+
+  .ui-pill {
+    border-color: #39ACAC;
+  }
+
+  .ui-pill:hover {
+    border-color: #5eead4;
+  }
+
+  .simulator-operational-readable .text-\[10px\],
+  .simulator-operational-readable .text-\[11px\],
+  .simulator-operational-readable .text-xs {
+    color: #ffffff !important;
+  }
+
+  .simulator-operational-readable .text-\[10px\],
+  .simulator-operational-readable .text-\[11px\] {
+    font-size: 11px;
+  }
+
+  .simulator-operational-readable section > div:first-child .font-semibold.uppercase,
+  .simulator-operational-readable section > .flex:first-child .font-semibold.uppercase {
+    color: #ffffff !important;
+    font-size: 12px;
+  }
+
+  @media (max-width: 640px) {
+    .simulator-operational-readable .text-\[10px\] {
+      font-size: 11px;
+    }
+
+    .simulator-operational-readable .text-\[11px\] {
+      font-size: 12px;
+    }
+
+    .simulator-operational-readable .text-xs {
+      font-size: 12px;
+      line-height: 1.6;
+    }
   }
 }
