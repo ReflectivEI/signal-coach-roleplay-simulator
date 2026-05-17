@@ -54,6 +54,9 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  build: {
+    outDir: "dist/client",
+  },
   server: {
     host: true,
     port: 5173,

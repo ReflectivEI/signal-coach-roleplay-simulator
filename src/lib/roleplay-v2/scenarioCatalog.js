@@ -1,5 +1,6 @@
 // Canonical scenario catalog + filter dimensions for Role Play Simulator
-import { CATEGORIES, DIFFICULTIES } from "@/lib/rpsUserInputOptions";
+const CANONICAL_CATEGORIES = ["All", "HIV / PrEP", "Oncology", "Cardiology", "Vaccines", "COVID-19", "Neurology", "Immunology", "Rare Disease"];
+const CANONICAL_DIFFICULTIES = ["All Levels", "beginner", "intermediate", "advanced"];
 
 // Deprecated: Use canonical options from rpsUserInputOptions.ts for all UI and new logic.
 // These arrays are retained ONLY for legacy scenario data compatibility and must NOT be used for any UI, dropdown, or selection logic.
@@ -401,3 +402,17 @@ export const ALL_SCENARIOS = [
     // focus_capabilities: ["signal_awareness", "value_connection"],
   },
 ];
+
+const uniqueScenarioValues = (field, fallbackLabel) => [
+  fallbackLabel,
+  ...Array.from(new Set(ALL_SCENARIOS.map((scenario) => scenario?.[field]).filter(Boolean))).sort(),
+];
+
+export const CATEGORIES = CANONICAL_CATEGORIES;
+export const DIFFICULTIES = CANONICAL_DIFFICULTIES;
+export const DISEASE_STATES = uniqueScenarioValues("category", "All Disease States");
+export const SPECIALTIES = uniqueScenarioValues("specialty", "All Specialties");
+export const HCP_CATEGORIES = uniqueScenarioValues("hcp_category", "All HCP Types");
+export const INFLUENCE_DRIVERS = uniqueScenarioValues("influence_driver", "All Influence Drivers");
+export const JOURNEY_STAGES = uniqueScenarioValues("journeyStage", "All Journey Stages");
+export const INTERACTION_PRESSURES = uniqueScenarioValues("interactionPressure", "All Interaction Pressures");

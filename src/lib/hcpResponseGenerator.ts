@@ -743,16 +743,16 @@ function buildStageBoundRealismReply({
           ];
         }
         return [
-          "Okay but what actually changes in real life?",
-          "If there's not a real office impact here, I'm probably not moving on it.",
-          "Bottom line, what's actually different?",
+          "What changes for a specific patient or office workflow?",
+          "If there is not a real practice impact here, I am probably not moving on it.",
+          "Bottom line, what patient or staff decision is actually different?",
         ];
       }
       if (isEarlyDiscoveryStage(scenario)) {
         return [
-          "Okay but who are you actually talking about?",
+          "Which patients in my clinic are you actually talking about?",
           "If we can't narrow the patients down, this gets hard to use.",
-          "Who exactly are you picturing here?",
+          "Who exactly should I be picturing from my patient panel?",
         ];
       }
       return variants;
@@ -791,7 +791,7 @@ function buildStageBoundRealismReply({
             "I'm still between patients. What is the practical office step that changes?",
           ]
           : [
-            "I have a little time. What changes for my staff in clinic workflow?",
+            "I'm between patients. What changes for my staff in clinic workflow?",
             "I'm between patients. Tell me what the office has to do differently.",
             "What changes for the team before the next patient task?",
           ], "initial-low-time-ops");
@@ -804,7 +804,7 @@ function buildStageBoundRealismReply({
             "Help me understand the practical point before I go.",
           ]
           : [
-            "I have a little time. What's the actual takeaway?",
+            "I'm between patients. What's the actual takeaway?",
             "I'm between patients. What should I understand first?",
             "Why does this actually matter in practice?",
           ], "initial-low-time");
@@ -855,9 +855,9 @@ function buildStageBoundRealismReply({
             "Short version, what changes for a patient I am seeing today?",
           ]
         : [
-          "Okay but what actually changes for me?",
-          "Where does this show up in real practice?",
-          "What am I doing differently tomorrow because of this?",
+          "What changes for a specific patient or office workflow?",
+          "Where does this show up in my actual clinic flow?",
+          "What am I doing differently for a patient or staff handoff tomorrow?",
         ], "initial-medium");
     }
     if (escalationMemory.escalationLevel >= 3) {
@@ -907,8 +907,8 @@ function buildStageBoundRealismReply({
         ]
         : [
           "Which patients should I be picturing?",
-          "That still feels broad. Who are we actually talking about?",
-          "Give me the patient, not the category.",
+          "Which patients in my clinic match this?",
+          "Give me the patient profile, not the category.",
         ], "early-medium");
     }
     if (escalationMemory.escalationLevel >= 3) {
@@ -943,9 +943,9 @@ function buildStageBoundRealismReply({
           "I need the subgroup outcome and what my staff gets stuck doing.",
         ]
         : [
-          "The data matters, but so does whether prior auth turns into staff rework.",
-          "Which endpoint improves enough to justify the access work?",
-          "If staff workload goes up, the subgroup outcome better be clear.",
+          "Which endpoint improves enough to justify the payer work my staff would have to handle?",
+          "Which subgroup outcome is strong enough to justify the access burden for my office?",
+          "If staff workload goes up, the trial endpoint has to be clear for the patients I treat.",
         ], "clinical-pressure-combined");
     }
     if (temperatureBand === "low") {
@@ -969,7 +969,7 @@ function buildStageBoundRealismReply({
           "Which subgroup result is supposed to change the treatment decision?",
         ]
         : [
-          "Where does this become treatment-changing in the trial data?",
+          "Which trial subgroup and endpoint would change my treatment decision?",
           "Which subgroup did better enough to matter?",
           "What endpoint gets meaningfully better here?",
         ], "clinical-medium");
@@ -1026,7 +1026,7 @@ function buildStageBoundRealismReply({
       return choose([
         "Okay, so what happens first in the clinic workflow if we actually do this?",
         "Who handles this step initially, my MA or someone else?",
-        "What does my staff suddenly have to learn before the first patient?",
+        "What does my staff have to learn before the first patient start?",
       ], "implementation-low");
     }
     if (temperatureBand === "medium") {
@@ -1065,22 +1065,22 @@ function buildStageBoundRealismReply({
           : "what you're actually asking me to do";
     if (temperatureBand === "low") {
       return choose([
-        "Okay but what exactly are you asking me to do?",
-        "Before I commit to anything, name the actual next step.",
-        "If you're asking for a change, make it specific.",
+        "What exactly are you asking me to do for the next patient or office step?",
+        "Before I commit to anything, name the actual next step and who owns it.",
+        "If you're asking for a change, tie it to a patient type or staff action.",
       ], "close-low");
     }
     if (temperatureBand === "medium") {
       return choose([
-        "I still don't know what you're actually asking me to do after this.",
-        "Okay but what's the concrete next step here?",
-        "If there's an action you're asking for, just say it directly.",
+        "I still don't know what patient or office action you're asking for after this.",
+        "What concrete next step are you asking for after this visit?",
+        "What specific action are you asking me or my staff to take?",
       ], "close-medium");
     }
     return choose(escalationMemory.escalationLevel >= 3
       ? [
-        "If there is a real next step for one patient, send that over.",
-        "I'm not committing to something vague without a patient or office action.",
+        "If there is a real next step for one patient, make that the follow-up.",
+        "I'm not committing to something vague without a patient type or office action.",
         "I still don't know what action you're actually asking my team to take.",
       ]
       : [
@@ -1584,18 +1584,130 @@ function applyEscalationBehavior({
 function buildBoundaryDisengagementReply(scenario: any, latestConcern = ""): string {
   const family = deriveRealismConcernFamily(scenario, latestConcern);
   if (family === "access") {
-    return "I don't think this is the right use of time today if we can't address the access issue directly.";
+    return "Let's pause here unless we can stay with the payer path and what my staff has to do next.";
   }
   if (family === "workflow") {
-    return "Let's stop here unless we can stay with the actual workflow issue.";
+    return "Let's pause here unless we can stay with the actual office workflow issue.";
   }
   if (family === "screening") {
-    return "I'm going to move on if we can't stay with the patient issue.";
+    return "I'm going to move on unless we can define the patient profile I should be looking for.";
   }
   if (family === "evidence") {
-    return "I don't think this is the right use of time today if we can't answer the evidence question directly.";
+    return "Let's pause unless we can stay with the evidence question and the treatment decision it changes.";
   }
-  return "Let's stop here unless you can answer the question directly.";
+  return "Let's pause unless we can keep this tied to the specific clinical or office decision.";
+}
+
+function applyHcpQaTwinSurfaceGuard({
+  hcpReply,
+  scenario,
+  transcript,
+}: {
+  hcpReply: string;
+  scenario: any;
+  transcript: ConversationTurn[];
+}): string {
+  let value = String(hcpReply || "").replace(/\s+/g, " ").trim();
+  if (!value) return value;
+
+  const stage = String(scenario?.journeyStage || "").toLowerCase();
+  const family = deriveRealismConcernFamily(scenario, value);
+  const pressures = Array.isArray(scenario?.interactionPressure)
+    ? scenario.interactionPressure.map((item: string) => String(item).toLowerCase())
+    : [];
+  const timeConstrained = pressures.includes("time_constrained");
+  const operational = pressures.includes("operationally_constrained") || pressures.includes("workflow_pressure");
+  const accessBarrier = pressures.includes("access_barrier") || stage === "access_formulary" || family === "access";
+  const recent = getRecentVisibleHcpReplies(transcript, 6).map((line) => normalizeLineForContinuity(line));
+
+  if (!timeConstrained) {
+    value = value
+      .replace(/\bI can talk briefly\b/gi, "I can hear you out")
+      .replace(/\bI can listen briefly\b/gi, "I can hear you out")
+      .replace(/\bSure, briefly\b/gi, "Sure")
+      .replace(/\bBriefly, yes\b/gi, "Yes")
+      .replace(/\bI have a few minutes\b/gi, "I can hear you out")
+      .replace(/\bI have a little time\b/gi, "I can hear you out");
+  }
+
+  const lower = value.toLowerCase();
+  const needsAccessAnchor = accessBarrier && !/\bprior auth|prior authorization|coverage|payer|formulary|approval path|access\b/i.test(value);
+  const needsWorkflowAnchor = operational && !/\bMA\b|\bnurse\b|\bfront desk\b|\bstaff\b|\boffice workflow\b|\bclinic flow\b|\bteam\b/i.test(value);
+
+  if (/^that still feels broad\. who are we actually talking about\??$/i.test(value)) {
+    return "Which patients in my clinic match this, and what decision would change for them?";
+  }
+
+  if (/^where does this become treatment-changing in the trial data\??$/i.test(value)) {
+    return "Which trial subgroup and endpoint would change my treatment decision for the patients I see?";
+  }
+
+  if (/^okay but what actually changes for me\??$/i.test(value)) {
+    if (accessBarrier) return "What changes in the payer or prior-auth path for my staff?";
+    if (operational || family === "workflow") return "What changes first in my office workflow, and who owns it?";
+    return "What changes for a specific patient decision in my practice?";
+  }
+
+  if (/^i still don'?t think that answers the concern\.?$/i.test(value)) {
+    if (stage === "objection_handling" || family === "evidence") {
+      return "That still does not answer the safety or evidence concern for the patients I treat.";
+    }
+    if (accessBarrier) return "That still does not answer how this gets covered through the payer path.";
+    if (operational) return "That still does not answer what my staff has to do differently.";
+  }
+
+  if (/^you'?re kind of talking around the issue right now\.?$/i.test(value)) {
+    if (family === "evidence") return "You're still not tying the evidence to the patient decision I asked about.";
+    if (accessBarrier) return "You're still not tying this to the formulary or prior-auth step my office has to handle.";
+    if (operational) return "You're still not tying this to the staff workflow in my office.";
+  }
+
+  if (/^okay but what actually changes about the concern\??$/i.test(value)) {
+    if (family === "evidence") return "What evidence or monitoring detail actually changes the concern for my patients?";
+    if (accessBarrier) return "What access step actually changes for my staff before the patient starts?";
+    if (operational) return "What staff task actually changes in clinic flow?";
+  }
+
+  if (/^if there'?s an action you'?re asking for, just say it directly\.?$/i.test(value)) {
+    return "What specific next step are you asking me to take, and for which patient or office workflow?";
+  }
+
+  if (/^just tell me the one thing that would make me use this with my next patient\.?$/i.test(value)) {
+    return "What is the one patient criterion and decision threshold you want me to use for the next case?";
+  }
+
+  if (/^okay but what'?s the concrete next step here\??$/i.test(value)) {
+    return "What concrete next step are you asking for after this visit, and who owns it in the clinic?";
+  }
+
+  if (stage === "adoption_implementation" && /\bsubgroup\b.*\bendpoint\b.*\bdecision changes\b/i.test(lower)) {
+    return "How would we pilot this with one patient, and who owns the first workflow step in the clinic?";
+  }
+
+  if (stage === "commitment_close" && /\bwhich patient subgroup\b|\bwhat decision changes\b/i.test(lower)) {
+    return "What specific commitment are you asking for now, and for which patient type?";
+  }
+
+  if (needsAccessAnchor && /approval process/i.test(value)) {
+    value = value.replace(/approval process/gi, "payer or prior-auth approval process");
+  }
+
+  if (needsAccessAnchor && !/\bapproval path|coverage path|payer path|prior-auth path\b/i.test(value)) {
+    value = `${value.replace(/[.?!]$/, "")} through the payer or prior-auth path?`;
+  }
+
+  if (needsWorkflowAnchor && /\bwhat changes\b/i.test(value)) {
+    value = value.replace(/\bwhat changes\b/i, "what changes for my MA or office workflow");
+  }
+
+  if (
+    recent.includes(normalizeLineForContinuity(value)) &&
+    (family === "evidence" || family === "screening" || stage === "early_discovery")
+  ) {
+    return "Narrow this to the patient profile, the endpoint, and the decision I would actually change.";
+  }
+
+  return value;
 }
 
 function buildPressurePersistenceBlock(scenario: any): string {
@@ -2131,6 +2243,16 @@ function deterministicContinuityVariation({
   }
 
   const concernFollowUp = (family: string): string => {
+    const stage = String(scenario?.journeyStage || "").toLowerCase();
+    if (stage === "adoption_implementation") {
+      if (family === "access") return "What approval workflow step changes on day one, and who owns it?";
+      if (family === "workflow" || family === "guideline" || family === "patient_fit") {
+        return "What first clinic step would we pilot, and who owns it?";
+      }
+    }
+    if (stage === "commitment_close") {
+      return "What specific commitment are you asking for now?";
+    }
     switch (family) {
       case "workflow":
         return "Name the first staff step that changes.";
@@ -2196,8 +2318,8 @@ function deterministicContinuityVariation({
     const hcpTurns = transcript.filter((turn) => turn?.speaker === "hcp").length;
     const variants = [
       "Give me the specific patient, endpoint, and decision that changes.",
-      "If you cannot make this specific, I am going to stop here.",
-      "Tie it to one patient decision, or this is not useful.",
+      "If you cannot make this specific to my patients, we should pause here.",
+      "Tie it to one patient decision in my practice, or this is not useful.",
       "I need the exact decision point, not another broad evidence frame.",
     ];
     return variants[hcpTurns % variants.length];
@@ -2761,22 +2883,40 @@ function buildInitialAccessAlignedReply(repMessage: string, scenario: any, trans
   }
 
   const variants = operational
-    ? [
-      "I have a few minutes. Can we start with how this would affect the office?",
-      "I'm between patients, so let's keep it practical. What would change for the team?",
-      "I can talk briefly. How would this fit into the way we work now?",
-    ]
-    : skeptical
+    ? timeConstrained
       ? [
-        "I have a few minutes. Can you connect this to the patients I actually see?",
-        "I can talk briefly. What patient need are you trying to address?",
-        "Let's start with the patient decision this would affect.",
+        "I have a few minutes. Can we start with how this would affect the office?",
+        "I'm between patients, so let's keep it practical. What would change for the team?",
+        "I can talk briefly. How would this fit into the way we work now?",
       ]
       : [
-        "I have a few minutes. What are you hoping to talk through for my patients?",
-        "I can listen briefly. What are you trying to understand today?",
-        "Sure, briefly. How can I help with this conversation?",
-      ];
+        "Can we start with how this would affect the office workflow?",
+        "Let's keep it practical. What would change for the team?",
+        "How would this fit into the way we work now?",
+      ]
+    : skeptical
+      ? timeConstrained
+        ? [
+          "I have a few minutes. Can you connect this to the patients I actually see?",
+          "I can talk briefly. What patient need are you trying to address?",
+          "Let's start with the patient decision this would affect.",
+        ]
+        : [
+          "Can you connect this to the patients I actually see?",
+          "What patient need are you trying to address?",
+          "Let's start with the patient decision this would affect.",
+        ]
+      : timeConstrained
+        ? [
+          "I have a few minutes. What are you hoping to talk through for my patients?",
+          "I can listen briefly. What are you trying to understand today?",
+          "Sure, briefly. How can I help with this conversation?",
+        ]
+        : [
+          "What are you hoping to talk through for my patients?",
+          "What are you trying to understand today?",
+          "Sure. How can I help with this conversation?",
+        ];
 
   const focusedVariants = repFocus
     ? variants.map((line) => line.replace(/\?$/, `, specifically around ${repFocus}?`))
@@ -4085,9 +4225,19 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
+  hcpReply = applyHcpQaTwinSurfaceGuard({
+    hcpReply,
+    scenario,
+    transcript,
+  });
 
   if (!hasPriorHcpTurns(transcript)) {
     hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
+    hcpReply = applyHcpQaTwinSurfaceGuard({
+      hcpReply,
+      scenario,
+      transcript,
+    });
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
@@ -4125,6 +4275,11 @@ Return ONLY valid JSON:
       liveRepAlignmentActive: finalLiveAlignment.applied,
     }), transcript, scenario);
     hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
+    hcpReply = applyHcpQaTwinSurfaceGuard({
+      hcpReply,
+      scenario,
+      transcript,
+    });
   }
 
   hcpReply = enforceRealismLeverDialogue({
@@ -4133,6 +4288,11 @@ Return ONLY valid JSON:
     scenario,
     temperatureBand,
     escalationMemory,
+    transcript,
+  });
+  hcpReply = applyHcpQaTwinSurfaceGuard({
+    hcpReply,
+    scenario,
     transcript,
   });
   hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);

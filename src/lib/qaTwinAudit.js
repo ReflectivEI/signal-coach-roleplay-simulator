@@ -79,6 +79,29 @@ const SHARP_PHRASE_PATTERNS = [/\bmake it quick\b/i, /\bjust say it\b/i];
 const CLINICAL_PATTERNS = [/\btrial\b/i, /\bguideline\b/i, /\brenal\b/i, /\befficacy\b/i, /\bsafety\b/i, /\bsubgroup\b/i, /\bendpoint\b/i, /\boutcome\b/i, /\btreatment decision\b/i, /\bdecision threshold\b/i, /\bpatient-level\b/i, /\bhazard ratio\b/i];
 const ACCESS_PATTERNS = [/\bformulary\b/i, /\bnon-preferred\b/i, /\bprior auth\b/i, /\bprior authorization\b/i, /\bauthorization\b/i, /\bapproval path\b/i, /\bapproval step\b/i, /\bcommittee\b/i, /\baccess\b/i, /\bpayer\b/i, /\bcoverage\b/i, /\bpathway\b/i];
 const WORKFLOW_PATTERNS = [/\bstaff\b/i, /\bworkflow\b/i, /\bhandoff\b/i, /\bcallback\b/i, /\bextra steps?\b/i, /\bprocess\b/i, /\bMA\b/i, /\bteam\b/i, /\boffice\b/i];
+const REP_LEARNER_DIAGNOSTIC_TYPES = new Set([
+  "question_obligation_failure",
+  "weak_answer",
+  "conversation_stagnation",
+]);
+const HCP_SYSTEM_REALISM_TYPES = new Set([
+  "chatbot_phrasing",
+  "over_precise",
+  "over_written",
+  "over_explained",
+  "weak_skepticism",
+  "wrong_emotional_temperature",
+  "poor_persona_fit",
+  "poor_specialty_fit",
+  "workflow_implausible",
+  "access_implausible",
+  "clinical_implausible",
+  "journey_stage_mismatch",
+  "interaction_pressure_mismatch",
+  "abrupt_rudeness_without_basis",
+  "unearned_tone_shift",
+]);
+const HCP_SYSTEM_CONTINUITY_TYPES = new Set(["continuity_break", "repetition_or_looping"]);
 const JOURNEY_SIGNAL_PATTERNS = {
   initial_access: [/\bwhat'?s this about\b/i, /\bwhy are you here\b/i, /\bfew minutes\b/i, /\b\d+\s+minutes?\b/i, /\bminutes?\b/i, /\bshort version\b/i, /\bbetween patients\b/i, /\bkeep it (?:tight|brief|quick)\b/i],
   early_discovery: [/\bwhich patients?\b/i, /\bpatient profile\b/i, /\bwhat are you seeing\b/i, /\bgo over today\b/i, /\bstay on therapy\b/i],
@@ -694,7 +717,10 @@ function normalizeFailureEntry(failure, defaultConfidence = "medium") {
 }
 
 function classifyFailureSeverity(type, confidence = "medium") {
-  if (["question_obligation_failure", "continuity_break", "conversation_stagnation"].includes(type)) {
+  if (REP_LEARNER_DIAGNOSTIC_TYPES.has(type)) {
+    return "learner_diagnostic";
+  }
+  if (["continuity_break"].includes(type)) {
     return "high";
   }
   if (["workflow_implausible", "access_implausible", "clinical_implausible", "interaction_pressure_mismatch"].includes(type)) {
@@ -704,6 +730,9 @@ function classifyFailureSeverity(type, confidence = "medium") {
 }
 
 function classifyRootCause(type) {
+  if (REP_LEARNER_DIAGNOSTIC_TYPES.has(type)) {
+    return "rep_learner_diagnostic";
+  }
   if (["workflow_implausible", "access_implausible", "clinical_implausible", "journey_stage_mismatch", "interaction_pressure_mismatch"].includes(type)) {
     return "state_alignment";
   }
@@ -927,39 +956,27 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     });
   });
 
-  const hcpFailureTypes = new Set([
-    "chatbot_phrasing",
-    "over_precise",
-    "over_written",
-    "over_explained",
-    "weak_skepticism",
-    "wrong_emotional_temperature",
-    "poor_persona_fit",
-    "poor_specialty_fit",
-    "workflow_implausible",
-    "access_implausible",
-    "clinical_implausible",
-    "journey_stage_mismatch",
-    "interaction_pressure_mismatch",
-    "abrupt_rudeness_without_basis",
-    "unearned_tone_shift",
-  ]);
-  const hcpContinuityTypes = new Set(["continuity_break", "repetition_or_looping"]);
-  const repCapabilityTypes = new Set(["question_obligation_failure", "weak_answer", "conversation_stagnation"]);
   const systemRuntimeTypes = new Set(["malformed_reply", "empty_reply"]);
   const hcpRuntimeFailures = failures.filter((failure) =>
     failure?.evidenceDetails?.speaker === "hcp" &&
-    (hcpFailureTypes.has(failure.type) || hcpContinuityTypes.has(failure.type))
+    (HCP_SYSTEM_REALISM_TYPES.has(failure.type) || HCP_SYSTEM_CONTINUITY_TYPES.has(failure.type))
   );
   const repEvaluationFailures = failures.filter((failure) =>
     failure?.evidenceDetails?.speaker === "rep" ||
-    repCapabilityTypes.has(failure.type)
+    REP_LEARNER_DIAGNOSTIC_TYPES.has(failure.type)
   );
   const systemRuntimeFailures = failures.filter((failure) => systemRuntimeTypes.has(failure.type));
-  const highConfidenceFailures = failures.filter((failure) => failure.confidence === "high");
+  const qaFailureCounts = {};
+  hcpRuntimeFailures.forEach((failure) => addCounts(qaFailureCounts, failure.type));
+  systemRuntimeFailures.forEach((failure) => addCounts(qaFailureCounts, failure.type));
+  const repLearnerDiagnosticCounts = {};
+  repEvaluationFailures.forEach((failure) => addCounts(repLearnerDiagnosticCounts, failure.type));
+  const highConfidenceFailures = failures.filter((failure) =>
+    failure.confidence === "high" && !REP_LEARNER_DIAGNOSTIC_TYPES.has(failure.type)
+  );
   const highConfidenceHcpFailures = hcpRuntimeFailures.filter((failure) => failure.confidence === "high");
   const highConfidenceSystemFailures = systemRuntimeFailures.filter((failure) => failure.confidence === "high");
-  const hardStopFailureTypes = new Set(["question_obligation_failure", "continuity_break", "conversation_stagnation"]);
+  const hardStopFailureTypes = new Set(["continuity_break"]);
   const hasHardStopFailure = highConfidenceHcpFailures.some((failure) => hardStopFailureTypes.has(failure.type));
   const hasConcreteRepAnswer = turns.some((turn) => turn?.speaker === "rep" && hasConcreteAnswerSignal(turn?.text));
   const hasForwardProgressionObserved = turns.some((turn, index) =>
@@ -982,14 +999,16 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     failure.confidence === "high" &&
     ["chatbot_phrasing", "over_written", "over_explained", "weak_skepticism", "wrong_emotional_temperature", "poor_persona_fit", "poor_specialty_fit", "workflow_implausible", "access_implausible", "clinical_implausible", "journey_stage_mismatch", "interaction_pressure_mismatch", "abrupt_rudeness_without_basis"].includes(failure.type)
   ) ? "FAIL" : "PASS";
-  const continuityStatus = hcpRuntimeFailures.some((failure) => failure.confidence === "high" && hcpContinuityTypes.has(failure.type)) ? "FAIL" : "PASS";
+  const continuityStatus = hcpRuntimeFailures.some((failure) => failure.confidence === "high" && HCP_SYSTEM_CONTINUITY_TYPES.has(failure.type)) ? "FAIL" : "PASS";
   const systemRuntimeStatus = systemRuntimeFailures.length ? "FAIL" : "PASS";
   const realismFailures = failures.filter((failure) =>
     ["chatbot_phrasing", "over_written", "over_explained", "weak_skepticism", "wrong_emotional_temperature", "poor_persona_fit", "poor_specialty_fit", "workflow_implausible", "access_implausible", "clinical_implausible", "abrupt_rudeness_without_basis"].includes(failure.type)
   );
   const continuityFailures = failures.filter((failure) =>
-    ["continuity_break", "question_obligation_failure", "repetition_or_looping", "unearned_tone_shift"].includes(failure.type)
+    failure?.evidenceDetails?.speaker === "hcp" &&
+    ["continuity_break", "repetition_or_looping", "unearned_tone_shift"].includes(failure.type)
   );
+  const repLearnerDiagnostics = failures.filter((failure) => REP_LEARNER_DIAGNOSTIC_TYPES.has(failure.type));
   const severityCounts = {};
   const rootCauseClassification = {};
   failures.forEach((failure) => {
@@ -1007,13 +1026,19 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
     transcript,
     failures,
     highConfidenceFailures,
-    failureCounts,
+    failureCounts: qaFailureCounts,
+    rawFailureCounts: failureCounts,
+    repLearnerDiagnosticCounts,
     realismSummary: realismFailures.length
       ? `${realismFailures.length} realism issue(s) flagged with transcript evidence.`
       : "No realism failures detected in the transcript.",
     continuitySummary: continuityFailures.length
       ? `${continuityFailures.length} continuity/dialogue-flow issue(s) flagged with transcript evidence.`
       : "No continuity failures detected in the transcript.",
+    repLearnerDiagnosticSummary: repLearnerDiagnostics.length
+      ? `${repLearnerDiagnostics.length} REP learner diagnostic issue(s) observed; excluded from HCP-system QA verdict.`
+      : "No REP learner diagnostic issues observed.",
+    repLearnerDiagnostics,
     stateAlignmentSummary: failures.some((failure) =>
       ["journey_stage_mismatch", "interaction_pressure_mismatch", "wrong_emotional_temperature"].includes(failure.type)
     )
@@ -1021,8 +1046,8 @@ export function buildTranscriptAudit({ scenario, turns = [], personaKey = "" }) 
       : "Journey, pressure, and tone alignment remained within expected bounds.",
     severityCounts,
     rootCauseClassification,
-    failureHierarchy: deriveFailureHierarchy(failureCounts),
-    topCorrections: deriveTopCorrections(failureCounts),
+    failureHierarchy: deriveFailureHierarchy(qaFailureCounts),
+    topCorrections: deriveTopCorrections(qaFailureCounts),
     calibrationCases: runInternalAuditCalibrationCases(),
   };
 }
@@ -1108,6 +1133,8 @@ export function runInternalAuditCalibrationCases() {
 
 export function buildMatrixAuditSummary(results = []) {
   const failureCounts = {};
+  const hcpSystemFailureCounts = {};
+  const repLearnerDiagnosticCounts = {};
   const perScenario = [];
   const perPersona = {};
 
@@ -1129,18 +1156,30 @@ export function buildMatrixAuditSummary(results = []) {
     Object.entries(qa?.failureCounts || {}).forEach(([type, count]) => {
       failureCounts[type] = (failureCounts[type] || 0) + count;
     });
+    (qa?.failures || []).forEach((failure) => {
+      if (REP_LEARNER_DIAGNOSTIC_TYPES.has(failure.type)) {
+        addCounts(repLearnerDiagnosticCounts, failure.type);
+      } else if (
+        failure?.evidenceDetails?.speaker === "hcp" &&
+        (HCP_SYSTEM_REALISM_TYPES.has(failure.type) || HCP_SYSTEM_CONTINUITY_TYPES.has(failure.type))
+      ) {
+        addCounts(hcpSystemFailureCounts, failure.type);
+      }
+    });
   });
 
   return {
     failureCounts,
+    hcpSystemFailureCounts,
+    repLearnerDiagnosticCounts,
     perScenario,
     perPersona,
-    topRecurringRealismFailures: Object.entries(failureCounts)
+    topRecurringRealismFailures: Object.entries(hcpSystemFailureCounts)
       .filter(([type]) => ["chatbot_phrasing", "over_written", "over_explained", "weak_skepticism", "poor_persona_fit", "poor_specialty_fit", "workflow_implausible", "access_implausible", "clinical_implausible", "abrupt_rudeness_without_basis"].includes(type))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5),
-    topRecurringContinuityFailures: Object.entries(failureCounts)
-      .filter(([type]) => ["continuity_break", "question_obligation_failure", "repetition_or_looping", "unearned_tone_shift", "journey_stage_mismatch", "interaction_pressure_mismatch"].includes(type))
+    topRecurringContinuityFailures: Object.entries(hcpSystemFailureCounts)
+      .filter(([type]) => ["continuity_break", "repetition_or_looping", "unearned_tone_shift", "journey_stage_mismatch", "interaction_pressure_mismatch"].includes(type))
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5),
   };

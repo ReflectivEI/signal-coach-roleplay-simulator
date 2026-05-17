@@ -177,7 +177,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CF_ACCOUNT_ID }}
-          command: pages deploy dist --project-name=${{ env.RPS_PAGES_PROJECT }} --branch=main
+          command: pages deploy dist/client --project-name=${{ env.RPS_PAGES_PROJECT }} --branch=main
 
       - name: Verify live dedicated Worker
         run: |

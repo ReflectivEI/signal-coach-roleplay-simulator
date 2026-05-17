@@ -910,8 +910,12 @@ export default function QATwin() {
 
   const exportResults = (results) => {
     const exportAudit = buildMatrixAuditSummary(results);
-    const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Turns per scenario: ${maxTurns}`, "", "Aggregate Failure Counts:"];
+    const lines = ["QA TWIN — MATRIX EXPORT", `Date: ${new Date().toLocaleDateString()}`, `Turns per scenario: ${maxTurns}`, "", "Aggregate HCP-System Failure Counts:"];
     Object.entries(exportAudit.failureCounts).forEach(([type, count]) => lines.push(`  ${type}: ${count}`));
+    lines.push("", "REP Learner Diagnostics (excluded from QA verdict):");
+    const repDiagnostics = Object.entries(exportAudit.repLearnerDiagnosticCounts || {});
+    if (repDiagnostics.length) repDiagnostics.forEach(([type, count]) => lines.push(`  ${type}: ${count}`));
+    else lines.push("  none");
     lines.push("", "Per Persona:");
     Object.entries(exportAudit.perPersona).forEach(([key, value]) => lines.push(`  ${key}: ${value.pass} pass / ${value.fail} fail`));
     lines.push("");
@@ -926,10 +930,20 @@ export default function QATwin() {
       lines.push(`Realism Summary: ${r.qaAudit?.realismSummary || "—"}`);
       lines.push(`Continuity Summary: ${r.qaAudit?.continuitySummary || "—"}`);
       lines.push(`State Alignment Summary: ${r.qaAudit?.stateAlignmentSummary || "—"}`);
-      (r.qaAudit?.failures || []).forEach((failure) => {
+      lines.push(`REP Diagnostic Summary: ${r.qaAudit?.repLearnerDiagnosticSummary || "—"}`);
+      const hcpSystemFailures = (r.qaAudit?.failures || []).filter((failure) => failure.rootCause !== "rep_learner_diagnostic");
+      const learnerDiagnostics = r.qaAudit?.repLearnerDiagnostics || [];
+      hcpSystemFailures.forEach((failure) => {
         lines.push(`  [${failure.type}] Turn ${failure.turnNumber}: ${failure.evidence}`);
         if (failure.note) lines.push(`    Note: ${failure.note}`);
       });
+      if (learnerDiagnostics.length) {
+        lines.push("  REP learner diagnostics:");
+        learnerDiagnostics.forEach((failure) => {
+          lines.push(`    [${failure.type}] Turn ${failure.turnNumber}: ${failure.evidence}`);
+          if (failure.note) lines.push(`      Note: ${failure.note}`);
+        });
+      }
       if (r.finalPrediction) {
         lines.push(`Predicted State: ${r.finalPrediction.predictedBehaviorState}`);
         lines.push(`Predicted Risk: ${r.finalPrediction.riskLevel}`);
@@ -1115,15 +1129,21 @@ export default function QATwin() {
                   </div>
                 </div>
               )}
-              {(singleResult.qaAudit?.failures || []).length > 0 && (
+              {(singleResult.qaAudit?.failures || []).filter((failure) => failure.rootCause !== "rep_learner_diagnostic").length > 0 && (
                 <div className="mt-3 space-y-2">
-                  {(singleResult.qaAudit.failures || []).slice(0, 8).map((failure, idx) => (
+                  {(singleResult.qaAudit.failures || []).filter((failure) => failure.rootCause !== "rep_learner_diagnostic").slice(0, 8).map((failure, idx) => (
                     <div key={`${failure.type}-${idx}`} className="rounded-lg border border-border/30 bg-background/40 px-3 py-2">
                       <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{failure.type.replace(/_/g, " ")} · Turn {failure.turnNumber}</p>
                       <p className="text-xs text-foreground/80 mt-1">{failure.evidence}</p>
                       {failure.note && <p className="text-xs text-muted-foreground mt-1">{failure.note}</p>}
                     </div>
                   ))}
+                </div>
+              )}
+              {(singleResult.qaAudit?.repLearnerDiagnostics || []).length > 0 && (
+                <div className="mt-3 rounded-lg border border-border/30 bg-background/30 px-3 py-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">REP learner diagnostics excluded from HCP QA verdict</p>
+                  <p className="text-xs text-foreground/80 mt-1">{singleResult.qaAudit.repLearnerDiagnosticSummary}</p>
                 </div>
               )}
             </div>
@@ -1188,14 +1208,29 @@ export default function QATwin() {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">Failure Taxonomy</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">HCP-System Failure Taxonomy</p>
                   <div className="flex flex-wrap gap-1.5">
                     {Object.entries(matrixAudit.failureCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
                       <span key={type} className="text-[11px] px-2 py-0.5 rounded-full border border-border/40 bg-background/40 text-foreground/80">
                         {type.replace(/_/g, " ")}: {count}
                       </span>
                     ))}
+                    {Object.keys(matrixAudit.failureCounts || {}).length === 0 && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full border border-border/40 bg-background/40 text-foreground/80">none</span>
+                    )}
                   </div>
+                  {Object.keys(matrixAudit.repLearnerDiagnosticCounts || {}).length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">REP Learner Diagnostics</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(matrixAudit.repLearnerDiagnosticCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                          <span key={type} className="text-[11px] px-2 py-0.5 rounded-full border border-border/40 bg-background/30 text-foreground/70">
+                            {type.replace(/_/g, " ")}: {count}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
