@@ -379,6 +379,21 @@ test("live RolePlayChat renders HCP cues even when the opening turn has no dialo
   assert.match(source, /SHOW_VISIBLE_HCP_CUES && hasVisibleHcpCue\(turn\)/);
 });
 
+test("HCP first-turn choice questions are answered before scenario pressure is applied", () => {
+  const generatorSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(generatorSource, /function repAsksExplicitDecisionLaneChoice/);
+  assert.match(generatorSource, /Access is the part that matters most/);
+  assert.match(generatorSource, /Workflow is the part that matters most/);
+  assert.match(generatorSource, /Patient fit is the part that matters most/);
+  assert.match(generatorSource, /The evidence question is the part that matters most/);
+  assert.match(generatorSource, /applyDecisionLaneChoiceAcknowledgement\(hcpReply, repMessage, scenario\)/);
+  assert.match(generatorSource, /replace\(\/\^if this is about access/);
+});
+
 test("HCP generator enforces Predictive Brain authority, escalation memory, and validator guardrails", () => {
   const generatorSource = fs.readFileSync(
     new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
