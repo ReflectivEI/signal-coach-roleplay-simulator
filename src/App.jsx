@@ -45,11 +45,14 @@ const AppRoutes = () => {
       <Route path="/predictive-builder" element={<PredictiveBuilder />} />
       <Route path="/predictive-builder/references" element={<PredictiveBuilderReferences />} />
       <Route path="/PreCallPlanning" element={<PreCallPlanning />} />
+      <Route path="/pre-call-planning" element={<PreCallPlanning />} />
       <Route path="/rps-adaptive" element={<AdaptiveRpsPage />} />
       {/* Redirect all RPS routes to the standalone RPS site */}
       <Route path="/rps" element={<ExternalRpsRedirect />} />
       <Route path="/RolePlaySimulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
       <Route path="/RolePlaySimulator/*" element={<ThemeProvider><Simulator /></ThemeProvider>} />
+      <Route path="/role-play-simulator" element={<ThemeProvider><Simulator /></ThemeProvider>} />
+      <Route path="/role-play-simulator/*" element={<ThemeProvider><Simulator /></ThemeProvider>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

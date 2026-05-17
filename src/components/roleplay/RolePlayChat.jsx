@@ -6466,7 +6466,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
   // ─── CHAT VIEW ────────────────────────────────────────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden" style={{ background: "#f0f4f8" }}>
+    <div
+      className="fixed inset-0 z-50 flex flex-col lg:flex-row overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(circle at 16% 0%, rgba(94,234,212,0.24) 0, rgba(94,234,212,0) 30rem), linear-gradient(180deg, #f7ffff 0%, #ecf9fa 42%, #f8fcfd 100%)",
+      }}
+    >
       {/* Left: Chat Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-white border-r border-gray-200">
 
