@@ -1789,7 +1789,7 @@ function handleHealth(env, request) {
     status: "ok",
     ready: true,
     timestamp: new Date().toISOString(),
-    service: "reflectivai-rps-api",
+    service: "signal-coach-roleplay-simulator",
     provider: provider || "mock",
     storage: {
       provider: getKv(env) ? "cloudflare_kv" : "memory_fallback",

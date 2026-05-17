@@ -26,7 +26,7 @@ jobs:
 
       - name: Run confidence gate
         env:
-          VITE_ROLEPLAY_WORKER_URL: ${{ secrets.VITE_ROLEPLAY_WORKER_URL || 'https://reflectivai-rps-api.tonyabdelmalak.workers.dev' }}
+          VITE_ROLEPLAY_WORKER_URL: ${{ secrets.VITE_ROLEPLAY_WORKER_URL || 'https://signal-coach-roleplay-simulator.tonyabdelmalak.workers.dev' }}
         run: npm run confidence:gate
 
       - name: Upload confidence artifacts

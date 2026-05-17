@@ -1,14 +1,13 @@
 /**
- * Hard guardrail: this repo must not deploy to the protected RPS targets.
+ * Hard guardrail: this repo must not deploy to retired or unrelated RPS targets.
  *
- * Protected targets:
+ * Forbidden legacy targets:
  * - Worker: reflectivai-rps-api
- * - Pages: signal-coach-roleplay-simulator
- * - Domains: rps.reflectiv-ai.com, signal-coach-roleplay-simulator.pages.dev,
- *   reflectivai-rps-api.tonyabdelmalak.workers.dev
+ * - Domain: reflectivai-rps-api.tonyabdelmalak.workers.dev
  *
- * This script is intentionally strict. If this repository is still wired to any
- * protected target, deploy commands must fail until the repo is repointed.
+ * This script is intentionally strict. If this repository is still wired to the
+ * retired API Worker, deploy commands must fail until the repo is repointed to
+ * signal-coach-roleplay-simulator.
  */
 
 import fs from "fs";
@@ -18,13 +17,10 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const commandName = process.argv[2] || "deploy";
 
-const PROTECTED = {
+const FORBIDDEN = {
   workerNames: ["reflectivai-rps-api"],
-  pagesNames: ["signal-coach-roleplay-simulator"],
+  pagesNames: [],
   hostnames: [
-    "rps.reflectiv-ai.com",
-    "signal-coach-roleplay-simulator.pages.dev",
-    "backup-predictive-builder-v1.signal-coach-roleplay-simulator.pages.dev",
     "reflectivai-rps-api.tonyabdelmalak.workers.dev",
   ],
 };
@@ -51,7 +47,7 @@ function parseTomlName(content) {
 
 function findProtectedHostHits(...contents) {
   const joined = contents.join("\n");
-  return PROTECTED.hostnames.filter((hostname) => joined.includes(hostname));
+  return FORBIDDEN.hostnames.filter((hostname) => joined.includes(hostname));
 }
 
 const wranglerToml = readIfExists(path.join(ROOT, "wrangler.toml"));
@@ -61,24 +57,24 @@ const deployGuard = readIfExists(path.join(ROOT, "scripts", "deploy-guard.js"));
 
 const workerName = parseTomlName(wranglerToml);
 const pagesName = parseTomlName(wranglerPagesToml);
-const protectedWorker = PROTECTED.workerNames.includes(workerName);
-const protectedPages = PROTECTED.pagesNames.includes(pagesName);
-const protectedHostHits = findProtectedHostHits(wranglerToml, wranglerPagesToml, packageJson, deployGuard);
+const forbiddenWorker = FORBIDDEN.workerNames.includes(workerName);
+const forbiddenPages = FORBIDDEN.pagesNames.includes(pagesName);
+const forbiddenHostHits = findProtectedHostHits(wranglerToml, wranglerPagesToml, packageJson, deployGuard);
 
-if (protectedWorker || protectedPages || protectedHostHits.length) {
-  console.error(`\n${COLORS.bold}${COLORS.red}DEPLOY BLOCKED: PROTECTED RPS TARGETS DETECTED${COLORS.reset}`);
-  console.error(`${COLORS.yellow}This repository is forbidden from modifying the protected RPS surfaces.${COLORS.reset}`);
+if (forbiddenWorker || forbiddenPages || forbiddenHostHits.length) {
+  console.error(`\n${COLORS.bold}${COLORS.red}DEPLOY BLOCKED: RETIRED RPS TARGET DETECTED${COLORS.reset}`);
+  console.error(`${COLORS.yellow}This repository must deploy to signal-coach-roleplay-simulator, not the retired API Worker.${COLORS.reset}`);
   console.error(`${COLORS.yellow}Blocked command: ${commandName}${COLORS.reset}`);
-  if (protectedWorker) {
-    console.error(`${COLORS.yellow}- Protected worker target detected in wrangler.toml: ${workerName}${COLORS.reset}`);
+  if (forbiddenWorker) {
+    console.error(`${COLORS.yellow}- Retired worker target detected in wrangler.toml: ${workerName}${COLORS.reset}`);
   }
-  if (protectedPages) {
-    console.error(`${COLORS.yellow}- Protected Pages target detected in wrangler.pages.toml: ${pagesName}${COLORS.reset}`);
+  if (forbiddenPages) {
+    console.error(`${COLORS.yellow}- Retired Pages target detected in wrangler.pages.toml: ${pagesName}${COLORS.reset}`);
   }
-  if (protectedHostHits.length) {
-    console.error(`${COLORS.yellow}- Protected host references detected: ${protectedHostHits.join(", ")}${COLORS.reset}`);
+  if (forbiddenHostHits.length) {
+    console.error(`${COLORS.yellow}- Retired host references detected: ${forbiddenHostHits.join(", ")}${COLORS.reset}`);
   }
-  console.error(`${COLORS.yellow}Repoint this repo to non-protected targets before enabling any deploy command.${COLORS.reset}\n`);
+  console.error(`${COLORS.yellow}Repoint this repo to signal-coach-roleplay-simulator before enabling any deploy command.${COLORS.reset}\n`);
   process.exit(1);
 }
 

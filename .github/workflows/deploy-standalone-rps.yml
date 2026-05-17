@@ -16,9 +16,9 @@ concurrency:
 
 env:
   CF_ACCOUNT_ID: 59fea97fab54fbd4d4168ccaa1fa3410
-  RPS_WORKER_NAME: reflectivai-rps-api
+  RPS_WORKER_NAME: signal-coach-roleplay-simulator
   RPS_PAGES_PROJECT: signal-coach-roleplay-simulator
-  RPS_WORKER_URL: https://reflectivai-rps-api.tonyabdelmalak.workers.dev
+  RPS_WORKER_URL: https://signal-coach-roleplay-simulator.tonyabdelmalak.workers.dev
   RPS_PAGES_URL: https://signal-coach-roleplay-simulator.pages.dev
   RPS_CUSTOM_DOMAIN: https://rps.reflectiv-ai.com
   EXPECTED_REPOSITORY: ReflectivEI/signal-coach-roleplay-simulator
@@ -82,7 +82,7 @@ jobs:
       - name: Re-assert standalone RPS targets
         run: node scripts/assert-rps-deploy-targets.mjs
 
-      - name: Deploy reflectivai-rps-api Worker
+      - name: Deploy signal-coach-roleplay-simulator Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -137,7 +137,7 @@ jobs:
       - name: Verify live dedicated Worker
         run: |
           curl --fail --silent --show-error "$RPS_WORKER_URL/health" | tee worker-health.json
-          grep -q '"service":"reflectivai-rps-api"' worker-health.json
+          grep -q '"service":"signal-coach-roleplay-simulator"' worker-health.json
           grep -q '"ready":true' worker-health.json
 
       - name: Verify live dedicated Worker LLM invoke

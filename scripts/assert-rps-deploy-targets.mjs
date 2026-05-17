@@ -6,9 +6,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const EXPECTED = {
   githubRepository: "ReflectivEI/signal-coach-roleplay-simulator",
-  workerName: "reflectivai-rps-api",
+  workerName: "signal-coach-roleplay-simulator",
   pagesProject: "signal-coach-roleplay-simulator",
-  workerUrl: "https://reflectivai-rps-api.tonyabdelmalak.workers.dev",
+  workerUrl: "https://signal-coach-roleplay-simulator.tonyabdelmalak.workers.dev",
   pagesUrl: "https://signal-coach-roleplay-simulator.pages.dev",
   customDomain: "https://rps.reflectiv-ai.com",
 };

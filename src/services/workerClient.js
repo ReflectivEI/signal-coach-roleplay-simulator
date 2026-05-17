@@ -26,7 +26,7 @@
 
 const isBrowserRuntime = typeof window !== "undefined";
 const isViteDevRuntime = Boolean(import.meta.env.DEV);
-const PRODUCTION_WORKER_URL = "https://reflectivai-rps-api.tonyabdelmalak.workers.dev";
+const PRODUCTION_WORKER_URL = "https://signal-coach-roleplay-simulator.tonyabdelmalak.workers.dev";
 const explicitWorkerUrl = import.meta.env.VITE_ROLEPLAY_WORKER_URL?.trim() || "";
 const BASE_URL = (isViteDevRuntime && !explicitWorkerUrl ? "" : (explicitWorkerUrl || PRODUCTION_WORKER_URL)).replace(/\/$/, "");
 

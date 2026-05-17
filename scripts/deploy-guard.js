@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const EXPECTED = {
-    workerName: "reflectivai-rps-api",
+    workerName: "signal-coach-roleplay-simulator",
     pagesName: "signal-coach-roleplay-simulator",
     packageName: "signal-coach-core",
 };
@@ -168,7 +168,7 @@ if (failures > 0) {
         `${COLORS.bold}${COLORS.red}║   DEPLOY GUARD PASSED — targeting PRODUCTION   ║${COLORS.reset}`
     );
     console.log(
-        `${COLORS.bold}${COLORS.red}║   Worker : reflectivai-rps-api                  ║${COLORS.reset}`
+        `${COLORS.bold}${COLORS.red}║   Worker : signal-coach-roleplay-simulator      ║${COLORS.reset}`
     );
     console.log(
         `${COLORS.bold}${COLORS.red}║   Pages  : signal-coach-roleplay-simulator      ║${COLORS.reset}`
