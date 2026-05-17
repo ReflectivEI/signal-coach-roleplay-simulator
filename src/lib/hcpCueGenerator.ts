@@ -701,6 +701,41 @@ function isSafetyFocusedTurn(text = ""): boolean {
   return /\b(safety|hepatic|renal|adverse|warning|side effect|monitoring|medical resource|case-level)\b/i.test(normalizeText(text));
 }
 
+function hasAccessStepSpecificity(text = ""): boolean {
+  return /\b(first staff step|first step|initial point|point of contact|walk me through|what changes|make a difference|alter .* workflow|staff step|access step|approval step)\b/i.test(normalizeText(text));
+}
+
+function repRepeatedAccessFrame(text = ""): boolean {
+  return /\b(separate the clinical decision from the staff burden|approved access support process|access support process|keep this practical)\b/i.test(normalizeText(text));
+}
+
+function buildActiveTurnCueOverride(inputs: HcpCueInputs, cueCategory: CueCategory, concernFamily: ConcernFamily): string | null {
+  const reply = normalizeText(inputs.hcpReply);
+  const rep = normalizeText(inputs.repMessage);
+  const hardening = cueCategory === "hard_escalation" || cueCategory === "terminal_exit" || /frustration|closed|resistance/i.test(String(inputs.behaviorState || ""));
+
+  if (concernFamily === "access" && hasAccessStepSpecificity(reply)) {
+    if (repRepeatedAccessFrame(rep)) {
+      return hardening
+        ? "The HCP keeps the coverage notes in front of them, finger on the staff-step question, rejecting another broad access-process frame."
+        : "The HCP keeps the coverage notes open, finger on the staff-step question, waiting for the first concrete access action.";
+    }
+    return "The HCP keeps the access notes open beside the workflow list, watching for the first concrete staff step.";
+  }
+
+  if (concernFamily === "evidence" && isSafetyFocusedTurn(reply)) {
+    return hardening
+      ? "The HCP holds the safety section still, finger near the hepatic-signal line, waiting for a patient-specific decision boundary."
+      : "The HCP keeps the safety section open, eyes moving between the hepatic signal and the patient context.";
+  }
+
+  if (concernFamily === "evidence" && /\b(endpoint|subgroup|decision|patient decision|treatment decision)\b/i.test(reply)) {
+    return "The HCP keeps the data page open, pen held at the decision point they want tied to one patient.";
+  }
+
+  return null;
+}
+
 const SAFETY_EVIDENCE_CUE_POOLS: Partial<Record<CueCategory, string[]>> = {
   receptive_attentive: [
     "Keeps the safety section open, eyes moving back to the patient context.",
@@ -914,6 +949,15 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
       };
     }
   }
+  const activeTurnCue = buildActiveTurnCueOverride(inputs, cueCategory, concernFamily);
+  if (activeTurnCue) {
+    return {
+      cueCategory,
+      concernFamily,
+      label: normalizeCueSentence(activeTurnCue),
+    };
+  }
+
   const domainPool =
     DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.[concernFamily]
     || DOMAIN_CUE_POOLS[domain]?.[cueCategory]?.general

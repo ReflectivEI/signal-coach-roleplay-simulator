@@ -224,7 +224,7 @@ function hasTimeTopic(text = ""): boolean {
 }
 
 function hasSpecificityBoundary(text = ""): boolean {
-  return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause|still waiting|same issue|stuck|narrow this)\b/.test(text);
+  return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause|still waiting|same issue|stuck|narrow this|first staff step|first step|initial point|point of contact|walk me through|what changes|make a difference|alter .* workflow)\b/.test(text);
 }
 
 function compactWords(value = ""): string[] {
@@ -248,11 +248,25 @@ function textSimilarity(a = "", b = ""): number {
 
 const SAFETY_BOUNDARY_RESPONSE = "That is an important safety question. I can stay with the approved safety information, and if you want case-level detail I should connect you with the appropriate medical resource.";
 const COMPLIANCE_BOUNDARY_RESPONSE = "I want to keep this accurate and within approved information. I can speak to what is in the approved materials and route anything more specific to the appropriate resource.";
+const ACCESS_INTERVENTION_RESPONSE = "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process.";
+const GENERIC_INTERVENTION_RESPONSE = "Before I answer too broadly, can I clarify which part matters most for your decision: patient fit, evidence, workflow, or access?";
 
 function latestRepRepeatedBoundary(turns: SimulatorIntelligenceInput["turns"] = []): boolean {
   const latestRep = latestRepText(turns);
   return textSimilarity(latestRep, SAFETY_BOUNDARY_RESPONSE) >= 0.72
     || textSimilarity(latestRep, COMPLIANCE_BOUNDARY_RESPONSE) >= 0.72;
+}
+
+function latestRepRepeatedAccessIntervention(turns: SimulatorIntelligenceInput["turns"] = []): boolean {
+  const latestRep = latestRepText(turns);
+  return textSimilarity(latestRep, ACCESS_INTERVENTION_RESPONSE) >= 0.62;
+}
+
+function latestRepRepeatedAnyIntervention(turns: SimulatorIntelligenceInput["turns"] = []): boolean {
+  const latestRep = latestRepText(turns);
+  return latestRepRepeatedBoundary(turns)
+    || latestRepRepeatedAccessIntervention(turns)
+    || textSimilarity(latestRep, GENERIC_INTERVENTION_RESPONSE) >= 0.72;
 }
 
 function pressureFromSignals(input: SimulatorIntelligenceInput): PressureSignal[] {
@@ -594,13 +608,28 @@ export function generatePredictiveChain(input: SimulatorIntelligenceInput, traje
     ],
   };
 
-  const boundaryLoop = latestRepRepeatedBoundary(input.turns) && hasSpecificityBoundary(latestHcpText(input.turns));
-  const intervention: ChainIntervention = boundaryLoop
-    ? {
-      label: "Recover from repeated boundary language",
-      rationale: "The HCP has already heard the compliance boundary and is now testing whether the rep can make the approved information useful without overstepping.",
-      safestResponse: "You are right; I have stayed at the boundary without answering what would make this useful. I can stay with the approved safety information and point to the specific approved data we can discuss, then route case-level interpretation to medical.",
-    }
+  const activeHcp = latestHcpText(input.turns);
+  const repeatedInterventionLoop = latestRepRepeatedAnyIntervention(input.turns) && hasSpecificityBoundary(activeHcp);
+  const repeatedAccessLoop = latestRepRepeatedAccessIntervention(input.turns) && hasAccessTopic(activeHcp);
+  const boundaryLoop = latestRepRepeatedBoundary(input.turns) && hasSpecificityBoundary(activeHcp);
+  const intervention: ChainIntervention = repeatedInterventionLoop
+    ? repeatedAccessLoop
+      ? {
+        label: "Recover from repeated access framing",
+        rationale: "The HCP has already heard the access-support frame and is asking for the first concrete workflow step, so repeating the same process language will deepen the stall.",
+        safestResponse: "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.",
+      }
+      : boundaryLoop
+        ? {
+          label: "Recover from repeated boundary language",
+          rationale: "The HCP has already heard the compliance boundary and is now testing whether the rep can make the approved information useful without overstepping.",
+          safestResponse: "You are right; I have stayed at the boundary without answering what would make this useful. I can stay with the approved safety information and point to the specific approved data we can discuss, then route case-level interpretation to medical.",
+        }
+        : {
+          label: "Recover from repeated broad framing",
+          rationale: "The HCP is asking for a concrete answer after hearing the same broad frame, so the next response needs to name the missed ask directly.",
+          safestResponse: "You are right; I repeated the frame without answering the specific question. Let me narrow to the one point you asked for and stay within the approved information.",
+        }
     : safety
       ? {
         label: "Move to approved safety boundary",
