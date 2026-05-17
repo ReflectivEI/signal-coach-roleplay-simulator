@@ -179,6 +179,55 @@ function transcriptText(input: PredictiveNextEventInput): string {
   return (input.liveTranscript || []).map((turn) => `${turn.speaker || ""}: ${turn.text || ""}`).join("\n");
 }
 
+function latestSpeakerText(input: PredictiveNextEventInput, speaker: string): string {
+  const target = speaker.toLowerCase();
+  const turns = input.liveTranscript || [];
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const turn = turns[index];
+    if (normalizeText(turn?.speaker) === target) return String(turn?.text || "");
+  }
+  return "";
+}
+
+function recentSpeakerText(input: PredictiveNextEventInput, speaker: string, count = 3): string {
+  const target = speaker.toLowerCase();
+  return (input.liveTranscript || [])
+    .filter((turn) => normalizeText(turn?.speaker) === target)
+    .slice(-count)
+    .map((turn) => String(turn?.text || ""))
+    .join("\n");
+}
+
+function compactWords(value: string): string[] {
+  return normalizeText(value)
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length >= 4);
+}
+
+function textSimilarity(a: string, b: string): number {
+  const wordsA = new Set(compactWords(a));
+  const wordsB = new Set(compactWords(b));
+  if (!wordsA.size || !wordsB.size) return 0;
+  let overlap = 0;
+  wordsA.forEach((word) => {
+    if (wordsB.has(word)) overlap += 1;
+  });
+  return overlap / Math.max(wordsA.size, wordsB.size);
+}
+
+function countRecentRecommendedUses(input: PredictiveNextEventInput, safestResponse: string): number {
+  return (input.liveTranscript || [])
+    .filter((turn) => normalizeText(turn?.speaker) === "rep")
+    .slice(-3)
+    .filter((turn) => textSimilarity(String(turn?.text || ""), safestResponse) >= 0.72)
+    .length;
+}
+
+function includesAny(text: string, pattern: RegExp): boolean {
+  return pattern.test(text);
+}
+
 function buildEvidence(signal: string, detail: string, source: PredictedEventEvidence["source"]): PredictedEventEvidence {
   return { signal, detail, source };
 }
@@ -261,6 +310,10 @@ export function rankPredictedEvents(events: PredictedNextEvent[]): PredictedNext
 export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}): PredictedNextEvent[] {
   const text = transcriptText(input);
   const normalized = normalizeText(text);
+  const latestHcp = normalizeText(latestSpeakerText(input, "hcp"));
+  const latestRep = normalizeText(latestSpeakerText(input, "rep"));
+  const recentHcp = normalizeText(recentSpeakerText(input, "hcp", 3));
+  const activeConcernText = [latestHcp, recentHcp].filter(Boolean).join(" ");
   const scenarioMode = normalizeText(input.scenarioMode);
   const persona = normalizeText(JSON.stringify(input.hcpPersonaProfile || {}));
   const hcpPrediction = input.hcpPrediction || {};
@@ -281,26 +334,44 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
   const fillers = Number(voice?.filler_word_count || voice?.fillers || 0);
   const concernFamily = normalizeText(hcpPrediction?.concernFamily || hcpPrediction?.concern_family);
   const riskLevel = normalizeText(hcpPrediction?.riskLevel || hcpPrediction?.risk_level);
+  const activeOrPredictedConcern = [activeConcernText, concernFamily, previousObjections].join(" ");
+  const transcriptContext = [normalized, scenarioMode, persona, complianceRules, historyOutcomes].join(" ");
+  const activeSafety = includesAny(activeConcernText, /\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case-level|patient-specific)\b/);
+  const activeAccess = includesAny(activeConcernText, /\b(access|prior auth|authorization|coverage|formulary|payer|copay|approval)\b/);
+  const activeEvidence = includesAny(activeConcernText, /\b(data|evidence|trial|study|endpoint|subgroup|clinical|treatment decision|decision it changes)\b/);
+  const activeStall = includesAny(latestHcp, /\b(stuck|same issue|not addressing|not answering|pause unless|stop here|still not|does not address|didn't answer)\b/);
+  const activeCompetitor = includesAny(activeConcernText, /\b(competitor|switch|current therapy|already using|patients do well|other option|standard of care)\b/);
+  const latestRepUsedAnyRecommended = Object.values(EVENT_BASELINES).some((baseline) => textSimilarity(latestRep, baseline.safestResponse) >= 0.72);
+
+  const staleRecommendationPenalty = (type: PredictedNextEventType, active = true): number => {
+    const baseline = EVENT_BASELINES[type].safestResponse;
+    const recentUses = countRecentRecommendedUses(input, baseline);
+    if (!recentUses) return 0;
+    return (active ? 0.12 : 0.28) + Math.min(0.16, (recentUses - 1) * 0.08);
+  };
 
   const candidates: Array<{ type: PredictedNextEventType; probability: number; horizon: number; evidence: PredictedEventEvidence[]; compliance?: boolean }> = [
     {
       type: "access_escalation",
       probability: 0.31
-        + (/\b(access|prior auth|authorization|coverage|formulary|payer|copay)\b/.test(normalized + scenarioMode + concernFamily + previousObjections) ? 0.32 : 0)
+        + (activeAccess ? 0.34 : 0)
+        + (!activeAccess && /\b(access|prior auth|authorization|coverage|formulary|payer|copay)\b/.test(transcriptContext) ? 0.1 : 0)
         + (lowControl ? 0.12 : 0)
-        + (riskLevel === "high" ? 0.08 : 0),
+        + (riskLevel === "high" ? 0.08 : 0)
+        - staleRecommendationPenalty("access_escalation", activeAccess),
       horizon: 16,
       evidence: [
-        buildEvidence("Access pressure", "Access, coverage, payer, or prior authorization language is active.", "transcript"),
+        buildEvidence("Access pressure", activeAccess ? "The latest HCP concern is about access, coverage, payer, or approval friction." : "Access language is present in the broader conversation history.", "transcript"),
         buildEvidence("Control score", `Conversation control is ${controlScore.toFixed(1)} on the current metric snapshot.`, "metrics"),
       ],
     },
     {
       type: "compliance_risk",
       probability: 0.26
-        + (/\b(off label|guarantee|safe for all|comparison|superior|head-to-head|case-level|unapproved)\b/.test(normalized + complianceRules) ? 0.34 : 0)
-        + (/\bcompetitor|switch|better than|versus|vs\.\b/.test(normalized) ? 0.12 : 0)
-        + (speakingFast ? 0.08 : 0),
+        + (/\b(off label|guarantee|safe for all|comparison|superior|head-to-head|case-level|unapproved)\b/.test(activeConcernText + complianceRules) ? 0.34 : 0)
+        + (/\bcompetitor|switch|better than|versus|vs\.\b/.test(activeConcernText) ? 0.12 : 0)
+        + (speakingFast ? 0.08 : 0)
+        + (latestRepUsedAnyRecommended && activeStall ? 0.08 : 0),
       horizon: 12,
       compliance: true,
       evidence: [
@@ -313,7 +384,8 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
       probability: 0.28
         + (lowListening ? 0.24 : 0)
         + (riskLevel === "high" ? 0.14 : 0)
-        + (/\bnot my question|you are not answering|that does not address|what i asked\b/.test(normalized) ? 0.22 : 0),
+        + (activeStall ? 0.28 : 0)
+        + (latestRepUsedAnyRecommended && activeStall ? 0.12 : 0),
       horizon: 20,
       evidence: [
         buildEvidence("Listening alignment", `Listening responsiveness is ${listeningScore.toFixed(1)}.`, "metrics"),
@@ -324,7 +396,8 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
       type: "conversation_stall",
       probability: 0.25
         + (lowControl ? 0.22 : 0)
-        + (/\bmaybe|later|send me|i'll think|not now|no next step\b/.test(normalized + historyOutcomes) ? 0.2 : 0)
+        + (/\b(maybe|later|send me|i'll think|not now|no next step|same issue|stuck)\b/.test(activeConcernText + historyOutcomes) ? 0.22 : 0)
+        + (latestRepUsedAnyRecommended && activeStall ? 0.1 : 0)
         + (fillers >= 4 ? 0.06 : 0),
       horizon: 28,
       evidence: [
@@ -335,7 +408,8 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
     {
       type: "competitor_challenge",
       probability: 0.22
-        + (/\bcompetitor|switch|current therapy|what i'm already using|patients do well|other option|standard of care\b/.test(normalized + persona + previousObjections) ? 0.34 : 0)
+        + (activeCompetitor ? 0.34 : 0)
+        + (!activeCompetitor && /\bcompetitor|switch|current therapy|what i'm already using|patients do well|other option|standard of care\b/.test(transcriptContext) ? 0.08 : 0)
         + (lowObjection ? 0.12 : 0),
       horizon: 24,
       evidence: [
@@ -346,12 +420,14 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
     {
       type: "safety_concern_escalation",
       probability: 0.2
-        + (/\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case)\b/.test(normalized + scenarioMode + previousObjections) ? 0.42 : 0)
-        + (/\bmedical|mi|msl|case-level|patient-specific\b/.test(complianceRules + normalized) ? 0.1 : 0),
+        + (activeSafety ? 0.44 : 0)
+        + (!activeSafety && /\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case)\b/.test(transcriptContext) ? 0.08 : 0)
+        + (/\bmedical|mi|msl|case-level|patient-specific\b/.test(complianceRules + activeConcernText) ? 0.1 : 0)
+        - staleRecommendationPenalty("safety_concern_escalation", activeSafety),
       horizon: 14,
       compliance: true,
       evidence: [
-        buildEvidence("Safety marker", "Safety, adverse-event, or patient-specific wording is active.", "transcript"),
+        buildEvidence("Safety marker", activeSafety ? "The latest HCP concern is still safety, adverse-event, or patient-specific wording." : "Safety wording is present in the broader conversation history but is not the latest active concern.", "transcript"),
         buildEvidence("Medical boundary", "Rules require approved safety language and medical-resource routing.", "compliance"),
       ],
     },
@@ -371,7 +447,9 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
       type: "next_hcp_objection",
       probability: 0.36
         + (lowObjection ? 0.18 : 0)
-        + (/\b(data|evidence|cost|workflow|access|patient fit|guideline|value)\b/.test(normalized + previousObjections + concernFamily) ? 0.2 : 0),
+        + (/\b(data|evidence|cost|workflow|access|patient fit|guideline|value|subgroup|endpoint|treatment decision)\b/.test(activeOrPredictedConcern) ? 0.24 : 0)
+        + (activeEvidence ? 0.08 : 0)
+        - staleRecommendationPenalty("next_hcp_objection", activeEvidence),
       horizon: 22,
       evidence: [
         buildEvidence("Open concern", "The conversation still contains unresolved value, evidence, workflow, access, or patient-fit language.", "transcript"),
