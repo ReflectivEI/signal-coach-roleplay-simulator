@@ -3,8 +3,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { User, Stethoscope, Loader2 } from "lucide-react";
 // User is used both for rep bubbles and the empty-state placeholder
 
-const SHOW_DEBUG_UI = Boolean(import.meta.env.DEV);
 const SHOW_VISIBLE_HCP_CUES = true;
+const HCP_RUNTIME_TRACE_FLAG_KEY = "roleplay.debug.hcp_runtime_trace";
+
+function isHcpRuntimeTraceUiEnabled() {
+  if (import.meta.env.DEV) return true;
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const queryEnabled = params.get("hcp_trace") === "1" || params.get("trace_hcp") === "1";
+    const storageValue = window.localStorage?.getItem(HCP_RUNTIME_TRACE_FLAG_KEY);
+    return queryEnabled || storageValue === "1" || storageValue === "true";
+  } catch {
+    return false;
+  }
+}
 
 function formatCueValue(value, fallback = "Not yet established") {
   const text = String(value || "").replace(/_/g, " ").trim();
@@ -82,11 +95,28 @@ function HcpCueStrip({ cue, prediction }) {
 
 function PredictiveDebugChip({ debugInfo }) {
   const [open, setOpen] = useState(false);
-  if (!SHOW_DEBUG_UI || !debugInfo) return null;
+  if (!isHcpRuntimeTraceUiEnabled() || !debugInfo) return null;
 
   const applied = Boolean(debugInfo.contextApplied);
-  const sourceLabel = debugInfo.source === "ai" ? "AI" : debugInfo.source === "deterministic" ? "Deterministic" : "";
+  const runtimeTrace = debugInfo.hcpRuntimeTrace || {};
+  const sourceLabel = debugInfo.source === "ai"
+    ? "Predictive Brain"
+    : debugInfo.source === "deterministic"
+      ? "Deterministic"
+      : "";
   const surfacedSignals = Array.isArray(debugInfo.surfacedSignals) ? debugInfo.surfacedSignals : [];
+  const appliedLayers = Array.isArray(debugInfo.appliedLayers)
+    ? debugInfo.appliedLayers
+    : Array.isArray(runtimeTrace.applied_layers)
+      ? runtimeTrace.applied_layers
+      : [];
+  const suppressedLayers = Array.isArray(debugInfo.suppressedRewriteLayers)
+    ? debugInfo.suppressedRewriteLayers
+    : Array.isArray(runtimeTrace.suppressed_rewrite_layers)
+      ? runtimeTrace.suppressed_rewrite_layers
+      : [];
+  const loopTouched = Boolean(debugInfo.loopRepairTouchedFinalLine || runtimeTrace.loop_repair_touched_final_line);
+  const lockStatus = debugInfo.predictiveLockStatus || runtimeTrace.predictive_lock_status || "not reported";
 
   return (
     <div className="max-w-fit rounded-xl border px-3 py-2" style={{
@@ -95,7 +125,7 @@ function PredictiveDebugChip({ debugInfo }) {
     }}>
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: applied ? "hsl(171 48% 30%)" : "hsl(220 22% 38%)" }}>
-          {applied ? "Predictive Applied" : "Predictive Debug"}
+          {applied ? "HCP Runtime Trace" : "HCP Runtime Trace"}
         </span>
         {sourceLabel ? (
           <span className="text-[10px] px-2 py-0.5 rounded-full border" style={{
@@ -118,6 +148,29 @@ function PredictiveDebugChip({ debugInfo }) {
 
       {open && (
         <div className="mt-2.5 space-y-2">
+          <div className="grid gap-1.5 text-[10px]" style={{ color: "hsl(213 25% 34%)" }}>
+            <div><span className="font-semibold">Authority:</span> {runtimeTrace.authority_source || debugInfo.authoritySource || "not reported"}</div>
+            <div><span className="font-semibold">Lock:</span> {lockStatus}</div>
+            <div><span className="font-semibold">Source:</span> {runtimeTrace.source || debugInfo.source || "not reported"}</div>
+            <div><span className="font-semibold">Loop repair touched:</span> {loopTouched ? "yes" : "no"}</div>
+            <div><span className="font-semibold">Suppressed layers:</span> {suppressedLayers.length ? suppressedLayers.join(", ") : "none"}</div>
+          </div>
+          {appliedLayers.length > 0 ? (
+            <div className="rounded-lg border px-2 py-1.5" style={{ borderColor: "rgba(70, 153, 138, 0.24)", background: "rgba(255,255,255,0.62)" }}>
+              <div className="text-[10px] font-semibold uppercase tracking-wide mb-1" style={{ color: "hsl(171 48% 28%)" }}>Applied Layers</div>
+              <div className="flex flex-wrap gap-1">
+                {appliedLayers.slice(-8).map((layer, index) => {
+                  const label = typeof layer === "string" ? layer : layer?.layer || `layer-${index + 1}`;
+                  const category = typeof layer === "object" && layer?.category ? ` (${layer.category})` : "";
+                  return (
+                    <span key={`${label}-${index}`} className="text-[10px] px-1.5 py-0.5 rounded-md border" style={{ color: "hsl(171 48% 28%)", borderColor: "rgba(70, 153, 138, 0.28)" }}>
+                      {label}{category}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           {surfacedSignals.length > 0 ? (
             <div className="flex flex-wrap gap-1.5">
               {surfacedSignals.map((signal) => (
@@ -151,12 +204,16 @@ function MessageBubble({ turn, isHighlighted = false }) {
   useEffect(() => {
     if (!isHcp || typeof window === "undefined") return;
     const hcpCueState = buildHcpCueState(cue, prediction);
+    const runtimeTrace = predictiveDebug?.hcpRuntimeTrace || null;
     window.hcpCueState = hcpCueState;
+    window.hcpRuntimeTrace = runtimeTrace;
     globalThis.hcpCueState = hcpCueState;
+    globalThis.hcpRuntimeTrace = runtimeTrace;
     if (import.meta.env.DEV) {
       console.debug("hcpCueState", hcpCueState);
+      if (runtimeTrace) console.debug("hcpRuntimeTrace", runtimeTrace);
     }
-  }, [cue, isHcp, prediction, turn.id]);
+  }, [cue, isHcp, prediction, predictiveDebug, turn.id]);
 
   return (
     <div>

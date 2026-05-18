@@ -479,3 +479,34 @@ test("HCP generator enforces Predictive Brain authority, escalation memory, and 
   );
   assert.match(surfaceSource, /output = trimToSentences\(enforceSentenceBoundaries\(output\), 1\)/);
 });
+
+test("active simulator exposes per-turn HCP runtime trace without changing normal rendering", () => {
+  const generatorSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
+    "utf8",
+  );
+  const simulatorSource = fs.readFileSync(
+    new URL("../src/pages/Simulator.jsx", import.meta.url),
+    "utf8",
+  );
+  const messageListSource = fs.readFileSync(
+    new URL("../src/components/simulator/MessageList.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(generatorSource, /hcpRuntimeTrace/);
+  assert.match(generatorSource, /predictive_lock_status/);
+  assert.match(generatorSource, /loop_repair_touched_final_line/);
+  assert.match(generatorSource, /deterministic_generation_fallback_used/);
+  assert.match(generatorSource, /suppressed_rewrite_layers/);
+  assert.match(generatorSource, /traceMutation/);
+  assert.match(generatorSource, /applyRecentHcpLoopGuardWithTrace/);
+  assert.match(generatorSource, /predictiveDebug:\s*\{/);
+  assert.match(generatorSource, /hcpRuntimeTrace,/);
+
+  assert.match(simulatorSource, /predictiveDebug: response\.predictiveDebug \|\| null/);
+  assert.match(messageListSource, /HCP_RUNTIME_TRACE_FLAG_KEY/);
+  assert.match(messageListSource, /hcp_trace/);
+  assert.match(messageListSource, /window\.hcpRuntimeTrace = runtimeTrace/);
+  assert.match(messageListSource, /Loop repair touched/);
+});

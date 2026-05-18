@@ -4072,6 +4072,9 @@ Return ONLY valid JSON:
 }`;
 
   let result;
+  let primaryGenerationSource = predictivePromptContext.trim()
+    ? "predictive_brain_json"
+    : "predictive_brain_fallback_mode_json";
   try {
     result = await invokeWorkerJson({
       prompt,
@@ -4092,6 +4095,7 @@ Return ONLY valid JSON:
       }
     });
   } catch {
+    primaryGenerationSource = "deterministic_generation_fallback";
     result = {
       hcpReply: buildDeterministicHcpFallbackReply({
         scenario,
@@ -4109,6 +4113,24 @@ Return ONLY valid JSON:
   }
 
   let hcpReply = result.hcpReply || "";
+  const hcpRuntimeTraceEvents: Array<Record<string, any>> = [];
+  const traceMutation = (layer: string, before: string, after: string, metadata: Record<string, any> = {}) => {
+    const from = String(before || "").trim();
+    const to = String(after || "").trim();
+    if (!from || !to || from === to) return;
+    hcpRuntimeTraceEvents.push({
+      layer,
+      changed: true,
+      before,
+      after,
+      ...metadata,
+    });
+  };
+  const applyRecentHcpLoopGuardWithTrace = (value: string, layer: string) => {
+    const repaired = applyRecentHcpLoopGuard(value, transcript, scenario);
+    traceMutation(layer, value, repaired, { category: "loop_repair" });
+    return repaired;
+  };
   let postLlmRewriteKind: PostLlmRewriteKind | null = null;
   if (needsNaturalnessRewrite(hcpReply)) {
     postLlmRewriteKind = "naturalness";
@@ -4124,27 +4146,32 @@ Return ONLY valid JSON:
 
   if (postLlmRewriteKind === "naturalness") {
     try {
+      const beforeRewrite = hcpReply;
       hcpReply = await rewriteForSpokenNaturalness({
         hcpReply,
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         prediction,
       });
+      traceMutation("post_llm_naturalness_rewrite", beforeRewrite, hcpReply, { category: "post_llm_rewrite" });
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
   } else if (postLlmRewriteKind === "spoken_style") {
     try {
+      const beforeRewrite = hcpReply;
       hcpReply = await rewriteForSpokenStyle({
         hcpReply,
         scenario,
         behaviorState: result.nextBehaviorState || currentBehaviorState,
       });
+      traceMutation("post_llm_spoken_style_rewrite", beforeRewrite, hcpReply, { category: "post_llm_rewrite" });
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
   } else if (postLlmRewriteKind === "context_consistency") {
     try {
+      const beforeRewrite = hcpReply;
       hcpReply = await rewriteForContextConsistency({
         hcpReply,
         scenario,
@@ -4152,6 +4179,7 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
         prediction,
       });
+      traceMutation("post_llm_context_consistency_rewrite", beforeRewrite, hcpReply, { category: "post_llm_rewrite" });
     } catch {
       // Fall back to the original line if the refinement call fails.
     }
@@ -4164,6 +4192,7 @@ Return ONLY valid JSON:
     transcript,
   })) {
     try {
+      const beforeRewrite = hcpReply;
       hcpReply = await rewriteForContinuityVariation({
         hcpReply,
         transcript,
@@ -4171,6 +4200,7 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
+      traceMutation("continuity_variation_rewrite", beforeRewrite, hcpReply, { category: "continuity_rewrite" });
       continuityAdjusted = true;
     } catch {
       continuityAdjusted = true;
@@ -4178,6 +4208,7 @@ Return ONLY valid JSON:
   }
   if (violatesTurnConstraint(hcpReply, turnConstraint)) {
     try {
+      const beforeConstraintRepair = hcpReply;
       const corrected = await rewriteForConstraintCompliance({
         hcpReply,
         constraint: turnConstraint,
@@ -4195,8 +4226,10 @@ Return ONLY valid JSON:
           behaviorState: result.nextBehaviorState || currentBehaviorState,
           currentJourneyState: result.nextJourneyState || currentJourneyState,
         });
+        traceMutation("turn_constraint_predictive_regeneration", beforeConstraintRepair, hcpReply, { category: "safeguard_regeneration" });
       } else {
         hcpReply = corrected;
+        traceMutation("turn_constraint_compliance_rewrite", beforeConstraintRepair, hcpReply, { category: "safeguard_rewrite" });
       }
     } catch {
       // Keep the model-authored line when constraint repair is unavailable.
@@ -4204,9 +4237,12 @@ Return ONLY valid JSON:
   }
 
   if (escalationMemory.action === "disengage" && escalationMemory.reasons.includes("two-turn boundary reached")) {
+    const beforeBoundary = hcpReply;
     hcpReply = buildBoundaryDisengagementReply(scenario, latestConcern);
+    traceMutation("boundary_disengagement_guard", beforeBoundary, hcpReply, { category: "terminal_guard" });
   }
 
+  const beforeSurface = hcpReply;
   hcpReply = applyHcpResponseSurface({
     hcpReply,
     scenario,
@@ -4215,7 +4251,8 @@ Return ONLY valid JSON:
     hcpTurnCount,
     liveRepAlignmentActive: false,
   });
-  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
+  traceMutation("hcp_response_surface", beforeSurface, hcpReply, { category: "surface_guard" });
+  hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "initial_recent_hcp_loop_guard");
   hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
 
   if (!continuityAdjusted && needsContinuityVariationRewrite({
@@ -4223,6 +4260,7 @@ Return ONLY valid JSON:
     transcript,
   })) {
     try {
+      const beforeRewrite = hcpReply;
       hcpReply = await rewriteForContinuityVariation({
         hcpReply,
         transcript,
@@ -4230,15 +4268,19 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
+      traceMutation("secondary_continuity_variation_rewrite", beforeRewrite, hcpReply, { category: "continuity_rewrite" });
       continuityAdjusted = true;
-      hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
+      const beforeSecondarySurface = hcpReply;
+      hcpReply = applyHcpResponseSurface({
         hcpReply,
         scenario,
         turn: turnDirectives,
         profile: runtimeProfile,
         hcpTurnCount,
         liveRepAlignmentActive: false,
-      }), transcript, scenario);
+      });
+      traceMutation("secondary_hcp_response_surface", beforeSecondarySurface, hcpReply, { category: "surface_guard" });
+      hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "secondary_recent_hcp_loop_guard");
       hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
         } catch {
       continuityAdjusted = true;
@@ -4252,40 +4294,51 @@ Return ONLY valid JSON:
     transcript,
   });
   if (finalLiveAlignment.applied) {
+    const beforeLiveAlignment = hcpReply;
     hcpReply = finalLiveAlignment.hcpReply;
     cueOverride = finalLiveAlignment.cueOverride;
+    traceMutation("first_turn_rep_adaptation", beforeLiveAlignment, hcpReply, { category: "live_alignment_guard" });
   }
 
   if (needsImplementationTurnRepair({ repMessage, hcpReply })) {
+    const beforeImplementationRepair = hcpReply;
     hcpReply = buildImplementationAdaptiveReply({
       repMessage,
       hcpReply,
       transcript,
       scenario,
     });
+    traceMutation("implementation_turn_repair", beforeImplementationRepair, hcpReply, { category: "implementation_guard" });
   }
 
+  const beforeInitialAccess = hcpReply;
   hcpReply = enforceInitialAccessSurface({
     hcpReply,
     repMessage,
     scenario,
     transcript,
   });
+  traceMutation("initial_access_surface", beforeInitialAccess, hcpReply, { category: "surface_guard" });
 
+  const beforeClinicalAccessWorkflow = hcpReply;
   hcpReply = enforceClinicalValueAccessWorkflowSurface({
     hcpReply,
     repMessage,
     scenario,
     transcript,
   });
+  traceMutation("clinical_value_access_workflow_surface", beforeClinicalAccessWorkflow, hcpReply, { category: "surface_guard" });
 
+  const beforeClinicalEvidence = hcpReply;
   hcpReply = enforceClinicalValueEvidenceSurface({
     hcpReply,
     repMessage,
     scenario,
     transcript,
   });
+  traceMutation("clinical_value_evidence_surface", beforeClinicalEvidence, hcpReply, { category: "surface_guard" });
 
+  const beforeRealismDialogue = hcpReply;
   hcpReply = enforceRealismLeverDialogue({
     hcpReply,
     repMessage,
@@ -4294,24 +4347,32 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
+  traceMutation("realism_lever_dialogue", beforeRealismDialogue, hcpReply, { category: "realism_guard" });
+  const beforeQaTwinSurface = hcpReply;
   hcpReply = applyHcpQaTwinSurfaceGuard({
     hcpReply,
     scenario,
     transcript,
   });
+  traceMutation("qa_twin_surface_guard", beforeQaTwinSurface, hcpReply, { category: "surface_guard" });
 
   if (!hasPriorHcpTurns(transcript)) {
+    const beforeFirstTurnAcknowledgement = hcpReply;
     hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
+    traceMutation("first_turn_rep_acknowledgement", beforeFirstTurnAcknowledgement, hcpReply, { category: "first_turn_guard" });
+    const beforeFirstTurnQaSurface = hcpReply;
     hcpReply = applyHcpQaTwinSurfaceGuard({
       hcpReply,
       scenario,
       transcript,
     });
+    traceMutation("first_turn_qa_twin_surface_guard", beforeFirstTurnQaSurface, hcpReply, { category: "surface_guard" });
   }
 
   const finalMissingPressures = missingPersistentPressure(hcpReply, scenario, hcpTurnCount);
   if (hasGlobalStockPhrase(hcpReply) || finalMissingPressures.length > 0) {
     try {
+      const beforePredictiveRegeneration = hcpReply;
       hcpReply = await regenerateWithPredictiveBrain({
         currentLine: hcpReply,
         reason: hasGlobalStockPhrase(hcpReply)
@@ -4326,31 +4387,40 @@ Return ONLY valid JSON:
         behaviorState: result.nextBehaviorState || currentBehaviorState,
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
+      traceMutation("final_predictive_brain_regeneration", beforePredictiveRegeneration, hcpReply, { category: "safeguard_regeneration" });
     } catch {
+      const beforeBrainFallback = hcpReply;
       hcpReply = buildBrainGroundedScenarioFallback({
         scenario,
         repMessage,
         escalationMemory,
         missingPressures: finalMissingPressures,
       });
+      traceMutation("brain_grounded_scenario_fallback", beforeBrainFallback, hcpReply, { category: "deterministic_fallback" });
     }
 
-    hcpReply = applyRecentHcpLoopGuard(applyHcpResponseSurface({
+    const beforeFinalSurface = hcpReply;
+    hcpReply = applyHcpResponseSurface({
       hcpReply,
       scenario,
       turn: turnDirectives,
       profile: runtimeProfile,
       hcpTurnCount,
       liveRepAlignmentActive: finalLiveAlignment.applied,
-    }), transcript, scenario);
+    });
+    traceMutation("final_hcp_response_surface", beforeFinalSurface, hcpReply, { category: "surface_guard" });
+    hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "final_recent_hcp_loop_guard");
     hcpReply = withCourtesyAcknowledgement(hcpReply, repMessage, scenario);
+    const beforeFinalQaSurface = hcpReply;
     hcpReply = applyHcpQaTwinSurfaceGuard({
       hcpReply,
       scenario,
       transcript,
     });
+    traceMutation("final_qa_twin_surface_guard", beforeFinalQaSurface, hcpReply, { category: "surface_guard" });
   }
 
+  const beforeFinalRealism = hcpReply;
   hcpReply = enforceRealismLeverDialogue({
     hcpReply,
     repMessage,
@@ -4359,13 +4429,18 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
+  traceMutation("final_realism_lever_dialogue", beforeFinalRealism, hcpReply, { category: "realism_guard" });
+  const beforeFinalQaTwin = hcpReply;
   hcpReply = applyHcpQaTwinSurfaceGuard({
     hcpReply,
     scenario,
     transcript,
   });
-  hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
+  traceMutation("terminal_qa_twin_surface_guard", beforeFinalQaTwin, hcpReply, { category: "surface_guard" });
+  hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "terminal_recent_hcp_loop_guard");
+  const beforeFinalNormalization = hcpReply;
   hcpReply = normalizeHcpSpokenRealism(hcpReply);
+  traceMutation("final_spoken_realism_normalization", beforeFinalNormalization, hcpReply, { category: "normalization_guard" });
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
@@ -4416,6 +4491,37 @@ Return ONLY valid JSON:
     id: `cue_${Date.now()}`,
     ...cue,
   }] : [];
+  const loopRepairEvents = hcpRuntimeTraceEvents.filter((event) => event?.category === "loop_repair");
+  const deterministicFallbackEvents = hcpRuntimeTraceEvents.filter((event) => event?.category === "deterministic_fallback");
+  const predictiveContextReceived = Boolean(predictivePromptContext.trim());
+  const hcpRuntimeTrace = {
+    generator_version: HCP_GENERATOR_VERSION,
+    source: primaryGenerationSource,
+    authority_source: predictiveContextReceived ? "predictive_brain" : "predictive_brain_fallback_mode",
+    predictive_brain_authoritative: predictiveContextReceived,
+    test_hcp_response_quality_contract: predictiveContextReceived
+      ? "predictive_builder_quality_bar"
+      : "scenario_metadata_predictive_fallback",
+    predictive_lock_status: predictiveContextReceived
+      ? "locked_to_predictive_brain_prompt"
+      : "predictive_context_missing_fallback_mode",
+    deterministic_generation_fallback_used: primaryGenerationSource === "deterministic_generation_fallback",
+    deterministic_fallback_layers: deterministicFallbackEvents.map((event) => event.layer),
+    suppressed_rewrite_layers: [],
+    loop_repair_touched_final_line: loopRepairEvents.length > 0,
+    loop_repair_layers: loopRepairEvents.map((event) => event.layer),
+    post_llm_rewrite_kind: postLlmRewriteKind || "none",
+    continuity_adjusted: continuityAdjusted,
+    first_turn_live_alignment_applied: Boolean(finalLiveAlignment.applied),
+    cue_source: cueOverride ? "override" : result.hcpCue ? "model_or_predictive_brain" : realismCueCandidate ? "realism_backbone" : "none",
+    final_cue: cue.label,
+    final_dialogue: hcpReply,
+    applied_layers: hcpRuntimeTraceEvents.map((event) => ({
+      layer: event.layer,
+      category: event.category,
+      changed: Boolean(event.changed),
+    })),
+  };
   const coachingNudge = result.coachingNudge && typeof result.coachingNudge === "object" && Object.keys(result.coachingNudge).length
     ? result.coachingNudge
     : coachingEnabled
@@ -4441,8 +4547,19 @@ Return ONLY valid JSON:
     coachingNudge,
     volatilityState: volatility,
     prediction,
+    predictiveDebug: {
+      contextApplied: predictiveContextReceived,
+      source: primaryGenerationSource === "deterministic_generation_fallback" ? "deterministic" : "ai",
+      authoritySource: hcpRuntimeTrace.authority_source,
+      predictiveLockStatus: hcpRuntimeTrace.predictive_lock_status,
+      loopRepairTouchedFinalLine: hcpRuntimeTrace.loop_repair_touched_final_line,
+      suppressedRewriteLayers: hcpRuntimeTrace.suppressed_rewrite_layers,
+      appliedLayers: hcpRuntimeTrace.applied_layers,
+      hcpRuntimeTrace,
+    },
     runtimeTrace: {
       generator_version: HCP_GENERATOR_VERSION,
+      hcp_runtime_trace: hcpRuntimeTrace,
       realism_level: contractRealism,
       sampling_temperature: generationTemperature,
       scenario_grounding_applied: true,
@@ -4473,8 +4590,10 @@ Return ONLY valid JSON:
         dialogue_enforced: true,
       },
       predictive_brain_authority: {
-        predictive_context_received: Boolean(predictivePromptContext.trim()),
+        predictive_context_received: predictiveContextReceived,
         guardrails_demoted_to_validators: true,
+        predictive_lock_status: hcpRuntimeTrace.predictive_lock_status,
+        loop_repair_touched_final_line: hcpRuntimeTrace.loop_repair_touched_final_line,
         final_stock_phrase_detected: hasGlobalStockPhrase(hcpReply),
         final_missing_pressure: missingPersistentPressure(hcpReply, scenario, hcpTurnCount),
       },
