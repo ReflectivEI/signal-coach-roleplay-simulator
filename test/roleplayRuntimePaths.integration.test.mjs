@@ -533,6 +533,12 @@ test("active simulator routes HCP authoring through Worker predictive brain befo
   assert.match(generatorSource, /result = \{\s*hcpReply: authoritativePredictiveLine/);
   assert.match(generatorSource, /worker_predictive_route_authoritative/);
   assert.match(generatorSource, /locked_to_worker_predictive_brain_route/);
+  assert.match(generatorSource, /const predictiveRouteLockActive = Boolean\(authoritativePredictiveLine\)/);
+  assert.match(generatorSource, /if \(predictiveRouteLockActive\) \{/);
+  assert.match(generatorSource, /suppressedRewriteLayers\.push/);
+  assert.match(generatorSource, /first_turn_rep_adaptation/);
+  assert.match(generatorSource, /initial_access_surface/);
+  assert.match(generatorSource, /realism_lever_dialogue/);
 });
 
 

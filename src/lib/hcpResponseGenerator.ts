@@ -4136,7 +4136,32 @@ Return ONLY valid JSON:
     traceMutation(layer, value, repaired, { category: "loop_repair" });
     return repaired;
   };
+  const predictiveRouteLockActive = Boolean(authoritativePredictiveLine);
+  const suppressedRewriteLayers: string[] = [];
   let postLlmRewriteKind: PostLlmRewriteKind | null = null;
+  let continuityAdjusted = false;
+  let cueOverride = "";
+  let finalLiveAlignment = { applied: false, hcpReply, cueOverride: "" };
+
+  if (predictiveRouteLockActive) {
+    suppressedRewriteLayers.push(
+      "post_llm_rewrites",
+      "continuity_variation_rewrites",
+      "turn_constraint_rewrites",
+      "boundary_disengagement_guard",
+      "hcp_response_surface",
+      "recent_hcp_loop_guard",
+      "first_turn_rep_adaptation",
+      "implementation_turn_repair",
+      "initial_access_surface",
+      "clinical_value_access_workflow_surface",
+      "clinical_value_evidence_surface",
+      "realism_lever_dialogue",
+      "qa_twin_surface_guard",
+      "first_turn_rep_acknowledgement",
+      "final_predictive_regeneration",
+    );
+  } else {
   if (needsNaturalnessRewrite(hcpReply)) {
     postLlmRewriteKind = "naturalness";
   } else if (needsSpokenStyleRewrite({ hcpReply, scenario })) {
@@ -4189,8 +4214,6 @@ Return ONLY valid JSON:
       // Fall back to the original line if the refinement call fails.
     }
   }
-  let continuityAdjusted = false;
-  let cueOverride = "";
 
   if (needsContinuityVariationRewrite({
     hcpReply,
@@ -4292,7 +4315,7 @@ Return ONLY valid JSON:
     }
   }
 
-  const finalLiveAlignment = enforceFirstTurnRepAdaptation({
+  finalLiveAlignment = enforceFirstTurnRepAdaptation({
     hcpReply,
     repMessage,
     scenario,
@@ -4436,6 +4459,8 @@ Return ONLY valid JSON:
   });
   traceMutation("terminal_qa_twin_surface_guard", beforeFinalQaTwin, hcpReply, { category: "surface_guard" });
   hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "terminal_recent_hcp_loop_guard");
+  }
+
   const beforeFinalNormalization = hcpReply;
   hcpReply = normalizeHcpSpokenRealism(hcpReply);
   traceMutation("final_spoken_realism_normalization", beforeFinalNormalization, hcpReply, { category: "normalization_guard" });
@@ -4510,7 +4535,7 @@ Return ONLY valid JSON:
     worker_predictive_route_line: authoritativePredictiveLine || null,
     deterministic_generation_fallback_used: false,
     deterministic_fallback_layers: deterministicFallbackEvents.map((event) => event.layer),
-    suppressed_rewrite_layers: [],
+    suppressed_rewrite_layers: suppressedRewriteLayers,
     loop_repair_touched_final_line: loopRepairEvents.length > 0,
     loop_repair_layers: loopRepairEvents.map((event) => event.layer),
     post_llm_rewrite_kind: postLlmRewriteKind || "none",
