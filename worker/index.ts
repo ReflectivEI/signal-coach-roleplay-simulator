@@ -235,7 +235,7 @@ function isGroqRateLimitResponse(responseText: string): boolean {
     return /rate limit|rate_limit|rate_limit_exceeded|tokens per minute|tpm|too many requests/i.test(responseText);
 }
 
-async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<string> {
+async function callGroq(env: Env, prompt: string, maxTokens: number, temperature = 0.2): Promise<string> {
     const keyPool = getGroqKeyPool(env);
     if (!keyPool.length) return "";
     const rankedKeys = rankGroqKeyPool(keyPool);
@@ -255,7 +255,7 @@ async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<st
                 },
                 body: JSON.stringify({
                     model: "llama-3.3-70b-versatile",
-                    temperature: 0.2,
+                    temperature,
                     max_tokens: maxTokens,
                     messages: [{ role: "user", content: prompt }],
                 }),
@@ -364,14 +364,58 @@ function naturalizePredictiveHcpLine(value: unknown): string {
         .trim();
 }
 
+function enforceWorkerHcpPunctuation(value: string): string {
+    const dependentPrefacePattern = /^(before|after|when|if|because|since|while|although|though|unless|until|as|given|from)\b/i;
+    const coordinatingJoinPattern = /^(and|but|or|so|yet|for|nor)\b/i;
+    const questionStarterPattern = /^(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/i;
+    const subjectStarterPattern = /^(i|we|you|they|he|she|it|there|this|that|these|those|the|a|an|our|my|your|their|dr\.?|doctor)\b/i;
+
+    const looksIndependent = (part: string): boolean => {
+        const trimmed = String(part || "").trim();
+        if (!trimmed || dependentPrefacePattern.test(trimmed)) return false;
+        const words = trimmed.split(/\s+/).filter(Boolean);
+        if (words.length < 3) return false;
+        const hasSubject = subjectStarterPattern.test(words[0] || "");
+        const hasVerb = /\b(am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|may|might|must|need|needs|needed|seem|seems|feel|feels|want|wants|think|thinks|review|reviews|prefer|prefers|keep|keeps|ask|asks|work|works|fit|fits|\w+ed|\w+s)\b/i.test(trimmed);
+        return hasSubject && hasVerb;
+    };
+
+    return String(value || "")
+        .replace(/,(\S)/g, ", $1")
+        .replace(/\s+-\s+(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi, (_match, starter) => `. ${starter}`)
+        .replace(
+            /([^,.!?]{8,}),\s*(who|what|when|where|why|how|which|could|would|can|do|does|did|is|are|am|will|may|should)\b/gi,
+            (match, prefix, starter) => {
+                const cleanPrefix = String(prefix || "").trim();
+                if (dependentPrefacePattern.test(cleanPrefix)) return `${cleanPrefix}, ${String(starter || "").toLowerCase()}`;
+                return `${cleanPrefix}. ${starter}`;
+            },
+        )
+        .replace(/(^|[.!?]\s+)([^?.!]{8,}),\s+([^?.!]{8,})([?.!]?)(?=\s|$)/g, (match, prefix, left, right, trailing) => {
+            const cleanRight = String(right || "").trim();
+            if (coordinatingJoinPattern.test(cleanRight)) return match;
+            if (!looksIndependent(left) || !looksIndependent(cleanRight)) return match;
+            return `${prefix}${String(left || "").trim()}. ${cleanRight}${trailing || ""}`;
+        })
+        .replace(/([.!?]\s+)([a-z])/g, (_match, boundary, char) => `${boundary}${String(char).toUpperCase()}`)
+        .replace(/\s{2,}/g, " ")
+        .trim();
+}
+
 function sanitizePredictiveHcpLine(value: unknown): string {
-    const cleaned = naturalizePredictiveHcpLine(value)
+    const cleaned = enforceWorkerHcpPunctuation(naturalizePredictiveHcpLine(value))
         .replace(/^['"`\s]+|['"`\s]+$/g, "")
         .replace(/\s+/g, " ")
         .trim();
     if (!cleaned) return "";
     const sentences = cleaned.match(/[^.!?]+[.!?]?/g) || [cleaned];
-    const sliced = sentences.slice(0, 2).join(" ").trim();
+    const sliced = sentences
+        .map((sentence) => sentence.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
     if (hasPredictiveBrainBannedPhrase(sliced)) return "";
     return sliced;
 }
@@ -905,49 +949,49 @@ function stripAuthoredHcpStateForPredictivePrompt(hcpState: Record<string, unkno
     return next;
 }
 
-function buildScenarioSpecificFallbackLine({
-    hcpState,
-    scenarioContext,
-    responseType,
-    liveTemperature,
-}: {
-    hcpState: Record<string, unknown>;
-    scenarioContext: Record<string, unknown>;
-    responseType: string;
-    liveTemperature: number;
-}): string {
-    const barrier = text(
-        hcpState.current_primary_barrier,
-        text(hcpState.current_secondary_barrier, text(scenarioContext.cue_signal, "the practical barrier")),
-    ).replace(/\s+/g, " ").replace(/[.,;:\s]+$/g, "").trim() || "the practical barrier";
+const UNSUPPORTED_SPECIFICITY_PATTERNS = [
+    /\bheart failure\b/i,
+    /\breduced ejection fraction\b/i,
+    /\bhfref\b/i,
+    /\bcomorbidit/i,
+    /\breal-world (?:data|setting|evidence)\b/i,
+    /\bsubgroup data\b/i,
+    /\boncology profile\b/i,
+];
 
-    if (responseType === "disengage") {
-        return sanitizePredictiveHcpLine(
-            `We are short on time, and I still do not have a clear answer on ${barrier}.`,
-        );
-    }
-
-    if (["soft_next_step", "permission_to_continue", "conditionally_open"].includes(responseType)) {
-        return sanitizePredictiveHcpLine(
-            liveTemperature >= 8
-                ? `This is closer, but I still need a clearer answer on ${barrier} before I move it forward.`
-                : `This is closer, but I still need a clearer answer on ${barrier} before this feels actionable in practice.`,
-        );
-    }
-
-    return sanitizePredictiveHcpLine(
-        liveTemperature >= 8
-            ? `I still need a clearer answer on ${barrier}, and I need it kept focused.`
-            : `I still need a clearer answer on ${barrier} before this feels relevant in practice.`,
-    );
+function hasUnsupportedSpecificity(candidate: string, supportText: string): boolean {
+    const support = String(supportText || "").toLowerCase();
+    return UNSUPPORTED_SPECIFICITY_PATTERNS.some((pattern) => {
+        const match = candidate.match(pattern);
+        if (!match) return false;
+        return !support.includes(match[0].toLowerCase());
+    });
 }
 
-function isUsablePredictiveCandidate(candidate: string, previousHcpLine: string): boolean {
+function isUsablePredictiveCandidate(candidate: string, previousHcpLine: string, supportText = ""): boolean {
     if (!candidate) return false;
     if (hasPredictiveBrainBannedPhrase(candidate) || isGenericHcpLine(candidate)) return false;
+    if (hasUnsupportedSpecificity(candidate, supportText)) return false;
     if (/^keep it tight\b/i.test(candidate)) return false;
     if (previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)) return false;
     return true;
+}
+
+function summarizeRecentHcpHistory(conversationMemory: Record<string, unknown>): string {
+    const history = Array.isArray(conversationMemory.hcp_response_history)
+        ? conversationMemory.hcp_response_history.map((item) => text(item)).filter(Boolean).slice(-4)
+        : [];
+    if (!history.length) return "none yet";
+    return history.join(" | ");
+}
+
+function summarizeRecurringSignals(conversationMemory: Record<string, unknown>): string {
+    const values = [
+        ...(Array.isArray(conversationMemory.unresolved_cues) ? conversationMemory.unresolved_cues : []),
+        ...(Array.isArray(conversationMemory.addressed_cues) ? conversationMemory.addressed_cues : []),
+        ...(Array.isArray(conversationMemory.intent_bucket_history) ? conversationMemory.intent_bucket_history : []),
+    ].map((item) => text(item)).filter(Boolean).slice(-8);
+    return values.length ? values.join(" | ") : "none yet";
 }
 
 async function authorPredictiveHcpResponse({
@@ -987,95 +1031,93 @@ async function authorPredictiveHcpResponse({
             ? conversationMemory.hcp_response_history[conversationMemory.hcp_response_history.length - 1]
             : ""), ""),
     );
-    const lastResponseType = text(
-        Array.isArray(conversationMemory.response_type_history)
-            ? conversationMemory.response_type_history[conversationMemory.response_type_history.length - 1]
-            : "",
-        "unknown",
-    );
-    const addressedPriorAsk = ["concern_partially_addressed", "deeper_barrier_revealed"].includes(
-        text(hcpStateDelta.concern_movement),
-    );
     const unresolvedConcern = [
         text(hcpState.current_primary_barrier),
         text(hcpState.current_secondary_barrier),
         ...(Array.isArray(hcpState.unresolved_concerns) ? hcpState.unresolved_concerns.map((item) => text(item)).filter(Boolean) : []),
         ...(Array.isArray(hcpState.revealed_concerns) ? hcpState.revealed_concerns.map((item) => text(item)).filter(Boolean) : []),
     ].filter(Boolean).slice(0, 3).join(" | ");
+    const supportedSpecificityText = [
+        transcript,
+        JSON.stringify(scenarioContext),
+        JSON.stringify(hcpBrain),
+        hcpBrainContext,
+    ].join(" ");
 
-    const buildPrompt = (retryReason = "") => `You are authoring the next HCP spoken line for a pharma role-play simulator.
+    const buildPrompt = (retryReason = "") => `You are simulating one realistic HCP reply in a live pharma role-play training session.
 
-Use the Predictive HCP Brain as the source of truth.
-Deterministic state progression, response type, temperature, and anti-loop metadata are validator constraints, not canned copy sources.
-Match the quality bar of the Predictive Builder Test HCP Response: concrete, context-aware, adaptive, realistic, and continuous with the prior turn.
+This is the global RPS HCP voice contract. It mirrors the Predictive Builder "Test HCP Response" baseline.
+The Predictive HCP Brain is the source of truth for clinician perspective. State progression, REP evaluation, scoring, right-panel recommendations, and safeguards are hidden context only. They must never become the HCP's spoken voice.
 
-Predictive HCP Brain:
+HCP profile:
+- Disease state: ${text(scenarioContext.disease_state || scenarioContext.diseaseState, "not provided")}
+- HCP role: ${text(scenarioContext.hcp_type || scenarioContext.hcpType || scenarioContext.specialty_hcp_type, "not provided")}
+- Conversation moment: ${text(scenarioContext.journey_stage || scenarioContext.journeyStage, "not provided")}
+- Interaction pressure: ${text(scenarioContext.interaction_pressure || scenarioContext.interactionPressure, "not provided")}
+- Influence driver: ${text(scenarioContext.influence_driver || scenarioContext.influenceDriver, "not provided")}
+- Behavior archetype: ${text(scenarioContext.behavior_archetype || scenarioContext.behaviorArchetype, "not provided")}
+
+Predictive HCP Brain context:
 ${hcpBrainContext || JSON.stringify(hcpBrain)}
 
-Current turn context:
-- Latest REP message: ${transcript}
+Continuous learning memory:
+- Prior HCP phrasing: ${summarizeRecentHcpHistory(conversationMemory)}
+- Recurring signals: ${summarizeRecurringSignals(conversationMemory)}
 - Previous HCP line: ${previousHcpLine || "none"}
-- Previous HCP response type: ${lastResponseType}
-- REP addressed prior ask: ${addressedPriorAsk ? "yes" : "no"}
-- Journey stage: ${text(scenarioContext.journey_stage || scenarioContext.journeyStage, "unknown")}
-- Current HCP state: ${JSON.stringify(hcpState)}
-- State delta: ${JSON.stringify(hcpStateDelta)}
-- Response type constraint: ${responseType}
-- Response type reason: ${responseTypeReason}
-- Progression explanation: ${progressionExplanation}
-- Intent bucket: ${intentBucket || "unknown"}
-- Live temperature: ${liveTemperature}/10
-- Unresolved concern: ${unresolvedConcern || "not provided"}
+
+Current exchange:
+- Latest REP message: ${transcript}
+- Live realism: ${liveTemperature}/10
+- Current unresolved concern, if any: ${unresolvedConcern || "not provided"}
 - Scenario opening: ${text(scenarioContext.opening_scene || scenarioContext.openingScene, "not provided")}
-- Scenario cue: ${text(scenarioContext.cue_signal, "not provided")}
-- Deterministic state output is validator metadata only and must not be copied into HCP dialogue.
-- Continuous learning memory: ${JSON.stringify(conversationMemory)}
 ${retryReason ? `- Retry guidance: ${retryReason}` : ""}
 
-Hard rules:
-- Speak as this specific HCP, not as a guardrail or simulator.
-- Respond to the latest REP message first, then preserve the HCP's predictive/adaptive state.
-- Keep the same clinical or operational concern family without routing the line into canned access/workflow/evidence menu language.
-- The line must feel like a real clinician speaking in the moment.
-- One HCP turn must make exactly one conversational move: acknowledge, narrow, sharpen, reveal a curveball, object, test credibility, or disengage. Do not pack multiple concerns into one exchange.
-- Use continuous learning memory to evolve the challenge from prior turns; do not reset to the same ask or scripted template.
-- If the REP is broad or evasive, state the missed answer in plain words, then ask one practical narrowing question only when it is needed. Do not add a new concern list.
-- Do not invent broad panel language such as comorbidities, treatment-resistant cases, side effects, or viable option unless those exact ideas are already in the scenario, brain, or transcript.
-- At live temperature 8-10, target 12-22 spoken words unless a safety/compliance boundary requires one extra clause.
-- Do not interrogate the rep. Prefer normal clinician dialogue that sounds like a person reacting in the room, not a checklist.
-- Avoid back-to-back questions and do not make every challenge a question.
-- If the REP offers menu options like patient fit, evidence, workflow, or access, let the HCP choose what matters in natural language without repeating the menu.
-- 1-2 sentences maximum.
-- Do not repeat the previous HCP sentence.
-- Do not use global stock phrases or generic training language.
-- Do not use any of these phrases: ${PREDICTIVE_BRAIN_BANNED_PHRASES.join("; ")}.
-- Use the deterministic response type only as a behavioral target, not as wording.
-- If the prior REP answer was generic or evasive, sharpen or restate the blocker in new words. Use at most one question and no repeated phrasing from HCP history.
-- If the prior REP answer earned progress, acknowledge that progress without sounding scripted.
-- Do not copy the validator-only fallback, right-panel recommendation text, or generic menu labels as the HCP dialogue.
+Voice rules:
+- Respond as the HCP only, in first-person clinician voice.
+- Keep it 1-3 short spoken sentences.
+- At neutral realism 5/10, sound professional, thoughtful, calm, and realistically skeptical without being hostile.
+- Higher realism may increase directness and pressure, but do not turn the HCP into an evaluator, correction bot, or interrogation script.
+- Sound like a real clinician in a live conversation, not polished writing, not a framework, and not a scoring engine.
+- Respond to the latest REP message first and continue the prior conversation naturally.
+- Use concrete practice language from the profile, brain, transcript, or scenario. Do not invent unsupported clinical claims.
+- Do not invent patient subgroups, disease subtypes, endpoints, outcomes, workflow results, access results, or real-world evidence that are not explicitly present in the profile, brain, transcript, or scenario.
+- If the needed patient or evidence detail is not provided, ask for it in plain language without naming a new disease subtype or unsupported subgroup.
+- If the REP is broad, ask for the next useful clinical, operational, or patient-level distinction in normal human language.
+- If the REP is helpful, acknowledge the progress naturally before narrowing the next point.
+- Make exactly one conversational move. Do not pack multiple concerns into one exchange.
+- Use standard written English punctuation; split distinct thoughts into separate sentences.
+- Avoid stiff/formal constructions; use normal contractions when appropriate.
+- Do not start each turn with the same structure as recent HCP turns.
+- Do not repeat wording from the previous HCP line.
+- Do not use canned menu labels as the HCP voice.
+- Do not copy REP-evaluation, right-panel recommendation, coaching, state-machine, or fallback text.
+- Do not include bullet points, markdown, labels, numbering, or meta commentary.
 
-Preferred shape examples for a weak or evasive REP answer:
-- "Evidence is the issue. I need the subgroup tied to one treatment decision."
-- "That still does not tell me who I would treat differently."
-- "I hear the boundary. I need the approved data tied to one decision."
-- "That is still broad; narrow it to the patient profile where the choice changes."
-These are style examples, not templates. Vary the wording based on the transcript and memory.
+Tone calibration examples from the approved HCP voice target:
+- "That sounds reasonable, but my staff already spends too much time on prior authorizations. How does this avoid adding more friction?"
+- "I hear the adherence point, but I need to know whether this is meaningfully different from what we already use."
+- "Before we go further, are you saying it is superior? I want to stay within what is actually supported."
+- "If reimbursement is unpredictable, I am not comfortable switching stable patients unless there is a very clear patient-level reason."
 
-Return ONLY the final HCP line.`;
+These examples define tone, length, and realism only. Do not copy them unless they fit the exact exchange.
 
-    const aiText = await callGroq(env, buildPrompt(), 180);
+Return only the HCP reply text.`;
+
+    const aiText = await callGroq(env, buildPrompt(), 200, 0.35);
     const candidate = sanitizePredictiveHcpLine(aiText);
-    if (isUsablePredictiveCandidate(candidate, previousHcpLine)) return candidate;
+    if (isUsablePredictiveCandidate(candidate, previousHcpLine, supportedSpecificityText)) return candidate;
 
     const retryReason = !candidate
         ? "The prior draft was empty. Regenerate with a natural clinician line grounded in the Predictive HCP Brain."
         : previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)
             ? "The prior draft repeated the last HCP line. Regenerate with new wording and forward continuity."
-            : "The prior draft sounded generic or reused stock phrasing. Regenerate with scenario-specific wording.";
+            : hasUnsupportedSpecificity(candidate, supportedSpecificityText)
+                ? "The prior draft invented patient subgroups, disease subtypes, or evidence details not present in the source context. Regenerate without unsupported specificity."
+                : "The prior draft sounded generic, evaluative, or scripted. Regenerate with natural Predictive Builder Test HCP Response tone.";
 
-    const retryText = await callGroq(env, buildPrompt(retryReason), 180);
+    const retryText = await callGroq(env, buildPrompt(retryReason), 150, 0.25);
     const retryCandidate = sanitizePredictiveHcpLine(retryText);
-    if (isUsablePredictiveCandidate(retryCandidate, previousHcpLine)) return retryCandidate;
+    if (isUsablePredictiveCandidate(retryCandidate, previousHcpLine, supportedSpecificityText)) return retryCandidate;
 
     return "";
 }

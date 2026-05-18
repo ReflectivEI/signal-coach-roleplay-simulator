@@ -376,9 +376,10 @@ test("RPS HCP dialogue locks Predictive Builder/Predictive Brain output before d
   assert.match(rolePlaySource, /predictiveAuthorityLocked: predictiveRouteAuthoritative/);
   assert.match(rolePlaySource, /deterministicRewriteLayersSuppressedByPredictiveAuthority/);
 
-  assert.match(workerSource, /Use the Predictive HCP Brain as the source of truth/);
-  assert.match(workerSource, /Match the quality bar of the Predictive Builder Test HCP Response/);
-  assert.match(workerSource, /Do not copy the validator-only fallback, right-panel recommendation text, or generic menu labels as the HCP dialogue/);
+  assert.match(workerSource, /This is the global RPS HCP voice contract/);
+  assert.match(workerSource, /mirrors the Predictive Builder "Test HCP Response" baseline/);
+  assert.match(workerSource, /They must never become the HCP's spoken voice/);
+  assert.match(workerSource, /Do not copy REP-evaluation, right-panel recommendation, coaching, state-machine, or fallback text/);
   assert.doesNotMatch(workerSource, /same scenario lane/);
 });
 
@@ -586,25 +587,21 @@ test("RPS HCP contract disables deterministic HCP fallback authoring", () => {
 });
 
 
-test("Predictive Brain HCP authoring is calibrated to one spoken move per exchange", () => {
+test("Predictive Builder HCP authoring is calibrated to neutral clinician realism", () => {
   const workerSource = fs.readFileSync(
     new URL("../worker/index.ts", import.meta.url),
     "utf8",
   );
 
-  assert.match(workerSource, /One HCP turn must make exactly one conversational move/);
+  assert.match(workerSource, /Make exactly one conversational move/);
   assert.match(workerSource, /Do not pack multiple concerns into one exchange/);
   assert.match(workerSource, /Continuous learning memory/);
-  assert.match(workerSource, /evolve the challenge from prior turns/);
-  assert.match(workerSource, /reveal a curveball/);
-  assert.match(workerSource, /no repeated phrasing from HCP history/);
-  assert.match(workerSource, /target 12-22 spoken words/);
-  assert.match(workerSource, /Do not interrogate the rep/);
-  assert.match(workerSource, /sounds like a person reacting in the room/);
-  assert.match(workerSource, /not a checklist/);
-  assert.match(workerSource, /Avoid back-to-back questions/);
-  assert.match(workerSource, /style examples, not templates/);
-  assert.match(workerSource, /specific challenges i see in my patient panel/);
-  assert.match(workerSource, /managing comorbidities/);
-  assert.match(workerSource, /before i consider it a viable option/);
+  assert.match(workerSource, /At neutral realism 5\/10, sound professional, thoughtful, calm/);
+  assert.match(workerSource, /without being hostile/);
+  assert.match(workerSource, /not a framework, and not a scoring engine/);
+  assert.match(workerSource, /Respond to the latest REP message first/);
+  assert.match(workerSource, /Do not start each turn with the same structure as recent HCP turns/);
+  assert.match(workerSource, /These examples define tone, length, and realism only/);
+  assert.doesNotMatch(workerSource, /Preferred shape examples/);
+  assert.doesNotMatch(workerSource, /That still does not tell me/);
 });

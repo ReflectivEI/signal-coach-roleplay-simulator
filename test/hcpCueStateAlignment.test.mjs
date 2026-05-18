@@ -25,7 +25,7 @@ test('neutral state derives an attentive cue tied to the active concern family',
 
   assert.equal(aligned.cueCategory, 'neutral_attentive');
   assert.equal(aligned.concernFamily, 'evidence');
-  assert.match(aligned.cueText, /chart|data|decision/i);
+  assert.match(aligned.cueText, /study|data|pen|marked/i);
   assert.doesNotMatch(aligned.cueText, /door|ending|exchange is over/i);
   assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
@@ -49,7 +49,7 @@ test('repeated non-adaptation derives increasing impatience cues without becomin
 
   assert.equal(aligned.cueCategory, 'non_adaptive_impatience');
   assert.equal(aligned.terminalCue, false);
-  assert.match(aligned.cueText, /clinic list|setup pass|less patient/i);
+  assert.match(aligned.cueText, /clinic list|workflow notes|exhales|without softening/i);
   assert.doesNotMatch(aligned.cueText, /receptive|relaxed|warm/i);
   assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
@@ -74,7 +74,7 @@ test('hard escalation cues do not preserve soft body-language descriptors', () =
 
   assert.equal(aligned.cueCategory, 'hard_escalation');
   assert.equal(aligned.replacedExistingCue, true);
-  assert.match(aligned.cueText, /chart|clipped|detour/i);
+  assert.match(aligned.cueText, /study|printout|clipped|jaw set/i);
   assert.doesNotMatch(aligned.cueText, /warm|receptive|relaxed|open/i);
   assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });
@@ -93,7 +93,7 @@ test('explicit time pressure derives time-constrained cues ahead of generic narr
   });
 
   assert.equal(aligned.cueCategory, 'time_constrained');
-  assert.match(aligned.cueText, /schedule|chart|concise point/i);
+  assert.match(aligned.cueText, /schedule|study|doorway/i);
   assert.doesNotMatch(aligned.cueText, /door|ending|exchange is over/i);
   assert.equal(detectInternalNarrationLeak(aligned.cueText), false);
 });

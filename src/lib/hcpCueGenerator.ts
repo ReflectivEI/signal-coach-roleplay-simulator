@@ -84,6 +84,15 @@ const BANNED_CUE_TERMS = [
   "workload",
   "credibility",
   "decision relevance",
+  "decision-relevant",
+  "proof point",
+  "current ask",
+  "signaling",
+  "waiting for",
+  "watching for",
+  "attention tightening",
+  "attention narrows",
+  "less patient",
 ];
 
 const CONCERN_KEYWORDS: Record<ConcernFamily, string[]> = {
@@ -190,7 +199,7 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
       "Narrows their gaze at the study printout, expression measured.",
       "Keeps a finger on the data page and looks back with a tighter expression.",
       "Looks down at the marked-up data, then back with a narrower expression.",
-      "Keeps the evidence page pinned under one hand, attention tightening around the proof point.",
+      "Keeps the evidence page pinned under one hand and looks back with a narrower expression.",
     ],
     workflow: [
       "Keeps a hand on the workflow notes, posture tightening.",
@@ -207,14 +216,14 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
       "Looks back from the chart with a more exacting expression.",
     ],
     time: [
-      "Checks the clock, then looks back with very little room for a detour.",
-      "Keeps their eyes on you for a beat, expression tightening around the ask.",
-      "Glances at the next room, then comes back with almost no room for a detour.",
+      "Checks the clock, then looks back with a tighter expression.",
+      "Keeps steady eye contact, expression more focused.",
+      "Glances at the next room, then comes back with a tighter expression.",
       "Checks the schedule and looks back as if only one useful point will fit here.",
     ],
     general: [
       "Holds steady eye contact, expression narrowing.",
-      "Goes still for a beat, leaving little room for a detour.",
+      "Goes still for a beat and keeps steady eye contact.",
     ],
   },
   time_constrained: {
@@ -244,7 +253,7 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
     ],
     general: [
       "Checks the clock, then looks back with a tighter expression.",
-      "Glances toward the doorway, posture still signaling limited time.",
+      "Glances toward the doorway, posture still tight.",
     ],
   },
   hard_escalation: {
@@ -301,194 +310,24 @@ const CUE_POOLS: Record<CueCategory, Record<ConcernFamily, string[]>> = {
   },
 };
 
-const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Partial<Record<ConcernFamily, string[]>>>>>> = {
-  oncology: {
-    focused_narrowing: {
-      evidence: [
-        "Keeps one finger on the study printout, eyes narrowing at the data.",
-        "Looks from the marked-up trial page back to you without relaxing her expression.",
-      ],
-    },
-    time_constrained: {
-      evidence: [
-        "Checks the clock, then taps the data page once with her pen.",
-        "Glances toward the doorway, trial printout still open beneath one hand.",
-      ],
-    },
-    hard_escalation: {
-      evidence: [
-        "Sets the printout flat on the desk, jaw tightening slightly.",
-        "Holds the data page still, expression clipped around the ask.",
-      ],
-    },
-  },
-  hiv: {
-    focused_narrowing: {
-      workflow: [
-        "Glances at the callback list, then looks back with a tighter expression.",
-        "Keeps one hand on the workflow notes, posture narrowing around the question.",
-      ],
-      access: [
-        "Looks down at the prior-auth note, then back at you without softening.",
-        "Keeps the access paperwork in view, expression tightening around the bottleneck.",
-      ],
-    },
-    time_constrained: {
-      workflow: [
-        "Checks the schedule, then rests a hand on the callback list.",
-        "Glances toward the next room, workflow notes still open beneath one hand.",
-      ],
-    },
-  },
-  cardiology: {
-    focused_narrowing: {
-      access: [
-        "Looks down at the discharge paperwork, then back with a tighter expression.",
-        "Keeps the formulary notes open, posture closing down around the practical ask.",
-      ],
-      workflow: [
-        "Glances at the discharge summary, then looks back with a narrower focus.",
-        "Keeps one hand on the med list, eyes fixed on the next step.",
-      ],
-    },
-    time_constrained: {
-      access: [
-        "Checks the clock, discharge paperwork still open on the desk.",
-        "Glances toward the hallway, formulary notes still in front of her.",
-      ],
-    },
-  },
-  immunology: {
-    focused_narrowing: {
-      screening: [
-        "Keeps the patient chart open, expression tightening around the patient-fit question.",
-        "Looks down at the criteria notes, then back with a more exacting expression.",
-      ],
-      evidence: [
-        "Keeps the study summary pinned under one hand, eyes narrowing at the claim.",
-        "Looks from the data sheet back to you without softening the expression.",
-      ],
-    },
-    neutral_attentive: {
-      workflow: [
-        "Keeps the clinic notes in view and looks back with measured reserve.",
-        "Leaves the intake sheet open, attention steady but guarded.",
-      ],
-    },
-  },
-  pulmonology: {
-    focused_narrowing: {
-      workflow: [
-        "Keeps the follow-up notes open, expression tightening around the practical step.",
-        "Looks down at the monitoring note, then back with a narrower focus.",
-      ],
-      screening: [
-        "Keeps the patient list visible, eyes narrowing at the selection boundary.",
-        "Looks back from the chart with a more exacting expression around who really fits.",
-      ],
-    },
-    time_constrained: {
-      workflow: [
-        "Checks the schedule, follow-up notes still open on the desk.",
-        "Glances toward the next room, workflow notes still under one hand.",
-      ],
-    },
-  },
-  rheumatology: {
-    focused_narrowing: {
-      access: [
-        "Keeps the prior-auth note in view, expression tightening around the staff step.",
-        "Looks down at the access paperwork, then back with a more exacting stare.",
-      ],
-      workflow: [
-        "Keeps one hand on the clinic notes, posture tightening around what this adds for staff.",
-        "Looks toward the intake sheet, then back with a narrower focus on the workflow step.",
-      ],
-    },
-    time_constrained: {
-      access: [
-        "Checks the schedule, prior-auth notes still open in front of them.",
-        "Glances toward the doorway, access paperwork still under one hand.",
-      ],
-    },
-  },
-  dermatology: {
-    focused_narrowing: {
-      workflow: [
-        "Keeps the monitoring note open, expression tightening around who would own the follow-up.",
-        "Looks down at the workflow sheet, then back with a more exacting expression.",
-      ],
-    },
-    neutral_attentive: {
-      workflow: [
-        "Leaves the follow-up notes open and looks back with measured reserve.",
-        "Keeps the clinic list visible, attention steady but guarded.",
-      ],
-    },
-  },
-  nephrology: {
-    focused_narrowing: {
-      general: [
-        "Keeps the protocol notes open, expression narrowing around who would go first.",
-        "Looks down at the patient list, then back with a more exacting expression.",
-      ],
-    },
-  },
-  neurology: {
-    focused_narrowing: {
-      evidence: [
-        "Keeps the conference note in view, expression tightening around the unresolved signal.",
-        "Looks down at the case summary, then back without relaxing the expression.",
-      ],
-    },
-  },
-  hematology: {
-    focused_narrowing: {
-      workflow: [
-        "Keeps the case notes open, posture tightening around what happened with that first patient.",
-        "Looks down at the chart, then back with a more exacting expression around the next case.",
-      ],
-    },
-  },
-  endocrinology: {
-    focused_narrowing: {
-      screening: [
-        "Keeps the patient notes open, expression narrowing around which patients really stay on therapy.",
-        "Looks down at the chart, then back with a tighter focus on who truly fits.",
-      ],
-    },
-  },
-  rare: {
-    neutral_attentive: {
-      screening: [
-        "Keeps the case file open, eyes moving once over the patient notes.",
-        "Leaves the chart visible on the desk and looks back with measured focus.",
-      ],
-    },
-    focused_narrowing: {
-      screening: [
-        "Looks down at the case notes, then back with a more exacting expression.",
-        "Keeps the patient file open, eyes narrowing at the identification question.",
-      ],
-    },
-  },
-};
+const DOMAIN_CUE_POOLS: Partial<Record<string, Partial<Record<CueCategory, Partial<Record<ConcernFamily, string[]>>>>>> = {};
+
 
 const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string[]> = {
   receptive_attentive: [
-    "The HCP is still with you, so the next turn should stay concrete and relevant.",
-    "The HCP is open enough to keep listening, so the next turn needs to stay specific.",
-    "The HCP is giving the conversation a little room, so the next turn should make good use of it.",
+    "The HCP stays oriented toward you, so the next turn should stay concrete and relevant.",
+    "The HCP posture remains open, so the next turn needs to stay specific.",
+    "The HCP leaves the conversation a little room, so the next turn should make good use of it.",
   ],
   neutral_attentive: [
-    "The HCP is still sizing this up, so the next turn has to earn more of their attention.",
-    "The HCP is listening, but the next turn still needs to prove its relevance.",
+    "The HCP keeps a measured posture, so the next turn has to earn more of their attention.",
+    "The HCP is still listening, but the next turn needs to prove its relevance.",
     "The HCP has not closed down the exchange, but the next turn needs to land cleanly.",
   ],
   focused_narrowing: [
-    "The HCP is narrowing in on one issue, so the next response should answer that directly.",
+    "The HCP posture narrows around one issue, so the next response should answer that directly.",
     "The HCP is pressing on one point, so the next turn should stay on that point.",
-    "The HCP is tightening the conversation around one issue, so the next response should stay there.",
+    "The HCP posture tightens around one issue, so the next response should stay there.",
   ],
   time_constrained: [
     "Time is visibly short, so the next move has to be brief and useful.",
@@ -496,9 +335,9 @@ const BEHAVIOR_DESCRIPTION_BANK: Record<CueCategory, string[]> = {
     "Time is tight, so the next move needs to be concise and immediately relevant.",
   ],
   hard_escalation: [
-    "Patience is tightening, so another detour will make this harder to recover.",
-    "The HCP is losing patience, so the next turn has to answer the point directly.",
-    "The exchange is hardening, so the next move cannot afford another sidestep.",
+    "The HCP posture is tighter, so the next turn needs to stay direct.",
+    "The HCP posture is tighter, so the next turn has to answer the point directly.",
+    "The HCP posture is hardening, so the next move cannot afford another sidestep.",
   ],
   terminal_exit: [
     "The interaction is close to ending, so only a concise and relevant final move still fits.",
@@ -514,12 +353,12 @@ const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string[]> = {
     "They still need evidence that feels relevant in practice, not just strong on paper.",
   ],
   workflow: [
-    "They are watching for what this actually changes in the clinic workflow.",
+    "Their gaze stays on the workflow notes as the next response lands.",
     "They still need to hear what changes for staff in the real workflow.",
     "They are focused on whether this creates work or removes it for the team.",
   ],
   access: [
-    "They are focused on the access step that actually slows care down.",
+    "They are focused on the page.",
     "They still need to know what changes in the approval and access process.",
     "They are holding on the access barrier that keeps care from moving forward.",
   ],
@@ -529,13 +368,13 @@ const CONCERN_DESCRIPTION_BANK: Record<ConcernFamily, string[]> = {
     "They are holding on where the real patient boundary sits.",
   ],
   time: [
-    "They are signaling limited time, so the next move needs real economy.",
+    "They check the schedule, so the next move needs real economy.",
     "They do not have much time here, so the next turn needs to stay lean.",
     "They are working inside a short time window, so the next move needs to stay tight.",
   ],
   general: [
     "They still need a clearer reason to stay in the conversation.",
-    "They are signaling that the conversation still has to prove its relevance.",
+    "They hold a professional posture while the conversation works to prove its relevance.",
     "They still need to hear why this matters in a practical way.",
   ],
 };
@@ -615,13 +454,13 @@ function cleanCueText(text: string): string {
     .replace(/\bglances at patient intake forms\b/gi, "glances at the patient intake forms")
     .replace(/\bglances at chart\b/gi, "glances at the chart")
     .replace(/\bglances at notes\b/gi, "glances at the notes")
-    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat,?\s*expression tightening around the ask\b/gi, "keeps steady eye contact, waiting for a more specific answer")
+    .replace(/\bkeeps (?:their|his|her) eyes on you for a beat,?\s*expression more focused\b/gi, "keeps steady eye contact, expression more focused")
     .replace(/\bkeeps (?:their|his|her) eyes on you for a beat\b/gi, "keeps steady eye contact")
-    .replace(/\bexpression tightening around the ask\b/gi, "expression focused on the question")
+    .replace(/\bexpression more focused\b/gi, "expression focused on the page")
     .replace(/\bkeeps the ([a-z -]+) under one hand,?\s*expression tightening around the ([a-z -]+)\b/gi, "keeps the $1 nearby, focused on the $2")
     .replace(/\bunder one hand\b/gi, "nearby")
     .replace(/\bexpression tightening around the ([a-z -]+)\b/gi, "focused on the $1")
-    .replace(/\bgoes still for a beat,?\s*leaving little room for a detour\b/gi, "pauses briefly, waiting for the answer to stay specific")
+    .replace(/\bgoes still for a beat,?\s*leaving little room for a detour\b/gi, "pauses briefly, keeps steady eye contact")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -711,7 +550,7 @@ const SAFETY_EVIDENCE_CUE_POOLS: Partial<Record<CueCategory, string[]>> = {
     "Leaves the hepatic-signal note visible and looks back with professional reserve.",
   ],
   focused_narrowing: [
-    "Keeps a finger on the hepatic-signal note, waiting for the answer to stay specific.",
+    "Keeps a finger on the hepatic-signal note and looks back with a narrower expression.",
     "Looks from the safety section back to you with a narrower expression.",
   ],
   time_constrained: [
@@ -848,10 +687,10 @@ function softenCueLabel(text = ""): string {
     .replace(/\bjaw tightening slightly\b/gi, "expression tightening slightly")
     .replace(/\bclipped, closed expression\b/gi, "measured, closed expression")
     .replace(/\bclipped expression\b/gi, "measured expression")
-    .replace(/\bexpression clipped around the ask\b/gi, "expression tightening around the ask")
-    .replace(/\bvisibly less patient with another setup pass\b/gi, "waiting for a more direct answer")
-    .replace(/\bno longer following another detour\b/gi, "waiting for the answer to stay on point")
-    .replace(/\bsignaling that only\b/gi, "leaving room for only")
+    .replace(/\bexpression clipped around the ask\b/gi, "expression more focused")
+    .replace(/\bvisibly\s+less\s+patient\s+with\s+another\s+setup\s+pass\b/gi, "exhales quietly")
+    .replace(/\bholding steady eye contact\b/gi, "keeps steady eye contact")
+    .replace(/\bsignaling\s+that\s+only\b/gi, "leaving room for only")
     .replace(/\bwill keep the exchange going\b/gi, "to keep the exchange focused");
 }
 
