@@ -4462,7 +4462,7 @@ Return ONLY valid JSON:
   }
 
   if (predictiveRouteLockActive) {
-    suppressedRewriteLayers.add("final_spoken_realism_normalization");
+    suppressedRewriteLayers.push("final_spoken_realism_normalization");
   } else {
     const beforeFinalNormalization = hcpReply;
     hcpReply = normalizeHcpSpokenRealism(hcpReply);
