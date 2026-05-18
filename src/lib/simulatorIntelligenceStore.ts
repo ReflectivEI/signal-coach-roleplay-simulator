@@ -224,35 +224,7 @@ function hasTimeTopic(text = ""): boolean {
 }
 
 function hasSpecificityBoundary(text = ""): boolean {
-  return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause|still waiting|same issue|stuck|narrow this)\b/.test(text);
-}
-
-function compactWords(value = ""): string[] {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((word) => word.length >= 4);
-}
-
-function textSimilarity(a = "", b = ""): number {
-  const wordsA = new Set(compactWords(a));
-  const wordsB = new Set(compactWords(b));
-  if (!wordsA.size || !wordsB.size) return 0;
-  let overlap = 0;
-  wordsA.forEach((word) => {
-    if (wordsB.has(word)) overlap += 1;
-  });
-  return overlap / Math.max(wordsA.size, wordsB.size);
-}
-
-const SAFETY_BOUNDARY_RESPONSE = "That is an important safety question. I can stay with the approved safety information, and if you want case-level detail I should connect you with the appropriate medical resource.";
-const COMPLIANCE_BOUNDARY_RESPONSE = "I want to keep this accurate and within approved information. I can speak to what is in the approved materials and route anything more specific to the appropriate resource.";
-
-function latestRepRepeatedBoundary(turns: SimulatorIntelligenceInput["turns"] = []): boolean {
-  const latestRep = latestRepText(turns);
-  return textSimilarity(latestRep, SAFETY_BOUNDARY_RESPONSE) >= 0.72
-    || textSimilarity(latestRep, COMPLIANCE_BOUNDARY_RESPONSE) >= 0.72;
+  return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause)\b/.test(text);
 }
 
 function pressureFromSignals(input: SimulatorIntelligenceInput): PressureSignal[] {
@@ -594,26 +566,19 @@ export function generatePredictiveChain(input: SimulatorIntelligenceInput, traje
     ],
   };
 
-  const boundaryLoop = latestRepRepeatedBoundary(input.turns) && hasSpecificityBoundary(latestHcpText(input.turns));
-  const intervention: ChainIntervention = boundaryLoop
+  const intervention: ChainIntervention = safety
     ? {
-      label: "Recover from repeated boundary language",
-      rationale: "The HCP has already heard the compliance boundary and is now testing whether the rep can make the approved information useful without overstepping.",
-      safestResponse: "You are right; I have stayed at the boundary without answering what would make this useful. I can stay with the approved safety information and point to the specific approved data we can discuss, then route case-level interpretation to medical.",
+      label: "Move to approved safety boundary",
+      rationale: "The safest intervention point is before the HCP asks for case-specific interpretation.",
+      safestResponse: "That is an important safety question. I can stay with the approved safety information, and if you want case-level detail I should connect you with the appropriate medical resource.",
     }
-    : safety
-      ? {
-        label: "Move to approved safety boundary",
-        rationale: "The safest intervention point is before the HCP asks for case-specific interpretation.",
-        safestResponse: SAFETY_BOUNDARY_RESPONSE,
-      }
-      : {
-        label: access ? "Re-anchor discussion to approved access support" : "Re-anchor discussion to approved differentiation",
-        rationale: "The best intervention point is before the HCP turns the current pressure into a broader objection chain.",
-        safestResponse: access
-          ? "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process."
-          : "Before I answer too broadly, can I clarify which part matters most for your decision: patient fit, evidence, workflow, or access?",
-      };
+    : {
+      label: access ? "Re-anchor discussion to approved access support" : "Re-anchor discussion to approved differentiation",
+      rationale: "The best intervention point is before the HCP turns the current pressure into a broader objection chain.",
+      safestResponse: access
+        ? "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process."
+        : "Before I answer too broadly, can I clarify which part matters most for your decision: patient fit, evidence, workflow, or access?",
+    };
 
   return {
     id: hashId("chain", `${trigger}-${trajectory.currentState}-${posture.id}`),

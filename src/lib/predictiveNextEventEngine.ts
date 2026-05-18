@@ -339,20 +339,15 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
   const activeSafety = includesAny(activeConcernText, /\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case-level|patient-specific)\b/);
   const activeAccess = includesAny(activeConcernText, /\b(access|prior auth|authorization|coverage|formulary|payer|copay|approval)\b/);
   const activeEvidence = includesAny(activeConcernText, /\b(data|evidence|trial|study|endpoint|subgroup|clinical|treatment decision|decision it changes)\b/);
-  const activeStall = includesAny(latestHcp, /\b(stuck|same issue|not addressing|not answering|pause unless|stop here|still not|still waiting|does not address|didn't answer|narrow this|specific decision|not useful)\b/);
-  const activeSpecificityDemand = includesAny(latestHcp, /\b(specific|specific data|specific decision|narrow this|patient decision|patients like mine|decision in front of me|what data|what specific)\b/);
+  const activeStall = includesAny(latestHcp, /\b(stuck|same issue|not addressing|not answering|pause unless|stop here|still not|does not address|didn't answer)\b/);
   const activeCompetitor = includesAny(activeConcernText, /\b(competitor|switch|current therapy|already using|patients do well|other option|standard of care)\b/);
   const latestRepUsedAnyRecommended = Object.values(EVENT_BASELINES).some((baseline) => textSimilarity(latestRep, baseline.safestResponse) >= 0.72);
-  const latestRepRepeatedSafetyBoundary = textSimilarity(latestRep, EVENT_BASELINES.safety_concern_escalation.safestResponse) >= 0.72;
-  const latestRepRepeatedComplianceBoundary = textSimilarity(latestRep, EVENT_BASELINES.compliance_risk.safestResponse) >= 0.72;
-  const repeatedBoundaryAfterSpecificAsk = activeStall && activeSpecificityDemand && (latestRepRepeatedSafetyBoundary || latestRepRepeatedComplianceBoundary);
 
   const staleRecommendationPenalty = (type: PredictedNextEventType, active = true): number => {
     const baseline = EVENT_BASELINES[type].safestResponse;
     const recentUses = countRecentRecommendedUses(input, baseline);
     if (!recentUses) return 0;
-    const repeatedBoundaryPenalty = repeatedBoundaryAfterSpecificAsk && ["safety_concern_escalation", "compliance_risk"].includes(type) ? 0.32 : 0;
-    return (active ? 0.16 : 0.32) + Math.min(0.22, (recentUses - 1) * 0.1) + repeatedBoundaryPenalty;
+    return (active ? 0.12 : 0.28) + Math.min(0.16, (recentUses - 1) * 0.08);
   };
 
   const candidates: Array<{ type: PredictedNextEventType; probability: number; horizon: number; evidence: PredictedEventEvidence[]; compliance?: boolean }> = [
@@ -376,8 +371,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (/\b(off label|guarantee|safe for all|comparison|superior|head-to-head|case-level|unapproved)\b/.test(activeConcernText + complianceRules) ? 0.34 : 0)
         + (/\bcompetitor|switch|better than|versus|vs\.\b/.test(activeConcernText) ? 0.12 : 0)
         + (speakingFast ? 0.08 : 0)
-        + (latestRepUsedAnyRecommended && activeStall ? 0.08 : 0)
-        - (repeatedBoundaryAfterSpecificAsk ? 0.26 : 0),
+        + (latestRepUsedAnyRecommended && activeStall ? 0.08 : 0),
       horizon: 12,
       compliance: true,
       evidence: [
@@ -391,8 +385,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (lowListening ? 0.24 : 0)
         + (riskLevel === "high" ? 0.14 : 0)
         + (activeStall ? 0.28 : 0)
-        + (latestRepUsedAnyRecommended && activeStall ? 0.12 : 0)
-        + (repeatedBoundaryAfterSpecificAsk ? 0.24 : 0),
+        + (latestRepUsedAnyRecommended && activeStall ? 0.12 : 0),
       horizon: 20,
       evidence: [
         buildEvidence("Listening alignment", `Listening responsiveness is ${listeningScore.toFixed(1)}.`, "metrics"),
@@ -405,7 +398,6 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (lowControl ? 0.22 : 0)
         + (/\b(maybe|later|send me|i'll think|not now|no next step|same issue|stuck)\b/.test(activeConcernText + historyOutcomes) ? 0.22 : 0)
         + (latestRepUsedAnyRecommended && activeStall ? 0.1 : 0)
-        + (repeatedBoundaryAfterSpecificAsk ? 0.18 : 0)
         + (fillers >= 4 ? 0.06 : 0),
       horizon: 28,
       evidence: [
@@ -431,8 +423,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (activeSafety ? 0.44 : 0)
         + (!activeSafety && /\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case)\b/.test(transcriptContext) ? 0.08 : 0)
         + (/\bmedical|mi|msl|case-level|patient-specific\b/.test(complianceRules + activeConcernText) ? 0.1 : 0)
-        - staleRecommendationPenalty("safety_concern_escalation", activeSafety)
-        - (repeatedBoundaryAfterSpecificAsk ? 0.28 : 0),
+        - staleRecommendationPenalty("safety_concern_escalation", activeSafety),
       horizon: 14,
       compliance: true,
       evidence: [
