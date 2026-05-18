@@ -4461,9 +4461,13 @@ Return ONLY valid JSON:
   hcpReply = applyRecentHcpLoopGuardWithTrace(hcpReply, "terminal_recent_hcp_loop_guard");
   }
 
-  const beforeFinalNormalization = hcpReply;
-  hcpReply = normalizeHcpSpokenRealism(hcpReply);
-  traceMutation("final_spoken_realism_normalization", beforeFinalNormalization, hcpReply, { category: "normalization_guard" });
+  if (predictiveRouteLockActive) {
+    suppressedRewriteLayers.add("final_spoken_realism_normalization");
+  } else {
+    const beforeFinalNormalization = hcpReply;
+    hcpReply = normalizeHcpSpokenRealism(hcpReply);
+    traceMutation("final_spoken_realism_normalization", beforeFinalNormalization, hcpReply, { category: "normalization_guard" });
+  }
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
