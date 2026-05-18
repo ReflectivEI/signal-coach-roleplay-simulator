@@ -65,6 +65,10 @@ export function evaluateAdaptiveResponse(payload) {
     return request("/api/rps/evaluate-response", payload);
 }
 
+export function generatePredictiveHcpResponse(payload) {
+    return request("/api/rps/predictive-hcp-response", payload);
+}
+
 export function saveAdaptiveSession(payload) {
     return request("/api/rps/save-session", payload);
 }

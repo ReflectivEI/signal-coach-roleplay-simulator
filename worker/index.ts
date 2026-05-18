@@ -1080,6 +1080,157 @@ Return ONLY the final HCP line.`;
     return "";
 }
 
+async function buildPredictiveBuilderHcpVoiceResult(
+    body: Record<string, unknown>,
+    env: Env,
+    route: string,
+): Promise<Record<string, unknown>> {
+    const transcript = text(body.rep_response_transcript);
+    if (!transcript) {
+        return { error: "rep_response_transcript is required", status: 400 };
+    }
+
+    const scenarioContext = (body.scenario_context || {}) as Record<string, unknown>;
+    const repSelectedTemperature = requireAdaptiveRealismContract(body, route);
+    const conversationMemory = (body.conversation_memory || scenarioContext.conversation_memory || {}) as Record<string, unknown>;
+    const selectedDropdowns = asObject(body.selected_dropdowns as Record<string, unknown>, {} as Record<string, unknown>);
+    const hcpBrain = asObject(
+        (body.hcp_brain || scenarioContext.hcp_brain) as Record<string, unknown>,
+        buildHcpBrain({
+            disease_state: selectedDropdowns.disease_state || body.disease_state,
+            specialty_hcp_type: selectedDropdowns.specialty_hcp_type || selectedDropdowns.hcp_type || body.hcp_type,
+            hcp_type: selectedDropdowns.hcp_type || body.hcp_type,
+            journey_stage: selectedDropdowns.journey_stage || body.journey_stage,
+            interaction_pressure: selectedDropdowns.interaction_pressure || body.interaction_pressure,
+            influence_driver: selectedDropdowns.influence_driver || body.influence_driver,
+            behavior_archetype: selectedDropdowns.behavior_archetype || body.behavior_archetype,
+            initial_temperature: repSelectedTemperature,
+            live_temperature: repSelectedTemperature,
+        }) as Record<string, unknown>,
+    );
+    const hcpBrainContext = text(
+        scenarioContext.predictive_hcp_brain_context,
+        buildHcpBrainPersonaContext(hcpBrain),
+    );
+    const cueSignal = text(scenarioContext.cue_signal, "cue");
+    const previousHcpState = (body.hcp_state || conversationMemory.hcp_state || scenarioContext.hcp_state) as Record<string, unknown> || null;
+
+    const validatorEvaluation = evaluateRepResponse({
+        repResponseTranscript: transcript,
+        voiceMetadata: body.voice_metadata || {},
+        cueSignal,
+        repSelectedTemperature,
+        scenarioContext,
+        conversationMemory,
+        hcpBrain,
+        previousHcpState,
+    });
+    const fullEvalForState = {
+        overall_score: Number((validatorEvaluation as Record<string, unknown>).overall_score || 0),
+        outcome_analysis: (validatorEvaluation as Record<string, unknown>).outcome_analysis,
+        hcp_brain_alignment: evaluateRepAgainstBrain(transcript, hcpBrain),
+    };
+    const voiceAdaptationForState = asObject(
+        (validatorEvaluation as Record<string, unknown>).voice_behavior_adaptation as Record<string, unknown>,
+        {} as Record<string, unknown>,
+    );
+    const fullStateProgression = computeHcpStateProgression({
+        hcpBrain,
+        previousHcpState,
+        repResponseTranscript: transcript,
+        evaluation: fullEvalForState,
+        voiceBehaviorAdaptation: voiceAdaptationForState,
+        liveTemperature: repSelectedTemperature,
+        conversationMemory,
+        scenarioContext,
+    });
+
+    const deterministicSimulatedResponse = text(fullStateProgression.simulated_hcp_next_response);
+    const predictivePromptState = stripAuthoredHcpStateForPredictivePrompt(
+        asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
+    );
+    const predictiveAuthoredResponse = sanitizePredictiveHcpLine(await authorPredictiveHcpResponse({
+        env,
+        transcript,
+        scenarioContext,
+        conversationMemory,
+        hcpBrain,
+        hcpBrainContext,
+        liveTemperature: repSelectedTemperature,
+        deterministicLine: deterministicSimulatedResponse,
+        hcpState: predictivePromptState,
+        hcpStateDelta: asObject(fullStateProgression.hcp_state_delta as Record<string, unknown>, {} as Record<string, unknown>),
+        responseType: text(fullStateProgression.hcp_response_type),
+        responseTypeReason: text(fullStateProgression.response_type_reason),
+        progressionExplanation: text(fullStateProgression.hcp_progression_explanation),
+        intentBucket: text(fullStateProgression.intent_bucket),
+    }));
+
+    if (!predictiveAuthoredResponse) {
+        return {
+            error: "predictive_builder_hcp_authoring_failed",
+            details: "Predictive Builder HCP voice route did not return a usable HCP line. Deterministic HCP fallback authoring is disabled by contract.",
+            predictive_hcp_response_source: "predictive_builder_test_hcp_response_unavailable",
+            hcp_authoring_contract: "predictive_builder_test_hcp_response_required",
+            hcp_response_type: fullStateProgression.hcp_response_type,
+            intent_bucket: fullStateProgression.intent_bucket,
+            anti_loop_intervention_triggered: Boolean(fullStateProgression.anti_loop_intervention_triggered),
+            semantic_similarity_max: fullStateProgression.semantic_similarity_max,
+            status: 502,
+        };
+    }
+
+    const enrichedHcpState = {
+        ...asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
+        last_hcp_response_text: predictiveAuthoredResponse,
+        hcp_response_history: replaceLastHistoryLine(
+            asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>).hcp_response_history,
+            predictiveAuthoredResponse,
+        ),
+    };
+
+    return {
+        simulated_hcp_next_response: predictiveAuthoredResponse,
+        hcp_reply: predictiveAuthoredResponse,
+        predictive_hcp_response_source: "predictive_builder_test_hcp_response",
+        hcp_authoring_contract: "predictive_builder_test_hcp_response_required",
+        hcp_state: enrichedHcpState,
+        hcp_state_delta: fullStateProgression.hcp_state_delta,
+        hcp_response_type: fullStateProgression.hcp_response_type,
+        response_type_reason: fullStateProgression.response_type_reason,
+        previous_response_types: fullStateProgression.previous_response_types,
+        response_type_transition_explanation: fullStateProgression.response_type_transition_explanation,
+        hcp_progression_explanation: fullStateProgression.hcp_progression_explanation,
+        anti_loop_intervention_triggered: Boolean(fullStateProgression.anti_loop_intervention_triggered),
+        anti_loop_intervention_reason: fullStateProgression.anti_loop_intervention_reason,
+        intent_bucket: fullStateProgression.intent_bucket,
+        semantic_similarity_max: fullStateProgression.semantic_similarity_max,
+        trailing_bucket_run: fullStateProgression.trailing_bucket_run,
+        conversation_memory: {
+            ...asObject((validatorEvaluation as Record<string, unknown>).conversation_memory as Record<string, unknown>, {} as Record<string, unknown>),
+            hcp_state: enrichedHcpState,
+            last_hcp_response_text: predictiveAuthoredResponse,
+            response_type_history: Array.isArray(conversationMemory.response_type_history)
+                ? [...(conversationMemory.response_type_history as unknown[]), fullStateProgression.hcp_response_type].filter(Boolean).slice(-8)
+                : [fullStateProgression.hcp_response_type].filter(Boolean),
+            hcp_response_history: Array.isArray(conversationMemory.hcp_response_history)
+                ? [...(conversationMemory.hcp_response_history as unknown[]), predictiveAuthoredResponse].filter(Boolean).slice(-8)
+                : [predictiveAuthoredResponse].filter(Boolean),
+            intent_bucket_history: Array.isArray(conversationMemory.intent_bucket_history)
+                ? [...(conversationMemory.intent_bucket_history as unknown[]), fullStateProgression.intent_bucket].filter(Boolean).slice(-8)
+                : [fullStateProgression.intent_bucket].filter(Boolean),
+        },
+    };
+}
+
+async function handlePredictiveHcpResponse(request: Request, env: Env): Promise<Response> {
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    const result = await buildPredictiveBuilderHcpVoiceResult(body, env, "/api/rps/predictive-hcp-response");
+    const status = Number(result.status || 200);
+    const { status: _status, ...payload } = result;
+    return json(request, payload, status);
+}
+
 async function readSessions(env: Env): Promise<unknown[]> {
     if (env.APP_DATA_KV) {
         const raw = await env.APP_DATA_KV.get(SESSION_KEY);
@@ -1610,6 +1761,9 @@ function routeAdaptiveRps(pathname: string, request: Request, env: Env): Promise
     }
     if (pathname === "/api/rps/evaluate-response" && request.method === "POST") {
         return handleEvaluateResponse(request, env);
+    }
+    if (pathname === "/api/rps/predictive-hcp-response" && request.method === "POST") {
+        return handlePredictiveHcpResponse(request, env);
     }
     if (pathname === "/api/rps/save-session" && request.method === "POST") {
         return handleSaveSession(request, env);

@@ -21,7 +21,7 @@ import { resolveObservedCue } from "@/lib/hcpCueGenerator";
 import { buildPredictiveSeedFromScenario } from "@/lib/predictiveSeedResolver";
 import { buildPredictivePromptContext, buildPredictiveRuntimeLens } from "@/lib/predictiveRuntimeService";
 import { requireRealismContract } from "@/lib/scenarioInputResolver";
-import { evaluateAdaptiveResponse } from "@/features/rps/api";
+import { evaluateAdaptiveResponse, generatePredictiveHcpResponse } from "@/features/rps/api";
 import { toast } from "@/components/ui/use-toast";
 
 function createSafeId() {
@@ -78,7 +78,7 @@ function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
   };
 }
 
-function buildSimulatorPredictiveRoutePayload({
+function buildSimulatorPredictiveHcpPayload({
   repText = "",
   scenario = {},
   session = {},
@@ -829,7 +829,7 @@ export default function Simulator() {
 
       let authoritativePredictiveRoute = null;
       try {
-        const predictiveRouteResult = await evaluateAdaptiveResponse(buildSimulatorPredictiveRoutePayload({
+        const predictiveRouteResult = await generatePredictiveHcpResponse(buildSimulatorPredictiveHcpPayload({
           repText,
           scenario: scenarioWithTemperature,
           session: {
@@ -845,8 +845,8 @@ export default function Simulator() {
         }));
         const predictiveLine = String(predictiveRouteResult?.simulated_hcp_next_response || "").trim();
         const predictiveSource = String(predictiveRouteResult?.predictive_hcp_response_source || "").trim();
-        if (!predictiveLine || predictiveSource !== "predictive_brain") {
-          throw new Error("Predictive Brain HCP route did not return an authoritative HCP line.");
+        if (!predictiveLine || predictiveSource !== "predictive_builder_test_hcp_response") {
+          throw new Error("Predictive Builder HCP voice route did not return an authoritative HCP line.");
         }
         authoritativePredictiveRoute = {
           line: predictiveLine,

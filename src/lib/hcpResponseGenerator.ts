@@ -3780,7 +3780,12 @@ export async function generateHcpResponse(
     && typeof runtimeMemoryArg.authoritativePredictiveRoute === "object"
     ? runtimeMemoryArg.authoritativePredictiveRoute
     : null;
-  const authoritativePredictiveLine = authoritativePredictiveRoute?.source === "predictive_brain"
+  const authoritativePredictiveRouteSource = String(authoritativePredictiveRoute?.source || "").trim();
+  const predictiveRouteSourceLocked = [
+    "predictive_brain",
+    "predictive_builder_test_hcp_response",
+  ].includes(authoritativePredictiveRouteSource);
+  const authoritativePredictiveLine = predictiveRouteSourceLocked
     ? String(authoritativePredictiveRoute?.line || "").trim()
     : "";
   const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
@@ -4527,7 +4532,7 @@ Return ONLY valid JSON:
     authority_source: predictiveContextReceived ? "predictive_brain" : "predictive_brain_fallback_mode",
     predictive_brain_authoritative: predictiveContextReceived || Boolean(authoritativePredictiveLine),
     worker_predictive_route_authoritative: Boolean(authoritativePredictiveLine),
-    worker_predictive_route_source: authoritativePredictiveRoute?.source || null,
+    worker_predictive_route_source: authoritativePredictiveRouteSource || null,
     test_hcp_response_quality_contract: predictiveContextReceived
       ? "predictive_builder_quality_bar"
       : "scenario_metadata_predictive_fallback",

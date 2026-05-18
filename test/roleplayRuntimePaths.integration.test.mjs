@@ -366,7 +366,7 @@ test("RPS HCP dialogue locks Predictive Builder/Predictive Brain output before d
   );
 
   assert.match(rolePlaySource, /draftResponseSource = "predictive_route_authoritative"/);
-  assert.match(rolePlaySource, /predictiveSource === "predictive_brain"/);
+  assert.match(rolePlaySource, /predictiveSource === "predictive_builder_test_hcp_response"/);
   assert.match(rolePlaySource, /predictiveAuthoritativeDialogue = nextHcpDialogue/);
   assert.match(rolePlaySource, /function cleanPredictiveAuthoritativeDialogue/);
   assert.match(rolePlaySource, /const preservePredictiveAuthority = \(layerName = "downstream_rewrite"\) => \{/);
@@ -521,12 +521,14 @@ test("active simulator routes HCP authoring through Worker predictive brain befo
     "utf8",
   );
 
-  assert.match(simulatorSource, /buildSimulatorPredictiveRoutePayload/);
-  assert.match(simulatorSource, /const predictiveRouteResult = await evaluateAdaptiveResponse/);
+  assert.match(simulatorSource, /buildSimulatorPredictiveHcpPayload/);
+  assert.match(simulatorSource, /const predictiveRouteResult = await generatePredictiveHcpResponse/);
   assert.match(simulatorSource, /predictive_hcp_response_source/);
+  assert.match(simulatorSource, /predictive_builder_test_hcp_response/);
   assert.match(simulatorSource, /authoritativePredictiveRoute = \{/);
   assert.match(simulatorSource, /authoritativePredictiveRoute,/);
   assert.match(simulatorSource, /deterministic HCP fallback authoring is disabled/);
+  assert.doesNotMatch(simulatorSource, /evaluateAdaptiveResponse\(buildSimulatorPredictive/);
 
   assert.match(generatorSource, /authoritativePredictiveRoute/);
   assert.match(generatorSource, /primaryGenerationSource = "worker_predictive_brain_route_authoritative"/);
@@ -539,6 +541,18 @@ test("active simulator routes HCP authoring through Worker predictive brain befo
   assert.match(generatorSource, /first_turn_rep_adaptation/);
   assert.match(generatorSource, /initial_access_surface/);
   assert.match(generatorSource, /realism_lever_dialogue/);
+});
+
+test("live role-play chat uses dedicated Predictive Builder HCP voice endpoint, not rep evaluation", () => {
+  const rolePlaySource = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(rolePlaySource, /buildPredictiveHcpVoicePayload/);
+  assert.match(rolePlaySource, /\/api\/rps\/predictive-hcp-response/);
+  assert.match(rolePlaySource, /predictiveSource === "predictive_builder_test_hcp_response"/);
+  assert.doesNotMatch(rolePlaySource, /fetch\('\/api\/rps\/evaluate-response'/);
 });
 
 
@@ -556,13 +570,14 @@ test("RPS HCP contract disables deterministic HCP fallback authoring", () => {
     "utf8",
   );
 
-  assert.match(workerSource, /predictive_hcp_authoring_failed/);
-  assert.match(workerSource, /predictive_brain_required/);
+  assert.match(workerSource, /predictive_builder_hcp_authoring_failed/);
+  assert.match(workerSource, /predictive_builder_test_hcp_response_required/);
+  assert.match(workerSource, /\/api\/rps\/predictive-hcp-response/);
   assert.doesNotMatch(workerSource, /predictive_hcp_response_source = predictiveAuthoredResponse[\s\S]*deterministic_fallback/);
   assert.doesNotMatch(workerSource, /deterministic_validator_hcp_next_response/);
 
   assert.match(simulatorSource, /Predictive Brain HCP route failed; deterministic HCP fallback authoring is disabled/);
-  assert.match(simulatorSource, /predictiveSource !== "predictive_brain"/);
+  assert.match(simulatorSource, /predictiveSource !== "predictive_builder_test_hcp_response"/);
 
   assert.match(generatorSource, /Predictive HCP generation failed; deterministic HCP fallback authoring is disabled/);
   assert.match(generatorSource, /Predictive HCP safeguard regeneration failed; deterministic HCP fallback authoring is disabled/);

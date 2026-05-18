@@ -239,7 +239,7 @@ function sanitizeScenarioTextForHcpRuntime(value = "") {
     .trim();
 }
 
-function buildPredictiveRoutePayload({
+function buildPredictiveHcpVoicePayload({
   repMessage = "",
   scenario = {},
   nextHcpState = "neutral",
@@ -4454,7 +4454,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         draftResponseSource = "terminal_forced";
         nextHcpDialogue = terminalCloseFallback;
       } else {
-        const predictiveRoutePayload = buildPredictiveRoutePayload({
+        const predictiveRoutePayload = buildPredictiveHcpVoicePayload({
           repMessage,
           scenario,
           nextHcpState,
@@ -4480,7 +4480,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           },
         });
         try {
-          const predictiveRes = await fetch('/api/rps/evaluate-response', {
+          const predictiveRes = await fetch('/api/rps/predictive-hcp-response', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(predictiveRoutePayload),
@@ -4489,7 +4489,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
             const predictiveData = await predictiveRes.json();
             const predictiveLine = String(predictiveData?.simulated_hcp_next_response || "").trim();
             const predictiveSource = String(predictiveData?.predictive_hcp_response_source || "").trim();
-            if (predictiveLine && predictiveSource === "predictive_brain") {
+            if (predictiveLine && predictiveSource === "predictive_builder_test_hcp_response") {
               nextHcpDialogue = normalizeHcpDialoguePunctuation(predictiveLine).trim();
               predictiveAuthoritativeDialogue = nextHcpDialogue;
               draftResponseBeforePostProcessing = nextHcpDialogue;
