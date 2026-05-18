@@ -2451,88 +2451,6 @@ function buildGenericLiveAdaptiveReply(repMessage: string, scenario: any): strin
     : "I'm doing alright. What were you hoping to talk through?";
 }
 
-function repAsksExplicitDecisionLaneChoice(repMessage: string): boolean {
-  const normalized = String(repMessage || "").toLowerCase().replace(/\s+/g, " ").trim();
-  if (!normalized) return false;
-
-  const hasChoiceLanguage = /\b(which|what)\s+(?:part|area|lane|piece|concern|issue)\s+(?:matters|is most important|should we start with)|\bmatters most for your decision\b|\bclarify which part\b/.test(normalized);
-  const hasChoiceSet = /\bpatient fit\b/.test(normalized)
-    && /\bevidence\b/.test(normalized)
-    && /\bworkflow\b/.test(normalized)
-    && /\baccess\b/.test(normalized);
-
-  return hasChoiceLanguage || hasChoiceSet;
-}
-
-function inferScenarioDecisionLane(scenario: any): FirstTurnRepTopic {
-  const scenarioText = `${scenario?.objective || ""} ${scenario?.description || ""} ${scenario?.openingScene || ""}`.toLowerCase();
-  const pressures = Array.isArray(scenario?.interactionPressure)
-    ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
-    : [];
-  const journeyStage = String(scenario?.journeyStage || "").toLowerCase();
-
-  if (pressures.includes("access_barrier") || /\bprior auth|prior authorization|coverage|formulary|payer|approval|access\b/.test(scenarioText)) return "access";
-  if (pressures.includes("operationally_constrained") || /\bstaff|workflow|process|office|clinic|callback|handoff|rework\b/.test(scenarioText)) return "workflow";
-  if (/\bpatient fit|patient profile|subgroup|screening|selection|eligibility\b/.test(scenarioText)) return "screening";
-  if (/clinical_value|objection_handling/.test(journeyStage) || /\bevidence|study|trial|data|outcome|endpoint|safety|hepatic\b/.test(scenarioText)) return "evidence";
-  return "general";
-}
-
-function inferReplyDecisionLane(reply: string): FirstTurnRepTopic {
-  const normalized = String(reply || "").toLowerCase();
-  if (/\bprior auth|prior authorization|coverage|formulary|payer|approval|access\b/.test(normalized)) return "access";
-  if (/\bstaff|workflow|process|office|clinic|callback|handoff|rework|team\b/.test(normalized)) return "workflow";
-  if (/\bpatient fit|patient profile|subgroup|screening|selection|eligibility|which patients|patient group\b/.test(normalized)) return "screening";
-  if (/\bevidence|study|trial|data|outcome|endpoint|safety|hepatic|decision threshold|treatment decision\b/.test(normalized)) return "evidence";
-  return "general";
-}
-
-function formatDecisionLaneAcknowledgement(lane: FirstTurnRepTopic): string {
-  if (lane === "access") return "Access is the part that matters most.";
-  if (lane === "workflow") return "Workflow is the part that matters most.";
-  if (lane === "screening") return "Patient fit is the part that matters most.";
-  if (lane === "evidence" || lane === "clinical_value" || lane === "study_follow_up") return "The evidence question is the part that matters most.";
-  return "The decision point is what matters most.";
-}
-
-export function applyDecisionLaneChoiceAcknowledgement(reply: string, repMessage: string, scenario: any): string {
-  const value = String(reply || "").trim();
-  if (!value || !repAsksExplicitDecisionLaneChoice(repMessage)) return value;
-
-  const replyLane = inferReplyDecisionLane(value);
-  const lane = replyLane === "general" ? inferScenarioDecisionLane(scenario) : replyLane;
-  const acknowledgement = formatDecisionLaneAcknowledgement(lane);
-  const normalized = value.toLowerCase();
-
-  if (normalized.startsWith(acknowledgement.toLowerCase())) return value;
-
-  if (lane === "access") {
-    const adjusted = value
-      .replace(/^if this is about access,\s*/i, "Access is the part that matters most, so ")
-      .replace(/^if we're talking about access,\s*/i, "Access is the part that matters most, so ");
-    return adjusted === value ? `${acknowledgement} ${value}` : adjusted;
-  }
-  if (lane === "workflow") {
-    const adjusted = value
-      .replace(/^if this is about workflow,\s*/i, "Workflow is the part that matters most, so ")
-      .replace(/^if we're talking about workflow,\s*/i, "Workflow is the part that matters most, so ");
-    return adjusted === value ? `${acknowledgement} ${value}` : adjusted;
-  }
-  if (lane === "screening") {
-    const adjusted = value
-      .replace(/^if (?:this is|you're talking) about patient fit,\s*/i, "Patient fit is the part that matters most, so ");
-    return adjusted === value ? `${acknowledgement} ${value}` : adjusted;
-  }
-  if (lane === "evidence" || lane === "clinical_value" || lane === "study_follow_up") {
-    const adjusted = value
-      .replace(/^if this is about (?:the )?(?:evidence|study),\s*/i, "The evidence question is the part that matters most, so ")
-      .replace(/^if we're talking about (?:the )?(?:evidence|study),\s*/i, "The evidence question is the part that matters most, so ");
-    return adjusted === value ? `${acknowledgement} ${value}` : adjusted;
-  }
-
-  return `${acknowledgement} ${value}`;
-}
-
 function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): string {
   const repText = String(repMessage || "").trim();
   if (!repText) return "";
@@ -2542,10 +2460,6 @@ function buildFirstTurnRepAcknowledgement(repMessage: string, scenario: any): st
     ? scenario.interactionPressure.map((value: string) => String(value).toLowerCase())
     : [];
   const timeConstrained = pressures.includes("time_constrained");
-
-  if (repAsksExplicitDecisionLaneChoice(repMessage)) {
-    return formatDecisionLaneAcknowledgement(inferScenarioDecisionLane(scenario));
-  }
 
   if (/\bjama\b|\bstudy\b|\btrial\b|\bdata\b|\bpaper\b|\bevidence\b/.test(normalized)) {
     return "";
@@ -2589,7 +2503,7 @@ function withFirstTurnRepAcknowledgement(reply: string, repMessage: string, scen
     return value;
   }
 
-  return applyDecisionLaneChoiceAcknowledgement(`${acknowledgement} ${value}`, repMessage, scenario);
+  return `${acknowledgement} ${value}`;
 }
 
 function repOpensWithCourtesy(repMessage: string): boolean {
@@ -4319,7 +4233,6 @@ Return ONLY valid JSON:
 
   if (!hasPriorHcpTurns(transcript)) {
     hcpReply = withFirstTurnRepAcknowledgement(hcpReply, repMessage, scenario);
-    hcpReply = applyDecisionLaneChoiceAcknowledgement(hcpReply, repMessage, scenario);
     hcpReply = applyHcpQaTwinSurfaceGuard({
       hcpReply,
       scenario,
@@ -4377,7 +4290,6 @@ Return ONLY valid JSON:
     escalationMemory,
     transcript,
   });
-  hcpReply = applyDecisionLaneChoiceAcknowledgement(hcpReply, repMessage, scenario);
   hcpReply = applyHcpQaTwinSurfaceGuard({
     hcpReply,
     scenario,
