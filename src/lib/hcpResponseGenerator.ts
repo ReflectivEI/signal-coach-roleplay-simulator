@@ -32,6 +32,7 @@ import { applyHcpResponseSurface } from "./hcpResponseSurface";
 import { buildRealismBackbonePrompt } from "./hcpRealismBackbone";
 import { getScenarioConcernFamily, scenarioMatchesConcernFamily } from "./scenarioFamilyRegistry";
 import { deriveUISelectionFromBrain, mapUIToBrain, requireRealismContract } from "./scenarioInputResolver";
+import { dedupeRepeatedHcpAsks, normalizeHcpSpokenRealism } from "./roleplay/dialogueGrammar.js";
 
 export const HCP_GENERATOR_VERSION = "runtime-contract-v2";
 const HCP_PRIMARY_TIMEOUT_MS = 18000;
@@ -2270,6 +2271,11 @@ function deterministicContinuityVariation({
     }
   };
 
+  const appendConcernFollowUp = (family: string): string => {
+    const followUp = concernFollowUp(family);
+    return dedupeRepeatedHcpAsks(`${text}. ${followUp}`);
+  };
+
   if (concernTags.includes("implementation")) {
     return buildImplementationAdaptiveReply({
       repMessage: text,
@@ -2281,24 +2287,24 @@ function deterministicContinuityVariation({
 
   if (concernTags.includes("workflow")) {
     if (/prior auth|prior authorization/i.test(text)) {
-      return `${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")}. Name the first staff step that changes.`;
+      return dedupeRepeatedHcpAsks(`${text.replace(/\bprior auth(?:orization)?\b/gi, "approval step")}. Name the first staff step that changes.`);
     }
     if (/staff|team|workflow|handoff|callback/i.test(text)) {
-      return `${text}. ${concernFollowUp("workflow")}`;
+      return appendConcernFollowUp("workflow");
     }
-    return `${text}. ${concernFollowUp("workflow")}`;
+    return appendConcernFollowUp("workflow");
   }
 
   if (concernTags.includes("access")) {
-    return `${text}. ${concernFollowUp("access")}`;
+    return appendConcernFollowUp("access");
   }
 
   if (concernTags.includes("guideline") || concernTags.includes("patient_fit")) {
-    return `${text}. ${concernFollowUp("patient_fit")}`;
+    return appendConcernFollowUp("patient_fit");
   }
 
   if (concernTags.includes("cost_value")) {
-    return `${text}. ${concernFollowUp("cost_value")}`;
+    return appendConcernFollowUp("cost_value");
   }
 
   if (concernTags.includes("renal")) {
@@ -2325,7 +2331,7 @@ function deterministicContinuityVariation({
     return variants[hcpTurns % variants.length];
   }
 
-  return `${text}. ${concernFollowUp(concernTags[0] || "general")}`;
+  return appendConcernFollowUp(concernTags[0] || "general");
 }
 
 function needsContinuityVariationRewrite({
@@ -3323,6 +3329,7 @@ function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): 
 
 function inferSkeletonSignature(text = ""): string {
   const lower = String(text || "").toLowerCase();
+  if (/\bpatient profile\b.*\bendpoint\b.*\bdecision\b/.test(lower)) return "patient_profile_endpoint_decision";
   if (/\bwhat makes you think\b.*\b(relevant|appl(?:y|ies))\b/.test(lower)) return "premise_relevance_challenge";
   if (/\b(can you|could you|help me)\b.*\bconnect\b.*\b(current patients|patients|practice|case discussion|study)\b/.test(lower)) return "premise_relevance_challenge";
   if (/\bwhat in that study\b/.test(lower)) return "what_in_study";
@@ -3334,6 +3341,54 @@ function inferSkeletonSignature(text = ""): string {
   if (/\bwhat changes clinically\b/.test(lower)) return "clinical_change";
   if (/^(what|which|how)\b/.test(lower)) return "question_open";
   return "";
+}
+
+function buildRecentLoopRepairVariant({
+  hcpReply,
+  transcript,
+  scenario,
+}: {
+  hcpReply: string;
+  transcript: ConversationTurn[];
+  scenario: any;
+}): string {
+  const recent = getRecentVisibleHcpReplies(transcript, 5).map((line) => normalizeLineForContinuity(line));
+  const concernTags = inferConcernTags(`${hcpReply} ${getLatestHcpConcern(transcript, scenario)}`);
+  const skeleton = inferSkeletonSignature(hcpReply);
+  const hcpTurns = transcript.filter((turn) => turn?.speaker === "hcp").length;
+  const variants = skeleton === "patient_profile_endpoint_decision" || concernTags.includes("patient_fit") || concernTags.includes("screening")
+    ? [
+      "I need the patient profile and endpoint that would change my next treatment choice.",
+      "That still leaves me without the exact patient and decision point.",
+      "Give me the study result that changes one treatment choice for the patients I actually see.",
+      "Make this practical: which patient would I treat differently after hearing this?",
+    ]
+    : concernTags.includes("access")
+      ? [
+        "I need the exact access step that changes for my team.",
+        "That still leaves the approval burden unclear.",
+        "Name the payer step my staff would handle differently.",
+      ]
+      : concernTags.includes("workflow")
+        ? [
+          "I need the first workflow step my team would actually own.",
+          "That still does not tell me what changes for staff tomorrow.",
+          "Name the task that changes before we go broader.",
+        ]
+        : [
+          "That still does not answer the decision in front of me.",
+          "I need the specific point that changes what I do next.",
+          "Make it concrete before we keep going.",
+        ];
+
+  for (let offset = 0; offset < variants.length; offset += 1) {
+    const candidate = variants[(hcpTurns + offset) % variants.length];
+    if (!recent.includes(normalizeLineForContinuity(candidate))) {
+      return candidate;
+    }
+  }
+
+  return variants[hcpTurns % variants.length];
 }
 
 function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[], scenario: any): string {
@@ -3354,11 +3409,25 @@ function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[
 
   if (!exactRepeat && !repeatedSkeleton && !highOverlapRepeat) return hcpReply;
 
-  return deterministicContinuityVariation({
+  const varied = normalizeHcpSpokenRealism(deterministicContinuityVariation({
     hcpReply: current,
     transcript,
     scenario,
-  });
+  }));
+  const normalizedVaried = normalizeLineForContinuity(varied);
+  const variedStillRepeats = normalizedRecent.includes(normalizedVaried) || recent.slice(-3).some((line) =>
+    continuityOverlapScore(varied, line) >= 0.68
+    || continuityContainmentScore(varied, line) >= 0.82
+    || startsWithSameFrame(varied, line)
+  );
+
+  if (!variedStillRepeats) return varied;
+
+  return normalizeHcpSpokenRealism(buildRecentLoopRepairVariant({
+    hcpReply: current,
+    transcript,
+    scenario,
+  }));
 }
 
 function detectQuestionType(repMessage: string): BehaviorSignals["question_type"] {
@@ -4296,6 +4365,7 @@ Return ONLY valid JSON:
     transcript,
   });
   hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
+  hcpReply = normalizeHcpSpokenRealism(hcpReply);
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,

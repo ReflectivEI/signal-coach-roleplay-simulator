@@ -9,6 +9,76 @@ const SUBORDINATE_STARTER_PATTERN = /^(because|although|while|if|unless|since|wh
 const AUXILIARY_QUESTION_STARTER_PATTERN = /^(could|would|can|do|does|did|is|are|am|will|may|should)$/i;
 const QUESTION_JOINER_PATTERN = /(who|what|when|where|why|how|is|are|am|was|were|do|does|did|can|could|will|would|should|shall|have|has|had|may|might|must)\b/i;
 const DEPENDENT_PREFACE_PATTERN = /^(before\s+(?:we|i)\s+[^.!?]{2,90}|given\s+[^.!?]{2,90}|from\s+(?:a|an|the|our|your)\s+[^.!?]{2,80}\s+perspective|to\s+make\s+sure\s+i\s+understand|i\s+want\s+to\s+make\s+sure\s+i\s+understand)$/i;
+const STOP_WORD_PATTERN = /\b(the|a|an|this|that|these|those|with|for|first|specific|actually|would|does|do|is|are|be|to|in|of|and|or|my|your|you|i|we|it|if|what|which|how)\b/g;
+
+function normalizeDialogueSignature(text = '') {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(STOP_WORD_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hcpAskIntentSignature(sentence = '') {
+  const value = String(sentence || '').toLowerCase();
+  if (/\bpatient subgroup\b/.test(value) && /\b(decision changes?|change in treatment choice|treatment choice|treatment decision|changes? treatment)\b/.test(value)) {
+    return 'patient-subgroup-treatment-decision';
+  }
+  if (/\bpatient profile\b/.test(value) && /\bendpoint\b/.test(value) && /\bdecision\b/.test(value)) {
+    return 'patient-subgroup-treatment-decision';
+  }
+  if (/\bthreshold\b/.test(value) && /\b(clinically useful|useful for the patients|patients? you are thinking about)\b/.test(value)) {
+    return 'clinical-utility-threshold';
+  }
+  if (/\bapproved (?:safety|information|materials?)\b/.test(value) && /\bmedical resource\b/.test(value)) {
+    return 'approved-information-boundary';
+  }
+  if (/\baccess step\b/.test(value) && /\bstaff\b/.test(value)) {
+    return 'access-step-staff';
+  }
+  if (/\bfirst (?:staff|clinic|workflow|access|approval) step\b/.test(value) && /\bchanges?|owns?|pilot\b/.test(value)) {
+    return 'first-operational-step';
+  }
+  return '';
+}
+
+export function dedupeRepeatedHcpAsks(dialogue = '') {
+  const value = String(dialogue || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(
+      /(\bWhat specific patient subgroup[^?.!]{0,140}\bchange in treatment choice[^?.!?,]*),\s*which patient subgroup does that affect first, and what decision changes\?/gi,
+      '$1?'
+    )
+    .replace(
+      /(\bWhich patient subgroup does that affect first, and what decision changes[?.!])\s+Which patient subgroup does that affect first, and what decision changes[?.!]?/gi,
+      '$1'
+    );
+  if (!value) return value;
+
+  const sentences = value.match(/[^?.!]+[?.!]?/g) || [value];
+  const seenExact = new Set();
+  const seenIntent = new Set();
+  const kept = [];
+
+  for (const rawSentence of sentences) {
+    const sentence = String(rawSentence || '').trim();
+    if (!sentence) continue;
+
+    const exact = normalizeDialogueSignature(sentence);
+    if (exact && seenExact.has(exact)) continue;
+
+    const intent = hcpAskIntentSignature(sentence);
+    if (intent && seenIntent.has(intent)) continue;
+
+    if (exact) seenExact.add(exact);
+    if (intent) seenIntent.add(intent);
+    kept.push(sentence);
+  }
+
+  return kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+}
 
 function normalizeAllCapsSentence(sentence = '') {
   const lettersOnly = sentence.replace(/[^A-Za-z]/g, '');
@@ -275,7 +345,17 @@ function splitOverlongHcpQuestion(text = '') {
 export function normalizeHcpSpokenRealism(dialogue) {
   const normalized = normalizeDialogueSentenceBoundaries(dialogue);
   if (!normalized) return normalized;
-  return repairSpokenPrefaceQuestionJoin(normalizeDialogueSentenceBoundaries(reviseForSentenceIntegrity(splitOverlongHcpQuestion(normalizeFormalRecallPhrases(normalized)))));
+  return dedupeRepeatedHcpAsks(
+    repairSpokenPrefaceQuestionJoin(
+      normalizeDialogueSentenceBoundaries(
+        reviseForSentenceIntegrity(
+          splitOverlongHcpQuestion(
+            normalizeFormalRecallPhrases(normalized)
+          )
+        )
+      )
+    )
+  );
 }
 
 function compressWorkflowOwnershipQuestion(text = '', cueCategory = '') {

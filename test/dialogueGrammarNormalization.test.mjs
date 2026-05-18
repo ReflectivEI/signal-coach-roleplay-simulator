@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   compressHcpDialogueForState,
+  dedupeRepeatedHcpAsks,
   detectClauseStitchFailure,
   detectDialogueBoundaryIssues,
   formatHcpSentence,
@@ -85,6 +86,44 @@ test('normalizeHcpSpokenRealism converts formal recall questions into shorter sp
     normalizeHcpSpokenRealism('Before we discuss new data, can you specifically address how the treatment options you mentioned last week would impact the workflow for my stable, suppressed patients?'),
     'Before we get into new data, can you walk me through how that would actually change my workflow for stable patients?'
   );
+});
+
+test('dedupeRepeatedHcpAsks removes repeated patient subgroup decision asks', () => {
+  const input = 'What specific patient subgroup would see a change in treatment choice with this. Which patient subgroup does that affect first, and what decision changes. Which patient subgroup does that affect first, and what decision changes?';
+  const output = normalizeHcpSpokenRealism(input);
+
+  assert.equal(
+    output,
+    'What specific patient subgroup would see a change in treatment choice with this?'
+  );
+  assert.equal(
+    (output.match(/patient subgroup/gi) || []).length,
+    1,
+    'only one patient-subgroup ask should remain'
+  );
+});
+
+test('dedupeRepeatedHcpAsks preserves distinct HCP pressure while removing duplicate intent', () => {
+  const output = dedupeRepeatedHcpAsks(
+    "I'm still not clear how this changes treatment for my patients. Which patient subgroup does that affect first, and what decision changes? Which patient subgroup does that affect first, and what decision changes?"
+  );
+
+  assert.equal(
+    output,
+    "I'm still not clear how this changes treatment for my patients. Which patient subgroup does that affect first, and what decision changes?"
+  );
+});
+
+test('dedupeRepeatedHcpAsks removes patient profile endpoint decision plus subgroup follow-up stacking', () => {
+  const output = normalizeHcpSpokenRealism(
+    'Narrow this to the patient profile, the endpoint, and the decision I would actually change. Which patient subgroup does that affect first, and what decision changes?'
+  );
+
+  assert.equal(
+    output,
+    'Narrow this to the patient profile, the endpoint, and the decision I would actually change.'
+  );
+  assert.doesNotMatch(output, /Which patient subgroup does that affect first/i);
 });
 
 test('compressHcpDialogueForState shortens evidence asks as pressure increases while preserving durability ask', () => {
