@@ -2495,35 +2495,16 @@ function formatDecisionLaneAcknowledgement(lane: FirstTurnRepTopic): string {
   return "The decision point is what matters most.";
 }
 
-function stripDecisionLaneAcknowledgementStack(reply: string): string {
-  let value = String(reply || "").replace(/\s+/g, " ").trim();
-  const lanePrefix = /^(?:access is the part that matters most|workflow is the part that matters most|patient fit is the part that matters most|the evidence question is the part that matters most|the decision point is what matters most)(?:,?\s+so|\.)?\s*/i;
-
-  for (let i = 0; i < 6; i += 1) {
-    const next = value.replace(lanePrefix, "").trim();
-    if (next === value) break;
-    value = next;
-  }
-
-  return value;
-}
-
-function capitalizeSpokenLead(text: string): string {
-  const value = String(text || "").trim();
-  if (!value) return value;
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 export function applyDecisionLaneChoiceAcknowledgement(reply: string, repMessage: string, scenario: any): string {
-  const original = String(reply || "").trim();
-  if (!original || !repAsksExplicitDecisionLaneChoice(repMessage)) return original;
-
-  const value = capitalizeSpokenLead(stripDecisionLaneAcknowledgementStack(original));
-  if (!value) return formatDecisionLaneAcknowledgement(inferScenarioDecisionLane(scenario));
+  const value = String(reply || "").trim();
+  if (!value || !repAsksExplicitDecisionLaneChoice(repMessage)) return value;
 
   const replyLane = inferReplyDecisionLane(value);
   const lane = replyLane === "general" ? inferScenarioDecisionLane(scenario) : replyLane;
   const acknowledgement = formatDecisionLaneAcknowledgement(lane);
+  const normalized = value.toLowerCase();
+
+  if (normalized.startsWith(acknowledgement.toLowerCase())) return value;
 
   if (lane === "access") {
     const adjusted = value
@@ -2608,11 +2589,7 @@ function withFirstTurnRepAcknowledgement(reply: string, repMessage: string, scen
     return value;
   }
 
-  if (repAsksExplicitDecisionLaneChoice(repMessage)) {
-    return applyDecisionLaneChoiceAcknowledgement(value, repMessage, scenario);
-  }
-
-  return `${acknowledgement} ${value}`;
+  return applyDecisionLaneChoiceAcknowledgement(`${acknowledgement} ${value}`, repMessage, scenario);
 }
 
 function repOpensWithCourtesy(repMessage: string): boolean {
