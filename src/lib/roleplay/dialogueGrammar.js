@@ -48,7 +48,7 @@ export function dedupeRepeatedHcpAsks(dialogue = '') {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(
-      /(\bWhat specific patient subgroup[^?.!]{0,140}\bchange in treatment choice[^?.!?,]*),\s*which patient subgroup does that affect first, and what decision changes\?/gi,
+      /(\bWhat specific patient subgroup[^?.!]{0,140}\bchange in treatment choice[^?.!?,]*),\s*which patient subgroup does that affect first, and what decision changes[?.!]?/gi,
       '$1?'
     )
     .replace(
@@ -148,7 +148,7 @@ export function detectDialogueBoundaryIssues(text = '') {
     }
   });
 
-  if (/\b[a-z0-9][,;:]\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b/i.test(value)) {
+  if (/\b[a-z0-9][,;:]\s*(who|what|when|where|why|how|which(?!\s+(?:was|were|is|are|has|have|had)\b)|could|would|can|do|does|did|is|are|am|will|may|should)\b/i.test(value)) {
     issues.push('weak_sentence_join_before_question');
   }
 
@@ -158,15 +158,15 @@ export function detectDialogueBoundaryIssues(text = '') {
 function repairSentenceBoundaryJoins(text = '') {
   return String(text || '')
     .replace(
-      /([^,.!?]{8,}),\s*(who|what|when|where|why|how|could|would|can|do|does|did|is|are|am|will|may|should)\b(\s+(?:i|we|you|they|he|she|it|there|this|that)\b)?/gi,
+      /([^,.!?]{8,}),\s*(who|what|when|where|why|how|which(?!\s+(?:was|were|is|are|has|have|had)\b)|could|would|can|do|does|did|is|are|am|will|may|should)\b(\s+(?:i|we|you|they|he|she|it|there|this|that)\b)?/gi,
       (match, prefix, starter, subjectToken = '') => {
         if (DEPENDENT_PREFACE_PATTERN.test(String(prefix || '').trim())) {
-          return `${prefix.trim()}, ${lowercaseQuestionStarter(starter)}${subjectToken || ''}`;
+          return `${prefix.trim()}, ${lowercaseQuestionStarter(starter)}${subjectToken || ' '}`;
         }
         if (AUXILIARY_QUESTION_STARTER_PATTERN.test(starter) && !String(subjectToken || '').trim()) {
           return match;
         }
-        return `${prefix.trim()}. ${starter}${subjectToken || ''}`;
+        return `${prefix.trim()}. ${starter}${subjectToken || ' '}`;
       }
     )
     .replace(/(^|[.!?]\s+)([^?.!]{8,}),\s+([^?.!]{8,})([?.!]?)(?=\s|$)/g, (match, prefix, leftClause, rightClause, trailingPunct) => {

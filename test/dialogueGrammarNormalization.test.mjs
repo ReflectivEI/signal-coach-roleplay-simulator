@@ -24,6 +24,12 @@ test('normalizeDialogueSentenceBoundaries repairs weak question join', () => {
   assert.equal(output, "I'm familiar with that trial. What outcome would change your decision?");
 });
 
+test('normalizeDialogueSentenceBoundaries repairs weak which-question join', () => {
+  const input = "That's still too general, which prior auth step can your support actually reduce for my staff?";
+  const output = normalizeDialogueSentenceBoundaries(input);
+  assert.equal(output, "That's still too general. Which prior auth step can your support actually reduce for my staff?");
+});
+
 test('normalizeDialogueSentenceBoundaries preserves valid dependent-clause commas', () => {
   const input = 'Because we are short-staffed today, we need one operational step';
   const output = normalizeDialogueSentenceBoundaries(input);

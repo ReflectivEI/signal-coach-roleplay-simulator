@@ -32,6 +32,12 @@ test("normalizeHcpDialoguePunctuation repairs comma splice between independent c
   assert.equal(output, "We reviewed adherence barriers. We need one concrete next step.");
 });
 
+test("normalizeHcpDialoguePunctuation repairs comma splice before which question", () => {
+  const input = "That's still too general, which prior auth step can your support actually reduce for my staff?";
+  const output = normalizeHcpDialoguePunctuation(input);
+  assert.equal(output, "That's still too general. Which prior auth step can your support actually reduce for my staff?");
+});
+
 test("normalizeHcpDialoguePunctuation handles multi-clause punctuation without semantic rewrite", () => {
   const input = "We're short-staffed today, can you give one practical next step, and keep it brief";
   const output = normalizeHcpDialoguePunctuation(input);
