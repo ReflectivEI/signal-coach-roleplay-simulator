@@ -305,6 +305,18 @@ function buildPredictiveRoutePayload({
   };
 }
 
+function cleanPredictiveAuthoritativeDialogue(dialogue = "") {
+  return applyDeterministicPunctuationContract(
+    hardenTextSurface(
+      stripFollowUpAfterTerminalClose(
+        stripSimulatorMetaDialogue(
+          normalizeHcpDialoguePunctuation(dialogue)
+        )
+      )
+    )
+  ).trim();
+}
+
 function classifyDialogueCueIntent(text = "") {
   const value = String(text || "").toLowerCase();
   if (!value) return "neutral";
@@ -4425,6 +4437,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     let draftResponseBeforePostProcessing = "";
     let draftResponseSource = "llm";
     let predictiveRouteAuthoritative = false;
+    let predictiveAuthoritativeDialogue = "";
+    const predictiveAuthoritySuppressedLayers = [];
+    const preservePredictiveAuthority = (layerName = "downstream_rewrite") => {
+      if (!predictiveRouteAuthoritative) return nextHcpDialogue;
+      if (layerName) predictiveAuthoritySuppressedLayers.push(layerName);
+      const lockedDialogue = cleanPredictiveAuthoritativeDialogue(
+        predictiveAuthoritativeDialogue || nextHcpDialogue
+      );
+      return lockedDialogue || nextHcpDialogue;
+    };
 
     try {
       if (forceTerminalDisengagement) {
@@ -4466,11 +4488,17 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
           if (predictiveRes.ok) {
             const predictiveData = await predictiveRes.json();
             const predictiveLine = String(predictiveData?.simulated_hcp_next_response || "").trim();
-            if (predictiveLine) {
+            const predictiveSource = String(predictiveData?.predictive_hcp_response_source || "").trim();
+            if (predictiveLine && predictiveSource === "predictive_brain") {
               nextHcpDialogue = normalizeHcpDialoguePunctuation(predictiveLine).trim();
+              predictiveAuthoritativeDialogue = nextHcpDialogue;
               draftResponseBeforePostProcessing = nextHcpDialogue;
               draftResponseSource = "predictive_route_authoritative";
               predictiveRouteAuthoritative = true;
+            } else if (predictiveLine && import.meta.env.DEV) {
+              console.warn("ROLEPLAY_PREDICTIVE_ROUTE_NOT_AUTHORITATIVE", {
+                predictiveSource: predictiveSource || "missing",
+              });
             }
           }
         } catch (predictiveRouteError) {
@@ -4571,7 +4599,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       draftResponseBeforePostProcessing = nextHcpDialogue;
     }
 
-    if (usedDeterministicFallback && !forceTerminalDisengagement) {
+    if (usedDeterministicFallback && !forceTerminalDisengagement && !predictiveRouteAuthoritative) {
       try {
         const fallbackRecoveryPrompt = [
           "You are generating ONE HCP reply in a role-play simulation.",
@@ -4648,6 +4676,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const allowGroundedFallbackOverride = ["neutral", "engaged"].includes(nextHcpState);
     if (
       allowGroundedFallbackOverride
+      && !predictiveRouteAuthoritative
       && !isScenarioGroundedDialogue(nextHcpDialogue, scenarioKeywords, repMessage)
       && String(nextHcpDialogue || "").split(/\s+/).length < 6
     ) {
@@ -4655,7 +4684,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = groundedFallback;
     }
 
-    if (!isFirstHcpResponse) {
+    if (!isFirstHcpResponse && !predictiveRouteAuthoritative) {
       const nextNorm = String(nextHcpDialogue || "").trim().toLowerCase();
       const prevNorm = String(previousHcpDialogue || "").trim().toLowerCase();
       if (nextNorm && prevNorm && nextNorm === prevNorm) {
@@ -4666,13 +4695,14 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     if (
       nextHcpState === "disengaged"
+      && !predictiveRouteAuthoritative
       && shouldReplaceWithTerminalDisengagement(nextHcpDialogue)
     ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = terminalCloseFallback;
     }
 
-    if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged") {
+    if (repHasFollowUpCommitment && ["impatient", "disengaging"].includes(decayState.tier) && nextHcpState !== "disengaged" && !predictiveRouteAuthoritative) {
       nextHcpState = overrideExit ? "disengaged" : "boundary-setting";
       usedDeterministicFallback = true;
       nextHcpDialogue = overrideExit
@@ -4698,9 +4728,11 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         })
       : baseResponse;
 
-    nextHcpDialogue = normalizeTone(inferenceAdjustedResponse);
+    nextHcpDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("inference_bias")
+      : normalizeTone(inferenceAdjustedResponse);
 
-    const latestAskBoundDialogue = liveTurnAuthorityBypass
+    const latestAskBoundDialogue = predictiveRouteAuthoritative || liveTurnAuthorityBypass
       ? ""
       : buildLatestAskProgressionDialogue(latestAskProgression);
     if (!overrideExit && nextHcpState !== "disengaged" && latestAskBoundDialogue) {
@@ -4714,7 +4746,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
-    if (!overrideExit && nextHcpState !== "disengaged" && liveTurnAuthorityBypass) {
+    if (!overrideExit && nextHcpState !== "disengaged" && liveTurnAuthorityBypass && !predictiveRouteAuthoritative) {
       const liveTurnAuthorityDialogue = buildLiveTurnAuthorityDialogue({
         repMessage,
         previousHcpLine: respondingToTurn?.hcpDialogueBefore || "",
@@ -4736,6 +4768,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && ["missed", "overpivot", "aligned"].includes(concernFlowOutcome)
       && (activeConcern === "workflow" || activeConcern === "access" || activeConcern === "time")
       && !latestAskBoundDialogue
+      && !predictiveRouteAuthoritative
     ) {
       const needsReanchor = concernFlowOutcome === "missed" || concernFlowOutcome === "overpivot";
       const shouldNudgeConditional =
@@ -4774,45 +4807,49 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     ];
     const progressionStage =
       dialogueProgression[Math.max(0, Math.min(dialogueProgression.length - 1, unresolvedConcernTurns))];
-    nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
-      ...decayState,
-      activeConcern,
-      unresolvedStreak: unresolvedConcernTurns,
-      burdenEstablished,
-    });
     const recentHcpDialogues = collectRecentHcpDialogues(prevTurns, NO_REPEAT_WINDOW_TURNS);
-    nextHcpDialogue = enforceDialogueVariety({
-      candidate: nextHcpDialogue,
-      concern: activeConcern,
-      seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
-      recentDialogues: recentHcpDialogues,
-      progressionStage,
-    });
-    if (terminalDecisionMode) {
-      nextHcpDialogue = buildTerminalDecisionDialogue({
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+    if (predictiveRouteAuthoritative) {
+      nextHcpDialogue = preservePredictiveAuthority("engagement_compression_and_variety");
+    } else {
+      nextHcpDialogue = compressHcpDialogueForEngagement(nextHcpDialogue, {
+        ...decayState,
+        activeConcern,
+        unresolvedStreak: unresolvedConcernTurns,
+        burdenEstablished,
       });
       nextHcpDialogue = enforceDialogueVariety({
         candidate: nextHcpDialogue,
         concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:variety`,
         recentDialogues: recentHcpDialogues,
         progressionStage,
       });
-    }
+      if (terminalDecisionMode && !predictiveRouteAuthoritative) {
+        nextHcpDialogue = buildTerminalDecisionDialogue({
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}`,
+        });
+        nextHcpDialogue = enforceDialogueVariety({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:terminal-variety`,
+          recentDialogues: recentHcpDialogues,
+          progressionStage,
+        });
+      }
 
-    const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
-    const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
-    const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
-    if (hasRecentPhraseReuse) {
-      nextHcpDialogue = enforceDialogueVariety({
-        candidate: nextHcpDialogue,
-        concern: activeConcern,
-        seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
-        recentDialogues: recentHcpDialogues,
-        progressionStage,
-      });
+      const recentPhraseMemory = recentDialoguePhrasesRef.current.slice(-NO_REPEAT_WINDOW_TURNS);
+      const candidatePhrases = extractDialoguePhrases(nextHcpDialogue);
+      const hasRecentPhraseReuse = candidatePhrases.some((phrase) => recentPhraseMemory.includes(phrase));
+      if (hasRecentPhraseReuse) {
+        nextHcpDialogue = enforceDialogueVariety({
+          candidate: nextHcpDialogue,
+          concern: activeConcern,
+          seed: `${generationKey}:${nextTurnNumber}:${activeConcern}:phrase-memory`,
+          recentDialogues: recentHcpDialogues,
+          progressionStage,
+        });
+      }
     }
     nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
     nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
@@ -4834,7 +4871,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       && nextHcpState !== "irritated"
       && (responseLooksTooIdeal || resolvesTooMuch || (repWasGeneric && /\b(thank you|appreciate|good question)\b/i.test(nextHcpDialogue)));
 
-    if (shouldCalibrateRealism) {
+    if (shouldCalibrateRealism && !predictiveRouteAuthoritative) {
       const transformedDialogue = rewriteTooIdealDialogue(nextHcpDialogue, primaryConcern, repWasGeneric);
       if (ENABLE_REALISM_TRANSFORM_HARNESS) {
         const harnessResult = applyTransformSafetyHarness({
@@ -4870,7 +4907,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       activeConcern: primaryConcern,
       flags: registerSelection.flags,
     });
-    if (operationalRealismResult.applied && !latestAskBoundDialogue) {
+    if (operationalRealismResult.applied && !latestAskBoundDialogue && !predictiveRouteAuthoritative) {
       nextHcpDialogue = operationalRealismResult.dialogue;
     }
     emitPlannerTrace("operational_realism_register", {
@@ -4878,7 +4915,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       preferredRegister: registerSelection.preferredRegister,
       registerScores: registerSelection.registerScores,
       registerFlags: registerSelection.flags,
-      rewriteApplied: operationalRealismResult.applied && !latestAskBoundDialogue,
+      rewriteApplied: operationalRealismResult.applied && !latestAskBoundDialogue && !predictiveRouteAuthoritative,
       rewriteReasons: operationalRealismResult.reasons,
       activeConcern: primaryConcern,
     });
@@ -4993,7 +5030,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       selectedCueLayers.push("safeguard_recent_memory");
     }
 
-    if (!overrideExit && isTerminalDisengagementCue(contextualCue)) {
+    if (!overrideExit && isTerminalDisengagementCue(contextualCue) && !predictiveRouteAuthoritative) {
       nextHcpState = "disengaged";
       nextHcpDialogue = terminalCloseFallback;
       selectedCueLayers.push("safeguard_terminal_cue_close");
@@ -5268,12 +5305,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       explicitExitOverride: overrideExit,
     });
 
-    if (!overrideExit && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && terminalPolicyAction === "probe" && isTerminalClosureDialogue(nextHcpDialogue) && !predictiveRouteAuthoritative) {
       nextHcpDialogue = "Before we close, give me one practical change we can run this week without adding burden.";
     }
 
     const activeDemand = interventionStateRef.current?.activeDemand;
-    if (!overrideExit && blockClose && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && blockClose && isTerminalClosureDialogue(nextHcpDialogue) && !predictiveRouteAuthoritative) {
       const primaryBlockingConstraint = blockingUnresolvedConstraints[0]?.type || "request_for_specificity";
       const constraintPromptGroups = {
         request_for_evidence: [
@@ -5355,16 +5392,16 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       }
     }
 
-    if (!overrideExit && !blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (!overrideExit && !blockClose && hasPartialProgress && isTerminalClosureDialogue(nextHcpDialogue) && !predictiveRouteAuthoritative) {
       nextHcpDialogue = "That is directionally useful. Tighten one operational detail so we can apply it without adding burden.";
     }
 
-    if (isTerminalDisengagementIntent(nextHcpDialogue)) {
+    if (isTerminalDisengagementIntent(nextHcpDialogue) && !predictiveRouteAuthoritative) {
       nextHcpState = "disengaged";
       nextHcpDialogue = terminalCloseFallback;
     }
 
-    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced && !objectiveOverrideBlocked && !latestAskBoundDialogue) {
+    if (!overrideExit && nextHcpState !== "disengaged" && lateTurnConstraintDecision.forced && !objectiveOverrideBlocked && !latestAskBoundDialogue && !predictiveRouteAuthoritative) {
       nextHcpDialogue = buildLateTurnConstraintResponse({
         concern: activeRequirementForTurn,
         mode: lateTurnConstraintDecision.mode,
@@ -5392,6 +5429,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME
       && !overrideExit
       && nextHcpState !== "disengaged"
+      && !predictiveRouteAuthoritative
       && hardDemandState.hardDemandPriorityLock
       && activeDemand?.isActive
       && activeDemand?.type
@@ -5628,11 +5666,13 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       cueText: contextualCue,
       dialogueText: nextHcpDialogue,
     });
-    nextHcpDialogue = enforceDomainReanchorInDialogue({
-      dialogueText: nextHcpDialogue,
-      domainAssessment: domainIntegrityAtConstruction,
-      activeConcern: primaryConcern,
-    });
+    nextHcpDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("domain_reanchor")
+      : enforceDomainReanchorInDialogue({
+          dialogueText: nextHcpDialogue,
+          domainAssessment: domainIntegrityAtConstruction,
+          activeConcern: primaryConcern,
+        });
 
     const acceptedDialogueBeforeFinalContract = nextHcpDialogue;
     nextHcpDialogue = applyDeterministicPunctuationContract(acceptedDialogueBeforeFinalContract);
@@ -5649,15 +5689,19 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         const recentCueText = prevTurns.map((t) => t.cueBefore).filter(Boolean);
         return buildScenarioAlignedCue(nextHcpDialogue, isFirstHcpResponse, recentCueText, decayState.tier);
       },
-      rewriteDialogue: ({ dialogueText, selectedRegister, activeConcern }) => enforceOperationalRealismPreference({
-        dialogue: dialogueText,
-        preferredRegister: selectedRegister,
-        activeConcern,
-        flags: registerSelection.flags,
-      }).dialogue,
+      rewriteDialogue: ({ dialogueText, selectedRegister, activeConcern }) => predictiveRouteAuthoritative
+        ? dialogueText
+        : enforceOperationalRealismPreference({
+            dialogue: dialogueText,
+            preferredRegister: selectedRegister,
+            activeConcern,
+            flags: registerSelection.flags,
+          }).dialogue,
     });
     contextualCue = cueDialogueIntegrity.cueText;
-    nextHcpDialogue = latestAskProtectedDialogue || cueDialogueIntegrity.dialogueText;
+    nextHcpDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("cue_dialogue_contract")
+      : latestAskProtectedDialogue || cueDialogueIntegrity.dialogueText;
     const finalOpening = getOpeningSentence(nextHcpDialogue);
     const openingAcknowledgesConstraintBeforeGuardrail = openingAcknowledgesAnyConstraint(
       openingBeforeGuardrail,
@@ -5764,7 +5808,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       openingTurnConsumed: isFirstHcpResponse,
     });
     contextualCue = hcpReactionContract.selectedCueText || contextualCue;
-    nextHcpDialogue = latestAskProtectedDialogue || hcpReactionContract.selectedDialogueText || nextHcpDialogue;
+    nextHcpDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("hcp_reaction_contract")
+      : latestAskProtectedDialogue || hcpReactionContract.selectedDialogueText || nextHcpDialogue;
     nextHcpDialogue = stripSimulatorMetaDialogue(nextHcpDialogue);
     nextHcpDialogue = stripFollowUpAfterTerminalClose(nextHcpDialogue);
 
@@ -5775,6 +5821,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (
       openingReplayCheck.replayed
       && !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
     ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = buildConstraintSafeRegeneratedResponse({
@@ -5803,6 +5850,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
     if (
       structuredScenarioLeakCheck.leaked
       && !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
     ) {
       usedDeterministicFallback = true;
       nextHcpDialogue = repairStructuredScenarioContentLeak({
@@ -5828,6 +5876,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
 
     const finalDialogueBeforeRepeatRepair = nextHcpDialogue;
     const finalDialogueNeededRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
       && (
         isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
         || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
@@ -5851,7 +5900,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       scenario,
       runtimeContract: roleplayTurnValidationContext.scenarioExecutionContract || runtimeScenarioContractRef.current,
     });
-    if (finalStructuredScenarioLeakCheck.leaked && !isTerminalClosureDialogue(nextHcpDialogue)) {
+    if (finalStructuredScenarioLeakCheck.leaked && !isTerminalClosureDialogue(nextHcpDialogue) && !predictiveRouteAuthoritative) {
       usedDeterministicFallback = true;
       nextHcpDialogue = repairStructuredScenarioContentLeak({
         dialogueText: nextHcpDialogue,
@@ -5916,7 +5965,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       requireContractBound: true,
     });
     const stateCompressedHcpDialogue = conversationalRealism?.text || nextHcpDialogue;
-    if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue) {
+    if (stateCompressedHcpDialogue && stateCompressedHcpDialogue !== nextHcpDialogue && !predictiveRouteAuthoritative) {
       finalHcpReactionContract = {
         ...finalHcpReactionContract,
         selectedDialogueText: stateCompressedHcpDialogue,
@@ -5925,6 +5974,9 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       };
       nextHcpDialogue = stateCompressedHcpDialogue;
     } else {
+      if (predictiveRouteAuthoritative) {
+        nextHcpDialogue = preservePredictiveAuthority("conversational_realism");
+      }
       finalHcpReactionContract = {
         ...finalHcpReactionContract,
         conversationalRealism: conversationalRealism?.metadata || null,
@@ -5941,15 +5993,18 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
         cueStateAlignmentConcernFamily: hcpCueStateAlignment.concernFamily,
       },
     };
-    nextHcpDialogue = enforceSpokenOnlyHcpDialogue({
-      text: nextHcpDialogue,
-      concern: primaryConcern,
-      repMessage,
-      activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || "",
-      hcpState: nextHcpState,
-      timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
-    });
+    nextHcpDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("spoken_only_rewrite")
+      : enforceSpokenOnlyHcpDialogue({
+          text: nextHcpDialogue,
+          concern: primaryConcern,
+          repMessage,
+          activeAsk: conversationActiveAskState?.askText || respondingToTurn?.hcpDialogueBefore || firstTurnOpeningContext || "",
+          hcpState: nextHcpState,
+          timePressure: Boolean(turnState.timePressure || scenarioPressured || /time|impatient|disengaging|time-pressured/.test(`${nextHcpState} ${decayState.tier}`)),
+        });
     const finalImplementationTurnRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
       && needsImplementationTurnRepair({ repMessage, dialogue: nextHcpDialogue });
     if (finalImplementationTurnRepair) {
       nextHcpDialogue = chooseConcernSpecificVariant({
@@ -5960,6 +6015,7 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
     }
     const finalSpokenOnlyRepeatRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
       && (
         isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues)
         || isRepEchoInHcpDialogue({ dialogue: nextHcpDialogue, repMessage })
@@ -5977,26 +6033,29 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       });
       nextHcpDialogue = stripFollowUpAfterTerminalClose(stripSimulatorMetaDialogue(nextHcpDialogue));
     }
-    const finalSurfaceDialogue = applyHcpResponseSurface({
-      hcpReply: nextHcpDialogue,
-      scenario,
-      turn: {
-        phase: nextHcpState === "engaged" ? "engagement" : "objection_resolution",
-        concernFamily: primaryConcern,
-        escalationStage: nextHcpState,
-        responseShape: nextHcpState === "engaged" ? "open" : "compressed_probe",
-        targetWordBudget: repSelectedTemperature <= 5 ? 26 : 22,
-      },
-      profile: {
-        brevity: repSelectedTemperature <= 5 ? "normal" : "tight",
-      },
-      hcpTurnCount: nextTurnNumber,
-      liveRepAlignmentActive: true,
-    });
+    const finalSurfaceDialogue = predictiveRouteAuthoritative
+      ? preservePredictiveAuthority("hcp_response_surface")
+      : applyHcpResponseSurface({
+          hcpReply: nextHcpDialogue,
+          scenario,
+          turn: {
+            phase: nextHcpState === "engaged" ? "engagement" : "objection_resolution",
+            concernFamily: primaryConcern,
+            escalationStage: nextHcpState,
+            responseShape: nextHcpState === "engaged" ? "open" : "compressed_probe",
+            targetWordBudget: repSelectedTemperature <= 5 ? 26 : 22,
+          },
+          profile: {
+            brevity: repSelectedTemperature <= 5 ? "normal" : "tight",
+          },
+          hcpTurnCount: nextTurnNumber,
+          liveRepAlignmentActive: true,
+        });
     if (finalSurfaceDialogue) {
       nextHcpDialogue = hardenTextSurface(finalSurfaceDialogue);
     }
     const finalSurfaceRepeatRepair = !isTerminalClosureDialogue(nextHcpDialogue)
+      && !predictiveRouteAuthoritative
       && isRepeatedFinalDialogue(nextHcpDialogue, recentHcpDialogues);
     if (finalSurfaceRepeatRepair) {
       const repairConcern = resolveVariantConcernForTurn({
@@ -6017,6 +6076,12 @@ export default function RolePlayChat({ scenario, onClose, _onSessionSaved }) {
       finalImplementationTurnRepair,
       finalSpokenOnlyRepeatRepair,
       finalSurfaceRepeatRepair,
+      predictiveRouteAuthoritative,
+      predictiveAuthorityLocked: predictiveRouteAuthoritative,
+      predictiveAuthoritativeDialogueBeforeSafeguards: predictiveAuthoritativeDialogue || null,
+      deterministicRewriteLayersSuppressedByPredictiveAuthority: predictiveRouteAuthoritative
+        ? [...new Set(predictiveAuthoritySuppressedLayers)]
+        : [],
     };
     nextTurn.cueBefore = contextualCue;
     nextTurn.hcpDialogueBefore = nextHcpDialogue;

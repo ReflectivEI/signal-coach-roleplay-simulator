@@ -223,6 +223,82 @@ function hasTimeTopic(text = ""): boolean {
   return /\b(few minutes|quick|brief|next patient|short on time)\b/.test(text);
 }
 
+function responseSimilarity(a = "", b = ""): number {
+  const compact = (value: string) => new Set(
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((word) => word.length >= 4)
+  );
+  const aWords = compact(a);
+  const bWords = compact(b);
+  if (!aWords.size || !bWords.size) return 0;
+  let overlap = 0;
+  aWords.forEach((word) => {
+    if (bWords.has(word)) overlap += 1;
+  });
+  return overlap / Math.max(aWords.size, bWords.size);
+}
+
+function selectNonRepeatingRepGuidance({
+  trigger,
+  active,
+  turns = [],
+}: {
+  trigger: ChainTrigger;
+  active: string;
+  turns?: SimulatorIntelligenceInput["turns"];
+}): string {
+  const guidanceByTrigger: Record<ChainTrigger, string[]> = {
+    compliance_boundary: [
+      "I can stay with the approved safety information. For patient-specific interpretation, the appropriate medical resource should handle that question.",
+      "Let me keep this inside the approved safety language. If the question is case-specific, I should route it to the appropriate medical resource.",
+      "The safe way to handle that is to separate approved safety information from patient-specific interpretation and connect the right medical resource if needed.",
+    ],
+    access_pressure: [
+      "You are right to separate the treatment decision from staff burden. The practical piece I can address is the approved access support step and what it changes for your team.",
+      "Let me answer the access part directly and stay inside the approved process: the useful test is whether the first approval step becomes clearer for your staff.",
+      "I should not overpromise coverage. I can focus on the approved access support process and the one staff step it is meant to clarify.",
+    ],
+    evidence_scrutiny: [
+      "Let me narrow this to the evidence question you are asking: which approved data point connects to the patient decision in front of you.",
+      "You are asking for the decision standard, not a broad data recap. I can anchor on the approved evidence point that maps to that patient type.",
+      "The useful answer is the approved evidence point that would change your next decision, not a general efficacy claim.",
+    ],
+    competitor_anchor: [
+      "I should not make a broad comparison. Let me ask which approved difference matters most for the patient decision you are weighing.",
+      "Before differentiating, I should anchor on the specific decision standard you use with the current option.",
+      "The compliant path is to avoid disparaging the incumbent and focus on the approved distinction that matters for patient fit.",
+    ],
+    conversation_stall: [
+      "We are getting too broad. I should answer the last HCP ask first, then check whether that resolves the decision standard.",
+      "The next response needs to name the missed ask directly instead of adding another frame.",
+      "I should reset to one concrete answer tied to the HCP's last question and stop expanding the conversation.",
+    ],
+    voice_pressure: [
+      "I should slow the first sentence, acknowledge the concern, and answer the narrow question before adding context.",
+      "The recovery move is a short acknowledgment followed by one specific, approved answer.",
+      "I need to reduce pressure here: one direct answer, no broad setup, and no extra claim.",
+    ],
+  };
+
+  const pool = guidanceByTrigger[trigger] || guidanceByTrigger.conversation_stall;
+  const recentRepText = (turns || [])
+    .filter((turn) => turn.speaker === "rep")
+    .slice(-4)
+    .map((turn) => String(turn.text || ""));
+  const seed = hashId("rep-guidance", `${trigger}-${active}-${(turns || []).length}`);
+  const start = parseInt(seed.replace(/^rep-guidance-/, ""), 36) % pool.length;
+
+  for (let index = 0; index < pool.length; index += 1) {
+    const candidate = pool[(start + index) % pool.length];
+    const repeated = recentRepText.some((line) => responseSimilarity(line, candidate) >= 0.72);
+    if (!repeated) return candidate;
+  }
+  return pool[(start + 1) % pool.length] || pool[0];
+}
+
 function hasSpecificityBoundary(text = ""): boolean {
   return /\b(specific|what exactly|not my question|generic|prove|show me|not useful|probably done|pause here|not ready|cannot make this specific|we should pause)\b/.test(text);
 }
@@ -566,18 +642,21 @@ export function generatePredictiveChain(input: SimulatorIntelligenceInput, traje
     ],
   };
 
+  const safestResponse = selectNonRepeatingRepGuidance({
+    trigger,
+    active,
+    turns: input.turns,
+  });
   const intervention: ChainIntervention = safety
     ? {
       label: "Move to approved safety boundary",
       rationale: "The safest intervention point is before the HCP asks for case-specific interpretation.",
-      safestResponse: "That is an important safety question. I can stay with the approved safety information, and if you want case-level detail I should connect you with the appropriate medical resource.",
+      safestResponse,
     }
     : {
       label: access ? "Re-anchor discussion to approved access support" : "Re-anchor discussion to approved differentiation",
       rationale: "The best intervention point is before the HCP turns the current pressure into a broader objection chain.",
-      safestResponse: access
-        ? "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process."
-        : "Before I answer too broadly, can I clarify which part matters most for your decision: patient fit, evidence, workflow, or access?",
+      safestResponse,
     };
 
   return {

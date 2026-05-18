@@ -355,6 +355,55 @@ test("live RolePlayChat final HCP render is hard-gated to contract-bound state",
   assert.match(source, /const conversationalRealism = applyConversationalRealism\(\{[\s\S]*requireContractBound:\s*true/);
 });
 
+test("RPS HCP dialogue locks Predictive Builder/Predictive Brain output before deterministic rewrites", () => {
+  const rolePlaySource = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+  const workerSource = fs.readFileSync(
+    new URL("../worker/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(rolePlaySource, /draftResponseSource = "predictive_route_authoritative"/);
+  assert.match(rolePlaySource, /predictiveSource === "predictive_brain"/);
+  assert.match(rolePlaySource, /predictiveAuthoritativeDialogue = nextHcpDialogue/);
+  assert.match(rolePlaySource, /function cleanPredictiveAuthoritativeDialogue/);
+  assert.match(rolePlaySource, /const preservePredictiveAuthority = \(layerName = "downstream_rewrite"\) => \{/);
+  assert.match(rolePlaySource, /const latestAskBoundDialogue = predictiveRouteAuthoritative \|\| liveTurnAuthorityBypass/);
+  assert.match(rolePlaySource, /const demandHoldActive = ENABLE_V2_INTERVENTION_RUNTIME[\s\S]*&& !predictiveRouteAuthoritative/);
+  assert.match(rolePlaySource, /const finalSurfaceDialogue = predictiveRouteAuthoritative[\s\S]*\? preservePredictiveAuthority\("hcp_response_surface"\)/);
+  assert.match(rolePlaySource, /predictiveAuthorityLocked: predictiveRouteAuthoritative/);
+  assert.match(rolePlaySource, /deterministicRewriteLayersSuppressedByPredictiveAuthority/);
+
+  assert.match(workerSource, /Use the Predictive HCP Brain as the source of truth/);
+  assert.match(workerSource, /Match the quality bar of the Predictive Builder Test HCP Response/);
+  assert.match(workerSource, /Do not copy the validator-only fallback, right-panel recommendation text, or generic menu labels as the HCP dialogue/);
+  assert.doesNotMatch(workerSource, /same scenario lane/);
+});
+
+test("right-panel REP recommendation text remains isolated from HCP dialogue runtime", () => {
+  const rolePlaySource = fs.readFileSync(
+    new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),
+    "utf8",
+  );
+  const storeSource = fs.readFileSync(
+    new URL("../src/lib/simulatorIntelligenceStore.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.doesNotMatch(rolePlaySource, /safestResponse/);
+  assert.doesNotMatch(rolePlaySource, /Recommended intervention point/i);
+  assert.doesNotMatch(rolePlaySource, /recommended response loaded/i);
+  assert.match(storeSource, /function selectNonRepeatingRepGuidance/);
+  assert.match(storeSource, /responseSimilarity\(line, candidate\) >= 0\.72/);
+  assert.doesNotMatch(
+    storeSource,
+    /safestResponse:\s*"That is an important safety question\./,
+    "right-panel REP guidance must not fall back to one hard-coded looping safety line",
+  );
+});
+
 test("live RolePlayChat resets scenario-bound realism memory on scenario changes", () => {
   const source = fs.readFileSync(
     new URL("../src/components/roleplay/RolePlayChat.jsx", import.meta.url),

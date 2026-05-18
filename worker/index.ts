@@ -254,7 +254,7 @@ async function callGroq(env: Env, prompt: string, maxTokens: number): Promise<st
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    model: "llama-3.1-70b-versatile",
+                    model: "llama-3.3-70b-versatile",
                     temperature: 0.2,
                     max_tokens: maxTokens,
                     messages: [{ role: "user", content: prompt }],
@@ -914,7 +914,7 @@ function buildScenarioSpecificFallbackLine({
     const barrier = text(
         hcpState.current_primary_barrier,
         text(hcpState.current_secondary_barrier, text(scenarioContext.cue_signal, "the practical barrier")),
-    );
+    ).replace(/\s+/g, " ").replace(/[.,;:\s]+$/g, "").trim() || "the practical barrier";
 
     if (responseType === "disengage") {
         return sanitizePredictiveHcpLine(
@@ -976,13 +976,12 @@ async function authorPredictiveHcpResponse({
     progressionExplanation: string;
     intentBucket: string;
 }): Promise<string> {
-    const fallbackLine = buildScenarioSpecificFallbackLine({
+    const validatorFallbackLine = buildScenarioSpecificFallbackLine({
         hcpState,
         scenarioContext,
         responseType,
         liveTemperature,
     }) || sanitizePredictiveHcpLine(deterministicLine);
-    if (!fallbackLine) return "";
 
     const previousHcpLine = text(
         conversationMemory.last_hcp_response_text,
@@ -1009,7 +1008,8 @@ async function authorPredictiveHcpResponse({
     const buildPrompt = (retryReason = "") => `You are authoring the next HCP spoken line for a pharma role-play simulator.
 
 Use the Predictive HCP Brain as the source of truth.
-Deterministic state progression, response type, routing, temperature, and anti-loop metadata are validator constraints, not canned copy sources.
+Deterministic state progression, response type, temperature, and anti-loop metadata are validator constraints, not canned copy sources.
+Match the quality bar of the Predictive Builder Test HCP Response: concrete, context-aware, adaptive, realistic, and continuous with the prior turn.
 
 Predictive HCP Brain:
 ${hcpBrainContext || JSON.stringify(hcpBrain)}
@@ -1030,11 +1030,13 @@ Current turn context:
 - Unresolved concern: ${unresolvedConcern || "not provided"}
 - Scenario opening: ${text(scenarioContext.opening_scene || scenarioContext.openingScene, "not provided")}
 - Scenario cue: ${text(scenarioContext.cue_signal, "not provided")}
+- Validator-only fallback that must NOT be copied: ${validatorFallbackLine || "none"}
 ${retryReason ? `- Retry guidance: ${retryReason}` : ""}
 
 Hard rules:
 - Speak as this specific HCP, not as a guardrail or simulator.
-- Keep the same concern family and scenario lane.
+- Respond to the latest REP message first, then preserve the HCP's predictive/adaptive state.
+- Keep the same clinical or operational concern family without routing the line into canned access/workflow/evidence menu language.
 - The line must feel like a real clinician speaking in the moment.
 - 1-2 sentences maximum.
 - Do not repeat the previous HCP sentence.
@@ -1043,6 +1045,7 @@ Hard rules:
 - Use the deterministic response type only as a behavioral target, not as wording.
 - If the prior REP answer was generic or evasive, sharpen or restate the blocker in new words.
 - If the prior REP answer earned progress, acknowledge that progress without sounding scripted.
+- Do not copy the validator-only fallback, right-panel recommendation text, or generic menu labels as the HCP dialogue.
 
 Return ONLY the final HCP line.`;
 
@@ -1051,7 +1054,7 @@ Return ONLY the final HCP line.`;
     if (isUsablePredictiveCandidate(candidate, previousHcpLine)) return candidate;
 
     const retryReason = !candidate
-        ? "The prior draft was empty. Regenerate with a natural clinician line in the same scenario lane."
+        ? "The prior draft was empty. Regenerate with a natural clinician line grounded in the Predictive HCP Brain."
         : previousHcpLine && normalizeQuestion(candidate) === normalizeQuestion(previousHcpLine)
             ? "The prior draft repeated the last HCP line. Regenerate with new wording and forward continuity."
             : "The prior draft sounded generic or reused stock phrasing. Regenerate with scenario-specific wording.";
@@ -1060,7 +1063,7 @@ Return ONLY the final HCP line.`;
     const retryCandidate = sanitizePredictiveHcpLine(retryText);
     if (isUsablePredictiveCandidate(retryCandidate, previousHcpLine)) return retryCandidate;
 
-    return fallbackLine;
+    return "";
 }
 
 async function readSessions(env: Env): Promise<unknown[]> {
@@ -1232,7 +1235,7 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
     const predictivePromptState = stripAuthoredHcpStateForPredictivePrompt(
         asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
     );
-    const predictiveSimulatedResponse = sanitizePredictiveHcpLine(await authorPredictiveHcpResponse({
+    const predictiveAuthoredResponse = sanitizePredictiveHcpLine(await authorPredictiveHcpResponse({
         env,
         transcript,
         scenarioContext,
@@ -1247,12 +1250,14 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
         responseTypeReason: text(fullStateProgression.response_type_reason),
         progressionExplanation: text(fullStateProgression.hcp_progression_explanation),
         intentBucket: text(fullStateProgression.intent_bucket),
-    })) || buildScenarioSpecificFallbackLine({
+    }));
+    const deterministicApiFallbackResponse = buildScenarioSpecificFallbackLine({
         hcpState: predictivePromptState,
         scenarioContext,
         responseType: text(fullStateProgression.hcp_response_type),
         liveTemperature: repSelectedTemperature,
     });
+    const predictiveSimulatedResponse = predictiveAuthoredResponse || deterministicApiFallbackResponse;
 
     const enrichedHcpState = {
         ...asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
@@ -1271,9 +1276,9 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
     (deterministicWithBrain as Record<string, unknown>).response_type_transition_explanation = fullStateProgression.response_type_transition_explanation;
     (deterministicWithBrain as Record<string, unknown>).hcp_progression_explanation = fullStateProgression.hcp_progression_explanation;
     (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response = predictiveSimulatedResponse;
-    (deterministicWithBrain as Record<string, unknown>).predictive_hcp_response_source = predictiveSimulatedResponse === deterministicSimulatedResponse
-        ? "deterministic_fallback"
-        : "predictive_brain";
+    (deterministicWithBrain as Record<string, unknown>).predictive_hcp_response_source = predictiveAuthoredResponse
+        ? "predictive_brain"
+        : "deterministic_fallback";
     (deterministicWithBrain as Record<string, unknown>).deterministic_validator_hcp_next_response = deterministicSimulatedResponse;
     (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_triggered = Boolean(fullStateProgression.anti_loop_intervention_triggered);
     (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_reason = fullStateProgression.anti_loop_intervention_reason;
