@@ -563,3 +563,27 @@ test("RPS HCP contract disables deterministic HCP fallback authoring", () => {
   assert.doesNotMatch(generatorSource, /primaryGenerationSource = "deterministic_generation_fallback"/);
   assert.doesNotMatch(generatorSource, /brain_grounded_scenario_fallback/);
 });
+
+
+test("Predictive Brain HCP authoring is calibrated to one spoken move per exchange", () => {
+  const workerSource = fs.readFileSync(
+    new URL("../worker/index.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workerSource, /One HCP turn must make exactly one conversational move/);
+  assert.match(workerSource, /Do not pack multiple concerns into one exchange/);
+  assert.match(workerSource, /Continuous learning memory/);
+  assert.match(workerSource, /evolve the challenge from prior turns/);
+  assert.match(workerSource, /reveal a curveball/);
+  assert.match(workerSource, /no repeated phrasing from HCP history/);
+  assert.match(workerSource, /target 12-22 spoken words/);
+  assert.match(workerSource, /Do not interrogate the rep/);
+  assert.match(workerSource, /one grounded statement/);
+  assert.match(workerSource, /at most one practical question/);
+  assert.match(workerSource, /Avoid back-to-back questions/);
+  assert.match(workerSource, /Which patient would I actually treat differently/);
+  assert.match(workerSource, /specific challenges i see in my patient panel/);
+  assert.match(workerSource, /managing comorbidities/);
+  assert.match(workerSource, /before i consider it a viable option/);
+});

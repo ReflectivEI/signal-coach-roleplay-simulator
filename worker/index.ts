@@ -320,6 +320,11 @@ function isGenericHcpLine(value: unknown): boolean {
         "i'm skeptical",
         "can you provide evidence",
         "this seems interesting",
+        "specific challenges i see in my patient panel",
+        "managing comorbidities",
+        "treatment-resistant cases",
+        "minimizing treatment side effects",
+        "before i consider it a viable option",
     ].some((phrase) => line.includes(phrase));
 }
 
@@ -1024,6 +1029,7 @@ Current turn context:
 - Scenario opening: ${text(scenarioContext.opening_scene || scenarioContext.openingScene, "not provided")}
 - Scenario cue: ${text(scenarioContext.cue_signal, "not provided")}
 - Deterministic state output is validator metadata only and must not be copied into HCP dialogue.
+- Continuous learning memory: ${JSON.stringify(conversationMemory)}
 ${retryReason ? `- Retry guidance: ${retryReason}` : ""}
 
 Hard rules:
@@ -1031,14 +1037,27 @@ Hard rules:
 - Respond to the latest REP message first, then preserve the HCP's predictive/adaptive state.
 - Keep the same clinical or operational concern family without routing the line into canned access/workflow/evidence menu language.
 - The line must feel like a real clinician speaking in the moment.
+- One HCP turn must make exactly one conversational move: acknowledge, narrow, sharpen, reveal a curveball, object, test credibility, or disengage. Do not pack multiple concerns into one exchange.
+- Use continuous learning memory to evolve the challenge from prior turns; do not reset to the same ask or scripted template.
+- If the REP is broad or evasive, state the missed answer in plain words, then ask one practical narrowing question only when it is needed. Do not add a new concern list.
+- Do not invent broad panel language such as comorbidities, treatment-resistant cases, side effects, or viable option unless those exact ideas are already in the scenario, brain, or transcript.
+- At live temperature 8-10, target 12-22 spoken words unless a safety/compliance boundary requires one extra clause.
+- Do not interrogate the rep. Prefer normal clinician dialogue: one grounded statement, then at most one practical question.
+- Avoid back-to-back questions and do not make every challenge a question.
 - 1-2 sentences maximum.
 - Do not repeat the previous HCP sentence.
 - Do not use global stock phrases or generic training language.
 - Do not use any of these phrases: ${PREDICTIVE_BRAIN_BANNED_PHRASES.join("; ")}.
 - Use the deterministic response type only as a behavioral target, not as wording.
-- If the prior REP answer was generic or evasive, sharpen or restate the blocker in new words.
+- If the prior REP answer was generic or evasive, sharpen or restate the blocker in new words. Use at most one question and no repeated phrasing from HCP history.
 - If the prior REP answer earned progress, acknowledge that progress without sounding scripted.
 - Do not copy the validator-only fallback, right-panel recommendation text, or generic menu labels as the HCP dialogue.
+
+Preferred shape examples for a weak or evasive REP answer:
+- "That still does not tell me who I would treat differently."
+- "I hear the boundary. I need the approved data tied to one decision."
+- "That is still broad; narrow it to the patient profile where the choice changes."
+- "Which patient would I actually treat differently?"
 
 Return ONLY the final HCP line.`;
 
