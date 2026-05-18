@@ -251,6 +251,38 @@ const COMPLIANCE_BOUNDARY_RESPONSE = "I want to keep this accurate and within ap
 const ACCESS_INTERVENTION_RESPONSE = "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process.";
 const GENERIC_INTERVENTION_RESPONSE = "Before I answer too broadly, can I clarify which part matters most for your decision: patient fit, evidence, workflow, or access?";
 
+const RECOVERY_RESPONSE_VARIANTS = {
+  access: [
+    "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.",
+    "You are right; I kept access too broad. Let me make it concrete: start with the coverage or benefits check, then clarify who owns the handoff on your team.",
+    "Let me correct that. The first approved access-support step is to verify coverage or benefits, then we can map the staff handoff instead of staying at a general process level.",
+  ],
+  boundary: [
+    "You are right; I have stayed at the boundary without answering what would make this useful. I can stay with the approved safety information and point to the specific approved data we can discuss, then route case-level interpretation to medical.",
+    "You are right; I repeated the boundary instead of making the approved information useful. I can stay within approved safety language, identify the approved data we can review, and route patient-specific interpretation to medical.",
+    "Let me reset. I should not keep repeating the boundary; I can stay with the approved safety information, clarify what approved data applies, and connect case-level questions to the appropriate medical resource.",
+  ],
+  broad: [
+    "You are right; I repeated the frame without answering the specific question. Let me narrow to the one point you asked for and stay within the approved information.",
+    "You are right; I stayed too broad. Let me answer the specific ask first, using only the approved information, before adding another frame.",
+    "Let me reset to your question. I should answer the narrow point you asked for and keep the response inside approved information.",
+  ],
+};
+
+function countRecentSimilarRepUses(turns: SimulatorIntelligenceInput["turns"] = [], variants: string[]): number {
+  return turns
+    .filter((turn) => String(turn?.speaker || "").toLowerCase() === "rep")
+    .slice(-8)
+    .filter((turn) => variants.some((variant) => textSimilarity(String(turn?.text || ""), variant) >= 0.66))
+    .length;
+}
+
+function selectRecoveryResponse(turns: SimulatorIntelligenceInput["turns"] = [], kind: keyof typeof RECOVERY_RESPONSE_VARIANTS): string {
+  const variants = RECOVERY_RESPONSE_VARIANTS[kind];
+  const recentUses = countRecentSimilarRepUses(turns, variants);
+  return variants[recentUses % variants.length] || variants[0];
+}
+
 function latestRepRepeatedBoundary(turns: SimulatorIntelligenceInput["turns"] = []): boolean {
   const latestRep = latestRepText(turns);
   return textSimilarity(latestRep, SAFETY_BOUNDARY_RESPONSE) >= 0.72
@@ -617,18 +649,18 @@ export function generatePredictiveChain(input: SimulatorIntelligenceInput, traje
       ? {
         label: "Recover from repeated access framing",
         rationale: "The HCP has already heard the access-support frame and is asking for the first concrete workflow step, so repeating the same process language will deepen the stall.",
-        safestResponse: "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.",
+        safestResponse: selectRecoveryResponse(input.turns, "access"),
       }
       : boundaryLoop
         ? {
           label: "Recover from repeated boundary language",
           rationale: "The HCP has already heard the compliance boundary and is now testing whether the rep can make the approved information useful without overstepping.",
-          safestResponse: "You are right; I have stayed at the boundary without answering what would make this useful. I can stay with the approved safety information and point to the specific approved data we can discuss, then route case-level interpretation to medical.",
+          safestResponse: selectRecoveryResponse(input.turns, "boundary"),
         }
         : {
           label: "Recover from repeated broad framing",
           rationale: "The HCP is asking for a concrete answer after hearing the same broad frame, so the next response needs to name the missed ask directly.",
-          safestResponse: "You are right; I repeated the frame without answering the specific question. Let me narrow to the one point you asked for and stay within the approved information.",
+          safestResponse: selectRecoveryResponse(input.turns, "broad"),
         }
     : safety
       ? {

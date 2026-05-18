@@ -155,7 +155,11 @@ const EVENT_BASELINES: Record<PredictedNextEventType, Omit<PredictedNextEvent, "
 };
 
 const ACCESS_INTERVENTION_RESPONSE = "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process.";
-const RECOVER_ACCESS_RESPONSE = "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.";
+const RECOVER_ACCESS_RESPONSES = [
+  "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.",
+  "You are right; I kept access too broad. Let me make it concrete: start with the coverage or benefits check, then clarify who owns the handoff on your team.",
+  "Let me correct that. The first approved access-support step is to verify coverage or benefits, then we can map the staff handoff instead of staying at a general process level.",
+];
 
 const severityWeight: Record<PredictedNextEventSeverity, number> = {
   low: 0.05,
@@ -225,6 +229,15 @@ function countRecentRecommendedUses(input: PredictiveNextEventInput, safestRespo
     .slice(-3)
     .filter((turn) => textSimilarity(String(turn?.text || ""), safestResponse) >= 0.72)
     .length;
+}
+
+function selectRecoveryAccessResponse(input: PredictiveNextEventInput): string {
+  const recentUses = (input.liveTranscript || [])
+    .filter((turn) => normalizeText(turn?.speaker) === "rep")
+    .slice(-8)
+    .filter((turn) => RECOVER_ACCESS_RESPONSES.some((variant) => textSimilarity(String(turn?.text || ""), variant) >= 0.66))
+    .length;
+  return RECOVER_ACCESS_RESPONSES[recentUses % RECOVER_ACCESS_RESPONSES.length] || RECOVER_ACCESS_RESPONSES[0];
 }
 
 function includesAny(text: string, pattern: RegExp): boolean {
@@ -482,7 +495,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
       ? {
         label: "HCP rejects repeated access framing and asks for the first concrete staff step",
         recommendedStrategy: "Acknowledge the repeated frame, then name the first approved access-support step instead of reusing broad process language.",
-        safestResponse: RECOVER_ACCESS_RESPONSE,
+        safestResponse: selectRecoveryAccessResponse(input),
       }
       : {};
     const event = {
