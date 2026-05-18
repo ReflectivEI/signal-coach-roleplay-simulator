@@ -78,6 +78,69 @@ function buildPredictiveProfileFromRuntime(runtimeLens, scenario) {
   };
 }
 
+function buildSimulatorPredictiveRoutePayload({
+  repText = "",
+  scenario = {},
+  session = {},
+  predictiveRuntimeData = null,
+  predictiveContext = "",
+  temperature = 5,
+  turns = [],
+  voiceMetadata = null,
+}) {
+  const selection = predictiveRuntimeData?.selection || scenario?.predictiveSeed || {};
+  const lastHcpTurn = getLastHcpTurn(turns);
+  const currentHcpState = session?.hcpState || {};
+  const hcpState = {
+    ...currentHcpState,
+    hcp_position: currentHcpState?.hcp_position || session?.currentBehaviorState || scenario?.startingBehaviorState || "neutral",
+    conversation_stage: currentHcpState?.conversation_stage || session?.currentJourneyState || scenario?.journeyState || "",
+    current_primary_barrier: currentHcpState?.current_primary_barrier || session?.lastConcernFamily || "",
+    last_hcp_response_text: lastHcpTurn?.text || currentHcpState?.last_hcp_response_text || "",
+    hcp_response_history: turns
+      .filter((turn) => turn?.speaker === "hcp")
+      .map((turn) => String(turn?.text || "").trim())
+      .filter(Boolean)
+      .slice(-8),
+  };
+
+  return {
+    scenario_id: scenario?.id,
+    scenario_context: {
+      ...scenario,
+      currentBehaviorState: session?.currentBehaviorState,
+      currentJourneyState: session?.currentJourneyState,
+      predictiveProfile: session?.predictiveProfile,
+      predictiveLens: predictiveRuntimeData || null,
+      predictive_hcp_brain_context: predictiveContext,
+      hcp_state: hcpState,
+      cue_signal: hcpState.current_primary_barrier || scenario?.challengeContext || scenario?.objective || "",
+    },
+    rep_response_transcript: repText,
+    voice_metadata: voiceMetadata || null,
+    selected_dropdowns: {
+      disease_state: selection.diseaseState || scenario?.disease_state || "",
+      specialty_hcp_type: selection.specialtyHcpType || selection.hcpType || scenario?.specialty_hcp_type || scenario?.specialty || "",
+      hcp_type: selection.hcpType || scenario?.persona || scenario?.stakeholder || "",
+      journey_stage: selection.journeyStage || session?.currentJourneyState || scenario?.journeyStage || "",
+      interaction_pressure: selection.interactionPressure || (scenario?.interactionPressure || []).join(", "),
+      influence_driver: selection.influenceDriver || scenario?.influenceDriver || "",
+      behavior_archetype: selection.behaviorArchetype || session?.predictiveProfile?.type || scenario?.persona || "",
+      realism: temperature,
+    },
+    rep_selected_temperature: temperature,
+    live_temperature: temperature,
+    initial_temperature: temperature,
+    hcp_state: hcpState,
+    conversation_memory: {
+      hcp_state: hcpState,
+      interaction_history: session?.interactionHistory || [],
+      session_memory: session?.sessionMemory || [],
+      hcp_brain_context: predictiveContext,
+    },
+  };
+}
+
 function normalizeShadowText(value = "") {
   return String(value || "").trim().replace(/\s+/g, " ");
 }
@@ -764,6 +827,40 @@ export default function Simulator() {
         throw new Error("Error: HCP context not initialized");
       }
 
+      let authoritativePredictiveRoute = null;
+      try {
+        const predictiveRouteResult = await evaluateAdaptiveResponse(buildSimulatorPredictiveRoutePayload({
+          repText,
+          scenario: scenarioWithTemperature,
+          session: {
+            ...session,
+            predictiveProfile,
+            hcpPersona: session?.hcpPersona || predictiveProfile,
+          },
+          predictiveRuntimeData,
+          predictiveContext,
+          temperature,
+          turns,
+          voiceMetadata: inputMeta?.voiceMetadata || null,
+        }));
+        const predictiveLine = String(predictiveRouteResult?.simulated_hcp_next_response || "").trim();
+        const predictiveSource = String(predictiveRouteResult?.predictive_hcp_response_source || "").trim();
+        if (predictiveLine && predictiveSource === "predictive_brain") {
+          authoritativePredictiveRoute = {
+            line: predictiveLine,
+            source: predictiveSource,
+            responseType: predictiveRouteResult?.hcp_response_type || null,
+            stateDelta: predictiveRouteResult?.hcp_state_delta || null,
+            hcpState: predictiveRouteResult?.hcp_state || null,
+            intentBucket: predictiveRouteResult?.intent_bucket || null,
+            antiLoopTriggered: Boolean(predictiveRouteResult?.anti_loop_intervention_triggered),
+            semanticSimilarityMax: predictiveRouteResult?.semantic_similarity_max ?? null,
+          };
+        }
+      } catch (predictiveRouteError) {
+        console.warn("SIMULATOR_PREDICTIVE_HCP_ROUTE_FAILED", predictiveRouteError);
+      }
+
       const response = await generateHcpResponse(
         scenarioWithTemperature,
         conversationHistory,
@@ -784,6 +881,7 @@ export default function Simulator() {
           interactionHistory: session?.interactionHistory || [],
           previousConcernFamily: session?.lastConcernFamily || "",
           escalationLevel: Number(session?.escalationLevel || 0),
+          authoritativePredictiveRoute,
         },
       );
 

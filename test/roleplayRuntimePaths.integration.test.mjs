@@ -510,3 +510,26 @@ test("active simulator exposes per-turn HCP runtime trace without changing norma
   assert.match(messageListSource, /window\.hcpRuntimeTrace = runtimeTrace/);
   assert.match(messageListSource, /Loop repair touched/);
 });
+
+test("active simulator routes HCP authoring through Worker predictive brain before local safeguards", () => {
+  const simulatorSource = fs.readFileSync(
+    new URL("../src/pages/Simulator.jsx", import.meta.url),
+    "utf8",
+  );
+  const generatorSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(simulatorSource, /buildSimulatorPredictiveRoutePayload/);
+  assert.match(simulatorSource, /const predictiveRouteResult = await evaluateAdaptiveResponse/);
+  assert.match(simulatorSource, /predictive_hcp_response_source/);
+  assert.match(simulatorSource, /authoritativePredictiveRoute = \{/);
+  assert.match(simulatorSource, /authoritativePredictiveRoute,/);
+
+  assert.match(generatorSource, /authoritativePredictiveRoute/);
+  assert.match(generatorSource, /primaryGenerationSource = "worker_predictive_brain_route_authoritative"/);
+  assert.match(generatorSource, /result = \{\s*hcpReply: authoritativePredictiveLine/);
+  assert.match(generatorSource, /worker_predictive_route_authoritative/);
+  assert.match(generatorSource, /locked_to_worker_predictive_brain_route/);
+});

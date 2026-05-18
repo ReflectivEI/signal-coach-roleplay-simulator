@@ -3776,6 +3776,13 @@ export async function generateHcpResponse(
   const runtimeMemoryArg = _legacyCompatibilityArgs[2] && typeof _legacyCompatibilityArgs[2] === "object"
     ? _legacyCompatibilityArgs[2]
     : {};
+  const authoritativePredictiveRoute = runtimeMemoryArg?.authoritativePredictiveRoute
+    && typeof runtimeMemoryArg.authoritativePredictiveRoute === "object"
+    ? runtimeMemoryArg.authoritativePredictiveRoute
+    : null;
+  const authoritativePredictiveLine = authoritativePredictiveRoute?.source === "predictive_brain"
+    ? String(authoritativePredictiveRoute?.line || "").trim()
+    : "";
   const contractRealism = requireRealismContract(scenario?.runtimeTemperature, "scenario.runtimeTemperature");
   const temperatureBand = deriveTemperatureBand(contractRealism);
   const transcriptText = transcript
@@ -4075,6 +4082,17 @@ Return ONLY valid JSON:
   let primaryGenerationSource = predictivePromptContext.trim()
     ? "predictive_brain_json"
     : "predictive_brain_fallback_mode_json";
+  if (authoritativePredictiveLine) {
+    primaryGenerationSource = "worker_predictive_brain_route_authoritative";
+    result = {
+      hcpReply: authoritativePredictiveLine,
+      hcpCue: "",
+      nextBehaviorState: currentBehaviorState,
+      nextJourneyState: currentJourneyState,
+      behaviorSignals: {},
+      coachingNudge: null,
+    };
+  } else {
   try {
     result = await invokeWorkerJson({
       prompt,
@@ -4110,6 +4128,7 @@ Return ONLY valid JSON:
       behaviorSignals: {},
       coachingNudge: null,
     };
+  }
   }
 
   let hcpReply = result.hcpReply || "";
@@ -4498,13 +4517,18 @@ Return ONLY valid JSON:
     generator_version: HCP_GENERATOR_VERSION,
     source: primaryGenerationSource,
     authority_source: predictiveContextReceived ? "predictive_brain" : "predictive_brain_fallback_mode",
-    predictive_brain_authoritative: predictiveContextReceived,
+    predictive_brain_authoritative: predictiveContextReceived || Boolean(authoritativePredictiveLine),
+    worker_predictive_route_authoritative: Boolean(authoritativePredictiveLine),
+    worker_predictive_route_source: authoritativePredictiveRoute?.source || null,
     test_hcp_response_quality_contract: predictiveContextReceived
       ? "predictive_builder_quality_bar"
       : "scenario_metadata_predictive_fallback",
-    predictive_lock_status: predictiveContextReceived
-      ? "locked_to_predictive_brain_prompt"
-      : "predictive_context_missing_fallback_mode",
+    predictive_lock_status: authoritativePredictiveLine
+      ? "locked_to_worker_predictive_brain_route"
+      : predictiveContextReceived
+        ? "locked_to_predictive_brain_prompt"
+        : "predictive_context_missing_fallback_mode",
+    worker_predictive_route_line: authoritativePredictiveLine || null,
     deterministic_generation_fallback_used: primaryGenerationSource === "deterministic_generation_fallback",
     deterministic_fallback_layers: deterministicFallbackEvents.map((event) => event.layer),
     suppressed_rewrite_layers: [],
@@ -4593,6 +4617,7 @@ Return ONLY valid JSON:
         predictive_context_received: predictiveContextReceived,
         guardrails_demoted_to_validators: true,
         predictive_lock_status: hcpRuntimeTrace.predictive_lock_status,
+        worker_predictive_route_authoritative: hcpRuntimeTrace.worker_predictive_route_authoritative,
         loop_repair_touched_final_line: hcpRuntimeTrace.loop_repair_touched_final_line,
         final_stock_phrase_detected: hasGlobalStockPhrase(hcpReply),
         final_missing_pressure: missingPersistentPressure(hcpReply, scenario, hcpTurnCount),
