@@ -579,10 +579,10 @@ test("Predictive Brain HCP authoring is calibrated to one spoken move per exchan
   assert.match(workerSource, /no repeated phrasing from HCP history/);
   assert.match(workerSource, /target 12-22 spoken words/);
   assert.match(workerSource, /Do not interrogate the rep/);
-  assert.match(workerSource, /one grounded statement/);
-  assert.match(workerSource, /at most one practical question/);
+  assert.match(workerSource, /sounds like a person reacting in the room/);
+  assert.match(workerSource, /not a checklist/);
   assert.match(workerSource, /Avoid back-to-back questions/);
-  assert.match(workerSource, /Which patient would I actually treat differently/);
+  assert.match(workerSource, /style examples, not templates/);
   assert.match(workerSource, /specific challenges i see in my patient panel/);
   assert.match(workerSource, /managing comorbidities/);
   assert.match(workerSource, /before i consider it a viable option/);
