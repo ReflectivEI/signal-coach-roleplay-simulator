@@ -154,9 +154,6 @@ const EVENT_BASELINES: Record<PredictedNextEventType, Omit<PredictedNextEvent, "
   },
 };
 
-const ACCESS_INTERVENTION_RESPONSE = "You are right to separate the clinical decision from the staff burden. Let me keep this practical and stay with the approved access support process.";
-const RECOVER_ACCESS_RESPONSE = "You are right; I repeated the access-process frame without naming the step. The first approved support step to clarify is the coverage or benefits check, then we can map who on your team would handle that handoff.";
-
 const severityWeight: Record<PredictedNextEventSeverity, number> = {
   low: 0.05,
   moderate: 0.12,
@@ -342,24 +339,20 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
   const activeSafety = includesAny(activeConcernText, /\b(safety|adverse|hepatic|renal|black box|warning|contraindication|side effect|ae\b|case-level|patient-specific)\b/);
   const activeAccess = includesAny(activeConcernText, /\b(access|prior auth|authorization|coverage|formulary|payer|copay|approval)\b/);
   const activeEvidence = includesAny(activeConcernText, /\b(data|evidence|trial|study|endpoint|subgroup|clinical|treatment decision|decision it changes)\b/);
-  const activeStall = includesAny(latestHcp, /\b(stuck|same issue|not addressing|not answering|pause unless|stop here|still not|still waiting|does not address|didn't answer|narrow this|specific decision|not useful|first staff step|first step|point of contact|walk me through|what changes)\b/);
-  const activeSpecificityDemand = includesAny(latestHcp, /\b(specific|specific data|specific decision|narrow this|patient decision|patients like mine|decision in front of me|what data|what specific|first staff step|first step|initial point|point of contact|walk me through|make a difference|alter .* workflow)\b/);
+  const activeStall = includesAny(latestHcp, /\b(stuck|same issue|not addressing|not answering|pause unless|stop here|still not|still waiting|does not address|didn't answer|narrow this|specific decision|not useful)\b/);
+  const activeSpecificityDemand = includesAny(latestHcp, /\b(specific|specific data|specific decision|narrow this|patient decision|patients like mine|decision in front of me|what data|what specific)\b/);
   const activeCompetitor = includesAny(activeConcernText, /\b(competitor|switch|current therapy|already using|patients do well|other option|standard of care)\b/);
   const latestRepUsedAnyRecommended = Object.values(EVENT_BASELINES).some((baseline) => textSimilarity(latestRep, baseline.safestResponse) >= 0.72);
   const latestRepRepeatedSafetyBoundary = textSimilarity(latestRep, EVENT_BASELINES.safety_concern_escalation.safestResponse) >= 0.72;
   const latestRepRepeatedComplianceBoundary = textSimilarity(latestRep, EVENT_BASELINES.compliance_risk.safestResponse) >= 0.72;
-  const latestRepRepeatedAccessIntervention = textSimilarity(latestRep, ACCESS_INTERVENTION_RESPONSE) >= 0.62 || textSimilarity(latestRep, EVENT_BASELINES.access_escalation.safestResponse) >= 0.62;
   const repeatedBoundaryAfterSpecificAsk = activeStall && activeSpecificityDemand && (latestRepRepeatedSafetyBoundary || latestRepRepeatedComplianceBoundary);
-  const repeatedAccessAfterSpecificAsk = activeStall && activeSpecificityDemand && latestRepRepeatedAccessIntervention;
-  const repeatedInterventionAfterSpecificAsk = repeatedBoundaryAfterSpecificAsk || repeatedAccessAfterSpecificAsk;
 
   const staleRecommendationPenalty = (type: PredictedNextEventType, active = true): number => {
     const baseline = EVENT_BASELINES[type].safestResponse;
     const recentUses = countRecentRecommendedUses(input, baseline);
     if (!recentUses) return 0;
     const repeatedBoundaryPenalty = repeatedBoundaryAfterSpecificAsk && ["safety_concern_escalation", "compliance_risk"].includes(type) ? 0.32 : 0;
-    const repeatedAccessPenalty = repeatedAccessAfterSpecificAsk && type === "access_escalation" ? 0.42 : 0;
-    return (active ? 0.16 : 0.32) + Math.min(0.22, (recentUses - 1) * 0.1) + repeatedBoundaryPenalty + repeatedAccessPenalty;
+    return (active ? 0.16 : 0.32) + Math.min(0.22, (recentUses - 1) * 0.1) + repeatedBoundaryPenalty;
   };
 
   const candidates: Array<{ type: PredictedNextEventType; probability: number; horizon: number; evidence: PredictedEventEvidence[]; compliance?: boolean }> = [
@@ -370,8 +363,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (!activeAccess && /\b(access|prior auth|authorization|coverage|formulary|payer|copay)\b/.test(transcriptContext) ? 0.1 : 0)
         + (lowControl ? 0.12 : 0)
         + (riskLevel === "high" ? 0.08 : 0)
-        - staleRecommendationPenalty("access_escalation", activeAccess)
-        - (repeatedAccessAfterSpecificAsk ? 0.34 : 0),
+        - staleRecommendationPenalty("access_escalation", activeAccess),
       horizon: 16,
       evidence: [
         buildEvidence("Access pressure", activeAccess ? "The latest HCP concern is about access, coverage, payer, or approval friction." : "Access language is present in the broader conversation history.", "transcript"),
@@ -400,7 +392,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (riskLevel === "high" ? 0.14 : 0)
         + (activeStall ? 0.28 : 0)
         + (latestRepUsedAnyRecommended && activeStall ? 0.12 : 0)
-        + (repeatedInterventionAfterSpecificAsk ? 0.28 : 0),
+        + (repeatedBoundaryAfterSpecificAsk ? 0.24 : 0),
       horizon: 20,
       evidence: [
         buildEvidence("Listening alignment", `Listening responsiveness is ${listeningScore.toFixed(1)}.`, "metrics"),
@@ -413,7 +405,7 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
         + (lowControl ? 0.22 : 0)
         + (/\b(maybe|later|send me|i'll think|not now|no next step|same issue|stuck)\b/.test(activeConcernText + historyOutcomes) ? 0.22 : 0)
         + (latestRepUsedAnyRecommended && activeStall ? 0.1 : 0)
-        + (repeatedInterventionAfterSpecificAsk ? 0.22 : 0)
+        + (repeatedBoundaryAfterSpecificAsk ? 0.18 : 0)
         + (fillers >= 4 ? 0.06 : 0),
       horizon: 28,
       evidence: [
@@ -478,16 +470,8 @@ export function generatePredictedNextEvents(input: PredictiveNextEventInput = {}
   return rankPredictedEvents(candidates.map((candidate, index) => {
     const probability = clamp(candidate.probability);
     const severity = severityFromProbability(probability, candidate.compliance);
-    const loopRecoveryOverride = repeatedAccessAfterSpecificAsk && ["trust_degradation", "conversation_stall"].includes(candidate.type)
-      ? {
-        label: "HCP rejects repeated access framing and asks for the first concrete staff step",
-        recommendedStrategy: "Acknowledge the repeated frame, then name the first approved access-support step instead of reusing broad process language.",
-        safestResponse: RECOVER_ACCESS_RESPONSE,
-      }
-      : {};
     const event = {
       ...EVENT_BASELINES[candidate.type],
-      ...loopRecoveryOverride,
       id: `${candidate.type}-${index}`,
       probability,
       timeHorizonSeconds: candidate.horizon,
