@@ -47,6 +47,7 @@ const wranglerWorker = read("wrangler.toml");
 const wranglerPages = read("wrangler.pages.toml");
 const workerClient = read("src/services/workerClient.js");
 const featureApi = read("src/features/rps/api.js");
+const productionEnv = read(".env.production");
 const workflows = fs.existsSync(path.join(ROOT, ".github", "workflows"))
   ? fs.readdirSync(path.join(ROOT, ".github", "workflows"))
       .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
@@ -65,7 +66,7 @@ if (pagesName !== EXPECTED.pagesProject) {
   fail(`wrangler.pages.toml name is ${pagesName || "<missing>"}; expected ${EXPECTED.pagesProject}.`);
 }
 
-for (const source of [workerClient, featureApi]) {
+for (const source of [workerClient, featureApi, productionEnv]) {
   if (!source.includes(EXPECTED.workerUrl)) {
     fail(`frontend runtime is missing dedicated worker URL ${EXPECTED.workerUrl}.`);
     break;

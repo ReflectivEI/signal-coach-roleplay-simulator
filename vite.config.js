@@ -12,6 +12,7 @@ const workerPaths = [
   "/api/roleplay/respond",
   "/api/rps/generate-scenario",
   "/api/rps/evaluate-response",
+  "/api/rps/predictive-hcp-response",
   "/api/rps/save-session",
   "/api/predict-next-event",
   "/api/voice-telemetry",
