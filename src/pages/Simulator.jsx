@@ -845,20 +845,22 @@ export default function Simulator() {
         }));
         const predictiveLine = String(predictiveRouteResult?.simulated_hcp_next_response || "").trim();
         const predictiveSource = String(predictiveRouteResult?.predictive_hcp_response_source || "").trim();
-        if (predictiveLine && predictiveSource === "predictive_brain") {
-          authoritativePredictiveRoute = {
-            line: predictiveLine,
-            source: predictiveSource,
-            responseType: predictiveRouteResult?.hcp_response_type || null,
-            stateDelta: predictiveRouteResult?.hcp_state_delta || null,
-            hcpState: predictiveRouteResult?.hcp_state || null,
-            intentBucket: predictiveRouteResult?.intent_bucket || null,
-            antiLoopTriggered: Boolean(predictiveRouteResult?.anti_loop_intervention_triggered),
-            semanticSimilarityMax: predictiveRouteResult?.semantic_similarity_max ?? null,
-          };
+        if (!predictiveLine || predictiveSource !== "predictive_brain") {
+          throw new Error("Predictive Brain HCP route did not return an authoritative HCP line.");
         }
+        authoritativePredictiveRoute = {
+          line: predictiveLine,
+          source: predictiveSource,
+          responseType: predictiveRouteResult?.hcp_response_type || null,
+          stateDelta: predictiveRouteResult?.hcp_state_delta || null,
+          hcpState: predictiveRouteResult?.hcp_state || null,
+          intentBucket: predictiveRouteResult?.intent_bucket || null,
+          antiLoopTriggered: Boolean(predictiveRouteResult?.anti_loop_intervention_triggered),
+          semanticSimilarityMax: predictiveRouteResult?.semantic_similarity_max ?? null,
+        };
       } catch (predictiveRouteError) {
         console.warn("SIMULATOR_PREDICTIVE_HCP_ROUTE_FAILED", predictiveRouteError);
+        throw new Error("Predictive Brain HCP route failed; deterministic HCP fallback authoring is disabled.");
       }
 
       const response = await generateHcpResponse(

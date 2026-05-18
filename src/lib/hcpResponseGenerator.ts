@@ -4112,22 +4112,8 @@ Return ONLY valid JSON:
         }
       }
     });
-  } catch {
-    primaryGenerationSource = "deterministic_generation_fallback";
-    result = {
-      hcpReply: buildDeterministicHcpFallbackReply({
-        scenario,
-        transcript,
-        repMessage,
-        currentBehaviorState,
-        prediction,
-      }),
-      hcpCue: buildFirstTurnCueOverride(repMessage, scenario),
-      nextBehaviorState: currentBehaviorState,
-      nextJourneyState: currentJourneyState,
-      behaviorSignals: {},
-      coachingNudge: null,
-    };
+  } catch (error) {
+    throw new Error(`Predictive HCP generation failed; deterministic HCP fallback authoring is disabled. ${String(error)}`);
   }
   }
 
@@ -4407,15 +4393,8 @@ Return ONLY valid JSON:
         currentJourneyState: result.nextJourneyState || currentJourneyState,
       });
       traceMutation("final_predictive_brain_regeneration", beforePredictiveRegeneration, hcpReply, { category: "safeguard_regeneration" });
-    } catch {
-      const beforeBrainFallback = hcpReply;
-      hcpReply = buildBrainGroundedScenarioFallback({
-        scenario,
-        repMessage,
-        escalationMemory,
-        missingPressures: finalMissingPressures,
-      });
-      traceMutation("brain_grounded_scenario_fallback", beforeBrainFallback, hcpReply, { category: "deterministic_fallback" });
+    } catch (error) {
+      throw new Error(`Predictive HCP safeguard regeneration failed; deterministic HCP fallback authoring is disabled. ${String(error)}`);
     }
 
     const beforeFinalSurface = hcpReply;
@@ -4529,7 +4508,7 @@ Return ONLY valid JSON:
         ? "locked_to_predictive_brain_prompt"
         : "predictive_context_missing_fallback_mode",
     worker_predictive_route_line: authoritativePredictiveLine || null,
-    deterministic_generation_fallback_used: primaryGenerationSource === "deterministic_generation_fallback",
+    deterministic_generation_fallback_used: false,
     deterministic_fallback_layers: deterministicFallbackEvents.map((event) => event.layer),
     suppressed_rewrite_layers: [],
     loop_repair_touched_final_line: loopRepairEvents.length > 0,
@@ -4573,7 +4552,7 @@ Return ONLY valid JSON:
     prediction,
     predictiveDebug: {
       contextApplied: predictiveContextReceived,
-      source: primaryGenerationSource === "deterministic_generation_fallback" ? "deterministic" : "ai",
+      source: "ai",
       authoritySource: hcpRuntimeTrace.authority_source,
       predictiveLockStatus: hcpRuntimeTrace.predictive_lock_status,
       loopRepairTouchedFinalLine: hcpRuntimeTrace.loop_repair_touched_final_line,

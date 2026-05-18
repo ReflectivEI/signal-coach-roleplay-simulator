@@ -497,7 +497,7 @@ test("active simulator exposes per-turn HCP runtime trace without changing norma
   assert.match(generatorSource, /hcpRuntimeTrace/);
   assert.match(generatorSource, /predictive_lock_status/);
   assert.match(generatorSource, /loop_repair_touched_final_line/);
-  assert.match(generatorSource, /deterministic_generation_fallback_used/);
+  assert.match(generatorSource, /deterministic_generation_fallback_used: false/);
   assert.match(generatorSource, /suppressed_rewrite_layers/);
   assert.match(generatorSource, /traceMutation/);
   assert.match(generatorSource, /applyRecentHcpLoopGuardWithTrace/);
@@ -526,10 +526,40 @@ test("active simulator routes HCP authoring through Worker predictive brain befo
   assert.match(simulatorSource, /predictive_hcp_response_source/);
   assert.match(simulatorSource, /authoritativePredictiveRoute = \{/);
   assert.match(simulatorSource, /authoritativePredictiveRoute,/);
+  assert.match(simulatorSource, /deterministic HCP fallback authoring is disabled/);
 
   assert.match(generatorSource, /authoritativePredictiveRoute/);
   assert.match(generatorSource, /primaryGenerationSource = "worker_predictive_brain_route_authoritative"/);
   assert.match(generatorSource, /result = \{\s*hcpReply: authoritativePredictiveLine/);
   assert.match(generatorSource, /worker_predictive_route_authoritative/);
   assert.match(generatorSource, /locked_to_worker_predictive_brain_route/);
+});
+
+
+test("RPS HCP contract disables deterministic HCP fallback authoring", () => {
+  const workerSource = fs.readFileSync(
+    new URL("../worker/index.ts", import.meta.url),
+    "utf8",
+  );
+  const simulatorSource = fs.readFileSync(
+    new URL("../src/pages/Simulator.jsx", import.meta.url),
+    "utf8",
+  );
+  const generatorSource = fs.readFileSync(
+    new URL("../src/lib/hcpResponseGenerator.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(workerSource, /predictive_hcp_authoring_failed/);
+  assert.match(workerSource, /predictive_brain_required/);
+  assert.doesNotMatch(workerSource, /predictive_hcp_response_source = predictiveAuthoredResponse[\s\S]*deterministic_fallback/);
+  assert.doesNotMatch(workerSource, /deterministic_validator_hcp_next_response/);
+
+  assert.match(simulatorSource, /Predictive Brain HCP route failed; deterministic HCP fallback authoring is disabled/);
+  assert.match(simulatorSource, /predictiveSource !== "predictive_brain"/);
+
+  assert.match(generatorSource, /Predictive HCP generation failed; deterministic HCP fallback authoring is disabled/);
+  assert.match(generatorSource, /Predictive HCP safeguard regeneration failed; deterministic HCP fallback authoring is disabled/);
+  assert.doesNotMatch(generatorSource, /primaryGenerationSource = "deterministic_generation_fallback"/);
+  assert.doesNotMatch(generatorSource, /brain_grounded_scenario_fallback/);
 });

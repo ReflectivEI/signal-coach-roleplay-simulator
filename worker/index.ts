@@ -976,13 +976,6 @@ async function authorPredictiveHcpResponse({
     progressionExplanation: string;
     intentBucket: string;
 }): Promise<string> {
-    const validatorFallbackLine = buildScenarioSpecificFallbackLine({
-        hcpState,
-        scenarioContext,
-        responseType,
-        liveTemperature,
-    }) || sanitizePredictiveHcpLine(deterministicLine);
-
     const previousHcpLine = text(
         conversationMemory.last_hcp_response_text,
         text((Array.isArray(conversationMemory.hcp_response_history)
@@ -1030,7 +1023,7 @@ Current turn context:
 - Unresolved concern: ${unresolvedConcern || "not provided"}
 - Scenario opening: ${text(scenarioContext.opening_scene || scenarioContext.openingScene, "not provided")}
 - Scenario cue: ${text(scenarioContext.cue_signal, "not provided")}
-- Validator-only fallback that must NOT be copied: ${validatorFallbackLine || "none"}
+- Deterministic state output is validator metadata only and must not be copied into HCP dialogue.
 ${retryReason ? `- Retry guidance: ${retryReason}` : ""}
 
 Hard rules:
@@ -1251,13 +1244,19 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
         progressionExplanation: text(fullStateProgression.hcp_progression_explanation),
         intentBucket: text(fullStateProgression.intent_bucket),
     }));
-    const deterministicApiFallbackResponse = buildScenarioSpecificFallbackLine({
-        hcpState: predictivePromptState,
-        scenarioContext,
-        responseType: text(fullStateProgression.hcp_response_type),
-        liveTemperature: repSelectedTemperature,
-    });
-    const predictiveSimulatedResponse = predictiveAuthoredResponse || deterministicApiFallbackResponse;
+    if (!predictiveAuthoredResponse) {
+        return json(request, {
+            error: "predictive_hcp_authoring_failed",
+            details: "Predictive Brain did not return a usable HCP line. Deterministic HCP fallback authoring is disabled by contract.",
+            predictive_hcp_response_source: "predictive_brain_unavailable",
+            hcp_authoring_contract: "predictive_brain_required",
+            hcp_response_type: fullStateProgression.hcp_response_type,
+            intent_bucket: fullStateProgression.intent_bucket,
+            anti_loop_intervention_triggered: Boolean(fullStateProgression.anti_loop_intervention_triggered),
+            semantic_similarity_max: fullStateProgression.semantic_similarity_max,
+        }, 502);
+    }
+    const predictiveSimulatedResponse = predictiveAuthoredResponse;
 
     const enrichedHcpState = {
         ...asObject(fullStateProgression.hcp_state as Record<string, unknown>, {} as Record<string, unknown>),
@@ -1276,10 +1275,8 @@ async function handleEvaluateResponse(request: Request, env: Env): Promise<Respo
     (deterministicWithBrain as Record<string, unknown>).response_type_transition_explanation = fullStateProgression.response_type_transition_explanation;
     (deterministicWithBrain as Record<string, unknown>).hcp_progression_explanation = fullStateProgression.hcp_progression_explanation;
     (deterministicWithBrain as Record<string, unknown>).simulated_hcp_next_response = predictiveSimulatedResponse;
-    (deterministicWithBrain as Record<string, unknown>).predictive_hcp_response_source = predictiveAuthoredResponse
-        ? "predictive_brain"
-        : "deterministic_fallback";
-    (deterministicWithBrain as Record<string, unknown>).deterministic_validator_hcp_next_response = deterministicSimulatedResponse;
+    (deterministicWithBrain as Record<string, unknown>).predictive_hcp_response_source = "predictive_brain";
+    (deterministicWithBrain as Record<string, unknown>).hcp_authoring_contract = "predictive_brain_required";
     (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_triggered = Boolean(fullStateProgression.anti_loop_intervention_triggered);
     (deterministicWithBrain as Record<string, unknown>).anti_loop_intervention_reason = fullStateProgression.anti_loop_intervention_reason;
     (deterministicWithBrain as Record<string, unknown>).intent_bucket = fullStateProgression.intent_bucket;
