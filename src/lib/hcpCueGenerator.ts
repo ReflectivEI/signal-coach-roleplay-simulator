@@ -949,43 +949,13 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
       };
     }
   }
-  const recentCueFingerprints = new Set(
-    (inputs.recentCueLabels || []).map((label) => normalizeCueFingerprint(label)).filter(Boolean)
-  );
-  const recentCueSignatures = (inputs.recentCueLabels || [])
-    .map((label) => cueSequenceSignature(label))
-    .filter(Boolean)
-    .slice(-4);
-  const recentCueFrames = (inputs.recentCueLabels || [])
-    .map((label) => cueFrameSignature(label))
-    .filter(Boolean)
-    .slice(-6);
-  const recentSignatureSet = new Set(recentCueSignatures);
-  const recentFrameSet = new Set(recentCueFrames);
-  const lastSignature = recentCueSignatures[recentCueSignatures.length - 1] || "";
-  const secondToLastSignature = recentCueSignatures[recentCueSignatures.length - 2] || "";
-  const lastFrame = recentCueFrames[recentCueFrames.length - 1] || "";
-  const secondToLastFrame = recentCueFrames[recentCueFrames.length - 2] || "";
-
   const activeTurnCue = buildActiveTurnCueOverride(inputs, cueCategory, concernFamily);
   if (activeTurnCue) {
-    const activeFingerprint = normalizeCueFingerprint(activeTurnCue);
-    const activeSignature = cueSequenceSignature(activeTurnCue);
-    const activeFrame = cueFrameSignature(activeTurnCue);
-    const repeatsRecentCue = recentCueFingerprints.has(activeFingerprint)
-      || recentSignatureSet.has(activeSignature)
-      || recentFrameSet.has(activeFrame)
-      || activeSignature === lastSignature
-      || activeSignature === secondToLastSignature
-      || activeFrame === lastFrame;
-
-    if (!repeatsRecentCue) {
-      return {
-        cueCategory,
-        concernFamily,
-        label: normalizeCueSentence(activeTurnCue),
-      };
-    }
+    return {
+      cueCategory,
+      concernFamily,
+      label: normalizeCueSentence(activeTurnCue),
+    };
   }
 
   const domainPool =
@@ -1006,6 +976,23 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     String(inputs.hcpTurnCount || 0),
   ].join(":");
 
+  const recentCueFingerprints = new Set(
+    (inputs.recentCueLabels || []).map((label) => normalizeCueFingerprint(label)).filter(Boolean)
+  );
+  const recentCueSignatures = (inputs.recentCueLabels || [])
+    .map((label) => cueSequenceSignature(label))
+    .filter(Boolean)
+    .slice(-4);
+  const recentCueFrames = (inputs.recentCueLabels || [])
+    .map((label) => cueFrameSignature(label))
+    .filter(Boolean)
+    .slice(-6);
+  const recentSignatureSet = new Set(recentCueSignatures);
+  const recentFrameSet = new Set(recentCueFrames);
+  const lastSignature = recentCueSignatures[recentCueSignatures.length - 1] || "";
+  const secondToLastSignature = recentCueSignatures[recentCueSignatures.length - 2] || "";
+  const lastFrame = recentCueFrames[recentCueFrames.length - 1] || "";
+  const secondToLastFrame = recentCueFrames[recentCueFrames.length - 2] || "";
   const rotationOffset = (inputs.recentCueLabels || []).length % Math.max(1, pool.length);
   const seedIndex = (deterministicIndex(seed, pool.length) + rotationOffset) % Math.max(1, pool.length);
   let derived = pool[seedIndex] || pool[0];
@@ -1029,36 +1016,6 @@ function selectStateAlignedCue(inputs: HcpCueInputs, candidateCue = ""): { cueCa
     if (score < bestScore) {
       bestScore = score;
       derived = nextCue;
-    }
-  }
-
-  if (recentCueFingerprints.has(normalizeCueFingerprint(derived))) {
-    const fallbackCueVariants = [
-      "Keeps the current page open and waits for a more specific answer.",
-      "Leaves the highlighted section in view and holds the pause.",
-      "Keeps one finger near the relevant line and looks back for the next answer.",
-      "Stays oriented to the same page, posture measured and guarded.",
-      "Keeps the materials in place and waits without softening the point.",
-      "Glances once at the marked section, then back to the rep.",
-      "Lets the room stay quiet for a beat, eyes still on the marked data.",
-      "Keeps the page turned to the same section and waits for a narrower answer.",
-      "Holds the document flat on the desk, attention fixed on the unresolved point.",
-      "Keeps the pen still beside the highlighted line, posture professionally guarded.",
-      "Looks from the note back to the rep, leaving the question unanswered for the moment.",
-      "Maintains a steady pause with the relevant page still centered on the desk.",
-    ];
-    const fallbackStart = deterministicIndex(`${seed}|fallback_cue`, fallbackCueVariants.length);
-    for (let offset = 0; offset < fallbackCueVariants.length; offset += 1) {
-      const candidate = fallbackCueVariants[(fallbackStart + offset) % fallbackCueVariants.length];
-      const candidateFingerprint = normalizeCueFingerprint(candidate);
-      const candidateSignature = cueSequenceSignature(candidate);
-      const candidateFrame = cueFrameSignature(candidate);
-      if (!recentCueFingerprints.has(candidateFingerprint)
-        && !recentSignatureSet.has(candidateSignature)
-        && !recentFrameSet.has(candidateFrame)) {
-        derived = candidate;
-        break;
-      }
     }
   }
   const cleanedCandidate = cleanCueText(candidateCue);

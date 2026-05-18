@@ -2321,14 +2321,8 @@ function deterministicContinuityVariation({
       "If you cannot make this specific to my patients, we should pause here.",
       "Tie it to one patient decision in my practice, or this is not useful.",
       "I need the exact decision point, not another broad evidence frame.",
-      "Name the patient profile first, then the endpoint that would change my decision.",
-      "I need the safety point tied to a specific patient decision, not another broad frame.",
     ];
-    return selectNonRepeatingFallbackVariant({
-      variants,
-      transcript,
-      seed: `${scenario?.id || scenario?.title || "scenario"}|${hcpTurns}|direct_answer_loop`,
-    });
+    return variants[hcpTurns % variants.length];
   }
 
   return `${text}. ${concernFollowUp(concernTags[0] || "general")}`;
@@ -3433,7 +3427,7 @@ function getRecentVisibleHcpReplies(transcript: ConversationTurn[], limit = 5): 
     .filter((turn) => turn?.speaker === "hcp" && typeof turn?.text === "string")
     .map((turn) => String(turn.text || "").trim())
     .filter(Boolean)
-    .slice(-Math.max(3, Math.min(10, limit)));
+    .slice(-Math.max(3, Math.min(5, limit)));
 }
 
 function inferSkeletonSignature(text = ""): string {
@@ -3474,109 +3468,6 @@ function applyRecentHcpLoopGuard(hcpReply: string, transcript: ConversationTurn[
     transcript,
     scenario,
   });
-}
-
-function buildFinalUniquenessVariants(hcpReply: string, transcript: ConversationTurn[], scenario: any): string[] {
-  const tags = inferConcernTags(`${hcpReply} ${getLatestHcpConcern(transcript, scenario)}`);
-  if (tags.includes("workflow") || tags.includes("implementation")) {
-    return [
-      "Start with the first clinic step and who owns it.",
-      "Tell me what my staff does first, then what work comes off their list.",
-      "Map the first handoff for my team before we talk about broader value.",
-      "Who owns the first step, and what repeat work does it prevent?",
-      "Keep it at the clinic level: first task, owner, and what changes after that.",
-    ];
-  }
-  if (tags.includes("access")) {
-    return [
-      "Name the first access step, who owns it, and what happens next.",
-      "Start with the coverage step my staff would actually handle.",
-      "Tell me where the approval path changes before we go broader.",
-      "Give me the first payer-path action and who takes it.",
-      "Keep this on access: first step, owner, and what gets simpler.",
-    ];
-  }
-  if (tags.includes("safety") || tags.includes("evidence") || tags.includes("renal")) {
-    return [
-      "Give me the specific safety signal and the patient decision it changes.",
-      "Connect the evidence to one patient type and the decision you want me to make.",
-      "I need the endpoint, the patient profile, and why that changes treatment.",
-      "Stay with the evidence: which result changes care for the patient in front of me?",
-      "Tie the data to one patient profile and one treatment decision.",
-    ];
-  }
-  if (tags.includes("patient_fit") || tags.includes("guideline")) {
-    return [
-      "Name the patient subgroup first, then the decision that changes.",
-      "Which patient profile are we talking about, and what would I do differently?",
-      "Make this patient-specific before we talk about any next step.",
-      "Start with the patient type this is meant to affect.",
-    ];
-  }
-  return [
-    "Make this specific to one patient decision before we continue.",
-    "Give me the narrow point you want me to act on.",
-    "Start with the specific decision this is supposed to change.",
-    "Keep this concrete: patient, decision, and next step.",
-  ];
-}
-
-function enforceFinalHcpReplyUniqueness(hcpReply: string, transcript: ConversationTurn[], scenario: any): string {
-  const current = String(hcpReply || "").trim();
-  if (!current) return hcpReply;
-  const recent = getRecentVisibleHcpReplies(transcript, 8);
-  if (!recent.length) return hcpReply;
-  const repeated = recent.some((line) => {
-    const normalizedLine = normalizeLineForContinuity(line);
-    const normalizedCurrent = normalizeLineForContinuity(current);
-    return normalizedLine === normalizedCurrent
-      || continuityOverlapScore(current, line) >= 0.78
-      || continuityContainmentScore(current, line) >= 0.84
-      || (inferSkeletonSignature(current) && inferSkeletonSignature(current) === inferSkeletonSignature(line));
-  });
-  if (!repeated) return hcpReply;
-  return selectNonRepeatingFallbackVariant({
-    variants: buildFinalUniquenessVariants(current, transcript, scenario),
-    transcript,
-    seed: `${scenario?.id || scenario?.title || "scenario"}|${transcript.length}|final_uniqueness`,
-  });
-}
-
-function normalizeCueForFinalUniqueness(value = ""): string {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function enforceFinalCueUniqueness(cue: any, recentCueLabels: string[], scenario: any, hcpReply: string): any {
-  const label = String(cue?.label || "").trim();
-  if (!label) return cue;
-  const recent = (recentCueLabels || []).map(normalizeCueForFinalUniqueness).filter(Boolean);
-  if (!recent.includes(normalizeCueForFinalUniqueness(label))) return cue;
-  const tags = inferConcernTags(`${hcpReply} ${scenario?.journeyStage || ""}`);
-  const variants = tags.includes("workflow") || tags.includes("implementation")
-    ? [
-      "Keeps the workflow page open and waits for the first concrete staff step.",
-      "Holds the clinic notes steady, attention fixed on who owns the next task.",
-      "Leaves the staff workflow list centered on the desk and waits.",
-      "Keeps the intake sheet visible, expression measured while the workflow question hangs.",
-    ]
-    : [
-      "Keeps the marked evidence page centered and waits for a narrower answer.",
-      "Holds the study printout flat, attention fixed on the unresolved decision point.",
-      "Keeps the highlighted line in view and waits for the patient-specific answer.",
-      "Looks from the data back to the rep, leaving the clinical question open.",
-    ];
-  const start = deterministicIndex(`${scenario?.id || scenario?.title || "scenario"}|${label}|final_cue`, variants.length);
-  for (let offset = 0; offset < variants.length; offset += 1) {
-    const candidate = variants[(start + offset) % variants.length];
-    if (!recent.includes(normalizeCueForFinalUniqueness(candidate))) {
-      return { ...cue, label: candidate };
-    }
-  }
-  return { ...cue, label: variants[start] };
 }
 
 function detectQuestionType(repMessage: string): BehaviorSignals["question_type"] {
@@ -4516,7 +4407,6 @@ Return ONLY valid JSON:
     transcript,
   });
   hcpReply = applyRecentHcpLoopGuard(hcpReply, transcript, scenario);
-  hcpReply = enforceFinalHcpReplyUniqueness(hcpReply, transcript, scenario);
 
   const constrainedNextBehaviorState = mapEngagementStateToBehaviorState(
     turnConstraint.engagementState,
@@ -4537,16 +4427,10 @@ Return ONLY valid JSON:
 
   const recentCueLabels = transcript
     .filter((turn: any) => turn?.speaker === "hcp")
-    .flatMap((turn: any) => {
-      const cueEntries = Array.isArray(turn?.cues) ? turn.cues : [];
-      const surfaced = cueEntries.flatMap((cue: any) => {
-        if (typeof cue === "string") return [cue];
-        return [cue?.label, cue?.description].filter(Boolean);
-      });
-      return [turn?.cueBefore, turn?.observedCue, ...surfaced].filter(Boolean);
-    })
+    .flatMap((turn: any) => Array.isArray(turn?.cues) ? turn.cues : [])
+    .map((cue: any) => cue?.label)
     .filter(Boolean)
-    .slice(-30);
+    .slice(-8);
   const cue = resolveObservedCue(cueOverride || result.hcpCue || realismCueCandidate || "", {
     hcpReply,
     behaviorState: realismAdjustedBehaviorState,
@@ -4569,10 +4453,9 @@ Return ONLY valid JSON:
       keyChallenges: scenario.keyChallenges,
     },
   });
-  const uniqueCue = enforceFinalCueUniqueness(cue, recentCueLabels, scenario, hcpReply);
-  const activeCues = uniqueCue.label ? [{
+  const activeCues = cue.label ? [{
     id: `cue_${Date.now()}`,
-    ...uniqueCue,
+    ...cue,
   }] : [];
   const coachingNudge = result.coachingNudge && typeof result.coachingNudge === "object" && Object.keys(result.coachingNudge).length
     ? result.coachingNudge
